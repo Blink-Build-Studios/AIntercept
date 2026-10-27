@@ -1,0 +1,4 @@
+# Ignore everything in this directory (private keys, certs, SDS material)...
+*
+# ...except this file, so the empty directory is tracked.
+!.gitignore

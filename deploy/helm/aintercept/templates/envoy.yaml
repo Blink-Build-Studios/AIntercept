@@ -1,0 +1,224 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+data:
+  # The canonical multi-provider Envoy config, embedded from the chart's files/.
+  # Its upstream clusters reference the in-cluster Service names (certsvc:18000,
+  # observer:9000), which resolve via cluster DNS unchanged.
+  envoy.yaml: |
+{{ .Files.Get "files/envoy.multi.yaml" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.envoy.autoscaling.enabled }}
+  replicas: {{ .Values.envoy.autoscaling.minReplicas }}
+  {{- end }}
+  # Zero-downtime rollout: bring a NEW Envoy to Ready BEFORE removing any old one
+  # (surge up, never drop below full capacity). maxUnavailable:0 is what makes a
+  # deploy a cutover rather than a dip.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels: { app: envoy }
+  template:
+    metadata:
+      labels: { app: envoy }
+      annotations:
+        # Roll pods when the embedded Envoy config changes.
+        checksum/config: {{ .Files.Get "files/envoy.multi.yaml" | sha256sum }}
+    spec:
+      # Must exceed preStopSleep + drainTime so Kubernetes never SIGKILLs Envoy
+      # mid-drain. On SIGTERM Envoy drains gracefully for --drain-time-s (below).
+      {{- $drain := .Values.envoy.drain | default dict }}
+      {{- $preStop := $drain.preStopSleepSeconds | default 5 }}
+      {{- $drainTime := $drain.drainTimeSeconds | default 180 }}
+      terminationGracePeriodSeconds: {{ add $preStop $drainTime 20 }}
+      securityContext:
+        # Run as the stock image's non-root `envoy` user (uid 101), not root.
+        # The internet-facing pod that sees all decrypted traffic + API keys must
+        # not run privileged. Binding :443 still works via NET_BIND_SERVICE below.
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: envoy
+          image: {{ include "aintercept.envoyImage" . }}
+          # Invoke the binary directly, bypassing the image's docker-entrypoint.sh
+          # (which does root-only chown/UID setup that fails under our restricted
+          # securityContext). The binary itself runs fine as uid 101.
+          command: ["/usr/local/bin/envoy"]
+          # --drain-time-s / --drain-strategy: on SIGTERM (pod termination) Envoy
+          # drains GRACEFULLY over this window — stops accepting new connections and
+          # lets in-flight requests (incl. long streaming LLM turns) finish, sending
+          # `connection: close` as they complete — before exiting. This is Envoy's
+          # native graceful-drain path, so no admin HTTP call (and no curl in the
+          # image) is needed. 'immediate' starts draining at once rather than
+          # ramping, which is what we want for a clean cutover.
+          args:
+            - "-c"
+            - "/etc/envoy/envoy.yaml"
+            - "--log-level"
+            - "info"
+            - "--drain-time-s"
+            - {{ $drainTime | quote }}
+            - "--drain-strategy"
+            - "immediate"
+          lifecycle:
+            preStop:
+              # Brief pause BEFORE SIGTERM so the LoadBalancer + kube endpoints stop
+              # routing NEW connections to this pod (that removal propagates async
+              # when the pod goes Terminating). Envoy keeps serving during the sleep;
+              # only after it does Kubernetes send SIGTERM, starting the graceful
+              # drain above. This closes the "new conn hits a shutting-down pod" race.
+              exec:
+                command: ["/usr/bin/sleep", {{ $preStop | quote }}]
+          ports:
+            - { name: https, containerPort: 443 }
+            - { name: admin, containerPort: 9901 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/envoy, readOnly: true }
+          readinessProbe:
+            # /ready reports NOT ready while draining, so a terminating pod is pulled
+            # from rotation promptly.
+            httpGet: { path: /ready, port: 9901 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            # Liveness uses /server_info (200 whenever the process is alive, even
+            # while draining) — NOT /ready — so a transient not-ready or an in-
+            # progress drain can never trip liveness and KILL an otherwise healthy
+            # pod mid-connection.
+            httpGet: { path: /server_info, port: 9901 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.envoy.resources | nindent 12 }}
+          securityContext:
+            # Envoy binds the privileged port 443; it needs NET_BIND_SERVICE.
+            # We drop everything else and forbid privilege escalation beyond that.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"]
+      volumes:
+        - name: config
+          configMap: { name: envoy-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq .Values.cloud "aws" }}
+    # AWS: provision a Network Load Balancer (L4, preserves TLS to Envoy).
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    {{- else if eq .Values.cloud "digitalocean" }}
+    # DigitalOcean: L4 LB, passthrough so Envoy terminates TLS itself.
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+    {{- end }}
+    {{- with .Values.envoy.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.envoy.service.type }}
+  selector: { app: envoy }
+  ports:
+    - { name: https, port: 443, targetPort: 443 }
+{{- if and .Values.envoy.autoscaling.enabled (eq .Values.envoy.autoscaling.mode "keda") }}
+---
+# Internal-only Service exposing Envoy's admin port so KEDA can poll live
+# connection stats. Never exposed outside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-admin
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: { app: envoy }
+  ports:
+    - { name: admin, port: 9901, targetPort: 9901 }
+{{- end }}
+{{- if .Values.envoy.autoscaling.enabled }}
+{{- if eq .Values.envoy.autoscaling.mode "keda" }}
+---
+# KEDA scales Envoy on ACTIVE DOWNSTREAM CONNECTIONS — the load signal that
+# actually matters for a proxy teeing long-lived streams, not CPU. KEDA polls
+# Envoy's admin /stats JSON directly (no Prometheus). The admin Service LB-routes
+# to one replica, so the sampled count is treated as representative of an
+# evenly-balanced L4 fleet; KEDA keeps that per-pod count at/under the target.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: envoy
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: envoy
+  minReplicaCount: {{ .Values.envoy.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.envoy.autoscaling.maxReplicas }}
+  pollingInterval: {{ .Values.envoy.autoscaling.pollingInterval }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+  triggers:
+    - type: metrics-api
+      metadata:
+        url: "http://envoy-admin.{{ .Release.Namespace }}.svc.cluster.local:9901/stats?format=json&filter=^http\\.ingress_https\\.downstream_cx_active$"
+        valueLocation: "stats.0.value"
+        targetValue: "{{ .Values.envoy.autoscaling.targetConnectionsPerPod }}"
+        # Envoy admin serves plaintext JSON on the cluster-internal port.
+        unsafeSsl: "false"
+{{- else }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: envoy
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: envoy
+  minReplicas: {{ .Values.envoy.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.envoy.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.envoy.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      # Wait 5 min of sustained low load before scaling in, so brief lulls don't
+      # thrash the fleet.
+      stabilizationWindowSeconds: 300
+{{- end }}
+{{- end }}

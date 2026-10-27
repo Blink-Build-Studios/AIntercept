@@ -1,0 +1,200 @@
+# Envoy configuration for the AI interception proxy.
+#
+# Downstream: terminates TLS on :443. The leaf certificate for each allowlisted
+# SNI hostname is fetched from the Go cert service over SDS, which mints it on
+# demand. Per-SNI selection is done with filter_chain_match.server_names, the
+# stock-Envoy mechanism for choosing a cert by SNI at handshake time.
+#
+# Telemetry: an ext_proc filter streams request/response headers and body chunks
+# to the Go observer. failure_mode_allow:true means an observer outage NEVER
+# fails a real request. STREAMED body mode means we observe chunks as they flow
+# without buffering whole bodies.
+#
+# Upstream: forwards to the authentic provider over verified TLS with correct
+# SNI. THIS IS THE M2 VARIANT: the upstream is the REAL api.anthropic.com,
+# resolved via pinned PUBLIC DNS resolvers (1.1.1.1 / 8.8.8.8) so the test
+# client's /etc/hosts override can never contaminate Envoy's upstream
+# resolution or create a loop. Upstream TLS is verified against the system
+# public root bundle shipped in the Envoy image.
+
+node:
+  id: aintercept
+  cluster: aintercept
+
+admin:
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+static_resources:
+  listeners:
+    - name: https_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 443 }
+      listener_filters:
+        # Required so filter_chain_match can match on SNI.
+        - name: envoy.filters.listener.tls_inspector
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+      filter_chains:
+        - filter_chain_match:
+            server_names: ["api.anthropic.com"]
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                alpn_protocols: ["h2", "http/1.1"]
+                tls_certificate_sds_secret_configs:
+                  # The secret name IS the SNI hostname. The cert service mints a
+                  # leaf for this exact name on first request.
+                  - name: "api.anthropic.com"
+                    sds_config:
+                      resource_api_version: V3
+                      api_config_source:
+                        api_type: GRPC
+                        transport_api_version: V3
+                        grpc_services:
+                          - envoy_grpc:
+                              cluster_name: certsvc
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https
+                codec_type: AUTO
+                stream_idle_timeout: 300s
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                http_filters:
+                  # ext_proc tees decrypted traffic to the Go observer.
+                  - name: envoy.filters.http.ext_proc
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      # An observer failure must never fail a real request.
+                      failure_mode_allow: true
+                      # Observe-only: stream bodies as chunks, never buffer whole.
+                      processing_mode:
+                        request_header_mode: SEND
+                        response_header_mode: SEND
+                        request_body_mode: STREAMED
+                        response_body_mode: STREAMED
+                        request_trailer_mode: SKIP
+                        response_trailer_mode: SKIP
+                      # Bounded time to talk to the observer; if exceeded with
+                      # failure_mode_allow, the request proceeds.
+                      message_timeout: 0.2s
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: observer
+                        timeout: 1s
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: upstream
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route:
+                            cluster: upstream
+                            # Preserve streaming/SSE: no response buffering, long
+                            # timeout, allow upgrades.
+                            timeout: 0s
+                            idle_timeout: 300s
+
+  clusters:
+    # The Go SDS cert service (gRPC, HTTP/2).
+    - name: certsvc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: certsvc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: certsvc, port_value: 18000 }
+
+    # The Go observer (ext_proc gRPC, HTTP/2).
+    - name: observer
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: observer
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: observer, port_value: 9000 }
+
+    # Authentic upstream: the REAL api.anthropic.com.
+    #
+    # CRITICAL: upstream TLS verification is ON against the public root bundle.
+    # We never set trusted_ca to our interception root here, and we never
+    # disable verification. The upstream SNI is api.anthropic.com.
+    #
+    # LOGICAL_DNS + a pinned resolver guarantees Envoy resolves the real
+    # provider address regardless of any client-side /etc/hosts override (which
+    # does not reach this container anyway). This closes the proxy-loop risk.
+    - name: upstream
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      # Pin Envoy's upstream resolver to public DNS. Isolated from host DNS.
+      typed_dns_resolver_config:
+        name: envoy.network.dns_resolver.cares
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
+          use_resolvers_as_fallback: false
+          resolvers:
+            - socket_address: { address: "1.1.1.1", port_value: 53 }
+            - socket_address: { address: "8.8.8.8", port_value: 53 }
+          dns_resolver_options:
+            use_tcp_for_dns_lookups: false
+      # HTTP/2 upstream with HTTP/1.1 fallback via ALPN.
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          auto_config:
+            http2_protocol_options: {}
+            http_protocol_options: {}
+      load_assignment:
+        cluster_name: upstream
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: api.anthropic.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          # SNI presented to the real provider.
+          sni: api.anthropic.com
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            validation_context:
+              # Verify against the system public root bundle shipped in the
+              # Envoy image — the same roots that already trust the real
+              # api.anthropic.com. NOT our interception CA.
+              trusted_ca:
+                filename: /etc/ssl/certs/ca-certificates.crt
+              # Belt-and-suspenders: require the cert to match the hostname.
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher:
+                    exact: api.anthropic.com

@@ -1,0 +1,28 @@
+aintercept ({{ .Chart.Version }}) installed as release "{{ .Release.Name }}" (cloud={{ .Values.cloud }}).
+
+Components: certsvc (SDS cert minting), envoy (interception proxy), observer
+(telemetry → {{ if eq .Values.cloud "digitalocean" }}DigitalOcean Spaces{{ else }}S3{{ end }}).
+
+1. Wait for pods and the LoadBalancer:
+     kubectl rollout status deploy/observer deploy/certsvc deploy/envoy
+     kubectl get svc envoy -w        # wait for EXTERNAL-IP
+
+2. Point a test client at the LoadBalancer IP (trust certs/root-ca.crt, override
+   DNS for an allowlisted host) and drive traffic. See docs/DEPLOY_DOKS.md and
+   scripts/smoke-test-k8s.sh.
+
+{{ if or .Values.observer.autoscaling.enabled .Values.envoy.autoscaling.enabled -}}
+⚠  AUTOSCALING IS ENABLED, which requires metrics-server in the cluster.
+   DigitalOcean DOKS (and some other distros) do NOT ship it — without it the
+   HorizontalPodAutoscalers stay stuck at minReplicas and report <unknown>.
+   Check:
+     kubectl get hpa          # TARGETS should show a % not <unknown>
+   If missing, install it:
+     kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+   (deploy/digitalocean-bootstrap.sh installs it for you.)
+{{- end }}
+{{ if and (eq .Values.cloud "digitalocean") (not .Values.objectStore.existingSecret) }}
+ℹ  Object-store credentials were passed inline (helm --set), which lands them in
+   shell history and release metadata. For a real deploy, pre-create a Secret and
+   set objectStore.existingSecret instead (see docs/DEPLOY_DOKS.md).
+{{- end }}

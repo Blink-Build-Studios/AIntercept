@@ -1,0 +1,147 @@
+{{- include "aintercept.validate" . -}}
+{{- if .Values.observer.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.observer.serviceAccount.name }}
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+  {{- if and (eq .Values.cloud "aws") .Values.observer.serviceAccount.roleArn }}
+  annotations:
+    # IRSA: binds this ServiceAccount to an IAM role so the observer gets
+    # keyless S3 credentials via the cluster OIDC provider.
+    eks.amazonaws.com/role-arn: {{ .Values.observer.serviceAccount.roleArn }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observer
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.observer.autoscaling.enabled }}
+  replicas: {{ .Values.observer.autoscaling.minReplicas }}
+  {{- end }}
+  selector:
+    matchLabels: { app: observer }
+  template:
+    metadata:
+      labels: { app: observer }
+    spec:
+      serviceAccountName: {{ .Values.observer.serviceAccount.name }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: observer
+          image: {{ include "aintercept.observerImage" . }}
+          imagePullPolicy: {{ .Values.images.observer.pullPolicy }}
+          env:
+            - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }
+            - { name: OBSERVER_HTTP_LISTEN, value: "0.0.0.0:9001" }
+            - { name: OBSERVER_BUFFER_SIZE, value: {{ .Values.observer.bufferSize | quote }} }
+            - { name: OBSERVER_LOG_LEVEL, value: {{ .Values.observer.logLevel | default "info" | quote }} }
+            - name: OBSERVER_INSTANCE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+            {{- if .Values.observer.keyHashSaltSecret }}
+            - name: OBSERVER_KEY_HASH_SALT
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.observer.keyHashSaltSecret }}, key: salt }
+            {{- else if .Values.observer.keyHashSalt }}
+            - { name: OBSERVER_KEY_HASH_SALT, value: {{ .Values.observer.keyHashSalt | quote }} }
+            {{- end }}
+            # ── Object store sink ──
+            - { name: OBSERVER_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: OBSERVER_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            - { name: OBSERVER_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            - { name: OBSERVER_S3_MAX_BYTES, value: {{ .Values.objectStore.maxBytes | quote }} }
+            - { name: OBSERVER_S3_MAX_EVENTS, value: {{ .Values.objectStore.maxEvents | quote }} }
+            - { name: OBSERVER_S3_MAX_AGE_SECONDS, value: {{ .Values.objectStore.maxAgeSeconds | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: OBSERVER_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if .Values.objectStore.forcePathStyle }}
+            - { name: OBSERVER_S3_FORCE_PATH_STYLE, value: "true" }
+            {{- end }}
+            # ── Unrecognized-shape sampling (structure-only; same bucket, schema-samples/ prefix) ──
+            {{- $sampling := .Values.observer.schemaSampling | default dict }}
+            {{- if and (hasKey $sampling "enabled") (not $sampling.enabled) }}
+            - { name: OBSERVER_SCHEMA_SAMPLING, value: "false" }
+            {{- end }}
+            - { name: OBSERVER_SCHEMA_SAMPLES_PER_MINUTE, value: {{ $sampling.samplesPerMinute | default 120 | quote }} }
+            {{- if eq .Values.cloud "digitalocean" }}
+            # Static Spaces credentials (DO has no IRSA). Sourced from a Secret.
+            - name: OBSERVER_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: OBSERVER_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+          ports:
+            - { name: grpc, containerPort: 9000 }
+            - { name: http, containerPort: 9001 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9001 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9001 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.observer.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observer
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  selector: { app: observer }
+  ports:
+    - { name: grpc, port: 9000, targetPort: 9000 }
+    - { name: http, port: 9001, targetPort: 9001 }
+{{- if .Values.observer.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: observer
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: observer
+  minReplicas: {{ .Values.observer.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.observer.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.observer.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+{{- end }}

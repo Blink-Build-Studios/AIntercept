@@ -1,0 +1,18 @@
+apiVersion: v2
+name: aintercept
+description: >-
+  AI traffic interception + telemetry proxy. Envoy terminates TLS for
+  allowlisted provider hostnames, tees decrypted request/response observations to
+  a horizontally-scaled Go observer, which batches them to an S3-compatible
+  object store (AWS S3 via IRSA, or DigitalOcean Spaces via static keys).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - observability
+  - ai
+  - proxy
+  - envoy
+maintainers:
+  - name: Blink Build Studios
+    url: https://github.com/Blink-Build-Studios/AIntercept

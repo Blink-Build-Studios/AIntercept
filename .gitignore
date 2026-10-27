@@ -1,0 +1,27 @@
+# Certificate material — NEVER commit keys or generated certs.
+certs/**
+!certs/.gitignore
+
+# Go build artifacts
+*.test
+*.out
+bin/
+dist/
+
+# Local env
+.env
+.env.local
+
+# OS
+.DS_Store
+
+# Stray local build binaries
+fixture/fixture
+certsvc/certsvc
+observer/observer
+go.work.sum
+
+# Captured telemetry (dev-only, raw bodies — never commit)
+data/
+__pycache__/
+*.pyc

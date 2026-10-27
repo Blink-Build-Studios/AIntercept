@@ -1,0 +1,30 @@
+{{- if .Values.networkPolicy.enabled }}
+# Restrict Envoy's admin interface (9901). The admin API is UNAUTHENTICATED and
+# exposes /config_dump, /certs (SDS/leaf material) and the mutating /quitquitquit,
+# so it must not be reachable by arbitrary pods. This policy allows 9901 only
+# from the KEDA operator namespace (for the connection-metric scrape) and leaves
+# the data port (443) open. Requires a CNI that enforces NetworkPolicy (Cilium,
+# Calico; DOKS and EKS w/ the VPC CNI + policy support do).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: envoy-admin-restrict
+  labels:
+    app: envoy
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: envoy }
+  policyTypes: ["Ingress"]
+  ingress:
+    # Data plane: the proxied TLS port is open to the LoadBalancer / clients.
+    - ports:
+        - { protocol: TCP, port: 443 }
+    # Admin/metrics port: only the KEDA operator namespace may reach 9901.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.kedaNamespace }}
+      ports:
+        - { protocol: TCP, port: 9901 }
+{{- end }}

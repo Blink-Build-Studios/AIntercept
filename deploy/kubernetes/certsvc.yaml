@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certsvc
+  labels: { app: certsvc }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: certsvc }
+  template:
+    metadata:
+      labels: { app: certsvc }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: certsvc
+          image: aintercept/certsvc:dev # replace with your registry
+          env:
+            - { name: CERTSVC_LISTEN, value: "0.0.0.0:18000" }
+            - { name: CERT_ALLOWLIST, value: "api.anthropic.com" }
+            - { name: INTERMEDIATE_CERT, value: "/secrets/ca/intermediate-ca.crt" }
+            - { name: INTERMEDIATE_KEY, value: "/secrets/ca/intermediate-ca.key" }
+            - { name: CA_CHAIN, value: "/secrets/ca/ca-chain.crt" }
+            - { name: LEAF_TTL, value: "24h" }
+          ports:
+            - { name: grpc, containerPort: 18000 }
+          volumeMounts:
+            # Issuing key from a Secret, mounted read-only. NEVER a ConfigMap.
+            - { name: ca, mountPath: /secrets/ca, readOnly: true }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: ca
+          secret:
+            secretName: interception-ca
+            defaultMode: 0400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: certsvc
+spec:
+  selector: { app: certsvc }
+  ports:
+    - { name: grpc, port: 18000, targetPort: 18000 }

@@ -1,0 +1,163 @@
+# ── Cloud target ──────────────────────────────────────────────────────────────
+# Selects cloud-specific wiring: how the observer authenticates to the object
+# store, and which LoadBalancer annotations the Envoy Service gets.
+#   aws          → S3 via IRSA (keyless; serviceAccount.roleArn), AWS NLB
+#   digitalocean → Spaces via static keys (from a Secret), DO LB
+cloud: digitalocean
+
+# ── Network policy ────────────────────────────────────────────────────────────
+# Restrict Envoy's UNAUTHENTICATED admin port (9901) to the KEDA operator only.
+# Requires a NetworkPolicy-enforcing CNI. Disable only if your cluster can't
+# enforce policies AND you have another control around 9901.
+networkPolicy:
+  enabled: true
+  kedaNamespace: keda
+
+images:
+  # Envoy is the stock upstream image; only observer + certsvc are built here.
+  envoy:
+    repository: envoyproxy/envoy
+    tag: v1.32-latest
+  observer:
+    repository: aintercept/observer
+    tag: dev
+    pullPolicy: IfNotPresent
+  certsvc:
+    repository: aintercept/certsvc
+    tag: dev
+    pullPolicy: IfNotPresent
+
+# Image pull secret name (e.g. a DO Container Registry secret). Empty => none.
+imagePullSecret: ""
+
+# ── Interception ──────────────────────────────────────────────────────────────
+interception:
+  # Hostnames Envoy will intercept + mint leaf certs for. The Envoy config
+  # shipped in this chart (templates/envoy-config.yaml) must have matching
+  # filter chains / upstream clusters.
+  allowlist: "api.anthropic.com,api.openai.com,generativelanguage.googleapis.com,chatgpt.com"
+  # Leaf cert lifetime. certsvc mints short-lived leaves and PROACTIVELY renews
+  # them (background scan every renewScanInterval, re-minting any leaf within
+  # leafTTL/4 of expiry and hot-swapping it over SDS), so a leaf never ages out
+  # from under Envoy. Keep this short for a small blast radius.
+  leafTTL: "6h"
+  # How often certsvc scans issued leaves for impending expiry.
+  renewScanInterval: "1m"
+  # Name of the pre-created Secret holding the issuing intermediate CA material
+  # (intermediate-ca.crt, intermediate-ca.key, ca-chain.crt). NEVER a ConfigMap.
+  # Create it before install (see docs/DEPLOY_DOKS.md).
+  caSecretName: interception-ca
+
+# ── Object store (telemetry sink) ─────────────────────────────────────────────
+objectStore:
+  bucket: ""              # S3 bucket / DO Space name (required)
+  prefix: "aintercept"      # key prefix
+  region: ""              # AWS region, or DO Spaces region (e.g. nyc3)
+  # S3-compatible endpoint. REQUIRED for DigitalOcean Spaces / MinIO; leave
+  # empty for native AWS S3.
+  endpoint: ""            # e.g. https://nyc3.digitaloceanspaces.com
+  forcePathStyle: false   # true for MinIO and some S3-compatible stores
+  # Flush thresholds (a batch flushes on whichever trips first).
+  maxBytes: 5242880       # 5 MiB
+  maxEvents: 10000
+  maxAgeSeconds: 60
+  # Static credentials (DigitalOcean / MinIO only). On AWS leave blank and use
+  # IRSA via serviceAccount.roleArn.
+  #
+  # Two ways to supply them (DO/MinIO):
+  #   1. existingSecret (RECOMMENDED for real deploys) — name of a Secret you
+  #      create out-of-band with keys `accessKeyId` and `secretAccessKey`. The
+  #      credential never passes through `helm --set` (shell history / release
+  #      metadata). See docs/DEPLOY_DOKS.md.
+  #   2. accessKeyId / secretAccessKey inline — convenient for a throwaway demo;
+  #      the chart creates the Secret. Avoid for anything you care about.
+  existingSecret: ""      # e.g. aintercept-objectstore (keys: accessKeyId, secretAccessKey)
+  accessKeyId: ""
+  secretAccessKey: ""
+
+# ── Observer ──────────────────────────────────────────────────────────────────
+observer:
+  bufferSize: 16384
+  # Operational log level: debug | info | warn | error. Logs are structured JSON
+  # on stderr (telemetry events go to stdout).
+  logLevel: info
+  # Unrecognized-shape sampling: when a transaction flows through but our
+  # extractors didn't fully recognize it (no model OR no usage), retain a
+  # STRUCTURE-ONLY fingerprint (no content, no secrets) to the same object store
+  # under a schema-samples/ prefix, so new providers / changed schemas are easy
+  # to find and extend coverage for. Rate-capped per replica.
+  schemaSampling:
+    enabled: true
+    samplesPerMinute: 120
+  # Salt mixed into the API-key hash (key_hash) that pseudonymously identifies
+  # callers. The raw key is NEVER stored — only sha256(salt || key). Set a
+  # strong, deployment-unique random value; keeping it stable keeps a given key's
+  # identity stable across time, and keeping it secret prevents dictionary
+  # attacks against known keys and cross-deployment correlation.
+  #   Generate: openssl rand -hex 32
+  # Supplied via a Secret (keyHashSaltSecret) when set; else this inline value.
+  keyHashSalt: ""
+  keyHashSaltSecret: ""   # name of an existing Secret with key `salt` (preferred)
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "500m", memory: "256Mi" }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+  # ServiceAccount: on AWS, annotate with the IRSA role ARN (keyless S3). On DO,
+  # roleArn is ignored and static keys are used instead.
+  serviceAccount:
+    create: true
+    name: aintercept-observer
+    roleArn: ""           # AWS IRSA role ARN (eks.amazonaws.com/role-arn)
+
+# ── Envoy ─────────────────────────────────────────────────────────────────────
+envoy:
+  # CPU request is set above Envoy's idle baseline (~50m) so an idle fleet sits
+  # well below the HPA target and scales back down.
+  resources:
+    requests: { cpu: "250m", memory: "128Mi" }
+    limits: { cpu: "1", memory: "512Mi" }
+  # Zero-downtime drain on deploy/scale-down. A terminating Envoy sleeps
+  # preStopSleepSeconds (so the LB/endpoints stop sending NEW connections), then
+  # on SIGTERM drains in-flight connections gracefully for drainTimeSeconds before
+  # exiting. Set drainTimeSeconds >= your longest expected in-flight request; the
+  # proxy tees streaming LLM turns, so this defaults high. terminationGracePeriod
+  # is derived as preStopSleep + drainTime + 20s.
+  drain:
+    preStopSleepSeconds: 5
+    drainTimeSeconds: 180
+  # Autoscaling. Two mutually-exclusive modes:
+  #   mode: cpu  → plain HPA on CPU utilization. Zero dependencies. CPU is a
+  #                rough proxy for a network proxy's load, but works out of the box.
+  #   mode: keda → KEDA ScaledObject on Envoy's ACTIVE CONNECTIONS (the load
+  #                signal that actually matters for a proxy). Requires KEDA
+  #                installed in the cluster; no Prometheus needed — KEDA polls
+  #                Envoy's admin /stats endpoint directly.
+  autoscaling:
+    enabled: true
+    mode: keda            # cpu | keda
+    minReplicas: 2
+    maxReplicas: 20
+    # CPU mode:
+    targetCPUUtilizationPercentage: 75
+    # KEDA mode: target active downstream connections PER POD. KEDA adds pods to
+    # keep the sampled per-pod connection count at/under this. Tune to the
+    # connections one Envoy replica handles comfortably at your latency target.
+    targetConnectionsPerPod: 500
+    # How often KEDA polls Envoy's admin stats (seconds).
+    pollingInterval: 15
+  service:
+    type: LoadBalancer
+    # Extra annotations merged onto the Envoy Service. Defaults per-cloud are
+    # added by the template (AWS NLB / DO LB); these override/extend them.
+    annotations: {}
+
+# ── certsvc ───────────────────────────────────────────────────────────────────
+certsvc:
+  replicas: 2
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "500m", memory: "256Mi" }

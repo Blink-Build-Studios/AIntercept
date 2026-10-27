@@ -1,0 +1,18 @@
+# M2 override: point Envoy at the REAL api.anthropic.com.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.m2.yml up -d
+#
+# This swaps Envoy's config to envoy.m2.yaml (real upstream, public-DNS
+# resolver, public-root verification). The fixture container is still built but
+# simply goes unused — nothing routes to it in M2. The cert service, observer,
+# and downstream interception path are identical to M1.
+
+services:
+  envoy:
+    volumes:
+      # Replace the M1 config with the M2 (real-upstream) config.
+      - ./envoy/envoy.m2.yaml:/etc/envoy/envoy.yaml:ro
+      # NOTE: no fixture upstream-ca mount here. M2 verifies against the
+      # system public root bundle already present in the Envoy image at
+      # /etc/ssl/certs/ca-certificates.crt.

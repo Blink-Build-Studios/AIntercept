@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observer
+  labels: { app: observer }
+spec:
+  # Horizontally scalable: no sticky routing required. Each replica is
+  # self-contained and tags events with its instance ID + correlation ID.
+  replicas: 2
+  selector:
+    matchLabels: { app: observer }
+  template:
+    metadata:
+      labels: { app: observer }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: observer
+          image: aintercept/observer:dev # replace with your registry
+          args: []
+          env:
+            - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }
+            - { name: OBSERVER_HTTP_LISTEN, value: "0.0.0.0:9001" }
+            - { name: OBSERVER_BUFFER_SIZE, value: "16384" }
+            # DEV_LOG_BODIES is intentionally unset — never enable in cluster.
+            - name: OBSERVER_INSTANCE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+          ports:
+            - { name: grpc, containerPort: 9000 }
+            - { name: http, containerPort: 9001 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9001 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9001 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observer
+spec:
+  selector: { app: observer }
+  ports:
+    - { name: grpc, port: 9000, targetPort: 9000 }
+    - { name: http, port: 9001, targetPort: 9001 }

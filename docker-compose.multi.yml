@@ -1,0 +1,18 @@
+# Multi-provider override: intercept Anthropic + OpenAI + Gemini at once.
+#
+# Usage (with full-body capture to build the cross-provider extractor):
+#   OBSERVER_CAPTURE_FILE=/data/events.ndjson DEV_CAPTURE_FULL_BODIES=true \
+#     docker compose -f docker-compose.yml -f docker-compose.multi.yml up -d
+#
+# Swaps Envoy to envoy.multi.yaml (three filter-chain SNIs + three verified
+# upstreams, routed by :authority) and widens the cert allowlist so the SDS
+# service will mint leaves for all three provider hostnames.
+
+services:
+  certsvc:
+    environment:
+      CERT_ALLOWLIST: "api.anthropic.com,api.openai.com,generativelanguage.googleapis.com,chatgpt.com"
+
+  envoy:
+    volumes:
+      - ./envoy/envoy.multi.yaml:/etc/envoy/envoy.yaml:ro

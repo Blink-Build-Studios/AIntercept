@@ -1,0 +1,79 @@
+# M1 local stack: Envoy (TLS MITM on :443) + Go cert service (SDS) + Go observer
+# (ext_proc) + fixture HTTPS origin.
+#
+# Secret handling:
+#   * The interception ROOT private key is NEVER mounted here — it stays on the
+#     host and is installed only into the test client's trust store.
+#   * The issuing INTERMEDIATE key is mounted read-only into certsvc only.
+#   * The fixture's own CA (separate trust domain) is mounted read-only into
+#     Envoy as the upstream trusted_ca, proving real upstream verification.
+
+services:
+  certsvc:
+    build: ./certsvc
+    image: aintercept/certsvc:dev
+    environment:
+      CERTSVC_LISTEN: "0.0.0.0:18000"
+      CERT_ALLOWLIST: "api.anthropic.com"
+      INTERMEDIATE_CERT: "/certs/intermediate-ca.crt"
+      INTERMEDIATE_KEY: "/certs/intermediate-ca.key"
+      CA_CHAIN: "/certs/ca-chain.crt"
+      LEAF_TTL: "24h"
+    volumes:
+      # Read-only, only the intermediate material the signer needs.
+      - ./certs/intermediate-ca.crt:/certs/intermediate-ca.crt:ro
+      - ./certs/intermediate-ca.key:/certs/intermediate-ca.key:ro
+      - ./certs/ca-chain.crt:/certs/ca-chain.crt:ro
+    restart: unless-stopped
+
+  observer:
+    build: ./observer
+    image: aintercept/observer:dev
+    environment:
+      OBSERVER_GRPC_LISTEN: "0.0.0.0:9000"
+      OBSERVER_HTTP_LISTEN: "0.0.0.0:9001"
+      OBSERVER_BUFFER_SIZE: "8192"
+      # Toggle to true ONLY for local body-visibility proof (M1 smoke test does
+      # this via an override). Bounded previews, never in k8s.
+      DEV_LOG_BODIES: "${DEV_LOG_BODIES:-false}"
+      # Durable capture (dev-only, for building the extractor). When
+      # OBSERVER_CAPTURE_FILE is set, events are written as NDJSON to the mounted
+      # ./data volume. DEV_CAPTURE_FULL_BODIES=true additionally records COMPLETE
+      # request/response bodies to that file (never to stdout). Both default off.
+      OBSERVER_CAPTURE_FILE: "${OBSERVER_CAPTURE_FILE:-}"
+      DEV_CAPTURE_FULL_BODIES: "${DEV_CAPTURE_FULL_BODIES:-false}"
+    ports:
+      - "9001:9001" # /healthz + /stats for the smoke test and operators
+    volumes:
+      # Host-visible capture directory. Files here are gitignored.
+      - ./data:/data
+    restart: unless-stopped
+
+  fixture:
+    build: ./fixture
+    image: aintercept/fixture:dev
+    environment:
+      FIXTURE_LISTEN: "0.0.0.0:8443"
+      FIXTURE_CERT: "/etc/ssl/fixture/fixture.crt"
+      FIXTURE_KEY: "/etc/ssl/fixture/fixture.key"
+    volumes:
+      - ./certs/fixture/fixture.crt:/etc/ssl/fixture/fixture.crt:ro
+      - ./certs/fixture/fixture.key:/etc/ssl/fixture/fixture.key:ro
+    restart: unless-stopped
+
+  envoy:
+    image: envoyproxy/envoy:v1.32-latest
+    depends_on:
+      - certsvc
+      - observer
+      - fixture
+    command: ["-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
+    ports:
+      - "443:443"   # downstream TLS listener (the test client connects here)
+      - "9901:9901" # Envoy admin
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      # Upstream trust bundle: Envoy must trust the fixture CA to connect. This
+      # is REAL verification, not a bypass.
+      - ./certs/fixture/upstream-ca.crt:/etc/ssl/upstream/upstream-ca.crt:ro
+    restart: unless-stopped
