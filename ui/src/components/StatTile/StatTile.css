@@ -1,0 +1,31 @@
+/* StatTile (CompSummary "StatTile" specimens; in a ribbon, People "StatRibbon").
+   Fill and border live here so the ribbon and hover rules can override them. */
+@layer components {
+  /* Tiles grow to share a row and wrap below 160px (a flex-1 utility used to win over this). */
+  .stat-tile {
+    flex: 1 1 160px;
+    gap: 2px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .stat-tile-loading {
+    gap: 8px;
+  }
+  .stat-tile-key-swatch {
+    gap: 6px;
+  }
+  .stat-tile-tip {
+    cursor: help;
+  }
+  a.stat-tile:hover,
+  .stat-tile-tip:hover,
+  .stat-tile[data-force="hover"] {
+    background: var(--surface-raised);
+  }
+  /* Tiles sit edge to edge, split by hairlines; the ribbon draws the frame. */
+  .stat-ribbon > .stat-tile {
+    flex-basis: 180px;
+    border-width: 0 1px 0 0;
+  }
+}

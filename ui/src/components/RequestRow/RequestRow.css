@@ -1,0 +1,13 @@
+/* RequestRow: the agent-dot cell of a person's All agents requests (handoff §11M 3.3). */
+@layer components {
+  .request-agent {
+    display: flex;
+    align-items: center;
+  }
+  .request-agent-dot {
+    display: block;
+    flex: none;
+    width: 7px;
+    height: 7px;
+  }
+}

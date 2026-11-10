@@ -1,0 +1,28 @@
+/* Breadcrumb (CompStates "AppBar", CompTableHover "Breadcrumb/hover"). */
+@layer components {
+  /* Resting color here, not as a utility: utilities would outrank the hover rule. */
+  /* A faint underline at rest, so a link isn't told apart by color alone (WCAG
+     1.4.1; the canvas rule since round 9, §11F.4). Hover takes ink. */
+  .crumb {
+    color: var(--ink-muted);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+  }
+  .crumb:hover,
+  .crumb[data-force="hover"] {
+    color: var(--ink);
+    text-decoration-color: currentColor;
+  }
+  /* The agent dot before a person or session crumb (§11L.2): 7px, 6px before the name. */
+  .crumb-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+  }
+  .crumb-skeleton {
+    display: inline-block;
+    vertical-align: middle;
+  }
+}

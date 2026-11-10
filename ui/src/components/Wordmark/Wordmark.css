@@ -1,0 +1,15 @@
+/* The brand (handoff §11H.1): Plex Mono, --ink, AI at 600 and the rest at 400. */
+@layer components {
+  .wordmark {
+    display: block;
+    font: 400 12.5px/20px var(--font-mono);
+    letter-spacing: 0.01em;
+    color: var(--ink);
+  }
+  .wordmark-large {
+    font-size: 18px;
+  }
+  .wordmark-ai {
+    font-weight: 600;
+  }
+}

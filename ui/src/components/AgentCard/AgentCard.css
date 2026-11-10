@@ -1,0 +1,40 @@
+/* AgentCard (CompSummary "AgentCard" specimens). Colors live here so the states can override them. */
+@layer components {
+  .agent-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+    padding: 10px 12px;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .agent-card:hover,
+  .agent-card[data-force="hover"] {
+    background: var(--surface-raised);
+  }
+  .agent-card[aria-pressed="true"] {
+    background: var(--surface-raised);
+    border-color: var(--ink);
+  }
+  .agent-card:focus-visible,
+  .agent-card[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  /* Mono at the button's weight (500), as on the sheet. */
+  .agent-card-count {
+    font: 500 12.5px/20px var(--font-mono);
+  }
+  .agent-card-sub {
+    font: 400 11px/20px var(--font-mono);
+  }
+  .agent-card-dot {
+    width: 8px;
+    height: 8px;
+  }
+}

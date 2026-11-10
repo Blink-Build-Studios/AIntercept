@@ -1,0 +1,5 @@
+@layer components {
+  .drawer-meta {
+    padding: 6px 16px;
+  }
+}

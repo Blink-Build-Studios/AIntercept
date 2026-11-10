@@ -1,0 +1,55 @@
+/* Tabs (CompControls / CompInteraction specimens; handoff §6.1): underline
+   tabs over a hairline. Colors live here so the state rules can override
+   them; data-force pins a state for stories. */
+@layer components {
+  .tablist {
+    display: flex;
+    gap: 24px;
+    border: 0 none;
+    border-bottom: 1px solid var(--line);
+  }
+  .tablist-inset {
+    padding: 0 12px;
+  }
+  .tab {
+    padding: 10px 0;
+    color: var(--ink-muted);
+    border: 0 none;
+    border-bottom: 2px solid transparent;
+    transition: border-color var(--dur-fast) var(--ease-out);
+  }
+  .tab:hover:not([aria-disabled="true"]):not([aria-selected="true"]),
+  .tab[data-force="hover"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink-muted);
+  }
+  .tab[aria-selected="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+  .tab:focus-visible,
+  .tab[data-force="focus"] {
+    outline: 2px solid var(--focus);
+  }
+  .tab[aria-disabled="true"] {
+    color: var(--line-strong);
+    cursor: default;
+  }
+  /* The underline sliding to a newly selected tab (§11G.B3); the tab's own shows once it lands. */
+  .tablist {
+    position: relative;
+  }
+  .tab-indicator {
+    position: absolute;
+    bottom: 0;
+    height: 2px;
+    background: var(--ink);
+    transition:
+      left 150ms var(--ease-out),
+      width 150ms var(--ease-out);
+    pointer-events: none;
+  }
+  .tablist[data-sliding] .tab[aria-selected="true"] {
+    border-bottom-color: transparent;
+  }
+}

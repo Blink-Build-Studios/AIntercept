@@ -1,0 +1,29 @@
+/* WaitingChecklist (CompStates "WaitingChecklist" specimens). */
+@layer components {
+  .waiting-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .waiting-step:last-child {
+    border-bottom: 0;
+  }
+  .waiting-glyph {
+    width: 18px;
+    flex: none;
+  }
+  /* On a narrow screen the detail gives way (ellipsis); the title keeps its column. */
+  .waiting-detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .waiting-title {
+    width: 220px;
+    flex: none;
+    font-weight: 600;
+  }
+}

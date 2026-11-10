@@ -1,0 +1,26 @@
+/* AgentStatGroup (CompAgents "AgentStatGroup/*"): a unit after the common stats, with a
+   --line-strong rule and a --surface fill; its stats split by hairlines, none after the last.
+   In a HeaderStatGroup it sits 12px after the last common stat, which keeps its rule. */
+@layer components {
+  .agent-stat-group {
+    display: inline-flex;
+    border-left: 1px solid var(--line-strong);
+    background: var(--surface);
+  }
+  .header-stat-group > .agent-stat-group {
+    display: flex;
+    margin-left: 12px;
+  }
+  .agent-stat-group > .agent-stat,
+  .agent-stat-group > * > .agent-stat {
+    border-left-width: 0;
+    border-right: 1px solid var(--line);
+  }
+  .agent-stat-group > :last-child.agent-stat,
+  .agent-stat-group > :last-child > .agent-stat {
+    border-right-width: 0;
+  }
+  .header-stat-group > .header-stat:has(+ .agent-stat-group) {
+    border-right-width: 1px;
+  }
+}

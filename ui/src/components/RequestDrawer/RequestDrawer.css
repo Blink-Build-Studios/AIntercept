@@ -1,0 +1,97 @@
+/* RequestDrawer (handoff §6.6, §6A.7; Session sheet `RequestDrawer`). */
+@layer components {
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: var(--scrim);
+    animation: drawer-scrim-in var(--dur-base) var(--ease-out);
+  }
+  .request-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 11;
+    width: 820px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line-strong);
+    animation: drawer-in var(--dur-slow) var(--ease-out);
+  }
+  /* Inside the drawer the parts are bands, each closed by a rule (alone they are boxes). */
+  .request-drawer .drawer-meta,
+  .request-drawer .drawer-meta-skeleton {
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer-meta-skeleton {
+    padding: 10px 16px;
+  }
+  .request-drawer .key-strip,
+  .request-drawer .drawer-tabs {
+    border-width: 0 0 1px;
+  }
+  .request-drawer .drawer-tabs {
+    flex-wrap: wrap;
+  }
+  .drawer-body {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+  }
+  .drawer-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+  }
+  .request-drawer .error-state-compact {
+    padding: 16px;
+  }
+  @keyframes drawer-in {
+    from {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes drawer-scrim-in {
+    from {
+      opacity: 0;
+    }
+  }
+  /* Closing: slide out 150 ms, the scrim fading with it (§6A.7). */
+  .request-drawer.drawer-closing {
+    animation: drawer-out 150ms var(--ease-out) forwards;
+  }
+  .drawer-scrim.drawer-closing {
+    animation: drawer-scrim-out 150ms var(--ease-out) forwards;
+  }
+  @keyframes drawer-out {
+    to {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes drawer-scrim-out {
+    to {
+      opacity: 0;
+    }
+  }
+  /* Reduced motion: a fade only, 80 ms (§11G.B3). */
+  @media (prefers-reduced-motion: reduce) {
+    .request-drawer,
+    .drawer-scrim {
+      animation: drawer-scrim-in 80ms linear;
+    }
+    .request-drawer.drawer-closing,
+    .drawer-scrim.drawer-closing {
+      animation: drawer-scrim-out 80ms linear forwards;
+    }
+  }
+}
+/* Below 960px the drawer takes the full width (handoff §12). */
+@media (max-width: 959.98px) {
+  .request-drawer {
+    width: 100%;
+    border-left: 0;
+  }
+}

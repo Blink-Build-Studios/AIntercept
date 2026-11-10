@@ -1,0 +1,15 @@
+{
+  "$comment": [
+    "Accessibility exceptions for `make a11y` (ui/parity/a11y.mjs), like deviations.json for parity.",
+    "A violation is excepted only when every failing node sits inside `within` for that `rule`.",
+    "status: accepted = allowed by the standard; design = a design rule the standard flags, asked of Claude Design (it stays listed until Design rules)."
+  ],
+  "exceptions": [
+    {
+      "rule": "color-contrast",
+      "within": ".region-dim",
+      "status": "accepted",
+      "reason": "A region keeps its old content dimmed and inert while it refreshes (handoff §6A.3, keep and dim); WCAG 1.4.3 exempts inactive components."
+    }
+  ]
+}

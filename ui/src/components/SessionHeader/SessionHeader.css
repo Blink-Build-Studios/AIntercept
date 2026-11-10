@@ -1,0 +1,22 @@
+/* SessionHeader (CompProviders "SessionHeader/codexMarked", handoff §11L.5): the mark, the
+   title row, facts and stats under them (§11M 1.10), 8px apart, on the page (no box of its own). */
+@layer components {
+  .session-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .session-header-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .session-header-title > h1 {
+    margin: 0;
+  }
+  .session-header-note {
+    max-width: 440px;
+    margin: 0;
+  }
+}

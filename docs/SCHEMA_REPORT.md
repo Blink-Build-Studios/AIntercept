@@ -45,7 +45,7 @@ make schema-report ARGS="--format text" # human summary
 make schema-report ARGS="--redact-keys" # also scrub object keys
 
 # Or directly:
-cd observer && go run ./cmd/schemareport --format json --out report.json
+cd aintercept && go run ./cmd/schemareport --format json --out report.json
 ```
 
 ### Incremental runs (don't resend the same data)
@@ -99,5 +99,34 @@ before downloading them, so repeat runs are cheap.
 
 Endpoints are ordered busiest-first, so the shapes worth adding capture for are at
 the top. To extend coverage, map the skeleton's keys to the extractor in
-`observer/internal/events/` (model via `usage.go`/`ModelFromPath`, usage via
+`aintercept/internal/events/` (model via `usage.go`/`ModelFromPath`, usage via
 `applyUsageJSON`, tools via `tools.go`).
+
+## Client analytics events (new events and fields)
+
+Clients like Claude Code report their own analytics (`client_event` rows).
+Those events change often, so the observer checks each one against a registry
+of known event names and field paths
+(`aintercept/internal/events/client_events/<client>.json`, one per client):
+
+- An unregistered event name, or a known event carrying new fields, is still
+  recorded in full, and its row is marked `client_event.new_event` /
+  `client_event.new_fields` (filterable in a dashboard).
+- A structure-only sample (field names and types, no values) goes to
+  `schema-samples/` once per new shape per replica, with reason
+  `new_client_event` or `new_client_event_fields` and path
+  `/api/event_logging/v2/batch#<event_name>`, so `make schema-report` lists
+  each new event alongside unrecognized request shapes. `new_fields` names the
+  added paths.
+
+To fold what's been seen into the registry:
+
+```sh
+make client-event-registry   # pulls client_event rows, ADDS new names/paths (never removes)
+git diff aintercept/internal/events/client_events/   # review
+# rebuild + deploy the observer; those shapes stop being reported as new
+```
+
+Then decide whether any new event or field deserves first-class extraction
+(a top-level column or dashboard panel).
+

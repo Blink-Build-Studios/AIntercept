@@ -1,0 +1,48 @@
+/* A 30% segment along the top edge of the nearest positioned ancestor
+   (CompInteraction .bar), sliding left to right in 1.2 s (§6A.7). The keyframes
+   stay inside the region, so no ancestor needs overflow: hidden. */
+@layer components {
+  .progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 30%;
+    background: var(--ink-muted);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--dur-base) var(--ease-out);
+  }
+  .progress[data-active="true"] {
+    opacity: 1;
+    animation: progress-slide 1.2s linear infinite;
+  }
+  .progress-global {
+    position: fixed;
+    z-index: 50;
+  }
+  @keyframes progress-slide {
+    0% {
+      left: 0;
+      width: 0;
+    }
+    25% {
+      left: 0;
+      width: 30%;
+    }
+    75% {
+      left: 70%;
+      width: 30%;
+    }
+    100% {
+      left: 100%;
+      width: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .progress[data-active="true"] {
+      animation: none;
+      width: 100%;
+    }
+  }
+}

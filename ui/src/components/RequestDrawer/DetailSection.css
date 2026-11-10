@@ -1,0 +1,31 @@
+/* DetailSection (CompDrawer "DetailSection/default"). */
+@layer components {
+  .detail-section {
+    padding: 10px 16px;
+  }
+  .detail-section-title {
+    margin-bottom: 4px;
+  }
+  /* An agent's section (CompAgents "DetailSection/codexResponse", §11J screens 2): mono, one line a fact. */
+  .detail-section-agent {
+    font: var(--type-data);
+    white-space: nowrap;
+  }
+  .detail-row {
+    display: flex;
+    gap: 8px;
+  }
+  .detail-key {
+    width: 160px;
+    flex: none;
+  }
+  .detail-value {
+    min-width: 0;
+  }
+  /* Two to a row in the drawer: values truncate (Session sheet); alone they wrap (CompDrawer). */
+  .details-view .detail-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

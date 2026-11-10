@@ -1,0 +1,62 @@
+/* StepStrip (CompProviders "StepStrip", handoff §11L.7): 22px of bars over a hairline,
+   the totals line 4px under it. */
+@layer components {
+  /* The strip's row under a long turn's prompt row: indented as its steps. */
+  .dt-row.step-strip-row {
+    padding-left: 70px;
+  }
+  /* In a prompts table the strip's one cell takes the row's width, not the first column's. */
+  .dt-row.step-strip-row > .step-strip-cell {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .step-strip {
+    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .step-strip-bars {
+    display: flex;
+    gap: 1px;
+    box-sizing: content-box;
+    height: 22px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    touch-action: none;
+  }
+  .step-strip-bars:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  .step-strip-bar {
+    flex: 1;
+    align-self: flex-end;
+  }
+  .step-kind-exec {
+    background: var(--ink);
+  }
+  .step-kind-patch {
+    background: var(--ch-count);
+  }
+  .step-kind-mcp {
+    background: var(--ch-flags);
+  }
+  .step-kind-text {
+    background: var(--ch-model);
+  }
+  .step-strip-legend {
+    display: flex;
+    gap: 16px;
+    font: 400 11px/20px var(--font-mono);
+  }
+  .step-strip-key {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .step-strip-swatch {
+    width: 8px;
+    height: 8px;
+  }
+}

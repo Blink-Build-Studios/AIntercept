@@ -22,6 +22,9 @@ upstream cluster (verified TLS, real SNI)
   M1: local fixture origin   |   M2+: real api.anthropic.com
 ```
 
+Both Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc`,
+`aintercept observer`), one mode per process and per pod.
+
 - **certsvc** (Go): an Envoy SDS v3 gRPC server. Holds the issuing intermediate
   key. On each SDS request, the requested resource name *is* the SNI hostname;
   certsvc checks it against the allowlist and lazily mints (and caches) a

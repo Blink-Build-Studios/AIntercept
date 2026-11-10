@@ -1,0 +1,33 @@
+/* AgentPanel (CompAgents "AgentPanel/codexSession"): rows 4px 12px, 12 apart, a hairline
+   under each but the last; keys 150px in --ink-muted. */
+@layer components {
+  .agent-panel {
+    border: 1px solid var(--line);
+  }
+  .agent-panel-list {
+    margin: 0;
+  }
+  .agent-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .agent-panel-head {
+    justify-content: space-between;
+    white-space: nowrap;
+  }
+  .agent-panel-list > .agent-panel-row:last-child {
+    border-bottom: 0;
+  }
+  .agent-panel-key {
+    width: 150px;
+    flex: none;
+  }
+  .agent-panel-value {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+}

@@ -27,4 +27,66 @@ spec:
               kubernetes.io/metadata.name: {{ .Values.networkPolicy.kedaNamespace }}
       ports:
         - { protocol: TCP, port: 9901 }
+---
+# certsvc's SDS port hands out leaf certificates WITH their private keys for
+# every intercepted host; any pod that could reach it could impersonate those
+# hosts to every enrolled client. Only Envoy may connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: certsvc-sds-restrict
+  labels:
+    app: certsvc
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: certsvc }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: envoy }
+      ports:
+        - { protocol: TCP, port: 18000 }
+---
+# The observer's ext_proc port receives decrypted traffic; only Envoy sends
+# it. Its HTTP port (9001: /healthz, /healthz/path, /stats) stays reachable
+# for kubelet probes and kill-switch pollers.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observer-extproc-restrict
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: observer }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: envoy }
+      ports:
+        - { protocol: TCP, port: 9000 }
+    - ports:
+        - { protocol: TCP, port: 9001 }
+{{- if .Values.api.enabled }}
+---
+# The query API serves everything captured, with no authentication of its own:
+# no pod may connect. People reach it with `kubectl port-forward`, which needs
+# cluster credentials and enters the pod directly; kubelet probes still pass.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-restrict
+  labels:
+    app: api
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: api }
+  policyTypes: ["Ingress"]
+  ingress: []
+{{- end }}
 {{- end }}

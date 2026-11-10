@@ -13,8 +13,7 @@ Build and push the images (replace the registry):
 
 ```bash
 export REG=your-registry.example.com/aintercept
-docker build -t $REG/certsvc:dev ./certsvc && docker push $REG/certsvc:dev
-docker build -t $REG/observer:dev ./observer && docker push $REG/observer:dev
+docker build -t $REG/aintercept:dev ./aintercept && docker push $REG/aintercept:dev   # one image: observer and certsvc
 # fixture is for local M1; a cluster test can reuse it or target a real upstream.
 ```
 

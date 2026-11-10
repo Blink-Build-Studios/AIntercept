@@ -1,0 +1,1100 @@
+{
+  "$comment": [
+    "Intentional differences from the Claude Design canvas, at property level, each with a reason.",
+    "make parity accepts exactly these and fails on anything else. Keys are data-spec values, 'Component/*', or '<spec>@<Sheet>' for one occurrence of a name the canvas reuses on several sheets.",
+    "Each entry: {\"path\": \"root\" | \"text \\\"…\\\"\" | \"mark[i]\" (globs allowed), \"prop\": \"<css property>\" | \"box.w\" | … (globs allowed), \"status\": \"approved\" | \"pending\", \"reason\": \"…\", \"source\": \"handoff §… | approved YYYY-MM-DD\" (approved only)}.",
+    "pending entries are reported as ⚠ (not a pass) until a design decision approves or removes them."
+  ],
+  "deviations": {
+    "BarTrack/default": [
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "BarTrack/hoverBin": [
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "BarTrack/hoverGap": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "BarTrack/withGaps": [
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Brush/hoverHandleSelection": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      }
+    ],
+    "Button/pressed": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompControls still draws this state as before §11G.B1 (pressed --surface-raised, unselected chips --line); the round-10 rule is ClickRule on CompDensity (pressed --skeleton, --line-strong at rest).",
+        "source": "handoff §11G.B1"
+      }
+    ],
+    "DensityTrack/default": [
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "DensityTrack/hoverBin": [
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "DeviceRow/asleep": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "FocusRow/blurred": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "FocusRow/focused": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "FrictionRow/destructive": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "FrictionRow/frustrated": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "FrictionRow/interrupted": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "GapRow/merged": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/analytics": [
+      {
+        "path": "text \"Analytics\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events/hour\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events/hour\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events/hour\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/analyticsHover": [
+      {
+        "path": "text \"Analytics\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/analyticsHoverGuide": [
+      {
+        "path": "text \"Analytics\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/brushdragging": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/brushhoverHandleSelection": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/contextHover": [
+      {
+        "path": "text \"Context\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"tokens · main thread\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"tokens · main thread\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"tokens · main thread\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/contextLabelHover": [
+      {
+        "path": "text \"Context\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"tokens · main thread\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"tokens · main thread\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"tokens · main thread\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/deviceSleepRow": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/focusRows": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/frictionHover": [
+      {
+        "path": "text \"Friction\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/frictionSplit": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/loading": [
+      {
+        "path": "text \"Presence\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/modelCalls": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per hour\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per hour\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per hour\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/modelCalls14d": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/modelCalls24h": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/modelCalls7d": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/modelCallsFocus": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/modelCallsGrid14d": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/modelCallsGrid24h": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/modelCallsHover": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/modelCallsPressed": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "box.h",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "line-height",
+        "status": "approved",
+        "reason": "§11G.A3: a lane's sublabel is mono 11/16 (CompDensity); CompTimeline and CompTimelineHover still draw it 11/20.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/modelCallsUnderBrush": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/modelCallsWithGapRow": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/networkHover": [
+      {
+        "path": "text \"Network\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      },
+      {
+        "path": "text \"net A · home\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"net B · has IPv6 → bypassed proxy\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/networkRow": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/notCapturedHover": [
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Lane/permission": [
+      {
+        "path": "text \"Permission\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/permissionHover": [
+      {
+        "path": "text \"Permission\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/presenceHover": [
+      {
+        "path": "text \"Presence\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"focused\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"away\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"device asleep\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/presenceHoverGuide": [
+      {
+        "path": "text \"Presence\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"focused\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"away\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"device asleep\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/presenceRows": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "Lane/prompts": [
+      {
+        "path": "text \"Prompts\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/promptsHover": [
+      {
+        "path": "text \"Prompts\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/promptsHoverGuide": [
+      {
+        "path": "text \"Prompts\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/sessions": [
+      {
+        "path": "text \"Sessions\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/sessionsFocus": [
+      {
+        "path": "text \"Sessions\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Lane/sessionsHover": [
+      {
+        "path": "text \"Sessions\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "PresenceRow/asleep": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "PresenceRow/away": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "PresenceRow/focused": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      }
+    ],
+    "RangeReadout/empty": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimeline's live and empty readouts keep their old button copy; §11G.A8 makes the readout's clear button `× Whole session` / `× Clear range` throughout.",
+        "source": "handoff §11G.A8"
+      }
+    ],
+    "RangeReadout/live": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimeline's live and empty readouts keep their old button copy; §11G.A8 makes the readout's clear button `× Whole session` / `× Clear range` throughout.",
+        "source": "handoff §11G.A8"
+      }
+    ],
+    "RangeReadout/wholeSession": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompDensity's RangeReadout is a sketch of the clear button's place (a chip, counts, three buttons, 1344px); the readout's layout is RangeReadout/range on CompTimeline, which passes.",
+        "source": "handoff §11G.A8"
+      }
+    ],
+    "RangeReadout/withClear": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompDensity's RangeReadout is a sketch of the clear button's place (a chip, counts, three buttons, 1344px); the readout's layout is RangeReadout/range on CompTimeline, which passes.",
+        "source": "handoff §11G.A8"
+      }
+    ],
+    "StateTrack/hoverNetwork": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      }
+    ],
+    "TimeAxis/ticks14d": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      },
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "The sheet's axis gutter is 132px plus a 1px border (133px); the lanes' label column is 132px including its border, so our axis keeps its ticks aligned with the lanes, 1px left of the sheet's.",
+        "source": "handoff §11G.A6, approved 2026-11-08"
+      }
+    ],
+    "TimeAxis/ticks24h": [
+      {
+        "path": "root",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "CompDensity's marks are drawn for a 1212px track (its ticks end at 1212) inside a 1210px frame; these specimens render the 1212px track the marks need, so the box is 2px wider than the sheet's frame.",
+        "source": "handoff §11G.A5–A6, approved 2026-11-08"
+      },
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "The sheet's axis gutter is 132px plus a 1px border (133px); the lanes' label column is 132px including its border, so our axis keeps its ticks aligned with the lanes, 1px left of the sheet's.",
+        "source": "handoff §11G.A6, approved 2026-11-08"
+      }
+    ],
+    "TimeAxis/withReadout": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      }
+    ],
+    "Timeline/hoverGuide": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      },
+      {
+        "path": "text \"Prompts\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"per 30 min\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"Analytics\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"events\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"Presence\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"focused\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"away\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"device asleep\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "Timeline/loading": [
+      {
+        "path": "text \"Prompts\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"Analytics\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "text \"Presence\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      }
+    ],
+    "Timeline/withBrush": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompTimelineHover / CompTimeline still draw this specimen as before round 10 (the old network lane, in-lane gap labels, the label-only axis, a brush without its ×, the axis annotation); §11G.A3, A4, A6 and A8 replace it.",
+        "source": "handoff §11G.A3–A8"
+      },
+      {
+        "path": "text \"Model calls\"",
+        "prop": "white-space",
+        "status": "approved",
+        "reason": "§11G.A3: lane labels are one line and never wrap (CompDensity); CompTimeline and CompTimelineHover still let them wrap.",
+        "source": "handoff §11G.A3"
+      },
+      {
+        "path": "mark[*]",
+        "prop": "box.w",
+        "status": "approved",
+        "reason": "§11G.A5: bars are a bin wide less 1px; CompTimeline and CompTimelineHover still draw 80% of a bin.",
+        "source": "handoff §11G.A5"
+      }
+    ],
+    "ToggleChip/focus": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompControls still draws this state as before §11G.B1 (pressed --surface-raised, unselected chips --line); the round-10 rule is ClickRule on CompDensity (pressed --skeleton, --line-strong at rest).",
+        "source": "handoff §11G.B1"
+      }
+    ],
+    "Tooltip/gapMerged": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompDensity's tooltips are drawn without the tooltip surface's 2px radius, start-aligned, in a 382px box; the surface's rules are CompTooltip's (§6B.1), which pass.",
+        "source": "handoff §6B.1, §11G"
+      }
+    ],
+    "Tooltip/partialCapture": [
+      {
+        "path": "*",
+        "prop": "*",
+        "status": "approved",
+        "reason": "CompDensity's tooltips are drawn without the tooltip surface's 2px radius, start-aligned, in a 382px box; the surface's rules are CompTooltip's (§6B.1), which pass.",
+        "source": "handoff §6B.1, §11G"
+      }
+    ]
+  }
+}

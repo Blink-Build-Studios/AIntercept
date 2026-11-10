@@ -6,17 +6,60 @@ app.kubernetes.io/part-of: aintercept
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end -}}
 
-{{/* Fully-qualified image refs. */}}
-{{- define "aintercept.observerImage" -}}
-{{ .Values.images.observer.repository }}:{{ .Values.images.observer.tag }}
+{{/*
+Fully-qualified image ref: repository@digest when a digest is set (immutable;
+what production deploys use), else repository:tag.
+*/}}
+{{- define "aintercept.image" -}}
+{{- if .digest -}}
+{{ .repository }}@{{ .digest }}
+{{- else -}}
+{{ .repository }}:{{ .tag }}
+{{- end -}}
 {{- end -}}
 
-{{- define "aintercept.certsvcImage" -}}
-{{ .Values.images.certsvc.repository }}:{{ .Values.images.certsvc.tag }}
+{{- define "aintercept.ainterceptImage" -}}
+{{ include "aintercept.image" .Values.images.aintercept }}
+{{- end -}}
+
+{{- define "aintercept.apiImage" -}}
+{{ include "aintercept.image" .Values.images.api }}
 {{- end -}}
 
 {{- define "aintercept.envoyImage" -}}
-{{ .Values.images.envoy.repository }}:{{ .Values.images.envoy.tag }}
+{{ include "aintercept.image" .Values.images.envoy }}
+{{- end -}}
+
+{{/* The Envoy config, rendered (it carries chart conditionals). */}}
+{{- define "aintercept.envoyConfig" -}}
+{{- include "aintercept.checkAllowlist" . -}}
+{{ tpl (.Files.Get "files/envoy.multi.yaml") . }}
+{{- end -}}
+
+{{/*
+Fail the render when interception.allowlist and the hosts Envoy serves differ.
+Envoy waits for every host's certificate before it goes ready, so a host Envoy
+serves but certsvc won't mint would keep every Envoy pod unready.
+*/}}
+{{- define "aintercept.checkAllowlist" -}}
+{{- $envoy := list -}}
+{{- range regexFindAll "- name: \"[^\"]+\"\\s+sds_config" (.Files.Get "files/envoy.multi.yaml") -1 -}}
+{{- $envoy = append $envoy (regexReplaceAll "- name: \"([^\"]+)\"[\\s\\S]*" . "${1}") -}}
+{{- end -}}
+{{- $allow := list -}}
+{{- range splitList "," .Values.interception.allowlist -}}
+{{- $allow = append $allow (trim . | lower) -}}
+{{- end -}}
+{{- range $envoy -}}
+{{- if not (has . $allow) -}}
+{{- fail (printf "interception.allowlist is missing %q, which Envoy serves (files/envoy.multi.yaml): Envoy would wait for its certificate forever" .) -}}
+{{- end -}}
+{{- end -}}
+{{- range $allow -}}
+{{- if not (has . $envoy) -}}
+{{- fail (printf "interception.allowlist has %q, which Envoy doesn't serve: add it to files/envoy.multi.yaml (filter chain, SDS secret, virtual host, clusters)" .) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -42,8 +85,8 @@ runtime failure in-cluster.
 {{- if not .Values.objectStore.region -}}
 {{- fail "objectStore.region is required" -}}
 {{- end -}}
-{{- if and (not .Values.observer.keyHashSalt) (not .Values.observer.keyHashSaltSecret) -}}
-{{- fail "observer.keyHashSalt (or keyHashSaltSecret) is required: without a salt, key_hash is a reversible sha256(key). Generate one: openssl rand -hex 32" -}}
+{{- if not (or .Values.observer.keyHashSalt .Values.observer.keyHashSaltSecret .Values.observer.keyHashSaltSecretsManagerId) -}}
+{{- fail "a key-hash salt is required (observer.keyHashSaltSecretsManagerId, keyHashSaltSecret, or keyHashSalt): without a salt, key_hash is a reversible sha256(key). Generate one: openssl rand -hex 32" -}}
 {{- end -}}
 {{- if eq .Values.cloud "digitalocean" -}}
 {{- if not .Values.objectStore.endpoint -}}
@@ -55,9 +98,8 @@ runtime failure in-cluster.
 {{- end -}}
 {{- end -}}
 {{- else if eq .Values.cloud "aws" -}}
-{{- if not .Values.observer.serviceAccount.roleArn -}}
-{{- fail "observer.serviceAccount.roleArn (IRSA) is required for cloud=aws" -}}
-{{- end -}}
+{{- /* AWS credentials come from EKS Pod Identity (an association made outside
+the cluster; nothing to set here) or IRSA (serviceAccount.roleArn). */ -}}
 {{- else -}}
 {{- fail (printf "cloud must be 'aws' or 'digitalocean', got %q" .Values.cloud) -}}
 {{- end -}}

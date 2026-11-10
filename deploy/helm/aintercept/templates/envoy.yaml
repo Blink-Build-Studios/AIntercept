@@ -10,7 +10,7 @@ data:
   # Its upstream clusters reference the in-cluster Service names (certsvc:18000,
   # observer:9000), which resolve via cluster DNS unchanged.
   envoy.yaml: |
-{{ .Files.Get "files/envoy.multi.yaml" | indent 4 }}
+{{ include "aintercept.envoyConfig" . | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -38,7 +38,7 @@ spec:
       labels: { app: envoy }
       annotations:
         # Roll pods when the embedded Envoy config changes.
-        checksum/config: {{ .Files.Get "files/envoy.multi.yaml" | sha256sum }}
+        checksum/config: {{ include "aintercept.envoyConfig" . | sha256sum }}
     spec:
       # Must exceed preStopSleep + drainTime so Kubernetes never SIGKILLs Envoy
       # mid-drain. On SIGTERM Envoy drains gracefully for --drain-time-s (below).
@@ -126,18 +126,26 @@ metadata:
     app: envoy
     {{- include "aintercept.labels" . | nindent 4 }}
   annotations:
+    {{- $proxyProtocol := (.Values.envoy.proxyProtocol | default dict).enabled }}
     {{- if eq .Values.cloud "aws" }}
     # AWS: provision a Network Load Balancer (L4, preserves TLS to Envoy).
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    {{- if $proxyProtocol }}
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+    {{- end }}
     {{- else if eq .Values.cloud "digitalocean" }}
     # DigitalOcean: L4 LB, passthrough so Envoy terminates TLS itself.
     service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+    {{- if $proxyProtocol }}
+    service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
+    {{- end }}
     {{- end }}
     {{- with .Values.envoy.service.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   type: {{ .Values.envoy.service.type }}
+  externalTrafficPolicy: {{ .Values.envoy.service.externalTrafficPolicy | default "Local" }}
   selector: { app: envoy }
   ports:
     - { name: https, port: 443, targetPort: 443 }

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Request drawer parts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.box{background:#131618;border:1px solid #2a3034;width:820px}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:2px 8px;cursor:pointer}
+.tab{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 0;cursor:pointer;color:#a3a9ad}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.comp{display:flex;flex-direction:column;gap:10px}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1850px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Request drawer parts</span>
+<span style="color: #a3a9ad">RequestDrawer is an 820px right-side dialog over a 60% scrim. Its parts, top to bottom: DrawerHeader, meta line, KeyStrip, Tabs (Summary · Raw · All details), then the tab body.</span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div class="comp"><span class="cname">DrawerHeader</span><span class="props">kind, method, path, status, onPrev, onNext, onClose, actions</span>
+<sc-for list="{{headers}}" as="h" hint-placeholder-count="3"><div><div class="cap">{{h.cap}}</div><div class="box">
+<div data-spec="DrawerHeader/{{h.st}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 16px; background: #1b1f22; border-bottom: 1px solid #2a3034"><span class="m" style="color: #7db3ff">model</span><span class="m" style="font-weight: 600">POST /v1/messages</span><span class="m" style="color: {{h.sc}}">{{h.status}}</span><span style="flex: 1"></span><button class="btn">Copy as curl</button><button class="btn" aria-label="Previous request">↑</button><button class="btn" aria-label="Next request">↓</button><button class="btn" aria-label="Close">×</button></div>
+<div data-spec="DrawerMeta/{{h.st}}" class="m" style="padding: 6px 16px; color: #a3a9ad">{{h.sub}}</div>
+</div></div></sc-for>
+</div>
+</div>
+
+<div class="comp"><span class="cname">KeyStrip · KeyStripCell</span><span class="props">cells[{label, value, sub}] · six equal cells; unknown is “—” with a reason</span>
+<div><div class="cap">values</div><div data-spec="KeyStrip/values" class="box" style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr))">
+<sc-for list="{{ks}}" as="s" hint-placeholder-count="6"><div data-spec="KeyStripCell/{{s.st}}" style="padding: 8px 12px; border-right: 1px solid #2a3034"><div class="k">{{s.k}}</div><div class="m" style="font-weight: 500">{{s.v}}</div><div class="m" style="font-size: 11px; color: #a3a9ad">{{s.s}}</div></div></sc-for>
+</div></div>
+<div><div class="cap">unknown</div><div data-spec="KeyStrip/unknown" class="box" style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr))">
+<sc-for list="{{ksU}}" as="s" hint-placeholder-count="6"><div data-spec="KeyStripCell/{{s.st}}" style="padding: 8px 12px; border-right: 1px solid #2a3034"><div class="k">{{s.k}}</div><div class="m" style="font-weight: 500; color: {{s.c}}">{{s.v}}</div><div class="m" style="font-size: 11px; color: #a3a9ad">{{s.s}}</div></div></sc-for>
+</div></div>
+</div>
+
+<div class="comp"><span class="cname">DrawerTabs</span><span class="props">tabs: Summary | Raw | All details · Raw relabels when there is no wire data</span>
+<div style="display: flex; gap: 32px">
+<div><div class="cap">default</div><div data-spec="DrawerTabs/default" class="box" style="width: 400px; display: flex; gap: 20px; padding: 0 16px"><button class="tab" style="color: #e6e3db; border-bottom-color: #e6e3db">Summary</button><button class="tab">Raw</button><button class="tab">All details</button></div></div>
+<div><div class="cap">no wire data</div><div data-spec="DrawerTabs/noWireData" class="box" style="width: 400px; display: flex; gap: 20px; padding: 0 16px"><button class="tab" style="color: #e6e3db; border-bottom-color: #e6e3db">Summary</button><button class="tab">Raw · none</button><button class="tab">All details</button></div></div>
+</div>
+</div>
+
+<div class="comp"><span class="cname">ContentRow</span><span class="props">label, detail, size, tone? (tool call = ch-skills), body? · shape only unless content is retained</span>
+<div><div class="cap">shape only</div><div class="box">
+<div data-spec="ContentRow/shapeOnly" class="row m" style="padding-left: 16px"><span style="width: 180px; font-weight: 600">tool_result · Read</span><span style="flex: 1; color: #a3a9ad">src/auth/session.ts · 132 lines</span><span style="color: #a3a9ad">4.1 KB</span></div>
+<div data-spec="ContentRow/notRetained" class="row m" style="padding-left: 16px"><span style="width: 180px; font-weight: 600">text</span><span style="flex: 1; color: #a3a9ad">not retained</span><span style="color: #a3a9ad">212 chars</span></div>
+<div data-spec="ContentRow/toolCall" class="row m" style="padding-left: 16px; border-bottom: 0"><span style="width: 180px; font-weight: 600; color: #e8916f">tool_use · Edit</span><span style="flex: 1; color: #a3a9ad">src/auth/session.ts → ran 62 ms · +14 −3</span><span style="color: #a3a9ad">1.3 KB</span></div>
+</div></div>
+<div><div class="cap">retained · with body</div><div class="box">
+<div data-spec="ContentRow/retainedWithBody" class="row m" style="padding-left: 16px"><span style="width: 180px; font-weight: 600; color: #e8916f">tool_use · Edit</span><span style="flex: 1; color: #a3a9ad">src/auth/session.ts → ran 62 ms · +14 −3</span><span style="color: #a3a9ad">1.3 KB</span></div>
+<pre class="m" style="margin: 0; padding: 8px 16px 8px 208px; background: #0c0e0f; white-space: pre-wrap">-   s.token = token
++   if (await isExpired(s)) {
++     s.token = await fetchToken(s.id)
++   }</pre>
+</div></div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div class="comp" style="width: 400px"><span class="cname">DetailSection</span><span class="props">title, accent?, rows[{k, v, tone}] · two per row in All details</span>
+<div data-spec="DetailSection/default" class="box" style="width: 400px; padding: 10px 16px; box-sizing: border-box">
+<div class="k" style="margin-bottom: 4px; color: #8fd17e">Tokens &amp; cost</div>
+<sc-for list="{{ds}}" as="r" hint-placeholder-count="5"><div class="m" style="display: flex; gap: 8px"><span style="width: 160px; color: #a3a9ad">{{r.k}}</span><span style="color: {{r.c}}">{{r.v}}</span></div></sc-for>
+</div></div>
+<div class="comp" style="width: 400px"><span class="cname">HeaderList</span><span class="props">headers[{name, value, redacted?}] · credentials always redacted · layout per §11H.3 (CompR11)</span>
+<div data-spec="HeaderList/default" class="box m" style="width: 400px; box-sizing: border-box; font-size: 12.5px; line-height: 18px">
+<sc-for list="{{hl}}" as="h" hint-placeholder-count="4"><div data-spec="HeaderList/{{h.st}}" style="display: grid; grid-template-columns: 184px minmax(0, 1fr); column-gap: 16px; padding: 3px 12px; border-bottom: {{h.bb}}; align-items: baseline"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e6e3db">{{h.k}}</span><span style="overflow-wrap: anywhere; color: {{h.c}}">{{h.v}}</span></div></sc-for>
+</div></div>
+<div class="comp" style="width: 400px"><span class="cname">StreamEventList</span><span class="props">events[{t, type, detail}] · decoded server-sent events</span>
+<div data-spec="StreamEventList/default" class="box" style="width: 400px; padding: 8px 16px; box-sizing: border-box">
+<sc-for list="{{sse}}" as="s" hint-placeholder-count="4"><div class="m" style="display: flex; gap: 12px"><span style="width: 52px; color: #848c90">{{s.t}}</span><span style="width: 170px">{{s.e}}</span><span style="color: #a3a9ad; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{s.d}}</span></div></sc-for>
+</div></div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div class="comp" style="width: 620px"><span class="cname">TimingWaterfall</span><span class="props">phases[{label, start, dur, tone}] · proxy timings beside Claude Code’s own</span>
+<div data-spec="TimingWaterfall/default" class="box" style="width: 620px; padding: 12px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{tw}}" as="t" hint-placeholder-count="5"><div class="m" style="display: flex; align-items: center; gap: 8px"><span style="width: 170px; color: #a3a9ad">{{t.k}}</span><div style="flex: 1; position: relative; height: 10px"><div style="position: absolute; top: 0; height: 10px; background: {{t.c}}; left: {{t.l}}; width: {{t.w}}"></div><span class="m" style="position: absolute; left: 0; top: -5px; font-size: 11px; line-height: 20px; color: #848c90; white-space: nowrap">{{t.r}}</span></div><span style="width: 56px; text-align: right">{{t.v}}</span></div></sc-for>
+</div></div>
+<div class="comp" style="width: 560px"><span class="cname">FieldList</span><span class="props">fields[{key, value}], filter · “— not on rows yet” for fields not extracted</span>
+<div data-spec="FieldList/default" class="box" style="width: 560px">
+<sc-for list="{{fl}}" as="f" hint-placeholder-count="4"><div class="row m"><span style="width: 240px; color: #a3a9ad">{{f.k}}</span><span style="color: {{f.c}}">{{f.v}}</span></div></sc-for>
+</div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1850}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var W = '#e6e3db', MU = '#a3a9ad', DG = '#ff7a6b';
+    var K = function (k, v, s, c) { return { k: k, v: v, s: s, c: c || W }; };
+    var __st = function (s) { var w = String(s).replace(/[\u2192\/\u00b7]/g, ' ').match(/[A-Za-z0-9]+/g) || ['default']; return w[0].toLowerCase() + w.slice(1).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(''); };
+    var __r = {
+      headers: [
+        { cap: 'normal', status: '200 · 9.3 s · 8.2 KB ↑ · 3.4 KB ↓', sc: MU, sub: 'Nov 3 10:42:16.204 · prompt #19 · step 2 of 9 · main · req_01H…9fa' },
+        { cap: 'reported, not captured', status: '▲ reported by Claude Code · not captured', sc: DG, sub: 'Nov 3 15:22:08 · prompt #22 · requestId from analytics' },
+        { cap: 'failed', status: '✕ ERR · connection reset after 0.6 s · retried', sc: W, sub: 'Nov 3 10:03:08.412 · prompt #17 · attempt 1 of 2' }
+      ],
+      ks: [K('Model', 'opus', 'effort high'), K('Tokens', '43.0k → 1.2k', '99% from cache'), K('Cost est.', '$0.21', 'API-equivalent'), K('TTFT', '1.9 s', 'proxy 1.87 s'), K('Duration', '9.3 s', '47 events'), K('Stop', 'tool_use', '1 tool call')],
+      ksU: [K('Model', 'opus', 'from analytics'), K('Tokens', '—', 'no response', MU), K('Cost est.', '—', 'not billed', MU), K('TTFT', '—', 'no first byte', MU), K('Duration', '0.6 s', 'until reset'), K('Stop', '—', 'not reported', MU)],
+      ds: [{ k: 'input · uncached', v: '412', c: W }, { k: 'cache read', v: '42,611', c: W }, { k: 'output', v: '1,204', c: W }, { k: 'costUSD', v: '$0.21 · ✓ matches usage', c: W }, { k: 'speed', v: '— not sent', c: MU }],
+      hl: [{ k: 'host', v: 'api.anthropic.com', c: W }, { k: 'authorization', v: '[redacted · key_hash 9e2…]', c: '#848c90' }, { k: 'x-claude-code-session-id', v: '4c1a…77e0', c: W }, { k: 'request-class', v: 'main', c: W }],
+      sse: [{ t: '+1.87 s', e: 'message_start', d: 'id msg_01…b2' }, { t: '+1.9 s', e: 'content_block_delta ×18', d: 'thinking_delta' }, { t: '+5.3 s', e: 'content_block_start [2]', d: 'tool_use · Edit' }, { t: '+9.3 s', e: 'message_stop', d: '' }],
+      tw: [{ k: 'accept + TLS', l: '0%', w: '0%', c: '#60686d', v: '—', r: '—  not recorded by the proxy' }, { k: 'upstream connect', l: '0%', w: '0%', c: '#60686d', v: '—', r: '—  not recorded by the proxy' }, { k: 'first byte', l: '0%', w: '20.1%', c: '#7db3ff', v: '1.9 s', r: '' }, { k: 'streaming', l: '20.1%', w: '79.9%', c: '#7db3ff', v: '7.4 s', r: '' }, { k: 'total', l: '0%', w: '100%', c: '#2a3034', v: '9.3 s', r: '' }],
+      fl: [{ k: 'session_id', v: '4c1a…77e0', c: W }, { k: 'usage.output_tokens', v: '1,204', c: W }, { k: 'usage.service_tier', v: 'standard', c: W }, { k: 'bytes_up / bytes_down', v: '— not on rows yet', c: MU }]
+    };
+    __r.headers.forEach(function (x) { x.st = __st(x.cap); }); __r.ks.forEach(function (x) { x.st = __st(x.k); }); __r.ksU.forEach(function (x) { x.st = __st(x.k) + (x.v === '\u2014' ? 'Unknown' : 'Known'); }); __r.hl.forEach(function (x, i) { x.st = __st('row ' + x.k) + (/redacted/.test(x.v) ? 'Redacted' : ''); x.c = /redacted/.test(x.v) ? '#848c90' : '#a3a9ad'; x.bb = i === __r.hl.length - 1 ? '0' : '1px solid #2a3034'; });
+    return __r;
+  }
+}
+</script>
+</body>
+</html>

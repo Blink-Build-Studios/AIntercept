@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Table rows</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;width:150px;flex:none;padding-top:6px}
+.frame{background:#131618;border:1px solid #2a3034;flex:1;min-width:0;overflow-x:auto}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.comp{display:flex;flex-direction:column;gap:8px}
+.var{display:flex;gap:12px;align-items:flex-start}
+.quiet{color:#848c90}.quiet *:not(.ch){color:#848c90 !important}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 2050px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Table rows</span>
+<span style="color: #a3a9ad">All rows live in a DataTable: a surface box with a micro-caps header row, hairlines between rows, horizontal scroll under a minimum width, and Pagination in the footer. Row states: hover surface-raised · focus 2px inset ring · selected surface-raised with ink.</span>
+</div>
+
+<div class="comp"><span class="cname">PersonRow</span><span class="props">person, agents[], lastSeen, sessions, prompts, tokens + accuracy, spark, bypass, coverage · links to the person page · min-width 1240</span>
+<sc-for list="{{persons}}" as="p" hint-placeholder-count="6"><div class="var"><span class="cap">{{p.cap}}</span><div class="frame"><div data-spec="PersonRow/{{p.ds}}" class="row m" style="min-width: 1240px; padding: 8px 12px; background: {{p.bg}}; box-shadow: {{p.ol}}">
+<span style="width: 250px; display: flex; flex-direction: column; overflow: hidden"><span style="font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; overflow: hidden; text-overflow: ellipsis">{{p.name}}</span><span style="color: #848c90; font-size: 11px; line-height: 14px; overflow: hidden; text-overflow: ellipsis">{{p.id}}</span></span>
+<span style="width: 260px; display: flex; flex-wrap: wrap; gap: 4px"><sc-for list="{{p.agents}}" as="a" hint-placeholder-count="1"><span data-spec="AgentChip/row" class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 999px; background: {{a.c}}"></span>{{a.n}}</span></sc-for></span>
+<span style="width: 100px; color: {{p.lsc}}">{{p.ls}}</span><span style="width: 70px; text-align: right">{{p.s}}</span><span style="width: 70px; text-align: right">{{p.pr}}</span><span style="width: 90px; text-align: right; color: {{p.tc}}">{{p.t}}</span>
+<span data-spec="Sparkline/inRow" style="flex: 1; display: flex; align-items: flex-end; gap: 2px; height: 22px; min-width: 160px"><sc-for list="{{p.spark}}" as="b" hint-placeholder-count="14"><span style="flex: 1; min-height: 1px; background: {{b.c}}; height: {{b.h}}"></span></sc-for></span>
+<span style="width: 90px; text-align: right">{{p.by}}</span><span style="width: 84px; text-align: right; color: {{p.cc}}">{{p.cov}}</span><span style="width: 12px; color: #848c90">›</span>
+</div></div></div></sc-for>
+<div class="var"><span class="cap">loading</span><div class="frame"><div data-spec="PersonRow/loading" class="row" style="min-width: 1240px; padding: 11px 12px"><div style="width: 250px; display: flex; flex-direction: column; gap: 6px"><div style="width: 60%; height: 12px; background: #20252a"></div><div style="width: 70%; height: 8px; background: #20252a; opacity: .6"></div></div><div style="width: 260px"><div style="width: 96px; height: 16px; background: #20252a"></div></div><div style="width: 100px"><div style="width: 70px; height: 12px; background: #20252a"></div></div><div style="width: 70px"><div style="width: 30px; height: 12px; background: #20252a; margin-left: auto"></div></div><div style="width: 70px"><div style="width: 30px; height: 12px; background: #20252a; margin-left: auto"></div></div><div style="width: 90px"><div style="width: 54px; height: 12px; background: #20252a; margin-left: auto"></div></div><div style="flex: 1; min-width: 160px; height: 18px; background: #20252a; opacity: .45"></div><div style="width: 90px"><div style="width: 44px; height: 12px; background: #20252a; margin-left: auto"></div></div><div style="width: 84px"><div style="width: 54px; height: 12px; background: #20252a; margin-left: auto"></div></div><div style="width: 12px"></div></div></div></div>
+</div>
+
+<div class="comp"><span class="cname">SessionRow</span><span class="props">start, live, repo, label, prompts, span, calls, events, friction, bypass, coverage · links to the session page</span>
+<sc-for list="{{sessions}}" as="s" hint-placeholder-count="5"><div class="var"><span class="cap">{{s.cap}}</span><div class="frame"><div data-spec="SessionRow/{{s.ds}}" class="row m" style="min-width: 1200px; padding: 6px 12px; background: {{s.bg}}">
+<span style="width: 92px; color: #a3a9ad">{{s.t}}</span><span style="width: 10px; color: {{s.dc}}">●</span>
+<span style="width: 240px; font-weight: 600; overflow: hidden; text-overflow: ellipsis">{{s.repo}}</span>
+<span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{s.label}}</span>
+<span style="width: 64px; text-align: right">{{s.p}}</span><span style="width: 64px; text-align: right; color: #a3a9ad">{{s.d}}</span>
+<span style="width: 56px; text-align: right">{{s.c}}</span><span style="width: 64px; text-align: right; color: #a3a9ad">{{s.ev}}</span>
+<span style="width: 84px">{{s.fr}}<span style="color: #ff7a6b">{{s.de}}</span></span>
+<span style="width: 72px; text-align: right">{{s.by}}</span>
+<span style="width: 84px; text-align: right; color: {{s.cc}}">{{s.cov}}</span>
+<span style="width: 12px; color: #848c90">›</span>
+</div></div></div></sc-for>
+</div>
+
+<div class="comp"><span class="cname">RequestRow</span><span class="props">time, prompt?, kind (ChannelSwatch color), session?, method, path, status, duration, up, down · opens the request drawer</span>
+<sc-for list="{{reqs}}" as="r" hint-placeholder-count="6"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="RequestRow/{{r.ds}}" class="row m {{r.q}}" style="min-width: 1180px; background: {{r.bg}}">
+<span style="width: 108px; color: #848c90">{{r.t}}</span><span class="ch" style="width: 84px; color: {{r.c}}">{{r.k}}</span>
+<span style="width: 150px; color: {{r.sc}}; overflow: hidden; text-overflow: ellipsis">{{r.s}}</span><span style="width: 40px">{{r.m}}</span>
+<span style="flex: 1; overflow: hidden; text-overflow: ellipsis; color: {{r.pc}}">{{r.p}}</span><span style="width: 44px; color: {{r.stc}}; font-weight: {{r.stw}}">{{r.st}}</span>
+<span style="width: 64px; text-align: right; color: #a3a9ad">{{r.d}}</span><span style="width: 70px; text-align: right">{{r.u}}</span><span style="width: 70px; text-align: right; color: #a3a9ad">{{r.dn}}</span>
+</div></div></div></sc-for>
+</div>
+
+<div class="comp"><span class="cname">EventRow</span><span class="props">time, prompt?, name, linkedTo, fields, marker?, json? · click to expand all fields</span>
+<sc-for list="{{events}}" as="e" hint-placeholder-count="4"><div class="var"><span class="cap">{{e.cap}}</span><div class="frame"><div data-spec="EventRow/{{e.ds}}" class="row m {{e.q}}" style="min-width: 1100px; background: {{e.bg}}">
+<span style="width: 76px; color: #848c90">{{e.t}}</span><span style="width: 40px; color: #a3a9ad">{{e.n}}</span><span style="width: 290px; color: #f0b43c; overflow: hidden; text-overflow: ellipsis">{{e.ev}}</span><span style="width: 150px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.l}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{e.f}}</span><span style="color: {{e.wc}}">{{e.w}}</span>
+</div>
+<sc-if value="{{e.open}}" hint-placeholder-val="{{ false }}"><pre data-spec="EventRow/expandedJson" class="m" style="margin: 0; padding: 8px 12px 8px 140px; background: #0c0e0f; border-bottom: 1px solid #2a3034; color: #e6e3db; white-space: pre-wrap">{{e.json}}</pre></sc-if>
+</div></div></sc-for>
+</div>
+
+<div class="comp"><span class="cname">EventRow · compact</span><span class="props">request drawer only · offset, name, detail, join key</span>
+<sc-for list="{{cevents}}" as="e" hint-placeholder-count="2"><div class="var"><span class="cap">{{e.cap}}</span><div class="frame" style="flex: none; width: 720px"><div data-spec="{{e.spec}}" class="row m"><span style="width: 64px; color: #848c90">{{e.t}}</span><span style="color: #f0b43c; width: 250px; overflow: hidden; text-overflow: ellipsis">{{e.n}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.d}}</span><span style="color: #848c90">{{e.j}}</span></div></div></div></sc-for>
+</div>
+
+<div class="comp"><span class="cname">PromptRow · StepRow · ToolCallRow · BetweenRow</span><span class="props">PromptRow: index, time, text | shape, steps, duration, tokens, tools, friction, expanded · StepRow: model | subagent, status · ToolCallRow: tool, target, result, marker? · BetweenRow: compaction | recap</span>
+<sc-for list="{{prompts}}" as="r" hint-placeholder-count="4"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="{{r.spec}}" class="row m" style="min-width: 1100px; background: {{r.bg}}">
+<span style="width: 18px">{{r.tw}}</span><span style="width: 40px; font-weight: 600">#{{r.n}}</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span><span style="width: 240px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.txt}}</span><span style="width: 70px">{{r.steps}}</span><span style="width: 64px; color: #a3a9ad">{{r.dur}}</span><span style="width: 110px">{{r.tok}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.tools}}</span><span style="width: 80px">{{r.mk}}</span>
+</div></div></div></sc-for>
+<sc-for list="{{steps}}" as="r" hint-placeholder-count="7"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="{{r.spec}}" class="row m" style="min-width: 1100px; padding-left: {{r.pad}}; background: {{r.bg}}">
+<span style="color: #848c90; width: 64px">{{r.t}}</span><span style="font-weight: {{r.fw}}; color: {{r.c}}; width: 72px">{{r.a}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{r.b}}</span><span style="color: #a3a9ad">{{r.r}}</span><span style="color: #ff7a6b">{{r.w}}</span>
+</div></div></div></sc-for>
+<sc-for list="{{betweens}}" as="r" hint-placeholder-count="2"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="{{r.spec}}" class="row m quiet" style="min-width: 1100px"><span style="width: 18px"></span><span style="width: 40px; color: #848c90">—</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span><span class="ch" style="color: {{r.c}}">{{r.b}}</span></div></div></div></sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2050}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var sp = function (d, c) { return d.map(function (v) { return { h: v ? Math.min(22, 3 + v * 1.9) + 'px' : '1px', c: v ? c : '#2a3034' }; }); };
+    var CC = { n: 'Claude Code', c: '#e8916f' }, CX = { n: 'Codex', c: '#9fb4c7' }, GPT = { n: 'ChatGPT', c: '#7fd1b9' };
+    var P = function (cap, bg, ol, name, id, agents, ls, lsc, s, t, tc, spark, by, cov, cc) { return { cap: cap, bg: bg, ol: ol, name: name, id: id, agents: agents, ls: ls, lsc: lsc, s: s, t: t, tc: tc, spark: spark, by: by, cov: cov, cc: cc }; };
+    var W = '#e6e3db', MU = '#a3a9ad', FA = '#848c90', DG = '#ff7a6b', LV = '#57d68d', M = '#7db3ff', A = '#f0b43c', F = '#c9a3ec', AC = '#b0b8bd', CT = '#8fd17e';
+    var spk = sp([0, 1, 0, 2, 3, 0, 1, 0, 0, 2, 4, 1, 0, 0], '#e8916f');
+    var R = function (cap, t, k, c, s, m, p, st, d, u, op, bg, err, dn, pc) { return { cap: cap, t: t, k: k, c: c, s: s, sc: s === '— no session' ? FA : MU, m: m, p: p, pc: pc || W, st: st, stc: err ? W : MU, stw: err ? 600 : 400, d: d, u: u, dn: dn || '—', op: op || 1, bg: bg || 'transparent' }; };
+    var E = function (cap, t, n, ev, l, f, w, wc, op, bg, open, json) { return { cap: cap, t: t, n: n, ev: ev, l: l, f: f, w: w || '', wc: wc || MU, op: op || 1, bg: bg || 'transparent', open: !!open, json: json || '' }; };
+    var Pr = function (cap, pad, tw, a, ac, aw, t, b, bc, r, rc, w, bg, op) { return { cap: cap, pad: pad, tw: tw, a: a, ac: ac, aw: aw, t: t, b: b, bc: bc, r: r, rc: rc, w: w || '', bg: bg || 'transparent', op: op || 1 }; };
+    var __st = function (s) { var w = String(s).replace(/[\u2192\/\u00b7]/g, ' ').match(/[A-Za-z0-9]+/g) || ['default']; return w[0].toLowerCase() + w.slice(1).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(''); };
+    var __r = {
+      persons: [
+        P('default', 'transparent', 'none', 'name unknown', 'email not seen · 1 account · 1 device', [CC], 'Nov 3 02:15', MU, '1', '1.8k out', W, spk, '—', '0', MU),
+        P('hover', '#1b1f22', 'none', 'name unknown', 'email not seen · 1 account · 1 device', [CC], 'Nov 3 02:15', MU, '1', '1.8k out', W, spk, '—', '0', MU),
+        P('focus', '#1b1f22', 'inset 0 0 0 2px #ffd36b', 'name unknown', 'email not seen · 1 account · 1 device', [CC], 'Nov 3 02:15', MU, '1', '1.8k out', W, spk, '—', '0', MU),
+        P('live · coverage gap', 'transparent', 'none', 'name unknown', 'email not seen · 1 account · 1 device', [CC], '● now', LV, '11', '1.1M out', W, sp([0, 10, 3, 2, 1, 1, 0, 1, 1, 0, 0, 10, 10, 4], '#e8916f'), '99.7%', '▲ 94', DG),
+        P('multi-agent · estimated', 'transparent', 'none', 'Dana Ruiz', 'dana@example.com · linked by email', [CX, GPT], '4 min ago', MU, '9', '≈ 610k out', MU, sp([2, 4, 0, 0, 5, 6, 3, 0, 0, 4, 7, 5, 6, 2], '#9fb4c7'), '—', '—', MU),
+        P('no token counts', 'transparent', 'none', 'name unknown', 'ChatGPT web · 1 device', [GPT], 'Nov 3 09:12', MU, '4', '—', FA, sp([0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 0, 3, 1, 0], '#7fd1b9'), '—', '—', MU)
+      ],
+      sessions: [
+        { cap: 'live · gap', ev: '21,305', bg: 'transparent', t: 'Nov 2 10:04', dc: LV, repo: 'aintercept · partner-readiness', label: 'Coverage check and IPv6 routing; PR #2 open', p: '34', d: '2d 0h', c: '640', fr: '↯1 ✕1 ', de: '▲10', by: '99.7%', cov: '▲ 94', cc: DG },
+        { cap: 'ended', ev: '—', bg: 'transparent', t: 'Oct 23 17:00', dc: '#2a3034', repo: 'web · feat/csv', label: 'Added CSV export; tests pass', p: '8', d: '3h 30m', c: '282', fr: '', de: '', by: '0%', cov: '0', cc: MU },
+        { cap: 'hover', ev: '—', bg: '#1b1f22', t: 'Oct 23 17:00', dc: '#2a3034', repo: 'web · feat/csv', label: 'Added CSV export; tests pass', p: '8', d: '3h 30m', c: '282', fr: '', de: '', by: '0%', cov: '0', cc: MU },
+        { cap: 'fields missing', ev: '—', bg: 'transparent', t: 'Oct 27 10:02', dc: '#2a3034', repo: '—', label: 'identity and repo not parsed (pre-Nov 2)', p: '1', d: '24m 0s', c: '4', fr: '', de: '', by: '—', cov: '—', cc: MU },
+        { cap: 'no recap label', ev: '—', bg: 'transparent', t: 'Oct 28 19:00', dc: '#2a3034', repo: 'docs · readme', label: 'docs · readme · 19:00', p: '2', d: '48m 0s', c: '7', fr: '', de: '', by: '100%', cov: '0', cc: MU }
+      ],
+      reqs: [
+        R('model', '10:42:16', 'model', M, 'partner-readiness', 'POST', '/v1/messages · main · opus · tool_use', '200', '9.3 s', '8.2 KB', 1, 'transparent', false, '3.4 KB', null),
+        R('background (quiet)', '10:42:28', 'analytics', A, 'partner-readiness', 'POST', '/api/event_logging/v2/batch · 96 events', '200', '71 ms', '15 KB', 0.55, 'transparent', false, '100 B', null),
+        R('flags', '10:04:02', 'flags', F, 'partner-readiness', 'POST', '/api/eval/sdk-… · 6-hourly refresh · 3 changed', '200', '120 ms', '1.8 KB', 1, 'transparent', false, '96 KB', null),
+        R('count tokens', '10:02:05', 'count', CT, 'partner-readiness', 'POST', '/v1/messages/count_tokens', '200', '290 ms', '38 KB', 0.55, 'transparent', false, '100 B', null),
+        R('account · no session', '08:31:20', 'account', AC, '— no session', 'GET', '/api/oauth/organizations/…/skills/list-skills', '200', '190 ms', '400 B', 1, 'transparent', false, '22 KB', null),
+        R('error', '10:03:08', 'model', M, 'partner-readiness', 'POST', '/v1/messages · main · opus · connection reset', '✕ ERR', 'retry 1', '5.1 KB', 1, 'transparent', true, '—', null),
+        R('not captured', '15:22:08', 'model', M, 'partner-readiness', '—', '▲ reported by Claude Code, not captured', '—', '7.7 s', '—', 1, 'transparent', false, '—', '#ff7a6b'),
+        R('selected', '10:42:16', 'model', M, 'partner-readiness', 'POST', '/v1/messages · main · opus · tool_use', '200', '9.3 s', '8.2 KB', 1, '#1b1f22', false, '3.4 KB', null)
+      ],
+      events: [
+        E('default', '10:02:09', '17', 'tengu_tool_use_start', 'tool Bash', 'toolUseID toolu_…41'),
+        E('collapsed ticks', '10:02:10', '17', 'tengu_tool_progress ×8', 'tool Bash', 'collapsed · client ticks', '', '', 0.55),
+        E('marked', '10:02:37', '17', 'tengu_bash_tool_command_executed', 'tool Bash', 'rm · exit 0 · destructive_category rm -rf', '▲', DG),
+        E('selected · expanded', '10:02:09', '17', 'tengu_api_success', 'req …a10', 'costUSD 0.18 · ttftMs 2,104', '', '', 1, '#1b1f22', true, '{\n  "requestId": "req_01H…a10",  "session_id": "4c1a…77e0",\n  "costUSD": 0.18,  "ttftMs": 2104,  "permissionMode": "bypassPermissions",\n  "env": { … +45 fields }\n}')
+      ],
+      cevents: [
+        { cap: 'compact', spec: 'EventRow/compact', t: '+9.3 s', n: 'tengu_api_success', d: 'costUSD 0.21 · ttftMs 1,912', j: 'requestId ✓' },
+        { cap: 'compact · no match', spec: 'EventRow/compactNoMatch', t: '+7.7 s', n: 'tengu_api_success', d: 'costUSD 0.17 · ttftMs 2,011 · durationMs 7,702', j: 'requestId · no match ▲' }
+      ],
+      prompts: [
+        { cap: 'collapsed', tw: '▸', n: 18, t: 'Nov 3 10:25', txt: '96 chars', steps: '22', dur: '4m 51s', tok: '39k → 2.6k', tools: 'Bash·19 Read·2', mk: '', bg: 'transparent' },
+        { cap: 'expanded', tw: '▾', n: 19, t: 'Nov 3 10:42', txt: '“fix the flaky auth test”', steps: '9', dur: '1m 40s', tok: '41k → 3.2k', tools: 'Bash·4 Read·3 Edit·2', mk: '↯', bg: '#1b1f22' },
+        { cap: 'in flight', tw: '▾', n: 34, t: 'Nov 4 10:05', txt: '120 chars', steps: '5 so far', dur: '● 4m 3s', tok: '18k → 1.1k', tools: 'Bash·3 Read·1', mk: '', bg: 'transparent' },
+        { cap: 'interrupted', tw: '▸', n: 20, t: 'Nov 3 11:26', txt: '41 chars', steps: '12', dur: '2m 10s', tok: '52k → 1.9k', tools: 'Bash·9 Read·2', mk: '✕', bg: 'transparent' }
+      ],
+      steps: [
+        { cap: 'step · model call', spec: 'StepRow/modelCall', pad: '70px', t: '10:42:16', a: 'opus', c: M, fw: 400, b: '43.0k in → 1.2k out · 9.3 s · tool_use', r: 'open ›', w: '', bg: 'transparent' },
+        { cap: 'step · streaming', spec: 'StepRow/streaming', pad: '70px', t: '10:09:05', a: 'opus', c: M, fw: 400, b: '● streaming · 214 tokens so far', r: '', w: '', bg: 'transparent' },
+        { cap: 'step · events pending', spec: 'StepRow/eventsPending', pad: '70px', t: '10:08:40', a: 'opus', c: M, fw: 400, b: '66.2k in → 380 out · 3.2 s · tool_use', r: 'cost — · events pending…', w: '', bg: 'transparent' },
+        { cap: 'step · subagent', spec: 'StepRow/subagent', pad: '70px', t: '10:42:31', a: '⤷ Explore', c: W, fw: 600, b: 'subagent (haiku) · 3 steps · 22 s · same prompt ID', r: '▸', w: '', bg: 'transparent' },
+        { cap: 'tool call', spec: 'ToolCallRow/default', pad: '100px', t: '', a: 'Read', c: W, fw: 600, b: 'src/auth/session.ts', r: '4.1 KB result', w: '', bg: 'transparent' },
+        { cap: 'tool call · marked', spec: 'ToolCallRow/marked', pad: '100px', t: '', a: 'Bash', c: W, fw: 600, b: 'npm test   exit 1', r: 'stdout 18 KB · 12 s', w: '▲ rm -rf (outside cwd)', bg: 'transparent' },
+        { cap: 'tool call · running', spec: 'ToolCallRow/running', pad: '100px', t: '', a: 'Bash', c: W, fw: 600, b: 'go test ./internal/coverage/...', r: '● running 8.2 s', w: '', bg: 'transparent' }
+      ],
+      betweens: [
+        { cap: 'between · compaction', spec: 'BetweenRow/compaction', t: 'Nov 3 11:18', b: 'compaction · 905k → 21k tokens · 2,207 messages summarized · 1m 11s wait', c: CT },
+        { cap: 'between · recap', spec: 'BetweenRow/recap', t: 'Nov 3 11:02', b: 'recap · auxiliary · haiku · 212 chars', c: MU }
+      ]
+    };
+    ['1', '1', '1', '66', '74', '19'].forEach(function (v, i) { __r.persons[i].pr = v; });
+    __r.reqs.concat(__r.events).forEach(function (x) { x.q = x.op < 1 ? 'quiet' : ''; });
+    ['persons', 'sessions', 'reqs', 'events'].forEach(function (k) { __r[k].forEach(function (x) { x.ds = __st(x.cap); }); }); __r.prompts.forEach(function (x) { x.spec = 'PromptRow/' + __st(x.cap); });
+    return __r;
+  }
+}
+</script>
+</body>
+</html>

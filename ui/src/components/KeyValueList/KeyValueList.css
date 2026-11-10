@@ -1,0 +1,34 @@
+/* KeyValueList (CompSummary "KeyValueList" specimens). */
+@layer components {
+  .kv-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .kv-rows > .kv-row:last-child {
+    border-bottom-width: 0;
+  }
+  .kv-row-tip:hover,
+  .kv-row-tip[data-force="hover"] {
+    background: var(--surface-raised);
+  }
+  .kv-key {
+    flex: none;
+    width: 120px;
+  }
+  /* The description gives way first on a narrow panel (ellipsis, as on Main). */
+  .kv-desc {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kv-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+}

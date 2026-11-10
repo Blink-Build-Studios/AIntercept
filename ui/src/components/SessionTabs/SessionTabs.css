@@ -1,0 +1,45 @@
+/* SessionTabs and TabHint (CompProviders "SessionTabs/withHints", "TabHint", handoff §11L.7). */
+@layer components {
+  .session-tabset {
+    border-bottom: 1px solid var(--line);
+  }
+  .session-tablist {
+    align-items: flex-start;
+    display: flex;
+    gap: 24px;
+  }
+  .session-tab {
+    padding: 6px 0;
+    border: 0 none;
+    background: none;
+    font: var(--type-body);
+    color: var(--ink);
+    text-align: start;
+    cursor: pointer;
+  }
+  .session-tab[aria-selected="true"] {
+    margin-bottom: -1px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .session-tab[aria-selected="true"] > .session-tab-label {
+    font-weight: 600;
+  }
+  .session-tab:hover:not([aria-selected="true"]) > .session-tab-label {
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+  }
+  .session-tab:focus-visible {
+    outline: 2px solid var(--focus);
+  }
+  .session-tab-count {
+    font: var(--type-data);
+  }
+  .tab-hint {
+    margin: 0;
+    font: 400 11px/16px var(--font-mono);
+  }
+  .session-tabset > .tab-hint {
+    padding: 4px 0 6px;
+  }
+}

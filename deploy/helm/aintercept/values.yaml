@@ -5,6 +5,23 @@
 #   digitalocean → Spaces via static keys (from a Secret), DO LB
 cloud: digitalocean
 
+# ── Admission policy ──────────────────────────────────────────────────────────
+# Reject pods in the release namespace that set the dev body-capture env vars
+# (DEV_LOG_BODIES / DEV_CAPTURE_FULL_BODIES). Production images already compile
+# those paths out; this stops the flags being deployed at all. Cluster-scoped
+# objects: needs rights to create ValidatingAdmissionPolicies (k8s >= 1.30).
+admissionPolicy:
+  enabled: true
+
+# ── Full interception (dev builds only) ──────────────────────────────────────
+# Record every request and response body. The observer writes the raw stream with
+# bodies under <objectStore.prefix>/capture (DEV_CAPTURE_FULL_BODIES), and the
+# processor and the API read that stream instead of the body-stripped one, so the
+# UI shows bodies and what's derived from them (commands, patches, text, exit
+# codes). Off, no body is read beyond the usage metadata. Needs a `-tags
+# devcapture` image and admissionPolicy.enabled=false; never for customer traffic.
+fullInterception: false
+
 # ── Network policy ────────────────────────────────────────────────────────────
 # Restrict Envoy's UNAUTHENTICATED admin port (9901) to the KEDA operator only.
 # Requires a NetworkPolicy-enforcing CNI. Disable only if your cluster can't
@@ -14,17 +31,24 @@ networkPolicy:
   kedaNamespace: keda
 
 images:
-  # Envoy is the stock upstream image; only observer + certsvc are built here.
+  # Envoy is the stock upstream image; the one built here is `aintercept`, which
+  # runs as the observer or certsvc (the Deployment's args pick the mode).
+  # Each image deploys by digest when `digest` is set (repository@digest; the tag
+  # is then informational). Production should always set digests.
   envoy:
     repository: envoyproxy/envoy
-    tag: v1.32-latest
-  observer:
-    repository: aintercept/observer
+    tag: v1.39.6
+    digest: sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed
+  aintercept:
+    repository: aintercept/aintercept
     tag: dev
+    digest: ""
     pullPolicy: IfNotPresent
-  certsvc:
-    repository: aintercept/certsvc
+  # The query API (api/Dockerfile), when `api.enabled`.
+  api:
+    repository: aintercept/api
     tag: dev
+    digest: ""
     pullPolicy: IfNotPresent
 
 # Image pull secret name (e.g. a DO Container Registry secret). Empty => none.
@@ -35,7 +59,7 @@ interception:
   # Hostnames Envoy will intercept + mint leaf certs for. The Envoy config
   # shipped in this chart (templates/envoy-config.yaml) must have matching
   # filter chains / upstream clusters.
-  allowlist: "api.anthropic.com,api.openai.com,generativelanguage.googleapis.com,chatgpt.com"
+  allowlist: "api.anthropic.com,api.openai.com,generativelanguage.googleapis.com,chatgpt.com,ab.chatgpt.com,ws.chatgpt.com,*.oaiusercontent.com,bzr.openai.com,claude.ai,a.claude.ai,cloudflare-ech.com"
   # Leaf cert lifetime. certsvc mints short-lived leaves and PROACTIVELY renews
   # them (background scan every renewScanInterval, re-minting any leaf within
   # leafTTL/4 of expiry and hot-swapping it over SDS), so a leaf never ages out
@@ -47,6 +71,13 @@ interception:
   # (intermediate-ca.crt, intermediate-ca.key, ca-chain.crt). NEVER a ConfigMap.
   # Create it before install (see docs/DEPLOY_DOKS.md).
   caSecretName: interception-ca
+  # The issuing intermediate is supplied, not minted by this chart. It should be
+  # name-constrained to the routed domains so its key can't sign for any other
+  # site. certsvc always verifies at startup that every allowlisted host gets a
+  # leaf clients will accept (and refuses to start otherwise); with this on it
+  # also refuses an intermediate that has no name constraints. Set true in
+  # production.
+  requireNameConstraints: false
 
 # ── Object store (telemetry sink) ─────────────────────────────────────────────
 objectStore:
@@ -76,8 +107,53 @@ objectStore:
   secretAccessKey: ""
 
 # ── Observer ──────────────────────────────────────────────────────────────────
+# Stage 2 of the data pipeline: raw partitions -> shaped Parquet tables under
+# <objectStore.prefix>/shaped/ (docs/ui/BUILD_PLAN.md §7.5). One replica.
+process:
+  enabled: true
+  pollSeconds: 10   # between polls (each lists only new files)
+  fullMinutes: 60   # between full listings (one also runs at start)
+  resources:
+    # The first start processes the whole bucket, 500 files a run. The request is
+    # its working size (about 450 MB on a few weeks of data), so the node has room
+    # for it: a pod over its request is the first evicted when a node runs short.
+    requests: { cpu: "50m", memory: "512Mi" }
+    limits: { cpu: "1", memory: "1Gi" }
+
+# The query API (api/), inside the cluster: it reads the processor's tables
+# (mirrored into the pod by an `aintercept mirror` sidecar) and raw files through
+# the sidecar. ClusterIP only, with a NetworkPolicy admitting no pod: reach it
+# with `kubectl port-forward svc/api 8787` (`make remote` does).
+api:
+  enabled: false
+  # The tables live in a DuckDB file on the pod's disk (`dbSizeLimit`), compressed
+  # and paged in under DuckDB's memory limit, so memory doesn't grow with the data.
+  # DuckDB's limit: empty = 60% of the container's memory limit (the rest is Python
+  # and the responses being built); or a size like "900MB".
+  memoryLimit: ""
+  threads: 2             # DuckDB's threads (its default is the node's cores, not the CPU limit)
+  resources:
+    # Memory request = limit: the scheduler reserves all of it, and the pod is the
+    # last evicted when a node runs short (docs/INTERCEPTION_ISSUES.md P5).
+    requests: { cpu: "500m", memory: "1536Mi" }
+    limits: { cpu: "2", memory: "1536Mi" }
+  mirror:
+    pollSeconds: 10
+    resources:
+      requests: { cpu: "20m", memory: "64Mi" }
+      limits: { cpu: "500m", memory: "256Mi" }
+  # The mirrored tables (tens of MB per million rows).
+  shapedSizeLimit: 2Gi
+  # The API's DuckDB file (about twice the mirrored tables) and its spill space.
+  dbSizeLimit: 4Gi
+
 observer:
   bufferSize: 16384
+  # On termination, keep serving this long while Envoy's DNS view drops the pod
+  # (headless Service, refreshed every 5 s), then drain in-flight streams. A call
+  # routed to an observer that already stopped passes through unrecorded.
+  shutdownDelaySeconds: 15
+  terminationGracePeriodSeconds: 200
   # Operational log level: debug | info | warn | error. Logs are structured JSON
   # on stderr (telemetry events go to stdout).
   logLevel: info
@@ -89,6 +165,12 @@ observer:
   schemaSampling:
     enabled: true
     samplesPerMinute: 120
+  # Request headers trusted to carry the original client IP, checked in order
+  # before the connection's peer address (e.g. ["cf-connecting-ip"] when an L7
+  # proxy that sets it sits in front). Leave empty when clients reach the LB
+  # directly: any header can be forged by the client, the peer address cannot.
+  # To get the real peer through the LB, use envoy.proxyProtocol below.
+  clientIPHeaders: []
   # Salt mixed into the API-key hash (key_hash) that pseudonymously identifies
   # callers. The raw key is NEVER stored — only sha256(salt || key). Set a
   # strong, deployment-unique random value; keeping it stable keeps a given key's
@@ -96,22 +178,73 @@ observer:
   # attacks against known keys and cross-deployment correlation.
   #   Generate: openssl rand -hex 32
   # Supplied via a Secret (keyHashSaltSecret) when set; else this inline value.
+  #
+  # Sources, first set wins:
+  #   keyHashSaltSecretsManagerId — AWS Secrets Manager secret name/ARN, read at
+  #     startup with the observer's AWS identity (needs GetSecretValue). The
+  #     secret is the salt, or JSON with a "salt" field.
+  #   keyHashSaltSecret — an existing Kubernetes Secret with key `salt`.
+  #   keyHashSalt — inline (throwaway demos only).
+  keyHashSaltSecretsManagerId: ""
   keyHashSalt: ""
-  keyHashSaltSecret: ""   # name of an existing Secret with key `salt` (preferred)
+  keyHashSaltSecret: ""   # name of an existing Secret with key `salt`
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "500m", memory: "256Mi" }
+  # Memory budget: bytes in-flight traffic (buffered bodies, WebSocket state,
+  # bodies queued for extraction) may hold per pod. Utilization of it is what
+  # Envoy load-balances on (ORCA) and, with autoscaling.mode keda, what the
+  # observer scales on. Empty: half the memory limit. GOMEMLIMIT defaults to
+  # 90% of the memory limit.
+  memoryBudget: ""
   autoscaling:
     enabled: true
+    # cpu: an HPA on CPU only. keda: KEDA on CPU or memory-budget utilization,
+    # whichever is higher (needs KEDA installed).
+    mode: keda
     minReplicas: 2
     maxReplicas: 20
     targetCPUUtilizationPercentage: 70
-  # ServiceAccount: on AWS, annotate with the IRSA role ARN (keyless S3). On DO,
-  # roleArn is ignored and static keys are used instead.
+    # Scale out when the fleet's average budget utilization passes this, well
+    # before pods are full: new pods take 30-90s, and open streams stay put.
+    targetMemoryBudgetPercent: 55
+    pollingInterval: 15
+  # Interception-path health check, served on the observer's HTTP port as
+  # GET /healthz/path: 200 when every allowlisted host passed its last probe,
+  # 503 otherwise, with per-host JSON. Each probe does a TLS handshake through
+  # Envoy with the provider's SNI (verified against the interception root),
+  # checks the served leaf's remaining validity, and sends one request that must
+  # be answered by the real provider. This is the signal an automatic kill
+  # switch polls. Mounts only the public CA chain.
+  pathProbe:
+    enabled: true
+    # The Envoy Service by default; the LB's address includes the LB in the check.
+    target: "envoy:443"
+    interval: "15s"
+    # Fail a host whose served leaf expires sooner than this (stalled renewal).
+    minLeafValidity: "30m"
+    # What to request per allowlist entry, as "entry=host/path" (default: the
+    # entry itself at "/"). Bot-protected web hosts get Cloudflare's edge
+    # endpoint /cdn-cgi/trace: it proves the path reaches the real edge without
+    # loading the app, so the probe never looks like a scraper from the same
+    # egress IP as users. A wildcard entry needs a concrete host here or it
+    # isn't probed.
+    targets:
+      - "chatgpt.com=chatgpt.com/cdn-cgi/trace"
+      - "ab.chatgpt.com=ab.chatgpt.com/cdn-cgi/trace"
+      - "ws.chatgpt.com=ws.chatgpt.com/cdn-cgi/trace"
+      - "claude.ai=claude.ai/cdn-cgi/trace"
+      - "a.claude.ai=a.claude.ai/cdn-cgi/trace"
+      - "cloudflare-ech.com=cloudflare-ech.com/cdn-cgi/trace"
+      - "*.oaiusercontent.com=sdmntprcentralus.oaiusercontent.com/"
+  # ServiceAccount. On AWS the observer needs s3:PutObject on the telemetry
+  # prefix (and secretsmanager:GetSecretValue on the salt, if used). Grant it
+  # with an EKS Pod Identity association on this ServiceAccount (nothing to set
+  # here), or with IRSA via roleArn. On DO, static keys are used instead.
   serviceAccount:
     create: true
     name: aintercept-observer
-    roleArn: ""           # AWS IRSA role ARN (eks.amazonaws.com/role-arn)
+    roleArn: ""           # IRSA only (eks.amazonaws.com/role-arn); empty for Pod Identity
 
 # ── Envoy ─────────────────────────────────────────────────────────────────────
 envoy:
@@ -149,8 +282,22 @@ envoy:
     targetConnectionsPerPod: 500
     # How often KEDA polls Envoy's admin stats (seconds).
     pollingInterval: 15
+  # Per-device attribution needs Envoy to see the client's real address. Two
+  # ways, depending on the load balancer:
+  #   - A pass-through LB that keeps the client IP (DO Network LB, AWS NLB with
+  #     instance targets): keep proxyProtocol off and set
+  #     service.externalTrafficPolicy: Local, so kube-proxy doesn't SNAT it.
+  #   - An LB that terminates TCP (DO's default regional LB, AWS NLB with IP
+  #     targets): enable proxyProtocol. It sets the cloud LB annotation AND the
+  #     Envoy listener filter together; the two must always match, or every
+  #     connection is reset.
+  proxyProtocol:
+    enabled: false
   service:
     type: LoadBalancer
+    # Local keeps the client source IP (see above). Cluster spreads load across
+    # nodes but rewrites the source to a node IP.
+    externalTrafficPolicy: Local
     # Extra annotations merged onto the Envoy Service. Defaults per-cloud are
     # added by the template (AWS NLB / DO LB); these override/extend them.
     annotations: {}
@@ -158,6 +305,20 @@ envoy:
 # ── certsvc ───────────────────────────────────────────────────────────────────
 certsvc:
   replicas: 2
+  # Sign leaves with an AWS KMS key instead of a key file: the intermediate's
+  # private key is created in KMS (asymmetric SIGN_VERIFY, RSA or ECC NIST) and
+  # never leaves it. The intermediate certificate in caSecretName must be issued
+  # for that key's public key; certsvc refuses to start if they don't match.
+  # certsvc's AWS identity needs kms:GetPublicKey and kms:Sign on the key.
+  kms:
+    keyId: ""             # key ID, ARN, or alias/...
+    region: ""            # defaults to objectStore.region
+  # certsvc's own identity (separate from the observer's), for KMS access via an
+  # EKS Pod Identity association, or IRSA with roleArn.
+  serviceAccount:
+    create: true
+    name: aintercept-certsvc
+    roleArn: ""
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "500m", memory: "256Mi" }

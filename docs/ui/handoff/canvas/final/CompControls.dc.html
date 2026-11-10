@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Controls</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cells{display:flex;flex-wrap:wrap;gap:12px}
+.cell{background:#131618;border:1px solid #2a3034;padding:14px 16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:150px}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db;background:transparent}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer;text-decoration:none}
+.btn:hover{background:#1b1f22;border-color:#a3a9ad}
+.btn:disabled,.btn[aria-disabled="true"]:not([aria-busy="true"]){color:#848c90;border-color:#2a3034;cursor:not-allowed}
+.tab{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 0;cursor:pointer;color:#a3a9ad}
+.inp{font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:18px;color:#e6e3db;background:#0c0e0f;border:1px solid #60686d;border-radius:2px;padding:5px 8px;width:240px}
+.inp:disabled,.inp[aria-disabled="true"]:not([aria-busy="true"]){color:#848c90;border-color:#2a3034;cursor:not-allowed}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1500px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Controls</span>
+<span style="color: #a3a9ad">Every clickable thing: cursor pointer; hover surface-raised with the border raised to ink-muted; pressed skeleton fill; focus 2px focus ring. Selected segments and toggle chips are an ink fill with bg text (round 10, §11G.B1). Disabled drops to ink-faint on a line border.</span>
+</div>
+
+<!-- Button -->
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Button</span>
+<span class="props">variant: default | ghost | icon · loading · disabled · as: button | a</span>
+<div class="cells">
+<div class="cell"><span class="cap">default</span><button data-spec="Button/default" class="btn">Retry now</button></div>
+<div class="cell"><span class="cap">hover</span><button data-spec="Button/hover" class="btn" style="background: #1b1f22; border-color: #a3a9ad">Retry now</button></div>
+<div class="cell"><span class="cap">focus</span><button data-spec="Button/focus" class="btn" style="outline: 2px solid #ffd36b; outline-offset: 1px">Retry now</button></div>
+<div class="cell"><span class="cap">pressed / selected</span><button data-spec="Button/pressedSelected" class="btn" aria-pressed="true" style="background: #1b1f22; border-color: #e6e3db">Retry now</button></div>
+<div class="cell"><span class="cap">disabled</span><button data-spec="Button/disabled" class="btn" aria-disabled="true">Retry now</button></div>
+<div class="cell"><span class="cap">loading</span><button data-spec="Button/loading" class="btn" aria-busy="true" aria-disabled="true" style="color: #a3a9ad; cursor: progress"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#2a3034" stroke-width="1.5"></circle><path d="M6 1.5 A4.5 4.5 0 0 1 10.5 6" fill="none" stroke="#e6e3db" stroke-width="1.5"></path></svg>Retrying…</button></div>
+<div class="cell"><span class="cap">ghost (in tables)</span><button data-spec="Button/ghostInTables" class="btn" style="border-color: transparent; background: transparent; color: #7db3ff; padding-left: 0">view 94 calls</button></div>
+<div class="cell"><span class="cap">icon only</span><div style="display: flex; gap: 6px"><button data-spec="Button/iconOnlyPrev" class="btn" aria-label="Previous request" style="padding: 2px 8px">↑</button><button data-spec="Button/iconOnlyNext" class="btn" aria-label="Next request" style="padding: 2px 8px">↓</button><button data-spec="Button/iconOnlyClose" class="btn" aria-label="Close" style="padding: 2px 8px">×</button></div></div>
+<div class="cell"><span class="cap">icon only · disabled</span><button data-spec="Button/iconOnlyDisabled" class="btn" aria-label="Previous request" aria-disabled="true" style="padding: 2px 8px">↑</button></div>
+</div>
+</div>
+
+<!-- SegmentedControl -->
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">SegmentedControl</span>
+<span class="props">options[], value, onChange · used for the time window</span>
+<div class="cells">
+<div class="cell"><span class="cap">default · 14d selected</span>
+<div data-spec="SegmentedControl/default14dSelected" role="group" aria-label="Time window" style="display: flex; border: 1px solid #60686d; border-radius: 2px"><button class="btn" style="border: 0; border-radius: 0">24h</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button><button class="btn" aria-pressed="true" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #e6e3db; color: #0c0e0f; font-weight: 600">14d</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">All</button></div></div>
+<div class="cell"><span class="cap">hover on 7d</span>
+<div data-spec="SegmentedControl/hoverOn7d" style="display: flex; border: 1px solid #60686d; border-radius: 2px"><button class="btn" style="border: 0; border-radius: 0">24h</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #1b1f22; color: #e6e3db; box-shadow: inset 0 0 0 1px #a3a9ad">7d</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #e6e3db; color: #0c0e0f; font-weight: 600">14d</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">All</button></div></div>
+<div class="cell"><span class="cap">focus on 24h</span>
+<div data-spec="SegmentedControl/focusOn24h" style="display: flex; border: 1px solid #60686d; border-radius: 2px"><button class="btn" style="border: 0; border-radius: 0; outline: 2px solid #ffd36b; outline-offset: -2px">24h</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #e6e3db; color: #0c0e0f; font-weight: 600">14d</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">All</button></div></div>
+<div class="cell"><span class="cap">disabled (while loading)</span>
+<div data-spec="SegmentedControl/disabledWhileLoading" style="display: flex; border: 1px solid #2a3034; border-radius: 2px"><button class="btn" aria-disabled="true" style="border: 0; border-radius: 0">24h</button><button class="btn" aria-disabled="true" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button><button class="btn" aria-disabled="true" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">14d</button><button class="btn" aria-disabled="true" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">All</button></div></div>
+</div>
+</div>
+
+<!-- Tabs -->
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Tabs / Tab</span>
+<span class="props">label, count?, selected, disabled · underline tabs over a hairline</span>
+<div class="cells">
+<div class="cell" style="min-width: 520px"><span class="cap">set · first selected</span>
+<div data-spec="Tabs/setFirstSelected" role="tablist" style="display: flex; gap: 24px; border-bottom: 1px solid #2a3034; width: 100%"><button class="tab" role="tab" aria-selected="true" style="color: #e6e3db; border-bottom-color: #e6e3db">Prompts · 4</button><button class="tab" role="tab">Requests · 170</button><button class="tab" role="tab">Events · 2,412</button></div></div>
+<div class="cell"><span class="cap">default</span><button data-spec="Tab/default" class="tab">Requests · 170</button></div>
+<div class="cell"><span class="cap">hover</span><button data-spec="Tab/hover" class="tab" style="color: #e6e3db; border-bottom-color: #a3a9ad">Requests · 170</button></div>
+<div class="cell"><span class="cap">selected</span><button data-spec="Tab/selected" class="tab" style="color: #e6e3db; border-bottom-color: #e6e3db">Requests · 170</button></div>
+<div class="cell"><span class="cap">focus</span><button data-spec="Tab/focus" class="tab" style="outline: 2px solid #ffd36b">Requests · 170</button></div>
+<div class="cell"><span class="cap">disabled</span><button data-spec="Tab/disabled" class="tab" aria-disabled="true" style="color: #60686d; cursor: default">Raw · none</button></div>
+</div>
+</div>
+
+<!-- TextInput -->
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">TextInput</span>
+<span class="props">label, placeholder, value, invalid?, message? · label is micro caps to the left</span>
+<div class="cells">
+<div class="cell"><span class="cap">empty</span><div data-spec="TextInput/empty" style="display: flex; gap: 8px; align-items: center"><label class="k" for="i1">Filter</label><input id="i1" class="inp" placeholder="path, status, session…"></div></div>
+<div class="cell"><span class="cap">focus</span><div data-spec="TextInput/focus" style="display: flex; gap: 8px; align-items: center"><label class="k" for="i2">Filter</label><input id="i2" class="inp" placeholder="path, status, session…" style="outline: 2px solid #ffd36b; outline-offset: 1px; border-color: #e6e3db"></div></div>
+<div class="cell"><span class="cap">filled</span><div data-spec="TextInput/filled" style="display: flex; gap: 8px; align-items: center"><label class="k" for="i3">Filter</label><input id="i3" class="inp" value="status=ERR"></div></div>
+<div class="cell"><span class="cap">disabled</span><div data-spec="TextInput/disabled" style="display: flex; gap: 8px; align-items: center"><label class="k" for="i4">Filter</label><input id="i4" class="inp" disabled placeholder="path, status, session…"></div></div>
+<div class="cell"><span class="cap">invalid</span><div data-spec="TextInput/invalid" style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; gap: 8px; align-items: center"><label class="k" for="i5">Filter</label><input id="i5" class="inp" value="colour=blue" aria-invalid="true" aria-describedby="i5m" style="border-color: #e6e3db"></div><span id="i5m" class="m" style="font-size: 11px; color: #e6e3db; padding-left: 52px">✕ unknown field “colour”</span></div></div>
+</div>
+</div>
+
+<!-- ToggleChip -->
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">ToggleChip</span>
+<span class="props">label, pressed, onChange · filters such as “hide client internals”, “collapse ticks”, channel chips</span>
+<div class="cells">
+<div class="cell"><span class="cap">off</span><button data-spec="ToggleChip/off" class="chip" aria-pressed="false" style="border-color: #60686d; color: #a3a9ad; cursor: pointer">HIDE CLIENT INTERNALS</button></div>
+<div class="cell"><span class="cap">on</span><button data-spec="ToggleChip/on" class="chip" aria-pressed="true" style="background: #e6e3db; border-color: #e6e3db; color: #0c0e0f; font-weight: 600; cursor: pointer">✓ HIDE CLIENT INTERNALS</button></div>
+<div class="cell"><span class="cap">hover</span><button data-spec="ToggleChip/hover" class="chip" style="border-color: #a3a9ad; color: #e6e3db; background: #1b1f22; cursor: pointer">HIDE CLIENT INTERNALS</button></div>
+<div class="cell"><span class="cap">focus</span><button data-spec="ToggleChip/focus" class="chip" style="border-color: #2a3034; color: #a3a9ad; outline: 2px solid #ffd36b; outline-offset: 1px">HIDE CLIENT INTERNALS</button></div>
+<div class="cell"><span class="cap">disabled</span><button data-spec="ToggleChip/disabled" class="chip" aria-disabled="true" style="border-color: #2a3034; color: #60686d">HIDE CLIENT INTERNALS</button></div>
+<div class="cell"><span class="cap">with swatch · on / off</span><div style="display: flex; gap: 4px"><button data-spec="ToggleChip/withSwatchOn" class="chip" aria-pressed="true" style="background: #e6e3db; border-color: #e6e3db; color: #0c0e0f; font-weight: 600; cursor: pointer">✓ <span style="width: 7px; height: 7px; border-radius: 2px; background: #7db3ff; box-shadow: 0 0 0 1px #0c0e0f"></span>MODEL 96</button><button data-spec="ToggleChip/withSwatchOff" class="chip" aria-pressed="false" style="border-color: #60686d; color: #a3a9ad; cursor: pointer"><span style="width: 7px; height: 7px; border-radius: 2px; background: #f0b43c"></span>ANALYTICS 71</button></div></div>
+</div>
+</div>
+
+<!-- Pagination -->
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Pagination</span>
+<span class="props">page, pageCount, from, to, total, loading · sits in a table footer, oldest first</span>
+<div class="cells">
+<div class="cell" style="min-width: 600px"><span class="cap">first page</span><div data-spec="Pagination/firstPage" class="m" style="display: flex; justify-content: space-between; width: 100%; color: #a3a9ad; align-items: center"><span>1–20 of 170</span><span style="display: flex; gap: 4px; align-items: center"><button class="btn" aria-disabled="true">‹ Prev</button><button class="btn" aria-current="page" style="background: #1b1f22">1</button><button class="btn">2</button><span>…</span><button class="btn">9</button><button class="btn">Next ›</button></span></div></div>
+<div class="cell" style="min-width: 600px"><span class="cap">middle</span><div data-spec="Pagination/middle" class="m" style="display: flex; justify-content: space-between; width: 100%; color: #a3a9ad; align-items: center"><span>81–100 of 170</span><span style="display: flex; gap: 4px; align-items: center"><button class="btn">‹ Prev</button><button class="btn">1</button><span>…</span><button class="btn">4</button><button class="btn" aria-current="page" style="background: #1b1f22">5</button><button class="btn">6</button><span>…</span><button class="btn">9</button><button class="btn">Next ›</button></span></div></div>
+<div class="cell" style="min-width: 600px"><span class="cap">last page</span><div data-spec="Pagination/lastPage" class="m" style="display: flex; justify-content: space-between; width: 100%; color: #a3a9ad; align-items: center"><span>161–170 of 170 · end of range</span><span style="display: flex; gap: 4px; align-items: center"><button class="btn">‹ Prev</button><button class="btn">1</button><span>…</span><button class="btn">8</button><button class="btn" aria-current="page" style="background: #1b1f22">9</button><button class="btn" aria-disabled="true">Next ›</button></span></div></div>
+<div class="cell" style="min-width: 600px"><span class="cap">single page</span><div data-spec="Pagination/singlePage" class="m" style="display: flex; justify-content: space-between; width: 100%; color: #a3a9ad"><span>1–12 of 12</span><span>all rows shown</span></div></div>
+<div class="cell" style="min-width: 600px"><span class="cap">loading next page</span><div data-spec="Pagination/loadingNextPage" class="m" style="display: flex; justify-content: space-between; width: 100%; color: #a3a9ad; align-items: center"><span>21–40 of 170 · loading…</span><span style="display: flex; gap: 4px; align-items: center"><button class="btn" aria-disabled="true">‹ Prev</button><button class="btn" aria-disabled="true">1</button><button class="btn" aria-current="page" aria-disabled="true" style="background: #1b1f22">2</button><button class="btn" aria-disabled="true">3</button><span>…</span><button class="btn" aria-disabled="true">9</button><button class="btn" aria-disabled="true">Next ›</button></span></div></div>
+<div class="cell" style="min-width: 600px"><span class="cap">live · new rows past the end</span><div data-spec="Pagination/liveNewRowsPastTheEnd" class="m" style="display: flex; justify-content: space-between; width: 100%; color: #a3a9ad; align-items: center"><span>161–176 of 176</span><span style="display: flex; gap: 4px; align-items: center"><span class="chip">6 NEW ↓</span><button class="btn">‹ Prev</button><button class="btn">1</button><span>…</span><button class="btn">8</button><button class="btn" aria-current="page" style="background: #1b1f22">9</button><button class="btn" aria-disabled="true">Next ›</button></span></div></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

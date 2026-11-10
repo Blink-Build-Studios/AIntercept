@@ -1,0 +1,47 @@
+/* TimingWaterfall (CompDrawer "TimingWaterfall/default"). */
+@layer components {
+  .timing {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 16px;
+  }
+  .timing-phase {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .timing-fact {
+    display: flex;
+    gap: 8px;
+  }
+  .timing-label {
+    width: 170px;
+    flex: none;
+  }
+  .timing-track {
+    position: relative;
+    flex: 1;
+    height: 10px;
+  }
+  .timing-bar {
+    position: absolute;
+    top: 0;
+    height: 10px;
+  }
+  /* Over the 10px track without changing the row height. */
+  .timing-unrecorded {
+    position: absolute;
+    left: 0;
+    top: -5px;
+    font: 400 11px/20px var(--font-mono);
+    white-space: nowrap;
+  }
+  .timing-value {
+    width: 56px;
+    text-align: right;
+  }
+  .timing-client-title {
+    margin-top: 12px;
+  }
+}

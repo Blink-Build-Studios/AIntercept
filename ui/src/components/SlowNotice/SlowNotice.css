@@ -1,0 +1,30 @@
+/* SlowNotice (CompInteraction RegionState/slow): a raised box centred over the
+   dimmed region. Padding is off the Wire scale. */
+@layer components {
+  .slow-notice {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    white-space: nowrap;
+    background: var(--surface-raised);
+    border: 1px solid var(--line-strong);
+  }
+}
+/* The row form (CompR11 SlowNotice/nameOnly|nameAndSize): full width on the panel's surface. */
+@layer components {
+  .slow-notice-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    white-space: nowrap;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+}

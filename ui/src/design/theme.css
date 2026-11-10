@@ -1,0 +1,129 @@
+/*
+ * Tailwind, restricted to the aintercept Wire design system.
+ *
+ * Every default namespace (colors, spacing, fonts, sizes, radii, shadows,
+ * breakpoints) is cleared, then rebuilt only from the Wire variables in
+ * tokens.css. So `bg-surface`, `text-ink-muted`, `p-3`, `text-data` exist and
+ * `bg-red-500`, `p-5`, `shadow-md` do not. `@theme inline` makes utilities
+ * reference the variables themselves, so [data-theme] switches light/dark
+ * without any `dark:` variants.
+ *
+ * Arbitrary values (a color or px value in square brackets) and the few
+ * bare-number utilities Tailwind generates without consulting the theme
+ * (duration-200, leading-6) are rejected by scripts/lint-ui.mjs.
+ * Bespoke styling goes in a small CSS file next to its component: colors there
+ * must still be Wire variables; one-off geometry (a 7px dot, 6px chip padding)
+ * may be literal.
+ */
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-ch-model: var(--ch-model);
+  --color-ch-analytics: var(--ch-analytics);
+  --color-ch-flags: var(--ch-flags);
+  --color-ch-skills: var(--ch-skills);
+  --color-ch-count: var(--ch-count);
+  --color-ch-account: var(--ch-account);
+  --color-live: var(--live);
+  --color-danger: var(--danger);
+  --color-focus: var(--focus);
+  --color-skeleton: var(--skeleton);
+  --color-agent-claude-code: var(--agent-claude-code);
+  --color-agent-codex: var(--agent-codex);
+  --color-agent-chatgpt: var(--agent-chatgpt);
+  --color-agent-claude-ai: var(--agent-claude-ai);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-*: initial;
+  /* Same stacks as tokens.css; literal because the names coincide. */
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+
+  /* Type: no text-* sizes, leading, tracking or free weights. Use the type-*
+     utilities below, which apply a whole Wire style (family included). */
+  --text-*: initial;
+  --leading-*: initial;
+  --tracking-*: initial;
+  --font-weight-*: initial; /* weights come with the type-* styles */
+  --text-shadow-*: initial;
+
+  --container-*: initial;
+  --aspect-*: initial;
+  --perspective-*: initial;
+
+  /* Wire spacing only: 1=4px 2=8px 3=12px 4=16px 6=24px 8=32px. */
+  --spacing: initial;
+  --spacing-*: initial;
+  --spacing-0: 0px;
+  --spacing-px: 1px;
+  --spacing-0_5: 2px;
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-6: var(--space-6);
+  --spacing-8: var(--space-8);
+
+  --radius-*: initial;
+  --radius-0: 0px;
+  --radius-sm: 2px;
+  --radius-pill: 999px;
+
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --blur-*: initial;
+
+  /* Handoff §7.4: panels stack below 960px, sit side by side from 1280px. */
+  --breakpoint-*: initial;
+  --breakpoint-md: 960px;
+  --breakpoint-xl: 1280px;
+
+  --ease-*: initial;
+  --ease-out: cubic-bezier(.2, 0, 0, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --animate-*: initial;
+
+  /* `transition` / `transition-colors` defaults come from the motion tokens. */
+  --default-transition-duration: var(--dur-fast);
+  --default-transition-timing-function: var(--ease-out);
+}
+
+/* Wire type styles (tokens.css --type-*): family, weight, size and line height
+   together, so `type-data` alone renders mono 12.5/20. */
+@utility type-num-xl { font: var(--type-num-xl); }
+@utility type-data { font: var(--type-data); }
+@utility type-data-strong { font: var(--type-data-strong); }
+@utility type-micro {
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-tracking);
+  text-transform: uppercase;
+}
+/* Header keys: "uppercase 10.5px above its value" (WIRE_README, Content fundamentals).
+   Weight 400, as every canvas key (.k): the value above it is the 500. */
+@utility type-key {
+  font: 400 10.5px/14px var(--font-mono);
+  letter-spacing: var(--type-micro-tracking);
+  text-transform: uppercase;
+}
+@utility type-title { font: var(--type-title); }
+@utility type-body { font: var(--type-body); }
+@utility type-label { font: var(--type-label); }
+
+/* Motion tokens (handoff §6A.7). Under reduced motion tokens.css zeroes fast
+   and slow; base stays because it times opacity fades, which §6A.7 keeps. */
+@utility duration-instant { transition-duration: var(--dur-instant); }
+@utility duration-fast { transition-duration: var(--dur-fast); }
+@utility duration-base { transition-duration: var(--dur-base); }
+@utility duration-slow { transition-duration: var(--dur-slow); }

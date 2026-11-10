@@ -1,0 +1,18 @@
+/* FieldList (CompDrawer "FieldList/default"). The drawer widens the key column to 280px (--field-key-width). */
+@layer components {
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .field-key {
+    width: var(--field-key-width, 240px);
+    flex: none;
+  }
+  .field-filter {
+    padding: 8px 12px;
+  }
+}

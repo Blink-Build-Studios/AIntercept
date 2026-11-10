@@ -52,7 +52,9 @@ PRD's instruction to distinguish tested behavior from assumptions.
   signs the intermediate once, then should move offline.
 - The issuing **intermediate key** is mounted read-only into `certsvc` only.
 - Secrets and bodies are redacted by default. `DEV_LOG_BODIES=true` prints
-  bounded body previews for local dev only and must never be set in Kubernetes.
+  bounded body previews for local dev only. Those paths exist only in builds
+  tagged `devcapture` (local compose); production images compile them out and
+  the chart's admission policy rejects pods that set the flags.
   Even then, sensitive headers (Authorization, API keys, cookies) are always
   redacted.
 - Upstream TLS verification is never disabled.

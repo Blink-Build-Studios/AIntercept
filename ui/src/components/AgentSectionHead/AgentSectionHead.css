@@ -1,0 +1,14 @@
+/* AgentSectionHead (CompAgents, handoff §11J screens 2): dot + micro caps, 6px apart. */
+@layer components {
+  .agent-section-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+  }
+  .agent-section-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+  }
+}

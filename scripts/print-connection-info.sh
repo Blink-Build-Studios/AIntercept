@@ -54,7 +54,9 @@ echo
 bold "Test client setup (local, reversible):"
 echo "  1) Trust the dev root CA (see docs/claude-code-test.md for per-OS steps)."
 echo "  2) Add to /etc/hosts:   ${IP}   ${HOSTNAME_INTERCEPT}"
-echo "     (Note: /etc/hosts is NOT reflected by 'dig'; verify with 'getent hosts ${HOSTNAME_INTERCEPT}'"
+echo "                    and:   ::ffff:${IP}   ${HOSTNAME_INTERCEPT}"
+echo "     (Both are needed: with only the IPv4 line, IPv6 networks bypass the proxy."
+echo "      /etc/hosts is NOT reflected by 'dig'; verify with 'getent ahosts ${HOSTNAME_INTERCEPT}'"
 echo "      or 'curl --resolve ${HOSTNAME_INTERCEPT}:443:${IP} ...')."
 if [[ -n "${LAN}" && "${IP}" == "127.0.0.1" ]]; then
   echo

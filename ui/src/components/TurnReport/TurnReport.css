@@ -1,0 +1,13 @@
+/* TurnReport (CompAgents "TurnReport"): a step-level row (from 70px, 1100px content min
+   width), mono 12/20 in --ink-muted, wrapping. */
+@layer components {
+  .turn-report {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px 4px 70px;
+    min-width: calc(1100px + 70px + 12px); /* the canvas's 1100px content box */
+    border-bottom: 1px solid var(--line);
+    font: 400 12px/20px var(--font-mono);
+  }
+}

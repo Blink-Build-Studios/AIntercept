@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}a:hover{color:#a9cbff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.srow{display:flex;align-items:center;gap:12px;padding:4px 12px;border:0;border-bottom:1px solid #2a3034;white-space:nowrap;color:#e6e3db;background:transparent;width:100%;text-align:left;cursor:pointer;box-sizing:border-box}
+.srow:hover{background:#1b1f22}
+.srow:focus-visible{outline:2px solid #ffd36b;outline-offset:-2px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn:focus-visible{outline:2px solid #ffd36b;outline-offset:1px}
+.btn:disabled{color:#848c90;border-color:#2a3034;cursor:default}
+.tab{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 0;cursor:pointer;color:#a3a9ad}
+.tab:focus-visible{outline:2px solid #ffd36b}
+.lane{display:flex;border-bottom:1px solid #2a3034}
+.lab{width:132px;flex:none;padding:6px 12px;box-sizing:border-box;border-right:1px solid #2a3034}
+.track{position:relative;flex:1}
+.panel{background:#131618;border:1px solid #2a3034}
+.ph{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #2a3034}
+.inp{font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:18px;color:#e6e3db;background:#0c0e0f;border:1px solid #60686d;border-radius:2px;padding:4px 8px;width:260px}
+</style>
+</helmet>
+<div style="position: relative; min-height: 2000px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+<!-- top bar -->
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span class="m" style="font-weight: 600">aintercept</span>
+<span class="m" style="color: #848c90"><a href="Console2.dc.html" style="color: #a3a9ad">people / name unknown</a> / session</span>
+<div style="flex: 1 1 0"></div>
+<span class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; background: #57d68d; border-radius: 999px"></span>LIVE · 5s</span>
+<button class="btn">Pause</button>
+<button class="btn">Copy link</button>
+</div>
+
+<div style="max-width: 1440px; margin: 0 auto; padding: 24px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<!-- session header -->
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 300px">
+<div style="display: flex; gap: 8px; align-items: center"><span style="width: 8px; height: 8px; background: #e8916f; border-radius: 999px"></span><span style="font-size: 18px; line-height: 24px; font-weight: 600">aintercept · partner-readiness</span></div>
+<div class="m" style="color: #a3a9ad">session 4c1a…77e0 · Claude Code</div>
+<div style="color: #a3a9ad; max-width: 440px">Latest recap: “Coverage check and IPv6 routing; PR #2 open, CI pending.”</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; flex: 1 1 600px; border-left: 1px solid #2a3034">
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Span</div><div class="m" style="font-weight: 500">Nov 2 10:04 → now · 2d 0h</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Prompts</div><div class="m" style="font-weight: 500">34</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Model calls</div><div class="m" style="font-weight: 500">640 <span style="color: #ff7a6b">+94 not captured</span></div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Events</div><div class="m" style="font-weight: 500">21,305</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Device</div><div class="m" style="font-weight: 500">darwin · zsh · 3 networks</div></div>
+<div style="padding: 0 16px"><div class="k">Approvals bypassed</div><div class="m" style="font-weight: 500">99.7% of calls</div></div>
+</div>
+</div>
+
+<!-- session timeline (range control) -->
+<div>
+<div class="panel" style="overflow-x: auto">
+<div style="min-width: 960px">
+<div class="ph"><span class="k">Session timeline</span><span class="m" style="color: #a3a9ad">whole session · 30-min bins</span><span style="flex: 1"></span><span class="m" style="color: #848c90">drag to select a range · everything below follows it</span></div>
+<div style="position: relative">
+<div style="position: absolute; top: 0; bottom: 0; left: calc(132px + (100% - 132px) * 0.516); width: calc((100% - 132px) * 0.0397); background: rgba(255, 211, 107, .08); border-left: 2px solid #ffd36b; border-right: 2px solid #ffd36b; z-index: 2; pointer-events: none">
+<div style="position: absolute; top: 50%; left: -5px; width: 8px; height: 22px; margin-top: -11px; background: #ffd36b; border-radius: 2px"></div>
+<div style="position: absolute; top: 50%; right: -5px; width: 8px; height: 22px; margin-top: -11px; background: #ffd36b; border-radius: 2px"></div>
+</div>
+<div style="position: absolute; top: 0; bottom: 0; left: 132px; width: calc((100% - 132px) * 0.516); background: rgba(12, 14, 15, .45); z-index: 1; pointer-events: none"></div>
+<div style="position: absolute; top: 0; bottom: 0; right: 0; width: calc((100% - 132px) * 0.4443); background: rgba(12, 14, 15, .45); z-index: 1; pointer-events: none"></div>
+<div class="lane" style="height: 26px">
+<div class="lab"><span class="k">Prompts</span></div>
+<div class="track">
+<sc-for list="{{prompts}}" as="p" hint-placeholder-count="34"><div style="position: absolute; top: 5px; width: 1px; height: 16px; background: #e6e3db; left: {{p.l}}"></div></sc-for>
+<sc-for list="{{plabels}}" as="p" hint-placeholder-count="4"><span class="m" style="position: absolute; top: 3px; font-size: 10.5px; color: #a3a9ad; left: {{p.l}}">{{p.t}}</span></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 60px">
+<div class="lab"><div class="k">Model calls</div><div class="m" style="font-size: 11px; color: #a3a9ad">per 30 min</div></div>
+<div class="track">
+<sc-for list="{{gaps}}" as="g" hint-placeholder-count="2">
+<div style="position: absolute; top: 0; bottom: 0; left: {{g.l}}; width: {{g.w}}; background: repeating-linear-gradient(135deg, rgba(255,122,107,.3) 0 4px, transparent 4px 8px)"></div>
+<span class="m" style="position: absolute; top: 2px; font-size: 10.5px; color: #ff7a6b; white-space: nowrap; left: {{g.l}}">▲ {{g.n}} reported, not captured</span>
+</sc-for>
+<sc-for list="{{model}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #7db3ff; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 56px">
+<div class="lab"><div class="k">Context</div><div class="m" style="font-size: 11px; color: #a3a9ad">tokens · main thread</div></div>
+<div class="track">
+<sc-for list="{{ctx}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #8fd17e; opacity: .7; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+<sc-for list="{{ctxMarks}}" as="c" hint-placeholder-count="2"><span class="m" style="position: absolute; top: 2px; font-size: 10.5px; white-space: nowrap; color: #e6e3db; left: {{c.l}}">{{c.t}}</span></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 30px">
+<div class="lab"><div class="k">Permission</div></div>
+<div class="track">
+<div class="m" style="position: absolute; top: 6px; height: 18px; left: 4%; right: 0.5%; background: #1b1f22; border: 1px solid #60686d; box-sizing: border-box; font-size: 10.5px; line-height: 16px; padding-left: 6px; color: #e6e3db">bypassPermissions</div>
+<div style="position: absolute; top: 4px; height: 22px; width: 3px; background: #ffd36b; left: 58.9%"></div>
+<span class="m" style="position: absolute; top: 6px; font-size: 10.5px; line-height: 18px; color: #ffd36b; white-space: nowrap; left: 59.3%; background: #131618; padding: 0 4px">→ default ×2 in 20s</span>
+</div>
+</div>
+<div class="lane" style="height: 30px">
+<div class="lab"><div class="k">Focus</div><div class="m" style="font-size: 11px; color: #a3a9ad">this terminal</div></div>
+<div class="track">
+<sc-for list="{{focus}}" as="p" hint-placeholder-count="6"><div class="m" style="position: absolute; top: 6px; height: 18px; font-size: 10.5px; line-height: 18px; padding-left: 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; left: {{p.l}}; width: {{p.w}}; background: {{p.bg}}; color: {{p.c}}">{{p.t}}</div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 30px">
+<div class="lab"><div class="k">Device</div><div class="m" style="font-size: 11px; color: #a3a9ad">sleep</div></div>
+<div class="track">
+<sc-for list="{{sleep}}" as="p" hint-placeholder-count="2"><div class="m" style="position: absolute; top: 6px; height: 18px; font-size: 10.5px; line-height: 18px; padding-left: 4px; box-sizing: border-box; background: #60686d; color: #0c0e0f; white-space: nowrap; overflow: hidden; left: {{p.l}}; width: {{p.w}}">{{p.t}}</div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 30px">
+<div class="lab"><div class="k">Network</div></div>
+<div class="track">
+<sc-for list="{{net}}" as="p" hint-placeholder-count="4"><div class="m" style="position: absolute; top: 6px; height: 18px; font-size: 10.5px; line-height: 16px; padding-left: 4px; box-sizing: border-box; border: 1px solid #60686d; white-space: nowrap; overflow: hidden; left: {{p.l}}; width: {{p.w}}; color: {{p.c}}">{{p.t}}</div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 26px; border-bottom: 0">
+<div class="lab"><div class="k">Friction</div></div>
+<div class="track">
+<sc-for list="{{fric}}" as="f" hint-placeholder-count="8"><span class="m" style="position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; left: {{f.l}}; color: {{f.c}}">{{f.g}}</span></sc-for>
+</div>
+</div>
+</div>
+<div class="m" style="display: flex; justify-content: space-between; padding: 4px 12px 6px 144px; color: #848c90; font-size: 11px; border-top: 1px solid #2a3034">
+<span>Nov 2 08:00</span><span>16:00</span><span>Nov 3 00:00</span><span>08:00</span><span>16:00</span><span>Nov 4 00:00</span><span>08:00</span>
+</div>
+</div>
+</div>
+<!-- selection readout -->
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 12px; border: 1px solid #ffd36b; border-top: 0; background: #131618">
+<span class="k" style="color: #ffd36b">Range</span>
+<span class="m" style="font-weight: 600">Nov 3 10:00:00 → 12:00:00 · 2h</span>
+<span class="m">4 prompts</span><span class="m">96 model calls</span><span class="m">170 requests</span><span class="m">2,412 events</span><span class="m">1 compaction</span>
+<span style="flex: 1"></span>
+<button class="btn" aria-label="Previous range">‹</button>
+<button class="btn" aria-label="Next range">›</button>
+<button class="btn">Whole session</button>
+</div>
+</div>
+
+<!-- session state panels, scoped to range -->
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<div class="panel">
+<div class="ph"><span class="k" style="color: #e8916f">Capabilities · at 12:00</span></div>
+<sc-for list="{{caps}}" as="c" hint-placeholder-count="5"><div class="row m"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{c.k}}</span><span style="color: #a3a9ad">{{c.v}}</span></div></sc-for>
+<div class="m" style="padding: 4px 12px; color: #a3a9ad; font-size: 11px">2 tool-pool changes in range</div>
+</div>
+<div class="panel">
+<div class="ph"><span class="k">Repo · in range</span></div>
+<div class="m" style="padding: 6px 12px; display: flex; flex-direction: column">
+<span>partner-readiness</span>
+<span>head a41f… → 9c02… · 2 commits</span>
+<span>cwd …/aintercept → …/observer</span>
+<span style="color: #a3a9ad">no push in range</span>
+</div>
+</div>
+<div class="panel">
+<div class="ph"><span class="k">Recaps · in range</span><span class="m" style="color: #a3a9ad">1 of 7</span></div>
+<div style="padding: 6px 12px"><span class="m" style="color: #848c90">11:02</span> <span>Patched session refresh race; auth suite green locally.</span></div>
+</div>
+<div class="panel">
+<div class="ph"><span class="k" style="color: #c9a3ec">Experiments · at 12:00</span></div>
+<div class="m" style="padding: 6px 12px; display: flex; flex-direction: column">
+<span style="color: #c9a3ec">curried_trinket</span><span style="color: #a3a9ad">= no_scratchpad_capped</span>
+<span style="margin-top: 6px">1 flag fetch in range · 3 changed</span>
+</div>
+</div>
+</div>
+
+<!-- tabs -->
+<div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; border-bottom: 1px solid #2a3034">
+<sc-for list="{{ptabs}}" as="t" hint-placeholder-count="3"><button class="tab" onClick="{{t.pick}}" style="color: {{t.c}}; border-bottom-color: {{t.b}}">{{t.n}}</button></sc-for>
+<div style="flex: 1"></div>
+<span class="m" style="color: #848c90">10:00 → 12:00 · oldest first</span>
+</div>
+
+<!-- Prompts tab -->
+<sc-if value="{{isPrompts}}" hint-placeholder-val="{{ true }}">
+<div class="panel" style="border-top: 0; overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 18px"></span><span style="width: 40px">#</span><span style="width: 92px">Time</span><span style="width: 240px">Prompt</span><span style="width: 70px">Steps</span><span style="width: 64px">Dur</span><span style="width: 110px">Tokens</span><span style="flex: 1">Tools</span><span style="width: 80px">Friction</span></div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+<sc-if value="{{r.isPrompt}}" hint-placeholder-val="{{ true }}">
+<div class="row m" style="min-width: 1100px; background: {{r.bg}}">
+<span style="width: 18px">{{r.tw}}</span><span style="width: 40px; font-weight: 600">#{{r.n}}</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span>
+<span style="width: 240px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.txt}}</span>
+<span style="width: 70px">{{r.steps}}</span><span style="width: 64px; color: #a3a9ad">{{r.dur}}</span><span style="width: 110px">{{r.tok}}</span>
+<span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.tools}}</span><span style="width: 80px">{{r.mk}}</span>
+</div>
+</sc-if>
+<sc-if value="{{r.isStep}}" hint-placeholder-val="{{ false }}">
+<button class="srow m" onClick="{{r.open}}" style="min-width: 1100px; padding-left: {{r.pad}}; background: {{r.bg}}; opacity: {{r.op}}">
+<span style="color: #848c90; width: 64px">{{r.t}}</span><span style="font-weight: {{r.fw}}; color: {{r.c}}; width: 72px">{{r.a}}</span>
+<span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{r.b}}</span><span style="color: #a3a9ad">{{r.r}}</span><span style="color: #ff7a6b">{{r.w}}</span>
+</button>
+</sc-if>
+<sc-if value="{{r.isBetween}}" hint-placeholder-val="{{ false }}">
+<div class="row m" style="min-width: 1100px; opacity: .6"><span style="width: 18px"></span><span style="width: 40px; color: #848c90">—</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span><span style="color: {{r.c}}">{{r.b}}</span></div>
+</sc-if>
+</sc-for>
+</div>
+</sc-if>
+
+<!-- Requests tab -->
+<sc-if value="{{isRequests}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0">
+<label class="k" for="sreqf">Filter</label>
+<input id="sreqf" class="inp" placeholder="path, status…">
+<span class="chip" style="background: #1b1f22">ALL 170</span>
+<span class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 2px; background: #7db3ff"></span>MODEL 96</span>
+<span class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 2px; background: #f0b43c"></span>ANALYTICS 71</span>
+<span class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 2px; background: #c9a3ec"></span>FLAGS 1</span>
+<span class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 2px; background: #8fd17e"></span>COUNT 2</span>
+</div>
+<div class="panel" style="overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 76px">Time</span><span style="width: 40px">#</span><span style="width: 84px">Kind</span><span style="width: 40px">Meth</span><span style="flex: 1">Path · detail</span><span style="width: 44px">Status</span><span style="width: 64px; text-align: right">Dur</span><span style="width: 70px; text-align: right">Up</span><span style="width: 70px; text-align: right">Down</span></div>
+<sc-for list="{{reqLog}}" as="r" hint-placeholder-count="20">
+<button class="srow m" onClick="{{r.open}}" style="min-width: 1100px; opacity: {{r.op}}">
+<span style="width: 76px; color: #848c90">{{r.t}}</span><span style="width: 40px; color: #a3a9ad">{{r.n}}</span><span style="width: 84px; color: {{r.c}}">{{r.k}}</span><span style="width: 40px">{{r.m}}</span>
+<span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{r.p}}</span><span style="width: 44px; color: {{r.stc}}">{{r.st}}</span>
+<span style="width: 64px; text-align: right; color: #a3a9ad">{{r.d}}</span><span style="width: 70px; text-align: right">{{r.u}}</span><span style="width: 70px; text-align: right; color: #a3a9ad">{{r.dn}}</span>
+</button>
+</sc-for>
+<div class="row m" style="border-bottom: 0; justify-content: space-between; color: #a3a9ad">
+<span>1–20 of 170</span>
+<span style="display: flex; gap: 4px; align-items: center"><button class="btn" disabled>‹ Prev</button><button class="btn" aria-current="page" style="background: #1b1f22">1</button><button class="btn">2</button><button class="btn">3</button><span>…</span><button class="btn">9</button><button class="btn">Next ›</button></span>
+</div>
+</div>
+</sc-if>
+
+<!-- Events tab -->
+<sc-if value="{{isEvents}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0">
+<label class="k" for="sevf">Filter</label>
+<input id="sevf" class="inp" placeholder="event name, field=value…">
+<span class="chip" style="border-color: #2a3034; color: #a3a9ad">HIDE CLIENT INTERNALS ✓</span>
+<span class="chip" style="border-color: #2a3034; color: #a3a9ad">COLLAPSE TICKS ✓</span>
+<span style="flex: 1"></span>
+<span class="m" style="color: #848c90">2,412 in range · 1,503 shown after hiding internals</span>
+</div>
+<div class="panel" style="overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 76px">Time</span><span style="width: 40px">#</span><span style="width: 290px">Event</span><span style="width: 150px">Linked to</span><span style="flex: 1">Fields</span></div>
+<sc-for list="{{evLog}}" as="e" hint-placeholder-count="20">
+<button class="srow m" onClick="{{e.pick}}" style="min-width: 1100px; background: {{e.bg}}; opacity: {{e.op}}">
+<span style="width: 76px; color: #848c90">{{e.t}}</span><span style="width: 40px; color: #a3a9ad">{{e.n}}</span><span style="width: 290px; color: #f0b43c; overflow: hidden; text-overflow: ellipsis">{{e.ev}}</span>
+<span style="width: 150px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.l}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{e.f}}</span><span style="color: {{e.wc}}">{{e.w}}</span>
+</button>
+<sc-if value="{{e.sel}}" hint-placeholder-val="{{ false }}">
+<pre class="m" style="margin: 0; padding: 8px 12px 8px 140px; background: #0c0e0f; border-bottom: 1px solid #2a3034; color: #e6e3db; white-space: pre-wrap">{{e.json}}</pre>
+</sc-if>
+</sc-for>
+<div class="row m" style="border-bottom: 0; justify-content: space-between; color: #a3a9ad">
+<span>1–20 of 1,503</span>
+<span style="display: flex; gap: 4px; align-items: center"><button class="btn" disabled>‹ Prev</button><button class="btn" aria-current="page" style="background: #1b1f22">1</button><button class="btn">2</button><button class="btn">3</button><span>…</span><button class="btn">76</button><button class="btn">Next ›</button></span>
+</div>
+</div>
+</sc-if>
+</div>
+
+</div>
+
+<!-- K request drawer -->
+<sc-if value="{{drawer}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; background: rgba(12, 14, 15, .6); z-index: 10"></div>
+<div role="dialog" aria-label="Request detail" style="position: absolute; top: 0; right: 0; bottom: 0; width: 820px; max-width: 100%; background: #131618; border-left: 1px solid #60686d; z-index: 11; display: flex; flex-direction: column">
+<div class="ph" style="background: #1b1f22; padding: 10px 16px; flex-wrap: wrap">
+<span class="m" style="color: #7db3ff">model</span><span class="m" style="font-weight: 600">POST /v1/messages</span><span class="m" style="color: #a3a9ad">200 · 9.3s · 8.2 KB ↑ · 3.4 KB ↓</span>
+<span style="flex: 1"></span>
+<button class="btn" style="padding: 2px 8px">Copy as curl</button>
+<button class="btn" style="padding: 2px 8px">Copy link</button>
+<button class="btn" aria-label="Previous request" style="padding: 2px 8px">↑</button>
+<button class="btn" aria-label="Next request" style="padding: 2px 8px">↓</button>
+<button class="btn" aria-label="Close request detail" onClick="{{close}}" style="padding: 2px 8px">×</button>
+</div>
+<div class="m" style="padding: 6px 16px; color: #a3a9ad; border-bottom: 1px solid #2a3034">Nov 3 10:42:16.204 · <a href="#">prompt #19</a> · step 2 of 9 · main · req_01H…9fa</div>
+<!-- key strip -->
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-bottom: 1px solid #2a3034">
+<sc-for list="{{kstrip}}" as="s" hint-placeholder-count="6">
+<div style="padding: 8px 12px; border-right: 1px solid #2a3034"><div class="k">{{s.k}}</div><div class="m" style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.v}}</div><div class="m" style="font-size: 11px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.s}}</div></div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 20px; padding: 0 16px; border-bottom: 1px solid #2a3034; flex-wrap: wrap">
+<sc-for list="{{dtabs}}" as="t" hint-placeholder-count="7"><button class="tab" onClick="{{t.pick}}" style="color: {{t.c}}; border-bottom-color: {{t.b}}">{{t.n}}</button></sc-for>
+</div>
+<div style="flex: 1; overflow: auto">
+
+<!-- Summary -->
+<sc-if value="{{dt.summary}}" hint-placeholder-val="{{ true }}">
+<div class="m" style="padding: 8px 16px; color: #a3a9ad; border-bottom: 1px solid #2a3034"><a href="#">Prompt #19</a> · step 2 of 9 · <a href="#">← 10:42:11</a> · <a href="#">10:42:31 →</a> · <span style="color: #57d68d">✓ matches Claude Code’s own report</span></div>
+<div class="k" style="padding: 12px 16px 4px">Sent · 2 new messages on a 42.6k-token cached prefix</div>
+<sc-for list="{{sumSent}}" as="r" hint-placeholder-count="2">
+<div class="row m" style="padding-left: 16px"><span style="width: 180px; font-weight: 600">{{r.a}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.b}}</span><span style="color: #a3a9ad">{{r.c}}</span></div>
+</sc-for>
+<div class="k" style="padding: 16px 16px 4px">Received · 1,204 tokens</div>
+<sc-for list="{{sumRecv}}" as="r" hint-placeholder-count="3">
+<div class="row m" style="padding-left: 16px"><span style="width: 180px; font-weight: 600; color: {{r.col}}">{{r.a}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.b}}</span><span style="color: #a3a9ad">{{r.c}}</span></div>
+</sc-for>
+<div class="m" style="padding: 16px; color: #848c90">Headers, body and stream are in Raw. Limits, network, timing, events and all 64 fields are in All details.</div>
+</sc-if>
+
+<!-- All details -->
+<sc-if value="{{dt.all}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 12px 16px; border-bottom: 1px solid #2a3034">
+<div style="display: flex; justify-content: space-between"><span class="k">Input composition · 43,023 tokens</span><span class="m" style="font-size: 11px; color: #a3a9ad">context at this step</span></div>
+<div style="display: flex; height: 10px; gap: 1px; margin-top: 6px">
+<div style="flex-grow: 42611; background: #8fd17e; opacity: .55"></div>
+<div style="flex-grow: 412; min-width: 3px; background: #8fd17e"></div>
+</div>
+<div class="m" style="display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11px; color: #a3a9ad; margin-top: 4px">
+<span><span style="color: #8fd17e; opacity: .55">■</span> cache read 42,611</span><span><span style="color: #8fd17e">■</span> uncached 412</span><span>cache write 5m 0 · 1h 0</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))">
+<sc-for list="{{ov}}" as="sec" hint-placeholder-count="8">
+<div style="padding: 10px 16px; border-bottom: 1px solid #2a3034; border-right: 1px solid #2a3034">
+<div class="k" style="margin-bottom: 4px; color: {{sec.hc}}">{{sec.h}}</div>
+<sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="5">
+<div class="m" style="display: flex; gap: 8px"><span style="width: 150px; flex: none; color: #a3a9ad">{{r.k}}</span><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: {{r.c}}">{{r.v}}</span></div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<!-- Tools -->
+<sc-if value="{{dt.all}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 12px 16px; display: flex; flex-direction: column; gap: 12px">
+<div class="m" style="color: #a3a9ad">This response asked for 1 tool call. Claude Code ran it, and the result went back to the model in the next step.</div>
+<div style="border: 1px solid #2a3034">
+<div class="ph" style="background: #1b1f22"><span class="m" style="font-weight: 600; color: #e8916f">Edit</span><span class="m" style="color: #a3a9ad">toolu_…8a · built-in</span><span style="flex: 1"></span><span class="m" style="color: #57d68d">success</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))">
+<sc-for list="{{toolCols}}" as="col" hint-placeholder-count="3">
+<div style="padding: 8px 12px; border-right: 1px solid #2a3034">
+<div class="k" style="margin-bottom: 4px">{{col.h}}</div>
+<sc-for list="{{col.rows}}" as="r" hint-placeholder-count="4">
+<div class="m" style="display: flex; flex-direction: column; margin-bottom: 4px"><span style="color: #a3a9ad; font-size: 11px">{{r.k}}</span><span style="color: {{r.c}}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.v}}</span></div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+<div class="m" style="color: #a3a9ad">Tool results for the previous step’s calls (Read, Bash) arrived in this request: Read 41 ms, Bash 12,304 ms (from <span style="color: #e6e3db">x-claude-code-prev-tool-durations</span>).</div>
+</div>
+</sc-if>
+
+<!-- Raw -->
+<sc-if value="{{dt.raw}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 8px 16px">
+<div class="m" style="font-weight: 600; margin-bottom: 4px">POST /v1/messages?beta=true HTTP/1.1</div>
+<div class="k" style="margin-bottom: 4px">Request headers · 17</div>
+<sc-for list="{{reqH}}" as="h" hint-placeholder-count="12"><div class="m" style="display: flex; gap: 12px"><span style="width: 260px; color: #a3a9ad; flex: none">{{h.k}}</span><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: {{h.c}}">{{h.v}}</span></div></sc-for>
+<div style="display: flex; gap: 8px; align-items: center; margin: 12px 0 4px"><span class="k">Request body · 8.2 KB · json</span><span style="flex: 1"></span><span class="chip" style="background: #1b1f22">PRETTY</span><span class="chip" style="border-color: #2a3034; color: #a3a9ad">RAW</span></div>
+<pre class="m" style="margin: 0; padding: 8px; background: #0c0e0f; border: 1px solid #2a3034; color: #e6e3db; white-space: pre-wrap">{{rawBody}}</pre>
+<div class="m" style="font-weight: 600; margin: 16px 0 4px">HTTP/1.1 200 OK · text/event-stream</div>
+<div class="k" style="margin-bottom: 4px">Response headers · 10</div>
+<sc-for list="{{resH}}" as="h" hint-placeholder-count="10"><div class="m" style="display: flex; gap: 12px"><span style="width: 260px; color: #a3a9ad; flex: none">{{h.k}}</span><span style="color: {{h.c}}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{h.v}}</span></div></sc-for>
+<div class="k" style="margin: 12px 0 4px">Response stream · 47 server-sent events · decoded</div>
+<sc-for list="{{sse}}" as="s" hint-placeholder-count="8"><div class="m" style="display: flex; gap: 12px"><span style="width: 64px; color: #848c90; flex: none">{{s.t}}</span><span style="width: 220px; flex: none; color: #e6e3db">{{s.e}}</span><span style="color: #a3a9ad; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{s.d}}</span></div></sc-for>
+</div>
+</sc-if>
+
+<!-- Timing -->
+<sc-if value="{{dt.all}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 12px 16px; display: flex; flex-direction: column; gap: 6px">
+<div class="k">Timing · proxy waterfall</div>
+<sc-for list="{{timing}}" as="t" hint-placeholder-count="6">
+<div class="m" style="display: flex; align-items: center; gap: 8px"><span style="width: 170px; color: #a3a9ad">{{t.k}}</span><div style="flex: 1; position: relative; height: 10px"><div style="position: absolute; top: 0; height: 10px; background: {{t.c}}; left: {{t.l}}; width: {{t.w}}"></div></div><span style="width: 64px; text-align: right">{{t.v}}</span></div>
+</sc-for>
+<div class="k" style="margin-top: 12px">Claude Code’s own timing</div>
+<sc-for list="{{ccTiming}}" as="r" hint-placeholder-count="5"><div class="m" style="display: flex; gap: 8px"><span style="width: 170px; color: #a3a9ad">{{r.k}}</span><span>{{r.v}}</span></div></sc-for>
+</div>
+</sc-if>
+
+<!-- Events -->
+<sc-if value="{{dt.all}}" hint-placeholder-val="{{ false }}">
+<div class="k" style="padding: 12px 16px 4px; border-top: 1px solid #2a3034">Claude Code events · 6</div>
+<sc-for list="{{events}}" as="e" hint-placeholder-count="6">
+<div class="row m"><span style="width: 64px; color: #848c90">{{e.t}}</span><span style="color: #f0b43c; width: 250px; overflow: hidden; text-overflow: ellipsis">{{e.n}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.d}}</span><span style="color: #848c90">{{e.j}}</span></div>
+</sc-for>
+</sc-if>
+
+<!-- Fields -->
+<sc-if value="{{dt.all}}" hint-placeholder-val="{{ false }}">
+<div class="k" style="padding: 12px 16px 4px; border-top: 1px solid #2a3034">All fields · 64</div>
+<div style="padding: 8px 12px"><input class="inp" aria-label="Filter fields" placeholder="filter 64 fields…" style="width: 100%; box-sizing: border-box"></div>
+<sc-for list="{{fields}}" as="f" hint-placeholder-count="20">
+<div class="row m"><span style="width: 280px; color: #a3a9ad">{{f.k}}</span><span style="overflow: hidden; text-overflow: ellipsis">{{f.v}}</span></div>
+</sc-for>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["prompts","requests","events"],"default":"prompts"},"drawer":{"editor":"boolean","default":false},"drawerTab":{"editor":"enum","options":["summary","raw","all"],"default":"summary"},"$preview":{"width":1440,"height":2000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var st = this.state || {};
+    var drawer = st.drawer !== undefined ? st.drawer : !!this.props.drawer;
+    var dtab = st.dtab || this.props.drawerTab || 'summary';
+    var W = '#e6e3db', MU = '#a3a9ad', OK = '#57d68d';
+    var row = function (k, v, c) { return { k: k, v: v, c: c || W }; };
+    var drawerData = {
+      kstrip: [
+        { k: 'Model', v: 'opus', s: 'effort high · thinking on' },
+        { k: 'Tokens', v: '43.0k → 1.2k', s: '99% from cache' },
+        { k: 'Cost est.', v: '$0.21', s: 'API-equivalent' },
+        { k: 'TTFT', v: '1.9 s', s: 'proxy 1.87 s' },
+        { k: 'Duration', v: '9.3 s', s: '47 stream events' },
+        { k: 'Stop', v: 'tool_use', s: '1 tool call: Edit' }
+      ],
+      ov: [
+        { h: 'Tokens & cost', hc: '#8fd17e', rows: [row('input · uncached', '412'), row('cache read', '42,611'), row('cache write 5m / 1h', '0 / 0'), row('output', '1,204'), row('  of which thinking', '380'), row('costUSD (Claude Code)', '$0.21 · matches usage ✓', OK)] },
+        { h: 'Request settings', hc: '#848c90', rows: [row('model', 'claude-opus-…'), row('max_tokens', '32,000'), row('thinking', 'enabled · budget 10,000'), row('effort', 'high'), row('stream', 'true'), row('cache breakpoints', '2')] },
+        { h: 'Thread position', hc: '#848c90', rows: [row('previous step', '10:42:11 · msg_01…a7'), row('this step', 'msg_01…b2'), row('next step', '10:42:31 · after Edit ran'), row('thread created', 'Nov 3 08:31 · 412 KB'), row('messages added', '2 · tool_result ×2'), row('compactions since create', '0')] },
+        { h: 'What the model could use', hc: '#e8916f', rows: [row('built-in tools', '23 (schemas at thread create)'), row('deferred MCP tools', '381 names · 11 servers'), row('skills', '87'), row('system prompt', '14 KB · carried from create'), row('injected context', 'git status · cwd · user email'), row('memory files', 'CLAUDE.md · MEMORY.md')] },
+        { h: 'Response service', hc: '#848c90', rows: [row('service tier', 'standard'), row('inference geo', 'us'), row('speed', '—'), row('status', '200 · request-id req_01H…9fa'), row('retries', '0'), row('streaming stalls', 'none')] },
+        { h: 'Account limits at response', hc: '#848c90', rows: [row('unified status', 'allowed'), row('7-day utilization', '41%'), row('representative claim', 'seven_day'), row('overage', 'rejected · org_level_disabled'), row('fallback percentage', '—', MU), row('5-hour window', 'not sent by API', MU)] },
+        { h: 'Network & proxy', hc: '#848c90', rows: [row('client', 'net A · home · IPv4'), row('device', 'd91…0c · darwin'), row('TLS', 'intercepted · minted api.anthropic.com cert'), row('upstream', 'verified TLS · connect 38 ms'), row('bytes', '8.2 KB up · 3.4 KB down'), row('credential', 'key_hash 9e2… (refreshes; not identity)', MU)] },
+        { h: 'Cross-check & posture', hc: '#848c90', rows: [row('analytics match', 'tengu_api_success by requestId ✓', OK), row('cost agreement', 'costUSD = usage × price ✓', OK), row('ttft agreement', '1,912 ms vs proxy 1,870 ms'), row('permissionMode', 'bypassPermissions'), row('sandbox', 'off'), row('content retention', 'shape only (production mode)', MU)] }
+      ],
+      convoOut: [
+        { role: 'assistant', kind: 'thinking', col: W, size: '380 tokens', body: 'signature present · text not retained' },
+        { role: 'assistant', kind: 'text', col: W, size: '212 chars', body: 'not retained' },
+        { role: 'assistant', kind: 'tool_use · Edit', col: '#e8916f', size: '1.3 KB input', body: 'file_path  src/auth/session.ts\nold_string 3 lines · 142 chars\nnew_string 14 lines · 610 chars' }
+      ],
+      toolCols: [
+        { h: 'Input (from response)', rows: [row('file_path', 'src/auth/session.ts'), row('old_string', '3 lines · 142 chars', MU), row('new_string', '14 lines · 610 chars', MU), row('replace_all', 'false')] },
+        { h: 'Execution (analytics)', rows: [row('PreToolUse hook', '48 ms'), row('duration', '62 ms'), row('file operation', 'edit · .ts · +14 −3'), row('contentHash', '4be…'), row('permission', 'auto · bypassPermissions')] },
+        { h: 'Result (next request)', rows: [row('delivered in', 'step 3 · 10:42:31'), row('size', '0.3 KB'), row('is_error', 'false'), row('content', 'not retained', MU)] }
+      ],
+      ccTiming: [row('requestPrepareMs', '41'), row('ttftMs', '1,912'), row('durationMs', '9,301'), row('attempt', '1 of 1'), row('ttfvt (prompt)', '7.4 s')],
+      sse: [
+        { t: '+1.87s', e: 'message_start', d: 'id msg_01…b2 · model · usage.input' },
+        { t: '+1.88s', e: 'content_block_start [0]', d: 'thinking' },
+        { t: '+1.9s', e: 'content_block_delta ×18', d: 'thinking_delta · signature_delta' },
+        { t: '+4.1s', e: 'content_block_start [1]', d: 'text' },
+        { t: '+4.1s', e: 'content_block_delta ×9', d: 'text_delta · 212 chars' },
+        { t: '+5.3s', e: 'content_block_start [2]', d: 'tool_use · Edit · toolu_…8a' },
+        { t: '+5.3s', e: 'content_block_delta ×12', d: 'input_json_delta · 1.3 KB' },
+        { t: '+9.2s', e: 'message_delta', d: 'stop_reason tool_use · usage.output_tokens 1,204' },
+        { t: '+9.3s', e: 'message_stop', d: '' }
+      ]
+    };
+    var ptab = st.ptab || this.props.tab || 'prompts';
+    var selEv = st.selEv !== undefined ? st.selEv : 5;
+    var openDrawer = function () { self.setState({ drawer: true }); };
+    var ptabs = [['prompts', 'Prompts · 4'], ['requests', 'Requests · 170'], ['events', 'Events · 2,412']].map(function (t) {
+      var on = t[0] === ptab;
+      return { n: t[1], c: on ? '#e6e3db' : '#a3a9ad', b: on ? '#e6e3db' : 'transparent', pick: function () { self.setState({ ptab: t[0] }); } };
+    });
+
+    // ---- timeline ----
+    var A0 = 8, span = 50.4;
+    var pct = function (h) { return ((h - A0) / span * 100).toFixed(3) + '%'; };
+    var dur = function (d) { return (d / span * 100).toFixed(3) + '%'; };
+    var seed = 23;
+    var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    var NOW = 58.15;
+    var active = function (h) { return (h >= 10 && h < 25.5) || (h >= 32.5 && h < 48) || (h >= 56 && h < NOW); };
+    var gapsH = [{ a: 24, b: 25, n: 37 }, { a: 39, b: 42, n: 57 }];
+    var inGap = function (h) { return gapsH.some(function (g) { return h >= g.a && h < g.b; }); };
+    var model = [], ctx = [], prompts = [];
+    var c = 20;
+    for (var h = 10; h < NOW; h += 0.5) {
+      if (active(h) && !inGap(h)) model.push({ l: pct(h), w: dur(0.42), h: (4 + rnd() * 50).toFixed(0) + 'px' });
+      if (active(h)) c += 22 + rnd() * 18;
+      if (h >= 35.25 && h < 35.75) c = 21;
+      if (h >= 47 && h < 47.5) c = 30;
+      ctx.push({ l: pct(h), w: dur(0.46), h: Math.min(52, c / 905 * 52).toFixed(0) + 'px' });
+    }
+    var ph = [10.1, 10.9, 12, 13.4, 14.2, 15.5, 16.8, 17.3, 21.8, 22.6, 23.4, 24.6, 33, 33.8, 34.03, 34.4, 34.7, 35.43, 36.5, 37.4, 42.4, 43, 43.6, 44.1, 44.8, 45.5, 46.1, 46.7, 47.4, 56.2, 56.9, 57.3, 57.7, 58.0];
+    ph.forEach(function (x) { prompts.push({ l: pct(x) }); });
+    var F = '#e6e3db';
+
+    // ---- requests in range, oldest first (page 1) ----
+    var Mc = '#7db3ff', Ac = '#f0b43c', Fc = '#c9a3ec', Cc = '#8fd17e';
+    var R = function (t, n, k, m, p, s, d, u, dn, op) {
+      return { t: t, n: n, k: k, c: { model: Mc, analytics: Ac, flags: Fc, count: Cc }[k], m: m, p: p, st: s, stc: s === '200' ? '#a3a9ad' : '#ff7a6b', d: d, u: u, dn: dn, op: op || 1, open: openDrawer };
+    };
+    var reqLog = [
+      R('10:00:41', '—', 'analytics', 'POST', '/api/event_logging/v2/batch · 22 events', '200', '70 ms', '3.4 KB', '0.1 KB', 0.55),
+      R('10:02:03', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '6.1 s', '9.8 KB', '1.1 KB'),
+      R('10:02:05', '17', 'count', 'POST', '/v1/messages/count_tokens', '200', '290 ms', '38 KB', '0.1 KB', 0.55),
+      R('10:02:11', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '10.9 s', '4.4 KB', '0.9 KB'),
+      R('10:02:12', '17', 'analytics', 'POST', '/api/event_logging/v2/batch · 61 events', '200', '72 ms', '9.2 KB', '0.1 KB', 0.55),
+      R('10:02:24', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '12.8 s', '5.2 KB', '1.4 KB'),
+      R('10:02:39', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '15.1 s', '6.0 KB', '1.6 KB'),
+      R('10:02:40', '17', 'analytics', 'POST', '/api/event_logging/v2/batch · 88 events', '200', '69 ms', '13.0 KB', '0.1 KB', 0.55),
+      R('10:02:55', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '12.4 s', '4.9 KB', '1.2 KB'),
+      R('10:03:08', '17', 'model', 'POST', '/v1/messages · main · opus', 'ERR', 'retry 1', '5.1 KB', '—'),
+      R('10:03:10', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '8.8 s', '5.1 KB', '0.8 KB'),
+      R('10:03:12', '17', 'analytics', 'POST', '/api/event_logging/v2/batch · 74 events', '200', '75 ms', '11.1 KB', '0.1 KB', 0.55),
+      R('10:03:30', '17', 'model', 'POST', '/v1/messages · subagent · Explore · haiku', '200', '1.6 s', '2.4 KB', '0.7 KB'),
+      R('10:03:31', '17', 'model', 'POST', '/v1/messages · subagent · Explore · haiku', '200', '1.2 s', '2.1 KB', '0.6 KB'),
+      R('10:03:44', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '7.3 s', '6.6 KB', '1.0 KB'),
+      R('10:03:46', '17', 'analytics', 'POST', '/api/event_logging/v2/batch · 92 events', '200', '71 ms', '13.9 KB', '0.1 KB', 0.55),
+      R('10:04:02', '—', 'flags', 'POST', '/api/eval/sdk-… · 6-hourly refresh · 3 changed', '200', '120 ms', '1.8 KB', '96 KB'),
+      R('10:04:19', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '9.0 s', '5.3 KB', '1.2 KB'),
+      R('10:04:33', '17', 'model', 'POST', '/v1/messages · main · opus · tool_use', '200', '11.6 s', '5.8 KB', '1.5 KB'),
+      R('10:04:35', '17', 'analytics', 'POST', '/api/event_logging/v2/batch · 79 events', '200', '68 ms', '11.8 KB', '0.1 KB', 0.55)
+    ];
+
+    // ---- events in range, oldest first (page 1) ----
+    var evRaw = [
+      ['10:00:12', '—', 'tengu_event_loop_stall', 'device', 'stall 1.2 s · likely_sleep false', '', '', 0.55],
+      ['10:00:30', '—', 'tengu_return_to_session', 'session', 'blurDurationMs 1,840,000 (30m 40s)'],
+      ['10:02:01', '17', 'tengu_input_prompt', 'prompt', 'prompt_length 402 · prompt_source typed · is_negative false'],
+      ['10:02:01', '17', 'tengu_paste_text', 'prompt', '6.0 KB pasted'],
+      ['10:02:03', '17', 'tengu_api_query', 'req …a10', 'permissionMode bypassPermissions · messages 2'],
+      ['10:02:09', '17', 'tengu_api_success', 'req …a10', 'costUSD 0.18 · ttftMs 2,104 · durationMs 6,120', '', '',
+        1, '{\n  "requestId": "req_01H…a10",  "clientRequestId": "c3b0…7f",\n  "session_id": "4c1a…77e0",  "cc_prompt_id": "p_2b…09",\n  "model": "claude-opus-…",  "costUSD": 0.18,\n  "ttftMs": 2104,  "durationMs": 6120,  "permissionMode": "bypassPermissions",\n  "inputTokens": 388,  "cachedInputTokens": 301204,  "outputTokens": 214,\n  "env": { platform, terminal, shell, runtimes, … +45 fields }\n}'],
+      ['10:02:09', '17', 'tengu_tool_use_start', 'tool Bash', 'toolUseID toolu_…41'],
+      ['10:02:09', '17', 'tengu_run_hook', 'tool Bash', 'PreToolUse · 51 ms'],
+      ['10:02:10', '17', 'tengu_tool_progress ×8', 'tool Bash', 'collapsed · client ticks', '', '', 0.55],
+      ['10:02:11', '17', 'tengu_bash_tool_command_executed', 'tool Bash', 'kubectl · exit 0 · stdout 3.1 KB · 1.4 s'],
+      ['10:02:11', '17', 'tengu_tool_use_success', 'tool Bash', '1.5 s'],
+      ['10:02:11', '17', 'tengu_api_query', 'req …a11', 'permissionMode bypassPermissions'],
+      ['10:02:22', '17', 'tengu_api_success', 'req …a11', 'costUSD 0.12 · ttftMs 1,960'],
+      ['10:02:22', '17', 'tengu_file_operation', 'tool Read', 'read · .go · contentHash 91c…'],
+      ['10:02:23', '17', 'tengu_tool_use_success', 'tool Read', '22 ms · 6.4 KB result'],
+      ['10:02:24', '17', 'tengu_api_query', 'req …a12', 'permissionMode bypassPermissions'],
+      ['10:02:37', '17', 'tengu_api_success', 'req …a12', 'costUSD 0.14 · ttftMs 2,230'],
+      ['10:02:37', '17', 'tengu_bash_tool_command_executed', 'tool Bash', 'rm · exit 0 · destructive_category rm -rf · scope unknown', '▲', '#ff7a6b'],
+      ['10:02:38', '17', 'tengu_shell_set_cwd', 'session', '…/aintercept → …/observer'],
+      ['10:02:39', '17', 'tengu_api_query', 'req …a13', 'permissionMode bypassPermissions']
+    ];
+    var evLog = evRaw.map(function (e, i) {
+      var sel = i === selEv;
+      return { t: e[0], n: e[1], ev: e[2], l: e[3], f: e[4], w: e[5] || '', wc: e[6] || '#a3a9ad', op: e[7] || 1,
+        bg: sel ? '#1b1f22' : 'transparent', sel: sel && !!e[8], json: e[8] || '',
+        pick: function () { self.setState({ selEv: sel ? -1 : i }); } };
+    });
+
+    return {
+      drawer: drawer,
+      close: function () { self.setState({ drawer: false }); },
+      ptabs: ptabs, isPrompts: ptab === 'prompts', isRequests: ptab === 'requests', isEvents: ptab === 'events',
+      reqLog: reqLog, evLog: evLog,
+      kstrip: drawerData.kstrip, ov: drawerData.ov, convoOut: drawerData.convoOut, toolCols: drawerData.toolCols, ccTiming: drawerData.ccTiming, sse: drawerData.sse,
+      dt: { summary: dtab === 'summary', raw: dtab === 'raw', all: dtab === 'all' },
+      sumSent: [{ a: 'tool_result · Read', b: 'src/auth/session.ts · 132 lines', c: '4.1 KB' }, { a: 'tool_result · Bash', b: 'npm test · exit 1', c: '18 KB' }],
+      sumRecv: [{ a: 'thinking', b: 'not retained', c: '380 tok', col: '#e6e3db' }, { a: 'text', b: 'not retained', c: '212 chars', col: '#e6e3db' }, { a: 'tool_use · Edit', b: 'src/auth/session.ts → ran 62 ms · +14 −3', c: '1.3 KB', col: '#e8916f' }],
+      dtabs: [['summary', 'Summary'], ['raw', 'Raw'], ['all', 'All details']].map(function (t) {
+        var on = t[0] === dtab;
+        return { n: t[1], c: on ? '#e6e3db' : '#a3a9ad', b: on ? '#e6e3db' : 'transparent', pick: function () { self.setState({ dtab: t[0] }); } };
+      }),
+      prompts: prompts,
+      plabels: [{ l: pct(10.1), t: '#1' }, { l: pct(33), t: '#13' }, { l: pct(42.4), t: '#21' }, { l: pct(56.2), t: '#30' }],
+      model: model, ctx: ctx,
+      ctxMarks: [{ l: pct(35.3), t: '⇣ compaction 905k → 21k · 71s' }, { l: pct(47), t: '⇣ idle compaction 904k' }],
+      gaps: gapsH.map(function (g) { return { l: pct(g.a), w: dur(g.b - g.a), n: g.n }; }),
+      focus: [
+        { l: pct(10), w: dur(8), t: 'focused', bg: F, c: '#0c0e0f' },
+        { l: pct(18), w: dur(3.5), t: 'blurred 3h 30m', bg: '#2a3034', c: '#e6e3db' },
+        { l: pct(21.5), w: dur(4), t: 'focused', bg: F, c: '#0c0e0f' },
+        { l: pct(32.5), w: dur(10), t: 'focused', bg: F, c: '#0c0e0f' },
+        { l: pct(42.5), w: dur(13.5), t: 'blurred 13h 30m', bg: '#2a3034', c: '#e6e3db' },
+        { l: pct(56), w: dur(NOW - 56), t: '', bg: F, c: '#0c0e0f' }
+      ],
+      sleep: [{ l: pct(25.5), w: dur(7), t: 'asleep 7h · clock jump' }, { l: pct(48), w: dur(8), t: 'asleep 8h' }],
+      net: [
+        { l: pct(10), w: dur(12), t: 'net A · home', c: '#e6e3db' },
+        { l: pct(22), w: dur(21), t: 'net B · has IPv6 → model calls bypassed proxy twice', c: '#ff7a6b' },
+        { l: pct(43), w: dur(13.5), t: 'net A · home', c: '#e6e3db' },
+        { l: pct(56.5), w: dur(NOW - 56.5), t: 'IPv6 test', c: '#e6e3db' }
+      ],
+      fric: [
+        { l: pct(14), g: '▲', c: '#ff7a6b' }, { l: pct(22.7), g: '▲▲', c: '#ff7a6b' }, { l: pct(34.05), g: '▲', c: '#ff7a6b' },
+        { l: pct(34.7), g: '↯', c: '#e6e3db' }, { l: pct(35.43), g: '✕', c: '#e6e3db' }, { l: pct(37.4), g: '▲▲▲', c: '#ff7a6b' }, { l: pct(44.8), g: '▲▲', c: '#ff7a6b' }
+      ],
+      caps: [
+        { k: 'Built-in tools', v: '5 / 23 used' }, { k: 'MCP servers', v: '11' }, { k: 'MCP tools', v: '0 / 381 used' },
+        { k: 'Skills', v: '87' }, { k: 'Hooks', v: '15' }
+      ],
+      rows: [
+        { isPrompt: true, tw: '▸', n: 17, t: 'Nov 3 10:02', txt: '402 chars · pasted 6 KB', steps: '48', dur: '11m', tok: '310k → 6.0k', tools: 'Bash·40 Read·5 Edit·3', mk: '▲', bg: '#131618' },
+        { isPrompt: true, tw: '▸', n: 18, t: 'Nov 3 10:25', txt: '96 chars · not retained', steps: '22', dur: '4m 51s', tok: '39k → 2.6k', tools: 'Bash·19 Read·2', mk: '', bg: '#131618' },
+        { isPrompt: true, tw: '▾', n: 19, t: 'Nov 3 10:42', txt: '“fix the flaky auth test”', steps: '9', dur: '1m 40s', tok: '41k → 3.2k', tools: 'Bash·4 Read·3 Edit·2', mk: '↯', bg: '#1b1f22' },
+        { isStep: true, pad: '70px', t: '10:42:11', a: 'opus', b: '41.2k in (40.8k cached) → 612 out · ttft 1.9s · 4.8s · tool_use', r: '', w: '', c: '#7db3ff', fw: 400, bg: '#131618', op: 1 },
+        { isStep: true, pad: '100px', t: '', a: 'Read', b: 'src/auth/session.ts', r: '4.1 KB result', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { isStep: true, pad: '100px', t: '', a: 'Bash', b: 'npm test   exit 1', r: 'stdout 18 KB · 12.3s', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { isStep: true, pad: '70px', t: '10:42:16', a: 'opus', b: '43.0k in → 1.2k out · 9.3s · tool_use', r: 'open ›', w: '', c: '#7db3ff', fw: 400, bg: '#1b1f22', op: 1 },
+        { isStep: true, pad: '100px', t: '', a: 'Edit', b: 'src/auth/session.ts', r: '+14 −3', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { isStep: true, pad: '70px', t: '10:42:31', a: '⤷ Explore', b: 'subagent (haiku) · 3 steps · 22s · same prompt ID', r: '▸', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { isBetween: true, t: 'Nov 3 11:02', b: 'recap · auxiliary · haiku · 212 chars', c: '#a3a9ad' },
+        { isBetween: true, t: 'Nov 3 11:18', b: 'compaction · 905k → 21k tokens · 2,207 messages summarized · 71s wait', c: '#8fd17e' },
+        { isPrompt: true, tw: '▸', n: 20, t: 'Nov 3 11:26', txt: '41 chars · not retained', steps: '12', dur: '2m 10s', tok: '52k → 1.9k', tools: 'Bash·9 Read·2', mk: '✕', bg: '#131618' }
+      ].map(function (r) {
+        r.isPrompt = !!r.isPrompt; r.isStep = !!r.isStep; r.isBetween = !!r.isBetween;
+        r.open = openDrawer;
+        return r;
+      }),
+      convo: [
+        { role: 'user', kind: 'tool_result · Read', col: '#e6e3db', size: '4.1 KB', body: 'tool_use_id toolu_…3f · src/auth/session.ts · 132 lines' },
+        { role: 'user', kind: 'tool_result · Bash', col: '#e6e3db', size: '18 KB', body: 'tool_use_id toolu_…40 · npm test · exit 1 · is_error false' }
+      ],
+      reqH: [
+        { k: 'host', v: 'api.anthropic.com', c: '#e6e3db' },
+        { k: 'authorization', v: '[redacted · key_hash 9e2…]', c: '#848c90' },
+        { k: 'anthropic-version', v: '2023-06-01', c: '#e6e3db' },
+        { k: 'anthropic-beta', v: 'oauth-2025-…, interleaved-thinking-…, context-management-…', c: '#e6e3db' },
+        { k: 'user-agent', v: 'claude-cli/2.x (external, cli)', c: '#e6e3db' },
+        { k: 'x-app', v: 'cli', c: '#e6e3db' },
+        { k: 'x-claude-code-session-id', v: '4c1a…77e0', c: '#e6e3db' },
+        { k: 'x-claude-code-prompt-id', v: 'p_7f…31', c: '#e6e3db' },
+        { k: 'x-client-request-id', v: 'c3b0…e1', c: '#e6e3db' },
+        { k: 'x-claude-code-prev-tool-durations', v: 'Read:41,Bash:12304', c: '#e6e3db' },
+        { k: 'request-class', v: 'main', c: '#e6e3db' },
+        { k: 'x-stainless-lang / -os / -runtime', v: 'js · MacOS · node v22', c: '#e6e3db' },
+        { k: 'x-stainless-retry-count', v: '0', c: '#e6e3db' },
+        { k: 'content-type', v: 'application/json', c: '#e6e3db' },
+        { k: 'content-length', v: '8,398', c: '#e6e3db' }
+      ],
+      rawBody: '{\n  "model": "claude-opus-…",\n  "max_tokens": 32000,\n  "thinking": { "type": "enabled", "budget_tokens": 10000 },\n  "system": [ …carried; cache_control ephemeral… ],\n  "messages": [\n    …412 earlier messages (cached prefix)…,\n    { "role": "user", "content": [\n      { "type": "tool_result", "tool_use_id": "toolu_…3f", "content": "[4.1 KB not retained]" },\n      { "type": "tool_result", "tool_use_id": "toolu_…40", "content": "[18 KB not retained]", "cache_control": { "type": "ephemeral" } }\n    ] }\n  ],\n  "metadata": { "user_id": "user_…_account_7d2e…_session_4c1a…" },\n  "stream": true\n}',
+      resH: [
+        { k: 'request-id', v: 'req_01H…9fa', c: '#e6e3db' },
+        { k: 'content-type', v: 'text/event-stream; charset=utf-8', c: '#e6e3db' },
+        { k: 'anthropic-ratelimit-unified-status', v: 'allowed', c: '#e6e3db' },
+        { k: 'anthropic-ratelimit-unified-7d-utilization', v: '0.41', c: '#e6e3db' },
+        { k: 'anthropic-ratelimit-unified-7d-status', v: 'allowed', c: '#e6e3db' },
+        { k: 'anthropic-ratelimit-unified-representative-claim', v: 'seven_day', c: '#e6e3db' },
+        { k: 'anthropic-ratelimit-unified-overage-status', v: 'rejected', c: '#e6e3db' },
+        { k: 'anthropic-ratelimit-unified-overage-disabled-reason', v: 'org_level_disabled', c: '#e6e3db' },
+        { k: 'anthropic-organization-id', v: '1b9f…e02', c: '#e6e3db' },
+        { k: 'cf-ray', v: '8e1…-SJC', c: '#848c90' }
+      ],
+      timing: [
+        { k: 'accept + TLS (client)', l: '0%', w: '1%', c: '#60686d', v: '4 ms' },
+        { k: 'request body received', l: '1%', w: '0.5%', c: '#60686d', v: '3 ms' },
+        { k: 'upstream connect + TLS', l: '1.5%', w: '1.5%', c: '#60686d', v: '38 ms' },
+        { k: 'first byte (ttft)', l: '3%', w: '17%', c: '#7db3ff', v: '1.87 s' },
+        { k: 'streaming', l: '20%', w: '80%', c: '#7db3ff', v: '7.43 s' },
+        { k: 'total', l: '0%', w: '100%', c: '#2a3034', v: '9.30 s' }
+      ],
+      events: [
+        { t: '+0.0s', n: 'tengu_api_query', d: 'permissionMode bypassPermissions · messages 2', j: 'clientRequestId' },
+        { t: '+9.3s', n: 'tengu_api_success', d: 'costUSD 0.21 · ttftMs 1,912', j: 'requestId ✓' },
+        { t: '+9.4s', n: 'tengu_tool_use_start', d: 'Edit', j: 'toolUseID' },
+        { t: '+9.5s', n: 'tengu_run_hook', d: 'PreToolUse · 48 ms', j: 'toolUseID' },
+        { t: '+9.5s', n: 'tengu_file_operation', d: 'edit · .ts · contentHash 4be…', j: 'toolUseID' },
+        { t: '+9.6s', n: 'tengu_tool_use_success', d: 'Edit · 62 ms', j: 'toolUseID' }
+      ],
+      fields: [
+        { k: 'account_uuid', v: '7d2e…a41c' }, { k: 'provider_org_id', v: '1b9f…e02' }, { k: 'device_id', v: 'd91…0c' },
+        { k: 'session_id', v: '4c1a…77e0' }, { k: 'cc_prompt_id', v: 'p_7f…31' }, { k: 'cc_prompt_index', v: '19' },
+        { k: 'message_id', v: 'msg_01…b2' }, { k: 'previous_message_id', v: 'msg_01…a7' }, { k: 'request_id', v: 'req_01H…9fa' },
+        { k: 'client_request_id', v: 'c3b0…e1' }, { k: 'request_class', v: 'main' }, { k: 'model', v: 'claude-opus-…' },
+        { k: 'stop_reason', v: 'tool_use' }, { k: 'usage.input_tokens', v: '412' }, { k: 'usage.cache_read_input_tokens', v: '42,611' },
+        { k: 'usage.cache_creation.ephemeral_1h_input_tokens', v: '0' }, { k: 'usage.cache_creation.ephemeral_5m_input_tokens', v: '0' },
+        { k: 'usage.output_tokens', v: '1,204' }, { k: 'usage.service_tier', v: 'standard' }, { k: 'usage.inference_geo', v: 'us' },
+        { k: 'key_hash', v: '9e2…' }, { k: 'client_ip', v: '[net A]' }, { k: 'bytes_up / bytes_down', v: '— not on rows yet' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

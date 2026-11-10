@@ -1,0 +1,31 @@
+/* SummaryLabel (CompProviders "SummaryLabel/*", handoff §11L.9): a fixed label column,
+   12px to the value, one line per row. */
+@layer components {
+  .summary-label-row {
+    display: grid;
+    grid-template-columns: var(--summary-label, 220px) 1fr;
+    column-gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 12px;
+    border-bottom: 1px solid var(--line);
+    font: 400 12px/20px var(--font-mono);
+    color: var(--ink);
+  }
+  .summary-label {
+    display: flex;
+    min-width: 0;
+  }
+  .summary-label:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  .summary-label-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .summary-label-count {
+    flex: none;
+  }
+}

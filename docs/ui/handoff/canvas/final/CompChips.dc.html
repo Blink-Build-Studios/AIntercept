@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chips, badges and markers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cells{display:flex;flex-wrap:wrap;gap:12px}
+.cell{background:#131618;border:1px solid #2a3034;padding:14px 16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:150px}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.dot{width:7px;height:7px;border-radius:999px;display:inline-block}
+.sw{width:8px;height:8px;border-radius:2px;display:inline-block}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1300px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Chips, badges &amp; markers</span>
+<span style="color: #a3a9ad">Non-interactive labels: default cursor, no hover. Clickable chips are ToggleChip (Controls) and FilterChip (below), which follow the click rule (§11G.B1). Color carries a channel, an agent or a status, never decoration; every colored mark sits next to a word.</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Chip</span>
+<span class="props">tone: neutral | muted | range | notRetained | selected · swatch? · dot?</span>
+<div class="cells">
+<div class="cell"><span class="cap">neutral · posture</span><span data-spec="Chip/neutralPosture" class="chip">BYPASSPERMISSIONS</span></div>
+<div class="cell"><span class="cap">muted</span><span data-spec="Chip/muted" class="chip" style="border-color: #2a3034; color: #a3a9ad">DEFAULT</span></div>
+<div class="cell"><span class="cap">not retained</span><span data-spec="Chip/notRetained" class="chip" style="border-color: #2a3034; color: #848c90">NOT RETAINED</span></div>
+<div class="cell"><span class="cap">range (selection)</span><span data-spec="Chip/rangeSelection" class="chip" style="border-color: #ffd36b; color: #ffd36b">RANGE OCT 30 02:00 – 08:00 ×</span></div>
+<div class="cell"><span class="cap">selected filter</span><span data-spec="Chip/selectedFilter" class="chip" style="background: #e6e3db; border-color: #e6e3db; color: #0c0e0f; font-weight: 600">ALL AGENTS · 5 PEOPLE</span></div>
+<div class="cell"><span class="cap">with swatch</span><span data-spec="Chip/withSwatch" class="chip" style="border-color: #2a3034"><span class="sw" style="width: 7px; height: 7px; background: #7db3ff"></span>MODEL 96</span></div>
+<div class="cell"><span class="cap">count / new</span><span data-spec="Chip/countNew" class="chip">3 NEW ↑</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">LiveBadge</span>
+<span class="props">status: live | connecting | waiting | delayed | retrying | paused · interval · green only when live</span>
+<div class="cells">
+<div class="cell"><span class="cap">live</span><span data-spec="LiveBadge/live" class="chip" style="border-color: #57d68d; color: #57d68d"><span class="dot" style="background: #57d68d"></span>LIVE · 5s</span></div>
+<div class="cell"><span class="cap">connecting</span><span data-spec="LiveBadge/connecting" class="chip" style="color: #a3a9ad"><span class="dot" style="background: #848c90"></span>CONNECTING</span></div>
+<div class="cell"><span class="cap">waiting</span><span data-spec="LiveBadge/waiting" class="chip" style="color: #a3a9ad"><span class="dot" style="background: #848c90"></span>WAITING</span></div>
+<div class="cell"><span class="cap">delayed</span><span data-spec="LiveBadge/delayed" class="chip" style="color: #a3a9ad"><span class="dot" style="background: #848c90"></span>DELAYED · 2m</span></div>
+<div class="cell"><span class="cap">retrying</span><span data-spec="LiveBadge/retrying" class="chip" style="color: #a3a9ad"><span class="dot" style="background: #848c90"></span>RETRYING</span></div>
+<div class="cell"><span class="cap">paused</span><span data-spec="LiveBadge/paused" class="chip" style="color: #a3a9ad"><span class="dot" style="background: transparent; border: 1px solid #848c90; box-sizing: border-box"></span>PAUSED · 12 NEW</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">AgentChip</span>
+<span class="props">agent: claude-code | codex | chatgpt | claude-ai · reserved?</span>
+<div class="cells">
+<div class="cell"><span class="cap">claude code</span><span data-spec="AgentChip/claudeCode" class="chip" style="border-color: #2a3034"><span class="dot" style="background: #e8916f"></span>Claude Code</span></div>
+<div class="cell"><span class="cap">codex</span><span data-spec="AgentChip/codex" class="chip" style="border-color: #2a3034"><span class="dot" style="background: #9fb4c7"></span>Codex</span></div>
+<div class="cell"><span class="cap">chatgpt</span><span data-spec="AgentChip/chatgpt" class="chip" style="border-color: #2a3034"><span class="dot" style="background: #7fd1b9"></span>ChatGPT</span></div>
+<div class="cell"><span class="cap">claude.ai</span><span data-spec="AgentChip/claudeAi" class="chip" style="border-color: #2a3034"><span class="dot" style="background: #d9b98c"></span>claude.ai</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">ChannelSwatch</span>
+<span class="props">channel: model | analytics | flags | skills | count | account · 8px square</span>
+<div class="cells">
+<div class="cell"><span data-spec="ChannelSwatch/model" class="m" style="display: flex; gap: 6px; align-items: center"><span class="sw" style="background: #7db3ff"></span>model</span></div>
+<div class="cell"><span data-spec="ChannelSwatch/analytics" class="m" style="display: flex; gap: 6px; align-items: center"><span class="sw" style="background: #f0b43c"></span>analytics</span></div>
+<div class="cell"><span data-spec="ChannelSwatch/flags" class="m" style="display: flex; gap: 6px; align-items: center"><span class="sw" style="background: #c9a3ec"></span>flags</span></div>
+<div class="cell"><span data-spec="ChannelSwatch/skills" class="m" style="display: flex; gap: 6px; align-items: center"><span class="sw" style="background: #e8916f"></span>skills · reach</span></div>
+<div class="cell"><span data-spec="ChannelSwatch/count" class="m" style="display: flex; gap: 6px; align-items: center"><span class="sw" style="background: #8fd17e"></span>count · tokens</span></div>
+<div class="cell"><span data-spec="ChannelSwatch/account" class="m" style="display: flex; gap: 6px; align-items: center"><span class="sw" style="background: #b0b8bd"></span>account · no session</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Marker</span>
+<span class="props">kind: frustrated | interrupted | destructive | coverageGap | match | live · count? · label?</span>
+<div class="cells">
+<div class="cell"><span class="cap">frustrated</span><span data-spec="Marker/frustrated" class="m">↯ frustrated</span><span data-spec="Marker/frustratedCompact" class="m">↯1</span></div>
+<div class="cell"><span class="cap">interrupted</span><span data-spec="Marker/interrupted" class="m">✕ interrupted</span><span data-spec="Marker/interruptedCompact" class="m">✕1</span></div>
+<div class="cell"><span class="cap">destructive</span><span data-spec="Marker/destructive" class="m" style="color: #ff7a6b">▲ rm -rf (outside cwd)</span><span data-spec="Marker/destructiveCompact" class="m" style="color: #ff7a6b">▲10</span></div>
+<div class="cell"><span class="cap">coverage gap</span><span data-spec="Marker/coverageGap" class="m" style="color: #ff7a6b">▲ 640/734</span><span data-spec="Marker/coverageGapLabel" class="m" style="color: #ff7a6b">▲ reported, not captured</span></div>
+<div class="cell"><span class="cap">match</span><span data-spec="Marker/match" class="m" style="color: #e6e3db">✓ matches Claude Code’s report</span></div>
+<div class="cell"><span class="cap">live</span><span data-spec="Marker/live" class="m"><span style="color: #57d68d">●</span> now</span><span data-spec="Marker/liveStreaming" class="m"><span style="color: #57d68d">●</span> streaming · 214 tokens</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">StatusCode</span>
+<span class="props">code | "ERR" | null</span>
+<div class="cells">
+<div class="cell"><span class="cap">2xx</span><span data-spec="StatusCode/2xx" class="m" style="color: #a3a9ad">200</span></div>
+<div class="cell"><span class="cap">error</span><span data-spec="StatusCode/error" class="m" style="font-weight: 600">✕ ERR</span><span data-spec="StatusCode/errorStatus529" class="m" style="font-weight: 600">✕ 529</span></div>
+<div class="cell"><span class="cap">none (not captured)</span><span data-spec="StatusCode/noneNotCaptured" class="m" style="color: #a3a9ad">—</span></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">FilterChip</span>
+<span class="props">label, tone?: danger, onRemove · an active filter set from elsewhere (coverage line, +N stat, hatch); sits after the filter input; × removes it (URL <code>captured</code> param)</span>
+<div class="cells">
+<div class="cell"><span class="cap">default</span><span data-spec="FilterChip/notCaptured" class="chip" style="border-color: #ff7a6b; color: #ff7a6b; background: #1b1f22; padding-right: 0">▲ NOT CAPTURED<button style="all: unset; box-sizing: border-box; padding: 0 6px; margin-left: 2px; border-left: 1px solid #2a3034; color: #e6e3db; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 18px; cursor: pointer" aria-label="Remove filter: not captured">×</button></span></div>
+<div class="cell"><span class="cap">× hover</span><span data-spec="FilterChip/removeHover" class="chip" style="border-color: #ff7a6b; color: #ff7a6b; background: #1b1f22; padding-right: 0">▲ NOT CAPTURED<button style="all: unset; box-sizing: border-box; padding: 0 6px; margin-left: 2px; border-left: 1px solid #2a3034; color: #e6e3db; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 18px; cursor: pointer; background: #2a3034" aria-label="Remove filter: not captured">×</button></span></div>
+<div class="cell"><span class="cap">× focus</span><span data-spec="FilterChip/removeFocus" class="chip" style="border-color: #ff7a6b; color: #ff7a6b; background: #1b1f22; padding-right: 0">▲ NOT CAPTURED<button style="all: unset; box-sizing: border-box; padding: 0 6px; margin-left: 2px; border-left: 1px solid #2a3034; color: #e6e3db; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 18px; cursor: pointer; outline: 2px solid #ffd36b; outline-offset: 1px" aria-label="Remove filter: not captured">×</button></span></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

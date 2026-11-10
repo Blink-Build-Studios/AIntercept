@@ -1,0 +1,81 @@
+{{- if .Values.process.enabled }}
+# Stage 2 of the data pipeline (docs/ui/BUILD_PLAN.md §7.5): `aintercept process`
+# reads the observer's raw partitions and writes shaped Parquet tables under
+# <prefix>/shaped/ in the same bucket. Exactly one replica: two processors must
+# never write the same output, so rollouts stop the old pod before starting
+# the new one (it resumes from the last commit).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: process
+  labels:
+    app: process
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: process }
+  template:
+    metadata:
+      labels: { app: process }
+    spec:
+      # On AWS this ServiceAccount's role must also allow reads, lists and
+      # deletes under <prefix>/shaped/ (the observer only writes).
+      serviceAccountName: {{ .Values.observer.serviceAccount.name }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: process
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["process"]
+          env:
+            - { name: PROCESS_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: PROCESS_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            {{- if .Values.fullInterception }}
+            - { name: PROCESS_RAW_PREFIX, value: {{ printf "%s/capture" (.Values.objectStore.prefix | trimSuffix "/") | trimPrefix "/" | quote }} }
+            {{- end }}
+            - { name: PROCESS_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: PROCESS_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if .Values.objectStore.forcePathStyle }}
+            - { name: PROCESS_S3_FORCE_PATH_STYLE, value: "true" }
+            {{- end }}
+            - { name: PROCESS_POLL_SECONDS, value: {{ .Values.process.pollSeconds | quote }} }
+            - { name: PROCESS_FULL_MINUTES, value: {{ .Values.process.fullMinutes | quote }} }
+            - { name: PROCESS_HTTP_LISTEN, value: "0.0.0.0:9002" }
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            {{- if eq .Values.cloud "digitalocean" }}
+            - name: PROCESS_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: PROCESS_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 9002 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9002 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9002 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.process.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+{{- end }}

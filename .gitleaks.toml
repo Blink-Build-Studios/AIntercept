@@ -1,0 +1,14 @@
+# Default gitleaks rules, plus reviewed false positives.
+[extend]
+useDefault = true
+
+# generic-api-key matches the spec names "KeyStripCell/tokens" and
+# "KeyStripCell/tokensUnknown" in the Claude Design spec manifest; they are
+# component names, not secrets. Scoped to that file and those names only.
+# (Not anchored to the line end: the generic-api-key match spans two lines.)
+[[allowlists]]
+description = "Claude Design spec names (KeyStripCell/tokens*)"
+condition = "AND"
+paths = ['''^docs/ui/handoff/canvas/final/spec-manifest\.json$''']
+regexTarget = "line"
+regexes = ['''KeyStripCell/tokens''']

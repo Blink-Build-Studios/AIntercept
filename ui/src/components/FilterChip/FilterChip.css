@@ -1,0 +1,30 @@
+/* FilterChip (CompChips FilterChip): the chip with a separate remove button,
+   divided by a hairline. Hover and focus are on the button only. */
+@layer components {
+  .chip.filter-chip-removable {
+    padding-right: 0;
+  }
+  .filter-chip-remove {
+    margin-left: 2px;
+    padding: 0 6px;
+    border-left: 1px solid var(--line);
+    /* The chip's weight and tracking carry through (the canvas resets the button). */
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 18px;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+    cursor: pointer;
+    background: none;
+  }
+  .filter-chip-remove:hover,
+  .filter-chip-remove[data-force="hover"] {
+    background: var(--line);
+  }
+  .filter-chip-remove:focus-visible,
+  .filter-chip-remove[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+}

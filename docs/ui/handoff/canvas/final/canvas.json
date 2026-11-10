@@ -1,0 +1,460 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-04T19:30:00Z"
+ },
+ "title": "aintercept — Person & session pages",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [
+  {
+   "id": "screens",
+   "name": "Screens"
+  },
+  {
+   "id": "components",
+   "name": "Components"
+  }
+ ],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person page · Sessions tab",
+   "expand": "fill",
+   "is_interactive": true,
+   "page": "screens"
+  },
+  "PersonRequests.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person page · All requests tab",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "Session.dc.html": {
+   "x": 0,
+   "y": 2200,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session page · Prompts tab",
+   "expand": "fill",
+   "is_interactive": true,
+   "page": "screens"
+  },
+  "SessionDrawer.dc.html": {
+   "x": 1520,
+   "y": 2200,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session page · request drawer",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "SessionRequests.dc.html": {
+   "x": 3040,
+   "y": 2200,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session page · Requests tab",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "SessionEvents.dc.html": {
+   "x": 4560,
+   "y": 2200,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session page · Events tab",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonLoading.dc.html": {
+   "x": 0,
+   "y": 4600,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · loading",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonWaiting.dc.html": {
+   "x": 1520,
+   "y": 4600,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · waiting for first traffic",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonDelayed.dc.html": {
+   "x": 3040,
+   "y": 4600,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · data delayed",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonError.dc.html": {
+   "x": 4560,
+   "y": 4600,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · refresh failed (keeps data)",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonEmpty.dc.html": {
+   "x": 6080,
+   "y": 4600,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · nothing in selected range",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "SessionLoading.dc.html": {
+   "x": 0,
+   "y": 6800,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session · loading",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "SessionLive.dc.html": {
+   "x": 1520,
+   "y": 6800,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session · live (in-flight step, events pending)",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "SessionError.dc.html": {
+   "x": 3040,
+   "y": 6800,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session · failed to load",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "DrawerNotCaptured.dc.html": {
+   "x": 4560,
+   "y": 6800,
+   "w": 1440,
+   "h": 2000,
+   "title": "Drawer · reported, not captured",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "DrawerFailed.dc.html": {
+   "x": 6080,
+   "y": 6800,
+   "w": 1440,
+   "h": 2000,
+   "title": "Drawer · failed request (retried)",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "DrawerRetained.dc.html": {
+   "x": 7600,
+   "y": 6800,
+   "w": 1440,
+   "h": 2000,
+   "title": "Drawer · content retained",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "People.dc.html": {
+   "x": -1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1200,
+   "title": "People · landing page (interactive: agent filter)",
+   "expand": "fill",
+   "is_interactive": true,
+   "page": "screens"
+  },
+  "PeopleLoading.dc.html": {
+   "x": -1520,
+   "y": 1320,
+   "w": 1440,
+   "h": 1200,
+   "title": "People · loading",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "CompIndex.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 2300,
+   "title": "Index · every component, props, states",
+   "page": "components"
+  },
+  "CompFoundations.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1500,
+   "title": "Foundations · color, type, space, glyphs",
+   "page": "components"
+  },
+  "CompControls.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1500,
+   "title": "Controls",
+   "page": "components"
+  },
+  "CompChips.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 1300,
+   "title": "Chips, badges & markers",
+   "page": "components"
+  },
+  "CompSummary.dc.html": {
+   "x": 6080,
+   "y": 0,
+   "w": 1440,
+   "h": 1700,
+   "title": "Summary blocks",
+   "page": "components"
+  },
+  "CompTimeline.dc.html": {
+   "x": 7600,
+   "y": 0,
+   "w": 1440,
+   "h": 1750,
+   "title": "Timeline",
+   "page": "components"
+  },
+  "CompRows.dc.html": {
+   "x": 9120,
+   "y": 0,
+   "w": 1440,
+   "h": 2050,
+   "title": "Table rows",
+   "page": "components"
+  },
+  "CompDrawer.dc.html": {
+   "x": 10640,
+   "y": 0,
+   "w": 1440,
+   "h": 1850,
+   "title": "Request drawer parts",
+   "page": "components"
+  },
+  "CompStates.dc.html": {
+   "x": 12160,
+   "y": 0,
+   "w": 1440,
+   "h": 1350,
+   "title": "Page states & skeletons",
+   "page": "components"
+  },
+  "CompInteraction.dc.html": {
+   "x": 13680,
+   "y": 0,
+   "w": 1440,
+   "h": 1900,
+   "title": "Interaction & loading",
+   "page": "components"
+  },
+  "CompTooltip.dc.html": {
+   "x": 15200,
+   "y": 0,
+   "w": 1440,
+   "h": 2560,
+   "title": "Tooltip & hover rules",
+   "page": "components"
+  },
+  "CompTimelineHover.dc.html": {
+   "x": 16720,
+   "y": 0,
+   "w": 1440,
+   "h": 5240,
+   "title": "Timeline hover & keyboard",
+   "page": "components"
+  },
+  "CompTableHover.dc.html": {
+   "x": 18240,
+   "y": 0,
+   "w": 1440,
+   "h": 4150,
+   "title": "Table, header & chip hover",
+   "page": "components"
+  },
+  "AboutThisData.dc.html": {
+   "x": -3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1200,
+   "title": "About this data · drawer (from AppBar or NOT RETAINED)",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonRequestsNotCaptured.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · All requests · not captured filter",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonRequestsNoUncaptured.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person · All requests · not captured, no matches",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "CompDensity.dc.html": {
+   "x": 19760,
+   "y": 0,
+   "w": 1440,
+   "h": 6800,
+   "title": "Timelines at density · clickable states · round 10",
+   "page": "components"
+  },
+  "CompR11.dc.html": {
+   "x": 21280,
+   "y": 0,
+   "w": 1440,
+   "h": 5420,
+   "title": "Brand, empty-space hover, headers · round 11",
+   "page": "components"
+  },
+  "CompAgents.dc.html": {
+   "x": 22800,
+   "y": 0,
+   "w": 1440,
+   "h": 4420,
+   "title": "Agents: Codex & provider-neutral · round 13",
+   "page": "components"
+  },
+  "CompProviders.dc.html": {
+   "x": 24320,
+   "y": 0,
+   "w": 1440,
+   "h": 9600,
+   "title": "Providers: screen by screen · round 14",
+   "page": "components"
+  }
+ },
+ "order": [
+  "People.dc.html",
+  "PeopleLoading.dc.html",
+  "Main.dc.html",
+  "PersonRequests.dc.html",
+  "Session.dc.html",
+  "SessionDrawer.dc.html",
+  "SessionRequests.dc.html",
+  "SessionEvents.dc.html",
+  "PersonLoading.dc.html",
+  "PersonWaiting.dc.html",
+  "PersonDelayed.dc.html",
+  "PersonError.dc.html",
+  "PersonEmpty.dc.html",
+  "SessionLoading.dc.html",
+  "SessionLive.dc.html",
+  "SessionError.dc.html",
+  "DrawerNotCaptured.dc.html",
+  "DrawerFailed.dc.html",
+  "DrawerRetained.dc.html",
+  "CompIndex.dc.html",
+  "CompFoundations.dc.html",
+  "CompControls.dc.html",
+  "CompChips.dc.html",
+  "CompSummary.dc.html",
+  "CompTimeline.dc.html",
+  "CompRows.dc.html",
+  "CompDrawer.dc.html",
+  "CompStates.dc.html",
+  "CompInteraction.dc.html",
+  "CompTooltip.dc.html",
+  "CompTimelineHover.dc.html",
+  "CompTableHover.dc.html",
+  "AboutThisData.dc.html",
+  "PersonRequestsNotCaptured.dc.html",
+  "PersonRequestsNoUncaptured.dc.html",
+  "CompDensity.dc.html",
+  "CompR11.dc.html",
+  "CompAgents.dc.html",
+  "CompProviders.dc.html"
+ ],
+ "notes": {
+  "n1": {
+   "x": 0,
+   "y": -300,
+   "text": "Person page",
+   "kind": "title1",
+   "maxW": 2960,
+   "page": "screens"
+  },
+  "n2": {
+   "x": 0,
+   "y": 1920,
+   "text": "Session page",
+   "kind": "title1",
+   "maxW": 6000,
+   "page": "screens"
+  },
+  "n3": {
+   "x": 0,
+   "y": 4320,
+   "text": "States · person page",
+   "kind": "title1",
+   "maxW": 7520,
+   "page": "screens"
+  },
+  "n4": {
+   "x": 0,
+   "y": 6520,
+   "text": "States · session page & request drawer",
+   "kind": "title1",
+   "maxW": 9040,
+   "page": "screens"
+  },
+  "n0": {
+   "x": -1520,
+   "y": -300,
+   "text": "People",
+   "kind": "title1",
+   "maxW": 1440,
+   "page": "screens"
+  },
+  "c0": {
+   "x": 0,
+   "y": -300,
+   "text": "Component library · aintercept Wire",
+   "kind": "title1",
+   "maxW": 15120,
+   "page": "components"
+  }
+ },
+ "designSystems": [
+  {
+   "title": "aintercept Wire",
+   "namespace": "aintercept-wire",
+   "artifact": "https://claude.ai/code/artifact/b5e53426-ab63-49a7-8dc1-9b41baed3036",
+   "version": null,
+   "copiedAt": "2026-11-04T19:30:00Z"
+  }
+ ]
+}

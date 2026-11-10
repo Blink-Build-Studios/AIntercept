@@ -1,0 +1,90 @@
+/* Generated from tokens.json (aintercept Wire). Do not hand-edit colors elsewhere. */
+:root, [data-theme="dark"] {
+  --bg: #0c0e0f;
+  --surface: #131618;
+  --surface-raised: #1b1f22;
+  --line: #2a3034;
+  --line-strong: #60686d;
+  --ink: #e6e3db;
+  --ink-muted: #a3a9ad;
+  --ink-faint: #848c90;
+  --ch-model: #7db3ff;
+  --ch-analytics: #f0b43c;
+  --ch-flags: #c9a3ec;
+  --ch-skills: #e8916f;
+  --ch-count: #8fd17e;
+  --live: #57d68d;
+  --danger: #ff7a6b;
+  --focus: #ffd36b;
+  --agent-claude-code: #e8916f;
+  --agent-codex: #9fb4c7;
+  --agent-chatgpt: #7fd1b9;
+  --agent-claude-ai: #d9b98c;
+  --skeleton: #20252a;
+  --ch-account: #b0b8bd;  /* proposed; add to Wire */
+  --brush-dim: rgba(12,14,15,.45);
+  --brush-fill: rgba(255,211,107,.08);
+  --scrim: rgba(12,14,15,.6);
+  --gap-hatch: rgba(255,122,107,.3);
+  --dim-opacity: 0.55;  /* overlay tokens: proposed; add to Wire */
+  --shadow-pop: 0 6px 16px rgba(0,0,0,.45);  /* tooltip: proposed; add to Wire */
+  --link-fill: rgba(230,227,219,.06);  /* linked-hover span: proposed; add to Wire */
+  --focus-halo: rgba(255,211,107,.3);  /* --focus at 30%: proposed; add to Wire */
+}
+[data-theme="light"] {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-raised: #ecece7;
+  --line: #d6d6cf;
+  --line-strong: #8b9094;
+  --ink: #141617;
+  --ink-muted: #4f5559;
+  --ink-faint: #62686c;
+  --ch-model: #1f5fbf;
+  --ch-analytics: #8a5a00;
+  --ch-flags: #7a3fa8;
+  --ch-skills: #a3431f;
+  --ch-count: #356f1e;
+  --live: #117336;
+  --danger: #b3261e;
+  --focus: #0b57d0;
+  --agent-claude-code: #a3431f;
+  --agent-codex: #45607a;
+  --agent-chatgpt: #1f6e58;
+  --agent-claude-ai: #7a5a2a;
+  --skeleton: #e4e4de;
+  --ch-account: #555d62;  /* proposed; add to Wire */
+  --brush-dim: rgba(246,246,243,.6);
+  --brush-fill: rgba(11,87,208,.08);
+  --scrim: rgba(20,22,23,.32);
+  --gap-hatch: rgba(179,38,30,.22);
+  --dim-opacity: 0.55;
+  --shadow-pop: 0 6px 16px rgba(20,22,23,.18);
+  --link-fill: rgba(20,22,23,.05);
+  --focus-halo: rgba(11,87,208,.3);
+}
+:root {
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --type-num-xl: 500 22px/26px var(--font-mono);
+  --type-data: 400 12.5px/20px var(--font-mono);
+  --type-data-strong: 600 12.5px/20px var(--font-mono);
+  --type-micro: 500 11px/14px var(--font-mono);
+  --type-micro-tracking: 0.04em;
+  --type-title: 600 18px/24px var(--font-ui);
+  --type-body: 400 13px/20px var(--font-ui);
+  --type-label: 500 12px/16px var(--font-ui);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-0: 0px;
+  --radius-sm: 2px;
+  --radius-pill: 999px;
+  --dur-instant: 0ms; --dur-fast: 80ms; --dur-base: 150ms; --dur-slow: 220ms;
+  --ease-out: cubic-bezier(.2, 0, 0, 1); --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --new-row-flash: 1200ms;
+}
+@media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0ms; --dur-slow: 0ms; --new-row-flash: 0ms; } }

@@ -1,0 +1,24 @@
+/* KeyStrip (CompDrawer "KeyStrip" / "KeyStripCell" specimens). */
+@layer components {
+  .key-strip {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .key-strip-cell {
+    padding: 8px 12px;
+    border-right: 1px solid var(--line);
+  }
+  /* In the drawer the cells are narrow: values and subs truncate (Session sheet); alone they wrap (CompDrawer). */
+  .request-drawer .key-strip-value,
+  .request-drawer .key-strip-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .key-strip-value {
+    font: 500 12.5px/20px var(--font-mono);
+  }
+  .key-strip-sub {
+    font: 400 11px/20px var(--font-mono);
+  }
+}

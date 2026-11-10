@@ -1,0 +1,8 @@
+/* DrawerTabs (CompDrawer "DrawerTabs" specimens): 20px apart, inset 16px. */
+@layer components {
+  .drawer-tabs {
+    display: flex;
+    gap: 20px;
+    padding: 0 16px;
+  }
+}

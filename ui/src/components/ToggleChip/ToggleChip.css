@@ -1,0 +1,53 @@
+/* ToggleChip (CompControls specimens; handoff §6.1). Chip geometry with the
+   micro type at an 18px line, so the chip is 20px tall; the label is
+   upper-cased in the markup, as Chip does. Colors live here so
+   the state rules can override them; data-force pins a state for stories. */
+@layer components {
+  .toggle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    font: var(--type-micro);
+    line-height: 18px;
+    letter-spacing: var(--type-micro-tracking);
+    color: var(--ink-muted);
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    cursor: pointer;
+  }
+  /* §11G.B1: hover raises and lifts the border; B2: on is the ink fill with a ✓, its swatch
+     ringed in --bg so the channel colour still reads; --ink-muted under the pointer. */
+  .toggle-chip:hover:not([aria-disabled="true"]),
+  .toggle-chip[data-force="hover"] {
+    color: var(--ink);
+    background: var(--surface-raised);
+    border-color: var(--ink-muted);
+  }
+  .toggle-chip[aria-pressed="true"] {
+    color: var(--bg);
+    background: var(--ink);
+    border-color: var(--ink);
+    font-weight: 600;
+  }
+  .toggle-chip[aria-pressed="true"]:hover:not([aria-disabled="true"]),
+  .toggle-chip[aria-pressed="true"][data-force="hover"] {
+    color: var(--bg);
+    background: var(--ink-muted);
+    border-color: var(--ink-muted);
+  }
+  .toggle-chip[aria-pressed="true"] .chip-dot {
+    box-shadow: 0 0 0 1px var(--bg);
+  }
+  .toggle-chip:focus-visible,
+  .toggle-chip[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  .toggle-chip[aria-disabled="true"] {
+    color: var(--line-strong);
+    background: transparent;
+    border-color: var(--line);
+    cursor: default;
+  }
+}

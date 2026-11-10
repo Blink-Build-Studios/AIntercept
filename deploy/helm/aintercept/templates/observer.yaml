@@ -10,7 +10,9 @@ metadata:
   {{- if and (eq .Values.cloud "aws") .Values.observer.serviceAccount.roleArn }}
   annotations:
     # IRSA: binds this ServiceAccount to an IAM role so the observer gets
-    # keyless S3 credentials via the cluster OIDC provider.
+    # keyless S3 credentials via the cluster OIDC provider. With EKS Pod
+    # Identity, leave roleArn empty and associate the role with this
+    # ServiceAccount instead.
     eks.amazonaws.com/role-arn: {{ .Values.observer.serviceAccount.roleArn }}
   {{- end }}
 ---
@@ -32,6 +34,9 @@ spec:
     metadata:
       labels: { app: observer }
     spec:
+      # The shutdown delay plus the longest streaming call it waits to finish
+      # (GracefulStop drains in-flight streams), so Kubernetes never kills mid-call.
+      terminationGracePeriodSeconds: {{ .Values.observer.terminationGracePeriodSeconds | default 200 }}
       serviceAccountName: {{ .Values.observer.serviceAccount.name }}
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
@@ -43,17 +48,23 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: observer
-          image: {{ include "aintercept.observerImage" . }}
-          imagePullPolicy: {{ .Values.images.observer.pullPolicy }}
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["observer"]
           env:
             - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }
             - { name: OBSERVER_HTTP_LISTEN, value: "0.0.0.0:9001" }
             - { name: OBSERVER_BUFFER_SIZE, value: {{ .Values.observer.bufferSize | quote }} }
             - { name: OBSERVER_LOG_LEVEL, value: {{ .Values.observer.logLevel | default "info" | quote }} }
+            - { name: OBSERVER_SHUTDOWN_DELAY_SECONDS, value: {{ .Values.observer.shutdownDelaySeconds | default 15 | quote }} }
+            - { name: OBSERVER_CLIENT_IP_HEADERS, value: {{ .Values.observer.clientIPHeaders | default list | join "," | quote }} }
             - name: OBSERVER_INSTANCE
               valueFrom:
                 fieldRef: { fieldPath: metadata.name }
-            {{- if .Values.observer.keyHashSaltSecret }}
+            {{- if .Values.observer.keyHashSaltSecretsManagerId }}
+            # Read from AWS Secrets Manager at startup (Pod Identity / IRSA creds).
+            - { name: OBSERVER_KEY_HASH_SALT_SECRET_ID, value: {{ .Values.observer.keyHashSaltSecretsManagerId | quote }} }
+            {{- else if .Values.observer.keyHashSaltSecret }}
             - name: OBSERVER_KEY_HASH_SALT
               valueFrom:
                 secretKeyRef: { name: {{ .Values.observer.keyHashSaltSecret }}, key: salt }
@@ -63,6 +74,12 @@ spec:
             # ── Object store sink ──
             - { name: OBSERVER_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
             - { name: OBSERVER_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            {{- if .Values.fullInterception }}
+            {{- if .Values.admissionPolicy.enabled }}
+            {{- fail "fullInterception needs admissionPolicy.enabled=false (the policy rejects DEV_CAPTURE_FULL_BODIES)" }}
+            {{- end }}
+            - { name: DEV_CAPTURE_FULL_BODIES, value: "true" }
+            {{- end }}
             - { name: OBSERVER_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
             - { name: OBSERVER_S3_MAX_BYTES, value: {{ .Values.objectStore.maxBytes | quote }} }
             - { name: OBSERVER_S3_MAX_EVENTS, value: {{ .Values.objectStore.maxEvents | quote }} }
@@ -88,6 +105,21 @@ spec:
               valueFrom:
                 secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
             {{- end }}
+            # Peers for the fleet memory-budget average (/stats/fleet).
+            - { name: OBSERVER_PEERS_DNS, value: "observer-pods.{{ .Release.Namespace }}.svc.cluster.local" }
+            {{- with .Values.observer.memoryBudget }}
+            - { name: OBSERVER_MEMORY_BUDGET, value: {{ . | quote }} }
+            {{- end }}
+            {{- $probe := .Values.observer.pathProbe | default dict }}
+            {{- if $probe.enabled }}
+            # ── Interception-path health check (/healthz/path) ──
+            - { name: OBSERVER_PROBE_HOSTS, value: {{ .Values.interception.allowlist | quote }} }
+            - { name: OBSERVER_PROBE_TARGET, value: {{ $probe.target | default "envoy:443" | quote }} }
+            - { name: OBSERVER_PROBE_TARGETS, value: {{ join "," $probe.targets | quote }} }
+            - { name: OBSERVER_PROBE_INTERVAL, value: {{ $probe.interval | default "15s" | quote }} }
+            - { name: OBSERVER_PROBE_MIN_LEAF_VALIDITY, value: {{ $probe.minLeafValidity | default "30m" | quote }} }
+            - { name: OBSERVER_PROBE_ROOTS, value: "/etc/aintercept/ca/ca-chain.crt" }
+            {{- end }}
           ports:
             - { name: grpc, containerPort: 9000 }
             - { name: http, containerPort: 9001 }
@@ -105,6 +137,18 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
+          {{- if $probe.enabled }}
+          volumeMounts:
+            - { name: ca-chain, mountPath: /etc/aintercept/ca, readOnly: true }
+      volumes:
+        # Only the public chain is projected; the intermediate key in the same
+        # Secret is never mounted into the observer.
+        - name: ca-chain
+          secret:
+            secretName: {{ .Values.interception.caSecretName }}
+            items:
+              - { key: ca-chain.crt, path: ca-chain.crt }
+          {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -118,7 +162,69 @@ spec:
   ports:
     - { name: grpc, port: 9000, targetPort: 9000 }
     - { name: http, port: 9001, targetPort: 9001 }
+---
+# Headless: resolves to every ready observer pod, so Envoy sees each pod as
+# its own endpoint and weights new ext_proc streams by the load each reports
+# (ORCA). Through the ClusterIP Service above, Envoy's few long-lived HTTP/2
+# connections would pin all streams to whichever pods they happened to reach.
+# Also how pods find each other for the fleet average (/stats/fleet).
+apiVersion: v1
+kind: Service
+metadata:
+  name: observer-pods
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector: { app: observer }
+  ports:
+    - { name: grpc, port: 9000, targetPort: 9000 }
+    - { name: http, port: 9001, targetPort: 9001 }
 {{- if .Values.observer.autoscaling.enabled }}
+{{- if eq (.Values.observer.autoscaling.mode | default "cpu") "keda" }}
+---
+# KEDA scales the observer on whichever is higher: CPU, or the fleet's
+# memory-budget utilization (bytes held for in-flight traffic / budget,
+# averaged over all pods by any pod's /stats/fleet). Scaling starts well
+# before the budget is reached; new pods get new streams through ORCA
+# weighting, since streams already open stay on their pod.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: observer
+  labels:
+    app: observer
+    {{- include "aintercept.labels" . | nindent 4 }}
+  annotations:
+    # Switching from mode cpu: KEDA adopts the existing HPA (same name)
+    # instead of its webhook rejecting a second autoscaler for the Deployment.
+    scaledobject.keda.sh/transfer-hpa-ownership: "true"
+spec:
+  scaleTargetRef:
+    name: observer
+  minReplicaCount: {{ .Values.observer.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.observer.autoscaling.maxReplicas }}
+  pollingInterval: {{ .Values.observer.autoscaling.pollingInterval | default 15 }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: observer
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "{{ .Values.observer.autoscaling.targetCPUUtilizationPercentage }}"
+    - type: metrics-api
+      # Value: replicas scale with fleet average / target.
+      metricType: Value
+      metadata:
+        url: "http://observer.{{ .Release.Namespace }}.svc.cluster.local:9001/stats/fleet"
+        valueLocation: "avg_utilization_percent"
+        targetValue: "{{ .Values.observer.autoscaling.targetMemoryBudgetPercent }}"
+{{- else }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -144,4 +250,5 @@ spec:
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
+{{- end }}
 {{- end }}

@@ -1,0 +1,42 @@
+/* Skeleton shapes (CompStates "Skeleton" specimens; handoff §6.7). */
+@layer components {
+  .sk {
+    display: block;
+    flex: none;
+    background: var(--skeleton);
+  }
+  .sk-faint {
+    opacity: 0.6;
+  }
+  .sk-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sk-block {
+    height: 78px;
+  }
+  .sk-row {
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .sk-row-cells {
+    display: flex;
+    gap: 12px;
+    padding: 11px 12px;
+  }
+  .sk-lane {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .sk-lane-band {
+    opacity: 0.55;
+  }
+  .sk-fill {
+    flex: 1 1 0;
+  }
+}

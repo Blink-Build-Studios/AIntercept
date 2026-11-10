@@ -1,0 +1,7 @@
+/* Value (CompAgents "Value/unknown", handoff §3.3). */
+@layer components {
+  .value-unknown {
+    text-decoration: underline dotted var(--line-strong);
+    text-underline-offset: 3px;
+  }
+}

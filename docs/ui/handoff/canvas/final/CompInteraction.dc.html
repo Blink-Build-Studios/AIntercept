@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Interaction and loading</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn:disabled,.btn[aria-disabled="true"]:not([aria-busy="true"]){color:#848c90;border-color:#2a3034;cursor:not-allowed}
+.tab{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 0;color:#a3a9ad}
+.row{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.panel{background:#131618;border:1px solid #2a3034;position:relative;overflow:hidden}
+.bar{position:absolute;left:0;top:0;height:2px;width:30%;background:#a3a9ad}
+.sk{background:#20252a}
+.comp{display:flex;flex-direction:column;gap:10px}
+.arrow{font-family:"IBM Plex Mono",monospace;color:#848c90;font-size:16px;align-self:center}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1900px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Interaction &amp; loading</span>
+<span style="color: #a3a9ad; max-width: 980px">After any click, the viewer can always tell that it registered, that work is happening and where, what is locked meanwhile, and how it ended. Full rules: handoff §6A.</span>
+</div>
+
+<!-- timing ruler -->
+<div class="comp"><span class="cname">Timing rules</span><span class="props">useDelayedFlag(pending, {delay: 150, minVisible: 400}) · useSlowFlag(pending, 8000) · abort at 30 s</span>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid #2a3034; background: #131618">
+<sc-for list="{{ruler}}" as="r" hint-placeholder-count="5">
+<div style="padding: 12px 14px; border-right: 1px solid #2a3034; display: flex; flex-direction: column; gap: 6px">
+<span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500">{{r.t}}</span>
+<span class="m" style="font-weight: 600">{{r.h}}</span>
+<span style="color: #a3a9ad">{{r.d}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<!-- button lifecycle -->
+<div class="comp"><span class="cname">Pending trigger lifecycle</span><span class="props">Button and anything clickable that starts work · usePendingAction() · width locked while pending · repeat clicks ignored</span>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch">
+<div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 170px"><span class="cap">1 · idle</span><button data-spec="Button/idle" class="btn" style="min-width: 108px; justify-content: center">Retry now</button></div>
+<span class="arrow">→</span>
+<div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 170px"><span class="cap">2 · pointer down · 0 ms</span><button data-spec="Button/pressed" class="btn" style="min-width: 108px; justify-content: center; background: #1b1f22; transform: translateY(1px)">Retry now</button></div>
+<span class="arrow">→</span>
+<div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 200px"><span class="cap">3 · pending · aria-busy</span><button data-spec="Button/pending" class="btn" aria-busy="true" aria-disabled="true" style="min-width: 108px; justify-content: center; color: #a3a9ad; cursor: progress"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#2a3034" stroke-width="1.5"></circle><path d="M6 1.5 A4.5 4.5 0 0 1 10.5 6" fill="none" stroke="#e6e3db" stroke-width="1.5"></path></svg>Retrying…</button><span class="m" style="font-size: 11px; color: #848c90">clicks ignored · same width</span></div>
+<span class="arrow">→</span>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="panel" style="padding: 14px 16px; display: flex; gap: 12px; align-items: center"><span class="cap" style="margin: 0; width: 120px">4a · success</span><button data-spec="Button/success" class="btn" style="min-width: 108px; justify-content: center">Updated ✓</button><span class="m" style="font-size: 11px; color: #848c90">1.5 s, then idle</span></div>
+<div class="panel" style="padding: 14px 16px; display: flex; gap: 12px; align-items: center"><span class="cap" style="margin: 0; width: 120px">4b · failure</span><button data-spec="Button/failure" class="btn" style="min-width: 108px; justify-content: center">Retry now</button><span data-spec="InlineError/besideTrigger" class="m" style="font-size: 12px">✕ Still couldn’t refresh · 11:32:10</span></div>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px"><span class="cap">clicked row while navigating</span><div style="width: 520px; border: 1px solid #2a3034"><div data-spec="SessionRow/pendingNavigation" data-spec-illustrative="true" class="row m" style="background: #1b1f22; box-shadow: inset 2px 0 0 #ffd36b"><span style="color: #a3a9ad">Nov 2 10:04</span><span style="font-weight: 600">aintercept · partner-readiness</span><span style="flex: 1"></span><span style="color: #848c90">opening…</span></div><div class="row m" style="border-bottom: 0"><span style="color: #a3a9ad">Oct 23 17:00</span><span style="font-weight: 600">web · feat/csv</span><span style="flex: 1"></span><span style="color: #848c90">›</span></div></div></div>
+<div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px"><span class="cap">copy</span><div style="display: flex; gap: 8px"><button data-spec="CopyButton/idle" class="btn">Copy as curl</button><button data-spec="CopyButton/copying" class="btn" aria-busy="true" style="color: #a3a9ad">Copying…</button><button data-spec="CopyButton/copied" class="btn">Copied ✓</button></div></div>
+<div class="panel" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px"><span class="cap">disabled always says why</span><div style="display: flex; gap: 8px; align-items: center"><button data-spec="Button/disabledWithReason" class="btn" aria-disabled="true">›</button><span class="m" style="font-size: 11px; color: #a3a9ad">tooltip: “Following live: no later range”</span></div></div>
+</div>
+</div>
+
+<!-- region states -->
+<div class="comp"><span class="cname">RegionState</span><span class="props">status: loading | refetching | slow | error (stale) | error (empty) | empty | ready · every query-backed region renders through it</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<div><div class="cap">first load → skeleton</div><div data-spec="RegionState/firstLoad" class="panel" aria-busy="true" style="height: 168px"><sc-for list="{{rows4}}" as="x" hint-placeholder-count="4"><div style="display: flex; gap: 12px; padding: 11px 12px; border-bottom: 1px solid #2a3034"><div class="sk" style="width: 70px; height: 12px"></div><div class="sk" style="width: 140px; height: 12px"></div><div class="sk" style="flex: 1; height: 12px; opacity: .6"></div></div></sc-for></div></div>
+<div><div class="cap">refetch → keep, dim 55%, progress bar (after 150 ms)</div><div data-spec="RegionState/refetching" class="panel" aria-busy="true" style="height: 168px"><div data-spec="ProgressBar/refetching" class="bar" style="left: 0; width: 30%"></div><div style="opacity: .55"><sc-for list="{{data4}}" as="d" hint-placeholder-count="4"><div class="row m"><span style="color: #848c90; width: 70px">{{d.t}}</span><span style="color: #7db3ff">model</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{d.p}}</span></div></sc-for></div></div></div>
+<div><div class="cap">slow (≥ 8 s) → still loading + cancel</div><div data-spec="RegionState/slow" class="panel" aria-busy="true" style="height: 168px"><div data-spec="ProgressBar/slow" class="bar" style="left: 0; width: 30%"></div><div style="opacity: .35"><sc-for list="{{data4}}" as="d" hint-placeholder-count="4"><div class="row m"><span style="color: #848c90; width: 70px">{{d.t}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{d.p}}</span></div></sc-for></div><div data-spec="SlowNotice/default" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #1b1f22; border: 1px solid #60686d; padding: 10px 14px; display: flex; gap: 12px; align-items: center; white-space: nowrap"><span class="m">Still loading the timeline… <span style="color: #a3a9ad">2 days · 21,305 events</span></span><button class="btn">Cancel</button></div></div></div>
+<div><div class="cap">error with stale data → inline error on top</div><div data-spec="RegionState/errorStale" class="panel" style="height: 168px"><div data-spec="InlineError/default" style="display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: #1b1f22; border-bottom: 1px solid #60686d"><span class="m">✕ Query timed out · q_8f…</span><span style="flex: 1"></span><button class="btn" style="padding: 2px 8px">Retry</button></div><sc-for list="{{data3}}" as="d" hint-placeholder-count="3"><div class="row m"><span style="color: #848c90; width: 70px">{{d.t}}</span><span style="color: #7db3ff">model</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{d.p}}</span></div></sc-for></div></div>
+<div><div class="cap">error, nothing to show → error state</div><div data-spec="RegionState/errorEmpty" class="panel" style="height: 168px; display: flex; flex-direction: column; justify-content: center; padding: 0 20px; gap: 6px"><span style="font-weight: 600">Couldn’t load requests</span><span style="color: #a3a9ad">Upstream timeout after 30 s.</span><div><button class="btn">Retry</button></div></div></div>
+<div><div class="cap">empty → only after success</div><div data-spec="RegionState/empty" class="panel" style="height: 168px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="font-weight: 500">No requests match “status=529”</span><button class="btn">Clear filter</button></div></div>
+</div>
+</div>
+
+<!-- drawer sequence -->
+<div class="comp"><span class="cname">Opening the request drawer</span><span class="props">opens immediately · header from row data, never blank · body skeleton → content · slide 220 ms ease-out, scrim 150 ms</span>
+<div style="display: flex; gap: 12px; align-items: stretch">
+<sc-for list="{{drawerSeq}}" as="f" hint-placeholder-count="3">
+<div style="flex: 1; display: flex; flex-direction: column"><div class="cap">{{f.cap}}</div>
+<div data-spec="RequestDrawer/{{f.st}}" class="panel" style="height: 220px; background: #0c0e0f">
+<div style="position: absolute; inset: 0; background: rgba(12, 14, 15, .6); opacity: {{f.scrim}}"></div>
+<div style="position: absolute; top: 0; bottom: 0; right: 0; width: 62%; background: #131618; border-left: 1px solid #60686d; transform: translateX({{f.x}})">
+<div style="padding: 8px 10px; background: #1b1f22; border-bottom: 1px solid #2a3034" class="m"><span style="color: #7db3ff">model</span> <b>POST /v1/messages</b> <span style="color: #a3a9ad">200</span></div>
+<sc-if value="{{f.sk}}" hint-placeholder-val="{{ true }}"><div style="padding: 10px; display: flex; flex-direction: column; gap: 8px"><div style="display: flex; gap: 6px"><div class="sk" style="flex: 1; height: 34px"></div><div class="sk" style="flex: 1; height: 34px"></div><div class="sk" style="flex: 1; height: 34px"></div></div><div class="sk" style="height: 12px; width: 80%"></div><div class="sk" style="height: 12px; width: 60%"></div><div class="sk" style="height: 12px; width: 70%"></div></div></sc-if>
+<sc-if value="{{f.content}}" hint-placeholder-val="{{ false }}"><div style="padding: 10px; display: flex; flex-direction: column; gap: 4px" class="m"><span>opus · 43.0k → 1.2k · $0.21</span><span style="color: #a3a9ad">tool_result · Read · 4.1 KB</span><span style="color: #a3a9ad">tool_result · Bash · 18 KB</span><span style="color: #e8916f">tool_use · Edit +14 −3</span></div></sc-if>
+</div>
+<div style="position: absolute; left: 10px; top: 60px; width: 32%; padding: 6px 8px; background: #1b1f22; box-shadow: inset 2px 0 0 #ffd36b; opacity: {{f.row}}" class="m">10:42:16 opus</div>
+</div>
+<span class="m" style="font-size: 11px; color: #a3a9ad; padding-top: 6px">{{f.d}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<!-- tabs & pagination -->
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<div class="comp" style="flex: 1 1 560px"><span class="cname">Tab switch</span><span class="props">selected instantly · headers and filters stay · skeleton rows only in the body when there is no cache</span>
+<div class="panel"><div data-spec="Tabs/selectedLoading" style="display: flex; gap: 24px; padding: 0 12px; border-bottom: 1px solid #2a3034"><button class="tab">Prompts · 4</button><button class="tab" style="color: #e6e3db; border-bottom-color: #e6e3db">Requests · 170</button><button class="tab">Events · 2,412</button></div>
+<div class="row k" style="color: #848c90"><span style="width: 70px">Time</span><span style="width: 70px">Kind</span><span style="flex: 1">Path</span></div>
+<sc-for list="{{rows4}}" as="x" hint-placeholder-count="4"><div style="display: flex; gap: 12px; padding: 11px 12px; border-bottom: 1px solid #2a3034"><div class="sk" style="width: 70px; height: 12px"></div><div class="sk" style="width: 70px; height: 12px"></div><div class="sk" style="flex: 1; height: 12px; opacity: .6"></div></div></sc-for>
+</div></div>
+<div class="comp" style="flex: 1 1 560px"><span class="cname">Pagination pending</span><span class="props">target page marked at once · all buttons locked with a tooltip · body dimmed + bar · revert on failure</span>
+<div class="panel"><div data-spec="ProgressBar/pagination" class="bar" style="left: 0; width: 30%"></div><div style="opacity: .55"><sc-for list="{{data3}}" as="d" hint-placeholder-count="3"><div class="row m"><span style="color: #848c90; width: 70px">{{d.t}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{d.p}}</span></div></sc-for></div>
+<div data-spec="Pagination/pendingLocked" class="m" style="display: flex; justify-content: space-between; padding: 8px 12px; color: #a3a9ad; align-items: center"><span>41–60 of 170 · loading…</span><span style="display: flex; gap: 4px; align-items: center"><button class="btn" aria-disabled="true">‹ Prev</button><button class="btn" aria-disabled="true">1</button><button class="btn" aria-disabled="true">2</button><button class="btn" aria-disabled="true" aria-current="page" style="background: #1b1f22">3</button><button class="btn" aria-disabled="true">4</button><span>…</span><button class="btn" aria-disabled="true">9</button><button class="btn" aria-disabled="true">Next ›</button></span></div>
+</div></div>
+</div>
+
+<!-- live -->
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<div class="comp" style="flex: 1 1 560px"><span class="cname">Live updates</span><span class="props">background polls show no spinner · new rows flash surface-raised → surface over 1.2 s · rows being read never move</span>
+<div class="panel"><div data-spec="RequestRow/newFlash" data-spec-illustrative="true" class="row m" style="background: #1b1f22"><span style="color: #848c90; width: 70px">10:09:12</span><span style="color: #f0b43c">analytics</span><span style="flex: 1">batch · 41 events</span><span class="k">new</span></div><div data-spec="RequestRow/newFlashFading" data-spec-illustrative="true" class="row m" style="background: #171a1d"><span style="color: #848c90; width: 70px">10:09:03</span><span style="color: #7db3ff">model</span><span style="flex: 1">main · opus · tool_use</span></div><div class="row m" style="border-bottom: 0"><span style="color: #848c90; width: 70px">10:08:58</span><span style="color: #7db3ff">model</span><span style="flex: 1">auxiliary · recap</span></div></div>
+<div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap"><span data-spec="NewRowsPill/visible" class="chip">12 NEW ↓</span><span class="m" style="font-size: 11px; color: #a3a9ad">NewRowsPill when scrolled away from the insert edge</span></div>
+</div>
+<div class="comp" style="flex: 1 1 560px"><span class="cname">LiveBadge heartbeat · pause</span><span class="props">dot blips 1 → 0.4 → 1 over 300 ms per successful poll · Pause stops polls and counts arrivals</span>
+<div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+<span data-spec="LiveBadge/heartbeatPeak" data-spec-illustrative="true" class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; border-radius: 999px; background: #57d68d"></span>LIVE · 5s</span>
+<span data-spec="LiveBadge/heartbeatMid" data-spec-illustrative="true" class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; border-radius: 999px; background: #57d68d; opacity: .4"></span>LIVE · 5s</span><span class="m" style="font-size: 11px; color: #848c90">mid-blip</span>
+<span data-spec="LiveBadge/pausedNoPulse" data-spec-illustrative="true" class="chip" style="color: #a3a9ad"><span style="width: 7px; height: 7px; border-radius: 999px; border: 1px solid #848c90; box-sizing: border-box"></span>PAUSED · 12 NEW</span>
+<span data-spec="LiveBadge/delayedNoPulse" data-spec-illustrative="true" class="chip" style="color: #a3a9ad"><span style="width: 7px; height: 7px; border-radius: 999px; background: #848c90"></span>DELAYED · 2m</span>
+</div>
+<div data-spec="StepRow/streamingPulse" data-spec-illustrative="true" class="panel" style="padding: 10px 12px"><span class="m"><span style="color: #7db3ff">opus</span>  <span style="color: #57d68d">●</span> streaming · 214 tokens so far</span><span class="m" style="font-size: 11px; color: #848c90; display: block">dot pulses 1 ↔ 0.4 over 1 s only while streaming</span></div>
+</div>
+</div>
+
+<!-- motion tokens -->
+<div class="comp"><span class="cname">Motion tokens</span><span class="props">prefers-reduced-motion: no slide, static progress bar, no flash (2px focus bar instead), no pulse</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #2a3034; background: #131618">
+<sc-for list="{{motion}}" as="t" hint-placeholder-count="4"><div style="padding: 12px 14px; border-right: 1px solid #2a3034"><div class="m" style="font-weight: 600">{{t.n}}</div><div class="m" style="color: #a3a9ad">{{t.v}}</div><div style="color: #a3a9ad; font-size: 12px">{{t.u}}</div></div></sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var d = [
+      { t: '10:42:11', p: '/v1/messages · main · opus · tool_use' }, { t: '10:42:16', p: '/v1/messages · main · opus · tool_use' },
+      { t: '10:42:28', p: '/api/event_logging/v2/batch · 96 events' }, { t: '10:42:31', p: '/v1/messages · subagent · Explore' }
+    ];
+    var __st = function (s) { var w = String(s).replace(/[\u2192\/\u00b7]/g, ' ').match(/[A-Za-z0-9]+/g) || ['default']; return w[0].toLowerCase() + w.slice(1).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(''); };
+    var __r = {
+      ruler: [
+        { t: '0 ms', h: 'Same frame', d: 'Pressed/selected state on pointer-down. Tabs, toggles and filters switch instantly. The trigger enters pending.' },
+        { t: '< 150 ms', h: 'Nothing else', d: 'No skeleton or spinner for fast responses: no flashes.' },
+        { t: '≥ 150 ms', h: 'Show work', d: 'Skeleton on first load; keep, dim and progress bar on refetch.' },
+        { t: '≥ 8 s', h: 'Explain the wait', d: '“Still loading the timeline…” with the region, size and Cancel.' },
+        { t: '30 s', h: 'Abort', d: 'InlineError with Retry. Existing data stays on screen.' }
+      ],
+      rows4: [1, 2, 3, 4], data4: d, data3: d.slice(0, 3),
+      drawerSeq: [
+        { cap: '0 ms · click', scrim: 0.3, x: '70%', sk: true, content: false, row: 1, d: 'Row marked pending; scrim fading in; panel starting to slide.' },
+        { cap: '220 ms · open', scrim: 1, x: '0%', sk: true, content: false, row: 1, d: 'Header filled from the row data. Key strip and body skeleton. Focus on the heading.' },
+        { cap: 'data · settled', scrim: 1, x: '0%', sk: false, content: true, row: 1, d: 'Body fades in over 150 ms. No second slide.' }
+      ],
+      motion: [
+        { n: '--dur-fast', v: '80 ms', u: 'hover, press, brush nudge' },
+        { n: '--dur-base', v: '150 ms', u: 'dim, fade, close, expand' },
+        { n: '--dur-slow', v: '220 ms', u: 'drawer open' },
+        { n: '--ease-out / --ease-in', v: 'cubic-bezier(.2,0,0,1) / (.4,0,1,1)', u: 'enter / exit' }
+      ]
+    };
+    __r.drawerSeq.forEach(function (f, i) { f.st = ['opening', 'open', 'settled'][i]; });
+    return __r;
+  }
+}
+</script>
+</body>
+</html>

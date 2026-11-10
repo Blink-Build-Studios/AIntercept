@@ -1,0 +1,55 @@
+/* PromptRow (handoff §11B.4, Session.dc.html): twisty 18 · # 40 · time 92 · prompt 240 ·
+   steps 70 · dur 64 · tokens 110 · tools (flex) · friction 80; padding 4px 12px, gap 12,
+   min width 1100 (from .dt-row). Set here too, so the row holds its columns outside a DataTable. */
+@layer components {
+  .dt-row.prompt-row > :nth-child(1) {
+    flex: 0 0 18px;
+  }
+  .dt-row.prompt-row > :nth-child(2) {
+    flex: 0 0 40px;
+  }
+  .dt-row.prompt-row > :nth-child(3) {
+    flex: 0 0 92px;
+  }
+  .dt-row.prompt-row > :nth-child(4) {
+    flex: 0 0 240px;
+  }
+  .dt-row.prompt-row > :nth-child(5) {
+    flex: 0 0 70px;
+  }
+  .dt-row.prompt-row > :nth-child(6) {
+    flex: 0 0 64px;
+  }
+  .dt-row.prompt-row > :nth-child(7) {
+    flex: 0 0 110px;
+  }
+  .dt-row.prompt-row > :nth-child(8) {
+    flex: 1 1 0%;
+  }
+  .dt-row.prompt-row > :nth-child(9) {
+    flex: 0 0 80px;
+  }
+  .dt-row.prompt-row {
+    min-width: calc(1100px + 24px);
+  }
+  /* Open: surface-raised (handoff §6.5). The in-flight prompt is open by default and not highlighted (CompRows). */
+  .dt-row.prompt-row[aria-expanded="true"]:not([data-inflight]) {
+    background: var(--surface-raised);
+  }
+  /* Arrived from the timeline (§11H.6): selected, --surface-raised and a 2px --ink inset rule. */
+  .dt-row.prompt-row[data-arrived="true"] {
+    background: var(--surface-raised);
+    box-shadow: inset 2px 0 0 var(--ink);
+  }
+  /* The detail line under an open prompt, aligned with the prompt cell. */
+  .dt-row.prompt-detail {
+    padding-left: 198px;
+  }
+  .dt-row.prompt-detail > :nth-child(1) {
+    flex: 1 1 auto;
+  }
+  /* Hidden calls under a prompt's steps (§11J gap 2), in line with its detail. */
+  .dt-row.prompt-hidden {
+    padding-left: 198px;
+  }
+}

@@ -1,0 +1,12 @@
+/* Sparkline (CompSummary "Sparkline" specimens, CompRows "Sparkline/inRow"). */
+@layer components {
+  .sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+  }
+  .sparkline-bar {
+    flex: 1;
+    min-height: 1px;
+  }
+}

@@ -1,0 +1,93 @@
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "./theme.css";
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: var(--type-body);
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  /* One rule for everything clickable (§11G.B1): pointer on what has a click result,
+     not-allowed when disabled, progress while busy; never pointer on inert things. */
+  button,
+  a[href],
+  [role="button"],
+  [role="tab"],
+  summary {
+    cursor: pointer;
+  }
+  [aria-disabled="true"],
+  button:disabled {
+    cursor: not-allowed;
+  }
+  [aria-busy="true"] {
+    cursor: progress;
+  }
+}
+
+@layer components {
+  /* Links (§11G.B1): a --line-strong underline at rest; link and underline lighten together on hover. */
+  .link {
+    color: var(--ch-model);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .link:hover,
+  .link[data-force="hover"] {
+    color: var(--link-hover);
+    text-decoration-color: var(--link-hover);
+  }
+}
+
+/* Motion (§11G.B3): a new page's body fades in with a 4px settle (the AppBar stays still);
+   a tab's panel fades in; content replacing its skeleton fades in. Never on a poll. */
+@layer components {
+  .page-enter {
+    animation: page-in 160ms var(--ease-out);
+  }
+  .tab-panel {
+    animation: fade-in 120ms var(--ease-out);
+  }
+  .content-enter {
+    animation: fade-in 150ms var(--ease-out);
+  }
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page-enter {
+      animation: fade-in 80ms linear;
+    }
+    .tab-panel,
+    .content-enter {
+      animation: none;
+    }
+  }
+}

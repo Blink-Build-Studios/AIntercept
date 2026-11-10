@@ -1,3 +1,22 @@
+{{- $sa := .Values.certsvc.serviceAccount | default dict }}
+{{- $kms := .Values.certsvc.kms | default dict }}
+{{- if $sa.create }}
+# Its own identity, separate from the observer's: on AWS this is what gets KMS
+# Sign on the intermediate key (via an EKS Pod Identity association, or IRSA
+# with roleArn). The observer never can.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa.name | default "aintercept-certsvc" }}
+  labels:
+    app: certsvc
+    {{- include "aintercept.labels" . | nindent 4 }}
+  {{- if and (eq .Values.cloud "aws") $sa.roleArn }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ $sa.roleArn }}
+  {{- end }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,6 +36,9 @@ spec:
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       {{- end }}
+      {{- if $sa.create }}
+      serviceAccountName: {{ $sa.name | default "aintercept-certsvc" }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -26,15 +48,24 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: certsvc
-          image: {{ include "aintercept.certsvcImage" . }}
-          imagePullPolicy: {{ .Values.images.certsvc.pullPolicy }}
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["certsvc"]
           env:
             - { name: CERTSVC_LISTEN, value: "0.0.0.0:18000" }
             - { name: CERT_ALLOWLIST, value: {{ .Values.interception.allowlist | quote }} }
             - { name: INTERMEDIATE_CERT, value: "/secrets/ca/intermediate-ca.crt" }
+            {{- if $kms.keyId }}
+            # The intermediate's private key lives in KMS; certsvc asks KMS to sign
+            # and the CA Secret needs no intermediate-ca.key.
+            - { name: INTERMEDIATE_KMS_KEY_ID, value: {{ $kms.keyId | quote }} }
+            - { name: AWS_REGION, value: {{ $kms.region | default .Values.objectStore.region | quote }} }
+            {{- else }}
             - { name: INTERMEDIATE_KEY, value: "/secrets/ca/intermediate-ca.key" }
+            {{- end }}
             - { name: CA_CHAIN, value: "/secrets/ca/ca-chain.crt" }
             - { name: LEAF_TTL, value: {{ .Values.interception.leafTTL | quote }} }
+            - { name: REQUIRE_NAME_CONSTRAINTS, value: {{ .Values.interception.requireNameConstraints | default false | quote }} }
             - { name: RENEW_SCAN_INTERVAL, value: {{ .Values.interception.renewScanInterval | default "1m" | quote }} }
           ports:
             - { name: grpc, containerPort: 18000 }

@@ -1,0 +1,32 @@
+/* HeaderList (handoff §11H.3, CompR11 HeaderList/*): a grid per row, the name column
+   the longest name (--header-name-col, capped at 400px), 16px to the value. */
+@layer components {
+  .header-list {
+    margin: 0;
+    font: 400 12.5px/18px var(--font-mono);
+    color: var(--ink);
+  }
+  .header-row {
+    display: grid;
+    grid-template-columns: var(--header-name-col, 170px) minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: baseline;
+    padding: 3px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header-row:last-child {
+    border-bottom: 0;
+  }
+  .header-row:hover {
+    background: var(--surface-raised);
+  }
+  .header-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header-value {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}

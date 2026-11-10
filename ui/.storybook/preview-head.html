@@ -1,0 +1,4 @@
+<!-- Fix the cascade layer order before any stylesheet loads: component CSS chunks can load ahead of global.css, and a layer's first appearance sets its rank. -->
+<style>
+  @layer properties, theme, base, components, utilities;
+</style>
