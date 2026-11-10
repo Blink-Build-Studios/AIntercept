@@ -20,9 +20,8 @@ spec:
     metadata:
       labels: { app: process }
     spec:
-      # Its own ServiceAccount when process.serviceAccount is set, else the
-      # observer's. On AWS its role needs the reads listed in docs/PRODUCTION.md
-      # §7; giving process its own keeps the observer's role write-only.
+      # Its own ServiceAccount, never the observer's, so the observer's AWS role
+      # stays write-only. Its role needs the reads in docs/PRODUCTION.md §7.
       serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.process "component" "process" "root" $) }}
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:

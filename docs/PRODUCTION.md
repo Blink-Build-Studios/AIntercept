@@ -220,15 +220,9 @@ Nothing in the chart provisions AWS resources; it consumes them.
 | process | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/shaped/*` | `process.serviceAccount` |
 | api (the `mirror` sidecar) | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*` | `api.serviceAccount` |
 
-- **process and api run as the observer's ServiceAccount unless
-  `process.serviceAccount.create` / `api.serviceAccount.create` is set.** Sharing
-  it means the observer's role must carry their reads and deletes too. Give them
-  their own (`aintercept-process`, `aintercept-api`) to keep the observer's role
-  write-only, so a compromised observer can add telemetry but can't read back or
-  erase it.
 - **EKS Pod Identity:** associate each role with its ServiceAccount
-  (`aintercept-observer`, `aintercept-certsvc`, and `aintercept-process` /
-  `aintercept-api` if created, in the release namespace) and leave
+  (`aintercept-observer`, `aintercept-certsvc`, `aintercept-process`,
+  `aintercept-api` in the release namespace) and leave
   `roleArn` empty. **IRSA:** set `serviceAccount.roleArn` instead. Both use the
   standard AWS credential chain; no static keys.
 - **Key-hash salt from Secrets Manager:** set

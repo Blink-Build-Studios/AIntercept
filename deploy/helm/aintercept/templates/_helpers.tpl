@@ -68,20 +68,10 @@ topologySpreadConstraints:
 {{- end }}
 {{- end -}}
 
-{{/*
-ServiceAccount name for process or api (pass the component's values block as
-.c and the root as .root). Unset → the observer's ServiceAccount, as before;
-serviceAccount.create without a name → aintercept-<component>.
-*/}}
+{{/* ServiceAccount name for process or api: serviceAccount.name, else aintercept-<component>. */}}
 {{- define "aintercept.readerServiceAccountName" -}}
 {{- $sa := .c.serviceAccount | default dict -}}
-{{- if $sa.name -}}
-{{ $sa.name }}
-{{- else if $sa.create -}}
-aintercept-{{ .component }}
-{{- else -}}
-{{ .root.Values.observer.serviceAccount.name }}
-{{- end -}}
+{{ $sa.name | default (printf "aintercept-%s" .component) }}
 {{- end -}}
 
 {{- define "aintercept.envoyConfig" -}}

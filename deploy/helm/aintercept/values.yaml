@@ -111,14 +111,12 @@ objectStore:
 # <objectStore.prefix>/shaped/ (docs/ui/BUILD_PLAN.md §7.5). One replica.
 process:
   enabled: true
-  # Its own ServiceAccount (optional). Off: process runs as the observer's
-  # ServiceAccount, as before. On AWS, a separate one keeps the observer's role
-  # write-only; process's role needs list + get on the raw prefix and put + delete under <prefix>/shaped/ (docs/PRODUCTION.md §7). name
-  # defaults to aintercept-process; set create: false with a name to use an
-  # existing one. roleArn is IRSA only (empty for Pod Identity).
+  # process's own ServiceAccount (never the observer's). On AWS its role needs
+  # list + get on the raw prefix and put + delete under <prefix>/shaped/ (docs/PRODUCTION.md §7). create: false uses an existing one named
+  # name. roleArn is IRSA only (empty for Pod Identity).
   serviceAccount:
-    create: false
-    name: ""
+    create: true
+    name: aintercept-process
     roleArn: ""
   # Scheduling. All optional: unset leaves the pod spec as it was.
   nodeSelector: {}
@@ -145,14 +143,12 @@ process:
 # with `kubectl port-forward svc/api 8787` (`make remote` does).
 api:
   enabled: false
-  # Its own ServiceAccount (optional). Off: api runs as the observer's
-  # ServiceAccount, as before. On AWS, a separate one keeps the observer's role
-  # write-only; api's role needs list + get on the telemetry prefix (docs/PRODUCTION.md §7). name
-  # defaults to aintercept-api; set create: false with a name to use an
-  # existing one. roleArn is IRSA only (empty for Pod Identity).
+  # api's own ServiceAccount (never the observer's). On AWS its role needs
+  # list + get on the telemetry prefix (docs/PRODUCTION.md §7). create: false uses an existing one named
+  # name. roleArn is IRSA only (empty for Pod Identity).
   serviceAccount:
-    create: false
-    name: ""
+    create: true
+    name: aintercept-api
     roleArn: ""
   # Scheduling. All optional: unset leaves the pod spec as it was.
   nodeSelector: {}
