@@ -46,6 +46,7 @@ spec:
         # with mode 0400 — the issuing CA private key is NOT world-readable.
         fsGroup: 65532
         seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.certsvc) }}{{ . | nindent 6 }}{{ end }}
       containers:
         - name: certsvc
           image: {{ include "aintercept.ainterceptImage" . }}

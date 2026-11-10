@@ -41,7 +41,8 @@ spec:
         checksum/config: {{ include "aintercept.envoyConfig" . | sha256sum }}
     spec:
       # Must exceed preStopSleep + drainTime so Kubernetes never SIGKILLs Envoy
-      # mid-drain. On SIGTERM Envoy drains gracefully for --drain-time-s (below).
+      # mid-drain. The drain itself runs in the preStop hook (below): Envoy
+      # closes its listeners immediately on SIGTERM, so SIGTERM must come last.
       {{- $drain := .Values.envoy.drain | default dict }}
       {{- $preStop := $drain.preStopSleepSeconds | default 5 }}
       {{- $drainTime := $drain.drainTimeSeconds | default 180 }}
@@ -54,6 +55,7 @@ spec:
         runAsUser: 101
         runAsGroup: 101
         seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.envoy) }}{{ . | nindent 6 }}{{ end }}
       containers:
         - name: envoy
           image: {{ include "aintercept.envoyImage" . }}
@@ -61,12 +63,13 @@ spec:
           # (which does root-only chown/UID setup that fails under our restricted
           # securityContext). The binary itself runs fine as uid 101.
           command: ["/usr/local/bin/envoy"]
-          # --drain-time-s / --drain-strategy: on SIGTERM (pod termination) Envoy
-          # drains GRACEFULLY over this window — stops accepting new connections and
-          # lets in-flight requests (incl. long streaming LLM turns) finish, sending
-          # `connection: close` as they complete — before exiting. This is Envoy's
-          # native graceful-drain path, so no admin HTTP call (and no curl in the
-          # image) is needed. 'immediate' starts draining at once rather than
+          # --drain-time-s / --drain-strategy set the window and shape of a
+          # GRACEFUL drain: Envoy sends `connection: close` / GOAWAY as in-flight
+          # requests (incl. long streaming LLM turns) complete. Envoy only drains
+          # like this on hot restart, an LDS change, or POST
+          # /drain_listeners?graceful; on SIGTERM it closes listeners at once. So
+          # the preStop hook below starts the drain and waits for it, and SIGTERM
+          # only arrives after. 'immediate' starts draining at once rather than
           # ramping, which is what we want for a clean cutover.
           args:
             - "-c"
@@ -79,13 +82,30 @@ spec:
             - "immediate"
           lifecycle:
             preStop:
-              # Brief pause BEFORE SIGTERM so the LoadBalancer + kube endpoints stop
-              # routing NEW connections to this pod (that removal propagates async
-              # when the pod goes Terminating). Envoy keeps serving during the sleep;
-              # only after it does Kubernetes send SIGTERM, starting the graceful
-              # drain above. This closes the "new conn hits a shutting-down pod" race.
+              # 1. Sleep preStopSleepSeconds so the LoadBalancer + kube endpoints
+              #    stop routing NEW connections here (that removal propagates
+              #    async once the pod is Terminating). Envoy serves normally.
+              # 2. POST /drain_listeners?graceful: Envoy starts its graceful drain
+              #    (--drain-time-s), closing connections as their requests finish.
+              # 3. Wait until no request is in flight on the proxied listener, or
+              #    drainTimeSeconds pass, whichever is first. Only then does the
+              #    hook return and Kubernetes send SIGTERM.
+              # bash for /dev/tcp: the image has no curl/wget. Any admin error
+              # falls through to the bounded wait, never to an early exit.
               exec:
-                command: ["/usr/bin/sleep", {{ $preStop | quote }}]
+                command:
+                  - /usr/bin/bash
+                  - -c
+                  - |
+                    admin() { exec 3<>/dev/tcp/127.0.0.1/9901 || return 1; printf '%s %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' "$1" "$2" >&3; cat <&3; exec 3<&-; }
+                    sleep {{ $preStop }}
+                    admin POST '/drain_listeners?graceful' >/dev/null 2>&1
+                    deadline=$((SECONDS + {{ $drainTime }}))
+                    while [ "$SECONDS" -lt "$deadline" ]; do
+                      active=$(admin GET '/stats?filter=^http\.ingress_https\.downstream_rq_active$' 2>/dev/null | sed -n 's/^http\.ingress_https\.downstream_rq_active: *//p')
+                      [ "$active" = "0" ] && break
+                      sleep 2
+                    done
           ports:
             - { name: https, containerPort: 443 }
             - { name: admin, containerPort: 9901 }
@@ -125,27 +145,39 @@ metadata:
   labels:
     app: envoy
     {{- include "aintercept.labels" . | nindent 4 }}
+  {{- /*
+  Per-cloud defaults, then envoy.service.annotations merged OVER them, rendered
+  once. A user value replaces a default with the same key (e.g. setting
+  aws-load-balancer-type: external to hand the Service to the AWS Load
+  Balancer Controller); writing both would emit a duplicate key.
+  AWS: a Network Load Balancer (L4, preserves TLS to Envoy).
+  DigitalOcean: an L4 LB in passthrough, so Envoy terminates TLS itself.
+  */}}
+  {{- $proxyProtocol := (.Values.envoy.proxyProtocol | default dict).enabled }}
+  {{- $defaults := dict }}
+  {{- if eq .Values.cloud "aws" }}
+  {{- $_ := set $defaults "service.beta.kubernetes.io/aws-load-balancer-type" "nlb" }}
+  {{- if $proxyProtocol }}
+  {{- $_ := set $defaults "service.beta.kubernetes.io/aws-load-balancer-proxy-protocol" "*" }}
+  {{- end }}
+  {{- else if eq .Values.cloud "digitalocean" }}
+  {{- $_ := set $defaults "service.beta.kubernetes.io/do-loadbalancer-protocol" "tcp" }}
+  {{- if $proxyProtocol }}
+  {{- $_ := set $defaults "service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol" "true" }}
+  {{- end }}
+  {{- end }}
+  {{- $annotations := merge (deepCopy (.Values.envoy.service.annotations | default dict)) $defaults }}
+  {{- with $annotations }}
   annotations:
-    {{- $proxyProtocol := (.Values.envoy.proxyProtocol | default dict).enabled }}
-    {{- if eq .Values.cloud "aws" }}
-    # AWS: provision a Network Load Balancer (L4, preserves TLS to Envoy).
-    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    {{- if $proxyProtocol }}
-    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
-    {{- end }}
-    {{- else if eq .Values.cloud "digitalocean" }}
-    # DigitalOcean: L4 LB, passthrough so Envoy terminates TLS itself.
-    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
-    {{- if $proxyProtocol }}
-    service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
-    {{- end }}
-    {{- end }}
-    {{- with .Values.envoy.service.annotations }}
     {{- toYaml . | nindent 4 }}
-    {{- end }}
+  {{- end }}
 spec:
   type: {{ .Values.envoy.service.type }}
   externalTrafficPolicy: {{ .Values.envoy.service.externalTrafficPolicy | default "Local" }}
+  {{- with .Values.envoy.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector: { app: envoy }
   ports:
     - { name: https, port: 443, targetPort: 443 }

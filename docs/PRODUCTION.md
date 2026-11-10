@@ -177,6 +177,32 @@ pod's disk, so its memory doesn't grow with the data:
   use more than it has, and the kubelet then evicts whichever pod is furthest
   over its request. See `docs/INTERCEPTION_ISSUES.md` P5.
 
+## 5c. Rollouts, disruption and placement
+
+- **Envoy drains in its preStop hook.** On SIGTERM Envoy closes its listeners
+  at once; `--drain-time-s` only shapes a drain that has already been started.
+  So the hook sleeps `envoy.drain.preStopSleepSeconds` (the LB stops sending
+  new connections), calls `POST /drain_listeners?graceful`, and waits until no
+  request is in flight on the proxied listener, up to
+  `envoy.drain.drainTimeSeconds`. SIGTERM comes after. A rollout, scale-down or
+  node replacement therefore lets streaming turns finish instead of cutting
+  them. Keep the LB's own deregistration delay at least as long (AWS NLB:
+  `deregistration_delay.timeout_seconds`).
+- **Disruption budgets:** `<component>.podDisruptionBudget.enabled` (off by
+  default) adds a PDB, so node drains and autoscaler consolidation never take a
+  component to zero.
+- **Placement:** every component takes `nodeSelector`, `tolerations`,
+  `affinity` and `topologySpreadConstraints`. Keep Envoy off interruptible
+  (spot/preemptible) capacity: an interruption ends every stream on the node.
+- **Load balancer annotations:** `envoy.service.annotations` is merged over the
+  per-cloud defaults, so a key there replaces the default. On AWS with the
+  Load Balancer Controller, set `aws-load-balancer-type: external` (plus scheme,
+  subnets and target type) to get an LBC-managed NLB instead of the legacy
+  in-tree one. `envoy.service.loadBalancerSourceRanges` limits who can reach it.
+- **Upstream resolvers:** `envoy.upstreamDnsResolvers` (default 1.1.1.1 /
+  8.8.8.8). They must never see the client-side DNS override. A VPC's own
+  resolver qualifies and avoids outbound UDP/53.
+
 ## 6. Corporate vs personal accounts
 
 `complete` events carry `provider_org_id`, taken from the provider's response
