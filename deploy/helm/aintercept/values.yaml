@@ -111,6 +111,16 @@ objectStore:
 # <objectStore.prefix>/shaped/ (docs/ui/BUILD_PLAN.md §7.5). One replica.
 process:
   enabled: true
+  # Scheduling. All optional: unset leaves the pod spec as it was.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
+  # minAvailable if set.
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   pollSeconds: 10   # between polls (each lists only new files)
   fullMinutes: 60   # between full listings (one also runs at start)
   resources:
@@ -126,6 +136,16 @@ process:
 # with `kubectl port-forward svc/api 8787` (`make remote` does).
 api:
   enabled: false
+  # Scheduling. All optional: unset leaves the pod spec as it was.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
+  # minAvailable if set.
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   # The tables live in a DuckDB file on the pod's disk (`dbSizeLimit`), compressed
   # and paged in under DuckDB's memory limit, so memory doesn't grow with the data.
   # DuckDB's limit: empty = 60% of the container's memory limit (the rest is Python
@@ -148,6 +168,16 @@ api:
   dbSizeLimit: 4Gi
 
 observer:
+  # Scheduling. All optional: unset leaves the pod spec as it was.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
+  # minAvailable if set.
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   bufferSize: 16384
   # On termination, keep serving this long while Envoy's DNS view drops the pod
   # (headless Service, refreshed every 5 s), then drain in-flight streams. A call
@@ -248,17 +278,29 @@ observer:
 
 # ── Envoy ─────────────────────────────────────────────────────────────────────
 envoy:
+  # Scheduling. All optional: unset leaves the pod spec as it was.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
+  # minAvailable if set.
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   # CPU request is set above Envoy's idle baseline (~50m) so an idle fleet sits
   # well below the HPA target and scales back down.
   resources:
     requests: { cpu: "250m", memory: "128Mi" }
     limits: { cpu: "1", memory: "512Mi" }
-  # Zero-downtime drain on deploy/scale-down. A terminating Envoy sleeps
-  # preStopSleepSeconds (so the LB/endpoints stop sending NEW connections), then
-  # on SIGTERM drains in-flight connections gracefully for drainTimeSeconds before
-  # exiting. Set drainTimeSeconds >= your longest expected in-flight request; the
-  # proxy tees streaming LLM turns, so this defaults high. terminationGracePeriod
-  # is derived as preStopSleep + drainTime + 20s.
+  # Zero-downtime drain on deploy/scale-down, run by the preStop hook: a
+  # terminating Envoy sleeps preStopSleepSeconds (so the LB/endpoints stop sending
+  # NEW connections), then starts a graceful drain over the admin API and waits
+  # until no request is in flight, up to drainTimeSeconds. Only then is it sent
+  # SIGTERM (on which Envoy closes listeners at once). Set drainTimeSeconds >=
+  # your longest expected in-flight request; the proxy tees streaming LLM turns,
+  # so this defaults high. terminationGracePeriod is derived as
+  # preStopSleep + drainTime + 20s.
   drain:
     preStopSleepSeconds: 5
     drainTimeSeconds: 180
@@ -293,18 +335,38 @@ envoy:
   #     connection is reset.
   proxyProtocol:
     enabled: false
+  # Resolvers Envoy uses for the REAL provider hostnames (IPs, port 53). They
+  # must never see the client-side DNS override, or traffic loops back into the
+  # proxy. Empty = the public 1.1.1.1 / 8.8.8.8. On a cloud VPC, its own resolver
+  # (e.g. AWS's VPC base + 2) avoids needing outbound UDP/53 to the internet.
+  upstreamDnsResolvers: []
   service:
     type: LoadBalancer
     # Local keeps the client source IP (see above). Cluster spreads load across
     # nodes but rewrites the source to a node IP.
     externalTrafficPolicy: Local
-    # Extra annotations merged onto the Envoy Service. Defaults per-cloud are
-    # added by the template (AWS NLB / DO LB); these override/extend them.
+    # Annotations for the Envoy Service, merged OVER the per-cloud defaults the
+    # template adds (AWS: aws-load-balancer-type: nlb; DO: tcp passthrough). A key
+    # set here replaces the default: e.g. on AWS with the Load Balancer
+    # Controller, set aws-load-balancer-type: external plus its scheme/subnet
+    # annotations for an internal NLB.
     annotations: {}
+    # Optional source CIDRs allowed to reach the load balancer.
+    loadBalancerSourceRanges: []
 
 # ── certsvc ───────────────────────────────────────────────────────────────────
 certsvc:
   replicas: 2
+  # Scheduling. All optional: unset leaves the pod spec as it was.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
+  # minAvailable if set.
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   # Sign leaves with an AWS KMS key instead of a key file: the intermediate's
   # private key is created in KMS (asymmetric SIGN_VERIFY, RSA or ECC NIST) and
   # never leaves it. The intermediate certificate in caSecretName must be issued

@@ -25,7 +25,7 @@ This is the point of the project, so it comes first.
 
 - **What is captured:** provider, host, endpoint, HTTP method and status, model, input/output/cache/reasoning token counts, timings, declared tools and the names and counts of tool calls (MCP server and tool names), stream flag, and a **salted, irreversible** hash of the caller's API key (`sha256(salt ‖ key)`, never the key itself). Coding agents' own analytics events are kept as the client sends them. Claude Code's include each shell command's program name and exit code.
 - **What is never captured:** prompt text, completion text, system prompts, tool arguments, tool results, file contents, or any other request or response body content.
-- **Secrets are redacted** before anything is logged. `Authorization`, API keys and cookies are replaced with `<redacted>` on every path.
+- **Secrets are redacted** before anything is logged. `Authorization`, API keys (including Gemini's `x-goog-api-key`) and cookies are replaced with `<redacted>` on every path, credential query parameters (Gemini's `?key=`) are redacted from the recorded path, and Envoy's access log omits the query string.
 - **Upstream TLS is always verified.** AIntercept is not a way to downgrade or strip transport security. It re-establishes a verified TLS connection to the genuine provider.
 - **The root CA private key never lives in a container.** certsvc holds only a short-lived *intermediate*; leaf certs expire in hours and auto-renew.
 

@@ -266,7 +266,9 @@ func (srv *Server) observeHeaders(st *streamState, dir events.Direction, phase e
 			st.method = v
 		}
 		if v := hdrs[":path"]; v != "" {
-			st.path = v
+			// Credential-bearing query params (Gemini `?key=`) never reach an
+			// event; the key hash below is computed from the raw headers first.
+			st.path = events.RedactPath(v)
 		}
 		keyHash = events.HashAPIKey(hdrs, srv.keyHashSalt)
 		keyHint = events.KeyHint(hdrs, srv.keyHintPrefix, srv.keyHintSuffix)

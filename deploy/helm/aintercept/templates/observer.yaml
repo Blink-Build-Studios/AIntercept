@@ -46,6 +46,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 65532
         seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.observer) }}{{ . | nindent 6 }}{{ end }}
       containers:
         - name: observer
           image: {{ include "aintercept.ainterceptImage" . }}
