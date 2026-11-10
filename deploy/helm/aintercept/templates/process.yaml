@@ -20,9 +20,10 @@ spec:
     metadata:
       labels: { app: process }
     spec:
-      # On AWS this ServiceAccount's role must also allow reads, lists and
-      # deletes under <prefix>/shaped/ (the observer only writes).
-      serviceAccountName: {{ .Values.observer.serviceAccount.name }}
+      # Its own ServiceAccount when process.serviceAccount is set, else the
+      # observer's. On AWS its role needs the reads listed in docs/PRODUCTION.md
+      # §7; giving process its own keeps the observer's role write-only.
+      serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.process "component" "process" "root" $) }}
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
