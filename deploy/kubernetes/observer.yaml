@@ -19,7 +19,8 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: observer
-          image: aintercept/observer:dev # replace with your registry
+          image: aintercept/aintercept:dev # replace with your registry
+          args: ["observer"]
           args: []
           env:
             - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }

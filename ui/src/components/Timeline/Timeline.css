@@ -1,0 +1,723 @@
+/* Timeline geometry and type from the canvas (CompTimeline): a 132px label
+   column, tracks positioned in % of the range, a 960px minimum that scrolls
+   inside its panel. Content-box where the canvas has no box-sizing reset (lanes,
+   the selection, swatches), so borders add to the box as they do there. */
+@layer components {
+  .tl {
+    overflow-x: auto;
+  }
+  .tl-inner {
+    min-width: 960px;
+  }
+  .tl-body {
+    position: relative;
+    overflow: hidden;
+  }
+  .tl-lane {
+    display: flex;
+    box-sizing: content-box;
+    border-bottom: 1px solid var(--line);
+  }
+  /* The axis (or the frame) draws the rule under the last lane, except while loading. */
+  .tl-lane:last-child {
+    border-bottom-width: 0;
+  }
+  .tl-loading .tl-lane:last-child {
+    border-bottom-width: 1px;
+  }
+  /* Lane labels (§11G.A3): one line each, never wrapping; row names under multi-row lanes. */
+  .tl-label {
+    position: relative;
+    box-sizing: border-box;
+    width: 132px;
+    flex: none;
+    padding: 6px 12px;
+    border-right: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .tl-key,
+  .tl-sublabel,
+  .tl-rowlabel {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tl-key {
+    font: 400 10.5px/14px var(--font-mono);
+    letter-spacing: var(--type-micro-tracking);
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .tl-sublabel {
+    font: 400 11px/16px var(--font-mono);
+    color: var(--ink-muted);
+  }
+  .tl-rowlabel {
+    height: 16px;
+    font: 400 10.5px/16px var(--font-mono);
+    color: var(--ink-muted);
+  }
+  .tl-label-footer {
+    position: absolute;
+    left: 12px;
+    bottom: 0;
+    height: 16px;
+    font: 400 10.5px/16px var(--font-mono);
+    white-space: nowrap;
+  }
+  .tl-track {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .tl-track-loading {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+  }
+  .tl-skeleton {
+    width: 100%;
+    background: var(--skeleton);
+    opacity: 0.55;
+  }
+  .tl-abs {
+    position: absolute;
+  }
+  /* Over the tracks only (not the label column): the brush. */
+  .tl-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 132px;
+    right: 0;
+    z-index: 2;
+  }
+  .tl-now {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(132px + (100% - 132px) * var(--at));
+    width: 1px;
+    background: var(--live);
+    z-index: 3;
+    pointer-events: none;
+  }
+  /* The gap row under the bars (§11G.A4): 16px under a rule; hatches 10px tall with 1px danger ends. */
+  .tl-bars {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+  }
+  .tl-gaprow {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 17px;
+    border-top: 1px solid var(--line);
+  }
+  .tl-gap {
+    position: absolute;
+    top: 3px;
+    height: 10px;
+    border-left: 1px solid var(--danger);
+    border-right: 1px solid var(--danger);
+    background: repeating-linear-gradient(135deg, var(--gap-hatch) 0 4px, transparent 4px 8px);
+  }
+  /* Level bars (the session context lane) and their labels (compactions). */
+  .tl-bar-level {
+    opacity: 0.7;
+  }
+  .tl-bar-label {
+    position: absolute;
+    top: 2px;
+    font: 400 10.5px/20px var(--font-mono);
+    white-space: nowrap;
+    color: var(--ink);
+  }
+  .tl-nowrap {
+    white-space: nowrap;
+  }
+  /* Session bands. */
+  .tl-band {
+    position: absolute;
+    box-sizing: content-box;
+    height: 28px;
+    border-left: 2px solid var(--agent-claude-code);
+    background: var(--surface-raised);
+    overflow: hidden;
+  }
+  .tl-band-fade {
+    position: absolute;
+    height: 28px;
+    background: linear-gradient(90deg, transparent, var(--surface-raised));
+  }
+  /* A lane of bands that all fit one row (the person page, Main): 26px from 8px down, border-box. */
+  .tl-band-single {
+    box-sizing: border-box;
+    height: 26px;
+  }
+  .tl-band-label {
+    position: absolute;
+    left: 6px;
+    top: 4px;
+    font: 400 10.5px/20px var(--font-mono);
+    white-space: nowrap;
+  }
+  .tl-band-live {
+    position: absolute;
+    right: 6px;
+    top: 10px;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+    background: var(--live);
+  }
+  .tl-band-single .tl-band-label {
+    top: 3px;
+  }
+  .tl-band-single .tl-band-live {
+    top: 9px;
+  }
+  /* State segments. */
+  .tl-state {
+    position: absolute;
+    top: 6px;
+    height: 18px;
+    overflow: hidden;
+    font: 400 10.5px/16px var(--font-mono);
+    padding-left: 4px;
+  }
+  .tl-state-permission,
+  .tl-state-network {
+    border: 1px solid var(--line-strong);
+  }
+  .tl-state-permission {
+    background: var(--surface-raised);
+    padding-left: 6px;
+  }
+  .tl-change {
+    position: absolute;
+    top: 4px;
+    height: 22px;
+    width: 3px;
+    background: var(--focus);
+  }
+  .tl-change-label {
+    position: absolute;
+    top: 6px;
+    font: 400 10.5px/18px var(--font-mono);
+    color: var(--focus);
+    background: var(--surface);
+    padding: 0 4px;
+  }
+  /* Markers. */
+  .tl-tick {
+    position: absolute;
+    top: 5px;
+    width: 1px;
+    height: 16px;
+    background: var(--ink);
+  }
+  .tl-glyph {
+    position: absolute;
+    top: 3px;
+    font: var(--type-data);
+  }
+  .tl-mark-label {
+    position: absolute;
+    top: 3px;
+    font: 400 10.5px/20px var(--font-mono);
+    color: var(--ink-muted);
+  }
+  /* Brush (§6.4): --brush-fill inside the range, --brush-dim outside (§11A.8). */
+  /* The brush lets the pointer through to the marks; only the selection takes it (§6B.4). */
+  .tl-overlay,
+  .tl-brush {
+    pointer-events: none;
+  }
+  .tl-brush {
+    position: absolute;
+    inset: 0;
+  }
+  .tl-body[data-brush] .tl-track {
+    cursor: crosshair;
+  }
+  .tl-brush:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+  .tl-dim {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--brush-dim);
+    pointer-events: none;
+  }
+  .tl-sel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    box-sizing: content-box;
+    border-left: 2px solid var(--focus);
+    border-right: 2px solid var(--focus);
+    background: var(--brush-fill);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .tl-handle {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 22px;
+    margin-top: -11px;
+    border-radius: var(--radius-sm);
+    background: var(--focus);
+  }
+  .tl-handle-start {
+    left: -5px;
+  }
+  .tl-handle-end {
+    right: -5px;
+  }
+  /* Axis and legend: mono 11/20 rows aligned with the tracks (132px label + 12px). */
+  /* The axis (§11G.A6): ticks hang from its top; labels on majors, midnights in ink. */
+  .tl-axis {
+    display: flex;
+    height: 25px;
+    border-top: 1px solid var(--line);
+  }
+  /* 132px plus its 1px rule, as the sheets draw it (content-box). */
+  .tl-axis-gutter {
+    box-sizing: content-box;
+    width: 132px;
+    flex: none;
+    border-right: 1px solid var(--line);
+  }
+  .tl-axis-track {
+    position: relative;
+    flex: 1;
+  }
+  .tl-tick-minor,
+  .tl-tick-major,
+  .tl-tick-day {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    background: var(--line-strong);
+  }
+  .tl-tick-minor {
+    height: 3px;
+  }
+  .tl-tick-major {
+    height: 6px;
+  }
+  .tl-tick-day {
+    height: 9px;
+    background: var(--ink-faint);
+  }
+  .tl-axis-label {
+    position: absolute;
+    top: 8px;
+    font: 400 11px/16px var(--font-mono);
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  .tl-axis-midnight {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  /* Gridlines through the lanes, behind marks: majors --line, day boundaries --line-strong. */
+  .tl-grid-major,
+  .tl-grid-day {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--line);
+    pointer-events: none;
+  }
+  .tl-grid-day {
+    background: var(--line-strong);
+  }
+
+  /* Hover (handoff §6B.4). Marks: the hit area of a bin, band, segment or tick.
+     Visual states come from :hover / :active (pressed, same frame) / :focus-visible,
+     or data-force in stories. */
+  .tl-mark {
+    position: absolute;
+    outline: none;
+  }
+  .tl-mark-active {
+    cursor: pointer;
+  }
+  .tl-col {
+    top: 0;
+    bottom: 0;
+  }
+  .tl-col:hover,
+  .tl-col[data-force="hover"],
+  .tl-col[data-force="linked"],
+  .tl-col:focus-visible,
+  .tl-col[data-force="focus"] {
+    background: var(--surface-raised);
+  }
+  .tl-col:active,
+  .tl-col[data-force="pressed"] {
+    background: var(--skeleton);
+  }
+  .tl-mark:focus-visible,
+  .tl-mark[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  /* Bars and labels sit over the bin columns but let the pointer through. */
+  .tl-abs,
+  .tl-gap-label,
+  .tl-bar-label,
+  .tl-band-label,
+  .tl-change-label,
+  .tl-mark-label {
+    pointer-events: none;
+  }
+  .tl-guide[hidden] {
+    display: none;
+  }
+  .tl-guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(132px + (100% - 132px) * var(--at));
+    width: 1px;
+    background: var(--ink-muted);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .tl-readout {
+    position: absolute;
+    top: 3px;
+    left: calc(100% * var(--at));
+    transform: translateX(-50%);
+    padding: 0 6px;
+    border-radius: 2px;
+    background: var(--ink);
+    color: var(--bg);
+    font: 400 11px/16px var(--font-mono);
+    z-index: 6;
+  }
+  .tl-axis {
+    position: relative;
+  }
+  /* Not captured: the window outlined in danger, over the bin columns. */
+  .tl-gap.tl-mark {
+    z-index: 1;
+  }
+  .tl-gap:hover,
+  .tl-gap[data-force="hover"],
+  .tl-gap[data-force="linked"] {
+    outline: 1px solid var(--danger);
+    outline-offset: 0;
+  }
+  /* Bands: pressed fill and a muted inset outline on hover or when a row points at them (§6B.5). */
+  .tl-band:hover,
+  .tl-band[data-force="hover"],
+  .tl-band[data-force="linked"] {
+    background: var(--skeleton);
+    outline: 1px solid var(--line-strong);
+    outline-offset: -1px;
+  }
+  .tl-band:focus-visible,
+  .tl-band[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  /* State segments: a muted outline (danger and a pressed fill for a bypassed network). */
+  .tl-state.tl-mark {
+    top: 6px;
+  }
+  .tl-state:hover,
+  .tl-state[data-force="hover"] {
+    outline: 1px solid var(--ink-muted);
+    outline-offset: 0;
+  }
+  .tl-state-network:hover,
+  .tl-state-network[data-force="hover"] {
+    outline: none;
+    background: var(--skeleton);
+  }
+  .tl-state-network.tl-state-bypassed:hover,
+  .tl-state-network.tl-state-bypassed[data-force="hover"] {
+    border-color: var(--danger);
+  }
+  /* Permission change ticks widen 3 → 5px. */
+  .tl-change.tl-mark:hover,
+  .tl-change[data-force="hover"],
+  .tl-change[data-force="focus"] {
+    width: 5px;
+    margin-left: -1px;
+  }
+  /* Prompt ticks: a 13px hit box around the 1px tick (the guide snaps within 6px).
+     Hover: 1 → 3px ink, 22px tall, centred, with the #N label in 600. */
+  .tl-hit {
+    top: 0;
+    bottom: 0;
+    width: 13px;
+    margin-left: -6px;
+  }
+  .tl-hit > .tl-tick {
+    left: 6px;
+  }
+  .tl-hit:hover > .tl-tick,
+  .tl-hit[data-force="hover"] > .tl-tick,
+  .tl-hit[data-force="focus"] > .tl-tick,
+  .tl-hit[data-force="linked"] > .tl-tick {
+    top: 2px;
+    left: 5px;
+    width: 3px;
+    height: 22px;
+  }
+  .tl-tick-label {
+    display: none;
+    position: absolute;
+    top: 3px;
+    left: 12px;
+    font: 600 10.5px/20px var(--font-mono);
+    color: var(--ink);
+    pointer-events: none;
+  }
+  .tl-hit:hover > .tl-tick-label,
+  .tl-hit[data-force] > .tl-tick-label,
+  .tl-hit:focus-visible > .tl-tick-label {
+    display: block;
+  }
+  /* Friction glyphs: a pressed box with a strong outline. */
+  .tl-glyph.tl-mark:hover,
+  .tl-glyph[data-force="hover"] {
+    top: 1px;
+    padding: 0 3px;
+    line-height: 22px;
+    background: var(--skeleton);
+    outline: 1px solid var(--line-strong);
+  }
+  /* Context bars: the pointed bar in ink over a faint column. */
+  .tl-bar-hover {
+    background: var(--ink);
+    opacity: 1;
+  }
+  /* A level track's pointed bin: its column comes just before its bar. Important,
+     since the bar's fill is a utility (utilities outrank this layer). */
+  .tl-col-level:is(:hover, :focus-visible) + .tl-bar-level {
+    background: var(--ink) !important;
+    opacity: 1;
+  }
+  .tl-col-level:hover,
+  .tl-col-level[data-force="hover"],
+  .tl-col-level[data-force="linked"],
+  .tl-col-level:focus-visible,
+  .tl-col-level[data-force="focus"] {
+    background: var(--link-fill);
+  }
+  /* Compaction labels: plain at rest; hovered or focused, a dotted muted underline. */
+  .tl-compaction {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .tl-compaction:hover,
+  .tl-compaction:focus-visible,
+  .tl-compaction[data-force="hover"] {
+    text-decoration: underline dotted var(--ink-muted);
+    text-underline-offset: 3px;
+  }
+  /* Linked span from a hovered session row: link fill with muted edges across all lanes. */
+  .tl-link-span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    box-sizing: border-box;
+    border-left: 1px solid var(--ink-muted);
+    border-right: 1px solid var(--ink-muted);
+    background: var(--link-fill);
+    z-index: 1;
+    pointer-events: none;
+  }
+  /* Legend: the pointed item underlined in ink, the rest faded. */
+  /* Lane labels with a definition (§6B.6). */
+  .tl-key-term {
+    cursor: help;
+    text-decoration: underline dotted var(--line-strong);
+    text-underline-offset: 3px;
+  }
+
+  /* Brush (§6B.4): grab inside, ew-resize 6px either side of an edge, grabbing while dragging. */
+  .tl-sel-active {
+    pointer-events: auto;
+    cursor: grab;
+  }
+  .tl-sel-dragging,
+  .tl-brush-dragging {
+    cursor: grabbing;
+  }
+  .tl-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    cursor: ew-resize;
+  }
+  .tl-edge-start {
+    left: -8px;
+  }
+  .tl-edge-end {
+    right: -8px;
+  }
+  /* A hovered or moving edge's handle grows to 10x28; hovered, it also takes the halo. */
+  .tl-edge-start:hover ~ .tl-handle-start,
+  .tl-edge-end:hover ~ .tl-handle-end,
+  .tl-handle-grow {
+    width: 10px;
+    height: 28px;
+    margin-top: -14px;
+  }
+  .tl-edge-start:hover ~ .tl-handle-start,
+  .tl-handle-start.tl-handle-grow {
+    left: -6px;
+  }
+  .tl-edge-end:hover ~ .tl-handle-end,
+  .tl-handle-end.tl-handle-grow {
+    right: -6px;
+  }
+  .tl-edge-start:hover ~ .tl-handle-start,
+  .tl-edge-end:hover ~ .tl-handle-end,
+  .tl-handle-halo {
+    outline: 2px solid var(--focus-halo);
+  }
+  /* The now line explains itself (a 7px hit area around the 1px line). */
+  .tl-now-hit {
+    pointer-events: auto;
+    margin-left: -3px;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    background-clip: content-box;
+  }
+}
+@layer components {
+  /* Multi-row lanes (§11G.A1–A3): 16px rows from 20px down. */
+  .tl-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 16px;
+  }
+  .tl-rowbar {
+    position: absolute;
+    top: 3px;
+    height: 10px;
+  }
+  .tl-rowbar-ink {
+    background: var(--ink);
+  }
+  .tl-rowbar-muted {
+    background: var(--ink-muted);
+  }
+  .tl-rowbar-faint {
+    background: var(--ink-faint);
+  }
+  /* Friction marks: mono 11px centred on their instant; a cluster is glyph + count at 600. */
+  .tl-friction {
+    position: absolute;
+    top: -2px;
+    margin-left: -3.5px;
+    font: 400 11px/20px var(--font-mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .tl-friction-cluster {
+    font-weight: 600;
+  }
+  .tl-friction.text-danger {
+    color: var(--danger);
+  }
+}
+@layer components {
+  /* The brush's × (§11G.A8): 16px in the selection's top-right corner. */
+  .tl-sel-clear {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: var(--focus);
+    color: var(--bg);
+    font: 600 12px/16px var(--font-mono);
+    text-align: center;
+    cursor: pointer;
+    z-index: 3;
+    /* The overlay it sits in lets the pointer through; the × takes it. */
+    pointer-events: auto;
+  }
+  .tl-sel-clear:hover,
+  .tl-sel-clear[data-force="hover"] {
+    background: var(--ink);
+  }
+  .tl-sel-clear:focus-visible,
+  .tl-sel-clear[data-force="focus"] {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+}
+@layer components {
+  /* A pointed row bar: a 1px outline in its own colour, 1px off (CompTimelineHover). */
+  .tl-rowbar.tl-mark:hover,
+  .tl-rowbar[data-force="hover"],
+  .tl-rowbar[data-force="linked"] {
+    outline: 1px solid var(--ink);
+    outline-offset: 1px;
+  }
+  .tl-rowbar-muted.tl-mark:hover,
+  .tl-rowbar-muted[data-force="hover"],
+  .tl-rowbar-muted[data-force="linked"] {
+    outline-color: var(--ink-muted);
+  }
+  .tl-rowbar-faint.tl-mark:hover,
+  .tl-rowbar-faint[data-force="hover"],
+  .tl-rowbar-faint[data-force="linked"] {
+    outline-color: var(--ink-faint);
+  }
+}
+@layer components {
+  /* A network segment's label (§11G.A3): its own mono 10.5/16 line, 4px in. */
+  .tl-state-text {
+    position: absolute;
+    left: 4px;
+    top: 0;
+    font: 400 10.5px/16px var(--font-mono);
+    white-space: nowrap;
+  }
+}
+@layer components {
+  /* Network (§11G.A3): one 18px row of outlined segments 5px down; labels in their own line. */
+  .tl-state.tl-state-network {
+    top: 5px;
+    padding-left: 0;
+    font: inherit;
+    color: inherit;
+    white-space: normal;
+  }
+  .tl-state-network.tl-state-bypassed {
+    border-color: var(--danger);
+  }
+  /* Approval (§11J, §11M 2.5): styled like Permission: --surface-raised fill, --line-strong
+     outline, 6px down a 30px lane, the label 6px in. */
+  .tl-state.tl-state-approval {
+    top: 6px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-raised);
+    padding-left: 6px;
+  }
+}

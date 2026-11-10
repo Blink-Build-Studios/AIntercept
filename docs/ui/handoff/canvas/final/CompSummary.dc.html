@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Summary blocks</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cells{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.tile{display:flex;flex-direction:column;gap:2px;padding:10px 16px;background:#131618;border:1px solid #2a3034;width:200px;box-sizing:border-box}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1700px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Summary blocks</span>
+<span style="color: #a3a9ad">The numbers at the top of each page and the panels beside them. Unknown is always “—” with a tooltip, never 0.</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">StatTile · StatRibbon</span>
+<span class="props">label, value, sub, swatch?, href?, loading? · tiles sit edge to edge in a ribbon</span>
+<div class="cells">
+<div><div class="cap">default</div><div data-spec="StatTile/default" class="tile"><span class="k" style="display: flex; gap: 6px; align-items: center"><span style="width: 8px; height: 8px; border-radius: 2px; background: #f0b43c"></span>Analytics</span><span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500">21,305</span><span style="color: #a3a9ad">969 batches · 128 types</span></div></div>
+<div><div class="cap">hover (links to rows)</div><div data-spec="StatTile/hoverLinksToRows" class="tile" style="background: #1b1f22"><span class="k" style="display: flex; gap: 6px; align-items: center"><span style="width: 8px; height: 8px; border-radius: 2px; background: #f0b43c"></span>Analytics</span><span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500">21,305</span><span style="color: #a3a9ad">969 batches · 128 types</span></div></div>
+<div><div class="cap">no swatch</div><div data-spec="StatTile/noSwatch" class="tile"><span class="k">People</span><span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500">5</span><span style="color: #a3a9ad">2 active now</span></div></div>
+<div><div class="cap">unknown</div><div data-spec="StatTile/unknown" class="tile"><span class="k">Tool calls</span><span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500; color: #a3a9ad">—</span><span style="color: #a3a9ad">not extracted yet</span></div></div>
+<div><div class="cap">coverage gap</div><div data-spec="StatTile/coverageGap" class="tile"><span class="k">Coverage</span><span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500; color: #ff7a6b">▲ 94</span><span style="color: #a3a9ad">reported, not captured</span></div></div>
+<div><div class="cap">loading</div><div data-spec="StatTile/loading" class="tile" style="gap: 8px"><div style="width: 70px; height: 10px; background: #20252a"></div><div style="width: 90px; height: 20px; background: #20252a"></div><div style="width: 130px; height: 10px; background: #20252a; opacity: .6"></div></div></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">HeaderStat</span>
+<span class="props">label, value, live?, tooltip? · grouped with hairlines in page headers</span>
+<div class="cells">
+<div><div class="cap">group</div><div data-spec="HeaderStatGroup/default" style="display: flex; border-left: 1px solid #2a3034"><div data-spec="HeaderStat/default" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Role</div><div class="m" style="font-weight: 500">admin</div></div><div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Plan</div><div class="m" style="font-weight: 500">max · 20x</div></div><div data-spec="HeaderStat/live" style="padding: 0 16px"><div class="k">Last seen</div><div class="m" style="font-weight: 500"><span style="color: #57d68d">●</span> now</div></div></div></div>
+<div><div class="cap">unknown</div><div data-spec="HeaderStat/unknown" style="border-left: 1px solid #2a3034; padding: 0 16px"><div class="k">Customer since</div><div class="m" style="font-weight: 500; color: #a3a9ad">— not extracted</div></div></div>
+<div><div class="cap">with qualifier</div><div data-spec="HeaderStat/withQualifier" style="border-left: 1px solid #2a3034; padding: 0 16px"><div class="k">Model calls</div><div class="m" style="font-weight: 500">640 <span style="color: #ff7a6b">+94 not captured</span></div></div></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">CoverageLine</span>
+<span class="props">reported, captured, windows[] · quiet when complete, prominent when not</span>
+<div class="cells" style="flex-direction: column; align-items: stretch">
+<div><div class="cap">complete</div><div data-spec="CoverageLine/complete" style="display: flex; gap: 12px; align-items: center; padding: 8px 16px; background: #131618; border: 1px solid #2a3034"><span class="m" style="color: #a3a9ad">✓ coverage complete</span><span style="color: #a3a9ad">All 22 model calls Claude Code reported were captured.</span></div></div>
+<div><div class="cap">gap</div><div data-spec="CoverageLine/gap" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 16px; background: #131618; border: 1px solid #2a3034"><span class="m" style="color: #ff7a6b; font-weight: 600">▲ coverage gap</span><span>Claude Code reported 94 model calls the proxy never saw: Nov 3 00:00–00:59 (37) and Nov 3 15:00–17:59 (57).</span><a href="#" class="m">view 94 calls</a></div></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Banner</span>
+<span class="props">kind: delayed | refreshFailed · since · onRetry · full width under the app bar; data stays visible</span>
+<div class="cells" style="flex-direction: column; align-items: stretch">
+<div><div class="cap">delayed</div><div data-spec="Banner/delayed" style="display: flex; gap: 12px; align-items: center; height: 32px; box-sizing: border-box; padding: 0 16px; overflow: hidden; white-space: nowrap; background: #1b1f22; border-bottom: 1px solid #60686d"><span class="m" style="font-weight: 600">Last data 2 min ago</span><span style="color: #a3a9ad">Nothing has arrived from the proxy since 11:27:04. Totals below are as of then.</span></div></div>
+<div><div class="cap">refresh failed</div><div data-spec="Banner/refreshFailed" style="display: flex; gap: 12px; align-items: center; height: 32px; box-sizing: border-box; padding: 0 16px; overflow: hidden; white-space: nowrap; background: #1b1f22; border-bottom: 1px solid #60686d"><span class="m" style="font-weight: 600">✕ Couldn’t refresh</span><span style="color: #a3a9ad">Showing data as of 11:27:40; retrying in 10 s.</span><span style="flex: 1"></span><button class="btn" style="padding: 3px 10px">Retry now</button></div></div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 600px">
+<span class="cname">Notice</span>
+<span class="props">tone: danger | neutral · title · body · inside the drawer</span>
+<div><div class="cap">danger (coverage gap only)</div><div data-spec="Notice/danger" style="padding: 10px 12px; background: #0c0e0f; border: 1px solid #ff7a6b"><div class="m" style="font-weight: 600; color: #ff7a6b">▲ This call bypassed the proxy</div><div style="color: #a3a9ad">Claude Code’s own analytics report a model call the proxy never saw.</div></div></div>
+<div><div class="cap">neutral</div><div data-spec="Notice/neutral" style="padding: 10px 12px; background: #0c0e0f; border: 1px solid #60686d"><div class="m" style="font-weight: 600">✕ Connection reset</div><div style="color: #a3a9ad">Upstream reset after 0.6 s. Claude Code retried after 1.2 s; the retry succeeded.</div></div></div>
+<div><div class="cap">UnattributedNotice</div><div data-spec="UnattributedNotice/default" style="display: flex; gap: 12px; align-items: center; padding: 8px 12px; border: 1px solid #2a3034; background: #131618"><span class="m" style="font-weight: 600">1 session not tied to a person</span><span style="color: #a3a9ad">Nov 2 · 38 model calls · identity not parsed yet</span><span style="flex: 1"></span><a href="#" class="m">view traffic</a></div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 500px">
+<span class="cname">AgentCard</span>
+<span class="props">agent, people, summary, shape, selected, onClick · filters the People table</span>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{cards}}" as="a" hint-placeholder-count="4">
+<div><div class="cap">{{a.cap}}</div>
+<button data-spec="AgentCard/{{a.st}}" class="btn" style="display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 10px 12px; text-align: left; width: 100%; background: {{a.bg}}; border-color: {{a.bd}}; opacity: {{a.op}}; outline: {{a.ol}}; outline-offset: 1px">
+<span style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 999px; background: {{a.c}}"></span><span class="m" style="font-weight: 600">{{a.n}}</span><span style="flex: 1"></span><span class="m" style="color: #a3a9ad">{{a.p}}</span></span>
+<span class="m" style="color: #a3a9ad; font-weight: 400">{{a.s}}</span>
+</button></div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 520px">
+<span class="cname">KeyValueList</span>
+<span class="props">title, accent?, rows[{k, d?, v}], action?, footer? · capabilities, footprint, session state</span>
+<div class="cells">
+<div style="flex: 1 1 300px"><div class="cap">default</div><div data-spec="KeyValueList/default" style="background: #131618; border: 1px solid #2a3034"><div class="row" style="justify-content: space-between"><span class="k" style="color: #e8916f">Capabilities · seen in any session</span><a href="#" class="m">per session ›</a></div><div class="row m"><span style="width: 120px; font-weight: 600">MCP servers</span><span style="flex: 1; color: #a3a9ad">Gmail, Drive, Vercel +8</span><span>11</span></div><div class="row m"><span style="width: 120px; font-weight: 600">Skills</span><span style="flex: 1; color: #a3a9ad">owner name + email</span><span>87</span></div><div class="row m" style="border-bottom: 0"><span style="width: 120px; font-weight: 600">Tool calls</span><span style="flex: 1; color: #a3a9ad">not extracted yet</span><span style="color: #a3a9ad">—</span></div></div></div>
+<div style="flex: 1 1 200px"><div class="cap">loading</div><div data-spec="KeyValueList/loading" style="background: #131618; border: 1px solid #2a3034; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px"><div style="width: 60%; height: 10px; background: #20252a"></div><div style="width: 90%; height: 12px; background: #20252a; opacity: .6"></div><div style="width: 80%; height: 12px; background: #20252a; opacity: .6"></div><div style="width: 85%; height: 12px; background: #20252a; opacity: .6"></div></div></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 520px">
+<span class="cname">Sparkline · InputCompositionBar</span>
+<span class="props">values[14], color · cacheRead, uncached, cacheWrite</span>
+<div class="cells">
+<sc-for list="{{sparks}}" as="s" hint-placeholder-count="3"><div><div class="cap">{{s.cap}}</div><div data-spec="Sparkline/{{s.st}}" style="display: flex; align-items: flex-end; gap: 2px; height: 22px; width: 180px"><sc-for list="{{s.bars}}" as="b" hint-placeholder-count="14"><span style="flex: 1; min-height: 1px; background: {{b.c}}; height: {{b.h}}"></span></sc-for></div></div></sc-for>
+</div>
+<div style="width: 420px"><div class="cap">input composition · mostly cached</div><div data-spec="InputCompositionBar/mostlyCached" style="display: flex; height: 10px; gap: 1px"><div style="flex-grow: 42611; background: #8fd17e; opacity: .55"></div><div style="flex-grow: 412; min-width: 3px; background: #8fd17e"></div></div><div class="m" style="display: flex; gap: 16px; font-size: 11px; color: #a3a9ad; margin-top: 4px"><span>cache read 42,611</span><span>uncached 412</span><span>cache write 0</span></div></div>
+<div style="width: 420px"><div class="cap">input composition · thread create</div><div data-spec="InputCompositionBar/threadCreate" style="display: flex; height: 10px; gap: 1px"><div style="flex-grow: 2000; background: #8fd17e; opacity: .55"></div><div style="flex-grow: 9000; background: #8fd17e"></div><div style="flex-grow: 31000; background: #8fd17e; opacity: .3; border: 1px solid #8fd17e; box-sizing: border-box"></div></div><div class="m" style="display: flex; gap: 16px; font-size: 11px; color: #a3a9ad; margin-top: 4px"><span>cache read 2,000</span><span>uncached 9,000</span><span>cache write 1h 31,000</span></div></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var sp = function (d, c) { return d.map(function (v) { return { h: v ? Math.min(22, 3 + v * 1.9) + 'px' : '1px', c: v ? c : '#2a3034' }; }); };
+    var __st = function (s) { var w = String(s).replace(/[\u2192\/\u00b7]/g, ' ').match(/[A-Za-z0-9]+/g) || ['default']; return w[0].toLowerCase() + w.slice(1).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(''); };
+    var __r = {
+      cards: [
+        { cap: 'default', n: 'Claude Code', c: '#e8916f', p: '3 people', s: '18 sessions · exact tokens', bg: '#131618', bd: '#2a3034', op: 1, ol: 'none' },
+        { cap: 'hover', n: 'Codex', c: '#9fb4c7', p: '1 person', s: '7 sessions · ≈ tokens', bg: '#1b1f22', bd: '#2a3034', op: 1, ol: 'none' },
+        { cap: 'selected', n: 'ChatGPT', c: '#7fd1b9', p: '2 people', s: 'no token counts', bg: '#1b1f22', bd: '#e6e3db', op: 1, ol: 'none' },
+        { cap: 'focus', n: 'claude.ai', c: '#d9b98c', p: '1 person', s: '4 conversations', bg: '#131618', bd: '#2a3034', op: 1, ol: '2px solid #ffd36b' }
+      ],
+      sparks: [
+        { cap: 'active', bars: sp([0, 10, 3, 2, 1, 1, 0, 1, 1, 0, 0, 10, 10, 4], '#e8916f') },
+        { cap: 'sparse', bars: sp([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0], '#7fd1b9') },
+        { cap: 'no data', bars: sp([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], '#9fb4c7') }
+      ]
+    };
+    __r.cards.forEach(function (c) { c.st = __st(c.cap); }); __r.sparks.forEach(function (s) { s.st = __st(s.cap); });
+    return __r;
+  }
+}
+</script>
+</body>
+</html>

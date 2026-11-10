@@ -1,0 +1,36 @@
+/* RawView (the drawer's Raw tab, Session sheet). */
+@layer components {
+  .raw-view {
+    padding: 8px 16px;
+    --stream-t-width: 64px;
+    --stream-type-width: 220px;
+  }
+  .raw-unavailable {
+    padding: 24px 16px;
+  }
+  .raw-line,
+  .raw-head {
+    margin-bottom: 4px;
+  }
+  .raw-response-line {
+    margin-top: 16px;
+  }
+  .raw-stream-head {
+    margin-top: 12px;
+  }
+  .raw-body-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 4px;
+  }
+  .raw-pre {
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--line);
+    white-space: pre-wrap;
+  }
+  .raw-missing {
+    margin-top: 16px;
+  }
+}

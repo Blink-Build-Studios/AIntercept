@@ -1,0 +1,43 @@
+# AWS-integration override: runs the stack the way an EKS deployment does,
+# against local emulators instead of AWS.
+#   - certsvc signs leaves with a KMS key (no intermediate key file mounted)
+#   - the observer reads its key-hash salt from Secrets Manager
+# Set up by `make test-aws` (scripts/dev-aws-emulators.sh creates the KMS key,
+# the intermediate issued for it, and the salt secret).
+services:
+  local-kms:
+    # KMS emulator. Not moto for KMS: moto re-hashes MessageType=DIGEST input,
+    # so its signatures don't verify; local-kms signs the digest as real KMS does.
+    image: nsmithuk/local-kms:3@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
+    ports: ["5056:8080"]
+
+  moto:
+    # Secrets Manager emulator.
+    image: motoserver/moto:5.1.14@sha256:800719627036dc38dc699e9f314f624f2c98ac3d8bb754db078cb2698f08ee77
+    ports: ["5055:5000"]
+
+  certsvc:
+    environment:
+      INTERMEDIATE_KEY: ""
+      INTERMEDIATE_KMS_KEY_ID: "alias/aintercept-dev-intermediate"
+      INTERMEDIATE_CERT: "/certs/intermediate-ca.crt"
+      CA_CHAIN: "/certs/ca-chain.crt"
+      REQUIRE_NAME_CONSTRAINTS: "true"
+      AWS_REGION: "us-east-1"
+      AWS_ENDPOINT_URL_KMS: "http://local-kms:8080"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+    # Only the KMS-backed intermediate's certificate and chain; no private key.
+    volumes: !override
+      - ./certs/kms/intermediate-ca.crt:/certs/intermediate-ca.crt:ro
+      - ./certs/kms/ca-chain.crt:/certs/ca-chain.crt:ro
+    depends_on: [local-kms]
+
+  observer:
+    environment:
+      OBSERVER_KEY_HASH_SALT_SECRET_ID: "aintercept-dev-key-hash-salt"
+      AWS_REGION: "us-east-1"
+      AWS_ENDPOINT_URL_SECRETS_MANAGER: "http://moto:5000"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+    depends_on: [moto]

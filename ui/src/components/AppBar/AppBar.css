@@ -1,0 +1,6 @@
+/* AppBar (CompStates "AppBar" specimens; screens draw it 32px in with a bottom hairline). */
+@layer components {
+  .app-bar {
+    padding: 8px 32px;
+  }
+}

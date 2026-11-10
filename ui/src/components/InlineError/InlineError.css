@@ -1,0 +1,15 @@
+/* InlineError (CompInteraction): the bar sits on top of stale content with a
+   hairline under it; the beside-trigger form is mono 12/20 next to a button.
+   Both off the Wire scale. */
+@layer components {
+  .inline-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .inline-error-beside {
+    font: 400 12px/20px var(--font-mono);
+  }
+}

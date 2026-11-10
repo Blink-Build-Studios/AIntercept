@@ -1,0 +1,15 @@
+/* ThreadOrigin (CompAgents "ThreadOrigin"): the source thread as a quiet underlined link. */
+@layer components {
+  .thread-origin-link {
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+  }
+  .thread-origin-link:hover {
+    color: var(--link-hover);
+  }
+  .thread-origin-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+}

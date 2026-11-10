@@ -1,0 +1,14 @@
+/* Exactly 32px including the bottom border, one line (handoff §11A.9).
+   16px sides as a component (CompSummary); `page` takes the 32px page gutter. */
+@layer components {
+  .banner {
+    height: 32px;
+    box-sizing: border-box;
+    padding: 0 16px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .banner-page {
+    padding: 0 32px;
+  }
+}

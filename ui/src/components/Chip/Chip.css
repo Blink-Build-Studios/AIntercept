@@ -1,0 +1,28 @@
+/* Chip geometry and type from the canvas specimen (CompChips .chip): micro
+   mono 11/18, off the 4px scale. Caps are in the text itself, not a
+   text-transform, so mixed-case suffixes ("LIVE · 5s") survive. White-space
+   is inherited: rows set nowrap, free-standing chips may wrap. */
+@layer components {
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    font: var(--type-micro);
+    line-height: 18px;
+    letter-spacing: var(--type-micro-tracking);
+  }
+  /* The selected filter (§11G.B2): the ink fill at 600. */
+  .chip-selected {
+    font-weight: 600;
+  }
+  /* The client after an agent's name (§11J gap 7): muted, at 400. */
+  .chip-client {
+    font-weight: 400;
+  }
+  .chip-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+  }
+}

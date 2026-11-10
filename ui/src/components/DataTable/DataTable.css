@@ -1,0 +1,147 @@
+/* One set of column widths (--c1…--c12, flex values set by DataTable) shared by
+   header, rows and skeleton rows, so columns never reflow between loading and
+   loaded (§6A.8). Rows are flex, as on the canvas. */
+@layer components {
+  .dt {
+    overflow-x: auto;
+  }
+  .dt-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 4px 12px;
+    white-space: nowrap;
+    text-align: start;
+    width: 100%;
+    /* The table's min width is the rows' content width (handoff §11A.6; the canvas
+       sets min-width on a content-box row), so add the 12px side padding. */
+    min-width: calc(var(--dt-min-width, 0px) + 24px);
+    color: inherit;
+    text-decoration: none;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+  /* Row hairlines belong to the table: a row on its own has none (CompRows). */
+  .dt-grid > .dt-row {
+    border-bottom: 1px solid var(--line);
+  }
+  /* Session rows breathe more than request rows (CompRows: 6px vs 4px). */
+  .dt-row.dt-tall {
+    padding-block: 6px;
+  }
+  .dt-row > :nth-child(1) {
+    flex: var(--c1, none);
+  }
+  .dt-row > :nth-child(2) {
+    flex: var(--c2, none);
+  }
+  .dt-row > :nth-child(3) {
+    flex: var(--c3, none);
+  }
+  .dt-row > :nth-child(4) {
+    flex: var(--c4, none);
+  }
+  .dt-row > :nth-child(5) {
+    flex: var(--c5, none);
+  }
+  .dt-row > :nth-child(6) {
+    flex: var(--c6, none);
+  }
+  .dt-row > :nth-child(7) {
+    flex: var(--c7, none);
+  }
+  .dt-row > :nth-child(8) {
+    flex: var(--c8, none);
+  }
+  .dt-row > :nth-child(9) {
+    flex: var(--c9, none);
+  }
+  .dt-row > :nth-child(10) {
+    flex: var(--c10, none);
+  }
+  .dt-row > :nth-child(11) {
+    flex: var(--c11, none);
+  }
+  .dt-row > :nth-child(12) {
+    flex: var(--c12, none);
+  }
+  .dt-row > * {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The whole row is the click target (§6B.6): pointer, and surface-raised on every cell. */
+  a.dt-row,
+  button.dt-row,
+  .dt-row.dt-click {
+    cursor: pointer;
+  }
+  a.dt-row:hover,
+  button.dt-row:hover,
+  .dt-row.dt-click:hover,
+  .dt-row[data-force="hover"],
+  .dt-row[aria-selected="true"],
+  .dt-row[aria-current="true"] {
+    background: var(--surface-raised);
+  }
+  /* Keyboard focus (§6B.8): a 2px focus ring inset, the hover fill. */
+  .dt-row:focus-visible,
+  .dt-row[data-force="focus"] {
+    outline: none;
+    background: var(--surface-raised);
+    box-shadow: inset 0 0 0 2px var(--focus);
+  }
+  /* The timeline points at this row (§6B.5): hover fill and a 2px ink-muted rule on the left. */
+  .dt-row[data-linked="true"],
+  .dt-row[data-force="linked"] {
+    background: var(--surface-raised);
+    box-shadow: inset 2px 0 0 var(--ink-muted);
+  }
+  /* An inner target (person-scope session cell, Linked to): ink and an underline on hover (§6B.6). */
+  .dt-inner {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: inherit;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .dt-inner:hover,
+  .dt-inner[data-force="hover"] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  /* A header with a definition (§6B.6): dotted underline at rest (tip-term), ink on hover. */
+  [role="columnheader"].tip-term:hover,
+  [role="columnheader"].tip-term[data-force="hover"] {
+    color: var(--ink);
+  }
+  /* The clicked row while its target loads (§6A.2): a 2px focus bar on the left. */
+  .dt-row[data-pending="true"] {
+    background: var(--surface-raised);
+    box-shadow: inset 2px 0 0 var(--focus);
+  }
+  /* Quiet row (§11F.1-2: background calls, collapsed ticks, BetweenRow): every text
+     color drops to --ink-faint, no opacity. Kept: cells marked quiet-keep (the kind label's
+     channel color, and Marker's danger and StatusCode's `✕ ERR`, which mark themselves). */
+  .dt-row.dt-quiet,
+  .dt-row.dt-quiet :not(.quiet-keep, .quiet-keep *) {
+    color: var(--ink-faint) !important;
+  }
+  /* A new row starts on surface-raised and fades to the table (handoff §6A, --new-row-flash).
+     data-force="new" holds the first frame (stories, parity). */
+  .dt-row[data-fresh="true"] {
+    animation: dt-new-row var(--new-row-flash) var(--ease-out);
+  }
+  .dt-row[data-force="new"] {
+    background: var(--surface-raised);
+  }
+  @keyframes dt-new-row {
+    from {
+      background-color: var(--surface-raised);
+    }
+  }
+  .dt-right {
+    text-align: right;
+  }
+}

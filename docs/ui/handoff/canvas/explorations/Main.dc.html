@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Person view — Console</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}a:hover{color:#a9cbff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn:focus-visible{outline:2px solid #ffd36b;outline-offset:1px}
+</style>
+</helmet>
+<div style="min-height: 1960px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+<!-- top bar -->
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span class="m" style="font-weight: 600">aintercept</span>
+<span class="m" style="color: #848c90">people / name unknown</span>
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+<span class="chip"><span style="width: 7px; height: 7px; background: #e8916f; border-radius: 999px"></span>CLAUDE CODE</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">CODEX · SOON</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">CHATGPT · SOON</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">CLAUDE.AI · SOON</span>
+</div>
+<div style="flex: 1 1 0"></div>
+<div style="display: flex; border: 1px solid #60686d; border-radius: 2px">
+<button class="btn" style="border: 0; border-radius: 0">15m</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">1h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #1b1f22">24h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button>
+</div>
+<span class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; background: #57d68d; border-radius: 999px"></span>LIVE · 5s</span>
+<button class="btn">Pause</button>
+<button class="btn">About this data</button>
+</div>
+
+<div style="max-width: 1440px; margin: 0 auto; padding: 24px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<!-- A person header -->
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 240px">
+<div style="font-size: 18px; line-height: 24px; font-weight: 600">name unknown</div>
+<div class="m" style="color: #a3a9ad">acct 7d2e…a41c · org 1b9f…e02 <span style="color: #848c90">(corporate)</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; flex: 1 1 600px; border-left: 1px solid #2a3034">
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Role</div><div class="m" style="font-weight: 500">admin</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Plan</div><div class="m" style="font-weight: 500">max · 20x</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Claude Code user</div><div class="m" style="font-weight: 500">15 mo</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Devices</div><div class="m" style="font-weight: 500">1 · darwin · zsh</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">7-day limit</div><div class="m" style="font-weight: 500">allowed · overage rejected</div></div>
+<div style="padding: 0 16px"><div class="k">Last seen</div><div class="m" style="font-weight: 500"><span style="color: #57d68d">●</span> 00:57</div></div>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: -12px">
+<span class="k" style="margin-right: 4px">Posture</span>
+<span class="chip">BYPASSPERMISSIONS · EVERY CALL</span>
+<span class="chip">SANDBOX OFF</span>
+<span class="chip">15 HOOKS</span>
+<span class="chip">TOKEN: KEYCHAIN-WITH-PLAINTEXT-FALLBACK</span>
+<span class="chip">PROXY DETECTED · CUSTOM_CA</span>
+</div>
+
+<!-- C ribbon + D coverage -->
+<div style="background: #131618; border: 1px solid #2a3034">
+<div class="m" style="display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid #2a3034">
+<sc-for list="{{ribbon}}" as="r" hint-placeholder-count="6">
+<a href="#" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-right: 1px solid #2a3034; text-decoration: none; color: #e6e3db; flex: 1 1 160px">
+<span class="k" style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 2px; background: {{r.c}}"></span>{{r.k}}</span>
+<span style="font-size: 22px; line-height: 26px; font-weight: 500">{{r.v}}</span>
+<span style="color: #a3a9ad">{{r.s}}</span>
+</a>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 16px">
+<span class="m" style="color: #ff7a6b; font-weight: 600">▲ coverage gap</span>
+<span>Claude Code reported 304 model calls; the proxy captured 267. 37 unmatched in 2 windows — likely IPv6 bypass.</span>
+<a href="#" class="m">view 37 calls · issue C6</a>
+</div>
+</div>
+
+<!-- B activity strip -->
+<div style="background: #131618; border: 1px solid #2a3034; padding: 12px 16px 8px">
+<div style="display: flex; flex-direction: column; gap: 0">
+<div style="display: flex; align-items: flex-end; height: 34px; border-bottom: 1px solid #2a3034">
+<div class="k" style="width: 104px; flex: none; padding-bottom: 4px">Model calls</div>
+<div style="position: relative; flex: 1; height: 100%">
+<div style="position: absolute; left: 41.5%; width: 4.5%; top: 0; bottom: 0; background: #1b1f22; border-left: 1px solid #ffd36b; border-right: 1px solid #ffd36b"></div>
+<sc-for list="{{marks}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; width: 2px; background: #7db3ff; left: {{b.l}}; height: {{b.h}}"></div></sc-for>
+</div>
+</div>
+<div style="display: flex; align-items: flex-end; height: 34px; border-bottom: 1px solid #2a3034">
+<div class="k" style="width: 104px; flex: none; padding-bottom: 4px">Analytics</div>
+<div style="position: relative; flex: 1; height: 100%">
+<sc-for list="{{dens}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; background: #f0b43c; opacity: .85; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div>
+</div>
+<div style="display: flex; align-items: center; height: 26px; border-bottom: 1px solid #2a3034">
+<div class="k" style="width: 104px; flex: none">Person</div>
+<div style="position: relative; flex: 1; height: 100%">
+<sc-for list="{{person}}" as="p" hint-placeholder-count="5"><div class="m" style="position: absolute; top: 6px; height: 14px; font-size: 10.5px; line-height: 14px; padding-left: 4px; overflow: hidden; color: #0c0e0f; left: {{p.l}}; width: {{p.w}}; background: {{p.bg}}">{{p.t}}</div></sc-for>
+<sc-for list="{{prompts}}" as="p" hint-placeholder-count="14"><div style="position: absolute; top: 3px; width: 1px; height: 20px; background: #e6e3db; left: {{p.l}}"></div></sc-for>
+</div>
+</div>
+<div style="display: flex; align-items: center; height: 22px">
+<div class="k" style="width: 104px; flex: none">Sessions</div>
+<div style="position: relative; flex: 1; height: 100%">
+<div class="m" style="position: absolute; left: 3%; width: 76%; top: 4px; height: 14px; font-size: 10.5px; line-height: 14px; padding-left: 6px; background: #1b1f22; border-left: 2px solid #e8916f; color: #a3a9ad">aintercept · partner-readiness</div>
+</div>
+</div>
+<div class="m" style="display: flex; padding-left: 104px; color: #848c90; font-size: 11px; justify-content: space-between">
+<span>14:00</span><span>16:00</span><span>18:00</span><span>20:00</span><span>22:00</span><span>00:00</span><span>01:00</span>
+</div>
+</div>
+</div>
+
+<!-- E / F -->
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<div style="flex: 1 1 520px; min-width: 0; background: #131618; border: 1px solid #2a3034">
+<div class="row" style="justify-content: space-between"><span class="k" style="color: #e8916f">Capabilities · what the agent can reach</span><span class="m" style="color: #a3a9ad">used / available</span></div>
+<sc-for list="{{caps}}" as="c" hint-placeholder-count="6">
+<div class="row m"><span style="width: 140px; font-weight: 600">{{c.k}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.d}}</span><span style="width: 90px; text-align: right">{{c.v}}</span></div>
+</sc-for>
+</div>
+<div style="flex: 1 1 520px; min-width: 0; background: #131618; border: 1px solid #2a3034">
+<div class="row" style="justify-content: space-between"><span class="k">Footprint · what it did</span><span class="m" style="color: #a3a9ad">window total</span></div>
+<sc-for list="{{foot}}" as="c" hint-placeholder-count="6">
+<div class="row m"><span style="width: 140px; font-weight: 600">{{c.k}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.d}}</span><span style="width: 90px; text-align: right">{{c.v}}</span></div>
+</sc-for>
+</div>
+</div>
+
+<!-- tabs -->
+<div style="display: flex; align-items: flex-end; gap: 24px; border-bottom: 1px solid #2a3034; margin-bottom: -16px">
+<button class="btn" style="border: 0; border-bottom: 2px solid #e6e3db; border-radius: 0; background: transparent; padding: 8px 0">Sessions · 3</button>
+<button class="btn" style="border: 0; border-radius: 0; background: transparent; padding: 8px 0; color: #a3a9ad">All requests · 12,1xx</button>
+<div style="flex: 1"></div>
+<span class="m" style="color: #848c90; padding-bottom: 8px">newest first · 3 new ↑</span>
+</div>
+
+<!-- G..K split -->
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start">
+<div style="flex: 999 1 640px; min-width: 0; background: #131618; border: 1px solid #2a3034; overflow-x: auto">
+<div class="row m" style="background: #1b1f22">
+<span>▾</span><span style="color: #a3a9ad">14:20</span><span style="color: #57d68d">●</span><span style="font-weight: 600">aintercept · partner-readiness</span>
+<span style="color: #a3a9ad">prompts 12–25</span><span class="chip" style="border-color: #2a3034; color: #a3a9ad">SEEN FROM #12</span>
+<span style="color: #a3a9ad">8h 20m</span><span style="flex: 1"></span>
+<span>↯1 ✕1</span><span style="color: #ff7a6b">▲10</span><span class="chip">BYPASS</span>
+</div>
+<!-- H session panel -->
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid #2a3034; background: #0c0e0f">
+<div style="padding: 10px 12px; border-right: 1px solid #2a3034">
+<div class="k">Context</div>
+<div style="display: flex; align-items: flex-end; gap: 1px; height: 36px; margin-top: 6px">
+<sc-for list="{{ctx}}" as="c" hint-placeholder-count="30"><div style="flex: 1; background: #8fd17e; opacity: .8; height: {{c.h}}"></div></sc-for>
+</div>
+<div class="m" style="color: #a3a9ad; font-size: 11px">compaction 905k → 21k · 71s</div>
+</div>
+<div style="padding: 10px 12px; border-right: 1px solid #2a3034">
+<div class="k">Repo trail</div>
+<div class="m">…/aintercept → …/observer</div>
+<div class="m" style="color: #a3a9ad">head_sha ×10 · push · <a href="#">PR #2</a></div>
+</div>
+<div style="padding: 10px 12px; border-right: 1px solid #2a3034">
+<div class="k">Experiments in effect</div>
+<div class="m" style="color: #c9a3ec; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">curried_trinket = no_scratchpad_capped</div>
+<div class="m" style="color: #a3a9ad">+11 more</div>
+</div>
+<div style="padding: 10px 12px">
+<div class="k">Coverage</div>
+<div class="m"><span style="color: #ff7a6b">▲</span> 267 / 304 calls</div>
+<div class="m" style="color: #a3a9ad">7 recaps · <a href="#">story</a></div>
+</div>
+</div>
+<!-- I prompt rows -->
+<sc-for list="{{promptRows}}" as="p" hint-placeholder-count="5">
+<div class="row m" style="padding-left: 28px; background: {{p.bg}}">
+<span>{{p.tw}}</span><span style="font-weight: 600; width: 34px">#{{p.n}}</span><span style="color: #a3a9ad; width: 44px">{{p.t}}</span>
+<span style="color: #a3a9ad; width: 220px; overflow: hidden; text-overflow: ellipsis">{{p.txt}}</span>
+<span style="width: 70px">{{p.steps}}</span><span style="color: #a3a9ad; width: 60px">{{p.dur}}</span>
+<span style="width: 110px">{{p.tok}}</span><span style="color: #a3a9ad; flex: 1; overflow: hidden; text-overflow: ellipsis">{{p.tools}}</span><span>{{p.mk}}</span>
+</div>
+</sc-for>
+<div class="row m" style="padding-left: 56px; color: #a3a9ad; background: #1b1f22">
+<span>312 chars · pasted 2.1 KB · 1 screenshot · repo dirty (3 changed) · ttfvt 7.4s</span><span style="flex: 1"></span><span class="chip" style="border-color: #2a3034; color: #848c90">NOT RETAINED</span>
+</div>
+<!-- J step rows -->
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="8">
+<div class="row m" style="padding-left: {{s.pad}}; background: {{s.bg}}; opacity: {{s.op}}">
+<span style="color: #848c90; width: 64px">{{s.t}}</span><span style="font-weight: {{s.fw}}; color: {{s.c}}; width: 64px">{{s.a}}</span>
+<span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{s.b}}</span><span style="color: #a3a9ad">{{s.r}}</span><span style="color: #ff7a6b">{{s.w}}</span>
+</div>
+</sc-for>
+<sc-for list="{{promptRows2}}" as="p" hint-placeholder-count="3">
+<div class="row m" style="padding-left: 28px">
+<span>▸</span><span style="font-weight: 600; width: 34px">#{{p.n}}</span><span style="color: #a3a9ad; width: 44px">{{p.t}}</span>
+<span style="color: #a3a9ad; width: 220px; overflow: hidden; text-overflow: ellipsis">{{p.txt}}</span>
+<span style="width: 70px">{{p.steps}}</span><span style="color: #a3a9ad; width: 60px">{{p.dur}}</span>
+<span style="width: 110px">{{p.tok}}</span><span style="color: #a3a9ad; flex: 1; overflow: hidden; text-overflow: ellipsis">{{p.tools}}</span><span>{{p.mk}}</span>
+</div>
+</sc-for>
+<div class="row m"><span>▸</span><span style="color: #a3a9ad">13:40</span><span style="width: 8px"></span><span style="font-weight: 600">web · feat/csv</span><span style="color: #a3a9ad">3 prompts</span><span style="color: #a3a9ad">6m</span><span style="flex: 1"></span><span class="chip" style="border-color: #2a3034; color: #a3a9ad">DEFAULT</span></div>
+<div class="row m" style="border-bottom: 0"><span>▸</span><span style="color: #a3a9ad">11:02</span><span style="width: 8px"></span><span style="font-weight: 600">aintercept · main</span><span style="color: #a3a9ad">2 prompts</span><span style="color: #a3a9ad">9m</span><span style="flex: 1"></span><span class="chip">BYPASS</span></div>
+</div>
+
+<!-- K detail panel -->
+<div style="flex: 1 1 440px; min-width: 0; background: #131618; border: 1px solid #2a3034">
+<div class="row" style="justify-content: space-between; background: #1b1f22">
+<span class="m" style="font-weight: 600">Step · 18:02:16 · prompt #19</span>
+<button class="btn" aria-label="Close panel" style="padding: 2px 8px">×</button>
+</div>
+<div style="display: flex; gap: 16px; padding: 0 12px; border-bottom: 1px solid #2a3034">
+<button class="btn" style="border: 0; border-bottom: 2px solid #e6e3db; border-radius: 0; background: transparent; padding: 8px 0">Conversation</button>
+<button class="btn" style="border: 0; border-radius: 0; background: transparent; padding: 8px 0; color: #a3a9ad">Raw</button>
+<button class="btn" style="border: 0; border-radius: 0; background: transparent; padding: 8px 0; color: #a3a9ad">Timing</button>
+<button class="btn" style="border: 0; border-radius: 0; background: transparent; padding: 8px 0; color: #a3a9ad">Events · 14</button>
+<button class="btn" style="border: 0; border-radius: 0; background: transparent; padding: 8px 0; color: #a3a9ad">Fields</button>
+</div>
+<div class="m" style="padding: 8px 12px; color: #a3a9ad; border-bottom: 1px solid #2a3034">Thread continuation · system prompt, 23 built-in + 381 deferred tools arrived on <a href="#">thread-create 14:20:03</a></div>
+<sc-for list="{{convo}}" as="c" hint-placeholder-count="5">
+<div style="padding: 8px 12px; border-bottom: 1px solid #2a3034">
+<div style="display: flex; gap: 8px; align-items: center"><span class="k">{{c.role}}</span><span class="m" style="font-weight: 600; color: {{c.col}}">{{c.kind}}</span><span style="flex: 1"></span><span class="m" style="color: #a3a9ad">{{c.size}}</span></div>
+<div class="m" style="color: #a3a9ad; white-space: pre-line">{{c.body}}</div>
+</div>
+</sc-for>
+<div style="padding: 8px 12px; border-bottom: 1px solid #2a3034">
+<div class="k">Response</div>
+<div class="m">opus · 43.0k in (42.6k cached) → 1.2k out · stop tool_use</div>
+<div class="m" style="color: #a3a9ad">ttft 1.9s · 9.3s · tier standard · geo us · $0.21 est.</div>
+</div>
+<div style="padding: 8px 12px">
+<div class="k">Cross-check</div>
+<div class="m"><span style="color: #57d68d">✓</span> tengu_api_success matched by requestId</div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var span = 660;
+    var pct = function (m) { return (m / span * 100).toFixed(2) + '%'; };
+    var seed = 7;
+    var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    var marks = [];
+    for (var i = 0; i < 170; i++) {
+      var m = i < 140 ? 20 + rnd() * 250 : 362 + rnd() * 38;
+      marks.push({ l: pct(m), h: (4 + Math.pow(rnd(), 2) * 26).toFixed(0) + 'px' });
+    }
+    var dens = [];
+    for (var j = 0; j < 132; j++) {
+      var mm = j * 5;
+      var on = (mm >= 20 && mm < 275) || (mm >= 360 && mm < 420);
+      var tail = mm >= 420 && mm < 657;
+      var h = on ? 10 + rnd() * 22 : tail ? 2 + rnd() * 6 : (mm > 0 ? rnd() * 3 : 0);
+      dens.push({ l: pct(mm), w: pct(4), h: h.toFixed(0) + 'px' });
+    }
+    var person = [
+      { l: pct(20), w: pct(250), bg: '#e6e3db', t: 'present' },
+      { l: pct(270), w: pct(40), bg: '#60686d', t: 'away' },
+      { l: pct(310), w: pct(140), bg: '#848c90', t: 'laptop sleep · clock jump' },
+      { l: pct(450), w: pct(30), bg: '#60686d', t: 'away 3.5h' },
+      { l: pct(362), w: pct(1), bg: '#e6e3db', t: '' }
+    ];
+    var pt = [20, 55, 100, 125, 150, 190, 225, 242, 362, 370, 378, 386, 392, 398];
+    var prompts = pt.map(function (m) { return { l: pct(m) }; });
+    var ctx = [];
+    for (var k = 0; k < 40; k++) { var v = k < 18 ? 8 + k * 1.6 : 4 + (k - 18) * 1.3; ctx.push({ h: Math.min(36, v).toFixed(0) + 'px' }); }
+    return {
+      marks: marks, dens: dens, person: person, prompts: prompts, ctx: ctx,
+      ribbon: [
+        { k: 'Model calls', c: '#7db3ff', v: '300', s: '37.2 MB ↑ · 1.9 MB ↓' },
+        { k: 'Analytics', c: '#f0b43c', v: '11,698', s: '105 types · 28.9 MB ↑' },
+        { k: 'Flags', c: '#c9a3ec', v: '1,072', s: '12 experiments' },
+        { k: 'Reach', c: '#e8916f', v: '381', s: 'MCP tools · 87 skills' },
+        { k: 'Tokens', c: '#8fd17e', v: '384k', s: 'out · 140.9M cache-read' },
+        { k: 'Cost est.', c: '#a3a9ad', v: '$44.94', s: 'API-equivalent, not a bill' }
+      ],
+      caps: [
+        { k: 'MCP servers', d: 'Gmail, Google Drive, Vercel, Playwright +7', v: '11' },
+        { k: 'MCP tools', d: 'share_file, trash_file, buy_domain, create_project_env…', v: '2 / 381' },
+        { k: 'Built-in tools', d: 'Bash, Read, Write, Edit, Agent…', v: '5 / 23' },
+        { k: 'Skills', d: 'owner listed with name + email', v: '— / 87' },
+        { k: 'Hooks', d: '~50 ms added per tool call', v: '15' },
+        { k: 'Memory', d: 'MEMORY.md loaded · 2 long-term writes', v: '2 writes' }
+      ],
+      foot: [
+        { k: 'Prompts', d: '#12–#25 · 1 session in window', v: '14' },
+        { k: 'Tool calls', d: 'Bash 269 · Read · Write · Edit · Agent · MCP', v: '282' },
+        { k: 'Commands', d: 'cd 55 · python 53 · sed 24 · cat 21 · kubectl 13', v: '269' },
+        { k: 'Destructive', d: '6 rm -f · 4 rm -rf · 1 outside cwd', v: '▲ 10' },
+        { k: 'Code shipped', d: 'commits · push · PR #2 polled 80×', v: '10 heads' },
+        { k: 'Failures', d: '9 commands · 11 tool errors · 5 retries', v: '25' }
+      ],
+      promptRows: [
+        { tw: '▸', n: 21, t: '22:18', txt: '188 chars · not retained', steps: '31 steps', dur: '6m 02s', tok: '58k → 4.1k', tools: 'Bash·24 Edit·3 Read·2', mk: '', bg: '#131618' },
+        { tw: '▸', n: 20, t: '22:02', txt: '41 chars · not retained', steps: '12 steps', dur: '2m 10s', tok: '52k → 1.9k', tools: 'Bash·9 Read·2', mk: '✕', bg: '#131618' },
+        { tw: '▾', n: 19, t: '18:02', txt: '"fix the flaky auth test"', steps: '9 steps', dur: '1m 40s', tok: '41k → 3.2k', tools: 'Bash·4 Read·3 Edit·2', mk: '↯', bg: '#1b1f22' }
+      ],
+      steps: [
+        { pad: '56px', t: '18:02:11', a: 'opus', b: '41.2k in (40.8k cached) → 612 out · ttft 1.9s · 4.8s · tool_use', r: '', w: '', c: '#7db3ff', fw: 400, bg: '#131618', op: 1 },
+        { pad: '84px', t: '', a: 'Read', b: 'src/auth/session.ts', r: '4.1 KB result', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { pad: '84px', t: '', a: 'Bash', b: 'npm test   exit 1', r: 'stdout 18 KB · 12.3s', w: '▲ rm -rf (outside cwd)', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { pad: '56px', t: '18:02:16', a: 'opus', b: '43.0k in → 1.2k out · 9.3s · tool_use', r: '', w: '', c: '#7db3ff', fw: 400, bg: '#1b1f22', op: 1 },
+        { pad: '84px', t: '', a: 'Edit', b: 'src/auth/session.ts', r: '+14 −3', w: '', c: '#e6e3db', fw: 600, bg: '#1b1f22', op: 1 },
+        { pad: '56px', t: '18:02:31', a: '⤷ Explore', b: 'subagent (haiku) · 3 steps · 22s', r: '▸', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
+        { pad: '56px', t: '18:03:40', a: 'recap', b: 'auxiliary · haiku · 212 chars', r: '', w: '', c: '#a3a9ad', fw: 400, bg: '#131618', op: 0.55 }
+      ],
+      promptRows2: [
+        { n: 18, t: '17:45', txt: '96 chars · not retained', steps: '22 steps', dur: '4m 51s', tok: '39k → 2.6k', tools: 'Bash·19 Read·2', mk: '' },
+        { n: 17, t: '17:10', txt: '402 chars · pasted 6 KB', steps: '48 steps', dur: '11m', tok: '905k → 21k', tools: 'compaction · Bash·40', mk: '' }
+      ],
+      convo: [
+        { role: 'user', kind: 'tool_result · Read', col: '#e6e3db', size: '4.1 KB', body: 'src/auth/session.ts · 132 lines\nnot retained' },
+        { role: 'user', kind: 'tool_result · Bash', col: '#e6e3db', size: '18 KB', body: 'npm test · exit 1 · 12.3s' },
+        { role: 'assistant', kind: 'text', col: '#e6e3db', size: '212 chars', body: 'not retained' },
+        { role: 'assistant', kind: 'tool_use · Edit', col: '#e8916f', size: '1.3 KB', body: 'file_path  src/auth/session.ts\nold_string 3 lines · new_string 14 lines' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -25,3 +25,18 @@ go.work.sum
 data/
 __pycache__/
 *.pyc
+
+# Local copies of telemetry pulled for registry updates
+.cache/
+
+# UI / query API
+node_modules/
+ui/dist/
+ui/storybook-static/
+api/.venv/
+.playwright-mcp/
+*.tsbuildinfo
+.coverage
+.coverage.*
+htmlcov/
+ui/parity/report.json

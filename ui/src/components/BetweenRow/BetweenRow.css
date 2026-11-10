@@ -1,0 +1,8 @@
+/* BetweenRow (CompRows "between · …"): a quiet row between prompts (dt-quiet, §11F.2). */
+@layer components {
+  /* The text and `open ›` take their content width, not the prompt table's
+     Prompt/Steps columns (§11B.4: "detail (content)"). */
+  .between-row.dt-row > :nth-child(n + 4) {
+    flex: none;
+  }
+}

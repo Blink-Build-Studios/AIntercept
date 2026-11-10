@@ -1,0 +1,96 @@
+/* EventRow (CompRows, Session events table). The row is a div with two controls
+   inside (the event name toggles, "Linked to" follows), so the whole row keeps
+   the clickable-row hover and shows the inner control's focus ring. */
+@layer components {
+  .ev-row {
+    position: relative;
+  }
+  .ev-row:hover {
+    background: var(--surface-raised);
+  }
+  .ev-row:has(.ev-control:focus-visible) {
+    background: var(--surface-raised);
+    box-shadow: inset 0 0 0 2px var(--focus);
+  }
+  /* The marker cell is as wide as its glyph (CompRows: an auto-width span), not a column. */
+  .ev-row.dt-row > :nth-child(6) {
+    flex: none;
+  }
+  /* A control that fills its cell, so the text sits exactly where the cell's would. */
+  .ev-control {
+    display: block;
+    width: 100%;
+    text-align: start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .ev-control:focus-visible {
+    outline: none;
+  }
+  .ev-control:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  /* The toggle's hit area covers the row (the row itself is not a control: it
+     holds the link too). The cells don't clip it: they aren't positioned. */
+  .ev-toggle::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  .ev-link {
+    color: var(--ink-muted);
+    position: relative;
+    z-index: 1;
+  }
+  span.ev-control {
+    cursor: auto;
+  }
+  span.ev-control:hover {
+    text-decoration: none;
+  }
+  /* The full JSON under an expanded row, aligned with the Event column
+     (12 + 76 + 12 + 40 = 140px; §11B.5), closed by a hairline. */
+  .ev-json {
+    display: block;
+    margin: 0;
+    padding: 8px 12px 8px 140px;
+    border-bottom: 1px solid var(--line);
+    white-space: pre-wrap;
+  }
+  /* Six lines at the data line height, so the area opens at its final height (§6A.4). */
+  .ev-json-loading {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 120px;
+    overflow: hidden;
+  }
+  /* The drawer's compact form (§11B.5): offset 64 · name 250 · fields flex · join key (content). */
+  .ev-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px;
+    white-space: nowrap;
+  }
+  .ev-compact > * {
+    flex: none;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ev-compact > :nth-child(1) {
+    width: 64px;
+  }
+  .ev-compact > :nth-child(2) {
+    width: 250px;
+  }
+  .ev-compact > :nth-child(3) {
+    flex: 1 1 0%;
+  }
+  .ev-compact > :nth-child(4) {
+    overflow: visible;
+  }
+}

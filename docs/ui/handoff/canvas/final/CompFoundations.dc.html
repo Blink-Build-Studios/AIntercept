@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foundations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1500px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Foundations</span>
+<span style="color: #a3a9ad">Tokens from the Wire design system. Dark is the default theme; light values are listed beside each swatch.</span>
+</div>
+
+<sc-for list="{{colorGroups}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">{{g.n}}</span>
+<span class="m" style="color: #a3a9ad">{{g.d}}</span>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{g.items}}" as="c" hint-placeholder-count="5">
+<div style="background: #131618; border: 1px solid #2a3034">
+<div style="height: 56px; border-bottom: 1px solid #2a3034; background: {{c.v}}"></div>
+<div style="padding: 8px 10px"><div class="m" style="font-weight: 600">{{c.n}}</div><div class="m" style="color: #a3a9ad; font-size: 11px">{{c.v}} · light {{c.l}}</div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="cname">Type</span>
+<div style="background: #131618; border: 1px solid #2a3034">
+<sc-for list="{{type}}" as="t" hint-placeholder-count="7">
+<div style="display: flex; align-items: baseline; gap: 24px; padding: 10px 16px; border-bottom: 1px solid #2a3034">
+<span class="m" style="width: 120px; font-weight: 600">{{t.n}}</span>
+<span class="m" style="width: 260px; color: #a3a9ad; font-size: 11px">{{t.spec}}</span>
+<span style="flex: 1; font-family: {{t.f}}; font-size: {{t.s}}; line-height: {{t.lh}}; font-weight: {{t.w}}; letter-spacing: {{t.ls}}">{{t.sample}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 400px">
+<span class="cname">Spacing</span>
+<sc-for list="{{space}}" as="s" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; gap: 12px"><span class="m" style="width: 72px">{{s.n}}</span><span class="m" style="width: 40px; color: #a3a9ad">{{s.v}}</span><span style="height: 12px; background: #7db3ff; width: {{s.v}}"></span><span class="m" style="color: #848c90; font-size: 11px">{{s.u}}</span></div>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 300px">
+<span class="cname">Radius</span>
+<div style="display: flex; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><div style="width: 64px; height: 40px; border: 1px solid #60686d; border-radius: 0"></div><span class="m">radius-0 · rows</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><div style="width: 64px; height: 40px; border: 1px solid #60686d; border-radius: 2px"></div><span class="m">radius-sm · chips</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><div style="width: 40px; height: 40px; border: 1px solid #57d68d; border-radius: 999px"></div><span class="m">pill · live dot</span></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1 1 400px">
+<span class="cname">Glyphs</span>
+<span class="m" style="color: #a3a9ad">Text in the mono face, always beside a word. No icon set, no emoji.</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{glyphs}}" as="g" hint-placeholder-count="12"><div class="m" style="display: flex; gap: 8px; padding: 4px 8px; background: #131618; border: 1px solid #2a3034"><span style="width: 16px; text-align: center; color: {{g.c}}">{{g.g}}</span><span style="color: #a3a9ad">{{g.n}}</span></div></sc-for>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var T = function (n, v, l) { return { n: n, v: v, l: l }; };
+    return {
+      colorGroups: [
+        { n: 'Ground & ink', d: 'bg page · surface rows and panels · surface-raised hover/selected · line hairlines · line-strong control borders', items: [
+          T('bg', '#0c0e0f', '#f6f6f3'), T('surface', '#131618', '#ffffff'), T('surface-raised', '#1b1f22', '#ecece7'), T('line', '#2a3034', '#d6d6cf'), T('line-strong', '#60686d', '#8b9094'), T('skeleton', '#20252a', '#e4e4de'),
+          T('ink', '#e6e3db', '#141617'), T('ink-muted', '#a3a9ad', '#4f5559'), T('ink-faint', '#848c90', '#62686c')] },
+        { n: 'Channels', d: 'Only to say which channel a thing came from. Never decoration.', items: [
+          T('ch-model', '#7db3ff', '#1f5fbf'), T('ch-analytics', '#f0b43c', '#8a5a00'), T('ch-flags', '#c9a3ec', '#7a3fa8'), T('ch-skills', '#e8916f', '#a3431f'), T('ch-count', '#8fd17e', '#356f1e'), T('ch-account', '#b0b8bd', '#555d62')] },
+        { n: 'Agents', d: 'Agent identity: chip dot, session-band edge, sparkline.', items: [
+          T('agent-claude-code', '#e8916f', '#a3431f'), T('agent-codex', '#9fb4c7', '#45607a'), T('agent-chatgpt', '#7fd1b9', '#1f6e58'), T('agent-claude-ai', '#d9b98c', '#7a5a2a')] },
+        { n: 'Status', d: 'live: live dot and badge only · danger: destructive commands and coverage gaps only, always with ▲ and a word · focus: 2px ring', items: [
+          T('live', '#57d68d', '#117336'), T('danger', '#ff7a6b', '#b3261e'), T('focus', '#ffd36b', '#0b57d0')] }
+      ],
+      type: [
+        { n: 'num-xl', spec: 'Plex Mono 22/26 · 500', f: "'IBM Plex Mono', monospace", s: '22px', lh: '26px', w: 500, ls: '0', sample: '11,698' },
+        { n: 'data', spec: 'Plex Mono 12.5/20 · 400', f: "'IBM Plex Mono', monospace", s: '12.5px', lh: '20px', w: 400, ls: '0', sample: '14:02:11  opus · 41.2k in → 612 out' },
+        { n: 'data-strong', spec: 'Plex Mono 12.5/20 · 600', f: "'IBM Plex Mono', monospace", s: '12.5px', lh: '20px', w: 600, ls: '0', sample: 'aintercept · partner-readiness' },
+        { n: 'micro', spec: 'Plex Mono 11/14 · 500 · +0.04em · caps', f: "'IBM Plex Mono', monospace", s: '11px', lh: '14px', w: 500, ls: '0.04em', sample: 'BYPASSPERMISSIONS' },
+        { n: 'title', spec: 'Plex Sans 18/24 · 600', f: "'IBM Plex Sans', sans-serif", s: '18px', lh: '24px', w: 600, ls: '0', sample: 'aintercept · partner-readiness' },
+        { n: 'body', spec: 'Plex Sans 13/20 · 400', f: "'IBM Plex Sans', sans-serif", s: '13px', lh: '20px', w: 400, ls: '0', sample: 'Claude Code reported 304 model calls; the proxy captured 267.' },
+        { n: 'label', spec: 'Plex Sans 12/16 · 500', f: "'IBM Plex Sans', sans-serif", s: '12px', lh: '16px', w: 500, ls: '0', sample: 'Retry now · About this data' }
+      ],
+      space: [
+        { n: 'space-1', v: '4px', u: 'row vertical padding, chip padding' }, { n: 'space-2', v: '8px', u: 'gaps between chips, panels' }, { n: 'space-3', v: '12px', u: 'row horizontal padding' },
+        { n: 'space-4', v: '16px', u: 'section padding' }, { n: 'space-6', v: '24px', u: 'between page regions' }, { n: 'space-8', v: '32px', u: 'page gutter' }
+      ],
+      glyphs: [
+        { g: '▾', n: 'expanded', c: '#e6e3db' }, { g: '▸', n: 'collapsed', c: '#e6e3db' }, { g: '›', n: 'opens page', c: '#848c90' }, { g: '⤷', n: 'subagent / nested', c: '#e6e3db' },
+        { g: '●', n: 'live', c: '#57d68d' }, { g: '↯', n: 'frustrated', c: '#e6e3db' }, { g: '✕', n: 'interrupted / failed', c: '#e6e3db' }, { g: '▲', n: 'destructive · gap', c: '#ff7a6b' },
+        { g: '✓', n: 'matches / done', c: '#e6e3db' }, { g: '○', n: 'pending', c: '#848c90' }, { g: '⇣', n: 'compaction', c: '#e6e3db' }, { g: '—', n: 'unknown', c: '#a3a9ad' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -10,8 +10,13 @@
 
 services:
   certsvc:
-    build: ./certsvc
-    image: aintercept/certsvc:dev
+    build: &aintercept-build
+      context: ./aintercept
+      # Local dev only: include the DEV_LOG_BODIES / DEV_CAPTURE_FULL_BODIES
+      # paths, which production images compile out (certsvc doesn't use them).
+      args: { GO_TAGS: devcapture }
+    image: aintercept/aintercept:dev
+    command: ["certsvc"]
     environment:
       CERTSVC_LISTEN: "0.0.0.0:18000"
       CERT_ALLOWLIST: "api.anthropic.com"
@@ -27,8 +32,9 @@ services:
     restart: unless-stopped
 
   observer:
-    build: ./observer
-    image: aintercept/observer:dev
+    build: *aintercept-build
+    image: aintercept/aintercept:dev
+    command: ["observer"]
     environment:
       OBSERVER_GRPC_LISTEN: "0.0.0.0:9000"
       OBSERVER_HTTP_LISTEN: "0.0.0.0:9001"
@@ -42,11 +48,35 @@ services:
       # request/response bodies to that file (never to stdout). Both default off.
       OBSERVER_CAPTURE_FILE: "${OBSERVER_CAPTURE_FILE:-}"
       DEV_CAPTURE_FULL_BODIES: "${DEV_CAPTURE_FULL_BODIES:-false}"
+      # Telemetry for the local UI: body-stripped, partitioned like object storage,
+      # in ./data/telemetry (the query API's default data dir). With
+      # DEV_CAPTURE_FULL_BODIES=true, full bodies also go to ./data/telemetry/capture.
+      OBSERVER_LOCAL_DIR: "${OBSERVER_LOCAL_DIR:-/data/telemetry}"
+      # Flush every 15 s locally so the UI is close to live (object storage: 60 s).
+      OBSERVER_S3_MAX_AGE_SECONDS: "${OBSERVER_S3_MAX_AGE_SECONDS:-15}"
     ports:
       - "9001:9001" # /healthz + /stats for the smoke test and operators
     volumes:
       # Host-visible capture directory. Files here are gitignored.
       - ./data:/data
+    restart: unless-stopped
+
+  # Stage 2 (docs/ui/BUILD_PLAN.md §7.5): the observer's partitions in
+  # ./data/telemetry become shaped Parquet tables in ./data/shaped.
+  process:
+    build: *aintercept-build
+    image: aintercept/aintercept:dev
+    command: ["process"]
+    environment:
+      PROCESS_LOCAL_DIR: "/data/telemetry"
+      PROCESS_OUT_DIR: "/data/shaped"
+      PROCESS_POLL_SECONDS: "${PROCESS_POLL_SECONDS:-5}"
+    ports:
+      - "9002:9002" # /healthz + /stats
+    volumes:
+      - ./data:/data
+    depends_on:
+      - observer
     restart: unless-stopped
 
   fixture:
@@ -62,7 +92,7 @@ services:
     restart: unless-stopped
 
   envoy:
-    image: envoyproxy/envoy:v1.32-latest
+    image: envoyproxy/envoy:v1.39.6@sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed  # same pin as the Helm chart
     depends_on:
       - certsvc
       - observer

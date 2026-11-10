@@ -1,0 +1,34 @@
+/* RequestFilters (CompProviders "RequestFilters/codex", handoff §11L.6): chips 8px apart,
+   the hidden-calls checkbox at the end. */
+@layer components {
+  .request-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .request-filters-hidden {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .request-filters-check {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .request-filters-check:checked {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+  .request-filters-check:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+}

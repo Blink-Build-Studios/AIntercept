@@ -17,7 +17,8 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: certsvc
-          image: aintercept/certsvc:dev # replace with your registry
+          image: aintercept/aintercept:dev # replace with your registry
+          args: ["certsvc"]
           env:
             - { name: CERTSVC_LISTEN, value: "0.0.0.0:18000" }
             - { name: CERT_ALLOWLIST, value: "api.anthropic.com" }

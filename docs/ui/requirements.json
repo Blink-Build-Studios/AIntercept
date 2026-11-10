@@ -1,0 +1,1535 @@
+{
+  "$comment": [
+    "Machine-readable requirements from docs/ui/handoff/AINTERCEPT_UI_HANDOFF.md, checked in CI (docs/ui/BUILD_PLAN.md §11).",
+    "A requirement applies from the moment its file or route exists: an endpoint's scenarios once the route is implemented,",
+    "a component's story states once its file exists, a test once every component it needs exists.",
+    "Story export names match states case-insensitively, ignoring punctuation (state 'iconDisabled' = export IconDisabled).",
+    "Change this file deliberately: it is the definition of done.",
+    "Screens (src/screens/<Name>Screen) are pure and need a story per state; pages (src/pages/<Name>Page) only wire the API into their screen and need no story."
+  ],
+  "endpoints": [
+    {
+      "path": "/api/v1/overview",
+      "operationId": "get_overview",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "unattributed",
+        "coverage_gap",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/people",
+      "operationId": "get_people",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "filtered_agent",
+        "linked",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/people/{personId}",
+      "operationId": "get_person",
+      "scenarios": [
+        "identified",
+        "unidentified",
+        "linked_codex",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/people/{personId}/summary",
+      "operationId": "get_person_summary",
+      "scenarios": [
+        "one_session",
+        "many",
+        "coverage_gap",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/people/{personId}/timeline",
+      "operationId": "get_person_timeline",
+      "scenarios": [
+        "empty",
+        "one_session",
+        "many",
+        "coverage_gap",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/people/{personId}/sessions",
+      "operationId": "get_person_sessions",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "pre_parser",
+        "coverage_gap",
+        "live",
+        "codex_threads",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/people/{personId}/requests",
+      "operationId": "get_person_requests",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "not_captured",
+        "account_calls",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}",
+      "operationId": "get_session",
+      "scenarios": [
+        "ended",
+        "live",
+        "pre_parser",
+        "codex",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}/timeline",
+      "operationId": "get_session_timeline",
+      "scenarios": [
+        "one_prompt",
+        "many",
+        "compaction",
+        "coverage_gap",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}/state",
+      "operationId": "get_session_state",
+      "scenarios": [
+        "default",
+        "empty_range",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}/prompts",
+      "operationId": "get_session_prompts",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "in_flight",
+        "codex",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}/requests",
+      "operationId": "get_session_requests",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "not_captured",
+        "codex_hidden",
+        "codex_channels",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}/events",
+      "operationId": "get_session_events",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "internals_hidden",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/events/{eventId}",
+      "operationId": "get_event",
+      "scenarios": [
+        "normal",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/requests/{requestId}",
+      "operationId": "get_request",
+      "scenarios": [
+        "normal",
+        "not_captured",
+        "failed",
+        "retained",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/requests/{requestId}/raw",
+      "operationId": "get_request_raw",
+      "scenarios": [
+        "normal",
+        "unavailable",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/requests/{requestId}/details",
+      "operationId": "get_request_details",
+      "scenarios": [
+        "normal",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/coverage",
+      "operationId": "get_coverage",
+      "scenarios": [
+        "complete",
+        "gap",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/status",
+      "operationId": "get_status",
+      "scenarios": [
+        "waiting",
+        "probes_only",
+        "receiving",
+        "delayed",
+        "error"
+      ],
+      "demo": false
+    }
+  ],
+  "components": [
+    {
+      "name": "Button",
+      "group": "Controls",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "pressed",
+        "disabled",
+        "loading",
+        "ghost",
+        "icon",
+        "iconDisabled"
+      ]
+    },
+    {
+      "name": "Tooltip",
+      "group": "Overlays",
+      "states": [
+        "plain",
+        "keyValue",
+        "unknown",
+        "disabledReason",
+        "truncated",
+        "columnHeader",
+        "flipped"
+      ]
+    },
+    {
+      "name": "SegmentedControl",
+      "group": "Controls",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "disabled"
+      ]
+    },
+    {
+      "name": "Tabs",
+      "group": "Controls",
+      "states": [
+        "default",
+        "hover",
+        "selected",
+        "focus",
+        "disabled"
+      ]
+    },
+    {
+      "name": "TextInput",
+      "group": "Controls",
+      "states": [
+        "empty",
+        "focus",
+        "filled",
+        "disabled",
+        "invalid"
+      ]
+    },
+    {
+      "name": "ToggleChip",
+      "group": "Controls",
+      "states": [
+        "off",
+        "on",
+        "hover",
+        "focus",
+        "disabled",
+        "withSwatch"
+      ]
+    },
+    {
+      "name": "Pagination",
+      "group": "Controls",
+      "states": [
+        "first",
+        "middle",
+        "last",
+        "single",
+        "loading",
+        "newAfterEnd"
+      ]
+    },
+    {
+      "name": "Chip",
+      "group": "Chips",
+      "states": [
+        "neutral",
+        "muted",
+        "range",
+        "notRetained",
+        "selected"
+      ]
+    },
+    {
+      "name": "LiveBadge",
+      "group": "Chips",
+      "states": [
+        "live",
+        "connecting",
+        "waiting",
+        "delayed",
+        "retrying",
+        "paused"
+      ]
+    },
+    {
+      "name": "AgentChip",
+      "group": "Chips",
+      "states": [
+        "row",
+        "withClient"
+      ]
+    },
+    {
+      "name": "ChannelSwatch",
+      "group": "Chips",
+      "states": [
+        "model",
+        "analytics",
+        "flags",
+        "count",
+        "account",
+        "skills",
+        "metrics",
+        "usage",
+        "catalog"
+      ]
+    },
+    {
+      "name": "Marker",
+      "group": "Chips",
+      "states": [
+        "frustrated",
+        "interrupted",
+        "destructive",
+        "coverageGap",
+        "match",
+        "live",
+        "compact"
+      ]
+    },
+    {
+      "name": "StatusCode",
+      "group": "Chips",
+      "states": [
+        "ok",
+        "error",
+        "err",
+        "unknown"
+      ]
+    },
+    {
+      "name": "StatTile",
+      "group": "Summary",
+      "states": [
+        "default",
+        "hover",
+        "noSwatch",
+        "unknown",
+        "gap",
+        "loading"
+      ]
+    },
+    {
+      "name": "StatRibbon",
+      "group": "Summary",
+      "states": [
+        "default",
+        "loading"
+      ]
+    },
+    {
+      "name": "HeaderStat",
+      "group": "Summary",
+      "states": [
+        "default",
+        "live",
+        "unknown",
+        "withQualifier",
+        "hover",
+        "hiddenQualifier"
+      ]
+    },
+    {
+      "name": "HeaderStatGroup",
+      "group": "Summary",
+      "states": [
+        "default",
+        "withAgentExtras"
+      ]
+    },
+    {
+      "name": "CoverageLine",
+      "group": "Summary",
+      "states": [
+        "complete",
+        "gap",
+        "hover"
+      ]
+    },
+    {
+      "name": "Banner",
+      "group": "Summary",
+      "states": [
+        "delayed",
+        "refreshFailed"
+      ]
+    },
+    {
+      "name": "Notice",
+      "group": "Summary",
+      "states": [
+        "danger",
+        "neutral"
+      ]
+    },
+    {
+      "name": "UnattributedNotice",
+      "group": "Summary",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "AgentCard",
+      "group": "Summary",
+      "states": [
+        "default",
+        "hover",
+        "selected",
+        "focus",
+        "extras"
+      ]
+    },
+    {
+      "name": "KeyValueList",
+      "group": "Summary",
+      "states": [
+        "default",
+        "withAction",
+        "loading",
+        "rowHover"
+      ]
+    },
+    {
+      "name": "Sparkline",
+      "group": "Summary",
+      "states": [
+        "active",
+        "sparse",
+        "noData"
+      ]
+    },
+    {
+      "name": "InputCompositionBar",
+      "group": "Summary",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "Timeline",
+      "group": "Timeline",
+      "states": [
+        "person",
+        "session",
+        "loading",
+        "codex"
+      ]
+    },
+    {
+      "name": "Lane",
+      "group": "Timeline",
+      "path": "src/components/Timeline/Lane.tsx",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "BarTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/BarTrack.tsx",
+      "states": [
+        "default",
+        "withGaps",
+        "gapRow",
+        "auxiliary"
+      ]
+    },
+    {
+      "name": "DensityTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/DensityTrack.tsx",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "BandTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/BandTrack.tsx",
+      "states": [
+        "default",
+        "preCapture",
+        "live",
+        "withInner"
+      ]
+    },
+    {
+      "name": "StateTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/StateTrack.tsx",
+      "states": [
+        "permission",
+        "network",
+        "networkNarrow",
+        "approval"
+      ]
+    },
+    {
+      "name": "RowTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/RowTrack.tsx",
+      "states": [
+        "presence",
+        "focus",
+        "sleep"
+      ]
+    },
+    {
+      "name": "FrictionTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/FrictionTrack.tsx",
+      "states": [
+        "default",
+        "clustered",
+        "empty",
+        "codex"
+      ]
+    },
+    {
+      "name": "MarkerTrack",
+      "group": "Timeline",
+      "path": "src/components/Timeline/MarkerTrack.tsx",
+      "states": [
+        "prompts"
+      ]
+    },
+    {
+      "name": "Brush",
+      "group": "Timeline",
+      "path": "src/components/Timeline/Brush.tsx",
+      "states": [
+        "idle",
+        "range",
+        "live",
+        "clearButton"
+      ]
+    },
+    {
+      "name": "TimeAxis",
+      "group": "Timeline",
+      "path": "src/components/Timeline/TimeAxis.tsx",
+      "states": [
+        "hours",
+        "days"
+      ]
+    },
+    {
+      "name": "TimelineGuide",
+      "group": "Timeline",
+      "path": "src/components/Timeline/TimelineGuide.tsx",
+      "states": [
+        "hidden",
+        "visible"
+      ]
+    },
+    {
+      "name": "RangeReadout",
+      "group": "Timeline",
+      "states": [
+        "range",
+        "live",
+        "empty"
+      ]
+    },
+    {
+      "name": "DataTable",
+      "group": "Rows",
+      "states": [
+        "default",
+        "loading",
+        "empty"
+      ]
+    },
+    {
+      "name": "TableHeader",
+      "group": "Rows",
+      "states": [
+        "plain",
+        "withDefinition",
+        "hoverDefinition"
+      ]
+    },
+    {
+      "name": "PersonRow",
+      "group": "Rows",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "live",
+        "coverageGap",
+        "multiAgentEstimated",
+        "noTokenCounts",
+        "unidentified",
+        "loading",
+        "linked",
+        "codexOnly",
+        "claudeCodeOnly",
+        "mixedCommon",
+        "codexView",
+        "claudeCodeView"
+      ]
+    },
+    {
+      "name": "SessionRow",
+      "group": "Rows",
+      "states": [
+        "liveWithGap",
+        "ended",
+        "hover",
+        "fieldsMissing",
+        "noRecap",
+        "seenFrom",
+        "linked",
+        "claudeCode",
+        "codexParent",
+        "codexChild",
+        "codexReview",
+        "codexFork",
+        "mixedClaudeCode",
+        "mixedCodexParent",
+        "mixedCodexChild",
+        "mixedCodexReview",
+        "mixedCodexFork",
+        "mixedCodexUntitled"
+      ]
+    },
+    {
+      "name": "SessionTable",
+      "group": "Rows",
+      "states": [
+        "mixed",
+        "codex",
+        "claudeCode",
+        "loading"
+      ]
+    },
+    {
+      "name": "CoverageCell",
+      "group": "Rows",
+      "states": [
+        "gap",
+        "complete",
+        "notApplicable",
+        "absent"
+      ]
+    },
+    {
+      "name": "PartialMark",
+      "group": "Rows",
+      "states": [
+        "default",
+        "open"
+      ]
+    },
+    {
+      "name": "RequestRow",
+      "group": "Rows",
+      "states": [
+        "model",
+        "background",
+        "flags",
+        "count",
+        "account",
+        "error",
+        "notCaptured",
+        "selected",
+        "hover",
+        "linked",
+        "focus",
+        "innerTargetHover",
+        "codexModelCall",
+        "codexModelCallText",
+        "codexAnalytics",
+        "codexUsage",
+        "codexPrewarmShown",
+        "codexModelCallNoBodies",
+        "codexModelCallTextNoBodies",
+        "personClaudeCodeModel",
+        "personCodexModel",
+        "personCodexMetrics",
+        "personClaudeCodeAnalytics"
+      ]
+    },
+    {
+      "name": "EventRow",
+      "group": "Rows",
+      "states": [
+        "default",
+        "collapsedTicks",
+        "marked",
+        "expanded",
+        "compact",
+        "linkedToHover"
+      ]
+    },
+    {
+      "name": "PromptRow",
+      "group": "Rows",
+      "states": [
+        "collapsed",
+        "expanded",
+        "inFlight",
+        "interrupted",
+        "frustrated",
+        "linked",
+        "arrived",
+        "codexExpanded",
+        "longTurn",
+        "longTurnNoBodies"
+      ]
+    },
+    {
+      "name": "StepRow",
+      "group": "Rows",
+      "states": [
+        "modelDone",
+        "tool",
+        "toolMarked",
+        "toolRunning",
+        "streaming",
+        "eventsPending",
+        "subagent",
+        "auxiliary",
+        "codexModelCall",
+        "codexSubagent",
+        "longTurn",
+        "longTurnNoBodies",
+        "longTurnPatchNoBodies",
+        "longTurnTextNoBodies"
+      ]
+    },
+    {
+      "name": "BetweenRow",
+      "group": "Rows",
+      "states": [
+        "compaction",
+        "recap"
+      ]
+    },
+    {
+      "name": "RequestDrawer",
+      "group": "Drawer",
+      "states": [
+        "normal",
+        "notCaptured",
+        "failed",
+        "retained",
+        "loading",
+        "error"
+      ]
+    },
+    {
+      "name": "DrawerHeader",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/DrawerHeader.tsx",
+      "states": [
+        "normal",
+        "notCaptured",
+        "failed"
+      ]
+    },
+    {
+      "name": "DrawerMeta",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/DrawerMeta.tsx",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "KeyStrip",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/KeyStrip.tsx",
+      "states": [
+        "values",
+        "unknown",
+        "codexCall",
+        "codexNoUsage"
+      ]
+    },
+    {
+      "name": "DrawerTabs",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/DrawerTabs.tsx",
+      "states": [
+        "default",
+        "rawNone",
+        "rawRequestOnly"
+      ]
+    },
+    {
+      "name": "SummaryView",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/SummaryView.tsx",
+      "states": [
+        "normal",
+        "notCaptured",
+        "failed",
+        "retained"
+      ]
+    },
+    {
+      "name": "ContentRow",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/ContentRow.tsx",
+      "states": [
+        "shapeOnly",
+        "toolCall",
+        "retained"
+      ]
+    },
+    {
+      "name": "RawView",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/RawView.tsx",
+      "states": [
+        "headers",
+        "body",
+        "stream",
+        "unavailable"
+      ]
+    },
+    {
+      "name": "DetailsView",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/DetailsView.tsx",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "DetailSection",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/DetailSection.tsx",
+      "states": [
+        "default",
+        "withChecks",
+        "agent"
+      ]
+    },
+    {
+      "name": "HeaderList",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/HeaderList.tsx",
+      "states": [
+        "short",
+        "anthropicResponse",
+        "longValue",
+        "redacted",
+        "overCap",
+        "noDimming"
+      ]
+    },
+    {
+      "name": "StreamEventList",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/StreamEventList.tsx",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "TimingWaterfall",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/TimingWaterfall.tsx",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "FieldList",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/FieldList.tsx",
+      "states": [
+        "default",
+        "notExtracted"
+      ]
+    },
+    {
+      "name": "Breadcrumb",
+      "group": "Chrome",
+      "states": [
+        "default",
+        "hover",
+        "loading",
+        "withAgents"
+      ]
+    },
+    {
+      "name": "AppBar",
+      "group": "Chrome",
+      "states": [
+        "default",
+        "loading",
+        "codexSession"
+      ]
+    },
+    {
+      "name": "UpdatedAgo",
+      "group": "Chrome",
+      "states": [
+        "idle",
+        "polling",
+        "failed",
+        "olderThanADay",
+        "withTooltip"
+      ]
+    },
+    {
+      "name": "Wordmark",
+      "group": "Chrome",
+      "states": [
+        "appBar",
+        "large"
+      ]
+    },
+    {
+      "name": "PageHeader",
+      "group": "Chrome",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "Skeleton",
+      "group": "Chrome",
+      "states": [
+        "line",
+        "block",
+        "row",
+        "lane"
+      ]
+    },
+    {
+      "name": "EmptyState",
+      "group": "Chrome",
+      "states": [
+        "emptyRange",
+        "noMatches",
+        "noFilterMatches"
+      ]
+    },
+    {
+      "name": "ErrorState",
+      "group": "Chrome",
+      "states": [
+        "default",
+        "compact"
+      ]
+    },
+    {
+      "name": "WaitingChecklist",
+      "group": "Chrome",
+      "states": [
+        "default"
+      ]
+    },
+    {
+      "name": "AboutThisData",
+      "group": "Chrome",
+      "states": [
+        "default",
+        "contentRetained",
+        "productsLoading"
+      ]
+    },
+    {
+      "name": "ProgressBar",
+      "group": "Interaction",
+      "states": [
+        "hidden",
+        "indeterminate",
+        "reducedMotion"
+      ]
+    },
+    {
+      "name": "RegionState",
+      "group": "Interaction",
+      "states": [
+        "firstLoad",
+        "refetching",
+        "slow",
+        "errorWithData",
+        "errorEmpty",
+        "empty",
+        "ready"
+      ]
+    },
+    {
+      "name": "InlineError",
+      "group": "Interaction",
+      "states": [
+        "default",
+        "retrying"
+      ]
+    },
+    {
+      "name": "NewRowsPill",
+      "group": "Interaction",
+      "states": [
+        "hidden",
+        "visible"
+      ]
+    },
+    {
+      "name": "SlowNotice",
+      "group": "Interaction",
+      "states": [
+        "default",
+        "nameOnly",
+        "nameAndSize"
+      ]
+    },
+    {
+      "name": "CopyButton",
+      "group": "Interaction",
+      "states": [
+        "idle",
+        "copying",
+        "copied",
+        "failed"
+      ]
+    },
+    {
+      "name": "FilterChip",
+      "group": "Chips",
+      "states": [
+        "notCaptured",
+        "removeHover",
+        "removeFocus",
+        "static"
+      ]
+    },
+    {
+      "name": "Value",
+      "group": "Agents",
+      "states": [
+        "unknown"
+      ]
+    },
+    {
+      "name": "AgentSectionHead",
+      "group": "Agents",
+      "states": [
+        "codex",
+        "claudeCode"
+      ]
+    },
+    {
+      "name": "AgentStatGroup",
+      "group": "Agents",
+      "states": [
+        "codexLimits",
+        "claudeCodeLimits",
+        "atLimit"
+      ]
+    },
+    {
+      "name": "AgentPanel",
+      "group": "Agents",
+      "states": [
+        "codexSession",
+        "claudeCodeSession"
+      ]
+    },
+    {
+      "name": "SessionHeader",
+      "group": "Agents",
+      "states": [
+        "codex",
+        "claudeCode",
+        "codexMarked",
+        "codexUntitled"
+      ]
+    },
+    {
+      "name": "SessionFacts",
+      "group": "Agents",
+      "states": [
+        "default",
+        "withOrigin",
+        "codexNoBodies"
+      ]
+    },
+    {
+      "name": "ThreadOrigin",
+      "group": "Agents",
+      "states": [
+        "fork",
+        "resume",
+        "subagent"
+      ]
+    },
+    {
+      "name": "TurnReport",
+      "group": "Agents",
+      "states": [
+        "codex",
+        "withOtel"
+      ]
+    },
+    {
+      "name": "HiddenCallsNote",
+      "group": "Agents",
+      "states": [
+        "prewarm",
+        "prewarmAndTitle"
+      ]
+    },
+    {
+      "name": "PersonIdentity",
+      "group": "Agents",
+      "states": [
+        "linked",
+        "single"
+      ]
+    },
+    {
+      "name": "ProviderMark",
+      "group": "Providers",
+      "states": [
+        "claudeCodePerson",
+        "codexPerson",
+        "linkedPerson",
+        "codexSession"
+      ]
+    },
+    {
+      "name": "PersonHeader",
+      "group": "Providers",
+      "states": [
+        "codexOnly",
+        "mixed",
+        "mixedNarrow"
+      ]
+    },
+    {
+      "name": "PersonHeaderRow",
+      "group": "Providers",
+      "path": "src/components/PersonHeader/PersonHeaderRow.tsx",
+      "states": [
+        "common",
+        "unknown"
+      ]
+    },
+    {
+      "name": "AgentRow",
+      "group": "Providers",
+      "path": "src/components/PersonHeader/AgentRow.tsx",
+      "states": [
+        "codex",
+        "claudeCode"
+      ]
+    },
+    {
+      "name": "OrgStat",
+      "group": "Providers",
+      "path": "src/components/PersonHeader/OrgStat.tsx",
+      "states": [
+        "customer",
+        "outside",
+        "unset"
+      ]
+    },
+    {
+      "name": "PeopleTable",
+      "group": "Rows",
+      "states": [
+        "allAgents",
+        "codexView",
+        "claudeCodeView"
+      ]
+    },
+    {
+      "name": "SessionTabs",
+      "group": "Controls",
+      "states": [
+        "withHints",
+        "requestsActive"
+      ]
+    },
+    {
+      "name": "TabHint",
+      "group": "Controls",
+      "path": "src/components/SessionTabs/TabHint.tsx",
+      "states": [
+        "prompts",
+        "requests"
+      ]
+    },
+    {
+      "name": "RequestFilters",
+      "group": "Rows",
+      "states": [
+        "codex",
+        "someEmpty",
+        "personAllAgents",
+        "personCodex"
+      ]
+    },
+    {
+      "name": "RequestTable",
+      "group": "Rows",
+      "states": [
+        "codex",
+        "loading",
+        "codexNoBodies",
+        "personAllAgents"
+      ]
+    },
+    {
+      "name": "StepStrip",
+      "group": "Rows",
+      "states": [
+        "default",
+        "countedTotals"
+      ]
+    },
+    {
+      "name": "StepRun",
+      "group": "Rows",
+      "path": "src/components/StepRow/StepRun.tsx",
+      "states": [
+        "collapsed",
+        "collapsedFailing",
+        "expanded",
+        "collapsedNoBodies",
+        "runNoBodies",
+        "claudeCodeNoBodies"
+      ]
+    },
+    {
+      "name": "StepList",
+      "group": "Rows",
+      "path": "src/components/StepRow/StepList.tsx",
+      "states": [
+        "more",
+        "all"
+      ]
+    },
+    {
+      "name": "SummaryLabel",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/SummaryLabel.tsx",
+      "states": [
+        "fits",
+        "truncated",
+        "long"
+      ]
+    },
+    {
+      "name": "KeyTile",
+      "group": "Drawer",
+      "path": "src/components/RequestDrawer/KeyTile.tsx",
+      "states": [
+        "value",
+        "unknown"
+      ]
+    },
+    {
+      "name": "AgentScope",
+      "group": "Agents",
+      "states": [
+        "allAgents",
+        "codex",
+        "oneAgent"
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "name": "PeopleScreen",
+      "states": [
+        "default",
+        "loading",
+        "waiting",
+        "delayed",
+        "refreshFailed",
+        "filteredCodex"
+      ]
+    },
+    {
+      "name": "PersonScreen",
+      "states": [
+        "sessions",
+        "allRequests",
+        "loading",
+        "waiting",
+        "delayed",
+        "refreshFailed",
+        "emptyRange",
+        "notCaptured",
+        "noUncaptured",
+        "aboutOpen"
+      ]
+    },
+    {
+      "name": "SessionScreen",
+      "states": [
+        "prompts",
+        "requests",
+        "events",
+        "live",
+        "loading",
+        "loadFailed",
+        "drawer",
+        "drawerNotCaptured",
+        "drawerFailed",
+        "drawerRetained"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "id": "6A.11-1",
+      "title": "Retry now is aria-busy in the same frame; a second click is ignored",
+      "requires": [
+        "Button"
+      ]
+    },
+    {
+      "id": "6A.11-2",
+      "title": "Changing the window keeps old table content dimmed; never EmptyState while pending",
+      "requires": [
+        "SegmentedControl",
+        "RegionState",
+        "DataTable"
+      ]
+    },
+    {
+      "id": "6A.11-3",
+      "title": "A response under 150 ms never shows a skeleton or progress bar",
+      "requires": [
+        "RegionState"
+      ]
+    },
+    {
+      "id": "6A.11-4",
+      "title": "A 200 ms response shows the progress bar for at least 400 ms",
+      "requires": [
+        "RegionState",
+        "ProgressBar"
+      ]
+    },
+    {
+      "id": "6A.11-5",
+      "title": "Two quick window changes: only the second result renders",
+      "requires": [
+        "SegmentedControl",
+        "RegionState"
+      ]
+    },
+    {
+      "id": "6A.11-6",
+      "title": "The drawer opens with its header populated from row data before the request resolves",
+      "requires": [
+        "RequestDrawer"
+      ]
+    },
+    {
+      "id": "6A.11-7",
+      "title": "Pagination disables with tooltips while loading; on failure aria-current returns",
+      "requires": [
+        "Pagination"
+      ]
+    },
+    {
+      "id": "6A.11-8",
+      "title": "At 8 s Still loading with Cancel appears; Cancel restores previous content",
+      "requires": [
+        "RegionState",
+        "SlowNotice"
+      ]
+    },
+    {
+      "id": "6A.11-9",
+      "title": "Under reduced motion the drawer has no transform transition",
+      "requires": [
+        "RequestDrawer"
+      ]
+    },
+    {
+      "id": "6A.11-10",
+      "title": "A live append while scrolled away shows NewRowsPill and doesn't move visible rows",
+      "requires": [
+        "NewRowsPill",
+        "DataTable"
+      ]
+    },
+    {
+      "id": "12-null",
+      "title": "Unknown (null) values render as a dash with a reason, never 0",
+      "requires": [
+        "StatTile",
+        "HeaderStat"
+      ]
+    },
+    {
+      "id": "6B.11-11",
+      "title": "No element in the rendered app has a title attribute",
+      "requires": [
+        "Tooltip"
+      ]
+    },
+    {
+      "id": "6B.11-12",
+      "title": "Hovering a bin opens its tooltip after 120 ms, not before 100 ms; the next bin opens at once",
+      "requires": [
+        "Tooltip"
+      ]
+    },
+    {
+      "id": "6B.11-13",
+      "title": "Hovering a cell opens at 400 ms; the pointer can move into the tooltip; its text is selectable",
+      "requires": [
+        "Tooltip"
+      ]
+    },
+    {
+      "id": "6B.11-14",
+      "title": "Keyboard focus on a timeline mark shows the tooltip at once with aria-describedby; Esc closes it and keeps focus",
+      "requires": [
+        "Tooltip"
+      ]
+    },
+    {
+      "id": "6B.11-15",
+      "title": "Clicking a bin sets the range to that bin; Enter on a focused bin does the same",
+      "requires": [
+        "Tooltip",
+        "Timeline"
+      ]
+    },
+    {
+      "id": "6B.11-16",
+      "title": "Hovering a SessionRow puts its band in hover style; hovering the band highlights the row; neither scrolls",
+      "requires": [
+        "SessionRow",
+        "Timeline"
+      ]
+    },
+    {
+      "id": "6B.11-17",
+      "title": "A null field renders — and its tooltip says why; never 0 for null",
+      "requires": [
+        "Tooltip"
+      ]
+    },
+    {
+      "id": "6B.11-18",
+      "title": "A disabled control is focusable, ignores clicks and shows its reason",
+      "requires": [
+        "Tooltip",
+        "Button"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "PeoplePage",
+      "screen": "PeopleScreen",
+      "route": "/people"
+    },
+    {
+      "name": "PersonPage",
+      "screen": "PersonScreen",
+      "route": "/people/:personId"
+    },
+    {
+      "name": "SessionPage",
+      "screen": "SessionScreen",
+      "route": "/sessions/:sessionId"
+    }
+  ]
+}

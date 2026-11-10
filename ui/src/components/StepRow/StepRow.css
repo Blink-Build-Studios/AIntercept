@@ -1,0 +1,100 @@
+/* StepRow / ToolCallRow (handoff §11B.4, Session.dc.html): time 64 · actor 72 · detail
+   (flex) · result (content) · marker (content). Model and subagent rows start at 70px,
+   tool calls at 100px (time blank), +30px per nesting level (a subagent's calls).
+   Padding 4px 12px, gap 12, a 1100px content min width. Widths are set here, over any
+   DataTable column vars. */
+@layer components {
+  .dt-row.step-row {
+    --step-indent: calc(70px + var(--step-depth, 0) * 30px);
+    padding-left: var(--step-indent);
+    min-width: calc(1100px + var(--step-indent) + 12px);
+  }
+  .dt-row.step-row.step-tool {
+    --step-indent: calc(100px + var(--step-depth, 0) * 30px);
+  }
+  .dt-row.step-row > :nth-child(1) {
+    flex: 0 0 64px;
+  }
+  .dt-row.step-row > :nth-child(2) {
+    flex: 0 0 72px;
+  }
+  /* An agent's rows (handoff §11J, Codex): the actor is the model as sent or the tool's
+     own name, so its column is 120px. */
+  .dt-row.step-row.step-wide > :nth-child(2) {
+    flex: 0 0 120px;
+  }
+  /* A long turn's rows (handoff §11L.7): the step number (or a run's range) in 56px, then
+     one line of detail. A StepRun sits on --bg, so a collapsed run reads apart from a step. */
+  .dt-row.step-row.step-numbered > :nth-child(2) {
+    flex: 0 0 56px;
+  }
+  .dt-row.step-row.step-run {
+    background: var(--bg);
+  }
+  /* A run's failures ("exit 1 ×31"): --danger, as the turn's failed commands (§11L.7). */
+  .step-run-failed {
+    color: var(--danger);
+  }
+  /* The list's last row: no hairline under it. */
+  .dt-row.step-list-more {
+    padding-left: 70px;
+  }
+  .dt-grid > .dt-row.step-list-more {
+    border-bottom: 0;
+  }
+  .step-list-more-link {
+    text-align: start;
+    margin-left: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .step-list-more-link:hover {
+    color: var(--link-hover);
+  }
+  .step-list-more-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  /* A spawned thread's link (`open thread ›`): ink, underlined in --line-strong. */
+  .step-thread-link {
+    display: block;
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+  }
+  .step-thread-link:hover {
+    color: var(--link-hover);
+  }
+  .step-thread-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  .dt-row.step-row > :nth-child(3) {
+    flex: 1 1 0%;
+  }
+  .dt-row.step-row > :nth-child(4),
+  .dt-row.step-row > :nth-child(5) {
+    flex: 0 0 auto;
+  }
+  /* Streaming: the ● pulses (opacity 1 ↔ 0.4 over 1 s, handoff §6A.7) while the text stays put. */
+  .step-streaming::first-letter {
+    animation: step-pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes step-pulse {
+    to {
+      color: var(--line-strong);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .step-streaming::first-letter {
+      animation: none;
+    }
+  }
+}

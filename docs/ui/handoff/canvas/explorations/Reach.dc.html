@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Person view — Reach</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}a:hover{color:#a9cbff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn:focus-visible{outline:2px solid #ffd36b;outline-offset:1px}
+.panel{background:#131618;border:1px solid #2a3034}
+.ph{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid #2a3034}
+</style>
+</helmet>
+<div style="min-height: 2100px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span class="m" style="font-weight: 600">aintercept</span>
+<span class="chip"><span style="width: 7px; height: 7px; background: #e8916f; border-radius: 999px"></span>CLAUDE CODE</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">+ CODEX · CHATGPT · CLAUDE.AI</span>
+<div style="flex: 1 1 0"></div>
+<div style="display: flex; border: 1px solid #60686d; border-radius: 2px">
+<button class="btn" style="border: 0; border-radius: 0">1h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #1b1f22">24h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button>
+</div>
+<span class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; background: #57d68d; border-radius: 999px"></span>LIVE</span>
+<button class="btn">Pause</button>
+</div>
+
+<div style="max-width: 1440px; margin: 0 auto; padding: 24px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<!-- dossier header -->
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<div class="panel" style="flex: 1 1 560px; min-width: 0; padding: 16px">
+<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+<span style="font-size: 18px; line-height: 24px; font-weight: 600">name unknown</span>
+<span class="m" style="color: #a3a9ad">acct 7d2e…a41c</span>
+<span class="m" style="color: #57d68d">● last seen 00:57</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; margin-top: 16px">
+<sc-for list="{{ident}}" as="i" hint-placeholder-count="9">
+<div style="border-top: 1px solid #2a3034; padding-top: 6px"><div class="k">{{i.k}}</div><div class="m" style="font-weight: 500">{{i.v}}</div></div>
+</sc-for>
+</div>
+</div>
+<div class="panel" style="flex: 1 1 420px; min-width: 0">
+<div class="ph"><span class="k">Posture</span></div>
+<sc-for list="{{posture}}" as="p" hint-placeholder-count="4">
+<div style="display: flex; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #2a3034; align-items: baseline">
+<span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500; width: 64px; color: {{p.c}}">{{p.v}}</span>
+<div><div style="font-weight: 500">{{p.t}}</div><div class="m" style="color: #a3a9ad">{{p.s}}</div></div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<!-- channel ledger -->
+<div class="panel">
+<div class="ph"><span class="k">Channels · everything Claude Code sent to api.anthropic.com</span><span style="flex: 1"></span><span class="m" style="color: #ff7a6b">▲ 37 model calls bypassed the proxy</span></div>
+<div style="padding: 12px">
+<div style="display: flex; height: 22px; gap: 2px">
+<div class="m" style="flex-grow: 37.2; background: #7db3ff; color: #0c0e0f; padding-left: 8px; font-size: 11px; line-height: 22px; font-weight: 600">model 37.2 MB</div>
+<div class="m" style="flex-grow: 28.9; background: #f0b43c; color: #0c0e0f; padding-left: 8px; font-size: 11px; line-height: 22px; font-weight: 600">analytics 28.9 MB</div>
+<div style="flex-grow: 0.6; background: #c9a3ec"></div>
+<div style="flex-grow: 0.3; background: #8fd17e"></div>
+<div style="flex-grow: 0.2; background: #e8916f"></div>
+</div>
+<div style="margin-top: 6px; color: #a3a9ad">For every 1 MB sent to the model, Claude Code sent 0.78 MB of its own telemetry about the session.</div>
+</div>
+<div class="row k" style="color: #848c90"><span style="width: 150px">Channel</span><span style="width: 330px">Endpoint</span><span style="flex: 1">Carries</span><span style="width: 90px; text-align: right">Requests</span><span style="width: 100px; text-align: right">Up</span></div>
+<sc-for list="{{chans}}" as="c" hint-placeholder-count="5">
+<div class="row m">
+<span style="width: 150px; display: flex; gap: 8px; align-items: center; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 2px; background: {{c.c}}"></span>{{c.n}}</span>
+<span style="width: 330px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.e}}</span>
+<span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.d}}</span>
+<span style="width: 90px; text-align: right">{{c.r}}</span><span style="width: 100px; text-align: right">{{c.b}}</span>
+</div>
+</sc-for>
+</div>
+
+<!-- reach vs use -->
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start">
+<div class="panel" style="flex: 999 1 640px; min-width: 0">
+<div class="ph"><span class="k" style="color: #e8916f">Can reach</span><span class="m" style="color: #a3a9ad">11 MCP servers · 381 tools · 87 skills · 15 hooks</span><span style="flex: 1"></span><span class="m">used <b>2</b> of 381 MCP tools</span></div>
+<sc-for list="{{servers}}" as="s" hint-placeholder-count="5">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid #2a3034">
+<span class="m" style="width: 140px; font-weight: 600">{{s.n}}</span>
+<div style="width: 180px; height: 8px; background: #1b1f22; position: relative"><div style="position: absolute; left: 0; top: 0; bottom: 0; background: #e8916f; width: {{s.w}}"></div></div>
+<span class="m" style="width: 70px; text-align: right">{{s.t}}</span>
+<span class="m" style="width: 60px; color: #a3a9ad">{{s.u}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 200px">
+<sc-for list="{{s.verbs}}" as="v" hint-placeholder-count="2"><span class="chip" style="border-color: #e8916f">{{v}}</span></sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 0">
+<sc-for list="{{other}}" as="o" hint-placeholder-count="4">
+<div style="padding: 10px 12px; border-right: 1px solid #2a3034"><div class="k">{{o.k}}</div><div class="m" style="font-size: 22px; line-height: 26px; font-weight: 500">{{o.v}}</div><div class="m" style="color: #a3a9ad; font-size: 11px">{{o.s}}</div></div>
+</sc-for>
+</div>
+</div>
+
+<div class="panel" style="flex: 1 1 400px; min-width: 0">
+<div class="ph"><span class="k">Did</span><span class="m" style="color: #a3a9ad">282 tool calls · 269 commands</span></div>
+<div style="padding: 8px 12px; border-bottom: 1px solid #2a3034">
+<div class="k" style="margin-bottom: 4px">First word of command</div>
+<sc-for list="{{cmds}}" as="c" hint-placeholder-count="8">
+<div class="m" style="display: flex; align-items: center; gap: 8px"><span style="width: 64px">{{c.n}}</span><div style="flex: 1; height: 8px"><div style="height: 8px; background: #e6e3db; opacity: .75; width: {{c.w}}"></div></div><span style="width: 28px; text-align: right; color: #a3a9ad">{{c.v}}</span></div>
+</sc-for>
+</div>
+<sc-for list="{{did}}" as="d" hint-placeholder-count="6">
+<div class="row m"><span style="flex: 1">{{d.k}}</span><span style="color: {{d.c}}">{{d.v}}</span></div>
+</sc-for>
+<div class="row m" style="border-bottom: 0"><span style="flex: 1">Files read / written</span><span title="Path not yet extracted from tool inputs" style="color: #a3a9ad">— not extracted</span></div>
+</div>
+</div>
+
+<!-- sessions | all requests -->
+<div>
+<div style="display: flex; align-items: flex-end; gap: 24px; border-bottom: 1px solid #2a3034">
+<button class="btn" style="border: 0; border-radius: 0; background: transparent; padding: 8px 0; color: #a3a9ad">Sessions · 3</button>
+<button class="btn" style="border: 0; border-bottom: 2px solid #e6e3db; border-radius: 0; background: transparent; padding: 8px 0">All requests</button>
+<div style="flex: 1"></div>
+<div style="display: flex; gap: 4px; padding-bottom: 6px">
+<span class="chip">ALL</span><span class="chip" style="color: #7db3ff; border-color: #2a3034">MODEL</span><span class="chip" style="color: #f0b43c; border-color: #2a3034">ANALYTICS</span><span class="chip" style="color: #c9a3ec; border-color: #2a3034">FLAGS</span><span class="chip" style="color: #e8916f; border-color: #2a3034">SKILLS</span><span class="chip" style="color: #8fd17e; border-color: #2a3034">COUNT</span>
+</div>
+</div>
+<div class="panel" style="border-top: 0; overflow-x: auto">
+<div class="row k" style="color: #848c90"><span style="width: 96px">Time</span><span style="width: 90px">Kind</span><span style="width: 44px">Meth</span><span style="flex: 1">Path</span><span style="width: 44px">Status</span><span style="width: 70px; text-align: right">Time</span><span style="width: 80px; text-align: right">Up</span><span style="width: 80px; text-align: right">Down</span></div>
+<sc-for list="{{log}}" as="r" hint-placeholder-count="12">
+<div class="row m" style="background: {{r.bg}}; opacity: {{r.op}}">
+<span style="width: 96px; color: #848c90">{{r.t}}</span><span style="width: 90px; color: {{r.c}}">{{r.k}}</span><span style="width: 44px">{{r.m}}</span>
+<span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{r.p}}</span><span style="width: 44px">{{r.s}}</span>
+<span style="width: 70px; text-align: right; color: #a3a9ad">{{r.d}}</span><span style="width: 80px; text-align: right">{{r.u}}</span><span style="width: 80px; text-align: right; color: #a3a9ad">{{r.dn}}</span>
+</div>
+</sc-for>
+<div class="row m" style="justify-content: center; color: #a3a9ad; border-bottom: 0">12,1xx more · newest first · 4 new ↑</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var cmdData = [['cd', 55], ['python', 53], ['sed', 24], ['cat', 21], ['grep', 17], ['kubectl', 13], ['docker', 8], ['git', 8]];
+    var M = '#7db3ff', A = '#f0b43c', F = '#c9a3ec', S = '#e8916f', C = '#8fd17e';
+    return {
+      ident: [
+        { k: 'Org', v: '1b9f…e02 · corporate' }, { k: 'Role', v: 'admin' }, { k: 'Plan', v: 'max · default_claude_max_20x' },
+        { k: 'Customer since', v: '— not extracted' }, { k: 'Claude Code user', v: '15 months' }, { k: '7-day limit', v: 'allowed · overage rejected' },
+        { k: 'Device', v: 'darwin · zsh · 1 machine' }, { k: 'Token storage', v: 'keychain-with-plaintext-fallback' }, { k: 'Proxy seen by client', v: 'yes · custom_ca' }
+      ],
+      posture: [
+        { v: '100%', c: '#e6e3db', t: 'tool calls ran without human approval', s: 'permission mode bypassPermissions' },
+        { v: 'off', c: '#e6e3db', t: 'sandbox', s: 'commands ran on the host' },
+        { v: '▲ 10', c: '#ff7a6b', t: 'commands Claude Code classed destructive', s: '6 rm -f · 4 rm -rf · 1 outside cwd' },
+        { v: '2', c: '#e6e3db', t: 'long-term memories written by the agent', s: 'tengu_memdir_file_write' }
+      ],
+      chans: [
+        { c: M, n: 'Model calls', e: 'POST /v1/messages', d: 'agent loop · tool catalog · injected git, cwd, email, memory', r: '300', b: '37.2 MB' },
+        { c: A, n: 'Analytics', e: 'POST /api/event_logging/v2/batch', d: '11,698 events · 105 types · ~45 env fields each', r: '—', b: '28.9 MB' },
+        { c: F, n: 'Feature flags', e: 'POST /api/eval/sdk-*', d: 'plan, role, first-use date · 1,072 flags · 12 experiments', r: '—', b: '—' },
+        { c: C, n: 'Token count', e: 'POST /v1/messages/count_tokens', d: 'whole files sent to be measured', r: '4', b: '—' },
+        { c: S, n: 'Skills listing', e: 'GET /api/oauth/organizations/…/skills/list-skills', d: 'installed skills + owner name and email', r: '34', b: '—' }
+      ],
+      servers: [
+        { n: 'Vercel', w: '100%', t: '244 tools', u: '0 used', verbs: ['buy_domain', 'create_project_env'] },
+        { n: 'Google Drive', w: '0%', t: '—', u: '0 used', verbs: ['share_file', 'trash_file'] },
+        { n: 'Gmail', w: '0%', t: '—', u: '0 used', verbs: [] },
+        { n: 'Playwright', w: '0%', t: '—', u: '2 used', verbs: [] },
+        { n: '+7 more', w: '56%', t: '137 tools', u: '', verbs: [] }
+      ],
+      other: [
+        { k: 'Built-in tools', v: '23', s: '5 used' }, { k: 'Skills', v: '87', s: 'owner name + email' },
+        { k: 'Hooks', v: '15', s: '~50 ms per tool call' }, { k: 'Instructions', v: '2', s: 'CLAUDE.md · MEMORY.md' }
+      ],
+      cmds: cmdData.map(function (c) { return { n: c[0], v: c[1], w: (c[1] / 55 * 100).toFixed(0) + '%' }; }),
+      did: [
+        { k: 'Prompts · model calls', v: '14 · 300', c: '#e6e3db' }, { k: 'Subagents', v: '3 · Explore (haiku)', c: '#e6e3db' },
+        { k: 'Tokens out · cache-read', v: '384k · 140.9M', c: '#e6e3db' }, { k: 'Cost (API-equivalent)', v: '$44.94', c: '#e6e3db' },
+        { k: 'Code shipped', v: '10 heads · push · PR #2', c: '#e6e3db' }, { k: 'Failures', v: '9 cmd · 11 tool · 5 retry', c: '#e6e3db' }
+      ],
+      log: [
+        { t: '00:57:12.4', k: 'analytics', c: A, m: 'POST', p: '/api/event_logging/v2/batch', s: '200', d: '84 ms', u: '6.1 KB', dn: '0.1 KB', bg: '#131618', op: 1 },
+        { t: '22:40:03.1', k: 'model', c: M, m: 'POST', p: '/v1/messages · main · opus', s: '200', d: '9.3 s', u: '8.2 KB', dn: '3.4 KB', bg: '#1b1f22', op: 1 },
+        { t: '22:40:01.9', k: 'analytics', c: A, m: 'POST', p: '/api/event_logging/v2/batch', s: '200', d: '71 ms', u: '14.8 KB', dn: '0.1 KB', bg: '#131618', op: 1 },
+        { t: '22:39:58.0', k: 'model', c: M, m: 'POST', p: '/v1/messages · auxiliary · recap', s: '200', d: '2.1 s', u: '3.0 KB', dn: '0.9 KB', bg: '#131618', op: 0.55 },
+        { t: '22:39:51.2', k: 'skills', c: S, m: 'GET', p: '/api/oauth/organizations/…/skills/list-skills', s: '200', d: '190 ms', u: '0.4 KB', dn: '22 KB', bg: '#131618', op: 1 },
+        { t: '22:39:44.7', k: 'model', c: M, m: 'POST', p: '/v1/messages · main · opus', s: '200', d: '4.8 s', u: '5.6 KB', dn: '1.2 KB', bg: '#131618', op: 1 },
+        { t: '22:39:40.3', k: 'flags', c: F, m: 'POST', p: '/api/eval/sdk-…', s: '200', d: '120 ms', u: '1.8 KB', dn: '96 KB', bg: '#131618', op: 1 },
+        { t: '22:39:38.8', k: 'count', c: C, m: 'POST', p: '/v1/messages/count_tokens', s: '200', d: '310 ms', u: '41 KB', dn: '0.1 KB', bg: '#131618', op: 0.55 },
+        { t: '22:39:31.0', k: 'model', c: M, m: 'POST', p: '/v1/messages · subagent · Explore · haiku', s: '200', d: '1.4 s', u: '2.2 KB', dn: '0.8 KB', bg: '#131618', op: 1 },
+        { t: '22:39:29.5', k: 'model', c: M, m: 'POST', p: '/v1/messages · main · opus', s: 'ERR', d: 'retry 1', u: '5.1 KB', dn: '—', bg: '#131618', op: 1 }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

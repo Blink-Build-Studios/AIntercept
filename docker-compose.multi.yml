@@ -11,8 +11,15 @@
 services:
   certsvc:
     environment:
-      CERT_ALLOWLIST: "api.anthropic.com,api.openai.com,generativelanguage.googleapis.com,chatgpt.com"
+      CERT_ALLOWLIST: "api.anthropic.com,api.openai.com,generativelanguage.googleapis.com,chatgpt.com,ab.chatgpt.com,ws.chatgpt.com,*.oaiusercontent.com,bzr.openai.com,claude.ai,a.claude.ai,cloudflare-ech.com"
 
   envoy:
     volumes:
       - ./envoy/envoy.multi.yaml:/etc/envoy/envoy.yaml:ro
+
+  # envoy.multi.yaml reaches the observer as observer-pods (a headless Service
+  # in Kubernetes); here it's just another name for the one container.
+  observer:
+    networks:
+      default:
+        aliases: [observer-pods]

@@ -1,0 +1,91 @@
+/* PersonRow (CompRows "PersonRow" specimens; columns handoff §11A.6). */
+@layer components {
+  .dt-row.person-row {
+    padding-block: 8px;
+  }
+  .dt-row.person-row-loading {
+    padding-block: 11px;
+  }
+  .person-cell {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .person-name {
+    font: 600 13px/20px var(--font-ui);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .person-ids {
+    font: 400 11px/14px var(--font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .person-agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  /* At the min width the columns shrink (DataTable columnVars). As on the canvas, a
+     cell stops at the smaller of its column and its text (min-width: auto); only the
+     person cell, which clips with an ellipsis, shrinks freely; activity keeps 160px. */
+  .dt-row.person-row > * {
+    min-width: auto;
+    overflow: visible;
+  }
+  .dt-row.person-row > :nth-child(1) {
+    width: var(--w1, auto);
+  }
+  .dt-row.person-row > :nth-child(2) {
+    width: var(--w2, auto);
+  }
+  .dt-row.person-row > :nth-child(3) {
+    width: var(--w3, auto);
+  }
+  .dt-row.person-row > :nth-child(4) {
+    width: var(--w4, auto);
+  }
+  .dt-row.person-row > :nth-child(5) {
+    width: var(--w5, auto);
+  }
+  .dt-row.person-row > :nth-child(6) {
+    width: var(--w6, auto);
+  }
+  .dt-row.person-row > :nth-child(7) {
+    width: var(--w7, auto);
+  }
+  .dt-row.person-row > :nth-child(8) {
+    width: var(--w8, auto);
+  }
+  .dt-row.person-row > :nth-child(9) {
+    width: var(--w9, auto);
+  }
+  .dt-row.person-row > :nth-child(10) {
+    width: var(--w10, auto);
+  }
+  .dt-row.person-row > .person-cell {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .dt-row.person-row > .person-activity,
+  .dt-row.person-head > :nth-child(7) {
+    min-width: 160px;
+  }
+  /* The header row keeps the table's 4px padding, not a person row's 8px. */
+  .dt-row.person-head {
+    padding-block: 4px;
+  }
+  .person-activity > .sparkline {
+    width: 100%;
+  }
+  .person-loading-name {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .person-activity-skeleton {
+    display: block;
+    height: 18px;
+    opacity: 0.45;
+  }
+}

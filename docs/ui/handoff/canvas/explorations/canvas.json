@@ -1,0 +1,143 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Console2.dc.html": {
+      "expand": "fill",
+      "h": 1760,
+      "is_interactive": true,
+      "title": "Person page \u00b7 Sessions tab (interactive)",
+      "w": 1440,
+      "x": 0,
+      "y": 2500
+    },
+    "ConsoleRequests.dc.html": {
+      "expand": "fill",
+      "h": 1760,
+      "title": "Person page \u00b7 All requests tab",
+      "w": 1440,
+      "x": 1520,
+      "y": 2500
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 1960,
+      "title": "A \u00b7 Console \u2014 Burp-style tree + side panel",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Reach.dc.html": {
+      "expand": "fill",
+      "h": 2100,
+      "title": "C \u00b7 Reach \u2014 capability & channel ledger first",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Session.dc.html": {
+      "expand": "fill",
+      "h": 2000,
+      "is_interactive": true,
+      "title": "Session page \u00b7 Prompts tab (interactive: tabs, steps, drawer)",
+      "w": 1440,
+      "x": 0,
+      "y": 4700
+    },
+    "SessionDrawer.dc.html": {
+      "expand": "fill",
+      "h": 2000,
+      "title": "Session page \u00b7 request drawer open (Raw)",
+      "w": 1440,
+      "x": 1520,
+      "y": 4700
+    },
+    "SessionEvents.dc.html": {
+      "expand": "fill",
+      "h": 2000,
+      "title": "Session page \u00b7 Events tab \u2014 range, oldest first, paged",
+      "w": 1440,
+      "x": 1520,
+      "y": 7120
+    },
+    "Timeline.dc.html": {
+      "expand": "fill",
+      "h": 1760,
+      "title": "B \u00b7 Timeline \u2014 time is the spine",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "SessionRequests.dc.html": {
+      "expand": "fill",
+      "h": 2000,
+      "title": "Session page \u00b7 Requests tab \u2014 range, oldest first, paged",
+      "w": 1440,
+      "x": 0,
+      "y": 7120
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-04T17:45:00Z",
+    "v": 1
+  },
+  "designSystems": [
+    {
+      "artifact": "https://claude.ai/code/artifact/b5e53426-ab63-49a7-8dc1-9b41baed3036",
+      "copiedAt": "2026-11-04T17:45:00Z",
+      "namespace": "aintercept-wire",
+      "title": "aintercept Wire",
+      "version": null
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "t1": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Person view \u00b7 Claude Code \u2014 three directions",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Person page \u2014 rollups only",
+      "w": 240,
+      "x": 0,
+      "y": 2220
+    },
+    "t3": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Session page + request drawer",
+      "w": 240,
+      "x": 0,
+      "y": 4420
+    },
+    "t4": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Session page \u2014 Requests & Events tabs",
+      "w": 240,
+      "x": 0,
+      "y": 6840
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Timeline.dc.html",
+    "Reach.dc.html",
+    "Console2.dc.html",
+    "ConsoleRequests.dc.html",
+    "Session.dc.html",
+    "SessionDrawer.dc.html",
+    "SessionRequests.dc.html",
+    "SessionEvents.dc.html"
+  ],
+  "pages": [],
+  "title": "aintercept \u2014 Person view"
+}

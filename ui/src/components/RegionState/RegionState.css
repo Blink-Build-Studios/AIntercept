@@ -1,0 +1,30 @@
+/* RegionState (CompInteraction "RegionState" specimens; §6A.3). */
+@layer components {
+  /* Refetch dim: --dim-opacity and inert while the progress bar shows; 35% once slow. */
+  .region-dim {
+    opacity: var(--dim-opacity);
+    pointer-events: none;
+  }
+  .region-dim-slow {
+    opacity: 0.35;
+  }
+  /* The region's own panel, when nothing around it draws one. */
+  .region-frame {
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  /* Error and empty states centre in the region's footprint. */
+  .region-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+  }
+  .region-error {
+    padding: 0 20px;
+  }
+  .region-empty {
+    align-items: center;
+  }
+}

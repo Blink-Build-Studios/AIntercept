@@ -1,0 +1,72 @@
+[project]
+name = "aintercept-api"
+version = "0.1.0"
+description = "aintercept query API: serves the UI contract from the observer's telemetry"
+authors = [
+    { name = "chris grayson", email = "lavalamp-@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb==2.0.0",
+    "fastapi==0.159.1",
+    "pydantic==2.14.1",
+    "uvicorn==0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.9,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2==2.16.0",
+    "mypy==2.4.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.1",
+]
+
+[tool.uv]
+# Supply-chain rule: nothing released in the last two weeks. Move this date
+# forward deliberately (scripts/check-pins.py fails if it is less than 14 days old).
+exclude-newer = "2026-10-22T00:00:00Z"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# S = bandit security rules: S608 bans SQL built from strings, S105-107 hard-coded secrets.
+select = ["E", "F", "I", "UP", "B", "S", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Absolute imports only (from aintercept_api.x / from tests.x), never relative.
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest tests
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+# Tests stay plain pytest: fixtures and helpers needn't be annotated.
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+disallow_any_generics = false
+
+[tool.coverage.run]
+source = ["aintercept_api"]
+omit = ["*/aintercept_api/openapi.py", "*/aintercept_api/serve.py"]  # CLI entry points, run by make regen / make api
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = ['if __name__ == "__main__":']

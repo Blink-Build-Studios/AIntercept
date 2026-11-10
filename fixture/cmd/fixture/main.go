@@ -6,7 +6,7 @@
 //   - GET  /                synthetic JSON including a known MARKER string
 //   - GET  /stream          an SSE stream of several events (tests streaming)
 //   - POST /echo            echoes the request body back (proves request-body
-//                           bytes are observable end-to-end)
+//     bytes are observable end-to-end)
 //
 // The MARKER lets the smoke test assert that the exact decrypted bytes the
 // fixture produced showed up in the observer's output.

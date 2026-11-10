@@ -1,0 +1,33 @@
+/* KeyTile (CompProviders "KeyTile/*", "KeyStrip/codex*", handoff §11L.10): equal tiles, the
+   value mono 16/22 500, the sub mono 11/14; both truncate rather than wrap. */
+@layer components {
+  .key-tiles {
+    display: flex;
+  }
+  .key-tile {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 12px;
+    border-right: 1px solid var(--line);
+  }
+  .key-tile-value {
+    font: 500 16px/22px var(--font-mono);
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Unknown (§3.3): --ink-muted at 400 with the dotted underline, as `—` reads everywhere. */
+  .key-tile-unknown {
+    font-weight: 400;
+    white-space: normal;
+    text-decoration: underline dotted var(--line-strong);
+    text-underline-offset: 3px;
+  }
+  .key-tile-sub {
+    font: 400 11px/14px var(--font-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

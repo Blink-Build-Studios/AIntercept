@@ -1,0 +1,14 @@
+@layer components {
+  /* The fill lives here, not as a utility, so the hover fill can override it. */
+  .coverage-line {
+    padding: 8px 16px;
+    background: var(--surface);
+  }
+  .coverage-line-tip {
+    cursor: help;
+  }
+  .coverage-line-tip:hover,
+  .coverage-line-tip[data-force="hover"] {
+    background: var(--surface-raised);
+  }
+}

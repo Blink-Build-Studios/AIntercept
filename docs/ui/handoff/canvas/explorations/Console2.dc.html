@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Person page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}a:hover{color:#a9cbff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.srow{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #2a3034;white-space:nowrap;color:#e6e3db;text-decoration:none}
+.srow:hover{background:#1b1f22;color:#e6e3db}
+.srow:focus-visible{outline:2px solid #ffd36b;outline-offset:-2px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn:focus-visible{outline:2px solid #ffd36b;outline-offset:1px}
+.tab{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 0;cursor:pointer;color:#a3a9ad}
+.tab:focus-visible{outline:2px solid #ffd36b}
+.lane{display:flex;border-bottom:1px solid #2a3034}
+.lab{width:132px;flex:none;padding:6px 12px;box-sizing:border-box;border-right:1px solid #2a3034}
+.track{position:relative;flex:1}
+.input{font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:18px;color:#e6e3db;background:#0c0e0f;border:1px solid #60686d;border-radius:2px;padding:5px 8px;width:280px}
+</style>
+</helmet>
+<div style="min-height: 1760px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+<!-- top bar -->
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span class="m" style="font-weight: 600">aintercept</span>
+<span class="m" style="color: #848c90">people / name unknown</span>
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+<span class="chip"><span style="width: 7px; height: 7px; background: #e8916f; border-radius: 999px"></span>CLAUDE CODE</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">CODEX · SOON</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">CHATGPT · SOON</span>
+<span class="chip" style="color: #848c90; border-color: #2a3034">CLAUDE.AI · SOON</span>
+</div>
+<div style="flex: 1 1 0"></div>
+<div style="display: flex; border: 1px solid #60686d; border-radius: 2px">
+<button class="btn" style="border: 0; border-radius: 0">1h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">24h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #1b1f22">14d</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">All</button>
+</div>
+<span class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; background: #57d68d; border-radius: 999px"></span>LIVE · 5s</span>
+<button class="btn">Pause</button>
+<button class="btn">About this data</button>
+</div>
+
+<div style="max-width: 1440px; margin: 0 auto; padding: 24px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<!-- A person header: account + device -->
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 240px">
+<div style="font-size: 18px; line-height: 24px; font-weight: 600">name unknown</div>
+<div class="m" style="color: #a3a9ad">acct 7d2e…a41c · org 1b9f…e02 <span style="color: #848c90">(corporate)</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; flex: 1 1 600px; border-left: 1px solid #2a3034">
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Role</div><div class="m" style="font-weight: 500">admin</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Plan</div><div class="m" style="font-weight: 500">max · 20x</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Claude Code user</div><div class="m" style="font-weight: 500">15 mo</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Devices</div><div class="m" style="font-weight: 500">1 · darwin · zsh</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">7-day limit</div><div class="m" style="font-weight: 500">allowed · overage rejected</div></div>
+<div style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Flags</div><div class="m" style="font-weight: 500">1,108 · 12 exp <span style="color: #c9a3ec">· 12 changed since 04:00</span></div></div>
+<div style="padding: 0 16px"><div class="k">Last seen</div><div class="m" style="font-weight: 500"><span style="color: #57d68d">●</span> now</div></div>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: -12px">
+<span class="k" style="margin-right: 4px">Posture</span>
+<span class="chip">BYPASSED APPROVALS · 99.7% OF MODEL CALLS</span>
+<span class="chip">SANDBOX OFF</span>
+<span class="chip">TOKEN: KEYCHAIN-WITH-PLAINTEXT-FALLBACK</span>
+<span class="chip">PROXY DETECTED · CUSTOM_CA</span>
+</div>
+
+<!-- C ribbon + D coverage -->
+<div style="background: #131618; border: 1px solid #2a3034">
+<div class="m" style="display: flex; flex-wrap: wrap; border-bottom: 1px solid #2a3034">
+<sc-for list="{{ribbon}}" as="r" hint-placeholder-count="6">
+<a href="#" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-right: 1px solid #2a3034; text-decoration: none; color: #e6e3db; flex: 1 1 160px">
+<span class="k" style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 2px; background: {{r.c}}"></span>{{r.k}}</span>
+<span style="font-size: 22px; line-height: 26px; font-weight: 500">{{r.v}}</span>
+<span style="color: #a3a9ad">{{r.s}}</span>
+</a>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 16px">
+<span class="m" style="color: #ff7a6b; font-weight: 600">▲ coverage gap</span>
+<span>Claude Code reported 94 model calls the proxy never saw: Nov 3 00:00–00:59 (37) and Nov 3 15:00–17:59 (57). They went out over IPv6; routing is now fixed.</span>
+<a href="#" class="m">view 94 calls</a>
+</div>
+</div>
+
+<!-- B activity timeline -->
+<div style="background: #131618; border: 1px solid #2a3034; overflow-x: auto">
+<div style="min-width: 960px">
+<div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #2a3034">
+<span class="k">Activity · Oct 22 – Nov 4</span>
+<span class="m" style="color: #a3a9ad">11 sessions · hourly</span>
+<span style="flex: 1"></span>
+<span class="m" style="color: #848c90">drag to filter sessions and requests below</span>
+</div>
+<div style="position: relative">
+<div style="position: absolute; top: 0; bottom: 0; width: 1px; background: #57d68d; z-index: 2; left: calc(132px + (100% - 132px) * {{nowFrac}})"></div>
+<div class="lane" style="height: 44px; background: #0c0e0f">
+<div class="lab"><div class="k">Sessions</div></div>
+<div class="track">
+<sc-for list="{{sessions}}" as="s" hint-placeholder-count="11">
+<div style="position: absolute; top: 8px; height: 26px; box-sizing: border-box; min-width: 4px; background: #1b1f22; border-left: 2px solid #e8916f; left: {{s.l}}; width: {{s.w}}">
+<span class="m" style="position: absolute; left: 6px; top: 3px; font-size: 10.5px; line-height: 20px; white-space: nowrap; color: #e6e3db">{{s.label}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div class="lane" style="height: 24px">
+<div class="lab"><span class="k">Prompts</span></div>
+<div class="track">
+<sc-for list="{{prompts}}" as="p" hint-placeholder-count="40"><div style="position: absolute; top: 5px; width: 1px; height: 14px; background: #e6e3db; left: {{p.l}}"></div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 60px">
+<div class="lab"><div class="k">Model calls</div><div class="m" style="font-size: 11px; color: #a3a9ad">per hour</div></div>
+<div class="track">
+<sc-for list="{{gaps}}" as="g" hint-placeholder-count="2"><div style="position: absolute; top: 0; bottom: 0; min-width: 3px; left: {{g.l}}; width: {{g.w}}; background: repeating-linear-gradient(135deg, rgba(255,122,107,.35) 0 3px, transparent 3px 6px)"></div></sc-for>
+<sc-for list="{{model}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #7db3ff; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 44px">
+<div class="lab"><div class="k">Analytics</div><div class="m" style="font-size: 11px; color: #a3a9ad">events/hour</div></div>
+<div class="track">
+<sc-for list="{{dens}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #f0b43c; opacity: .85; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 30px">
+<div class="lab"><div class="k">Presence</div><div class="m" style="font-size: 11px; color: #a3a9ad">device</div></div>
+<div class="track">
+<sc-for list="{{person}}" as="p" hint-placeholder-count="12"><div style="position: absolute; top: 8px; height: 14px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: {{p.bg}}"></div></sc-for>
+</div>
+</div>
+<div class="lane" style="height: 26px; border-bottom: 0">
+<div class="lab"><div class="k">Friction</div></div>
+<div class="track">
+<sc-for list="{{fric}}" as="f" hint-placeholder-count="8"><span class="m" style="position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; left: {{f.l}}; color: {{f.c}}">{{f.g}}</span></sc-for>
+</div>
+</div>
+</div>
+<div class="m" style="display: flex; justify-content: space-between; padding: 4px 12px 6px 144px; color: #848c90; font-size: 11px; border-top: 1px solid #2a3034">
+<span>Oct 22</span><span>Oct 24</span><span>Oct 26</span><span>Oct 28</span><span>Oct 30</span><span>Nov 1</span><span>Nov 3</span><span>Nov 5</span>
+</div>
+<div class="m" style="display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 6px 12px 8px 144px; color: #a3a9ad; font-size: 11px; border-top: 1px solid #2a3034">
+<span><span style="display: inline-block; width: 10px; height: 8px; background: #e6e3db"></span> focused</span>
+<span><span style="display: inline-block; width: 10px; height: 8px; background: #2a3034; border: 1px solid #60686d"></span> away (all sessions blurred)</span>
+<span><span style="display: inline-block; width: 10px; height: 8px; background: #60686d"></span> device asleep</span>
+<span>blank = no session open</span>
+<span style="color: #ff7a6b">▨ reported, not captured</span>
+<span style="color: #57d68d">| now</span>
+</div>
+</div>
+</div>
+
+<!-- E / F -->
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<div style="flex: 1 1 520px; min-width: 0; background: #131618; border: 1px solid #2a3034">
+<div class="row" style="justify-content: space-between"><span class="k" style="color: #e8916f">Capabilities · seen in any session</span><a href="#" class="m">per session ›</a></div>
+<sc-for list="{{caps}}" as="c" hint-placeholder-count="6">
+<div class="row m"><span style="width: 140px; font-weight: 600">{{c.k}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.d}}</span><span style="width: 90px; text-align: right">{{c.v}}</span></div>
+</sc-for>
+</div>
+<div style="flex: 1 1 520px; min-width: 0; background: #131618; border: 1px solid #2a3034">
+<div class="row" style="justify-content: space-between"><span class="k">Footprint · all sessions</span><span class="m" style="color: #a3a9ad">window total</span></div>
+<sc-for list="{{foot}}" as="c" hint-placeholder-count="6">
+<div class="row m"><span style="width: 140px; font-weight: 600">{{c.k}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.d}}</span><span style="width: 90px; text-align: right">{{c.v}}</span></div>
+</sc-for>
+</div>
+</div>
+
+<!-- tabs -->
+<div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; border-bottom: 1px solid #2a3034">
+<button class="tab" onClick="{{showSessions}}" style="color: {{tabS.c}}; border-bottom-color: {{tabS.b}}">Sessions · 11</button>
+<button class="tab" onClick="{{showRequests}}" style="color: {{tabR.c}}; border-bottom-color: {{tabR.b}}">All requests · 2,859</button>
+<div style="flex: 1"></div>
+<span class="chip" style="color: #e6e3db; border-color: #2a3034">3 NEW ↑</span>
+</div>
+
+<!-- Sessions tab -->
+<sc-if value="{{isSessions}}" hint-placeholder-val="{{ true }}">
+<div style="background: #131618; border: 1px solid #2a3034; border-top: 0; overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1200px">
+<span style="width: 92px">Start</span><span style="width: 10px"></span><span style="width: 240px">Repo · branch</span><span style="flex: 1">Label</span>
+<span style="width: 64px; text-align: right">Prompts</span><span style="width: 64px; text-align: right">Span</span><span style="width: 56px; text-align: right">Calls</span><span style="width: 64px; text-align: right">Events</span>
+<span style="width: 84px">Friction</span><span style="width: 72px; text-align: right">Bypass</span><span style="width: 84px; text-align: right">Coverage</span><span style="width: 12px"></span>
+</div>
+<sc-for list="{{sessRows}}" as="s" hint-placeholder-count="7">
+<a href="Session.dc.html" class="srow m" style="min-width: 1200px">
+<span style="width: 92px; color: #a3a9ad">{{s.t}}</span><span style="width: 10px; color: {{s.dotc}}">●</span>
+<span style="width: 240px; font-weight: 600; overflow: hidden; text-overflow: ellipsis">{{s.repo}}</span>
+<span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{s.label}}</span>
+<span style="width: 64px; text-align: right">{{s.prompts}}</span><span style="width: 64px; text-align: right; color: #a3a9ad">{{s.dur}}</span>
+<span style="width: 56px; text-align: right">{{s.calls}}</span><span style="width: 64px; text-align: right; color: #a3a9ad">{{s.ev}}</span>
+<span style="width: 84px">{{s.fr}}<span style="color: #ff7a6b">{{s.de}}</span></span>
+<span style="width: 72px; text-align: right">{{s.by}}</span>
+<span style="width: 84px; text-align: right; color: {{s.covc}}">{{s.cov}}</span>
+<span style="width: 12px; color: #848c90">›</span>
+</a>
+</sc-for>
+</div>
+</sc-if>
+
+<!-- All requests tab -->
+<sc-if value="{{isRequests}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0">
+<label class="k" for="reqf">Filter</label>
+<input id="reqf" class="input" placeholder="path, status, session…">
+<span class="chip" style="background: #1b1f22">ALL</span>
+<sc-for list="{{kinds}}" as="kd" hint-placeholder-count="6"><span class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 2px; background: {{kd.c}}"></span>{{kd.n}}</span></sc-for>
+<span style="flex: 1"></span>
+<span class="chip" style="border-color: #2a3034; color: #a3a9ad">BACKGROUND DIMMED</span>
+</div>
+<div style="background: #131618; border: 1px solid #2a3034; overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1180px">
+<span style="width: 108px">Time</span><span style="width: 84px">Kind</span><span style="width: 150px">Session</span><span style="width: 40px">Meth</span><span style="flex: 1">Path · detail</span>
+<span style="width: 44px">Status</span><span style="width: 64px; text-align: right">Dur</span><span style="width: 70px; text-align: right">Up</span><span style="width: 70px; text-align: right">Down</span>
+</div>
+<sc-for list="{{log}}" as="r" hint-placeholder-count="22">
+<a href="#" class="srow m" style="min-width: 1180px; padding-top: 3px; padding-bottom: 3px; opacity: {{r.op}}">
+<span style="width: 108px; color: #848c90">{{r.t}}</span><span style="width: 84px; color: {{r.c}}">{{r.k}}</span>
+<span style="width: 150px; color: {{r.sc}}; overflow: hidden; text-overflow: ellipsis">{{r.s}}</span><span style="width: 40px">{{r.m}}</span>
+<span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{r.p}}</span><span style="width: 44px; color: {{r.stc}}">{{r.st}}</span>
+<span style="width: 64px; text-align: right; color: #a3a9ad">{{r.d}}</span><span style="width: 70px; text-align: right">{{r.u}}</span><span style="width: 70px; text-align: right; color: #a3a9ad">{{r.dn}}</span>
+</a>
+</sc-for>
+<div class="row m" style="color: #a3a9ad; border-bottom: 0; justify-content: center">2,8xx more · newest first · click a row for request detail</div>
+</div>
+</sc-if>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["sessions","requests"],"default":"sessions"},"$preview":{"width":1440,"height":1760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var tab = (this.state && this.state.tab) || this.props.tab || 'sessions';
+    var span = 336; // hours from Oct 22 00:00 to Nov 5 00:00
+    var NOW = 322.15;
+    var pct = function (h) { return (h / span * 100).toFixed(3) + '%'; };
+    var seed = 17;
+    var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    // sessions (hours)
+    var S = [
+      { a: 34.2, b: 40.0, label: 'Oct 23 · 539 calls', n: 12, rate: 92 },
+      { a: 41.0, b: 44.5, label: '282 calls', n: 8, rate: 80 },
+      { a: 58.5, b: 59.2, label: '', n: 2, rate: 8 }, { a: 81, b: 81.6, label: '', n: 1, rate: 6 },
+      { a: 99.3, b: 100.1, label: '', n: 2, rate: 7 }, { a: 122.4, b: 122.9, label: '', n: 1, rate: 5 },
+      { a: 147, b: 147.8, label: '', n: 2, rate: 6 }, { a: 163.2, b: 163.6, label: '', n: 1, rate: 5 },
+      { a: 170.5, b: 171.3, label: '', n: 2, rate: 6 }, { a: 178, b: 178.4, label: '', n: 1, rate: 4 },
+      { a: 274.1, b: NOW, label: 'aintercept · partner-readiness · live', n: 34, rate: 0 }
+    ];
+    var sessions = S.map(function (s) { return { l: pct(s.a), w: pct(s.b - s.a), label: s.label }; });
+    var prompts = [];
+    S.forEach(function (s) {
+      for (var i = 0; i < s.n; i++) {
+        var h = s.a + (i + 0.3) * (s.b - s.a) / s.n;
+        if (s.a > 270 && ((h > 289.5 && h < 296.5) || (h > 312 && h < 320))) continue;
+        prompts.push({ l: pct(h) });
+      }
+    });
+    // main session active hours: Nov 2 10-24, Nov 3 0-1, 8-24 (minus sleep), Nov 4 8-10
+    var mainActive = function (h) {
+      return (h >= 274 && h < 289.5) || (h >= 296.5 && h < 312) || (h >= 320 && h < NOW);
+    };
+    var gapsH = [{ a: 288, b: 289 }, { a: 303, b: 306 }];
+    var inGap = function (h) { return gapsH.some(function (g) { return h >= g.a && h < g.b; }); };
+    var model = [], dens = [];
+    for (var h = 0; h < 336; h++) {
+      var calls = 0, ev = 0;
+      S.forEach(function (s) { if (s.rate && h + 1 > s.a && h < s.b) { calls = s.rate * (0.6 + rnd() * 0.6); ev = calls * 0.2; } });
+      if (mainActive(h + 0.5)) { calls = 10 + rnd() * 26; ev = 380 + rnd() * 420; }
+      else if (h >= 274 && h < NOW) { ev = 20 + rnd() * 60; }
+      if (inGap(h + 0.5)) calls = 0;
+      if (calls) model.push({ l: pct(h), w: pct(0.8), h: Math.min(58, 3 + calls * 0.55).toFixed(0) + 'px' });
+      if (ev) dens.push({ l: pct(h), w: pct(0.8), h: Math.min(42, 2 + ev * 0.05).toFixed(0) + 'px' });
+    }
+    var F = '#e6e3db', AW = '#2a3034', SL = '#60686d';
+    var person = [
+      { l: pct(34.2), w: pct(10.3), bg: F },
+      { l: pct(58.5), w: pct(0.7), bg: F }, { l: pct(81), w: pct(0.6), bg: F }, { l: pct(99.3), w: pct(0.8), bg: F },
+      { l: pct(122.4), w: pct(0.5), bg: F }, { l: pct(147), w: pct(0.8), bg: F }, { l: pct(163.2), w: pct(0.4), bg: F },
+      { l: pct(170.5), w: pct(0.8), bg: F }, { l: pct(178), w: pct(0.4), bg: F },
+      { l: pct(274.1), w: pct(7.9), bg: F }, { l: pct(282), w: pct(3.5), bg: AW }, { l: pct(285.5), w: pct(4), bg: F },
+      { l: pct(289.5), w: pct(7), bg: SL }, { l: pct(296.5), w: pct(10), bg: F }, { l: pct(306.5), w: pct(5.5), bg: AW },
+      { l: pct(312), w: pct(8), bg: SL }, { l: pct(320), w: pct(NOW - 320), bg: F }
+    ];
+    var fric = [
+      { l: pct(36), g: '▲', c: '#ff7a6b' }, { l: pct(42.5), g: '↯', c: '#e6e3db' },
+      { l: pct(278), g: '▲', c: '#ff7a6b' }, { l: pct(286.5), g: '▲▲', c: '#ff7a6b' }, { l: pct(299), g: '↯', c: '#e6e3db' },
+      { l: pct(301), g: '▲▲▲', c: '#ff7a6b' }, { l: pct(308.5), g: '✕', c: '#e6e3db' }, { l: pct(310), g: '▲▲', c: '#ff7a6b' }
+    ];
+    var active = { c: '#e6e3db', b: '#e6e3db' }, idle = { c: '#a3a9ad', b: 'transparent' };
+    var M = '#7db3ff', A = '#f0b43c', FL = '#c9a3ec', SK = '#e8916f', C = '#8fd17e', AC = '#9fb4c7';
+    var PR = 'partner-readiness';
+    var L = function (t, k, s, m, p, st, d, u, dn, op) {
+      var c = { model: M, analytics: A, flags: FL, skills: SK, count: C, account: AC }[k];
+      return { t: t, k: k, c: c, s: s, sc: s === '— no session' ? '#848c90' : '#a3a9ad', m: m, p: p, st: st, stc: st === '200' ? '#a3a9ad' : '#ff7a6b', d: d, u: u, dn: dn, op: op || 1 };
+    };
+    return {
+      isSessions: tab === 'sessions', isRequests: tab === 'requests',
+      tabS: tab === 'sessions' ? active : idle, tabR: tab === 'requests' ? active : idle,
+      showSessions: function () { self.setState({ tab: 'sessions' }); },
+      showRequests: function () { self.setState({ tab: 'requests' }); },
+      nowFrac: (NOW / span).toFixed(4),
+      sessions: sessions, prompts: prompts, model: model, dens: dens, person: person, fric: fric,
+      gaps: gapsH.map(function (g) { return { l: pct(g.a), w: pct(g.b - g.a) }; }),
+      ribbon: [
+        { k: 'Model calls', c: M, v: '1,506', s: '11 sessions · +94 not captured' },
+        { k: 'Analytics', c: A, v: '21,305', s: '969 batches · 128 event types' },
+        { k: 'Account calls', c: AC, v: '384', s: 'skills, MCP registry, bootstrap' },
+        { k: 'Reach', c: SK, v: '381', s: 'tools seen in any session' },
+        { k: 'Tokens out', c: C, v: '1.1M', s: '412M cache-read · illustrative' },
+        { k: 'Cost est.', c: '#a3a9ad', v: '$118', s: 'API-equivalent · illustrative' }
+      ],
+      caps: [
+        { k: 'MCP servers', d: 'Gmail, Drive, Docs, Vercel, Playwright, taza +5', v: '11' },
+        { k: 'MCP tools', d: 'share_file, trash_file, buy_domain, create_project_env…', v: '381' },
+        { k: 'Varies by session', d: 'Oct 23: 20 tools vs 51 tools, same day', v: '20–381' },
+        { k: 'Skills', d: 'owner listed with name + email', v: '87' },
+        { k: 'Hooks', d: '~50 ms added per tool call', v: '15' },
+        { k: 'Memory', d: 'MEMORY.md · long-term writes', v: '2 writes' }
+      ],
+      foot: [
+        { k: 'Prompts', d: '11 sessions', v: '66' },
+        { k: 'Tool calls', d: 'Bash · Read · Write · Edit · Agent · MCP', v: '—' },
+        { k: 'Commands', d: 'cd · python · sed · cat · grep · kubectl', v: '—' },
+        { k: 'Destructive', d: 'rm -f · rm -rf · 1 outside cwd', v: '▲ 13' },
+        { k: 'Code shipped', d: 'commits · push · PR #2', v: '1 PR' },
+        { k: 'Subagent calls', d: 'Explore (haiku) · share parent prompt ID', v: '126' }
+      ],
+      sessRows: [
+        { t: 'Nov 2 10:04', dotc: '#57d68d', repo: 'aintercept · partner-readiness', label: 'Coverage check and IPv6 routing; PR #2 open', prompts: '34', dur: '2d 0h', calls: '640', ev: '21,305', fr: '↯1 ✕1 ', de: '▲10', by: '99.7%', cov: '▲ 640/734', covc: '#ff7a6b' },
+        { t: 'Oct 27 10:02', dotc: '#2a3034', repo: '—', label: 'identity and repo not parsed (pre-Nov 2)', prompts: '1', dur: '24m', calls: '4', ev: '—', fr: '', de: '', by: '—', cov: '4/—', covc: '#a3a9ad' },
+        { t: 'Oct 28 19:00', dotc: '#2a3034', repo: '—', label: 'identity and repo not parsed (pre-Nov 2)', prompts: '2', dur: '48m', calls: '7', ev: '—', fr: '', de: '', by: '—', cov: '7/—', covc: '#a3a9ad' },
+        { t: 'Oct 24 – 26', dotc: '#2a3034', repo: '—', label: '+ 6 more short sessions (34 calls)', prompts: '9', dur: '—', calls: '34', ev: '—', fr: '', de: '', by: '—', cov: '—', covc: '#a3a9ad' },
+        { t: 'Oct 23 17:00', dotc: '#2a3034', repo: '—', label: '51 tools · 6 MCP servers (Docs, Gmail, Drive, Vercel, taza, playwright)', prompts: '8', dur: '3h 30m', calls: '282', ev: '—', fr: '↯1', de: '', by: '—', cov: '282/—', covc: '#a3a9ad' },
+        { t: 'Oct 23 10:12', dotc: '#2a3034', repo: '—', label: '20 tools · MCP playwright', prompts: '12', dur: '5h 48m', calls: '539', ev: '—', fr: '', de: '▲3', by: '—', cov: '539/—', covc: '#a3a9ad' }
+      ],
+      kinds: [{ n: 'MODEL 1,506', c: M }, { n: 'ANALYTICS 969', c: A }, { n: 'FLAGS 9', c: FL }, { n: 'COUNT 12', c: C }, { n: 'ACCOUNT 384', c: AC }],
+      log: [
+        L('Nov 4 10:09:12', 'analytics', PR, 'POST', '/api/event_logging/v2/batch · 41 events', '200', '84 ms', '6.1 KB', '0.1 KB'),
+        L('Nov 4 10:09:03', 'model', PR, 'POST', '/v1/messages · main · opus · tool_use', '200', '9.3 s', '8.2 KB', '3.4 KB'),
+        L('Nov 4 10:08:58', 'model', PR, 'POST', '/v1/messages · auxiliary · recap · haiku', '200', '2.1 s', '3.0 KB', '0.9 KB', 0.55),
+        L('Nov 4 10:08:51', 'account', '— no session', 'GET', '/api/oauth/organizations/…/skills/list-skills', '200', '190 ms', '0.4 KB', '22 KB'),
+        L('Nov 4 10:08:44', 'model', PR, 'POST', '/v1/messages · main · opus · tool_use', '200', '4.8 s', '5.6 KB', '1.2 KB'),
+        L('Nov 4 10:08:42', 'analytics', PR, 'POST', '/api/event_logging/v2/batch · 88 events', '200', '69 ms', '13.1 KB', '0.1 KB'),
+        L('Nov 4 10:08:38', 'count', PR, 'POST', '/v1/messages/count_tokens', '200', '310 ms', '41 KB', '0.1 KB', 0.55),
+        L('Nov 4 10:08:31', 'model', PR, 'POST', '/v1/messages · subagent · Explore · haiku', '200', '1.4 s', '2.2 KB', '0.8 KB'),
+        L('Nov 4 10:08:29', 'model', PR, 'POST', '/v1/messages · main · opus', 'ERR', 'retry 1', '5.1 KB', '—'),
+        L('Nov 4 10:08:22', 'account', '— no session', 'GET', '/v1/mcp_servers/registry · directory', '200', '240 ms', '0.3 KB', '58 KB'),
+        L('Nov 4 10:08:12', 'model', PR, 'POST', '/v1/messages · main · opus · end_turn', '200', '11.2 s', '6.3 KB', '4.4 KB'),
+        L('Nov 4 10:07:57', 'analytics', PR, 'POST', '/api/event_logging/v2/batch · 64 events', '200', '66 ms', '9.7 KB', '0.1 KB'),
+        L('Nov 4 08:31:40', 'model', PR, 'POST', '/v1/messages · main · opus · thread create', '200', '14.9 s', '412 KB', '2.0 KB'),
+        L('Nov 4 08:31:22', 'flags', PR, 'POST', '/api/eval/sdk-… · 6-hourly refresh · 4 changed', '200', '120 ms', '1.8 KB', '96 KB'),
+        L('Nov 4 08:31:20', 'account', '— no session', 'GET', '/api/claude_cli/bootstrap', '200', '160 ms', '0.2 KB', '9 KB'),
+        L('Nov 4 08:31:19', 'account', '— no session', 'GET', '/api/oauth/profile', '200', '95 ms', '0.2 KB', '1.4 KB')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

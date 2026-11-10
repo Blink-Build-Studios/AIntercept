@@ -1,0 +1,70 @@
+/* SegmentedControl (CompControls specimens; handoff §6.1). Options are
+   borderless buttons split by `line` hairlines inside one line-strong frame.
+   Colors live here so the state rules can override them; data-force pins a
+   state on one option for stories. */
+@layer components {
+  .segmented {
+    display: flex;
+    border: 1px solid var(--line-strong);
+  }
+  .segmented[aria-disabled="true"] {
+    border-color: var(--line);
+  }
+  .segmented-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    color: var(--ink);
+    background: var(--surface);
+    border: 0 none;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+  .segmented-dot {
+    display: block;
+    flex: none;
+    width: 7px;
+    height: 7px;
+  }
+  /* On the ink fill a dot keeps a --bg ring, so a light dot still reads (CompProviders AgentScope/personCodex). */
+  .segmented-option[aria-pressed="true"] .segmented-dot {
+    box-shadow: 0 0 0 1px var(--bg);
+  }
+  .segmented-option + .segmented-option {
+    border-left: 1px solid var(--line);
+  }
+  /* §11G.B1–B2: hover raises with a 1px --ink-muted inset ring; pressed is --skeleton; the
+     selected option takes the ink fill (--bg text, 600), --ink-muted under the pointer. */
+  .segmented:not([aria-disabled="true"]) .segmented-option:hover,
+  .segmented-option[data-force="hover"] {
+    background: var(--surface-raised);
+    box-shadow: inset 0 0 0 1px var(--ink-muted);
+  }
+  .segmented:not([aria-disabled="true"]) .segmented-option:active,
+  .segmented-option[data-force="pressed"] {
+    background: var(--skeleton);
+    box-shadow: none;
+  }
+  .segmented-option[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--bg);
+    /* Important: the option's type utility (500) outranks this layer otherwise. */
+    font-weight: 600 !important;
+    box-shadow: none;
+  }
+  .segmented:not([aria-disabled="true"]) .segmented-option[aria-pressed="true"]:hover {
+    background: var(--ink-muted);
+  }
+  .segmented-option:focus-visible,
+  .segmented-option[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+  .segmented[aria-disabled="true"] .segmented-option {
+    color: var(--ink-faint);
+    cursor: default;
+  }
+  .segmented-option[aria-busy="true"] {
+    cursor: progress;
+  }
+}

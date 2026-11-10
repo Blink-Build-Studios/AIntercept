@@ -1,0 +1,69 @@
+/* PersonScreen (Main.dc.html): a 1440px column, 24px 32px, sections 24px apart. */
+@layer components {
+  .person-page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 24px 32px;
+  }
+  /* PageHeader brings its own padding for the full-width header; here the column pads. */
+  .person-header > * {
+    padding: 0;
+  }
+  /* The header's posture chips sit 12px under the block (Main.dc.html: -12px of the 24px gap). */
+  .person-header-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .person-posture {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .person-posture > .type-key {
+    margin-right: 4px;
+  }
+  .person-ribbon > .stat-ribbon {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .person-ribbon > .coverage-line {
+    border: 0;
+  }
+  .person-panels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .person-panels > * {
+    flex: 1 1 520px;
+    min-width: 0;
+  }
+  .person-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .person-waiting {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 72px 32px;
+  }
+  @media (max-width: 959px) {
+    .person-page {
+      padding: 16px;
+    }
+    .person-panels > * {
+      flex-basis: 100%;
+    }
+  }
+}

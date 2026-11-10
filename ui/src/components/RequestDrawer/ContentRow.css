@@ -1,0 +1,33 @@
+/* ContentRow (CompDrawer "ContentRow" specimens; the drawer's Summary tab). */
+@layer components {
+  .content-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px 4px 16px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  /* The last block of a list closes on the list's own edge. */
+  .content-row:last-child {
+    border-bottom: 0;
+  }
+  .content-row-label {
+    width: 180px;
+    flex: none;
+    font-weight: 600;
+  }
+  .content-row-detail {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The body lines up with the detail column (16 + 180 + 12). */
+  .content-row-body {
+    margin: 0;
+    padding: 8px 16px 8px 208px;
+    border-bottom: 1px solid var(--line);
+    white-space: pre-wrap;
+  }
+}

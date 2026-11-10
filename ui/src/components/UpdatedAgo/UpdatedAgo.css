@@ -1,0 +1,28 @@
+/* UpdatedAgo (handoff §11H.4, CompR11): a fixed 19ch slot, a 10px indicator cell, a 6px gap. */
+@layer components {
+  .updated-ago {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 19ch;
+    white-space: nowrap;
+  }
+  .updated-ago-cell {
+    display: flex;
+    justify-content: center;
+    width: 10px;
+    flex: none;
+  }
+  .updated-ago-dot {
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--ink-muted);
+  }
+  .updated-ago-failed {
+    display: block;
+    font-weight: 600;
+    color: var(--ink);
+  }
+}

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>People</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}a:hover{color:#a9cbff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.prow{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid #2a3034;white-space:nowrap;color:#e6e3db;text-decoration:none}
+.prow:hover{background:#1b1f22;color:#e6e3db}
+.prow:focus-visible{outline:none;background:#1b1f22;box-shadow:inset 0 0 0 2px #ffd36b}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn:focus-visible{outline:2px solid #ffd36b;outline-offset:1px}
+.inp{font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:18px;color:#e6e3db;background:#0c0e0f;border:1px solid #60686d;border-radius:2px;padding:5px 8px;width:260px}
+</style>
+</helmet>
+<div style="min-height: 1200px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+<!-- top bar -->
+<div data-spec="AppBar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span data-spec="Wordmark" class="m" style="color: #e6e3db; letter-spacing: .01em"><span style="font-weight: 600">AI</span><span style="font-weight: 400">ntercept</span></span>
+<span class="m" style="color: #848c90">people</span>
+<div style="flex: 1 1 0"></div>
+<span class="k" id="win-l">Active in the last</span>
+<div data-spec="SegmentedControl" role="group" aria-labelledby="win-l" style="display: flex; border: 1px solid #60686d; border-radius: 2px">
+<button class="btn" style="border: 0; border-radius: 0">24h</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button>
+<button class="btn" aria-pressed="true" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #e6e3db; color: #0c0e0f; font-weight: 600">14d</button>
+<button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">All</button>
+</div>
+<span data-spec="UpdatedAgo" class="m" style="display: inline-flex; align-items: center; gap: 6px; width: 19ch; white-space: nowrap; color: #a3a9ad"><span style="width: 10px; display: inline-flex; justify-content: center"><sc-if value="{{polling}}" hint-placeholder-val="{{ false }}"><span style="width: 6px; height: 6px; border-radius: 999px; background: #a3a9ad; display: inline-block"></span></sc-if></span><span>{{updated}}</span></span>
+<button data-spec="Button/aboutThisData" class="btn">About this data</button>
+</div>
+
+<!-- loading -->
+<sc-if value="{{isLoading}}" hint-placeholder-val="{{ false }}">
+<div data-spec="Skeleton/page" aria-busy="true" aria-label="Loading people" style="max-width: 1440px; margin: 0 auto; padding: 24px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<span style="font-size: 18px; line-height: 24px; font-weight: 600">People</span>
+<span class="m" style="color: #848c90">loading…</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{skel5}}" as="x" hint-placeholder-count="5"><div data-spec="Skeleton/block" style="flex: 1 1 180px; height: 78px; background: #20252a"></div></sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{skel4}}" as="x" hint-placeholder-count="4"><div data-spec="AgentCard/loading" style="height: 74px; background: #131618; border: 1px solid #2a3034; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px"><div style="width: 50%; height: 12px; background: #20252a"></div><div style="width: 70%; height: 10px; background: #20252a; opacity: .6"></div></div></sc-for>
+</div>
+<div>
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 8px"><div style="width: 320px; height: 30px; background: #20252a; opacity: .6"></div></div>
+<div data-spec="DataTable/people" style="background: #131618; border: 1px solid #2a3034; overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1240px">
+<span style="width: 250px">Person</span><span style="width: 260px">Agents</span><span style="width: 100px">Last seen</span>
+<span style="width: 70px; text-align: right">Sessions</span><span style="width: 70px; text-align: right">Prompts</span><span style="width: 90px; text-align: right">Tokens</span>
+<span style="flex: 1">Activity · 14 days</span><sc-if value="{{ccCols}}" hint-placeholder-val="{{ false }}"><span style="width: 90px; text-align: right">Bypass</span><span style="width: 84px; text-align: right">Missed</span></sc-if><sc-if value="{{cxCols}}" hint-placeholder-val="{{ false }}"><span style="width: 150px; text-align: right">5h · week</span><span style="width: 100px">Plan</span></sc-if><span style="width: 12px"></span>
+</div>
+<sc-for list="{{skelRows}}" as="x" hint-placeholder-count="5">
+<div data-spec="PersonRow/loading" style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-bottom: 1px solid #2a3034; min-width: 1240px">
+<div style="width: 250px; display: flex; flex-direction: column; gap: 6px"><div style="height: 12px; background: #20252a; width: {{x.w}}"></div><div style="width: 70%; height: 8px; background: #20252a; opacity: .6"></div></div>
+<div style="width: 260px"><div style="width: 96px; height: 16px; background: #20252a"></div></div>
+<div style="width: 100px"><div style="width: 70px; height: 12px; background: #20252a"></div></div>
+<div style="width: 70px"><div style="width: 30px; height: 12px; background: #20252a; margin-left: auto"></div></div>
+<div style="width: 70px"><div style="width: 30px; height: 12px; background: #20252a; margin-left: auto"></div></div>
+<div style="width: 90px"><div style="width: 54px; height: 12px; background: #20252a; margin-left: auto"></div></div>
+<div style="flex: 1; min-width: 160px; height: 18px; background: #20252a; opacity: .45"></div>
+<div style="width: 12px"></div>
+</div>
+</sc-for>
+</div>
+<div class="m" style="color: #848c90; padding-top: 8px">Loading people seen in the last 14 days…</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showData}}" hint-placeholder-val="{{ true }}">
+
+<div style="max-width: 1440px; margin: 0 auto; padding: 24px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<!-- heading + ribbon -->
+<div data-spec="PageHeader" style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<span style="font-size: 18px; line-height: 24px; font-weight: 600">People</span>
+<span class="m" style="color: #a3a9ad">active in the last 14 days · Oct 22 – Nov 4 · counts below cover that window only</span>
+</div>
+<div data-spec="StatRibbon" style="background: #131618; border: 1px solid #2a3034; display: flex; flex-wrap: wrap">
+<sc-for list="{{ribbon}}" as="r" hint-placeholder-count="5">
+<div data-spec="StatTile" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-right: 1px solid #2a3034; flex: 1 1 180px">
+<span class="k">{{r.k}}</span>
+<span class="m" style="font-size: 22px; line-height: 26px; font-weight: 500">{{r.v}}</span>
+<span style="color: #a3a9ad">{{r.s}}</span>
+</div>
+</sc-for>
+</div>
+
+<!-- agents strip -->
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{agents}}" as="a" hint-placeholder-count="4">
+<button data-spec="AgentCard" class="btn" onClick="{{a.pick}}" style="display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 10px 12px; text-align: left; background: {{a.bg}}; border-color: {{a.bd}}">
+<span style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 999px; background: {{a.c}}"></span><span class="m" style="font-weight: 600">{{a.n}}</span><span style="flex: 1"></span><span class="m" style="color: #a3a9ad">{{a.p}}</span></span>
+<span class="m" style="color: #a3a9ad; font-weight: 400">{{a.s}}</span>
+<span class="m" style="color: #848c90; font-weight: 400; font-size: 11px">{{a.shape}}</span>
+</button>
+</sc-for>
+</div>
+
+<!-- unattributed -->
+<div data-spec="UnattributedNotice" style="display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 12px; border: 1px solid #2a3034; background: #131618">
+<span class="m" style="font-weight: 600">1 session not tied to a person</span>
+<span style="color: #a3a9ad">Nov 2 · 38 model calls · Claude Code · from an IP no known device has used · identity not parsed yet</span>
+<span style="flex: 1"></span>
+<a href="#" class="m">view traffic</a>
+</div>
+
+<!-- table -->
+<div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 8px">
+<label class="k" for="pplf">Search</label>
+<input data-spec="TextInput/search" id="pplf" class="inp" placeholder="name, email, account, device…">
+<span data-spec="Chip/selectedFilter" class="chip" style="background: #1b1f22">{{filterLabel}}</span>
+<span style="flex: 1"></span>
+<span class="m" style="color: #848c90">sorted by last seen</span>
+</div>
+<div data-spec="DataTable/people" style="background: #131618; border: 1px solid #2a3034; overflow-x: auto">
+<div class="row k" style="color: #848c90; min-width: 1240px">
+<span style="width: 250px">Person</span><span style="width: 260px">Agents</span><span style="width: 100px">Last seen</span>
+<span style="width: 70px; text-align: right">Sessions</span><span style="width: 70px; text-align: right">Prompts</span><span style="width: 90px; text-align: right">Tokens</span>
+<span style="flex: 1">Activity · 14 days</span><sc-if value="{{ccCols}}" hint-placeholder-val="{{ false }}"><span style="width: 90px; text-align: right">Bypass</span><span style="width: 84px; text-align: right">Missed</span></sc-if><sc-if value="{{cxCols}}" hint-placeholder-val="{{ false }}"><span style="width: 150px; text-align: right">5h · week</span><span style="width: 100px">Plan</span></sc-if><span style="width: 12px"></span>
+</div>
+<sc-for list="{{people}}" as="p" hint-placeholder-count="5">
+<a data-spec="PersonRow" href="{{p.href}}" class="prow m" style="min-width: 1240px">
+<span style="width: 250px; display: flex; flex-direction: column; overflow: hidden">
+<span style="font-weight: 600; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; overflow: hidden; text-overflow: ellipsis">{{p.name}}</span>
+<span style="color: #848c90; font-size: 11px; line-height: 14px; overflow: hidden; text-overflow: ellipsis">{{p.id}}</span>
+</span>
+<span style="width: 260px; display: flex; flex-wrap: wrap; gap: 4px">
+<sc-for list="{{p.agents}}" as="a" hint-placeholder-count="2"><span data-spec="AgentChip/row" class="chip" style="border-color: #2a3034"><span style="width: 7px; height: 7px; border-radius: 999px; background: {{a.c}}"></span>{{a.n}}</span></sc-for>
+</span>
+<span style="width: 100px; color: {{p.lsc}}">{{p.ls}}</span>
+<span style="width: 70px; text-align: right">{{p.sess}}</span>
+<span style="width: 70px; text-align: right">{{p.prompts}}</span>
+<span style="width: 90px; text-align: right; color: {{p.tokc}}">{{p.tok}}</span>
+<span data-spec="Sparkline" style="flex: 1; display: flex; align-items: flex-end; gap: 2px; height: 22px; min-width: 160px">
+<sc-for list="{{p.spark}}" as="b" hint-placeholder-count="14"><span style="flex: 1; background: {{b.c}}; height: {{b.h}}; min-height: 1px"></span></sc-for>
+</span>
+<sc-if value="{{ccCols}}" hint-placeholder-val="{{ false }}"><span style="width: 90px; text-align: right">{{p.by}}</span><span style="width: 84px; text-align: right; color: {{p.covc}}">{{p.cov}}</span></sc-if>
+<sc-if value="{{cxCols}}" hint-placeholder-val="{{ false }}"><span style="width: 150px; text-align: right">{{p.lim}}</span><span style="width: 100px">{{p.plan}}</span></sc-if>
+<span style="width: 12px; color: #848c90">›</span>
+</a>
+</sc-for>
+</div>
+<div class="m" style="color: #848c90; padding-top: 8px">Tokens: exact where the agent reports usage, ≈ estimated from text size, — where the surface sends none.</div>
+</div>
+
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["ready","loading"],"default":"ready"},"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var pick = (this.state && this.state.agent) || 'all';
+    var st8 = this.props.state || 'ready';
+    var CC = '#e8916f', CX = '#9fb4c7', GPT = '#7fd1b9', CAI = '#d9b98c';
+    var A = { cc: { n: 'Claude Code', c: CC }, cx: { n: 'Codex', c: CX }, gpt: { n: 'ChatGPT', c: GPT }, cai: { n: 'claude.ai', c: CAI } };
+    var spark = function (days, col) {
+      return days.map(function (d) { return { h: d ? Math.min(22, 3 + d * 1.9) + 'px' : '1px', c: d ? col : '#2a3034' }; });
+    };
+    var people = [
+      { key: ['cc'], name: 'name unknown', id: 'email not seen · 1 account · 1 device', agents: [A.cc], ls: '● now', lsc: '#57d68d', sess: '11', prompts: '66', tok: '1.1M out', tokc: '#e6e3db',
+        spark: spark([0, 10, 3, 2, 1, 1, 0, 1, 1, 0, 0, 10, 10, 4], CC), by: '99.7%', cov: '▲ 94', covc: '#ff7a6b', href: 'Main.dc.html' },
+      { key: ['cx', 'gpt'], name: '[Person B]', id: 'linked by email · 2 accounts · 2 devices', agents: [A.cx, A.gpt], ls: '● 4 min ago', lsc: '#57d68d', sess: '9', prompts: '74', tok: '≈ 610k out', tokc: '#a3a9ad',
+        spark: spark([2, 4, 0, 0, 5, 6, 3, 0, 0, 4, 7, 5, 6, 2], CX), by: '', cov: '', covc: '#a3a9ad', lim: '41% · 83%', plan: 'Plus', href: '#' },
+      { key: ['cai', 'cc'], name: '[Person C]', id: 'linked by email · 2 accounts · 2 devices', agents: [A.cai, A.cc], ls: 'Nov 3 18:40', lsc: '#a3a9ad', sess: '6', prompts: '41', tok: '212k out', tokc: '#e6e3db',
+        spark: spark([0, 0, 1, 2, 0, 0, 0, 0, 1, 3, 2, 0, 4, 0], CAI), by: '0%', cov: '0', covc: '#a3a9ad', href: '#' },
+      { key: ['gpt'], name: '[Person D]', id: 'ChatGPT web · 1 device', agents: [A.gpt], ls: 'Nov 3 09:12', lsc: '#a3a9ad', sess: '4', prompts: '19', tok: '—', tokc: '#848c90',
+        spark: spark([0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 0, 3, 1, 0], GPT), by: '—', cov: '—', covc: '#a3a9ad', href: '#' },
+      { key: ['cc'], name: 'name unknown', id: 'email not seen · 1 account · 1 device', agents: [A.cc], ls: 'Nov 3 02:15', lsc: '#a3a9ad', sess: '1', prompts: '1', tok: '1.8k out', tokc: '#e6e3db',
+        spark: spark([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0], CC), by: '—', cov: '0', covc: '#a3a9ad', href: '#' }
+    ];
+    var shown = pick === 'all' ? people : people.filter(function (p) { return p.key.indexOf(pick) >= 0; });
+    var agentCard = function (id, a, ppl, s, shape) {
+      var on = pick === id;
+      return { n: a.n, c: a.c, p: ppl, s: s, shape: shape, bg: on ? '#1b1f22' : '#131618', bd: on ? '#e6e3db' : '#2a3034',
+        pick: function () { self.setState({ agent: on ? 'all' : id }); } };
+    };
+    return {
+      isLoading: st8 === 'loading', showData: st8 !== 'loading',
+      live: st8 === 'loading' ? { t: 'CONNECTING', c: '#a3a9ad', bd: '#60686d', dot: '#848c90' } : { t: 'LIVE · 5s', c: '#57d68d', bd: '#57d68d', dot: '#57d68d' },
+      updated: 'updated 11:32:05', polling: st8 === 'loading',
+      skel5: [1, 2, 3, 4, 5], skel4: [1, 2, 3, 4],
+      skelRows: [{ w: '60%' }, { w: '45%' }, { w: '55%' }, { w: '40%' }, { w: '50%' }],
+      ribbon: [
+        { k: 'People', v: '5', s: '2 active now' },
+        { k: 'Agents seen', v: '4', s: 'Claude Code, Codex, ChatGPT, claude.ai' },
+        { k: 'Sessions', v: '31', s: '+1 not tied to a person' },
+        { k: 'Requests', v: '4,9xx', s: 'all agents, all channels' },
+        { k: 'Devices', v: '9', s: 'across all agents' }
+      ],
+      agents: [
+        agentCard('cc', A.cc, '3 people', '18 sessions · ▲ 94 calls missed', 'bypass on 62% of model calls'),
+        agentCard('cx', A.cx, '1 person', '7 sessions · 21 turns', 'limits: highest week 83%'),
+        agentCard('gpt', A.gpt, '2 people', '6 conversations · no token counts', 'conversations → messages'),
+        agentCard('cai', A.cai, '1 person', '4 conversations · 3 uploads', 'conversations → messages')
+      ],
+      filterLabel: pick === 'all' ? 'ALL AGENTS · 5 PEOPLE' : (A[pick].n.toUpperCase() + ' · ' + shown.length + (shown.length === 1 ? ' PERSON' : ' PEOPLE')),
+      ccCols: pick === 'cc', cxCols: pick === 'cx',
+      people: shown
+    };
+  }
+}
+</script>
+</body>
+</html>

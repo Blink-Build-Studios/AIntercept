@@ -70,6 +70,9 @@ static_resources:
                   - name: envoy.filters.http.ext_proc
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      # Observe: Envoy sends and never waits for the observer's
+                      # replies, so it can't delay or break traffic.
+                      observability_mode: true
                       # An observer failure must never fail a real request.
                       failure_mode_allow: true
                       # Observe-only: stream bodies as chunks, never buffer whole.
@@ -80,9 +83,6 @@ static_resources:
                         response_body_mode: STREAMED
                         request_trailer_mode: SKIP
                         response_trailer_mode: SKIP
-                      # Bounded time to talk to the observer; if exceeded with
-                      # failure_mode_allow, the request proceeds.
-                      message_timeout: 0.2s
                       grpc_service:
                         envoy_grpc:
                           cluster_name: observer

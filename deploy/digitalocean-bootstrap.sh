@@ -94,8 +94,7 @@ never the CLI):
 
   helm install aintercept deploy/helm/aintercept \\
     --set cloud=digitalocean \\
-    --set images.observer.repository=<registry>/aintercept-observer --set images.observer.tag=<tag> \\
-    --set images.certsvc.repository=<registry>/aintercept-certsvc  --set images.certsvc.tag=<tag> \\
+    --set images.aintercept.repository=<registry>/aintercept --set images.aintercept.tag=<tag> \\
     --set imagePullSecret=<registry-pull-secret> \\
     --set objectStore.bucket=${SPACE} \\
     --set objectStore.region=${REGION} \\

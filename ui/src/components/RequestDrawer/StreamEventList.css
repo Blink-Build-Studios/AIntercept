@@ -1,0 +1,22 @@
+/* StreamEventList (CompDrawer "StreamEventList/default"). RawView widens the
+   columns to 64px and 220px (--stream-t-width, --stream-type-width). */
+@layer components {
+  .stream-row {
+    display: flex;
+    gap: 12px;
+  }
+  .stream-t {
+    width: var(--stream-t-width, 52px);
+    flex: none;
+  }
+  .stream-type {
+    width: var(--stream-type-width, 170px);
+    flex: none;
+  }
+  .stream-detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

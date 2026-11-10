@@ -1,0 +1,25 @@
+/* EmptyState (CompStates "EmptyState" specimens): centered in the region. */
+@layer components {
+  .empty-state {
+    gap: 8px;
+    padding: 40px 16px;
+    text-align: center;
+  }
+  .empty-state-compact {
+    gap: 6px;
+    padding: 24px 16px;
+    text-align: start;
+  }
+  .empty-state-bare {
+    padding: 0;
+  }
+  .empty-state-title {
+    font: 500 13px/20px var(--font-ui);
+  }
+  .empty-state-body {
+    max-width: 460px;
+  }
+  .empty-state-actions {
+    margin-top: 8px;
+  }
+}

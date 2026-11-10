@@ -1,0 +1,28 @@
+/* InputCompositionBar (the drawer's All details, Session sheet). */
+@layer components {
+  .composition {
+    padding: 12px 16px;
+  }
+  .composition-note,
+  .composition-legend {
+    font: 400 11px/20px var(--font-mono);
+  }
+  .composition-bar {
+    display: flex;
+    gap: 1px;
+    height: 10px;
+    margin-top: 6px;
+  }
+  .composition-cached {
+    opacity: 0.55;
+  }
+  .composition-fresh {
+    min-width: 3px;
+  }
+  .composition-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin-top: 4px;
+  }
+}

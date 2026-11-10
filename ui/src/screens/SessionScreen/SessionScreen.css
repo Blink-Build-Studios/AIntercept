@@ -1,0 +1,86 @@
+/* SessionScreen (handoff §7.3, §7.4; Session.dc.html). */
+@layer components {
+  .session-screen {
+    min-height: 100vh;
+    background: var(--bg);
+  }
+  .session-main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 32px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  /* PageHeader pads itself 24px 32px; the main column continues under it. */
+  .session-head {
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  .session-head > .session-head-box,
+  .session-head > .session-header-skeleton {
+    padding: 24px 32px;
+  }
+  .session-header-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .session-timeline-skeleton {
+    height: 360px;
+  }
+  .session-panels {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .session-panel-skeleton {
+    height: 140px;
+  }
+  .session-tabbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .session-tabbar .tablist {
+    border-bottom: 0;
+  }
+  .session-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .session-pill {
+    position: sticky;
+    bottom: 16px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .session-pill > * {
+    pointer-events: auto;
+  }
+  .session-failed {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 96px 32px;
+  }
+  /* §7.4: four panels in a row from 1280px; two below; stacked below 960px, where the page pads less. */
+  @media (max-width: 1279px) {
+    .session-panels {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 959px) {
+    .session-main {
+      padding: 0 16px 16px;
+    }
+    .session-panels {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

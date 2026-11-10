@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Timeline</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.frame{background:#131618;border:1px solid #2a3034;width:1100px}
+.lane{display:flex;border-bottom:1px solid #2a3034}
+.lab{width:132px;flex:none;padding:6px 12px;box-sizing:border-box;border-right:1px solid #2a3034}
+.track{position:relative;flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.btn[aria-disabled="true"]:not([aria-busy="true"]){color:#848c90;border-color:#2a3034;cursor:not-allowed}
+.comp{display:flex;flex-direction:column;gap:10px}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1750px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Timeline</span>
+<span style="color: #a3a9ad">A Timeline is a stack of Lanes on one shared axis. Each lane is a 132px label plus one track type. Dragging across any lane sets the Brush, and everything below the timeline follows the brushed range.</span>
+</div>
+
+<div class="comp"><span class="cname">Lane + BarTrack</span><span class="props">bins[{t, v}], color, gaps[] · model calls · coverage gaps now have their own row: Timelines at density → Lane/modelCallsWithGapRow</span>
+<div class="frame"><div data-spec="Lane/modelCalls" class="lane" style="height: 60px; border-bottom: 0"><div class="lab"><div class="k">Model calls</div><div class="m" style="font-size: 11px; color: #a3a9ad">per hour</div></div><div data-spec="BarTrack/withGaps" class="track">
+
+
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; background: {{b.c}}; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div></div></div></div>
+
+<div class="comp"><span class="cname">Lane + DensityTrack</span><span class="props">bins[], color · analytics events per bin; continues after model calls stop</span>
+<div class="frame"><div data-spec="Lane/analytics" class="lane" style="height: 44px; border-bottom: 0"><div class="lab"><div class="k">Analytics</div><div class="m" style="font-size: 11px; color: #a3a9ad">events/hour</div></div><div data-spec="DensityTrack/default" class="track">
+<sc-for list="{{dens}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; background: #f0b43c; opacity: .85; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div></div></div></div>
+
+<div class="comp"><span class="cname">Lane + BandTrack</span><span class="props">bands[{start, end, label, row, live?, preCapture?, inner?}] · sessions; overlapping sessions stack into rows; context draws inside a band on the session page only</span>
+<div class="frame"><div data-spec="Lane/sessions" class="lane" style="height: 76px; background: #0c0e0f; border-bottom: 0"><div class="lab"><div class="k">Sessions</div></div><div data-spec="BandTrack/default" class="track">
+<div style="position: absolute; top: 6px; height: 28px; left: 6%; width: 3%; background: #1b1f22; border-left: 2px solid #e8916f"><span class="m" style="position: absolute; left: 6px; top: 4px; font-size: 10.5px; line-height: 20px; white-space: nowrap">short</span></div>
+<div style="position: absolute; top: 6px; height: 28px; left: 24%; width: 30%; background: #1b1f22; border-left: 2px solid #e8916f"><span class="m" style="position: absolute; left: 6px; top: 4px; font-size: 10.5px; line-height: 20px; white-space: nowrap">ended · aintercept · main</span></div>
+<div data-spec="BandTrack/overlappingBand" style="position: absolute; top: 40px; height: 28px; left: 34%; width: 10%; background: #1b1f22; border-left: 2px solid #e8916f"><span class="m" style="position: absolute; left: 6px; top: 4px; font-size: 10.5px; line-height: 20px; white-space: nowrap">overlapping (row 2)</span></div>
+<div data-spec="BandTrack/preCaptureFade" style="position: absolute; top: 6px; height: 28px; left: 62%; width: 3%; background: linear-gradient(90deg, transparent, #1b1f22)"></div>
+<div data-spec="BandTrack/liveBand" style="position: absolute; top: 6px; height: 28px; left: 65%; width: 35%; background: #1b1f22; border-left: 2px solid #e8916f"><span class="m" style="position: absolute; left: 6px; top: 4px; font-size: 10.5px; line-height: 20px; white-space: nowrap">aintercept · partner-readiness · live</span><span style="position: absolute; right: 6px; top: 10px; width: 7px; height: 7px; border-radius: 999px; background: #57d68d"></span></div>
+</div></div></div></div>
+
+<div class="comp"><span class="cname">Lane + StateTrack</span><span class="props">segments[{start, end, state, label?}] · presence (focused | away | asleep | none), permission mode, network</span>
+<div class="frame">
+<div class="m" style="color: #a3a9ad; font-size: 12px; padding: 10px 12px; border: 1px dashed #60686d; width: 1100px; box-sizing: border-box">Presence, focus and device sleep are now one labelled row per state with no text inside segments: Timelines at density → Lane/presenceRows, Lane/focusRows, Lane/deviceSleepRow.</div>
+
+
+
+
+
+<div data-spec="Lane/permission" class="lane" style="height: 30px"><div class="lab"><div class="k">Permission</div></div><div data-spec="StateTrack/permission" class="track">
+<div class="m" style="position: absolute; top: 6px; height: 18px; left: 4%; right: 4%; background: #1b1f22; border: 1px solid #60686d; box-sizing: border-box; font-size: 10.5px; line-height: 16px; padding-left: 6px">bypassPermissions</div>
+<div style="position: absolute; top: 4px; height: 22px; width: 3px; background: #ffd36b; left: 58%"></div>
+<span class="m" style="position: absolute; top: 6px; font-size: 10.5px; line-height: 18px; color: #ffd36b; left: 58.4%; background: #131618; padding: 0 4px">→ default ×2 in 20 s</span>
+</div></div>
+<div class="m" style="color: #a3a9ad; font-size: 12px; padding: 10px 12px; border: 1px dashed #60686d; width: 1100px; box-sizing: border-box">Network: Timelines at density → Lane/networkRow (labels only when they fit).</div>
+
+
+
+</div></div>
+
+<div class="comp"><span class="cname">Lane + MarkerTrack</span><span class="props">markers[{t, glyph?, tone}], labels? · prompt ticks, friction glyphs</span>
+<div class="frame">
+<div data-spec="Lane/prompts" class="lane" style="height: 26px"><div class="lab"><div class="k">Prompts</div></div><div data-spec="MarkerTrack/ticks" class="track">
+<sc-for list="{{ticks}}" as="p" hint-placeholder-count="20"><div style="position: absolute; top: 5px; width: 1px; height: 16px; background: #e6e3db; left: {{p.l}}"></div></sc-for>
+<span class="m" style="position: absolute; top: 3px; left: 10.3%; font-size: 10.5px; color: #a3a9ad">#1</span><span class="m" style="position: absolute; top: 3px; left: 60.3%; font-size: 10.5px; color: #a3a9ad">#13</span>
+</div></div>
+<div class="m" style="color: #a3a9ad; font-size: 12px; padding: 10px 12px; border: 1px dashed #60686d; width: 1100px; box-sizing: border-box">Friction: Timelines at density → Lane/frictionSplit (one row per kind, clusters with counts).</div>
+
+
+</div></div>
+
+<div class="comp"><span class="cname">Brush · NowLine</span><span class="props">Brush: start, end, onChange (handles, dimmed outside) · NowLine: t · TimeAxis: start, end, ticks · Legend: items[]</span>
+<div data-spec="Timeline/withBrush" class="frame">
+<div style="position: relative">
+<div data-spec="Brush/selected" style="position: absolute; top: 0; bottom: 0; left: calc(132px + (100% - 132px) * .30); width: calc((100% - 132px) * .15); background: rgba(255, 211, 107, .08); border-left: 2px solid #ffd36b; border-right: 2px solid #ffd36b; z-index: 2">
+<div style="position: absolute; top: 50%; left: -5px; width: 8px; height: 22px; margin-top: -11px; background: #ffd36b; border-radius: 2px"></div><div style="position: absolute; top: 50%; right: -5px; width: 8px; height: 22px; margin-top: -11px; background: #ffd36b; border-radius: 2px"></div><button data-spec="Brush/clearButtonOnTimeline" aria-label="Clear range" style="all: unset; position: absolute; top: 2px; right: 4px; width: 16px; height: 16px; line-height: 16px; text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; border-radius: 2px; cursor: pointer; background: #ffd36b; color: #0c0e0f">×</button></div>
+<div style="position: absolute; top: 0; bottom: 0; left: 132px; width: calc((100% - 132px) * .30); background: rgba(12, 14, 15, .45); z-index: 1"></div>
+<div style="position: absolute; top: 0; bottom: 0; right: 0; width: calc((100% - 132px) * .55); background: rgba(12, 14, 15, .45); z-index: 1"></div>
+<div data-spec="NowLine/default" style="position: absolute; top: 0; bottom: 0; width: 1px; background: #57d68d; z-index: 3; left: calc(132px + (100% - 132px) * .92)"></div>
+<div data-spec="Lane/modelCallsUnderBrush" class="lane" style="height: 60px; border-bottom: 0"><div class="lab"><div class="k">Model calls</div></div><div data-spec="BarTrack/default" class="track">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; background: {{b.c}}; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+</div></div>
+</div>
+<div class="m" style="color: #a3a9ad; font-size: 12px; padding: 10px 12px; border: 1px dashed #60686d; width: 1100px; box-sizing: border-box">TimeAxis: ticks, gridlines and round-time labels now: Timelines at density → TimeAxis/ticks14d, TimeAxis/ticks24h. The legend is removed (§11G.A7).</div>
+
+</div></div>
+
+<div class="comp"><span class="cname">RangeReadout</span><span class="props">range, counts{}, mode: range | live | empty · onPrev, onNext, onClear · attaches under the timeline</span>
+<div style="display: flex; flex-direction: column; gap: 12px; width: 1100px">
+<div><div class="cap">range</div><div data-spec="RangeReadout/range" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 12px; border: 1px solid #ffd36b; background: #131618"><span class="k" style="color: #ffd36b">Range</span><span class="m" style="font-weight: 600">Nov 3 10:00:00 → 12:00:00 · 2h 0m</span><span class="m">4 prompts</span><span class="m">96 model calls</span><span class="m">2,412 events</span><span style="flex: 1"></span><button class="btn" aria-label="Previous range">‹</button><button class="btn" aria-label="Next range">›</button><button data-spec="Button/wholeSessionOnReadout" class="btn">× Whole session</button></div></div>
+<div><div class="cap">live (following)</div><div data-spec="RangeReadout/live" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 12px; border: 1px solid #ffd36b; background: #131618"><span class="k" style="color: #ffd36b">Range</span><span class="m" style="font-weight: 600">Last 15 min · following live</span><span class="m">2 prompts</span><span class="m">19 model calls</span><span class="m">402 events</span><span style="flex: 1"></span><button class="btn" aria-label="Previous range">‹</button><button class="btn" aria-label="Next range" aria-disabled="true" style="color: #848c90; border-color: #2a3034">›</button><button class="btn">Whole session</button></div></div>
+<div><div class="cap">empty range</div><div data-spec="RangeReadout/empty" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 12px; border: 1px solid #ffd36b; background: #131618"><span class="k" style="color: #ffd36b">Range</span><span class="m" style="font-weight: 600">Oct 30 02:00 → 08:00 · 6h 0m</span><span class="m" style="color: #a3a9ad">no activity</span><span style="flex: 1"></span><button class="btn">← nearest earlier</button><button class="btn">nearest later →</button><button class="btn">Clear</button></div></div>
+</div></div>
+
+<div class="comp"><span class="cname">Timeline · loading</span><span class="props">lanes keep their labels and heights; tracks show skeleton</span>
+<div data-spec="Timeline/loading" class="frame">
+<sc-for list="{{skel}}" as="s" hint-placeholder-count="4"><div data-spec="Lane/loading" class="lane" style="height: {{s.h}}"><div class="lab"><div class="k">{{s.n}}</div></div><div class="track" style="display: flex; align-items: center; padding: 0 8px"><div style="width: 100%; background: #20252a; opacity: .55; height: {{s.ih}}"></div></div></div></sc-for>
+</div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1750}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var seed = 5; var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    var bars = [], dens = [], ticks = [];
+    for (var i = 0; i < 100; i++) {
+      var x = i; var on = (x > 4 && x < 30) || (x > 36 && x < 52) || (x > 60 && x < 96);
+      if (on && !(x >= 52 && x < 60)) bars.push({ l: x + '%', w: '0.8%', h: (4 + rnd() * 52).toFixed(0) + 'px', c: rnd() < 0.06 ? '#60686d' : '#7db3ff' });
+      dens.push({ l: x + '%', w: '0.8%', h: (on ? 10 + rnd() * 28 : 1 + rnd() * 5).toFixed(0) + 'px' });
+    }
+    [10.3, 13, 17, 20, 24, 27, 38, 41, 45, 49, 60.3, 63, 66, 70, 74, 79, 84, 88, 91, 94].forEach(function (t) { ticks.push({ l: t + '%' }); });
+    return {
+      bars: bars, dens: dens, ticks: ticks,
+      skel: [{ n: 'Prompts', h: '26px', ih: '10px' }, { n: 'Model calls', h: '60px', ih: '40px' }, { n: 'Analytics', h: '44px', ih: '28px' }, { n: 'Presence', h: '30px', ih: '14px' }]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+# Design parity report
+
+542 specimens · 542 pass · 0 fail · 24 illustrative (not measured)
+
+Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputCompositionBar, NotReportedLine, PageHeader, RequestDrawer, TabMark, TabTitle
+
+- ✓ AboutSection/products
+- ✓ AboutProduct/claudeCode
+- ✓ AboutProduct/codex
+- ✓ AboutProduct/chatgpt
+- ✓ AboutProduct/claudeAi
+- ✓ RetentionList/metadataOnly
+- ✓ AgentCard/claudeCodeExtras
+- ✓ AgentCard/codexSelected
+- ✓ AgentCard/chatgpt
+- ✓ AgentCard/claudeAi
+- ✓ AgentCard/default
+- ✓ AgentCard/hover
+- ✓ AgentCard/selected
+- ✓ AgentCard/focus
+- ✓ AgentChip/claudeCode
+- ✓ AgentChip/codex
+- ✓ AgentChip/chatgpt
+- ✓ AgentChip/claudeAi
+- ✓ AgentChip/row
+- ◌ AgentPanel/codexSession (illustrative, not measured)
+- ✓ AgentScope/person
+- ✓ AgentScope/personCodex
+- ◌ AgentStatGroup/codexLimits (illustrative, not measured)
+- ◌ AgentStatGroup/claudeCodeLimits (illustrative, not measured)
+- ✓ AppBar/peopleWindow
+- ✓ AppBar/people
+- ✓ AppBar/codexPerson
+- ✓ AppBar/codexSession
+- ✓ AppBar/mixedPersonCodexSession
+- ✓ AppBar/mixedPerson
+- ✓ AppBar/brand
+- ✓ AppBar/personPage
+- ✓ AppBar/loading
+- ✓ Banner/delayed
+- ✓ Banner/refreshFailed
+- ✓ BetweenRow/compaction
+- ✓ BetweenRow/recap
+- ✓ Breadcrumb/hover
+- ✓ Button/default
+- ✓ Button/hover
+- ✓ Button/focus
+- ✓ Button/pressedSelected
+- ✓ Button/disabled
+- ✓ Button/loading
+- ✓ Button/ghostInTables
+- ✓ Button/iconOnlyPrev
+- ✓ Button/iconOnlyNext
+- ✓ Button/iconOnlyClose
+- ✓ Button/iconOnlyDisabled
+- ✓ Button/clearRange
+- ✓ Button/wholeSession
+- ✓ Button/idle
+- ✓ Button/pressed (5 accepted deviations)
+- ✓ Button/pending
+- ✓ Button/success
+- ✓ Button/failure
+- ✓ Button/disabledWithReason
+- ✓ Button/wholeSessionOnReadout
+- ✓ Button/disabledFocusable
+- ✓ ChannelSwatch/model
+- ✓ ChannelSwatch/analytics
+- ✓ ChannelSwatch/flags
+- ✓ ChannelSwatch/skills
+- ✓ ChannelSwatch/count
+- ✓ ChannelSwatch/account
+- ✓ Chip/neutralPosture
+- ✓ Chip/muted
+- ✓ Chip/notRetained
+- ✓ Chip/rangeSelection
+- ✓ Chip/selectedFilter
+- ✓ Chip/withSwatch
+- ✓ Chip/countNew
+- ✓ CoverageCell/gap
+- ✓ CoverageCell/complete
+- ✓ CoverageCell/notApplicable
+- ✓ CoverageLine/complete
+- ✓ CoverageLine/gap
+- ✓ CoverageLine/hover
+- ✓ EmptyState/emptyRange
+- ✓ EmptyState/noFilterMatches
+- ✓ ErrorState/loadFailed
+- ✓ EventRow/default
+- ✓ EventRow/collapsedTicks
+- ✓ EventRow/marked
+- ✓ EventRow/selectedExpanded
+- ✓ EventRow/expandedJson
+- ✓ EventRow/compact
+- ✓ EventRow/compactNoMatch
+- ✓ EventRow/linkedToHover
+- ✓ FilterChip/notCaptured
+- ✓ FilterChip/removeHover
+- ✓ FilterChip/removeFocus
+- ✓ HeaderStat/default
+- ✓ HeaderStat/live
+- ✓ HeaderStat/unknown
+- ✓ HeaderStat/withQualifier
+- ✓ HeaderStat/hover
+- ◌ HeaderStatGroup/withAgentExtras (illustrative, not measured)
+- ✓ HeaderStatGroup/session
+- ✓ HeaderStatGroup/default
+- ✓ HeaderStatGroup/withHover
+- ✓ HiddenCallsNote
+- ✓ InlineError/besideTrigger
+- ✓ InlineError/default
+- ✓ KeyValueList/default
+- ✓ KeyValueList/loading
+- ✓ KeyValueList/rowHover
+- ✓ LiveBadge/live
+- ✓ LiveBadge/connecting
+- ✓ LiveBadge/waiting
+- ✓ LiveBadge/delayed
+- ✓ LiveBadge/retrying
+- ✓ LiveBadge/paused
+- ◌ LiveBadge/heartbeatPeak (illustrative, not measured)
+- ◌ LiveBadge/heartbeatMid (illustrative, not measured)
+- ◌ LiveBadge/pausedNoPulse (illustrative, not measured)
+- ◌ LiveBadge/delayedNoPulse (illustrative, not measured)
+- ✓ Marker/frustrated
+- ✓ Marker/frustratedCompact
+- ✓ Marker/interrupted
+- ✓ Marker/interruptedCompact
+- ✓ Marker/destructive
+- ✓ Marker/destructiveCompact
+- ✓ Marker/coverageGap
+- ✓ Marker/coverageGapLabel
+- ✓ Marker/match
+- ✓ Marker/live
+- ✓ Marker/liveStreaming
+- ✓ NewRowsPill/visible
+- ✓ Notice/danger
+- ✓ Notice/neutral
+- ✓ Pagination/firstPage
+- ✓ Pagination/middle
+- ✓ Pagination/lastPage
+- ✓ Pagination/singlePage
+- ✓ Pagination/loadingNextPage
+- ✓ Pagination/liveNewRowsPastTheEnd
+- ✓ Pagination/pendingLocked
+- ✓ PartialMark
+- ✓ PeopleTable/allAgents
+- ✓ PeopleTable/codexView
+- ✓ PeopleTable/claudeCodeView
+- ✓ AgentRow/codex
+- ✓ AgentRow/claudeCode
+- ✓ AgentRow/codexMixed
+- ✓ AgentRow/claudeCodeNarrow
+- ✓ AgentRow/codexNarrow
+- ✓ OrgStat/yours
+- ✓ OrgStat/outside
+- ✓ OrgStat/unset
+- ✓ PersonHeader/codexOnly
+- ✓ PersonHeader/mixed
+- ✓ PersonHeader/mixedNarrow
+- ✓ PersonHeaderRow/common
+- ✓ PersonHeaderRow/commonMixed
+- ✓ PersonHeaderRow/commonNarrow
+- ✓ PersonIdentity/linked
+- ◌ PersonRow/linked (illustrative, not measured)
+- ◌ PersonRow/codexOnly (illustrative, not measured)
+- ◌ PersonRow/claudeCodeOnly (illustrative, not measured)
+- ✓ PersonRow/mixedCommon
+- ✓ PersonRow/codexCommon
+- ✓ PersonRow/chatCommon
+- ✓ PersonRow/codexView
+- ✓ PersonRow/codexViewLinked
+- ✓ PersonRow/claudeCodeView
+- ✓ PersonRow/default
+- ✓ PersonRow/hover
+- ✓ PersonRow/focus
+- ✓ PersonRow/liveCoverageGap
+- ✓ PersonRow/multiAgentEstimated
+- ✓ PersonRow/noTokenCounts
+- ✓ PersonRow/loading
+- ✓ ProgressBar/refetching
+- ✓ ProgressBar/slow
+- ✓ ProgressBar/pagination
+- ✓ PromptRow/codexExpanded
+- ✓ PromptRow/longTurn
+- ✓ PromptRow/longTurnHead
+- ✓ PromptRow/longTurnNoBodies
+- ✓ PromptRow/longTurnHeadNoBodies
+- ✓ PromptRow/arrived
+- ✓ PromptRow/collapsed
+- ✓ PromptRow/expanded
+- ✓ PromptRow/inFlight
+- ✓ PromptRow/interrupted
+- ✓ PromptRow/hoverLinked
+- ✓ ProviderMark/claudeCodePerson
+- ✓ ProviderMark/codexPerson
+- ✓ ProviderMark/mixedPerson
+- ✓ ProviderMark/codexSession
+- ✓ ProviderMark/codexHeader
+- ✓ ProviderMark/mixedHeader
+- ✓ ProviderMark/mixedNarrow
+- ✓ ProviderMark/codexSessionHeader
+- ✓ RangeReadout/withClear (18 accepted deviations)
+- ✓ RangeReadout/wholeSession (18 accepted deviations)
+- ✓ RangeReadout/range
+- ✓ RangeReadout/live (4 accepted deviations)
+- ✓ RangeReadout/empty (4 accepted deviations)
+- ✓ RegionState/firstLoad
+- ✓ RegionState/refetching
+- ✓ RegionState/slow
+- ✓ RegionState/errorStale
+- ✓ RegionState/errorEmpty
+- ✓ RegionState/empty
+- ✓ ContentRow/shapeOnly
+- ✓ ContentRow/notRetained
+- ✓ ContentRow/toolCall
+- ✓ ContentRow/retainedWithBody
+- ✓ DetailSection/codexResponse
+- ✓ DetailSection/default
+- ✓ DrawerMeta/normal
+- ✓ DrawerMeta/reportedNotCaptured
+- ✓ DrawerMeta/failed
+- ✓ DrawerHeader/normal
+- ✓ DrawerHeader/reportedNotCaptured
+- ✓ DrawerHeader/failed
+- ✓ DrawerTabs/default
+- ✓ DrawerTabs/noWireData
+- ✓ FieldList/default
+- ✓ HeaderList/default
+- ✓ HeaderList/rowHost
+- ✓ HeaderList/rowAuthorizationRedacted
+- ✓ HeaderList/rowXClaudeCodeSessionId
+- ✓ HeaderList/rowRequestClass
+- ✓ HeaderList/noDimming
+- ✓ HeaderList/short
+- ✓ HeaderList/anthropicResponse
+- ✓ HeaderList/longValue
+- ✓ HeaderList/redacted
+- ✓ KeyStrip/values
+- ✓ KeyStrip/unknown
+- ✓ KeyStrip/codexCall
+- ✓ KeyStrip/codexNoUsage
+- ✓ KeyStripCell/model
+- ✓ KeyStripCell/tokens
+- ✓ KeyStripCell/costEst
+- ✓ KeyStripCell/ttft
+- ✓ KeyStripCell/duration
+- ✓ KeyStripCell/stop
+- ✓ KeyStripCell/modelKnown
+- ✓ KeyStripCell/tokensUnknown
+- ✓ KeyStripCell/costEstUnknown
+- ✓ KeyStripCell/ttftUnknown
+- ✓ KeyStripCell/durationKnown
+- ✓ KeyStripCell/stopUnknown
+- ✓ KeyTile/codexModel
+- ✓ KeyTile/codexTokens
+- ✓ KeyTile/codexReasoning
+- ✓ KeyTile/codexTtft
+- ✓ KeyTile/codexDuration
+- ✓ KeyTile/codexModelHigh
+- ✓ KeyTile/codexTokensUnknown
+- ✓ KeyTile/codexReasoningUnknown
+- ✓ KeyTile/codexTtftProxy
+- ✓ KeyTile/codexDurationLong
+- ✓ StreamEventList/default
+- ✓ SummaryLabel/fits
+- ✓ SummaryLabel/truncated
+- ✓ SummaryLabel/long
+- ✓ TimingWaterfall/default
+- ✓ RequestFilters/codex
+- ✓ RequestFilters/personAllAgents
+- ✓ RequestFilters/personCodex
+- ◌ RequestRow/newFlash (illustrative, not measured)
+- ◌ RequestRow/newFlashFading (illustrative, not measured)
+- ✓ RequestRow/codexModelCall
+- ✓ RequestRow/codexModelCallText
+- ✓ RequestRow/codexAnalytics
+- ✓ RequestRow/codexUsage
+- ✓ RequestRow/codexPrewarmShown
+- ✓ RequestRow/codexModelCallNoBodies
+- ✓ RequestRow/codexModelCallTextNoBodies
+- ✓ RequestRow/personClaudeCodeModel
+- ✓ RequestRow/personCodexModel
+- ✓ RequestRow/personCodexMetrics
+- ✓ RequestRow/personClaudeCodeAnalytics
+- ✓ RequestRow/model
+- ✓ RequestRow/backgroundQuiet
+- ✓ RequestRow/flags
+- ✓ RequestRow/countTokens
+- ✓ RequestRow/accountNoSession
+- ✓ RequestRow/error
+- ✓ RequestRow/notCaptured
+- ✓ RequestRow/selected
+- ✓ RequestRow/hoverLinked
+- ✓ RequestRow/timelineHovered
+- ✓ RequestRow/innerTargetHover
+- ✓ RequestRow/focus
+- ✓ RequestTable/codex
+- ✓ RequestTable/codexNoBodies
+- ✓ RequestTable/personAllAgents
+- ✓ SegmentedControl/default14dSelected
+- ✓ SegmentedControl/hoverOn7d
+- ✓ SegmentedControl/focusOn24h
+- ✓ SegmentedControl/disabledWhileLoading
+- ✓ SegmentedControl/window
+- ◌ SessionFacts (illustrative, not measured)
+- ✓ SessionFacts/codexNoBodies
+- ◌ SessionHeader/codex (illustrative, not measured)
+- ✓ SessionHeader/codexMarked
+- ◌ SessionRow/claudeCode (illustrative, not measured)
+- ◌ SessionRow/codexParent (illustrative, not measured)
+- ◌ SessionRow/codexChild (illustrative, not measured)
+- ◌ SessionRow/codexReview (illustrative, not measured)
+- ◌ SessionRow/codexFork (illustrative, not measured)
+- ✓ SessionRow/partialCapture
+- ◌ SessionRow/pendingNavigation (illustrative, not measured)
+- ✓ SessionRow/mixedClaudeCode
+- ✓ SessionRow/mixedCodexParent
+- ✓ SessionRow/mixedCodexChild
+- ✓ SessionRow/mixedCodexReview
+- ✓ SessionRow/mixedCodexFork
+- ✓ SessionRow/mixedCodexUntitled
+- ✓ SessionRow/liveGap
+- ✓ SessionRow/ended
+- ✓ SessionRow/hover
+- ✓ SessionRow/fieldsMissing
+- ✓ SessionRow/noRecapLabel
+- ✓ SessionRow/hoverLinked
+- ✓ SessionTable/mixed
+- ✓ SessionTabs/withHints
+- ✓ TabHint
+- ✓ TabHint/requests
+- ✓ Skeleton/line
+- ✓ Skeleton/blockTile
+- ✓ Skeleton/row
+- ✓ Skeleton/lane
+- ✓ SlowNotice/default
+- ✓ SlowNotice/nameOnly
+- ✓ SlowNotice/nameAndSize
+- ✓ Sparkline/inRow
+- ✓ Sparkline/active
+- ✓ Sparkline/sparse
+- ✓ Sparkline/noData
+- ✓ StatTile/default
+- ✓ StatTile/hoverLinksToRows
+- ✓ StatTile/noSwatch
+- ✓ StatTile/unknown
+- ✓ StatTile/coverageGap
+- ✓ StatTile/loading
+- ✓ StatTile/hover
+- ✓ StatusCode/2xx
+- ✓ StatusCode/error
+- ✓ StatusCode/errorStatus529
+- ✓ StatusCode/noneNotCaptured
+- ✓ StepList/more
+- ✓ StepRow/codexModelCall
+- ✓ StepRow/codexSubagent
+- ◌ StepRow/streamingPulse (illustrative, not measured)
+- ✓ StepRow/longTurnFirst
+- ✓ StepRow/longTurnSecond
+- ✓ StepRow/longTurnPatch
+- ✓ StepRow/longTurnNoBodies
+- ✓ StepRow/longTurnPatchNoBodies
+- ✓ StepRow/longTurnTextNoBodies
+- ✓ StepRow/modelCall
+- ✓ StepRow/streaming
+- ✓ StepRow/eventsPending
+- ✓ StepRow/subagent
+- ✓ StepRun/collapsed
+- ✓ StepRun/collapsedFailing
+- ✓ StepRun/collapsedNoBodies
+- ✓ StepRun/runNoBodies
+- ✓ StepRun/claudeCodeNoBodies
+- ✓ ToolCallRow/codexExec
+- ✓ ToolCallRow/codexPatch
+- ✓ ToolCallRow/default
+- ✓ ToolCallRow/marked
+- ✓ ToolCallRow/running
+- ✓ StepStrip
+- ✓ StepStrip/noBodies
+- ✓ TableHeader/missed
+- ✓ TableHeader/hoverDefinition
+- ✓ Tab/default
+- ✓ Tab/hover
+- ✓ Tab/selected
+- ✓ Tab/focus
+- ✓ Tab/disabled
+- ✓ Tabs/setFirstSelected
+- ✓ Tabs/selectedLoading
+- ✓ TextInput/empty
+- ✓ TextInput/focus
+- ✓ TextInput/filled
+- ✓ TextInput/disabled
+- ✓ TextInput/invalid
+- ◌ ThreadOrigin (illustrative, not measured)
+- ✓ BandTrack/snapped
+- ✓ BandTrack/linkedBand
+- ✓ BandTrack/default
+- ✓ BandTrack/overlappingBand
+- ✓ BandTrack/preCaptureFade
+- ✓ BandTrack/liveBand
+- ✓ BandTrack/hoverBand
+- ✓ BandTrack/focusBand
+- ✓ BarTrack/withGaps (75 accepted deviations)
+- ✓ BarTrack/default (75 accepted deviations)
+- ✓ BarTrack/hoverBin (44 accepted deviations)
+- ✓ BarTrack/hoverGap (45 accepted deviations)
+- ✓ BarTrack/contextHover
+- ✓ BarTrack/contextHoverBar
+- ✓ BarTrack/contextLabelHover
+- ✓ Brush/clearButton
+- ✓ Brush/clearButtonHover
+- ✓ Brush/clearButtonFocus
+- ✓ Brush/selected
+- ✓ Brush/clearButtonOnTimeline
+- ✓ Brush/hoverHandleSelection
+- ✓ Brush/handleHover
+- ✓ Brush/dragging
+- ✓ ContextTrack/compactionLabelHover
+- ✓ DensityTrack/default (100 accepted deviations)
+- ✓ DensityTrack/hoverBin (100 accepted deviations)
+- ✓ DeviceRow/asleep (1 accepted deviation)
+- ✓ FocusRow/focused (1 accepted deviation)
+- ✓ FocusRow/blurred (1 accepted deviation)
+- ✓ FrictionRow/steered
+- ✓ FrictionRow/frustrated (1 accepted deviation)
+- ✓ FrictionRow/interrupted (1 accepted deviation)
+- ✓ FrictionRow/destructive (1 accepted deviation)
+- ✓ GapRow/merged (1 accepted deviation)
+- ✓ Lane/codexPrompts
+- ✓ Lane/codexModelCalls
+- ✓ Lane/approvalSandbox
+- ✓ Lane/codexNetwork
+- ✓ Lane/codexFriction
+- ✓ Lane/modelCalls24h (1 accepted deviation)
+- ✓ Lane/modelCalls7d (1 accepted deviation)
+- ✓ Lane/modelCalls14d (1 accepted deviation)
+- ✓ Lane/modelCallsWithGapRow (1 accepted deviation)
+- ✓ Lane/frictionSplit (1 accepted deviation)
+- ✓ Lane/presenceRows (1 accepted deviation)
+- ✓ Lane/focusRows (1 accepted deviation)
+- ✓ Lane/deviceSleepRow (1 accepted deviation)
+- ✓ Lane/networkRow (1 accepted deviation)
+- ✓ Lane/modelCallsGrid14d (1 accepted deviation)
+- ✓ Lane/modelCallsGrid24h (1 accepted deviation)
+- ✓ Lane/sessionsSnap
+- ✓ Lane/sessionsReadout
+- ✓ Lane/modelCallsEmptyBin
+- ✓ Lane/presenceReadout
+- ✓ Lane/modelCalls (79 accepted deviations)
+- ✓ Lane/analytics (104 accepted deviations)
+- ✓ Lane/sessions (1 accepted deviation)
+- ✓ Lane/permission (1 accepted deviation)
+- ✓ Lane/prompts (1 accepted deviation)
+- ✓ Lane/modelCallsUnderBrush (76 accepted deviations)
+- ✓ Lane/loading (1 accepted deviation)
+- ✓ Lane/promptsHoverGuide (1 accepted deviation)
+- ✓ Lane/modelCallsHover (48 accepted deviations)
+- ✓ Lane/analyticsHoverGuide (104 accepted deviations)
+- ✓ Lane/presenceHoverGuide (4 accepted deviations)
+- ✓ Lane/notCapturedHover (49 accepted deviations)
+- ✓ Lane/analyticsHover (104 accepted deviations)
+- ✓ Lane/sessionsHover (1 accepted deviation)
+- ✓ Lane/contextHover (4 accepted deviations)
+- ✓ Lane/contextLabelHover (4 accepted deviations)
+- ✓ Lane/presenceHover (4 accepted deviations)
+- ✓ Lane/permissionHover (1 accepted deviation)
+- ✓ Lane/networkHover (24 accepted deviations)
+- ✓ Lane/promptsHover (1 accepted deviation)
+- ✓ Lane/frictionHover (1 accepted deviation)
+- ✓ Lane/brushhoverHandleSelection (45 accepted deviations)
+- ✓ Lane/brushdragging (45 accepted deviations)
+- ✓ Lane/modelCallsFocus (48 accepted deviations)
+- ✓ Lane/modelCallsPressed (48 accepted deviations)
+- ✓ Lane/sessionsFocus (1 accepted deviation)
+- ✓ MarkerTrack/linkedTick
+- ✓ MarkerTrack/ticks
+- ✓ MarkerTrack/hoverTick
+- ✓ MarkerTrack/hoverGlyph
+- ✓ NowLine/default
+- ✓ PresenceRow/focused (1 accepted deviation)
+- ✓ PresenceRow/away (1 accepted deviation)
+- ✓ PresenceRow/asleep (1 accepted deviation)
+- ✓ StateTrack/permission
+- ✓ StateTrack/hoverSegment
+- ✓ StateTrack/hoverTick
+- ✓ StateTrack/hoverNetwork (7 accepted deviations)
+- ✓ TimeAxis/codex
+- ✓ TimeAxis/ticks14d (33 accepted deviations)
+- ✓ TimeAxis/ticks24h (22 accepted deviations)
+- ✓ TimeAxis/withReadout (39 accepted deviations)
+- ✓ TimeAxis/hoverReadout
+- ✓ Timeline/codex
+- ✓ Timeline/withBrush (105 accepted deviations)
+- ✓ Timeline/loading (4 accepted deviations)
+- ✓ Timeline/hoverGuide (189 accepted deviations)
+- ✓ ToggleChip/off
+- ✓ ToggleChip/on
+- ✓ ToggleChip/hover
+- ✓ ToggleChip/focus (4 accepted deviations)
+- ✓ ToggleChip/disabled
+- ✓ ToggleChip/withSwatchOn
+- ✓ ToggleChip/withSwatchOff
+- ✓ Tooltip/codexLimits
+- ✓ Tooltip/gapMerged (1 accepted deviation)
+- ✓ Tooltip/partialCapture (4 accepted deviations)
+- ✓ Tooltip/orgUnset
+- ✓ Tooltip/summaryLabel
+- ✓ Tooltip/sessionSnapped
+- ✓ Tooltip/laneReadout
+- ✓ Tooltip/emptyBin
+- ✓ Tooltip/stateReadout
+- ✓ Tooltip/updatedAgo
+- ✓ Tooltip/status
+- ✓ Tooltip/statusError
+- ✓ Tooltip/duration
+- ✓ Tooltip/tokens
+- ✓ Tooltip/bytes
+- ✓ Tooltip/time
+- ✓ Tooltip/coverage
+- ✓ Tooltip/friction
+- ✓ Tooltip/agentChip
+- ✓ Tooltip/unknownCell
+- ✓ Tooltip/columnHeaderCoverage
+- ✓ Tooltip/headerStat
+- ✓ Tooltip/statTile
+- ✓ Tooltip/coverageLine
+- ✓ Tooltip/keyValueRow
+- ✓ Tooltip/notRetained
+- ✓ Tooltip/postureChip
+- ✓ Tooltip/rangeChip
+- ✓ Tooltip/liveBadge
+- ✓ Tooltip/barBin
+- ✓ Tooltip/notCaptured
+- ✓ Tooltip/densityBin
+- ✓ Tooltip/sessionBand
+- ✓ Tooltip/contextBar
+- ✓ Tooltip/compaction
+- ✓ Tooltip/stateSegment
+- ✓ Tooltip/permissionChanges
+- ✓ Tooltip/network
+- ✓ Tooltip/promptMarker
+- ✓ Tooltip/frictionMarker
+- ✓ Tooltip/nowLine
+- ✓ Tooltip/laneLabel
+- ✓ Tooltip/brushDrag
+- ✓ Tooltip/barBinFocus
+- ✓ Tooltip/full
+- ✓ Tooltip/plain
+- ✓ Tooltip/keyValue
+- ✓ Tooltip/unknownValue
+- ✓ Tooltip/disabledReason
+- ✓ Tooltip/truncated
+- ✓ Tooltip/columnHeader
+- ✓ Tooltip/anchoredTop
+- ✓ Tooltip/flippedBottom
+- ✓ Tooltip/chartAnchored
+- ✓ TurnReport
+- ✓ UnattributedNotice/default
+- ✓ UpdatedAgo
+- ✓ UpdatedAgo/peopleBar
+- ✓ UpdatedAgo/idle
+- ✓ UpdatedAgo/polling
+- ✓ UpdatedAgo/failed
+- ✓ Value/unknown
+- ◌ Value/notApplicable (illustrative, not measured)
+- ✓ WaitingChecklist/default
+- ✓ WaitingChecklist/stepDone
+- ✓ WaitingChecklist/stepActive
+- ✓ WaitingChecklist/stepPending
+- ✓ Wordmark
+- ✓ Wordmark/appBar
+- ✓ Wordmark/large

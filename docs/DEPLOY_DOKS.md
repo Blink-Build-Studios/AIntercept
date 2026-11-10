@@ -52,8 +52,8 @@ kubectl get nodes   # confirm Ready
 ```bash
 doctl registry login
 REG=registry.digitalocean.com/<your-registry>
-docker buildx build --platform linux/amd64 -t $REG/aintercept-observer:dev --push ./observer
-docker buildx build --platform linux/amd64 -t $REG/aintercept-certsvc:dev  --push ./certsvc
+# One image; the observer and certsvc Deployments run it in their own mode.
+docker buildx build --platform linux/amd64 -t $REG/aintercept:dev --push ./aintercept
 # Let the cluster pull from the DO registry:
 doctl registry kubernetes-manifest | kubectl apply -f -   # creates the pull secret
 ```
@@ -97,8 +97,7 @@ kubectl create secret generic aintercept-keyhash-salt \
 ```bash
 helm install aintercept deploy/helm/aintercept \
   --set cloud=digitalocean \
-  --set images.observer.repository=$REG/aintercept-observer \
-  --set images.certsvc.repository=$REG/aintercept-certsvc \
+  --set images.aintercept.repository=$REG/aintercept \
   --set imagePullSecret=registry-<your-registry> \
   --set objectStore.bucket=$SPACE \
   --set objectStore.region=$REGION \

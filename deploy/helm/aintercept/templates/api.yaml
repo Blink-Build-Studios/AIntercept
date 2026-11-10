@@ -1,0 +1,126 @@
+{{- if .Values.api.enabled }}
+# The query API (api/) inside the cluster, as it runs in a client network: the
+# UI connects to it (today through `kubectl port-forward svc/api 8787`). The
+# `aintercept mirror` sidecar keeps the processor's tables on a shared volume, in
+# commit order, and serves raw files to the API over localhost on demand.
+# One replica: the tables are a small read-only copy, rebuilt at start.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      # On AWS this ServiceAccount's role must allow reads and lists on the bucket.
+      serviceAccountName: {{ .Values.observer.serviceAccount.name }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: shaped
+          emptyDir: { sizeLimit: {{ .Values.api.shapedSizeLimit }} }
+        - name: work
+          emptyDir: {}
+        - name: db
+          emptyDir: { sizeLimit: {{ .Values.api.dbSizeLimit }} }
+      containers:
+        - name: api
+          image: {{ include "aintercept.apiImage" . }}
+          imagePullPolicy: {{ .Values.images.api.pullPolicy }}
+          env:
+            - { name: AINTERCEPT_SHAPED_DIR, value: /data/shaped }
+            - { name: AINTERCEPT_DATA_DIR, value: /data/raw-unused }
+            - { name: AINTERCEPT_RAW_URL, value: "http://127.0.0.1:9003" }
+            - { name: AINTERCEPT_MEMORY_LIMIT, value: {{ .Values.api.memoryLimit | quote }} }
+            - name: AINTERCEPT_CONTAINER_MEMORY
+              valueFrom:
+                resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            - { name: AINTERCEPT_DB_DIR, value: /data/db }
+            - { name: AINTERCEPT_THREADS, value: {{ .Values.api.threads | quote }} }
+          ports:
+            - { name: http, containerPort: 8787 }
+          readinessProbe:
+            httpGet: { path: /api/v1/status, port: 8787 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/status, port: 8787 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          volumeMounts:
+            - { name: shaped, mountPath: /data/shaped, readOnly: true }
+            - { name: work, mountPath: /work }
+            - { name: db, mountPath: /data/db }
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+        - name: mirror
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["mirror"]
+          env:
+            - { name: PROCESS_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: PROCESS_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            {{- if .Values.fullInterception }}
+            - { name: PROCESS_RAW_PREFIX, value: {{ printf "%s/capture" (.Values.objectStore.prefix | trimSuffix "/") | trimPrefix "/" | quote }} }
+            {{- end }}
+            - { name: PROCESS_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: PROCESS_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if .Values.objectStore.forcePathStyle }}
+            - { name: PROCESS_S3_FORCE_PATH_STYLE, value: "true" }
+            {{- end }}
+            - { name: MIRROR_DIR, value: /data/shaped }
+            - { name: MIRROR_POLL_SECONDS, value: {{ .Values.api.mirror.pollSeconds | quote }} }
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            {{- if eq .Values.cloud "digitalocean" }}
+            - name: PROCESS_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: PROCESS_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+          volumeMounts:
+            - { name: shaped, mountPath: /data/shaped }
+          resources:
+            {{- toYaml .Values.api.mirror.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: { app: api }
+  ports:
+    - { name: http, port: 8787, targetPort: 8787 }
+{{- end }}

@@ -1,0 +1,9 @@
+/* SessionFacts (CompAgents "SessionFacts"): mono 12/20, wrapping, 4px 20px apart. */
+@layer components {
+  .session-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 20px;
+    font: 400 12px/20px var(--font-mono);
+  }
+}

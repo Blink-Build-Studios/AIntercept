@@ -47,8 +47,12 @@ private key.
 # Replace 127.0.0.1 with the host-reachable IP from `make info` if the client
 # is a different machine.
 echo "127.0.0.1  api.anthropic.com" | sudo tee -a /etc/hosts
-# Verify (dig does NOT read /etc/hosts):
-getent hosts api.anthropic.com || dscacheutil -q host -a name api.anthropic.com
+# Override IPv6 too, or on an IPv6-capable network the client connects to the
+# provider's real AAAA address and bypasses the proxy
+# (docs/INTERCEPTION_ISSUES.md C6). The IPv4-mapped form reaches the proxy over IPv4.
+echo "::ffff:127.0.0.1  api.anthropic.com" | sudo tee -a /etc/hosts
+# Verify (dig does NOT read /etc/hosts): only the proxy's addresses may appear.
+getent ahosts api.anthropic.com || dscacheutil -q host -a name api.anthropic.com
 ```
 
 ## 4. Run Claude Code with a test-only prompt

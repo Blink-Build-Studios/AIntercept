@@ -1,0 +1,6 @@
+/* Pagination (CompControls / CompInteraction specimens; handoff §6.1). */
+@layer components {
+  .btn[aria-current="page"] {
+    background: var(--surface-raised);
+  }
+}

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Component index</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 2300px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Index</span>
+<span style="color: #a3a9ad; max-width: 900px">Every component used on the People, Person and Session pages, the request drawer and their states. Names are the proposed React component names; props are the ones the screens need; Data names the API endpoint (handoff doc §5) that feeds each one. Each group has its own sheet to the right.</span>
+</div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="7">
+<div style="display: flex; flex-direction: column">
+<div style="display: flex; align-items: baseline; gap: 12px; padding-bottom: 6px">
+<span style="font-size: 18px; line-height: 24px; font-weight: 600">{{g.n}}</span><span class="m" style="color: #848c90">{{g.sheet}} · {{g.count}}</span>
+</div>
+<div style="background: #131618; border: 1px solid #2a3034">
+<div class="m k" style="display: flex; gap: 16px; padding: 4px 12px; border-bottom: 1px solid #2a3034"><span style="width: 180px">Component</span><span style="width: 430px">Props</span><span style="width: 330px">States &amp; variants</span><span style="flex: 1">Data</span></div>
+<sc-for list="{{g.items}}" as="c" hint-placeholder-count="6">
+<div class="m" style="display: flex; gap: 16px; padding: 4px 12px; border-bottom: 1px solid #2a3034">
+<span style="width: 180px; font-weight: 600">{{c.n}}</span>
+<span style="width: 430px; color: #a3a9ad; white-space: normal">{{c.p}}</span>
+<span style="width: 330px; white-space: normal">{{c.s}}</span>
+<span style="flex: 1; color: #7db3ff; white-space: normal">{{c.d}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var C = function (n, p, s) { return { n: n, p: p, s: s }; };
+    var groups = [
+      { n: 'Controls', sheet: 'Controls', items: [
+        C('Button', 'variant: default | ghost | icon · loading · disabled · onClick', 'default, hover, focus, pressed, disabled, loading'),
+        C('SegmentedControl', 'options[], value, onChange', 'default, hover, focus, disabled'),
+        C('Tabs / Tab', 'label, count?, selected, disabled', 'default, hover, selected, focus, disabled'),
+        C('TextInput', 'label, placeholder, value, invalid?, message?', 'empty, focus, filled, disabled, invalid'),
+        C('ToggleChip', 'label, pressed, onChange', 'off, on, hover, focus, disabled'),
+        C('Pagination', 'page, pageCount, from, to, total, loading', 'first, middle, last, single page, loading')
+      ] },
+      { n: 'Chips, badges & markers', sheet: 'Chips', items: [
+        C('Chip', 'tone: neutral | muted | range | notRetained | selected · swatch? · dot?', '6 tones'),
+        C('LiveBadge', 'status: live | connecting | waiting | delayed | retrying | paused · interval', '6 statuses'),
+        C('AgentChip', 'agent: claude-code | codex | chatgpt | claude-ai · reserved?', 'active ×4, reserved'),
+        C('ChannelSwatch', 'channel: model | analytics | flags | skills | count | account', '6 channels'),
+        C('Marker', 'kind: frustrated | interrupted | destructive | coverageGap | match | live | count?', '6 kinds, with count'),
+        C('StatusCode', 'code | "ERR" | null', '2xx, error, none'),
+        C('FilterChip', 'label, tone?: danger, onRemove', 'default, × hover, × focus')
+      ] },
+      { n: 'Summary blocks', sheet: 'Summary', items: [
+        C('StatTile / StatRibbon', 'label, value, sub, swatch?, href?, loading?', 'default, hover, unknown, loading'),
+        C('HeaderStat', 'label, value, live?, tooltip?', 'default, live, unknown'),
+        C('CoverageLine', 'reported, captured, windows[]', 'complete (quiet), gap (prominent)'),
+        C('Banner', 'kind: delayed | refreshFailed · since · onRetry', 'delayed, refresh failed'),
+        C('Notice', 'tone: danger | neutral · title · body', 'danger, neutral'),
+        C('AgentCard', 'agent, people, summary, shape, selected, onClick', 'default, hover, selected, reserved'),
+        C('KeyValueList', 'title, accent?, rows[{k, v}], footer?', 'default, loading'),
+        C('Sparkline', 'values[14], color', 'active, sparse, no data'),
+        C('InputCompositionBar', 'cacheRead, uncached, cacheWrite5m, cacheWrite1h', 'mostly cached, mostly uncached')
+      ] },
+      { n: 'Timeline', sheet: 'Timeline', items: [
+        C('Timeline', 'start, end, now?, selection?, onSelect, lanes[]', 'default, live, loading'),
+        C('Lane', 'label, sublabel?, height, children', 'default'),
+        C('BarTrack', 'bins[{t, v}], color, gaps[]', 'with gaps'),
+        C('DensityTrack', 'bins[], color', 'default'),
+        C('BandTrack', 'bands[{start, end, label, row}]', 'single row, overlapping rows, live, pre-capture fade'),
+        C('StateTrack', 'segments[{start, end, state}]', 'focused, away, asleep, none'),
+        C('MarkerTrack', 'markers[{t, glyph, tone}]', 'ticks, glyphs'),
+        C('Brush', 'start, end, onChange', 'idle, selected, live-following'),
+        C('TimeAxis', 'start, end, ticks', 'hours, days'),
+        C('RangeReadout', 'range, counts{}, onPrev, onNext, onClear', 'range, live, empty')
+      ] },
+      { n: 'Tables & rows', sheet: 'Rows', items: [
+        C('DataTable', 'columns[], rows, minWidth, footer (Pagination)', 'default, loading'),
+        C('PersonRow', 'person, agents[], lastSeen, counts, spark, bypass, coverage', 'default, hover, focus, live, unidentified, loading'),
+        C('SessionRow', 'start, repo, label, counts, friction, bypass, coverage, live', 'live, ended, fields missing, coverage gap'),
+        C('RequestRow', 'time, kind, session?, method, path, status, duration, bytes', 'model, background (dimmed), account, error, not captured'),
+        C('EventRow', 'time, prompt?, name, linkedTo, fields, json?', 'default, collapsed ticks, selected, marked'),
+        C('PromptRow', 'index, time, text | shape, steps, duration, tokens, tools, friction', 'collapsed, expanded, in flight'),
+        C('StepRow', 'kind: model | subagent · status', 'model call, streaming, events pending, subagent'),
+        C('ToolCallRow', 'tool, target, result, marker?', 'default, running, marked'),
+        C('GapRow', 'gaps[{from, to, count}] · merge < 4px', 'merged hatch, empty'),
+        C('FrictionRows', 'marks[{t, kind, prompt}] · cluster < 14px', 'frustrated, interrupted, destructive; clusters'),
+        C('StateRows', 'rows[{label, segments, tone}]', 'presence (3 rows), focus (2), device (1)'),
+        C('PartialMark', 'capturedFromPrompt', '† with tooltip'),
+        C('BetweenRow', 'kind: compaction | recap, detail', 'compaction, recap')
+      ] },
+      { n: 'Request drawer', sheet: 'Drawer', items: [
+        C('RequestDrawer', 'request, kind: normal | notCaptured | failed | retained, tab', 'summary, raw, all details'),
+        C('DrawerHeader', 'kind, method, path, status, meta, onPrev, onNext, onClose', 'normal, not captured, failed'),
+        C('KeyStrip / KeyStripCell', 'cells[{label, value, sub}]', 'value, unknown'),
+        C('ContentRow', 'label, detail, size, tone?, body?', 'shape only, retained, tool call'),
+        C('DetailSection', 'title, accent?, rows[{k, v, tone}]', 'default, with check'),
+        C('HeaderList', 'headers[{name, value, redacted?}]', 'default, redacted'),
+        C('StreamEventList', 'events[{t, type, detail}]', 'default'),
+        C('TimingWaterfall', 'phases[{label, start, dur, tone}]', 'default'),
+        C('FieldList', 'fields[{key, value}], filter', 'default, not extracted')
+      ] },
+      { n: 'Page chrome & states', sheet: 'States', items: [
+        C('AppBar', 'breadcrumb[], agents?, window, live, actions', 'default, loading'),
+        C('PageHeader', 'title, subtitle, stats[]', 'default'),
+        C('Skeleton', 'shape: line | block | row | lane', '4 shapes'),
+        C('EmptyState', 'title, body, actions[]', 'empty range'),
+        C('ErrorState', 'title, body, meta, onRetry, back', 'load failed'),
+        C('AboutThisData', 'open, onClose · static content', 'default (640px drawer)'),
+        C('UpdatedAgo', 'lastSuccessAt, polling, failed · fixed 19ch slot', 'idle, polling (dot), failed (✕)'),
+        C('Wordmark · TabMark', 'size', 'app bar, large, favicon 16/32'),
+        C('WaitingChecklist', 'steps[{status: done | active | pending, title, detail}]', '3 step states')
+      ] },
+      { n: 'Agents & providers', sheet: 'Agents (round 13)', items: [
+        C('AgentChip', 'product, client?, version?', 'Claude Code, Codex · exec, Codex · tui 0.167'),
+        C('Value', 'value | unknown(reason) | na(product, field)', '—, n/a'),
+        C('NotReportedLine', 'product, fields[]', 'default'),
+        C('AgentSectionHead · AgentStatGroup · AgentPanel', 'product, topic, rows[] from ext', 'person header limits, session panel, drawer section'),
+        C('PersonIdentity', 'name, email, accounts[{product, id, plan, devices}], linkedBy', 'single, linked by email'),
+        C('SessionFacts · ThreadOrigin', 'cwd, shell, tz, approval, sandbox, origin{kind, thread, turn}', 'fork, resume, subagent, review'),
+        C('TurnReport', 'codex_turn_event', 'default'),
+        C('HiddenCallsNote', 'count, onShow', 'per prompt, Requests toggle')
+      ] },
+      { n: 'Providers, screen by screen', sheet: 'Providers (round 14)', items: [
+        C('ProviderMark', 'agents[], kind: person | session, client?', 'Claude Code, Codex, linked, Codex session'),
+        C('PersonHeader · PersonHeaderRow · AgentRow', 'common stats, agents[{product, account, stats[]}]', 'Codex only, linked 1344, linked 1024'),
+        C('OrgStat', 'orgId, configured: yours | outside | unset', '3 states + tooltip'),
+        C('AgentCard (scope)', 'product, people, headline, sub, selected', 'Claude Code, Codex selected'),
+        C('PeopleTable', 'scope: all | product → extra columns', 'all agents, Codex view, Claude Code view'),
+        C('TabHint', 'tab, person', 'Prompts, Requests'),
+        C('RequestFilters', 'channels[] from product (count > 0), hiddenCount', 'Codex'),
+        C('StepStrip · StepRun · StepList', 'steps[{kind, outTokens}], runs', 'long turn, collapsed, failing, more'),
+        C('KeyStrip (Codex)', 'tiles by product', 'call, no usage'),
+        C('SummaryLabel', 'name, suffix', 'fits, truncated, long + tooltip')
+      ] },
+      { n: 'Hover, tooltips & keyboard', sheet: 'Tooltip · Timeline hover · Table hover', items: [
+        C('Tooltip', 'title?, rows[{key, value, tone?}], hint?, body?, placement, openDelay', 'plain, key/value, unknown, disabled reason, truncated, column header, flipped'),
+        C('LaneReadout', 'time, state, hint?', 'snapped (mark tooltip), readout'),
+        C('useLinkedHover', 'time | span, source: table | timeline', 'row → timeline, timeline → rows'),
+        C('useRovingFocus', 'group: timeline | table | stats', 'focused bin / band / tick / row')
+      ] },
+      { n: 'Interaction & loading (mandatory)', sheet: 'Interaction', items: [
+        C('RegionState', 'status, skeleton, empty?, error?, slow?, children', 'first load, refetching (dim + bar), slow, error stale, error empty, empty, ready'),
+        C('ProgressBar', 'active, scope: global | region', 'hidden, indeterminate, reduced motion'),
+        C('InlineError', 'message, queryId?, onRetry', 'default, retrying'),
+        C('SlowNotice', 'reason, onCancel', 'default'),
+        C('NewRowsPill', 'count, direction, onClick', 'hidden, visible'),
+        C('CopyButton', 'getText, label', 'idle, copying, copied, failed'),
+        C('usePendingAction / useDelayedFlag', 'hooks: 150 ms delay, 400 ms min visible, 8 s slow, 30 s abort', 'idle, pressed, pending, success, failure')
+      ] }
+    ];
+    var D = {
+      'Pagination': 'meta.page / pageSize / total', 'LiveBadge': 'meta.lastDataAt + polling state', 'AgentChip': 'people[].agents', 'ChannelSwatch': 'request.kind', 'Marker': 'friction{} · coverage', 'StatusCode': 'request.status',
+      'StatTile / StatRibbon': '/overview · /people/:id/summary.ribbon', 'HeaderStat': '/people/:id · /sessions/:id', 'CoverageLine': '/people/:id/summary.coverage · /coverage', 'Banner': 'meta.lastDataAt · query error', 'Notice': '/requests/:id.notice',
+      'AgentCard': '/overview.agents', 'KeyValueList': '/summary.capabilities | footprint · /sessions/:id/state', 'Sparkline': '/people[].activity', 'InputCompositionBar': '/requests/:id/details.composition',
+      'Timeline': '/people/:id/timeline · /sessions/:id/timeline', 'BarTrack': 'timeline.modelCalls + notCaptured · context', 'DensityTrack': 'timeline.analytics', 'BandTrack': 'timeline.sessions', 'StateTrack': 'timeline.presence | permission | network', 'MarkerTrack': 'timeline.prompts | friction', 'Brush': 'URL ?from&to', 'RangeReadout': '/sessions/:id/state.counts',
+      'DataTable': 'list endpoints (Envelope.meta)', 'PersonRow': '/people', 'SessionRow': '/people/:id/sessions', 'RequestRow': '/people/:id/requests · /sessions/:id/requests', 'EventRow': '/sessions/:id/events · /events/:id', 'PromptRow': '/sessions/:id/prompts', 'StepRow': '/sessions/:id/prompts (steps)', 'ToolCallRow': '/sessions/:id/prompts (tools)', 'BetweenRow': '/sessions/:id/prompts (between)',
+      'RequestDrawer': '/requests/:id · /raw · /details', 'DrawerHeader': '/requests/:id', 'KeyStrip / KeyStripCell': '/requests/:id.keyStrip', 'ContentRow': '/requests/:id.sent | received', 'DetailSection': '/requests/:id/details.sections', 'HeaderList': '/requests/:id/raw', 'StreamEventList': '/requests/:id/raw.stream', 'TimingWaterfall': '/requests/:id/details.timing', 'FieldList': '/requests/:id/details.fields',
+      'AppBar': 'route + /people/:id (breadcrumb)', 'PageHeader': '/people/:id · /sessions/:id', 'EmptyState': 'empty list in range', 'ErrorState': 'query error {message, queryId}', 'WaitingChecklist': '/status', 'RegionState': 'TanStack Query status + timers', 'ProgressBar': 'isFetching (delayed flag)', 'InlineError': 'query error {message, queryId}', 'NewRowsPill': 'since-poll new rows', 'UpdatedAgo': 'meta.asOf + poll state', 'Wordmark · TabMark': 'static', 'LaneReadout': 'timeline payload (state at t)', 'GapRow': 'timeline.notCaptured', 'FrictionRows': 'timeline.friction', 'StateRows': 'timeline.presence | focus | sleep', 'PartialMark': 'session.capturedFromPrompt', 'FilterChip': 'URL ?captured=false', 'AboutThisData': 'static + deployment.contentRetained', 'Tooltip': 'fields on list / timeline payloads', 'useLinkedHover': 'client state', 'useRovingFocus': 'client state', 'SlowNotice': 'useSlowFlag', 'CopyButton': '/requests/:id/raw (curl)', 'usePendingAction / useDelayedFlag': 'mutation / query state'
+    };
+    groups.forEach(function (g) { g.items.forEach(function (c) { c.d = D[c.n] || 'presentational'; }); });
+    groups.forEach(function (g) { g.count = g.items.length + ' components'; });
+    return { groups: groups };
+  }
+}
+</script>
+</body>
+</html>

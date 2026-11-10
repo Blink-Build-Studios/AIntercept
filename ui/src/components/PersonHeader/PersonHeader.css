@@ -1,0 +1,90 @@
+/* PersonHeader, PersonHeaderRow, AgentRow, OrgStat (CompProviders "PersonHeader/*", handoff §11L.3):
+   the mark, the name row, then one bordered block of rows, each a 200px label column and
+   a stat area that wraps on its own. */
+@layer components {
+  .person-header-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .person-header-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .person-header-title > h1 {
+    margin: 0;
+  }
+  .person-header-block {
+    padding-left: 12px;
+  }
+  .person-header-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+  }
+  .person-header-row + .person-header-row {
+    border-top: 1px solid var(--line);
+  }
+  .person-header-label {
+    align-self: stretch;
+    padding: 8px 0;
+    border-right: 1px solid var(--line);
+  }
+  .person-agent-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 0;
+    border-right: 1px solid var(--line);
+  }
+  .person-agent-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .person-agent-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+  }
+  .person-agent-account {
+    font: 400 11px/14px var(--font-mono);
+  }
+  .person-stats {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 8px 0;
+  }
+  /* A stat: 16px sides, a hairline after it; the value is mono 500 at the body size. */
+  .person-stat {
+    min-width: 0;
+    padding: 0 16px;
+    border-right: 1px solid var(--line);
+  }
+  .person-stat-tip {
+    cursor: help;
+  }
+  .person-stat-tip:hover,
+  .person-stat-tip:focus-visible {
+    background: var(--surface-raised);
+    outline: none;
+  }
+  .person-stat-tip:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--focus);
+  }
+  .person-stat-value {
+    font: 500 13px/20px var(--font-mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .person-stat-value.value-unknown {
+    text-decoration: underline dotted var(--line-strong);
+    text-underline-offset: 3px;
+  }
+  .person-stat-sub {
+    font: 400 11px/14px var(--font-mono);
+    white-space: nowrap;
+  }
+}

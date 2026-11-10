@@ -1,0 +1,18 @@
+/* NewRowsPill (CompInteraction "NewRowsPill/visible"): a Chip-shaped button.
+   Hidden keeps it mounted (its live region must exist before the count changes). */
+@layer components {
+  .new-rows-pill {
+    cursor: pointer;
+    text-align: start;
+  }
+  .new-rows-pill:hover {
+    background: var(--surface-raised);
+  }
+  .new-rows-pill:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .new-rows-pill[data-hidden="true"] {
+    visibility: hidden;
+  }
+}

@@ -1,0 +1,10 @@
+/* PartialMark (§11G.D1): the dagger after a partial session's prompt count. */
+@layer components {
+  .partial-mark {
+    white-space: nowrap;
+    color: var(--ink-muted);
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+}

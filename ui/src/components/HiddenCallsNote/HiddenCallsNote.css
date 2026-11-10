@@ -1,0 +1,26 @@
+/* HiddenCallsNote (CompAgents "HiddenCallsNote"): a step-level line (from 70px, 1100px
+   content min width), mono 11/20 in --ink-faint, the last line under a prompt's steps. */
+@layer components {
+  .hidden-calls-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 4px 12px 4px 70px;
+    min-width: calc(1100px + 70px + 12px);
+    border: 0;
+    background: none;
+    font: 400 11px/20px var(--font-mono);
+    text-align: start;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .hidden-calls-note:hover {
+    color: var(--ink-muted);
+    text-decoration: underline;
+  }
+  .hidden-calls-note:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+}

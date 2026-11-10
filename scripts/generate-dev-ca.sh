@@ -59,10 +59,15 @@ openssl req -new -key "${INT_KEY}" \
 
 # Intermediate must be a CA that can issue end-entity (server-auth) leaves but
 # not further CAs: pathlen:0.
+# It is also name-constrained, like a production intermediate should be, so the
+# key can only sign for the routed domains (a domain covers its subdomains).
+PERMITTED_DOMAINS="${PERMITTED_DOMAINS:-anthropic.com claude.ai openai.com chatgpt.com oaiusercontent.com generativelanguage.googleapis.com cloudflare-ech.com}"
+NAME_CONSTRAINTS="critical$(printf ',permitted;DNS:%s' ${PERMITTED_DOMAINS})"
 cat > "${CERTS_DIR}/intermediate.ext" <<EXT
 basicConstraints=critical,CA:TRUE,pathlen:0
 keyUsage=critical,keyCertSign,cRLSign
 extendedKeyUsage=serverAuth
+nameConstraints=${NAME_CONSTRAINTS}
 EXT
 
 openssl x509 -req -in "${INT_CSR}" \

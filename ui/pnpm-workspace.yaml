@@ -1,0 +1,9 @@
+# Supply-chain rule: never install a version released in the last 14 days
+# (minutes). Checked by scripts/check-pins.py.
+minimumReleaseAge: 20160
+
+# Rollup's newest release (pulled in by vite) was days old when the lockfile was
+# made, so the age rule dropped its platform packages and a clean install had a
+# rollup that couldn't run. Pin it to a release older than the rule.
+overrides:
+  rollup: 4.65.0

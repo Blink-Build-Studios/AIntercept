@@ -1,0 +1,14 @@
+/* ErrorState (CompStates "ErrorState/loadFailed"; compact: CompInteraction
+   "RegionState/errorEmpty"; the region or drawer around it pads and centres it). */
+@layer components {
+  .error-state {
+    gap: 12px;
+    padding: 32px;
+  }
+  .error-state-compact {
+    gap: 6px;
+  }
+  .error-state-compact-title {
+    font: 600 13px/20px var(--font-ui);
+  }
+}

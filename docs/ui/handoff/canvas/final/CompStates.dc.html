@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Page chrome and states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+a{color:#7db3ff}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer;text-decoration:none}
+.row{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.comp{display:flex;flex-direction:column;gap:10px}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1350px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · component library</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Page chrome &amp; states</span>
+<span style="color: #a3a9ad">The bar every page shares, and the blocks that stand in for content while it loads, is missing or fails. Refreshes never clear what is already on screen.</span>
+</div>
+
+<div class="comp"><span class="cname">AppBar</span><span class="props">breadcrumb[], agents?, window (SegmentedControl), live (LiveBadge), actions[]</span>
+<div><div class="cap">person page</div><div data-spec="AppBar/personPage" style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span class="m" style="color: #e6e3db; letter-spacing: .01em"><span style="font-weight: 600">AI</span><span style="font-weight: 400">ntercept</span></span><span class="m" style="color: #848c90"><a href="#" style="color: #a3a9ad; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">people</a> / <span style="display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: #e8916f; margin-right: 6px"></span><span style="color: #e6e3db">name unknown</span></span>
+<span style="flex: 1"></span>
+<span style="display: flex; border: 1px solid #60686d; border-radius: 2px"><button class="btn" style="border: 0; border-radius: 0">24h</button><button class="btn" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034">7d</button><button class="btn" aria-pressed="true" style="border: 0; border-radius: 0; border-left: 1px solid #2a3034; background: #e6e3db; color: #0c0e0f; font-weight: 600">14d</button></span>
+<span class="chip" style="border-color: #57d68d; color: #57d68d"><span style="width: 7px; height: 7px; border-radius: 999px; background: #57d68d"></span>LIVE · 5s</span><button class="btn">Pause</button><button class="btn">About this data</button>
+</div></div>
+<div><div class="cap">loading</div><div data-spec="AppBar/loading" style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
+<span class="m" style="color: #e6e3db; letter-spacing: .01em"><span style="font-weight: 600">AI</span><span style="font-weight: 400">ntercept</span></span><span class="m" style="color: #848c90">people</span><span style="flex: 1"></span>
+<span class="chip" style="color: #a3a9ad"><span style="width: 7px; height: 7px; border-radius: 999px; background: #848c90"></span>CONNECTING</span><button class="btn">About this data</button>
+</div></div>
+</div>
+
+<div class="comp"><span class="cname">Skeleton</span><span class="props">shape: line | block | row | lane · skeleton token, no shimmer; aria-busy on the region</span>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div><div class="cap">line</div><div data-spec="Skeleton/line" style="display: flex; flex-direction: column; gap: 6px; width: 220px"><div style="width: 100%; height: 12px; background: #20252a"></div><div style="width: 70%; height: 8px; background: #20252a; opacity: .6"></div></div></div>
+<div><div class="cap">block (tile)</div><div data-spec="Skeleton/blockTile" style="width: 180px; height: 78px; background: #20252a"></div></div>
+<div><div class="cap">row</div><div data-spec="Skeleton/row" style="width: 460px; background: #131618; border: 1px solid #2a3034"><div style="display: flex; gap: 12px; padding: 11px 12px"><div style="width: 92px; height: 12px; background: #20252a"></div><div style="width: 160px; height: 12px; background: #20252a"></div><div style="flex: 1; height: 12px; background: #20252a; opacity: .6"></div></div></div></div>
+<div><div class="cap">lane</div><div data-spec="Skeleton/lane" style="width: 360px; display: flex; gap: 12px; align-items: center; background: #131618; border: 1px solid #2a3034; padding: 10px 12px"><div style="width: 90px; height: 12px; background: #20252a"></div><div style="flex: 1; height: 32px; background: #20252a; opacity: .55"></div></div></div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+<div class="comp" style="flex: 1 1 600px"><span class="cname">EmptyState</span><span class="props">title, body, actions[], range? · centered in the table region</span>
+<div data-spec="EmptyState/emptyRange" style="background: #131618; border: 1px solid #2a3034; padding: 40px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center">
+<span class="chip" style="border-color: #ffd36b; color: #ffd36b">RANGE OCT 30 02:00 – 08:00</span>
+<div style="font-weight: 500">No Claude Code activity in this range</div>
+<div style="color: #a3a9ad; max-width: 460px">No sessions were open and no requests from this person reached the proxy.</div>
+<div style="display: flex; gap: 8px; margin-top: 8px"><button class="btn">Clear range</button><button class="btn">nearest later →</button></div>
+</div>
+<div class="cap" style="margin-top: 8px">no rows match filter</div>
+<div data-spec="EmptyState/noFilterMatches" style="background: #131618; border: 1px solid #2a3034; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="font-weight: 500">No requests match “status=529”</div><button class="btn">Clear filter</button></div>
+</div>
+<div class="comp" style="flex: 1 1 520px"><span class="cname">ErrorState</span><span class="props">title, body, meta, onRetry, back? · replaces a page that could not load</span>
+<div data-spec="ErrorState/loadFailed" style="background: #131618; border: 1px solid #2a3034; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 18px; line-height: 24px; font-weight: 600">Couldn’t load this session</div>
+<div style="color: #a3a9ad">The query timed out after 30 s. Capture isn’t affected: the proxy keeps recording.</div>
+<div class="m" style="color: #848c90">11:31:02 · upstream timeout · query q_8f…</div>
+<div style="display: flex; gap: 8px"><button class="btn">Retry</button><a href="#" class="btn">← Back to person</a></div>
+</div>
+</div>
+</div>
+
+<div class="comp"><span class="cname">WaitingChecklist</span><span class="props">steps[{status: done | active | pending, title, detail}] · first-deploy screen</span>
+<div data-spec="WaitingChecklist/default" style="background: #131618; border: 1px solid #2a3034; width: 880px">
+<div data-spec="WaitingChecklist/stepDone" class="row m"><span style="width: 18px">✓</span><span style="width: 220px; font-weight: 600">Proxy running</span><span style="flex: 1; color: #a3a9ad">done</span></div>
+<div data-spec="WaitingChecklist/stepActive" class="row m"><span style="width: 18px; color: #57d68d">●</span><span style="width: 220px; font-weight: 600">First request</span><span style="flex: 1; color: #a3a9ad">active · waiting 4m 12s</span></div>
+<div data-spec="WaitingChecklist/stepPending" class="row m" style="border-bottom: 0"><span style="width: 18px; color: #848c90">○</span><span style="width: 220px; font-weight: 600; color: #a3a9ad">Person identified</span><span style="flex: 1; color: #a3a9ad">pending</span></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1350}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+/* SessionRow's nested threads (CompAgents "SessionRow/codex*", handoff §11J gap 3): a
+   child's `⤷ <agent_name>` is indented 28px under its parent; the parent's twisty toggles. */
+@layer components {
+  .session-child-name {
+    padding-left: 28px;
+  }
+  .session-twisty {
+    cursor: pointer;
+  }
+}

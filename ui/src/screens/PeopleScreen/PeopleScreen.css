@@ -1,0 +1,46 @@
+/* PeopleScreen (People.dc.html; handoff §7.1, §7.4). */
+@layer components {
+  .people-screen {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 1440px;
+    margin: 0 auto;
+    /* PageHeader above draws its own 24px / 32px band. */
+    padding: 0 32px 24px;
+  }
+  .people-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  /* AgentCards: 4 / 2 / 1 across. */
+  .people-agents {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 1279px) {
+    .people-agents {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 639px) {
+    .people-agents {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .people-screen {
+      padding: 0 16px 16px;
+    }
+  }
+  .people-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+  .people-footnote {
+    padding-top: 8px;
+  }
+}

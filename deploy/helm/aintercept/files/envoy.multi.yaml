@@ -5,10 +5,16 @@
 # demand. Per-SNI selection is done with filter_chain_match.server_names, the
 # stock-Envoy mechanism for choosing a cert by SNI at handshake time.
 #
-# Telemetry: an ext_proc filter streams request/response headers and body chunks
-# to the Go observer. failure_mode_allow:true means an observer outage NEVER
-# fails a real request. STREAMED body mode means we observe chunks as they flow
-# without buffering whole bodies.
+# Telemetry: an ext_proc filter in observability mode streams request/response
+# headers and body chunks to the Go observer without waiting on it ("send and
+# go"): the observer adds no latency and an observer outage NEVER affects a
+# request. STREAMED body mode observes chunks as they flow, including the
+# frames of upgraded WebSocket connections.
+#
+# WebSockets: each provider has an upgrade route to a sibling *_ws cluster that
+# speaks HTTP/1.1 upstream (providers reject WebSocket over HTTP/2), so
+# WebSocket clients (e.g. Codex) connect at full function. See
+# docs/design/WEBSOCKET_AND_POLICY_SPEC.md.
 #
 # Upstream: forwards to the authentic provider over verified TLS with correct
 # SNI. THIS IS THE M2 VARIANT: the upstream is the REAL api.anthropic.com,
@@ -31,6 +37,19 @@ static_resources:
       address:
         socket_address: { address: 0.0.0.0, port_value: 443 }
       listener_filters:
+{{- if .Values.envoy.proxyProtocol.enabled }}
+        # The load balancer prepends a PROXY protocol header carrying the
+        # original client address; this filter restores it as the downstream
+        # peer, so source.address (sent to the observer) is the laptop, not the
+        # LB. Only enable when the LB actually sends it: a connection without
+        # the header is rejected.
+        - name: envoy.filters.listener.proxy_protocol
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.proxy_protocol.v3.ProxyProtocol
+            # In-cluster clients (the observer's path probe) connect without
+            # the LB's PROXY header; traffic through the LB always carries it.
+            allow_requests_without_proxy_protocol: true
+{{- end }}
         # Required so filter_chain_match can match on SNI.
         - name: envoy.filters.listener.tls_inspector
           typed_config:
@@ -46,6 +65,13 @@ static_resources:
               - "api.openai.com"
               - "generativelanguage.googleapis.com"
               - "chatgpt.com"
+              - "ab.chatgpt.com"
+              - "cloudflare-ech.com"
+              - "bzr.openai.com"
+              - "a.claude.ai"
+              - "ws.chatgpt.com"
+              - "claude.ai"
+              - "*.oaiusercontent.com"
           transport_socket:
             name: envoy.transport_sockets.tls
             typed_config:
@@ -56,6 +82,11 @@ static_resources:
                 tls_certificate_sds_secret_configs:
                   - name: "api.anthropic.com"
                     sds_config: &sds
+                      # Wait for every host's leaf before the listener goes
+                      # live (/ready stays NOT ready). With the default 15s
+                      # timeout Envoy starts without a missing secret and
+                      # serves another host's cert for that SNI.
+                      initial_fetch_timeout: 0s
                       resource_api_version: V3
                       api_config_source:
                         api_type: GRPC
@@ -69,12 +100,31 @@ static_resources:
                     sds_config: *sds
                   - name: "chatgpt.com"
                     sds_config: *sds
+                  - name: "ab.chatgpt.com"
+                    sds_config: *sds
+                  - name: "cloudflare-ech.com"
+                    sds_config: *sds
+                  - name: "bzr.openai.com"
+                    sds_config: *sds
+                  - name: "a.claude.ai"
+                    sds_config: *sds
+                  - name: "ws.chatgpt.com"
+                    sds_config: *sds
+                  - name: "claude.ai"
+                    sds_config: *sds
+                  - name: "*.oaiusercontent.com"
+                    sds_config: *sds
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: ingress_https
                 codec_type: AUTO
+                # Forward traffic as the client sent it. By default Envoy mints an
+                # x-request-id and overwrites the upstream's `server` response
+                # header with "envoy"; neither should be visible to either side.
+                generate_request_id: false
+                server_header_transformation: PASS_THROUGH
                 stream_idle_timeout: 300s
                 # Accept HTTP/2 extended CONNECT from downstream so a WS upgrade
                 # can be carried when the client speaks h2 (RFC 8441).
@@ -93,9 +143,14 @@ static_resources:
                   - name: envoy.filters.http.ext_proc
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      # Observe: Envoy sends and never waits for (or applies) the
+                      # observer's replies, so it can't delay or break traffic. This
+                      # is also what lets upgraded WebSocket streams through (the
+                      # synchronous STREAMED mode stalls them).
+                      observability_mode: true
                       # An observer failure must never fail a real request.
                       failure_mode_allow: true
-                      # Observe-only: stream bodies as chunks, never buffer whole.
+                      # Stream bodies as chunks, never buffer whole.
                       processing_mode:
                         request_header_mode: SEND
                         response_header_mode: SEND
@@ -103,18 +158,48 @@ static_resources:
                         response_body_mode: STREAMED
                         request_trailer_mode: SKIP
                         response_trailer_mode: SKIP
-                      # Bounded time to talk to the observer; if exceeded with
-                      # failure_mode_allow, the request proceeds.
-                      message_timeout: 0.2s
+                      # Send the downstream peer address with the request headers so
+                      # the observer can attribute the request without trusting any
+                      # client-supplied header.
+                      request_attributes: ["source.address"]
                       grpc_service:
                         envoy_grpc:
                           cluster_name: observer
                         timeout: 1s
+                  # Resolves the upstream for wildcard hosts (e.g. per-region file-upload
+                  # hosts) from :authority; a no-op for routes to the fixed clusters.
+                  - name: envoy.filters.http.dynamic_forward_proxy
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.dynamic_forward_proxy.v3.FilterConfig
+                      dns_cache_config: &dfp_cache
+                        name: dfp_cache
+                        dns_lookup_family: V4_PREFERRED
+                        typed_dns_resolver_config:
+                          name: envoy.network.dns_resolver.cares
+                          typed_config:
+                            "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
+                            use_resolvers_as_fallback: false
+                            resolvers:
+                              - socket_address: { address: "1.1.1.1", port_value: 53 }
+                              - socket_address: { address: "8.8.8.8", port_value: 53 }
+                            dns_resolver_options:
+                              use_tcp_for_dns_lookups: false
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      # No x-envoy-* headers on upstream requests or downstream
+                      # responses (e.g. x-envoy-upstream-service-time).
+                      suppress_envoy_headers: true
                 route_config:
                   name: local_route
+                  # The only deliberate change to traffic: drop the upstream's
+                  # HTTP/3 advertisement so browsers stay on TCP, which this
+                  # listener intercepts, instead of attempting QUIC (UDP), which
+                  # it does not.
+                  response_headers_to_remove: ["alt-svc"]
+                  # Envoy adds x-forwarded-proto to every upstream request; the
+                  # provider should see the request as the client sent it.
+                  request_headers_to_remove: ["x-forwarded-proto"]
                   # Route to the matching upstream by the original hostname. A
                   # client reaching api.openai.com (DNS-overridden to the proxy)
                   # keeps :authority = api.openai.com, which selects the openai
@@ -123,21 +208,104 @@ static_resources:
                     - name: anthropic
                       domains: ["api.anthropic.com"]
                       routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_anthropic_ws, timeout: 0s, idle_timeout: 300s }
                         - match: { prefix: "/" }
                           route: { cluster: upstream_anthropic, timeout: 0s, idle_timeout: 300s }
                     - name: openai
                       domains: ["api.openai.com"]
                       routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_openai_ws, timeout: 0s, idle_timeout: 300s }
                         - match: { prefix: "/" }
                           route: { cluster: upstream_openai, timeout: 0s, idle_timeout: 300s }
                     - name: chatgpt
                       domains: ["chatgpt.com"]
                       routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_chatgpt_ws, timeout: 0s, idle_timeout: 300s }
                         - match: { prefix: "/" }
                           route: { cluster: upstream_chatgpt, timeout: 0s, idle_timeout: 300s }
+                    - name: chatgpt_ab
+                      domains: ["ab.chatgpt.com"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_chatgpt_ab_ws, timeout: 0s, idle_timeout: 300s }
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_chatgpt_ab, timeout: 0s, idle_timeout: 300s }
+                    # ECH: with Encrypted Client Hello the outer SNI is the
+                    # provider's public name. Completing that handshake as the
+                    # public name (with no ECH retry configs) makes the browser
+                    # retry without ECH, sending the real SNI (RFC 9849, the
+                    # "split mode"/middlebox fallback). No requests are expected
+                    # on this host itself.
+                    - name: ech_public_name
+                      domains: ["cloudflare-ech.com"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_ech_public_name_ws, timeout: 0s, idle_timeout: 300s }
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_ech_public_name, timeout: 0s, idle_timeout: 300s }
+                    - name: openai_bzr
+                      domains: ["bzr.openai.com"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_openai_bzr_ws, timeout: 0s, idle_timeout: 300s }
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_openai_bzr, timeout: 0s, idle_timeout: 300s }
+                    - name: claude_analytics
+                      domains: ["a.claude.ai"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_claude_analytics_ws, timeout: 0s, idle_timeout: 300s }
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_claude_analytics, timeout: 0s, idle_timeout: 300s }
+                    - name: chatgpt_wshost
+                      domains: ["ws.chatgpt.com"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_chatgpt_wshost_ws, timeout: 0s, idle_timeout: 300s }
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_chatgpt_wshost, timeout: 0s, idle_timeout: 300s }
+                    - name: claude_web
+                      domains: ["claude.ai"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_claude_web_ws, timeout: 0s, idle_timeout: 300s }
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_claude_web, timeout: 0s, idle_timeout: 300s }
+                    # Wildcard: the upstream is whatever *.oaiusercontent.com host the client named,
+                    # resolved by the forward-proxy filter and verified against that name.
+                    - name: wildcard_oaiusercontent_com
+                      domains: ["*.oaiusercontent.com"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route: { cluster: upstream_dynamic, timeout: 0s, idle_timeout: 300s }
                     - name: gemini
                       domains: ["generativelanguage.googleapis.com"]
                       routes:
+                        - match:
+                            prefix: "/"
+                            headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+                          route: { cluster: upstream_gemini_ws, timeout: 0s, idle_timeout: 300s }
                         - match: { prefix: "/" }
                           route: { cluster: upstream_gemini, timeout: 0s, idle_timeout: 300s }
 
@@ -159,22 +327,43 @@ static_resources:
                   address:
                     socket_address: { address: certsvc, port_value: 18000 }
 
-    # The Go observer (ext_proc gRPC, HTTP/2).
+    # The Go observer (ext_proc gRPC, HTTP/2). observer-pods is a headless
+    # Service, so each observer pod is its own endpoint (re-resolved every 5s
+    # as pods come and go). Each ext_proc stream goes to a pod picked by
+    # client-side weighted round robin on the load each pod reports out of band
+    # (ORCA, every 30s): its memory-budget utilization, so new streams go to the
+    # pods with the most room. A pod without a report yet gets the median
+    # weight, so new pods take traffic right away.
     - name: observer
       type: STRICT_DNS
       connect_timeout: 2s
+      dns_refresh_rate: 5s
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config:
             http2_protocol_options: {}
+      load_balancing_policy:
+        policies:
+          - typed_extension_config:
+              name: envoy.load_balancing_policies.client_side_weighted_round_robin
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin
+                enable_oob_load_report: true
+                oob_reporting_period: 30s
+                # Reports arrive every 30s: use a weight after the second, and
+                # keep it for a few missed reports.
+                blackout_period: 30s
+                weight_expiration_period: 120s
+                # Utilization is the reported application_utilization (the
+                # memory budget's), the policy's default source.
       load_assignment:
         cluster_name: observer
         endpoints:
           - lb_endpoints:
               - endpoint:
                   address:
-                    socket_address: { address: observer, port_value: 9000 }
+                    socket_address: { address: observer-pods, port_value: 9000 }
 
     # Authentic upstreams: the REAL provider APIs, one cluster each.
     #
@@ -203,7 +392,14 @@ static_resources:
           auto_config:
             # allow_connect enables HTTP/2 extended CONNECT (RFC 8441), which is
             # how a WebSocket upgrade is carried when Envoy speaks h2 upstream.
-            http2_protocol_options: { allow_connect: true }
+            # Browser-like HTTP/2 settings (Chrome's HPACK table and window
+            # sizes): bot management fingerprints the upstream connection,
+            # which Envoy originates. See docs/INTERCEPTION_ISSUES.md B2.
+            http2_protocol_options:
+              allow_connect: true
+              hpack_table_size: 65536
+              initial_stream_window_size: 6291456
+              initial_connection_window_size: 15728640
             http_protocol_options: {}
       load_assignment:
         cluster_name: upstream_anthropic
@@ -219,6 +415,17 @@ static_resources:
           sni: api.anthropic.com
           common_tls_context:
             alpn_protocols: ["h2", "http/1.1"]
+            # Chrome's TLS parameters: TLS 1.3, its cipher order, curves (incl.
+            # the X25519MLKEM768 hybrid) and signature algorithms. Envoy's default
+            # is a TLS 1.2-only, 6-cipher hello that no browser sends; bot management
+            # scores that against the client's browser User-Agent. Matches Chrome's
+            # JA4 cipher hash; GREASE and a few browser-only extensions can't be set.
+            tls_params: &upstream_tls_params
+              tls_minimum_protocol_version: TLSv1_2
+              tls_maximum_protocol_version: TLSv1_3
+              cipher_suites: [ECDHE-ECDSA-AES128-GCM-SHA256, ECDHE-RSA-AES128-GCM-SHA256, ECDHE-ECDSA-AES256-GCM-SHA384, ECDHE-RSA-AES256-GCM-SHA384, ECDHE-ECDSA-CHACHA20-POLY1305, ECDHE-RSA-CHACHA20-POLY1305, ECDHE-RSA-AES128-SHA, ECDHE-RSA-AES256-SHA, AES128-GCM-SHA256, AES256-GCM-SHA384, AES128-SHA, AES256-SHA]
+              ecdh_curves: [X25519MLKEM768, X25519, P-256, P-384]
+              signature_algorithms: [ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256, rsa_pkcs1_sha256, ecdsa_secp384r1_sha384, rsa_pss_rsae_sha384, rsa_pkcs1_sha384, rsa_pss_rsae_sha512, rsa_pkcs1_sha512]
             validation_context:
               trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
               match_typed_subject_alt_names:
@@ -245,6 +452,7 @@ static_resources:
           sni: api.openai.com
           common_tls_context:
             alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
             validation_context:
               trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
               match_typed_subject_alt_names:
@@ -271,11 +479,203 @@ static_resources:
           sni: chatgpt.com
           common_tls_context:
             alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
             validation_context:
               trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
               match_typed_subject_alt_names:
                 - san_type: DNS
                   matcher: { exact: chatgpt.com }
+
+    - name: upstream_chatgpt_ab
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http
+      load_assignment:
+        cluster_name: upstream_chatgpt_ab
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: ab.chatgpt.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: ab.chatgpt.com
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: ab.chatgpt.com }
+
+    - name: upstream_ech_public_name
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http
+      load_assignment:
+        cluster_name: upstream_ech_public_name
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: cloudflare-ech.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: cloudflare-ech.com
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: cloudflare-ech.com }
+
+    - name: upstream_openai_bzr
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http
+      load_assignment:
+        cluster_name: upstream_openai_bzr
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: bzr.openai.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: bzr.openai.com
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: bzr.openai.com }
+
+    - name: upstream_claude_analytics
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http
+      load_assignment:
+        cluster_name: upstream_claude_analytics
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: a.claude.ai, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: a.claude.ai
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: a.claude.ai }
+
+    - name: upstream_chatgpt_wshost
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http
+      load_assignment:
+        cluster_name: upstream_chatgpt_wshost
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: ws.chatgpt.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: ws.chatgpt.com
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: ws.chatgpt.com }
+
+    - name: upstream_claude_web
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http
+      load_assignment:
+        cluster_name: upstream_claude_web
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: claude.ai, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: claude.ai
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: claude.ai }
+
+    # Wildcard hosts: one dynamic forward-proxy cluster. The upstream SNI and the
+    # SAN check both come from the request's :authority (auto_sni /
+    # auto_san_validation), so the provider's cert must match the host the client
+    # asked for; only hosts matching a wildcard vhost ever reach it.
+    - name: upstream_dynamic
+      connect_timeout: 5s
+      lb_policy: CLUSTER_PROVIDED
+      cluster_type:
+        name: envoy.clusters.dynamic_forward_proxy
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.clusters.dynamic_forward_proxy.v3.ClusterConfig
+          dns_cache_config: *dfp_cache
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          upstream_http_protocol_options: { auto_sni: true, auto_san_validation: true }
+          auto_config:
+            http2_protocol_options: {}
+            http_protocol_options: {}
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          common_tls_context:
+            alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
 
     - name: upstream_gemini
       type: LOGICAL_DNS
@@ -297,6 +697,284 @@ static_resources:
           sni: generativelanguage.googleapis.com
           common_tls_context:
             alpn_protocols: ["h2", "http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: generativelanguage.googleapis.com }
+
+    # WebSocket siblings: same verified upstreams, HTTP/1.1 only, for upgrade
+    # routes. (WebSocket over HTTP/2 needs RFC 8441 extended CONNECT, which the
+    # providers reject.)
+    - name: upstream_anthropic_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: &upstream_http1
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http_protocol_options: {}
+      load_assignment:
+        cluster_name: upstream_anthropic_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: api.anthropic.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: api.anthropic.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: api.anthropic.com }
+
+    - name: upstream_openai_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_openai_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: api.openai.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: api.openai.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: api.openai.com }
+
+    - name: upstream_chatgpt_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_chatgpt_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: chatgpt.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: chatgpt.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: chatgpt.com }
+
+    - name: upstream_chatgpt_ab_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_chatgpt_ab_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: ab.chatgpt.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: ab.chatgpt.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: ab.chatgpt.com }
+
+    - name: upstream_ech_public_name_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_ech_public_name_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: cloudflare-ech.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: cloudflare-ech.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: cloudflare-ech.com }
+
+    - name: upstream_openai_bzr_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_openai_bzr_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: bzr.openai.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: bzr.openai.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: bzr.openai.com }
+
+    - name: upstream_claude_analytics_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_claude_analytics_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: a.claude.ai, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: a.claude.ai
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: a.claude.ai }
+
+    - name: upstream_chatgpt_wshost_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_chatgpt_wshost_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: ws.chatgpt.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: ws.chatgpt.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: ws.chatgpt.com }
+
+    - name: upstream_claude_web_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_claude_web_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: claude.ai, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: claude.ai
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
+            validation_context:
+              trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
+              match_typed_subject_alt_names:
+                - san_type: DNS
+                  matcher: { exact: claude.ai }
+
+    - name: upstream_gemini_ws
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      dns_lookup_family: V4_PREFERRED
+      typed_dns_resolver_config: *pinned_dns
+      typed_extension_protocol_options: *upstream_http1
+      load_assignment:
+        cluster_name: upstream_gemini_ws
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: generativelanguage.googleapis.com, port_value: 443 }
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: generativelanguage.googleapis.com
+          common_tls_context:
+            alpn_protocols: ["http/1.1"]
+            tls_params: *upstream_tls_params
             validation_context:
               trusted_ca: { filename: /etc/ssl/certs/ca-certificates.crt }
               match_typed_subject_alt_names:

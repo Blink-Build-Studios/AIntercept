@@ -1,0 +1,15 @@
+/* RangeReadout (CompTimeline): a wrapping row, 8px between lines and 20px between items. */
+@layer components {
+  .rr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+  }
+  .rr-key {
+    font: 400 10.5px/14px var(--font-mono);
+    letter-spacing: var(--type-micro-tracking);
+    text-transform: uppercase;
+    color: var(--focus);
+  }
+}

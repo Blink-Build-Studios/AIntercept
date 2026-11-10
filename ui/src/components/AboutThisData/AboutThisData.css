@@ -1,0 +1,134 @@
+/* AboutThisData (AboutThisData.dc.html, handoff §11E.1). Shares the request
+   drawer's scrim (.drawer-scrim). */
+@layer components {
+  .about-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 11;
+    width: 640px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .about-header {
+    gap: 12px;
+    padding: 10px 16px;
+  }
+  .about-header h1 {
+    margin: 0;
+  }
+  .about-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 24px;
+  }
+  .about-body p {
+    margin: 0;
+  }
+  .about-section {
+    gap: 8px;
+  }
+  .about-section h2 {
+    margin: 0;
+    font-weight: 400;
+  }
+  .about-pipeline {
+    display: grid;
+    grid-template-columns: 1fr 24px 1fr 24px 1fr;
+    row-gap: 6px;
+  }
+  .about-node {
+    padding: 8px 10px;
+  }
+  .about-node-sub,
+  .about-copy,
+  .about-bypass {
+    font: 400 11px/16px var(--font-mono);
+  }
+  .about-arrow,
+  .about-copy {
+    text-align: center;
+    align-self: center;
+  }
+  .about-bypass {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    padding: 6px 10px;
+  }
+  .about-table > :last-child {
+    border-bottom: 0;
+  }
+  .about-channel,
+  .about-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 4px 12px;
+    font: var(--type-data);
+  }
+  .about-channel-head {
+    align-items: center;
+    padding-block: 4px;
+  }
+  .about-channel > :nth-child(1) {
+    width: 150px;
+    flex: none;
+  }
+  .about-channel > :nth-child(2) {
+    width: 170px;
+    flex: none;
+  }
+  .about-channel > :nth-child(3) {
+    flex: 1;
+  }
+  .about-channel-name {
+    gap: 6px;
+  }
+  /* A product's agent dot (§11L.2), as the breadcrumb and agent rows draw it. */
+  .about-product-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+  }
+  .about-wire {
+    font: 400 11px/20px var(--font-mono);
+    word-break: break-word;
+  }
+  .about-carries,
+  .about-row-v {
+    font: 400 12px/20px var(--font-mono);
+  }
+  /* A captured product (§11M 3.2): name 140px, then its shape and hosts, mono 12/18. */
+  .about-product {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    column-gap: 16px;
+    padding: 8px 12px;
+  }
+  .about-product-name {
+    gap: 6px;
+  }
+  .about-product-what {
+    display: flex;
+    flex-direction: column;
+    font: 400 12px/18px var(--font-mono);
+    word-break: break-word;
+  }
+  .about-row-k {
+    width: 110px;
+    flex: none;
+  }
+  .about-row-v {
+    flex: 1;
+  }
+}
+/* Below 960px the drawer takes the full width (handoff §12). */
+@media (max-width: 959.98px) {
+  .about-drawer {
+    width: 100%;
+    border-left: 0;
+  }
+}
