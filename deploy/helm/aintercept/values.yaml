@@ -111,6 +111,13 @@ objectStore:
 # <objectStore.prefix>/shaped/ (docs/ui/BUILD_PLAN.md §7.5). One replica.
 process:
   enabled: true
+  # process's own ServiceAccount (never the observer's). On AWS its role needs
+  # list + get on the raw prefix and put + delete under <prefix>/shaped/ (docs/PRODUCTION.md §7). create: false uses an existing one named
+  # name. roleArn is IRSA only (empty for Pod Identity).
+  serviceAccount:
+    create: true
+    name: aintercept-process
+    roleArn: ""
   # Scheduling. All optional: unset leaves the pod spec as it was.
   nodeSelector: {}
   tolerations: []
@@ -136,6 +143,13 @@ process:
 # with `kubectl port-forward svc/api 8787` (`make remote` does).
 api:
   enabled: false
+  # api's own ServiceAccount (never the observer's). On AWS its role needs
+  # list + get on the telemetry prefix (docs/PRODUCTION.md §7). create: false uses an existing one named
+  # name. roleArn is IRSA only (empty for Pod Identity).
+  serviceAccount:
+    create: true
+    name: aintercept-api
+    roleArn: ""
   # Scheduling. All optional: unset leaves the pod spec as it was.
   nodeSelector: {}
   tolerations: []

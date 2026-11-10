@@ -217,9 +217,12 @@ Nothing in the chart provisions AWS resources; it consumes them.
 |---|---|---|
 | observer | `s3:PutObject` on the telemetry prefix (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
 | certsvc | `kms:GetPublicKey`, `kms:Sign` on the intermediate's key | `certsvc.serviceAccount`, `certsvc.kms.keyId` |
+| process | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/shaped/*` | `process.serviceAccount` |
+| api (the `mirror` sidecar) | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*` | `api.serviceAccount` |
 
 - **EKS Pod Identity:** associate each role with its ServiceAccount
-  (`aintercept-observer`, `aintercept-certsvc` in the release namespace) and leave
+  (`aintercept-observer`, `aintercept-certsvc`, `aintercept-process`,
+  `aintercept-api` in the release namespace) and leave
   `roleArn` empty. **IRSA:** set `serviceAccount.roleArn` instead. Both use the
   standard AWS credential chain; no static keys.
 - **Key-hash salt from Secrets Manager:** set

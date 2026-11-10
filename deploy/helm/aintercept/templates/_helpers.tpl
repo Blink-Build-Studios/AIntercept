@@ -68,6 +68,12 @@ topologySpreadConstraints:
 {{- end }}
 {{- end -}}
 
+{{/* ServiceAccount name for process or api: serviceAccount.name, else aintercept-<component>. */}}
+{{- define "aintercept.readerServiceAccountName" -}}
+{{- $sa := .c.serviceAccount | default dict -}}
+{{ $sa.name | default (printf "aintercept-%s" .component) }}
+{{- end -}}
+
 {{- define "aintercept.envoyConfig" -}}
 {{- include "aintercept.checkAllowlist" . -}}
 {{ tpl (.Files.Get "files/envoy.multi.yaml") . }}

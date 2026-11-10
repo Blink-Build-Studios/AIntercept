@@ -19,8 +19,9 @@ spec:
     metadata:
       labels: { app: api }
     spec:
-      # On AWS this ServiceAccount's role must allow reads and lists on the bucket.
-      serviceAccountName: {{ .Values.observer.serviceAccount.name }}
+      # Its own ServiceAccount, never the observer's, so the observer's AWS role
+      # stays write-only. Its role needs the reads in docs/PRODUCTION.md §7.
+      serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.api "component" "api" "root" $) }}
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
