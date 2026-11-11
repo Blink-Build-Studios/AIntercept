@@ -284,6 +284,23 @@ api:
 
   If the JWKS can't be fetched, requests get **503**: AIntercept fails closed.
   `/api/v1/status` stays open for probes.
+- **Exposing requires the check:** the chart refuses
+  `api.networkPolicy.ingressFrom`, a non-ClusterIP `api.service.type` or
+  `api.httpRoute` without `api.auth`. Set `api.auth.allowUnauthenticated: true`
+  only if something else verifies identity and nothing can reach the Service
+  around it.
+- **Set the issuer.** It's optional, but without it any token the JWKS signs
+  for that audience is accepted; the API logs a warning at startup. The JWKS
+  URL must be `https://`. Keys are cached for an hour and refetched early when
+  a token names a new key ID (rotation), at most every 30 s.
+- **Browser hardening:**
+  - UI responses carry a strict Content-Security-Policy: everything from the
+    same origin, no inline script, framing refused;
+  - every response carries `X-Content-Type-Options: nosniff` and
+    `Referrer-Policy: no-referrer`;
+  - API responses are `Cache-Control: no-store`;
+  - the API explorer (`/docs`, `/redoc`, `/openapi.json`) is off whenever the
+    UI is served.
 - **Access is logged:** each request's log line carries the verified identity
   (`identity`: the email claim, else the subject), so who looked at whose data
   is attributable.

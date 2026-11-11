@@ -238,6 +238,10 @@ api:
     jwksUrl: ""           # https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
     audience: ""          # the application's AUD tag / audience
     issuer: ""            # optional: https://<team>.cloudflareaccess.com
+    # Exposing the API (ingressFrom, a non-ClusterIP Service or an HTTPRoute)
+    # requires the check above, because the UI shows per-person data. Set true
+    # only if something else in front verifies identity and nothing can bypass it.
+    allowUnauthenticated: false
 
 observer:
   # Scheduling. All optional: unset leaves the pod spec as it was.

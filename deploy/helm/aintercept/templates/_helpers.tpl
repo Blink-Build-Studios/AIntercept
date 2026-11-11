@@ -127,6 +127,10 @@ runtime failure in-cluster.
 {{- fail "api.auth needs jwtHeader, jwksUrl and audience together (issuer is optional)" -}}
 {{- end -}}
 {{- end -}}
+{{- $exposed := or .Values.api.networkPolicy.ingressFrom (ne .Values.api.service.type "ClusterIP") .Values.api.httpRoute.enabled -}}
+{{- if and .Values.api.enabled $exposed (not .Values.api.auth.jwtHeader) (not .Values.api.auth.allowUnauthenticated) -}}
+{{- fail "exposing the API (api.networkPolicy.ingressFrom, api.service.type or api.httpRoute) needs api.auth: the UI shows per-person data. Configure the identity-aware proxy's assertion check, or set api.auth.allowUnauthenticated=true deliberately" -}}
+{{- end -}}
 {{- if and .Values.api.httpRoute.enabled (not .Values.api.httpRoute.parentRefs) -}}
 {{- fail "api.httpRoute.enabled needs api.httpRoute.parentRefs (the Gateway to attach to)" -}}
 {{- end -}}

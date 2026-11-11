@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 import os
 import pathlib
@@ -76,7 +78,18 @@ def create_app(
         ui_dir = pathlib.Path(os.environ["AINTERCEPT_UI_DIR"])
     # operationId = the route function's name (e.g. get_status): readable in the
     # generated TypeScript and used to name sample folders.
-    app = FastAPI(title="aintercept API", version="0.1.0", generate_unique_id_function=lambda route: route.name)
+    # Serving the UI means a deployment, not a laptop: no interactive API explorer
+    # (/docs, /redoc, /openapi.json) there. The contract is generated from the
+    # models (make regen), not fetched from the app.
+    explorer = ui_dir is None
+    app = FastAPI(
+        title="aintercept API",
+        version="0.1.0",
+        generate_unique_id_function=lambda route: route.name,
+        docs_url="/docs" if explorer else None,
+        redoc_url="/redoc" if explorer else None,
+        openapi_url="/openapi.json" if explorer else None,
+    )
     data_dir = pathlib.Path(os.environ.get("AINTERCEPT_DATA_DIR") or DEFAULT_DATA_DIR)
     if store is None:
         shaped = pathlib.Path(os.environ.get("AINTERCEPT_SHAPED_DIR") or DEFAULT_SHAPED_DIR)
@@ -136,6 +149,8 @@ def create_app(
 
         fields = {"header": auth.config.header, "audience": auth.config.audience}
         log.info("identity verification on", extra={"fields": fields})
+        if auth.config.issuer is None:
+            log.warning("identity verification without an issuer check: set AINTERCEPT_AUTH_ISSUER")
 
     @app.middleware("http")
     async def request_log(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -172,6 +187,12 @@ def create_app(
             fields["authError"] = why
         log.log(logging.ERROR if response.status_code >= 500 else logging.INFO, "request", extra={"fields": fields})
         response.headers["X-Query-Id"] = qid
+        # Every response: never sniffed, never sent as a referrer. API data is
+        # per-person: no browser or intermediate cache keeps it.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     @app.exception_handler(RequestValidationError)
@@ -203,16 +224,46 @@ def mount_ui(app: FastAPI, ui_dir: pathlib.Path) -> None:
     index = root / "index.html"
     if not index.is_file():
         raise ValueError(f"AINTERCEPT_UI_DIR {ui_dir} has no index.html")
+    headers = {"Content-Security-Policy": content_security_policy(index.read_text()), "X-Frame-Options": "DENY"}
 
-    @app.get("/{path:path}", include_in_schema=False)
+    def file(f: pathlib.Path, cache: str) -> FileResponse:
+        return FileResponse(f, headers={**headers, "Cache-Control": cache})
+
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def ui(path: str, request: Request) -> Response:
         if path == "api" or path.startswith("api/"):
             return error_response(404, "http_404", "Not Found", request.state.query_id)
-        f = (root / path).resolve()
-        if path and f.is_file() and f.is_relative_to(root):
+        try:
+            f = (root / path).resolve()
+            found = bool(path) and f.is_relative_to(root) and f.is_file()
+        except (ValueError, OSError):  # a NUL byte, a name too long, …
+            found = False
+        if found:
             # Vite fingerprints assets/: their content never changes under a name.
-            cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
-            return FileResponse(f, headers={"Cache-Control": cache})
-        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+            return file(f, "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache")
+        return file(index, "no-cache")
 
     log.info("serving the UI", extra={"fields": {"dir": str(root)}})
+
+
+def content_security_policy(index_html: str) -> str:
+    """The UI's policy: everything from its own origin, no inline script, no
+    framing. index.html's inline <style> blocks are allowed by their hash."""
+    hashes = [
+        "'sha256-" + base64.b64encode(hashlib.sha256(css.encode()).digest()).decode() + "'"
+        for css in re.findall(r"<style[^>]*>(.*?)</style>", index_html, re.S)
+    ]
+    return "; ".join(
+        [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src " + " ".join(["'self'", *hashes]),
+            "img-src 'self' data:",
+            "font-src 'self'",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'none'",
+        ]
+    )

@@ -53,6 +53,7 @@ def test_serves_the_ui_beside_the_api(store, ui_dir):
     c = app_client(store, ui_dir=ui_dir)
     r = c.get("/")
     assert r.status_code == 200 and "AIntercept" in r.text and r.headers["cache-control"] == "no-cache"
+    assert c.head("/").status_code == 200  # load-balancer health checks
     r = c.get("/assets/index-abc123.js")
     assert r.status_code == 200 and "console.log" in r.text and "immutable" in r.headers["cache-control"]
     assert c.get("/favicon.svg").text == "<svg/>"
@@ -193,3 +194,97 @@ def test_config_from_env():
 
 def test_without_auth_everything_is_open(store):
     assert app_client(store).get("/api/v1/people").status_code == 200
+
+
+# ── Security regressions (attacks that must keep failing) ───────────────────
+
+
+def _b64(d) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
+
+
+def _claims():
+    now = int(time.time())
+    return {"aud": AUDIENCE, "iss": ISSUER, "exp": now + 300, "email": "evil@example.com"}
+
+
+def test_unsigned_and_algorithm_confused_tokens_are_refused(store, keys):
+    import base64
+    import hashlib
+    import hmac
+
+    from cryptography.hazmat.primitives import serialization
+
+    c = auth_client(store, keys)
+    unsigned = _b64({"alg": "none", "typ": "JWT", "kid": "k"}) + "." + _b64(_claims()) + "."
+    assert c.get("/api/v1/people", headers={HEADER: unsigned}).status_code == 401
+    # HS256 keyed with the proxy's *public* key: the classic confusion attack.
+    pub = keys[0].public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    head, body = _b64({"alg": "HS256", "typ": "JWT", "kid": "k"}), _b64(_claims())
+    sig = base64.urlsafe_b64encode(hmac.new(pub, f"{head}.{body}".encode(), hashlib.sha256).digest()).rstrip(b"=")
+    assert c.get("/api/v1/people", headers={HEADER: f"{head}.{body}.{sig.decode()}"}).status_code == 401
+
+
+def test_only_the_exact_status_path_is_open(store, keys):
+    c = auth_client(store, keys)
+    assert c.get("/api/v1/status?x=1").status_code == 200
+    for path in ("/api/v1/status/", "/api//v1/status", "/api/v1/status/../people", "/docs", "/openapi.json"):
+        assert c.get(path).status_code in (401, 404), path
+
+
+def test_odd_ui_paths_get_the_app_not_an_error(store, ui_dir):
+    c = app_client(store, ui_dir=ui_dir)
+    for path in ("/a%00b", "/" + "x" * 5000):
+        r = c.get(path)
+        assert r.status_code == 200 and "AIntercept" in r.text, path
+
+
+def test_security_headers(store, ui_dir):
+    (ui_dir / "index.html").write_text("<!doctype html><style>@layer a, b;</style><title>AIntercept</title>")
+    c = app_client(store, ui_dir=ui_dir)
+    for path in ("/", "/people", "/assets/index-abc123.js"):
+        h = c.get(path).headers
+        csp = h["content-security-policy"]
+        assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp and "'unsafe-inline'" not in csp, path
+        assert h["x-frame-options"] == "DENY" and h["x-content-type-options"] == "nosniff", path
+    # The inline <style> is allowed by its hash, and only it.
+    import base64
+    import hashlib
+
+    digest = base64.b64encode(hashlib.sha256(b"@layer a, b;").digest()).decode()
+    assert f"'sha256-{digest}'" in c.get("/").headers["content-security-policy"]
+    api = c.get("/api/v1/status").headers
+    assert api["cache-control"] == "no-store" and api["x-content-type-options"] == "nosniff"
+    assert api["referrer-policy"] == "no-referrer"
+
+
+def test_no_api_explorer_when_serving_the_ui(store, ui_dir):
+    c = app_client(store, ui_dir=ui_dir)
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        r = c.get(path)
+        assert "swagger" not in r.text.lower() and '"openapi"' not in r.text, path
+    # Local development keeps them.
+    assert app_client(store).get("/openapi.json").status_code == 200
+
+
+def test_keys_must_come_over_https():
+    with pytest.raises(ValueError, match="https"):
+        AuthConfig.from_env(
+            {
+                "AINTERCEPT_AUTH_JWT_HEADER": HEADER,
+                "AINTERCEPT_AUTH_JWKS_URL": "http://team.example/certs",
+                "AINTERCEPT_AUTH_AUDIENCE": AUDIENCE,
+            }
+        )
+
+
+def test_a_broken_key_is_a_401_not_a_500(store, keys):
+    class BrokenJWKS:
+        def get_signing_key_from_jwt(self, token):
+            raise jwt.PyJWKError("Unable to parse a key")
+
+    cfg = AuthConfig(header=HEADER, jwks_url="https://unused.example/certs", audience=AUDIENCE, issuer=ISSUER)
+    c = app_client(store, auth=Verifier(cfg, jwks=BrokenJWKS()))
+    assert c.get("/api/v1/people", headers={HEADER: token(keys[0])}).status_code == 401

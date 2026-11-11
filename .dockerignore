@@ -12,3 +12,9 @@ ui/dist/
 ui/storybook-static/
 ui/.vite/
 test/interceptor/out/
+# Secrets never enter the build context: dev CA keys, env files, key material.
+certs/
+**/.env
+**/.env.*
+**/*.key
+**/*.pem

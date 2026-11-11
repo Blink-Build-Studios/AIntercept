@@ -46,6 +46,10 @@ class AuthConfig:
         if not (header or jwks_url or audience or issuer):
             return None
         missing = [n for n, v in (("JWT_HEADER", header), ("JWKS_URL", jwks_url), ("AUDIENCE", audience)) if not v]
+        if jwks_url and not jwks_url.lower().startswith("https://"):
+            # Keys fetched over plain HTTP could be swapped in transit, and then
+            # any assertion would verify.
+            raise ValueError("AINTERCEPT_AUTH_JWKS_URL must be an https:// URL")
         if missing:
             names = ", ".join(f"AINTERCEPT_AUTH_{m}" for m in missing)
             raise ValueError(f"AINTERCEPT_AUTH_* is partly set; also set {names}")
@@ -69,8 +73,11 @@ class SigningKeys(Protocol):
 class Verifier:
     def __init__(self, config: AuthConfig, jwks: SigningKeys | None = None) -> None:
         self.config = config
-        # Keys are cached and refetched when a token names a key id not seen yet.
-        self.jwks: SigningKeys = jwks or jwt.PyJWKClient(config.jwks_url, cache_keys=True, lifespan=600, timeout=5)
+        # The key set is cached for an hour and refetched early when a token names
+        # a key id it doesn't have (rotation), at most every 30 s (PyJWT's
+        # cooldown), so unknown key ids can't make every request fetch. A short
+        # timeout keeps an identity-provider outage from stalling requests.
+        self.jwks: SigningKeys = jwks or jwt.PyJWKClient(config.jwks_url, cache_keys=True, lifespan=3600, timeout=3)
 
     def verify(self, headers: Mapping[str, str]) -> dict[str, Any]:
         """The verified claims of the request's assertion. Blocking (may fetch
@@ -84,7 +91,7 @@ class Verifier:
             key = self.jwks.get_signing_key_from_jwt(token)
         except jwt.PyJWKClientConnectionError as e:
             raise KeysUnavailable(str(e)) from e
-        except (jwt.PyJWKClientError, jwt.InvalidTokenError) as e:
+        except jwt.PyJWTError as e:  # unknown key id, malformed token or key, …
             raise AuthError(str(e)) from e
         try:
             claims: dict[str, Any] = jwt.decode(
@@ -96,7 +103,7 @@ class Verifier:
                 options={"require": ["exp", "aud"] + (["iss"] if self.config.issuer else [])},
                 leeway=30,
             )
-        except jwt.InvalidTokenError as e:
+        except jwt.PyJWTError as e:
             raise AuthError(str(e)) from e
         return claims
 
