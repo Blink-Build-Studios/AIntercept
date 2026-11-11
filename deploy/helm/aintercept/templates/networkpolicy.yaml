@@ -73,9 +73,11 @@ spec:
         - { protocol: TCP, port: 9001 }
 {{- if .Values.api.enabled }}
 ---
-# The query API serves everything captured, with no authentication of its own:
-# no pod may connect. People reach it with `kubectl port-forward`, which needs
+# The query API (and the UI it serves) shows everything captured. By default no
+# pod may connect: people reach it with `kubectl port-forward`, which needs
 # cluster credentials and enters the pod directly; kubelet probes still pass.
+# api.networkPolicy.ingressFrom admits the ingress gateway or tunnel connector in
+# front of it (docs/PRODUCTION.md §5d).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -87,6 +89,14 @@ spec:
   podSelector:
     matchLabels: { app: api }
   policyTypes: ["Ingress"]
+  {{- with .Values.api.networkPolicy.ingressFrom }}
+  ingress:
+    - from:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - { port: 8787, protocol: TCP }
+  {{- else }}
   ingress: []
+  {{- end }}
 {{- end }}
 {{- end }}

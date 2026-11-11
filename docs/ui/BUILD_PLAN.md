@@ -314,7 +314,7 @@ The query API was parsing raw JSON on every request: `/overview` and `/people` t
   Result: p95 32–40 ms on both pages (the no-handler floor measures 16 ms; handler time p95 2.3 ms), in the dev build.
 
 - **The API in the cluster (2026-11-08):** as a client network runs it, the query API runs inside the cluster next to the data, and the UI connects through a tunnel.
-  - Chart: `api.enabled` adds an `api` Deployment (`api/Dockerfile`) with an `aintercept mirror` sidecar, a ClusterIP Service, and a NetworkPolicy admitting no pod (`kubectl port-forward` needs cluster credentials and still reaches it).
+  - Chart: `api.enabled` adds an `api` Deployment (`api/Dockerfile`) with an `aintercept mirror` sidecar, a ClusterIP Service, and a NetworkPolicy admitting no pod (`kubectl port-forward` needs cluster credentials and still reaches it). The image also serves the built UI at `/` (same origin as `/api/v1`), and `api.networkPolicy.ingressFrom`, `api.service`, `api.httpRoute` and `api.auth` expose it behind an identity-aware proxy (`docs/PRODUCTION.md` §5d).
   - `aintercept mirror` keeps the processor's tables in the pod (parts first, then the manifest, then deletions; the previous commit's files stay one more cycle) and serves raw objects on localhost (`/raw/list`, `/raw/get`), so the bucket's raw capture is never copied in bulk.
   - The API reads raw files through a `RawSource` (`api/src/aintercept_api/raw.py`): a directory, or the mirror (`AINTERCEPT_RAW_URL`). When raw files can't be read at all, the drawer builds the request from its request row (the headers the tables keep), and Raw says so.
   - `make remote` is now the tunnel (`kubectl port-forward svc/api 8787`, restarting with the pod) plus the local UI.

@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 import os
 import pathlib
@@ -10,10 +12,11 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from aintercept_api.auth import OPEN_PATHS, AuthError, KeysUnavailable, Verifier, identity, verifier_from_env
 from aintercept_api.models.common import ErrorBody, ErrorResponse
 from aintercept_api.raw import HttpRaw
 from aintercept_api.routers import people, requests, sessions, status
@@ -61,12 +64,32 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
     query_id: Callable[[], str] | None = None,
     ingest_interval_s: float = DEFAULT_INGEST_INTERVAL_S,
+    auth: Verifier | None = None,
+    ui_dir: pathlib.Path | None = None,
 ) -> FastAPI:
     """Build the app. Tests pass their own store, a frozen clock and fixed query
-    ids so generated samples are deterministic."""
+    ids so generated samples are deterministic.
+
+    auth (default: from AINTERCEPT_AUTH_*) verifies an identity-aware proxy's
+    assertion on every request (auth.py). ui_dir (default: AINTERCEPT_UI_DIR)
+    is a built UI to serve at /, beside /api/v1, so one Service serves both."""
+    auth = auth or verifier_from_env()
+    if ui_dir is None and os.environ.get("AINTERCEPT_UI_DIR"):
+        ui_dir = pathlib.Path(os.environ["AINTERCEPT_UI_DIR"])
     # operationId = the route function's name (e.g. get_status): readable in the
     # generated TypeScript and used to name sample folders.
-    app = FastAPI(title="aintercept API", version="0.1.0", generate_unique_id_function=lambda route: route.name)
+    # Serving the UI means a deployment, not a laptop: no interactive API explorer
+    # (/docs, /redoc, /openapi.json) there. The contract is generated from the
+    # models (make regen), not fetched from the app.
+    explorer = ui_dir is None
+    app = FastAPI(
+        title="aintercept API",
+        version="0.1.0",
+        generate_unique_id_function=lambda route: route.name,
+        docs_url="/docs" if explorer else None,
+        redoc_url="/redoc" if explorer else None,
+        openapi_url="/openapi.json" if explorer else None,
+    )
     data_dir = pathlib.Path(os.environ.get("AINTERCEPT_DATA_DIR") or DEFAULT_DATA_DIR)
     if store is None:
         shaped = pathlib.Path(os.environ.get("AINTERCEPT_SHAPED_DIR") or DEFAULT_SHAPED_DIR)
@@ -105,6 +128,30 @@ def create_app(
                 templates.append((re.compile(re.sub(r"\{[^}]+\}", "[^/]+", t) + "$"), t))
         return next((t for rx, t in templates if rx.match(path)), None)
 
+    if auth is not None:
+        # Inside request_log (registered after it, so it wraps this): refusals
+        # are logged, and the verified identity goes on the request's line.
+        @app.middleware("http")
+        async def require_identity(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+            if request.url.path in OPEN_PATHS:
+                return await call_next(request)
+            qid = request.state.query_id
+            try:
+                claims = await run_in_threadpool(auth.verify, request.headers)
+            except KeysUnavailable as e:
+                log.warning("identity keys unavailable", extra={"fields": {"queryId": qid, "error": str(e)}})
+                return error_response(503, "identity_unavailable", "The identity provider's keys can't be fetched", qid)
+            except AuthError as e:
+                request.state.auth_error = str(e)
+                return error_response(401, "unauthenticated", "A valid identity assertion is required", qid)
+            request.state.identity = identity(claims)
+            return await call_next(request)
+
+        fields = {"header": auth.config.header, "audience": auth.config.audience}
+        log.info("identity verification on", extra={"fields": fields})
+        if auth.config.issuer is None:
+            log.warning("identity verification without an issuer check: set AINTERCEPT_AUTH_ISSUER")
+
     @app.middleware("http")
     async def request_log(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """Exactly one structured line per request, failures included, keyed by
@@ -133,8 +180,19 @@ def create_app(
         skipped = len(request.app.state.store.skipped)
         if skipped:
             fields["skippedFiles"] = skipped
+        # Who asked (the verified assertion), so access to per-person data is attributable.
+        if who := getattr(request.state, "identity", None):
+            fields["identity"] = who
+        if why := getattr(request.state, "auth_error", None):
+            fields["authError"] = why
         log.log(logging.ERROR if response.status_code >= 500 else logging.INFO, "request", extra={"fields": fields})
         response.headers["X-Query-Id"] = qid
+        # Every response: never sniffed, never sent as a referrer. API data is
+        # per-person: no browser or intermediate cache keeps it.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     @app.exception_handler(RequestValidationError)
@@ -153,4 +211,59 @@ def create_app(
     app.include_router(people.router, prefix="/api/v1", responses=ERROR_RESPONSES)
     app.include_router(sessions.router, prefix="/api/v1", responses=ERROR_RESPONSES)
     app.include_router(requests.router, prefix="/api/v1", responses=ERROR_RESPONSES)
+    if ui_dir is not None:
+        mount_ui(app, ui_dir)
     return app
+
+
+def mount_ui(app: FastAPI, ui_dir: pathlib.Path) -> None:
+    """Serve the built UI (`vite build`'s dist/) at /: its files as they are,
+    and index.html for every other path (the UI routes on the client). /api/*
+    is never the UI: an unknown API path is a JSON 404."""
+    root = ui_dir.resolve()
+    index = root / "index.html"
+    if not index.is_file():
+        raise ValueError(f"AINTERCEPT_UI_DIR {ui_dir} has no index.html")
+    headers = {"Content-Security-Policy": content_security_policy(index.read_text()), "X-Frame-Options": "DENY"}
+
+    def file(f: pathlib.Path, cache: str) -> FileResponse:
+        return FileResponse(f, headers={**headers, "Cache-Control": cache})
+
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    def ui(path: str, request: Request) -> Response:
+        if path == "api" or path.startswith("api/"):
+            return error_response(404, "http_404", "Not Found", request.state.query_id)
+        try:
+            f = (root / path).resolve()
+            found = bool(path) and f.is_relative_to(root) and f.is_file()
+        except (ValueError, OSError):  # a NUL byte, a name too long, …
+            found = False
+        if found:
+            # Vite fingerprints assets/: their content never changes under a name.
+            return file(f, "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache")
+        return file(index, "no-cache")
+
+    log.info("serving the UI", extra={"fields": {"dir": str(root)}})
+
+
+def content_security_policy(index_html: str) -> str:
+    """The UI's policy: everything from its own origin, no inline script, no
+    framing. index.html's inline <style> blocks are allowed by their hash."""
+    hashes = [
+        "'sha256-" + base64.b64encode(hashlib.sha256(css.encode()).digest()).decode() + "'"
+        for css in re.findall(r"<style[^>]*>(.*?)</style>", index_html, re.S)
+    ]
+    return "; ".join(
+        [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src " + " ".join(["'self'", *hashes]),
+            "img-src 'self' data:",
+            "font-src 'self'",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'none'",
+        ]
+    )

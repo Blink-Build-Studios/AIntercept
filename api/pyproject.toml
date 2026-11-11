@@ -10,6 +10,8 @@ dependencies = [
     "duckdb==2.0.0",
     "fastapi==0.159.1",
     "pydantic==2.14.1",
+    "pyjwt==2.15.1",
+    "cryptography==50.0.2",
     "uvicorn==0.54.0",
 ]
 

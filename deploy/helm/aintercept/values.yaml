@@ -213,6 +213,35 @@ api:
   shapedSizeLimit: 2Gi
   # The API's DuckDB file (about twice the mirrored tables) and its spill space.
   dbSizeLimit: 4Gi
+  # The image serves the web UI at / beside the API at /api/v1. To give a small
+  # group the UI behind an identity-aware proxy (docs/PRODUCTION.md §5d):
+  service:
+    type: ClusterIP       # e.g. LoadBalancer for an internal load balancer
+    annotations: {}       # e.g. the cloud's internal-LB annotation
+  networkPolicy:
+    # Who may connect, as NetworkPolicy `from` peers (the ingress gateway, the
+    # tunnel connector, a CIDR). Empty: no pod (kubectl port-forward only).
+    #   - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cloudflared } }
+    #   - ipBlock: { cidr: 10.0.0.0/16 }
+    ingressFrom: []
+  # A Gateway API HTTPRoute to the api Service (needs the Gateway API CRDs).
+  httpRoute:
+    enabled: false
+    parentRefs: []        # - { name: internal-gateway, namespace: gateway }
+    hostnames: []         # - aintercept.internal.example.com
+  # Verify the identity-aware proxy's signed assertion on every request (defense
+  # in depth if the proxy is bypassed). Off when jwtHeader is empty. Without a
+  # valid assertion: 401; /api/v1/status stays open for probes. The verified
+  # email is logged with each request.
+  auth:
+    jwtHeader: ""         # Cf-Access-Jwt-Assertion, X-Goog-IAP-JWT-Assertion, …
+    jwksUrl: ""           # https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
+    audience: ""          # the application's AUD tag / audience
+    issuer: ""            # optional: https://<team>.cloudflareaccess.com
+    # Exposing the API (ingressFrom, a non-ClusterIP Service or an HTTPRoute)
+    # requires the check above, because the UI shows per-person data. Set true
+    # only if something else in front verifies identity and nothing can bypass it.
+    allowUnauthenticated: false
 
 observer:
   # Scheduling. All optional: unset leaves the pod spec as it was.
