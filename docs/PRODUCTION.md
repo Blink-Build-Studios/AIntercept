@@ -99,14 +99,27 @@ attempt HTTP/3 (QUIC), which the proxy does not intercept.
 
 - Deploy every image by digest: `images.<name>.digest` renders
   `repository@digest`. Envoy ships pinned (`v1.39.6` by digest).
-- Build the `aintercept` image (observer and certsvc) with the stock Dockerfile and **no build args**.
-  Production builds compile the dev body-capture paths
-  (`DEV_LOG_BODIES` / `DEV_CAPTURE_FULL_BODIES`) out entirely, and the
-  observer refuses to start if either is set. Only local compose builds with
-  `GO_TAGS=devcapture`.
-- `admissionPolicy.enabled: true` (default) installs a ValidatingAdmissionPolicy
-  that rejects pods in the release namespace setting either variable
-  (Kubernetes ≥ 1.30; installing it needs cluster-scoped rights).
+- Build the `aintercept` image (observer, certsvc and processor) with the stock
+  Dockerfile. One image serves both interception modes.
+
+## 4b. Interception mode: what is recorded
+
+`interceptionMode` (chart) / `INTERCEPTION_MODE` (observer) chooses what
+AIntercept records, per deployment:
+
+| Mode | Recorded |
+|---|---|
+| `content-free` (default) | Metadata only: headers (credentials redacted), token counts, timings, model and tool names with counts per call, and the agents' own analytics events as sent. No request or response body. |
+| `full` | Everything above, plus every request and response body. The observer writes a second stream with bodies under `<prefix>/capture/`, and the processor and API read it, so the UI shows prompt text, commands, patches and exit codes. |
+
+Full interception records far more data, and that data includes everything
+people send to AI tools. Size the object store, set its retention, and restrict
+who can read the bucket accordingly. Credentials (`Authorization`, API keys,
+cookies) are redacted in both modes.
+
+The mode only decides what is **recorded**. Whether a customer's Interceptor
+sees bodies, to act on them, is a separate setting (`interceptor.content`;
+see `docs/INTERCEPTOR.md`): a content-free deployment can still redact inline.
 
 ## 4a. Observe mode and WebSockets
 
@@ -115,8 +128,28 @@ headers and body chunks to it and never waits for a reply, so the observer
 adds no latency and an observer outage (verified: both pods deleted
 mid-session) never affects traffic. WebSocket upgrades are routed to
 HTTP/1.1 sibling upstreams and pass at full function; the observer decodes
-them (see `design/WEBSOCKET_AND_POLICY_SPEC.md`). Inline enforcement is a
-separate, opt-in mode (Phase 3 of that spec), not yet built.
+them (see `design/WEBSOCKET_AND_POLICY_SPEC.md`).
+
+## 4c. Enforce mode (the Interceptor)
+
+Hosts and paths listed in `interceptor.enforce` go through a second ext_proc
+filter in full-duplex mode instead. Envoy forwards only what the observer
+returns, so a customer's Interceptor can allow, rewrite or refuse each call
+(`docs/INTERCEPTOR.md`). That puts the observer, and the Interceptor, in the
+request path for those calls:
+
+- **Failure:** enforced calls are refused when the observer is down (Envoy
+  fails closed) or when the Interceptor misses its deadline or fails
+  (`onError: deny`, the default; `allow` lets them through). Observed calls are
+  never affected.
+- **Availability:** with enforce scopes set, the chart requires at least 2
+  observer replicas and adds a PodDisruptionBudget. Run 3 or more, and the
+  Interceptor with the same availability, close to the observer.
+- **Latency:** a request is held until its body has arrived, then each
+  callback costs a round trip to the Interceptor. With Interceptor content on,
+  that's one round trip per event of a streamed response.
+- **Scope:** start narrow (one path), and check the verdicts recorded in
+  observe mode first. Rolling back is removing the scope.
 
 ## 5. Health check (kill-switch signal)
 
@@ -254,9 +287,7 @@ for now, analyze, then tighten.
   to drop or hash.
 - **`metadata.user_id` is stored raw** alongside its parsed device, account
   and session IDs.
-- **Full-body capture was enabled on the DO demo cluster** (`v12-capture`
-  image, `DEV_CAPTURE_FULL_BODIES=true`, admission policy off), writing
-  complete request/response bodies to `aintercept/capture/` in the bucket. Turn
-  it off (`kubectl set env deploy/observer DEV_CAPTURE_FULL_BODIES-`, deploy a
-  production image, re-enable `admissionPolicy`) and delete `capture/` before
-  anyone else's traffic goes through that cluster.
+- **The DO demo cluster runs in full interception mode**
+  (`interceptionMode: full`), writing complete request/response bodies to
+  `aintercept/capture/` in the bucket. Switch it to `content-free` and delete
+  `capture/` if traffic that shouldn't be recorded is going to pass through it.

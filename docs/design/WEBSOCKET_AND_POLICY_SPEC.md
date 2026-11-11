@@ -1,7 +1,12 @@
 # Spec: uniform interception for HTTP and WebSocket (observe and enforce)
 
 Status: **Phase 1 implemented** (2026-11-02, observer v17; results in §5).
-Phases 2–3 not started. Decisions taken in review are in §0.
+**Phases 2–3 implemented as the Interceptor** (2026-11-10), with a different
+interface from §3.5 and §3.7: one `Interceptor` service with `OnCallStart`,
+`OnMessage` and `OnCallComplete`, the same in observe and enforce, and
+Interceptor content as its own setting. `docs/INTERCEPTOR.md` is the
+reference; issue #6 has the decisions. §3.5 and §3.7 below are superseded.
+Decisions taken in review are in §0.
 
 ## 0. Decisions (2026-11-02)
 

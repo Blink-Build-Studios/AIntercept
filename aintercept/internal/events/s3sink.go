@@ -15,8 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/devbuild"
 )
 
 // S3Sink is the durable production sink: it batches events in memory and flushes
@@ -106,9 +104,8 @@ type S3Config struct {
 	Bucket string
 	// Prefix is prepended to every object key (e.g. "aintercept"). Optional.
 	Prefix string
-	// IncludeContent keeps decrypted body fields in the stored events. It takes
-	// effect ONLY in builds tagged devcapture; production builds ignore it and
-	// always strip content.
+	// IncludeContent keeps decrypted body fields in the stored events (the
+	// full-interception stream, INTERCEPTION_MODE=full).
 	IncludeContent bool
 	// Region is the store region. For AWS, the bucket's region. For DO Spaces,
 	// the Space region (e.g. "nyc3"). Required.
@@ -207,7 +204,7 @@ func newS3SinkWithClient(client s3PutObjectAPI, cfg S3Config) *S3Sink {
 		uploader:       client,
 		bucket:         cfg.Bucket,
 		prefix:         strings.Trim(cfg.Prefix, "/"),
-		includeContent: cfg.IncludeContent && devbuild.BodyCapture,
+		includeContent: cfg.IncludeContent,
 		instanceID:     cfg.InstanceID,
 		maxBytes:       maxBytes,
 		maxEvents:      maxEvents,

@@ -125,6 +125,14 @@ ui: ## Run the UI dev server on :5173 (proxies /api to :8787)
 storybook: ## Run Storybook on :6006
 	cd ui && pnpm storybook
 
+.PHONY: proto
+proto: ## Regenerate the Interceptor gRPC code from aintercept/interceptor/v1/interceptor.proto (needs protoc, protoc-gen-go, protoc-gen-go-grpc)
+	cd aintercept && protoc -I . --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative interceptor/v1/interceptor.proto
+
+.PHONY: test-interceptor
+test-interceptor: ## End-to-end test of the Interceptor (observe and enforce) through a real Envoy, in Docker
+	scripts/test-interceptor.sh
+
 .PHONY: regen
 regen: ## Regenerate the UI contract: OpenAPI -> ui/src/api/spec.ts, then API test samples -> ui/src/api/samples
 	cd api && uv run python -m aintercept_api.openapi > ../ui/openapi.json

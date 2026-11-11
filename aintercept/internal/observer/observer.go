@@ -34,9 +34,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/devbuild"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/extproc"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
 )
@@ -56,26 +56,28 @@ func Run() {
 	bufferSize := envInt("OBSERVER_BUFFER_SIZE", 8192)
 	bodyPreviewCap := envInt("DEV_BODY_PREVIEW_CAP", 256)
 	devLogBodies := os.Getenv("DEV_LOG_BODIES") == "true"
-	captureFullBodies := os.Getenv("DEV_CAPTURE_FULL_BODIES") == "true"
+	// The deployment's interception mode: content-free (metadata only, the
+	// default) or full (every request and response body is recorded too).
+	interceptionMode := envDefault("INTERCEPTION_MODE", "content-free")
+	if interceptionMode != "content-free" && interceptionMode != "full" {
+		fatal("INTERCEPTION_MODE must be content-free or full", "got", interceptionMode)
+	}
+	captureFullBodies := interceptionMode == "full"
 	captureFile := os.Getenv("OBSERVER_CAPTURE_FILE") // e.g. /data/events.ndjson
 
-	if (devLogBodies || captureFullBodies) && !devbuild.BodyCapture {
-		fatal("DEV_LOG_BODIES / DEV_CAPTURE_FULL_BODIES are set, but body capture is compiled out of this build; rebuild with -tags devcapture for local development")
-	}
+	slog.Info("interception mode", "mode", interceptionMode)
 	if devLogBodies {
-		slog.Warn("DEV_LOG_BODIES enabled — bounded body previews WILL be printed; local development only, never in production",
+		slog.Warn("DEV_LOG_BODIES enabled: bounded response-body previews are printed to the log (a debugging aid)",
 			"body_preview_cap", bodyPreviewCap)
 	}
 
 	// Build the sink topology. Two tiers:
-	//   bodyStripped — receive Event.ForStdout() (NO full bodies). stdout and the
-	//                  S3/Spaces durable sink live here: full request/response
-	//                  CONTENT must never reach the terminal or object storage.
-	//   full         — receive the complete event (incl. BodyB64 when capture is
-	//                  on). ONLY the local-dev file sink lives here.
-	// Routing S3 through the body-stripped tier makes it structurally impossible
-	// for decrypted prompt/response content to land in the bucket, regardless of
-	// the full-body capture flag.
+	//   bodyStripped — receive Event.ForStdout() (no bodies): stdout and the
+	//                  content-free stream (S3/Spaces, local dir). Written in
+	//                  both interception modes.
+	//   full         — receive the complete event, including BodyB64 in full
+	//                  interception mode: the capture file and the capture/
+	//                  stream.
 	stdoutSink := events.NewStdoutSink(os.Stdout)
 	var sink events.Sink = stdoutSink
 
@@ -146,16 +148,15 @@ func Run() {
 		slog.Info("local partitioned sink enabled", "dir", localDir)
 	}
 
-	// Full-body capture (dev builds only; production binaries refuse to start
-	// with the flag set). Full events go to the capture file, and, when the S3
-	// sink is configured, to the same bucket under <prefix>/capture/ so a
-	// deployed dev build can be inspected like the rest of the telemetry. The
-	// normal S3 sink stays body-stripped either way.
+	// Full interception (INTERCEPTION_MODE=full). Full events go to the capture
+	// file and, when the S3 or local sink is configured, under <prefix>/capture/,
+	// which the processor reads in this mode. The content-free stream is written
+	// alongside it either way.
 	var captureS3 *events.S3Sink
 	var captureLocal *events.S3Sink
 	if captureFullBodies {
 		if captureFile == "" && s3Sink == nil && localSink == nil {
-			fatal("DEV_CAPTURE_FULL_BODIES needs OBSERVER_CAPTURE_FILE, the S3 sink or OBSERVER_LOCAL_DIR to write full bodies to; never stdout")
+			fatal("INTERCEPTION_MODE=full needs OBSERVER_CAPTURE_FILE, the S3 sink or OBSERVER_LOCAL_DIR to write bodies to; never stdout")
 		}
 		if localSink != nil {
 			cfg := localCfg
@@ -167,7 +168,7 @@ func Run() {
 			}
 			captureLocal = cl
 			full = append(full, captureLocal)
-			slog.Warn("DEV_CAPTURE_FULL_BODIES: COMPLETE request/response content is being written locally", "dir", filepath.Join(localDir, "capture"))
+			slog.Info("full interception: request and response bodies are recorded locally", "dir", filepath.Join(localDir, "capture"))
 		}
 		if s3Sink != nil {
 			cfg := s3Cfg
@@ -179,9 +180,8 @@ func Run() {
 			}
 			captureS3 = cs
 			full = append(full, captureS3)
-			slog.Warn("DEV_CAPTURE_FULL_BODIES: COMPLETE request/response content is being written to object storage", "bucket", cfg.Bucket, "prefix", cfg.Prefix)
+			slog.Info("full interception: request and response bodies are recorded to object storage", "bucket", cfg.Bucket, "prefix", cfg.Prefix)
 		}
-		slog.Warn("DEV_CAPTURE_FULL_BODIES enabled — COMPLETE request/response content is being captured; dev-only, delete after use, never in production")
 	}
 
 	if len(full) > 0 || len(bodyStripped) > 1 {
@@ -234,7 +234,19 @@ func Run() {
 		procCfg.SchemaSink = schemaSink
 		procCfg.SchemaSamplesPerMinute = envInt("OBSERVER_SCHEMA_SAMPLES_PER_MINUTE", 120)
 	}
-	proc := events.NewProcessor(sink, procCfg)
+	// The customer's Interceptor, when configured: every call's start, content
+	// (when enabled) and record go to it; its verdicts are recorded as rows.
+	var proc *events.Processor
+	ic := setupInterceptor(instanceID, func(e events.Event) { proc.Offer(e) })
+	if ic != nil {
+		procCfg.OnComplete = func(e *events.Event) {
+			if !e.Synthetic {
+				rec, final := interceptor.Record(e)
+				ic.Complete(rec, final)
+			}
+		}
+	}
+	proc = events.NewProcessor(sink, procCfg)
 	stopStats := proc.StartStatsLogger(30 * time.Second)
 
 	// Periodically flush the capture file so a live `tail -f` sees events
@@ -274,6 +286,7 @@ func Run() {
 		// connection's peer address, which a client cannot forge.
 		ClientIPHeaders: envList("OBSERVER_CLIENT_IP_HEADERS"),
 		ProbeMarker:     probeMarker(keyHashSalt),
+		Interceptor:     ic,
 	})
 
 	// Bound concurrent ext_proc streams (one per in-flight transaction). This
@@ -294,7 +307,7 @@ func Run() {
 	}
 
 	// HTTP side: liveness + stats, for probes and operators.
-	mux := statsMux(proc, budget)
+	mux := statsMux(proc, budget, ic)
 	_, httpPort, _ := net.SplitHostPort(httpAddr)
 	mux.Handle("/stats/fleet", fleetHandler(budget, os.Getenv("OBSERVER_PEERS_DNS"), httpPort))
 	stopPathProbe := startPathProbe(mux, keyHashSalt)
@@ -336,6 +349,9 @@ func Run() {
 	stopPathProbe()
 	stopLoadReports()
 	grpcServer.GracefulStop()
+	if ic != nil {
+		ic.Close() // delivers queued callbacks (bounded by their timeout)
+	}
 	proc.Close() // drains buffer and flushes sinks
 	if fileSink != nil {
 		if err := fileSink.Close(); err != nil {
@@ -468,7 +484,7 @@ func startPathProbe(mux *http.ServeMux, salt string) func() {
 	return cancel
 }
 
-func statsMux(proc *events.Processor, budget *membudget.Budget) *http.ServeMux {
+func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.Client) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -476,10 +492,16 @@ func statsMux(proc *events.Processor, budget *membudget.Budget) *http.ServeMux {
 	})
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		var ics *interceptor.Stats
+		if ic != nil {
+			s := ic.Stats()
+			ics = &s
+		}
 		_ = json.NewEncoder(w).Encode(struct {
 			events.Stats
-			Memory budgetStats `json:"memory"`
-		}{proc.Stats(), statsOf(budget)})
+			Memory      budgetStats        `json:"memory"`
+			Interceptor *interceptor.Stats `json:"interceptor,omitempty"`
+		}{proc.Stats(), statsOf(budget), ics})
 	})
 	return mux
 }

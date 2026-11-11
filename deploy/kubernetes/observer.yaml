@@ -26,7 +26,8 @@ spec:
             - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }
             - { name: OBSERVER_HTTP_LISTEN, value: "0.0.0.0:9001" }
             - { name: OBSERVER_BUFFER_SIZE, value: "16384" }
-            # DEV_LOG_BODIES is intentionally unset — never enable in cluster.
+            # content-free records metadata only; full also records every body.
+            - { name: INTERCEPTION_MODE, value: "content-free" }
             - name: OBSERVER_INSTANCE
               valueFrom:
                 fieldRef: { fieldPath: metadata.name }

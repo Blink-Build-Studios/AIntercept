@@ -75,11 +75,33 @@ spec:
             # ── Object store sink ──
             - { name: OBSERVER_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
             - { name: OBSERVER_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
-            {{- if .Values.fullInterception }}
-            {{- if .Values.admissionPolicy.enabled }}
-            {{- fail "fullInterception needs admissionPolicy.enabled=false (the policy rejects DEV_CAPTURE_FULL_BODIES)" }}
+            - { name: INTERCEPTION_MODE, value: {{ include "aintercept.interceptionMode" . | quote }} }
+            {{- with .Values.interceptor }}
+            {{- if .endpoint }}
+            # ── Interceptor (docs/INTERCEPTOR.md) ──
+            - { name: INTERCEPTOR_ENDPOINT, value: {{ .endpoint | quote }} }
+            - { name: INTERCEPTOR_CONTENT, value: {{ .content | toString | quote }} }
+            - { name: INTERCEPTOR_DEADLINE_MS, value: {{ .deadlineMs | toString | quote }} }
+            - { name: INTERCEPTOR_ON_ERROR, value: {{ .onError | quote }} }
+            {{- if .tls.enabled }}
+            - { name: INTERCEPTOR_TLS, value: "true" }
+            {{- if .tls.serverName }}
+            - { name: INTERCEPTOR_TLS_SERVER_NAME, value: {{ .tls.serverName | quote }} }
             {{- end }}
-            - { name: DEV_CAPTURE_FULL_BODIES, value: "true" }
+            {{- if and .tls.secretName .tls.ca }}
+            - { name: INTERCEPTOR_TLS_CA_FILE, value: /etc/aintercept/interceptor-tls/ca.crt }
+            {{- end }}
+            {{- if and .tls.secretName .tls.clientCert }}
+            - { name: INTERCEPTOR_TLS_CERT_FILE, value: /etc/aintercept/interceptor-tls/tls.crt }
+            - { name: INTERCEPTOR_TLS_KEY_FILE, value: /etc/aintercept/interceptor-tls/tls.key }
+            {{- end }}
+            {{- end }}
+            {{- if .tokenSecret }}
+            - name: INTERCEPTOR_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ .tokenSecret }}, key: token }
+            {{- end }}
+            {{- end }}
             {{- end }}
             - { name: OBSERVER_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
             - { name: OBSERVER_S3_MAX_BYTES, value: {{ .Values.objectStore.maxBytes | quote }} }
@@ -138,10 +160,17 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
-          {{- if $probe.enabled }}
+          {{- $icTLS := and .Values.interceptor.endpoint .Values.interceptor.tls.enabled .Values.interceptor.tls.secretName }}
+          {{- if or $probe.enabled $icTLS }}
           volumeMounts:
+            {{- if $probe.enabled }}
             - { name: ca-chain, mountPath: /etc/aintercept/ca, readOnly: true }
+            {{- end }}
+            {{- if $icTLS }}
+            - { name: interceptor-tls, mountPath: /etc/aintercept/interceptor-tls, readOnly: true }
+            {{- end }}
       volumes:
+        {{- if $probe.enabled }}
         # Only the public chain is projected; the intermediate key in the same
         # Secret is never mounted into the observer.
         - name: ca-chain
@@ -149,6 +178,12 @@ spec:
             secretName: {{ .Values.interception.caSecretName }}
             items:
               - { key: ca-chain.crt, path: ca-chain.crt }
+        {{- end }}
+        {{- if $icTLS }}
+        - name: interceptor-tls
+          secret:
+            secretName: {{ .Values.interceptor.tls.secretName }}
+        {{- end }}
           {{- end }}
 ---
 apiVersion: v1

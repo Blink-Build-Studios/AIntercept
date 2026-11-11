@@ -91,6 +91,9 @@ func (srv *Server) wsMessage(st *streamState, dir events.Direction, m wsframe.Me
 	if m.Opcode != wsframe.OpText && m.Opcode != wsframe.OpBinary {
 		return // ping / pong
 	}
+	if !m.Truncated {
+		srv.observeWSMessage(st, dir, m.Opcode, m.Payload)
+	}
 	if m.Truncated {
 		ws.conn.TruncatedMessages++
 	}
@@ -141,6 +144,7 @@ func (srv *Server) wsEmitTurn(st *streamState) {
 		Phase:         events.PhaseComplete,
 		Transport:     events.TransportWebSocket,
 		WSTurn:        ws.turnsTotal,
+		InterceptMode: st.interceptMode(),
 		Host:          st.host,
 		Method:        st.method,
 		Path:          st.path,
@@ -195,6 +199,7 @@ func (srv *Server) wsClose(st *streamState) {
 		ProviderOrgID: events.ProviderOrgID(st.respHeaders),
 		Synthetic:     st.synthetic,
 		WebSocket:     &conn,
+		InterceptMode: st.interceptMode(),
 	}
 	// Run the header-based extraction (client/provider maps, account,
 	// device/session from the upgrade's turn metadata); no bodies.
