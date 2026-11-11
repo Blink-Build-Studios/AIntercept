@@ -31,6 +31,49 @@ what production deploys use), else repository:tag.
 {{- end -}}
 
 {{/* The Envoy config, rendered (it carries chart conditionals). */}}
+{{/*
+The resolvers Envoy uses for the REAL provider hostnames, one cares
+socket_address per entry. Never point these at anything that sees the
+client-side DNS override, or traffic loops back into the proxy.
+*/}}
+{{- define "aintercept.upstreamResolvers" -}}
+{{- $r := .Values.envoy.upstreamDnsResolvers | default (list "1.1.1.1" "8.8.8.8") -}}
+{{- range $i, $addr := $r }}
+{{- if $i }}{{ "\n" }}{{ end -}}
+- socket_address: { address: {{ $addr | quote }}, port_value: 53 }
+{{- end }}
+{{- end -}}
+
+{{/*
+Scheduling fields for a pod spec, from a component's values block:
+nodeSelector, tolerations, affinity, topologySpreadConstraints. Each renders
+only when set, so an unset block leaves the pod spec unchanged.
+*/}}
+{{- define "aintercept.scheduling" -}}
+{{- with .nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .affinity }}
+affinity:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .topologySpreadConstraints }}
+topologySpreadConstraints:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/* ServiceAccount name for process or api: serviceAccount.name, else aintercept-<component>. */}}
+{{- define "aintercept.readerServiceAccountName" -}}
+{{- $sa := .c.serviceAccount | default dict -}}
+{{ $sa.name | default (printf "aintercept-%s" .component) }}
+{{- end -}}
+
 {{- define "aintercept.envoyConfig" -}}
 {{- include "aintercept.checkAllowlist" . -}}
 {{ tpl (.Files.Get "files/envoy.multi.yaml") . }}

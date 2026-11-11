@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -458,6 +459,8 @@ var sensitiveHeaders = map[string]struct{}{
 	"cookie":              {},
 	"set-cookie":          {},
 	"x-auth-token":        {},
+	// Gemini (generativelanguage.googleapis.com) API key header.
+	"x-goog-api-key": {},
 	// ChatGPT web's per-turn anti-abuse and routing tokens: short-lived, but
 	// replayable bearer-like values.
 	"openai-sentinel-chat-requirements-token": {},
@@ -480,9 +483,89 @@ func RedactHeaders(hdrs map[string]string) map[string]string {
 			out[k] = redactedMarker
 			continue
 		}
+		// The request path can carry a credential in its query string
+		// (Gemini's `?key=`), so it gets the same treatment as a header.
+		if k == ":path" {
+			out[k] = RedactPath(v)
+			continue
+		}
 		out[k] = v
 	}
 	return out
+}
+
+// sensitiveQueryParams name query-string parameters that carry credentials.
+// Matching is case-insensitive. `key` is the Gemini API's documented form
+// (`...:generateContent?key=<API_KEY>`); the rest are common equivalents.
+var sensitiveQueryParams = map[string]struct{}{
+	"key":          {},
+	"api_key":      {},
+	"apikey":       {},
+	"access_token": {},
+}
+
+// RedactPath returns p with the values of credential-bearing query parameters
+// replaced by the redaction marker. Everything else, including parameter order
+// and encoding, is left exactly as received, so the path stays useful for
+// endpoint and model extraction. A path without a query is returned unchanged.
+func RedactPath(p string) string {
+	q := strings.IndexByte(p, '?')
+	if q < 0 {
+		return p
+	}
+	base, query := p[:q], p[q+1:]
+	frag := ""
+	if h := strings.IndexByte(query, '#'); h >= 0 {
+		query, frag = query[:h], query[h:]
+	}
+	parts := strings.Split(query, "&")
+	changed := false
+	for i, part := range parts {
+		name, _, hasValue := strings.Cut(part, "=")
+		if !hasValue {
+			continue
+		}
+		if decoded, err := url.QueryUnescape(name); err == nil {
+			name = decoded
+		}
+		if _, bad := sensitiveQueryParams[strings.ToLower(name)]; bad {
+			parts[i] = part[:strings.IndexByte(part, '=')+1] + redactedMarker
+			changed = true
+		}
+	}
+	if !changed {
+		return p
+	}
+	return base + "?" + strings.Join(parts, "&") + frag
+}
+
+// queryAPIKey returns the value of the first credential-bearing query
+// parameter in p, or "".
+func queryAPIKey(p string) string {
+	q := strings.IndexByte(p, '?')
+	if q < 0 {
+		return ""
+	}
+	query := p[q+1:]
+	if h := strings.IndexByte(query, '#'); h >= 0 {
+		query = query[:h]
+	}
+	for _, part := range strings.Split(query, "&") {
+		name, value, hasValue := strings.Cut(part, "=")
+		if !hasValue || value == "" {
+			continue
+		}
+		if decoded, err := url.QueryUnescape(name); err == nil {
+			name = decoded
+		}
+		if _, bad := sensitiveQueryParams[strings.ToLower(name)]; bad {
+			if decoded, err := url.QueryUnescape(value); err == nil {
+				value = decoded
+			}
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // IsSensitiveHeader reports whether a header name must never be logged in clear.
@@ -502,7 +585,8 @@ func IsSensitiveHeader(name string) bool {
 // An empty salt still produces a usable (if un-salted) hash.
 //
 // Recognized sources, in order: `authorization: Bearer <key>` (OpenAI/Anthropic
-// SDKs), `x-api-key: <key>` (Anthropic), `api-key: <key>` (Azure).
+// SDKs), `x-api-key: <key>` (Anthropic), `api-key: <key>` (Azure),
+// `x-goog-api-key: <key>` and `?key=<key>` on the path (Gemini).
 func HashAPIKey(hdrs map[string]string, salt string) string {
 	key := extractAPIKey(hdrs)
 	if key == "" {
@@ -565,6 +649,13 @@ func extractAPIKey(hdrs map[string]string) string {
 	}
 	if v := get("api-key"); v != "" {
 		return strings.TrimSpace(v)
+	}
+	if v := get("x-goog-api-key"); v != "" {
+		return strings.TrimSpace(v)
+	}
+	// Gemini also accepts the key as `?key=` on the request path.
+	if v := queryAPIKey(get(":path")); v != "" {
+		return v
 	}
 	// Browser chat apps authenticate with a session cookie instead; hashing it
 	// gives every request of a signed-in session one stable key_hash.

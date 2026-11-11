@@ -18,7 +18,8 @@
 #
 # Upstream: forwards to the authentic provider over verified TLS with correct
 # SNI. THIS IS THE M2 VARIANT: the upstream is the REAL api.anthropic.com,
-# resolved via pinned PUBLIC DNS resolvers (1.1.1.1 / 8.8.8.8) so the test
+# resolved via pinned resolvers (envoy.upstreamDnsResolvers, default the
+# PUBLIC 1.1.1.1 / 8.8.8.8) so the test
 # client's /etc/hosts override can never contaminate Envoy's upstream
 # resolution or create a loop. Upstream TLS is verified against the system
 # public root bundle shipped in the Envoy image.
@@ -138,6 +139,12 @@ static_resources:
                   - name: envoy.access_loggers.stdout
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      # Envoy's default line, except the path is logged WITHOUT its
+                      # query string: a query can carry a credential (Gemini's
+                      # `?key=`), and access logs are not redacted.
+                      log_format:
+                        text_format_source:
+                          inline_string: "[%START_TIME%] \"%REQ(:METHOD)% %PATH(WQ:ORIG_OR_PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% \"%REQ(X-FORWARDED-FOR)%\" \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" \"%REQ(:AUTHORITY)%\" \"%UPSTREAM_HOST%\"\n"
                 http_filters:
                   # ext_proc tees decrypted traffic to the Go observer.
                   - name: envoy.filters.http.ext_proc
@@ -208,8 +215,7 @@ static_resources:
                             "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
                             use_resolvers_as_fallback: false
                             resolvers:
-                              - socket_address: { address: "1.1.1.1", port_value: 53 }
-                              - socket_address: { address: "8.8.8.8", port_value: 53 }
+                              {{- include "aintercept.upstreamResolvers" . | nindent 30 }}
                             dns_resolver_options:
                               use_tcp_for_dns_lookups: false
                   - name: envoy.filters.http.router
@@ -421,8 +427,7 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.network.dns_resolver.cares.v3.CaresDnsResolverConfig
           use_resolvers_as_fallback: false
           resolvers:
-            - socket_address: { address: "1.1.1.1", port_value: 53 }
-            - socket_address: { address: "8.8.8.8", port_value: 53 }
+            {{- include "aintercept.upstreamResolvers" . | nindent 12 }}
           dns_resolver_options:
             use_tcp_for_dns_lookups: false
       typed_extension_protocol_options: &upstream_http

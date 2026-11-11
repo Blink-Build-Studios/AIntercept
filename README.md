@@ -30,7 +30,7 @@ Each deployment chooses (`interceptionMode` in the Helm chart, `INTERCEPTION_MOD
 | `full` | All of the above, plus every request and response body: prompt text, commands, patches, responses. Far more data: size, retain and restrict the store accordingly. |
 
 In both modes:
-- **Credentials are redacted:** `Authorization`, API keys and cookies are replaced with `<redacted>` before anything is written.
+- **Credentials are redacted:** `Authorization`, API keys (including Gemini's `x-goog-api-key`) and cookies are replaced with `<redacted>` before anything is written. Credential query parameters (Gemini's `?key=`) are redacted from the recorded path, and Envoy's access log omits the query string.
 - **Upstream TLS is always verified.** AIntercept re-establishes a verified TLS connection to the genuine provider; it never downgrades or strips transport security.
 - **The root CA private key never lives in a container.** certsvc holds only a short-lived *intermediate*, and leaf certs expire in hours and auto-renew.
 
