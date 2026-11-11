@@ -134,6 +134,60 @@ upstream TLS verification must stay on.
   and the system/public root bundle as `trusted_ca`. The client-side DNS
   override must not be visible to Envoy's resolver. See `limitations.md`.
 
+## Decision 4 — Precompute everything: the processor writes what the UI shows
+
+Decided 2026-11-11. **The processor writes every value the UI shows. The query
+API only runs SQL over those tables.** Storage is cheap and query time isn't, so
+we spend storage freely: a value the UI needs is a column some table already
+holds, not something an endpoint derives.
+
+**Why.** BUILD_PLAN §7.5 moved JSON parsing out of the API but stopped at thin
+tables: one row per call, one per analytics event, and a few counters. The API
+still derived nearly everything (request rows, prompts and their steps,
+presence, coverage, retries, attribution) in about 5,000 lines of Python per
+request. With three people's traffic in the demo cluster, a person page's
+endpoints took 4–24 s. A single rebuild loaded 26k events, 7.7k calls and 22k
+transactions into Python, and the processor commits every half minute while
+people work. A company of 1,500 can't be served that way, and a per-commit
+cache only hides it until the next commit.
+
+**The rule:**
+- **Per-request work is limited to** the request's window, search, filters,
+  paging and ordering (`WHERE`, `GROUP BY`, `ORDER BY`, `LIMIT` over stored
+  rows), plus `now()` expressions for whatever depends on the current time:
+  live sessions, in-progress prompts, open segments. Store what those
+  expressions need (`last_ns`, `to_ns IS NULL`), not their result.
+- **Everything else is a column the processor wrote:** each row's kind, step
+  number, retries, captured or not, tokens and cost; prompts with their steps;
+  session coverage and friction; presence; attribution.
+- **Raw stays the source of truth** (§7.5 point 4). Only the request drawer's
+  headers and bodies read raw objects.
+
+**Data that's still arriving.** A finished session's rows don't change. A
+running one's do, and so do some values in finished sessions when late data
+arrives: a reported call is matched to the capture that arrives after it, step
+numbers shift with an out-of-order call, a credential's owner becomes known.
+The processor doesn't only append for these tables. Each run rewrites the rows
+of every session (or person) the run touched, so the tables always equal a
+rebuild from all the raw data so far.
+
+**How a table moves from the API to the processor: proven equal first.** Each
+table moves on its own, behind a parity test:
+1. Take a real capture from the bucket. Keep it local and never commit it.
+2. Compute the endpoint's output with the current API code.
+3. Compute it from the processor's new table.
+4. Require them to be identical, field for field.
+
+The check runs at many points while the capture is replayed in pieces
+(`aintercept replay`), not only at the end, because a running session and late
+data are where bugs hide. The API code it replaces is deleted only after the
+test passes.
+
+**Enrichment goes in the processor too.** Looking up a credential's owner
+through the provider's API, for example, writes small dimension tables
+(credential → account → person). Queries join them; they're never copied into
+fact rows. A new lookup then changes one row, not history.
+
 ## Scaling and statelessness (forward-looking)
 
 The observer is designed to run as many replicas with **no sticky routing**:
