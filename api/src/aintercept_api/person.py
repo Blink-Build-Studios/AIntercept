@@ -131,9 +131,14 @@ class Tx:
 
 def transactions(store: Store, hashes: list[str], session_id: str | None = None) -> list[Tx]:
     """Every transaction made with these credentials; with `session_id`, only that
-    session's (its own calls, and batches whose events are its)."""
+    session's (its own calls, and batches whose events are its). Shared: don't mutate it."""
     if not hashes:
         return []
+    # Once per commit: a person's summary and requests both need them, every poll.
+    return store.memo(("transactions", tuple(hashes), session_id), lambda: _transactions(store, hashes, session_id))
+
+
+def _transactions(store: Store, hashes: list[str], session_id: str | None) -> list[Tx]:
     rows = store.query(
         """WITH c AS (
              -- Each coding agent's transactions: a WebSocket's turns, not the connection itself.

@@ -218,7 +218,9 @@ def get_person(request: Request, personId: str) -> PersonResponse:  # noqa: N803
     now = cc.to_ns(now_dt)
     sessions = cc.load_person(store, personId)
     sids = list(sessions)
-    f = pp.header_facts(store, personId, sids, pp.key_hashes(store, sids))
+    f = store.memo(
+        ("person-header", personId), lambda: pp.header_facts(store, personId, sids, pp.key_hashes(store, sids))
+    )
     all_s = list(sessions.values())
     bypass = _pct([e for s in all_s for e in s.events if e.name == "tengu_api_query" and e.permission_mode])
     linked = [personId] if personId == cc.UNATTRIBUTED else cc.linked_accounts(store, personId)
@@ -427,7 +429,8 @@ def get_person_requests(
     sessions = cc.load_person(store, personId)
     rows = [
         r
-        for r in _request_rows(store, sessions)
+        # Every row is built once per commit; each poll only filters and pages them.
+        for r in store.memo(("person-requests", personId), lambda: _request_rows(store, sessions))
         if _matches(r, from_, to, None, q, captured) and (not agent or r.agent in agent)
     ]
     hidden_count = sum(r.hiddenKind is not None for r in rows)
