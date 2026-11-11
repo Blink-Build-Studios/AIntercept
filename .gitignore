@@ -40,3 +40,6 @@ api/.venv/
 .coverage.*
 htmlcov/
 ui/parity/report.json
+
+# Vite dependency cache (the dev server)
+ui/.vite/

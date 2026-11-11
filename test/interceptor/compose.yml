@@ -1,0 +1,34 @@
+# The Interceptor end-to-end test stack (scripts/test-interceptor.sh):
+# Envoy (both filters) → fixture, with the observer and the example redact
+# Interceptor. Records land in ./out/events.ndjson.
+name: aintercept-interceptor-test
+services:
+  fixture:
+    build: ../../fixture
+    environment:
+      FIXTURE_PLAIN_LISTEN: "0.0.0.0:8080"
+      FIXTURE_TLS: "off"
+  redact:
+    build: ../../aintercept
+    image: aintercept-test/aintercept:dev
+    entrypoint: ["/redact-interceptor"]
+  observer:
+    image: aintercept-test/aintercept:dev
+    depends_on: [redact]
+    command: ["observer"]
+    user: "0"
+    environment:
+      OBSERVER_GRPC_LISTEN: "0.0.0.0:9000"
+      OBSERVER_HTTP_LISTEN: "0.0.0.0:9001"
+      OBSERVER_CAPTURE_FILE: /out/events.ndjson
+      INTERCEPTION_MODE: content-free
+      INTERCEPTOR_ENDPOINT: redact:9100
+      INTERCEPTOR_CONTENT: "true"
+      INTERCEPTOR_DEADLINE_MS: "500"
+    volumes: ["./out:/out"]
+    ports: ["19001:9001"]
+  envoy:
+    image: envoyproxy/envoy:v1.39.6@sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed
+    depends_on: [observer, fixture]
+    volumes: ["./envoy.yaml:/etc/envoy/envoy.yaml:ro"]
+    ports: ["10000:10000"]

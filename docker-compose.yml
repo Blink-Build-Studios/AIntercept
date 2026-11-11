@@ -12,9 +12,6 @@ services:
   certsvc:
     build: &aintercept-build
       context: ./aintercept
-      # Local dev only: include the DEV_LOG_BODIES / DEV_CAPTURE_FULL_BODIES
-      # paths, which production images compile out (certsvc doesn't use them).
-      args: { GO_TAGS: devcapture }
     image: aintercept/aintercept:dev
     command: ["certsvc"]
     environment:
@@ -39,18 +36,23 @@ services:
       OBSERVER_GRPC_LISTEN: "0.0.0.0:9000"
       OBSERVER_HTTP_LISTEN: "0.0.0.0:9001"
       OBSERVER_BUFFER_SIZE: "8192"
-      # Toggle to true ONLY for local body-visibility proof (M1 smoke test does
-      # this via an override). Bounded previews, never in k8s.
+      # A debugging aid: bounded response-body previews in the observer's log
+      # (the M1 smoke test turns it on via an override).
       DEV_LOG_BODIES: "${DEV_LOG_BODIES:-false}"
-      # Durable capture (dev-only, for building the extractor). When
-      # OBSERVER_CAPTURE_FILE is set, events are written as NDJSON to the mounted
-      # ./data volume. DEV_CAPTURE_FULL_BODIES=true additionally records COMPLETE
-      # request/response bodies to that file (never to stdout). Both default off.
+      # Interception mode: content-free (metadata only, the default) or full
+      # (every request and response body is recorded too).
+      INTERCEPTION_MODE: "${INTERCEPTION_MODE:-content-free}"
+      # A customer Interceptor (docs/INTERCEPTOR.md), observe mode: every call
+      # goes to it; nothing is enforced in this local stack (see
+      # scripts/test-interceptor.sh for enforce).
+      INTERCEPTOR_ENDPOINT: "${INTERCEPTOR_ENDPOINT:-}"
+      INTERCEPTOR_CONTENT: "${INTERCEPTOR_CONTENT:-false}"
+      # When set, events are also written as NDJSON to this file on the mounted
+      # ./data volume (with bodies in full interception mode; never on stdout).
       OBSERVER_CAPTURE_FILE: "${OBSERVER_CAPTURE_FILE:-}"
-      DEV_CAPTURE_FULL_BODIES: "${DEV_CAPTURE_FULL_BODIES:-false}"
-      # Telemetry for the local UI: body-stripped, partitioned like object storage,
-      # in ./data/telemetry (the query API's default data dir). With
-      # DEV_CAPTURE_FULL_BODIES=true, full bodies also go to ./data/telemetry/capture.
+      # Telemetry for the local UI, partitioned like object storage, in
+      # ./data/telemetry (the query API's default data dir). In full interception
+      # mode, bodies also go to ./data/telemetry/capture.
       OBSERVER_LOCAL_DIR: "${OBSERVER_LOCAL_DIR:-/data/telemetry}"
       # Flush every 15 s locally so the UI is close to live (object storage: 60 s).
       OBSERVER_S3_MAX_AGE_SECONDS: "${OBSERVER_S3_MAX_AGE_SECONDS:-15}"

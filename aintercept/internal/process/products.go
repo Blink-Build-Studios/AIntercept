@@ -12,20 +12,13 @@ import (
 // prompt, client, hidden calls) in its own fields; what only it has goes in
 // the row's ext_json.
 const (
-	productClaudeCode = "claude_code"
-	productCodex      = "codex"
+	productClaudeCode = events.ProductClaudeCode
+	productCodex      = events.ProductCodex
 )
 
 // productOf names the product a request came from, by its client headers.
 func productOf(r *Request, originator string) string {
-	ua := r.UserAgent
-	switch {
-	case r.SessionID != "" && r.Host == "api.anthropic.com", strings.HasPrefix(ua, "claude-cli/"), strings.HasPrefix(ua, "claude-code/"):
-		return productClaudeCode
-	case strings.HasPrefix(originator, "codex"), strings.HasPrefix(ua, "codex"):
-		return productCodex
-	}
-	return ""
+	return events.ProductOf(r.Host, r.UserAgent, originator, r.SessionID)
 }
 
 // clientOf is how the product was run (Codex: exec, tui; Claude Code: cli,

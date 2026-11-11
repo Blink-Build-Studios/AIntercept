@@ -113,7 +113,7 @@ func configFromEnv(ctx context.Context) (Config, error) {
 	if prefix != "" {
 		out = prefix + "/shaped"
 	}
-	// Full interception (the observer's DEV_CAPTURE_FULL_BODIES) writes the raw stream with
+	// Full interception (INTERCEPTION_MODE=full) writes the raw stream with
 	// bodies under <prefix>/capture: read that one instead (the tables stay under <prefix>/shaped).
 	raw := prefix
 	if r := strings.Trim(os.Getenv("PROCESS_RAW_PREFIX"), "/"); r != "" {

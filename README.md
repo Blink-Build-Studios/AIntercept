@@ -1,51 +1,67 @@
 # AIntercept
 
-**A transparent interception proxy for AI API traffic that captures structure and metadata, never content.**
+**A transparent interception proxy for AI traffic: see how your organization uses AI tools, and act on it.**
 
-AIntercept sits in front of an organization's AI API calls (Anthropic, OpenAI, Gemini, and the ChatGPT/Codex backend). It terminates TLS under a trust root you control, forwards each request **unchanged** to the genuine upstream, and tees a **content-free** observation of every request and response to a horizontally scaled Go observer. A processor turns those observations into tables, and a query API and web UI show who uses which coding agent, how, and at what cost: people, sessions, prompts, the steps inside each prompt, and every call on the wire.
+AIntercept sits in front of an organization's AI calls: Anthropic, OpenAI, Gemini, the ChatGPT and Codex backend, and claude.ai. It terminates TLS under a trust root you control, forwards each request to the genuine upstream, and tees every request and response to a horizontally scaled Go observer.
 
-It's built so that it **cannot** silently become a surveillance tool. By design it records the *shape* of AI usage (who called which model, with which tools, how many tokens, how long it took), not prompts or responses.
+- **See it:** a processor turns the observations into tables, and a query API and web UI show who uses which AI tool, how, and at what cost: people, sessions, prompts, the steps inside each prompt, and every call on the wire.
+- **Act on it:** the **Interceptor** interface lets your own control plane react to every call. It can record, redact or refuse.
 
 ```
 client ──TLS──> Envoy (leaf cert minted on the fly) ──verified TLS──> real api.anthropic.com / chatgpt.com / …
-                  │  tee (decrypted, async, non-blocking)
+                  │  ext_proc: observe (async copy) or enforce (inline, opt-in per host/path)
                   ▼
-               observer ──> object store (body-stripped NDJSON)
-                  ▲                │
-               certsvc             ▼
-       (SDS: mints + renews    processor ──> Parquet tables ──> query API ──> web UI
-        short-lived leaf certs)
+               observer ──> object store ──> processor ──> Parquet tables ──> query API ──> web UI
+                  │  ▲
+                  │  certsvc (SDS: mints + renews short-lived leaf certs)
+                  ▼
+           your Interceptor (gRPC): OnCallStart · OnMessage · OnCallComplete
 ```
 
 ---
 
-## The content-free contract
+## What AIntercept records: two modes
 
-This is the point of the project, so it comes first.
+Each deployment chooses (`interceptionMode` in the Helm chart, `INTERCEPTION_MODE` for the observer):
 
-- **What is captured:** provider, host, endpoint, HTTP method and status, model, input/output/cache/reasoning token counts, timings, declared tools and the names and counts of tool calls (MCP server and tool names), stream flag, and a **salted, irreversible** hash of the caller's API key (`sha256(salt ‖ key)`, never the key itself). Coding agents' own analytics events are kept as the client sends them. Claude Code's include each shell command's program name and exit code.
-- **What is never captured:** prompt text, completion text, system prompts, tool arguments, tool results, file contents, or any other request or response body content.
-- **Secrets are redacted** before anything is logged. `Authorization`, API keys and cookies are replaced with `<redacted>` on every path.
-- **Upstream TLS is always verified.** AIntercept is not a way to downgrade or strip transport security. It re-establishes a verified TLS connection to the genuine provider.
-- **The root CA private key never lives in a container.** certsvc holds only a short-lived *intermediate*; leaf certs expire in hours and auto-renew.
+| Mode | Recorded |
+|---|---|
+| `content-free` (default) | Metadata: provider, host, endpoint, method, status, timings, model, token counts (input, output, cache, reasoning), declared tools and tool calls by name and count (MCP server and tool), the coding agents' own analytics events as they send them, and a salted, irreversible hash of the caller's API key (`sha256(salt ‖ key)`). No request or response body. |
+| `full` | All of the above, plus every request and response body: prompt text, commands, patches, responses. Far more data: size, retain and restrict the store accordingly. |
 
-### Development-only body capture
+In both modes:
+- **Credentials are redacted:** `Authorization`, API keys and cookies are replaced with `<redacted>` before anything is written.
+- **Upstream TLS is always verified.** AIntercept re-establishes a verified TLS connection to the genuine provider; it never downgrades or strips transport security.
+- **The root CA private key never lives in a container.** certsvc holds only a short-lived *intermediate*, and leaf certs expire in hours and auto-renew.
 
-For building and debugging extractors there is a full-interception mode that records bodies: `DEV_LOG_BODIES`, `DEV_CAPTURE_FULL_BODIES`, and the Helm chart's `fullInterception` value. It is fenced off:
+See [`docs/PRODUCTION.md`](docs/PRODUCTION.md) §4b.
 
-- The code only exists in images built with `-tags devcapture`. Production builds compile it out.
-- The chart refuses `fullInterception` while its admission policy (on by default) is enabled.
-- The UI says which mode a deployment runs in (About this data → What is kept).
+---
 
-**Never enable it for anyone else's traffic, or against a shared or durable store.** Doing so breaks the contract above. See [`docs/PRODUCTION.md`](docs/PRODUCTION.md) and [`docs/limitations.md`](docs/limitations.md).
+## Acting on traffic: the Interceptor
+
+Your control plane implements one gRPC service, [`aintercept/interceptor/v1/interceptor.proto`](aintercept/interceptor/v1/interceptor.proto):
+
+- **`OnCallStart`:** the parsed request (identity, client, model, tools) before it goes upstream. Allow or deny.
+- **`OnMessage`:** content, if you enable it: the request body, each streamed event, each WebSocket message. Allow, replace, drop or deny.
+- **`OnCallComplete`:** the normalized record of the finished call: tokens, tools used, status, timings, and your verdicts.
+
+The same integration runs in two modes:
+- **Observe** (everywhere, by default): callbacks are asynchronous, verdicts are recorded as what would have happened, and traffic never waits.
+- **Enforce** (hosts and paths you list): AIntercept waits for your verdict and applies it. Refused calls fail in the provider's own error format, and a slow or unavailable Interceptor fails closed.
+
+Whether the Interceptor sees bodies is its own setting, independent of what AIntercept records: you can redact inline without storing anything. [`docs/INTERCEPTOR.md`](docs/INTERCEPTOR.md) is the reference, and [`docs/BUILDING_AN_INTERCEPTOR.md`](docs/BUILDING_AN_INTERCEPTOR.md) walks through building one and wiring it into a deployment. [`aintercept/examples/redact`](aintercept/examples/redact) is a complete example in about 90 lines: it redacts "silly clown" in both directions and refuses a model.
 
 ---
 
 ## How it works
 
-A client reaches its ordinary hostname (`api.anthropic.com`), but DNS, scoped to that one host, points it at Envoy on `:443`. Envoy reads the TLS SNI and selects or mints a leaf certificate for that hostname via the Go SDS service (`certsvc`, signed by a CA the client trusts). It terminates TLS, forwards to the genuine upstream over *verified* TLS, and tees the decrypted HTTP exchange to the Go `observer` over Envoy's `ext_proc` protocol. The observer acknowledges Envoy immediately and does all extraction on a separate goroutine, so a slow or failed observer can never stall real traffic.
+A client reaches its ordinary hostname (`api.anthropic.com`), but DNS, scoped to that one host, points it at Envoy on `:443`. Envoy reads the TLS SNI and selects or mints a leaf certificate for that hostname via the Go SDS service (`certsvc`, signed by a CA the client trusts). It terminates TLS, forwards to the genuine upstream over *verified* TLS, and hands the decrypted exchange to the Go `observer` over Envoy's `ext_proc` protocol:
 
-The observer writes body-stripped observations to an S3-compatible store. The **processor** compacts them into Parquet tables, shaped into one common schema across providers, with per-provider extensions. The **query API** (Python, FastAPI and DuckDB) serves those tables, and the **UI** (React) reads the API.
+- **Observe mode:** Envoy sends a copy and never waits, so a slow or failed observer can't stall real traffic.
+- **Enforce mode:** Envoy forwards only what the observer returns.
+
+The observer writes observations to an S3-compatible store. The **processor** compacts them into Parquet tables, shaped into one common schema across providers with per-provider extensions. The **query API** (Python, FastAPI and DuckDB) serves those tables, and the **UI** (React) reads the API.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale (telemetry mechanism, dynamic certs, DNS isolation, scaling model). [`docs/harness-parity.md`](docs/harness-parity.md) covers what each coding agent sends and how it maps onto the common schema, and [`docs/limitations.md`](docs/limitations.md) is an honest account of what is tested versus assumed.
 
@@ -66,11 +82,11 @@ Then open http://localhost:5173. Routing Claude Code through the proxy (`scripts
 The proxy on its own, against a local fixture upstream:
 
 ```bash
-make run           # generate dev CAs, build images, start the stack, print connection info
-make test          # Go unit tests + end-to-end smoke test
-make observer-logs # watch content-free JSON telemetry events stream by
-make stop          # stop the stack (CA material preserved)
-make clean         # DESTRUCTIVE: also delete generated CA keys (prompts first)
+make run              # generate dev CAs, build images, start the stack, print connection info
+make test             # Go unit tests + end-to-end smoke test
+make test-interceptor # the Interceptor, observe and enforce, through a real Envoy
+make stop             # stop the stack (CA material preserved)
+make clean            # DESTRUCTIVE: also delete generated CA keys (prompts first)
 ```
 
 `make help` lists every target. `make check` runs exactly what CI runs.
@@ -81,26 +97,32 @@ make clean         # DESTRUCTIVE: also delete generated CA keys (prompts first)
 
 | Path | What |
 |---|---|
-| `envoy/` | Envoy configs (single-host, multi-provider). TLS termination, per-SNI cert selection, `ext_proc` tee, verified upstreams. |
-| `aintercept/` | Go, one binary in three roles: `aintercept certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `aintercept observer` (`ext_proc` tee, buffer-and-ack, provider-aware extractors, pluggable sinks: stdout, file, S3-compatible) and `aintercept process` (raw partitions → Parquet tables). Also `schemareport`, which turns unrecognized-shape samples into a structure-only report (key names and value *types*, never values). |
+| `envoy/` | Envoy configs (single-host, multi-provider). TLS termination, per-SNI cert selection, `ext_proc`, verified upstreams. |
+| `aintercept/` | Go, one binary in three roles: `certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `observer` (`ext_proc` in observe and enforce modes, provider-aware extractors, pluggable sinks, the Interceptor client) and `process` (raw partitions → Parquet tables). Also `schemareport`, which turns unrecognized-shape samples into a structure-only report. |
+| `aintercept/interceptor/v1/` | The Interceptor gRPC contract and generated Go code. |
+| `aintercept/examples/redact/`, `aintercept/examples/python-redact/` | Example Interceptors, in Go and Python. |
 | `api/` | The query API (FastAPI and DuckDB) over the processor's tables. Its Pydantic models are the contract; the UI's types and samples are generated from them (`make regen`). |
 | `ui/` | The web UI (React, Vite, Tailwind), with Storybook stories for every component and state. Design in `docs/ui/`. |
-| `fixture/` | A local HTTPS origin with synthetic content, for the end-to-end smoke test. |
+| `fixture/` | A local HTTPS origin with synthetic content, for the end-to-end tests. |
 | `extractor/` | Offline schema extraction and the sanitizer that makes committable fixtures. |
 | `deploy/helm/aintercept/` | Helm chart: Envoy, observer, certsvc, processor and API. One chart, `cloud: aws \| digitalocean`. |
 | `deploy/terraform/` | Terraform for AWS (EKS, S3/IRSA) and DigitalOcean (DOKS, Spaces). |
 | `deploy/kubernetes/` | Plain manifests (reference). |
+| `test/interceptor/` | The Interceptor end-to-end stack (`make test-interceptor`). |
 | `scripts/` | Dev CA generation, setup and verification, client-routing helper, smoke tests, repo checks. |
 
 ---
 
-## Coding agents
+## Coding agents and AI apps
 
 Claude Code and Codex are supported end to end. Their sessions, prompts (Codex calls them turns), steps, tool use, rate limits and friction (interruptions, destructive commands, permission prompts) are shown in one common shape, with each provider's extras where it sends them. ChatGPT and claude.ai web traffic is recognized at the conversation level. [`docs/harness-parity.md`](docs/harness-parity.md) tracks exactly what each agent sends and how it is mapped.
 
-## Multi-provider
+The multi-provider Envoy config intercepts, by SNI, the hostnames on an **allowlist**. By default those are:
+- `api.anthropic.com`, `claude.ai`, `a.claude.ai`;
+- `api.openai.com`, `chatgpt.com`, `ab.chatgpt.com`, `ws.chatgpt.com`;
+- `generativelanguage.googleapis.com`.
 
-The multi-provider Envoy config intercepts, by SNI, the hostnames on an **allowlist**. By default those are `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com` and `chatgpt.com` (the ChatGPT/Codex backend). certsvc **fails closed**: a handshake for a host not on the allowlist gets no cert. The extractors are provider-aware; Gemini, for example, carries the model in the URL path and usage in `usageMetadata`, and Anthropic in the body. Anything that flows through but isn't fully recognized is captured as a **structure-only schema sample**, so coverage is easy to extend. See [`docs/SCHEMA_REPORT.md`](docs/SCHEMA_REPORT.md).
+certsvc **fails closed**: a handshake for a host not on the allowlist gets no cert. Anything that flows through but isn't fully recognized is captured as a **structure-only schema sample**, so coverage is easy to extend. See [`docs/SCHEMA_REPORT.md`](docs/SCHEMA_REPORT.md).
 
 ---
 
@@ -109,13 +131,14 @@ The multi-provider Envoy config intercepts, by SNI, the hostnames on an **allowl
 - **Kubernetes (Helm):** `deploy/helm/aintercept/` packages Envoy, observer, certsvc, processor and API. It includes:
   - HPA/KEDA autoscaling;
   - zero-downtime rolling drains: Envoy brings a new pod to Ready before draining in-flight streaming turns, for up to 180 s;
-  - per-cloud object-store wiring.
+  - per-cloud object-store wiring;
+  - the Interceptor settings.
 
-  Credentials and the key-hash salt are supplied via Secrets, never `helm --set`. [`docs/PRODUCTION.md`](docs/PRODUCTION.md) covers sizing and hardening.
+  Credentials and the key-hash salt are supplied via Secrets, never `helm --set`. [`docs/PRODUCTION.md`](docs/PRODUCTION.md) covers sizing, the two modes and enforce.
 - **DigitalOcean walkthrough:** [`docs/DEPLOY_DOKS.md`](docs/DEPLOY_DOKS.md) has the exact `doctl`, `kubectl` and `helm` steps end to end.
 - **Terraform:** `deploy/terraform/{aws,digitalocean}` provision the cluster and the object store.
 
-The object-store defaults in code (`your-telemetry-bucket` and the like) are placeholders. Set your own bucket, region and endpoint.
+The object-store defaults in code are placeholders. Set your own bucket, region and endpoint.
 
 ---
 
@@ -123,7 +146,11 @@ The object-store defaults in code (`your-telemetry-bucket` and the like) are pla
 
 This is an early-stage project, developed against live Claude Code and Codex traffic.
 
-- **Tested in CI:** the Go interception and extraction layer (`go test -race`), the API (typed, with a coverage floor), and the UI (unit and interaction tests, plus a story per component state).
+- **Tested in CI:**
+  - the Go interception and extraction layer (`go test -race`), including enforce-mode unit tests;
+  - the API (typed, with a coverage floor);
+  - the UI (unit and interaction tests, plus a story per component state).
+- **Tested end to end, through a real Envoy:** the Interceptor in observe and enforce (`make test-interceptor`).
 - **Run on DigitalOcean:** the Kubernetes/Helm packaging and the Terraform.
 
 See [`docs/limitations.md`](docs/limitations.md) for the honest tested-versus-assumed breakdown.

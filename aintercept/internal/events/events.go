@@ -28,6 +28,9 @@ const (
 	PhaseResponseBodyChunk Phase = "response_body_chunk"
 	PhaseComplete          Phase = "complete"
 	PhaseDisconnect        Phase = "disconnect"
+	// PhaseVerdict records one verdict a customer's Interceptor returned
+	// (applied in enforce mode, recorded only in observe mode).
+	PhaseVerdict Phase = "verdict"
 )
 
 // Direction indicates which half of the transaction an event belongs to.
@@ -102,10 +105,11 @@ type Event struct {
 	// BodyB64 is the COMPLETE body chunk as base64 of the RAW wire bytes —
 	// binary-safe, so gzip/brotli/zstd-compressed response bodies survive
 	// losslessly (unlike a UTF-8 string, which mangles non-UTF-8 bytes). This is
-	// the authoritative capture field. Populated ONLY when DEV_CAPTURE_FULL_BODIES
-	// is enabled, and routed ONLY to the durable file sink (stripped from stdout
-	// by ForStdout). The extractor base64-decodes and then decompresses per the
-	// response's content-encoding.
+	// the authoritative capture field. Populated only in full interception mode
+	// (INTERCEPTION_MODE=full) and routed only to the full-interception sinks
+	// (stripped from stdout and the content-free stream by ForStdout). The
+	// extractor base64-decodes, then decompresses per the response's
+	// content-encoding.
 	BodyB64 string `json:"body_b64,omitempty"`
 
 	// Model is the model name parsed from the request body (plaintext JSON).
@@ -189,6 +193,11 @@ type Event struct {
 	// ClientEvent is set on PhaseClientEvent rows: one event from a client's
 	// own analytics batch (see ClientEventsFromRequest).
 	ClientEvent *ClientEvent `json:"client_event,omitempty"`
+	// Verdict is set on PhaseVerdict rows.
+	Verdict *Verdict `json:"verdict,omitempty"`
+	// InterceptMode is "enforce" when the call went through the enforcing
+	// ext_proc filter (a customer Interceptor could act on it); "" otherwise.
+	InterceptMode string `json:"intercept_mode,omitempty"`
 	// clientEvents are parsed from an analytics request during deferred
 	// extraction; the processor fans each out as its own row.
 	clientEvents []ClientEvent
@@ -718,4 +727,19 @@ type WSConnection struct {
 	// MessageTypes counts messages by "<direction>:<type>" (JSON "type").
 	MessageTypes map[string]int `json:"message_types,omitempty"`
 	Closed       bool           `json:"-"`
+}
+
+// Verdict is one decision a customer's Interceptor returned for a call.
+type Verdict struct {
+	// Callback is "call_start" or "message".
+	Callback string `json:"callback"`
+	// Action: allow, replace, drop, deny, or error (the Interceptor failed or
+	// missed its deadline; Applied then says whether the call was refused).
+	Action      string            `json:"action"`
+	Applied     bool              `json:"applied"`
+	Mode        string            `json:"mode"`
+	Reason      string            `json:"reason,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// LatencyMS is how long the Interceptor took to answer.
+	LatencyMS int64 `json:"latency_ms,omitempty"`
 }

@@ -79,6 +79,22 @@ Validate required values early with a clear message rather than a confusing
 runtime failure in-cluster.
 */}}
 {{- define "aintercept.validate" -}}
+{{- with .Values.interceptor -}}
+{{- if and .enforce (not .endpoint) -}}
+{{- fail "interceptor.enforce needs interceptor.endpoint: enforced calls go through the Interceptor" -}}
+{{- end -}}
+{{- if and .enforce (lt (int $.Values.observer.autoscaling.minReplicas) 2) -}}
+{{- fail "interceptor.enforce needs observer.autoscaling.minReplicas >= 2: enforced calls are refused while no observer is up" -}}
+{{- end -}}
+{{- if not (has (.onError | default "deny") (list "deny" "allow")) -}}
+{{- fail "interceptor.onError must be deny or allow" -}}
+{{- end -}}
+{{- range .enforce -}}
+{{- if not (has .host (splitList "," (nospace $.Values.interception.allowlist))) -}}
+{{- fail (printf "interceptor.enforce host %q isn't in interception.allowlist" .host) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- if not .Values.objectStore.bucket -}}
 {{- fail "objectStore.bucket is required" -}}
 {{- end -}}
@@ -104,3 +120,50 @@ the cluster; nothing to set here) or IRSA (serviceAccount.roleArn). */ -}}
 {{- fail (printf "cloud must be 'aws' or 'digitalocean', got %q" .Values.cloud) -}}
 {{- end -}}
 {{- end -}}
+
+{{/* The interception mode, validated: content-free (default) or full. */}}
+{{- define "aintercept.interceptionMode" -}}
+{{- $m := .Values.interceptionMode | default "content-free" -}}
+{{- if not (has $m (list "content-free" "full")) -}}
+{{- fail (printf "interceptionMode must be content-free or full, not %q" $m) -}}
+{{- end -}}
+{{- $m -}}
+{{- end }}
+
+{{/*
+Enforced routes for one virtual host (interceptor.enforce): for each path
+prefix in scope (the whole host when no paths are listed), a WebSocket upgrade
+route and a default route through the enforcing filter, ahead of the host's
+observe routes. Empty when the host isn't in an enforce scope.
+*/}}
+{{- define "aintercept.enforceRoutes" -}}
+{{- $root := . -}}
+{{- range ((.values.interceptor | default dict).enforce | default list) }}
+{{- if eq .host $root.host }}
+{{- range (.paths | default (list "/")) }}
+{{- if $root.ws }}
+- match:
+    prefix: {{ . | quote }}
+    headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
+  route: { cluster: {{ $root.ws }}, timeout: 0s, idle_timeout: 300s }
+  typed_per_filter_config:
+    envoy.filters.http.ext_proc:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+      disabled: true
+    aintercept.enforce:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+      overrides: {}
+{{- end }}
+- match: { prefix: {{ . | quote }} }
+  route: { cluster: {{ $root.cluster }}, timeout: 0s, idle_timeout: 300s }
+  typed_per_filter_config:
+    envoy.filters.http.ext_proc:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+      disabled: true
+    aintercept.enforce:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+      overrides: {}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

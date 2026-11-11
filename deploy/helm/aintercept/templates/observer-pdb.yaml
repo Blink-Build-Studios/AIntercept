@@ -1,0 +1,15 @@
+{{- if (.Values.interceptor | default dict).enforce }}
+# Enforced calls depend on the observer (Envoy fails closed in the enforcing
+# filter), so voluntary disruptions take down at most one replica at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: observer
+  labels:
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: observer
+{{- end }}

@@ -46,6 +46,7 @@ type Processor struct {
 	// alarmEvery controls how often a sustained-drop summary is logged.
 	alarmEvery uint64
 	budget     *membudget.Budget
+	onComplete func(*Event)
 	done       chan struct{}
 }
 
@@ -68,6 +69,11 @@ type ProcessorConfig struct {
 	// Budget, when non-nil, is released by each event's Held bytes once the
 	// event is processed (or dropped).
 	Budget *membudget.Budget
+
+	// OnComplete, when set, is called on the drain goroutine with each
+	// complete event (and WebSocket connection row) once its metadata is
+	// extracted: the Interceptor's OnCallComplete. It must not block.
+	OnComplete func(*Event)
 }
 
 // NewProcessor starts the drain goroutine and returns the processor.
@@ -86,6 +92,7 @@ func NewProcessor(sink Sink, cfg ProcessorConfig) *Processor {
 		clientShapesSeen: map[string]struct{}{},
 		alarmEvery:       cfg.AlarmEveryDrops,
 		budget:           cfg.Budget,
+		onComplete:       cfg.OnComplete,
 		done:             make(chan struct{}),
 	}
 	if cfg.SchemaSink != nil {
@@ -153,6 +160,9 @@ func (p *Processor) processOne(e Event) {
 	// ext_proc serving goroutine, so the heavy JSON parse never adds latency
 	// to the proxied request path. No-op for events without attached bodies.
 	e.ExtractDeferred()
+	if p.onComplete != nil && (e.Phase == PhaseComplete || e.Phase == PhaseWSConnection) {
+		p.onComplete(&e)
+	}
 	// Unrecognized-shape sampling: if we did NOT fully recognize this
 	// transaction, retain a structure-only fingerprint on the schema sink. We
 	// do this while the raw buffers are still attached and BEFORE clearing

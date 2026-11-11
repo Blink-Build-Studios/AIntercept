@@ -1,0 +1,9 @@
+# Runs this example in place of the Go one in the Interceptor end-to-end test:
+#   INTERCEPTOR_COMPOSE_OVERRIDE=aintercept/examples/python-redact/compose.override.yml make test-interceptor
+services:
+  redact:
+    build:
+      context: ../../aintercept
+      dockerfile: examples/python-redact/Dockerfile
+    image: aintercept-test/python-redact:dev
+    entrypoint: ["python", "server.py"]

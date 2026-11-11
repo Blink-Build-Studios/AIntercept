@@ -1,0 +1,266 @@
+// The Interceptor interface: how a control plane plugs into AIntercept.
+//
+// The customer runs a gRPC server implementing Interceptor; AIntercept's
+// observer is the client and calls it for every intercepted call. One
+// integration serves both modes, with the same callbacks and the same
+// messages:
+//
+//   observe  Callbacks are delivered asynchronously. Traffic never waits, and
+//            a slow or unavailable Interceptor never affects it. Verdicts are
+//            recorded as what would have happened (dry-run), never applied.
+//   enforce  OnCallStart and OnMessage are in the request path: Envoy waits
+//            for the verdict and AIntercept applies it. If the Interceptor
+//            doesn't answer within the deadline, or fails, the call is
+//            refused (fail closed; configurable).
+//
+// Which traffic is enforced is deployment configuration (hosts and paths),
+// not something the Interceptor decides. Call.mode tells the Interceptor
+// whether its verdict will be applied.
+//
+// Content: OnMessage carries request and response bodies, and is only called
+// when the deployment enables Interceptor content (a setting independent of
+// what AIntercept records). Without it, the Interceptor sees per-call
+// metadata only: OnCallStart and OnCallComplete.
+//
+// See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
+syntax = "proto3";
+
+package aintercept.interceptor.v1;
+
+option go_package = "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1;interceptorv1";
+
+service Interceptor {
+  // The request's headers and body have arrived and been parsed; nothing has
+  // been forwarded upstream yet in enforce mode. Allow or Deny. (Replace and
+  // Drop apply to messages, and are treated as Allow here.)
+  rpc OnCallStart(CallStart) returns (Verdict);
+
+  // One message of the call's content, in order per direction. Only called
+  // when Interceptor content is enabled. Allow, Replace, Drop or Deny.
+  rpc OnMessage(Message) returns (Verdict);
+
+  // The call has ended: the normalized per-call record. Always asynchronous,
+  // in both modes; there is nothing left to decide.
+  rpc OnCallComplete(CallRecord) returns (Ack);
+}
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  // Verdicts are recorded, never applied.
+  MODE_OBSERVE = 1;
+  // Verdicts are applied; AIntercept waits for them.
+  MODE_ENFORCE = 2;
+}
+
+enum Transport {
+  TRANSPORT_UNSPECIFIED = 0;
+  TRANSPORT_HTTP = 1;
+  TRANSPORT_WEBSOCKET = 2;
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  // Client to provider: the request body, client WebSocket messages.
+  DIRECTION_CLIENT_TO_SERVER = 1;
+  // Provider to client: the response body, SSE events, server WebSocket messages.
+  DIRECTION_SERVER_TO_CLIENT = 2;
+}
+
+// Call identifies one intercepted call and is repeated on every callback.
+message Call {
+  // Stable for the life of the call; the same value appears on every callback
+  // and in AIntercept's own records (correlation_id).
+  string call_id = 1;
+  Mode mode = 2;
+  Transport transport = 3;
+  string host = 4;
+  string method = 5;
+  // Path including the query string, as the client sent it.
+  string path = 6;
+  // When AIntercept received the request headers.
+  int64 start_unix_nano = 7;
+  // Who is calling, as far as this one call can tell.
+  Identity identity = 8;
+  // The client software: product ("claude_code", "codex", "" when unknown),
+  // the user agent and the client's own identifying headers.
+  Client client = 9;
+}
+
+// Identity known from the call itself. No enrichment: linking accounts and
+// devices to a person happens later, in AIntercept's processor.
+message Identity {
+  // Salted, irreversible hash of the API key or bearer token; key_hint is its
+  // display fragment (e.g. "sk-ant…a3f9"). Never the credential itself.
+  string key_hash = 1;
+  string key_hint = 2;
+  // The client's IP address.
+  string ip = 3;
+  // Provider account and organization, from the credential or the request.
+  string account_id = 4;
+  string org_id = 5;
+  // The client installation and its session, when the client sends them
+  // (Claude Code's metadata.user_id; Codex's turn metadata).
+  string device_id = 6;
+  string session_id = 7;
+  // Email, when the call carries it (for example in an OAuth token's claims).
+  string email = 8;
+}
+
+message Client {
+  string product = 1;
+  string user_agent = 2;
+  // Identifying client headers, e.g. originator, x-app, anthropic-version.
+  map<string, string> headers = 3;
+}
+
+// CallStart: the parsed request, before it goes upstream.
+message CallStart {
+  Call call = 1;
+  // Request headers, with credentials redacted.
+  map<string, string> headers = 2;
+  // What the request body says, parsed (no content).
+  RequestInfo request = 3;
+}
+
+message RequestInfo {
+  string model = 1;
+  // Reasoning effort or thinking budget, as the client requested it.
+  string effort = 2;
+  bool stream = 3;
+  int32 max_tokens = 4;
+  // Names of the tools the request declares (the model may call them).
+  repeated string tools_available = 5;
+  // Calls to MCP servers among them, "server/tool".
+  repeated string mcp_tools_available = 6;
+  // A prewarm call, which produces no output.
+  bool prewarm = 7;
+  // Files or images attached to this request.
+  int32 attachments = 8;
+  int64 request_bytes = 9;
+}
+
+enum MessageKind {
+  MESSAGE_KIND_UNSPECIFIED = 0;
+  // A whole HTTP request body (decompressed).
+  MESSAGE_KIND_HTTP_REQUEST_BODY = 1;
+  // A whole HTTP response body that isn't an event stream (decompressed).
+  MESSAGE_KIND_HTTP_RESPONSE_BODY = 2;
+  // One server-sent event of a streamed response: payload is the event's
+  // data, sse_event its event name.
+  MESSAGE_KIND_SSE_EVENT = 3;
+  // One WebSocket message (reassembled, unmasked, decompressed).
+  MESSAGE_KIND_WS_TEXT = 4;
+  MESSAGE_KIND_WS_BINARY = 5;
+}
+
+// Message: one unit of content. The payload is decoded; a Replace verdict
+// supplies a decoded payload too, and AIntercept re-encodes it for the wire
+// (content-length, SSE framing, WebSocket framing and compression).
+message Message {
+  Call call = 1;
+  Direction direction = 2;
+  // Order within this call and direction, from 1.
+  int64 seq = 3;
+  MessageKind kind = 4;
+  bytes payload = 5;
+  string content_type = 6;
+  // SSE only: the event's name ("" for unnamed events).
+  string sse_event = 7;
+}
+
+// The answer to OnCallStart and OnMessage. Unset action means Allow.
+message Verdict {
+  oneof action {
+    Allow allow = 1;
+    Replace replace = 2;
+    Drop drop = 3;
+    Deny deny = 4;
+  }
+  // Recorded on AIntercept's records of the call, in both modes.
+  repeated Annotation annotations = 10;
+}
+
+// Forward unchanged.
+message Allow {}
+
+// Forward this payload instead of the message's (decoded; AIntercept
+// re-encodes it). OnMessage only.
+message Replace {
+  bytes payload = 1;
+}
+
+// Remove this message: an SSE event or WebSocket message is not forwarded.
+// For a whole HTTP body it behaves like Deny. OnMessage only.
+message Drop {}
+
+// Refuse the call. Before the response has started, the client gets an error
+// in the provider's own format (HTTP status, default 403, and the provider's
+// error body; a WebSocket is closed with code 1008). Once a streamed response
+// has started, AIntercept ends it with the provider's error event.
+message Deny {
+  string reason = 1;
+  // HTTP status for the error; 0 means 403.
+  int32 http_status = 2;
+}
+
+message Annotation {
+  string key = 1;
+  string value = 2;
+}
+
+// CallRecord: the normalized record of a finished call.
+//
+// A WebSocket connection is one call (one OnCallStart, at the upgrade; each
+// message through OnMessage) that carries many model turns: it produces one
+// CallRecord per turn (ws_turn 1, 2, …), and a final one when the connection
+// closes (ws_turn 0, no model or tokens).
+message CallRecord {
+  Call call = 1;
+  RequestInfo request = 2;
+  ResponseInfo response = 3;
+  // The verdicts the Interceptor returned for this call, and whether they were
+  // applied (enforce) or only recorded (observe). On a WebSocket, the
+  // connection's final record carries them.
+  repeated RecordedVerdict verdicts = 4;
+  int64 end_unix_nano = 5;
+  int32 ws_turn = 6;
+}
+
+message ResponseInfo {
+  // HTTP status (101 for a WebSocket upgrade).
+  int32 status = 1;
+  // The model the provider reports serving (may differ from the request's).
+  string model = 2;
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
+  int64 cache_read_tokens = 5;
+  int64 cache_write_tokens = 6;
+  int64 reasoning_tokens = 7;
+  string stop_reason = 8;
+  // Tools the model called in this response, by name and count.
+  repeated ToolCount tool_calls = 9;
+  // Time to first response byte, and the whole call, in milliseconds.
+  int64 ttfb_ms = 10;
+  int64 duration_ms = 11;
+  int64 response_bytes = 12;
+  // Set when the call failed or the client disconnected.
+  string error = 13;
+}
+
+message ToolCount {
+  string name = 1;
+  int32 count = 2;
+}
+
+message RecordedVerdict {
+  // "call_start" or "message".
+  string callback = 1;
+  // "allow", "replace", "drop", "deny", or "error" when the Interceptor
+  // failed or timed out.
+  string action = 2;
+  bool applied = 3;
+  string reason = 4;
+  repeated Annotation annotations = 5;
+}
+
+message Ack {}

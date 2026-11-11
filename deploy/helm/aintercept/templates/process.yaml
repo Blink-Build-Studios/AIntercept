@@ -39,7 +39,7 @@ spec:
           env:
             - { name: PROCESS_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
             - { name: PROCESS_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
-            {{- if .Values.fullInterception }}
+            {{- if eq (include "aintercept.interceptionMode" .) "full" }}
             - { name: PROCESS_RAW_PREFIX, value: {{ printf "%s/capture" (.Values.objectStore.prefix | trimSuffix "/") | trimPrefix "/" | quote }} }
             {{- end }}
             - { name: PROCESS_S3_REGION, value: {{ .Values.objectStore.region | quote }} }

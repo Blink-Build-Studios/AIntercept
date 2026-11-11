@@ -166,6 +166,34 @@ static_resources:
                         envoy_grpc:
                           cluster_name: observer
                         timeout: 1s
+{{- if (.Values.interceptor | default dict).enforce }}
+                  # Enforce (interceptor.enforce; docs/INTERCEPTOR.md): on the routes
+                  # in an enforce scope this filter replaces the observing one. Envoy
+                  # forwards only what the observer sends back (FULL_DUPLEX_STREAMED),
+                  # so the customer's Interceptor can allow, rewrite or refuse each
+                  # call before it goes on. Fails closed: if the observer is
+                  # unreachable, enforced calls are refused.
+                  - name: aintercept.enforce
+                    disabled: true
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      failure_mode_allow: false
+                      # The observer applies the Interceptor's own deadline; this only
+                      # bounds a stuck stream (it covers holding a request until its
+                      # body has arrived).
+                      message_timeout: 30s
+                      processing_mode:
+                        request_header_mode: SEND
+                        response_header_mode: SEND
+                        request_body_mode: FULL_DUPLEX_STREAMED
+                        response_body_mode: FULL_DUPLEX_STREAMED
+                        request_trailer_mode: SEND
+                        response_trailer_mode: SEND
+                      request_attributes: ["source.address"]
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: observer
+{{- end }}
                   # Resolves the upstream for wildcard hosts (e.g. per-region file-upload
                   # hosts) from :authority; a no-op for routes to the fixed clusters.
                   - name: envoy.filters.http.dynamic_forward_proxy
@@ -208,6 +236,7 @@ static_resources:
                     - name: anthropic
                       domains: ["api.anthropic.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "api.anthropic.com" "cluster" "upstream_anthropic" "ws" "upstream_anthropic_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -217,6 +246,7 @@ static_resources:
                     - name: openai
                       domains: ["api.openai.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "api.openai.com" "cluster" "upstream_openai" "ws" "upstream_openai_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -226,6 +256,7 @@ static_resources:
                     - name: chatgpt
                       domains: ["chatgpt.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "chatgpt.com" "cluster" "upstream_chatgpt" "ws" "upstream_chatgpt_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -235,6 +266,7 @@ static_resources:
                     - name: chatgpt_ab
                       domains: ["ab.chatgpt.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "ab.chatgpt.com" "cluster" "upstream_chatgpt_ab" "ws" "upstream_chatgpt_ab_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -250,6 +282,7 @@ static_resources:
                     - name: ech_public_name
                       domains: ["cloudflare-ech.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "cloudflare-ech.com" "cluster" "upstream_ech_public_name" "ws" "upstream_ech_public_name_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -259,6 +292,7 @@ static_resources:
                     - name: openai_bzr
                       domains: ["bzr.openai.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "bzr.openai.com" "cluster" "upstream_openai_bzr" "ws" "upstream_openai_bzr_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -268,6 +302,7 @@ static_resources:
                     - name: claude_analytics
                       domains: ["a.claude.ai"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "a.claude.ai" "cluster" "upstream_claude_analytics" "ws" "upstream_claude_analytics_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -277,6 +312,7 @@ static_resources:
                     - name: chatgpt_wshost
                       domains: ["ws.chatgpt.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "ws.chatgpt.com" "cluster" "upstream_chatgpt_wshost" "ws" "upstream_chatgpt_wshost_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -286,6 +322,7 @@ static_resources:
                     - name: claude_web
                       domains: ["claude.ai"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "claude.ai" "cluster" "upstream_claude_web" "ws" "upstream_claude_web_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]
@@ -297,11 +334,13 @@ static_resources:
                     - name: wildcard_oaiusercontent_com
                       domains: ["*.oaiusercontent.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "*.oaiusercontent.com" "cluster" "upstream_dynamic" "ws" "" "values" .Values) | nindent 24 }}
                         - match: { prefix: "/" }
                           route: { cluster: upstream_dynamic, timeout: 0s, idle_timeout: 300s }
                     - name: gemini
                       domains: ["generativelanguage.googleapis.com"]
                       routes:
+{{- include "aintercept.enforceRoutes" (dict "host" "generativelanguage.googleapis.com" "cluster" "upstream_gemini" "ws" "upstream_gemini_ws" "values" .Values) | nindent 24 }}
                         - match:
                             prefix: "/"
                             headers: [{ name: upgrade, string_match: { exact: websocket, ignore_case: true } }]

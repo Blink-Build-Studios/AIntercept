@@ -17,7 +17,7 @@ const FORMATTING = [
 ];
 
 export default tseslint.config(
-  { ignores: ["dist/", "storybook-static/", "public/", "src/api/spec.ts", "src/api/samples/", "openapi.json"] },
+  { ignores: ["dist/", ".vite/", "storybook-static/", "public/", "src/api/spec.ts", "src/api/samples/", "openapi.json"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

@@ -18,10 +18,11 @@ import (
 	"time"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	filterextprocv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/devbuild"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
 )
@@ -52,8 +53,12 @@ type Server struct {
 	// probeMarker identifies the observer's own health probes; requests
 	// carrying it are tagged Synthetic. Empty disables tagging.
 	probeMarker string
+	// ic is the customer's Interceptor (nil: none). See intercept.go and
+	// enforce.go.
+	ic *interceptor.Client
 
-	streamCounter atomic.Uint64
+	streamCounter    atomic.Uint64
+	undecodableCount atomic.Uint64
 }
 
 // Config configures the ext_proc Server.
@@ -71,6 +76,8 @@ type Config struct {
 	KeyHintSuffix     int
 	ClientIPHeaders   []string
 	ProbeMarker       string
+	// Interceptor, when set, receives every call (docs/INTERCEPTOR.md).
+	Interceptor *interceptor.Client
 }
 
 // New builds a Server.
@@ -99,6 +106,7 @@ func New(cfg Config) *Server {
 		keyHintSuffix:     suffix,
 		clientIPHeaders:   cfg.ClientIPHeaders,
 		probeMarker:       cfg.ProbeMarker,
+		ic:                cfg.Interceptor,
 	}
 }
 
@@ -153,6 +161,16 @@ type streamState struct {
 	// but a non-secret marker allowlist.
 	reqHeaders  map[string]string
 	respHeaders map[string]string
+
+	// enforce: the stream is from the enforcing filter (full duplex), where
+	// this server forwards every byte (enforce.go). enf is its state; ic the
+	// Interceptor bookkeeping in either mode.
+	enforce bool
+	enf     *enforceState
+	ic      *interceptState
+	// denyReason is set when enforce refused the call; it becomes the
+	// complete row's Error.
+	denyReason string
 }
 
 // Per-stream body buffering caps for metadata extraction.
@@ -183,8 +201,11 @@ func (srv *Server) Process(stream extprocv3.ExternalProcessor_ProcessServer) err
 	// Whatever the stream still holds when it ends is released.
 	defer func() { srv.budget.Add(-st.held) }()
 
-	for {
+	for first := true; ; first = false {
 		req, err := stream.Recv()
+		if first && err == nil && req.GetProtocolConfig().GetRequestBodyMode() == extprocv3ProcessingModeFullDuplex {
+			return srv.processEnforce(stream, st, req)
+		}
 		if err == io.EOF {
 			srv.wsClose(st)
 			return nil
@@ -301,6 +322,13 @@ func (srv *Server) observeHeaders(st *streamState, dir events.Direction, phase e
 			st.ws = newWSState(hdrs)
 		}
 	}
+	defer func() {
+		// The request has arrived with no body (or is a WebSocket upgrade):
+		// the Interceptor's OnCallStart, after the header row.
+		if dir == events.DirInbound && (h.GetEndOfStream() || st.wsRequested) {
+			srv.observeStart(st)
+		}
+	}()
 
 	now := time.Now().UnixNano()
 	if dir == events.DirInbound {
@@ -328,6 +356,14 @@ func (srv *Server) observeHeaders(st *streamState, dir events.Direction, phase e
 func (srv *Server) observeBody(st *streamState, dir events.Direction, phase events.Phase, b *extprocv3.HttpBody) {
 	n := len(b.GetBody())
 	switch {
+	case st.ws != nil && st.enf != nil && st.enf.wsContent:
+		// Enforced with content: enforceWS decodes the frames (once) and
+		// records the messages; only the byte counts are kept here.
+		if dir == events.DirInbound {
+			st.ws.conn.BytesUp += n
+		} else {
+			st.ws.conn.BytesDown += n
+		}
 	case st.ws != nil:
 		// Upgraded WebSocket: decode frames instead of buffering a body.
 		srv.wsFeed(st, dir, b.GetBody())
@@ -360,22 +396,28 @@ func (srv *Server) observeBody(st *streamState, dir events.Direction, phase even
 		Bytes:       n,
 		EndOfStream: b.GetEndOfStream(),
 	}
-	// Body preview is OFF unless explicitly enabled for local dev, and even then
-	// strictly capped. This is how we prove decrypted bytes reached Go without
-	// routinely logging payloads. Restricted to the RESPONSE (outbound) side:
-	// previewing the request body would echo raw prompt text to stdout.
-	// Both body paths are compiled out of production builds (devbuild).
-	if devbuild.BodyCapture && srv.devLogBodies && n > 0 && dir == events.DirOutbound {
+	// Body preview is a debugging aid (DEV_LOG_BODIES), off by default and
+	// strictly capped. Restricted to the RESPONSE (outbound) side: previewing the
+	// request body would echo raw prompt text to stdout.
+	if srv.devLogBodies && n > 0 && dir == events.DirOutbound {
 		e.BodyPreview = previewBytes(b.GetBody(), srv.bodyPreviewCap)
 	}
-	// Full-body capture (dev-only, file sink only): store the complete chunk as
+	// Full interception (INTERCEPTION_MODE=full): store the complete chunk as
 	// base64 of the RAW bytes so compressed/binary response bodies survive
-	// losslessly. Stripped from stdout by Event.ForStdout.
-	if devbuild.BodyCapture && srv.captureFullBodies && n > 0 {
+	// losslessly. Only the full-interception sinks receive it; stdout and the
+	// content-free stream strip it (Event.ForStdout).
+	if srv.captureFullBodies && n > 0 {
 		e.BodyB64 = base64.StdEncoding.EncodeToString(b.GetBody())
 	}
 	srv.offer(st, e)
 
+	if st.ws == nil {
+		if dir == events.DirInbound && b.GetEndOfStream() {
+			srv.observeStart(st)
+		} else if dir == events.DirOutbound {
+			srv.observeResponseContent(st, b.GetBody(), b.GetEndOfStream())
+		}
+	}
 	if b.GetEndOfStream() && dir == events.DirOutbound {
 		if st.ws != nil {
 			srv.wsClose(st)
@@ -440,6 +482,8 @@ func (srv *Server) emitComplete(st *streamState) {
 		ResponseStartNS: st.respStartNS,
 		RequestBytes:    st.reqBytes,
 		ResponseBytes:   st.respBytes,
+		InterceptMode:   st.interceptMode(),
+		Error:           st.denyReason,
 	}
 	// Attach the buffers for deferred parsing. A truncated request buffer yields
 	// invalid JSON downstream (no model/tools) rather than an error; pass it
@@ -546,4 +590,15 @@ func atoiSafe(s string) int {
 		n = n*10 + int(r-'0')
 	}
 	return n
+}
+
+// extprocv3ProcessingModeFullDuplex is the body mode of the enforcing filter.
+const extprocv3ProcessingModeFullDuplex = filterextprocv3.ProcessingMode_FULL_DUPLEX_STREAMED
+
+// interceptMode is the stream's mode as recorded on its rows.
+func (st *streamState) interceptMode() string {
+	if st.enforce {
+		return "enforce"
+	}
+	return ""
 }

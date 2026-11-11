@@ -11,7 +11,7 @@ import (
 
 // FileSink writes one JSON event per line (NDJSON) to a file. It is the durable
 // capture path used to build the extractor: point it at a mounted volume and
-// the full event stream — including DEV_CAPTURE_FULL_BODIES content — survives
+// the full event stream (bodies included, in full interception mode) survives
 // container restarts and is immune to Docker log rotation.
 //
 // This is NOT the production sink. The forward-looking durable sink is S3-style

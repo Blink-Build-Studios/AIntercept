@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/devbuild"
 )
 
 // fakeS3 captures PutObject calls in memory, decompressing and recording each
@@ -305,18 +303,5 @@ func TestS3Sink_EmitAfterCloseErrors(t *testing.T) {
 	s.Close()
 	if err := s.Emit(ev(0)); err == nil {
 		t.Fatalf("expected error emitting after close")
-	}
-}
-
-// IncludeContent is ignored outside devcapture builds: the S3 sink still
-// strips content, so a production binary can't write bodies to object storage.
-func TestS3Sink_IncludeContentIgnoredInProductionBuilds(t *testing.T) {
-	if devbuild.BodyCapture {
-		t.Skip("devcapture build")
-	}
-	s := newS3SinkWithClient(&fakeS3{}, S3Config{Bucket: "b", InstanceID: "i", IncludeContent: true})
-	defer s.Close()
-	if s.includeContent {
-		t.Fatal("IncludeContent must be a no-op in production builds")
 	}
 }

@@ -7,6 +7,8 @@
 //   - GET  /stream          an SSE stream of several events (tests streaming)
 //   - POST /echo            echoes the request body back (proves request-body
 //     bytes are observable end-to-end)
+//   - /v1/messages, /v1/json, /ws  the Interceptor end-to-end test's routes
+//     (interceptor.go)
 //
 // The MARKER lets the smoke test assert that the exact decrypted bytes the
 // fixture produced showed up in the observer's output.
@@ -60,6 +62,20 @@ func main() {
 		fmt.Fprintf(w, `{"echoed_bytes":%d,"marker":%q,"body":%q}`+"\n", len(body), Marker, string(body))
 	})
 
+	interceptorRoutes(mux)
+
+	// Plain HTTP as well, when asked (the Interceptor end-to-end test puts
+	// Envoy in front without TLS).
+	if plain := os.Getenv("FIXTURE_PLAIN_LISTEN"); plain != "" {
+		go func() {
+			log.Printf("fixture: plain HTTP on %s", plain)
+			log.Fatal((&http.Server{Addr: plain, Handler: logRequests(mux)}).ListenAndServe())
+		}()
+	}
+
+	if os.Getenv("FIXTURE_TLS") == "off" {
+		select {} // plain HTTP only
+	}
 	srv := &http.Server{Addr: addr, Handler: logRequests(mux)}
 	log.Printf("fixture: HTTPS origin on %s (marker=%s)", addr, Marker)
 	if err := srv.ListenAndServeTLS(cert, key); err != nil {

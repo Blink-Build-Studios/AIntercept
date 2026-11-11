@@ -51,10 +51,15 @@ PRD's instruction to distinguish tested behavior from assumptions.
 - The interception **root private key is never mounted into any container.** It
   signs the intermediate once, then should move offline.
 - The issuing **intermediate key** is mounted read-only into `certsvc` only.
-- Secrets and bodies are redacted by default. `DEV_LOG_BODIES=true` prints
-  bounded body previews for local dev only. Those paths exist only in builds
-  tagged `devcapture` (local compose); production images compile them out and
-  the chart's admission policy rejects pods that set the flags.
-  Even then, sensitive headers (Authorization, API keys, cookies) are always
-  redacted.
+- Bodies are recorded only in full interception mode (`INTERCEPTION_MODE=full`);
+  the default, content-free, records metadata only. `DEV_LOG_BODIES=true` prints
+  bounded response-body previews to the observer's log, as a debugging aid.
+  Sensitive headers (Authorization, API keys, cookies) are always redacted.
 - Upstream TLS verification is never disabled.
+- Enforce mode (the Interceptor, `docs/INTERCEPTOR.md`) evaluates content only
+  when it can release it intact. A response that arrives compressed despite the
+  request asking for none, a body over 32 MiB, or a WebSocket on which the
+  server negotiated compression is passed through unevaluated (and counted).
+  A request body over 32 MiB is refused (413). Provider error formats for
+  refused calls follow each provider's published API errors; they aren't yet
+  checked against captured real rejections.

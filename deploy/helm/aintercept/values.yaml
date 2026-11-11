@@ -5,22 +5,55 @@
 #   digitalocean → Spaces via static keys (from a Secret), DO LB
 cloud: digitalocean
 
-# ── Admission policy ──────────────────────────────────────────────────────────
-# Reject pods in the release namespace that set the dev body-capture env vars
-# (DEV_LOG_BODIES / DEV_CAPTURE_FULL_BODIES). Production images already compile
-# those paths out; this stops the flags being deployed at all. Cluster-scoped
-# objects: needs rights to create ValidatingAdmissionPolicies (k8s >= 1.30).
-admissionPolicy:
-  enabled: true
+# ── Interception mode ─────────────────────────────────────────────────────────
+# What AIntercept records:
+#   content-free → metadata only: headers, token counts, timings, model and tool
+#                  names, the agents' own analytics. No request or response body.
+#   full         → everything above plus every request and response body. The
+#                  observer writes the stream with bodies under
+#                  <objectStore.prefix>/capture, and the processor and the API
+#                  read it, so the UI shows prompt text, commands, patches and
+#                  exit codes. Far more data: size the object store for it.
+# Independent of the interceptor (below): whether a customer's Interceptor sees
+# bodies is its own setting.
+interceptionMode: content-free
 
-# ── Full interception (dev builds only) ──────────────────────────────────────
-# Record every request and response body. The observer writes the raw stream with
-# bodies under <objectStore.prefix>/capture (DEV_CAPTURE_FULL_BODIES), and the
-# processor and the API read that stream instead of the body-stripped one, so the
-# UI shows bodies and what's derived from them (commands, patches, text, exit
-# codes). Off, no body is read beyond the usage metadata. Needs a `-tags
-# devcapture` image and admissionPolicy.enabled=false; never for customer traffic.
-fullInterception: false
+# ── Interceptor (the control-plane hook) ─────────────────────────────────────
+# A customer's gRPC service implementing interceptor/v1 (docs/INTERCEPTOR.md)
+# receives every call: OnCallStart, OnMessage (with content on) and
+# OnCallComplete. Observe mode (everywhere, by default) never touches
+# traffic; hosts and paths listed under `enforce` go through the enforcing
+# filter, where the Interceptor's verdicts are applied.
+interceptor:
+  # host:port of the Interceptor. Empty: no Interceptor.
+  endpoint: ""
+  # Send request and response bodies to the Interceptor (OnMessage). Separate
+  # from interceptionMode: the Interceptor can act on bodies AIntercept doesn't
+  # record.
+  content: false
+  # Enforce: how long the Interceptor has to answer each callback, and what
+  # happens when it doesn't (or fails): deny (fail closed) or allow.
+  deadlineMs: 50
+  onError: deny
+  # Enforce scopes: each host (and optional path prefixes) whose calls the
+  # Interceptor's verdicts apply to. Everything else is observed only.
+  #   - host: api.anthropic.com
+  #     paths: ["/v1/messages"]
+  #   - host: chatgpt.com
+  #     paths: ["/backend-api/codex/responses"]
+  enforce: []
+  # TLS to the Interceptor. secretName holds ca.crt (verifies the server) and,
+  # for mutual TLS, tls.crt/tls.key (the observer's client certificate).
+  tls:
+    enabled: false
+    secretName: ""
+    # Verify the server with the Secret's ca.crt (false: the system roots).
+    ca: true
+    # Present the Secret's tls.crt/tls.key as a client certificate.
+    clientCert: false
+    serverName: ""
+  # A Secret whose `token` key is sent as "authorization: Bearer <token>".
+  tokenSecret: ""
 
 # ── Network policy ────────────────────────────────────────────────────────────
 # Restrict Envoy's UNAUTHENTICATED admin port (9901) to the KEDA operator only.
