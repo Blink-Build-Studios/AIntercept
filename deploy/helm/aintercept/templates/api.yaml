@@ -54,6 +54,18 @@ spec:
                 resourceFieldRef: { resource: limits.memory, divisor: "1" }
             - { name: AINTERCEPT_DB_DIR, value: /data/db }
             - { name: AINTERCEPT_THREADS, value: {{ .Values.api.threads | quote }} }
+            {{- with .Values.api.auth }}
+            {{- if .jwtHeader }}
+            # Verify the identity-aware proxy's signed assertion on every request
+            # (docs/PRODUCTION.md §5d).
+            - { name: AINTERCEPT_AUTH_JWT_HEADER, value: {{ .jwtHeader | quote }} }
+            - { name: AINTERCEPT_AUTH_JWKS_URL, value: {{ .jwksUrl | quote }} }
+            - { name: AINTERCEPT_AUTH_AUDIENCE, value: {{ .audience | quote }} }
+            {{- if .issuer }}
+            - { name: AINTERCEPT_AUTH_ISSUER, value: {{ .issuer | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- end }}
           ports:
             - { name: http, containerPort: 8787 }
           readinessProbe:
@@ -120,8 +132,12 @@ metadata:
   labels:
     app: api
     {{- include "aintercept.labels" . | nindent 4 }}
+  {{- with .Values.api.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.api.service.type }}
   selector: { app: api }
   ports:
     - { name: http, port: 8787, targetPort: 8787 }

@@ -1,0 +1,14 @@
+# Build context for images built from the repository root (api/Dockerfile).
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.ruff_cache
+**/.mypy_cache
+**/.pytest_cache
+data/
+.cache/
+ui/dist/
+ui/storybook-static/
+ui/.vite/
+test/interceptor/out/

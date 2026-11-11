@@ -1,0 +1,22 @@
+{{- if and .Values.api.enabled .Values.api.httpRoute.enabled }}
+# Routes a Gateway API listener to the api Service, which serves the UI at / and
+# the API at /api/v1 (docs/PRODUCTION.md §5d). Put an identity-aware proxy in
+# front, and admit the gateway in api.networkPolicy.ingressFrom.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api
+  labels:
+    app: api
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.api.httpRoute.parentRefs | nindent 4 }}
+  {{- with .Values.api.httpRoute.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - backendRefs:
+        - { name: api, port: 8787 }
+{{- end }}

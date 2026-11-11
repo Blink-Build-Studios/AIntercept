@@ -236,6 +236,66 @@ pod's disk, so its memory doesn't grow with the data:
   8.8.8.8). They must never see the client-side DNS override. A VPC's own
   resolver qualifies and avoids outbound UDP/53.
 
+## 5d. Giving people the UI (in-cluster, behind an identity-aware proxy)
+
+The API image also serves the built web UI: the UI at `/`, the API at
+`/api/v1`, on one origin. So with `api.enabled`, the `api` Service is the whole
+app, with no port-forward and no local Node. (`make up` and `make remote` still
+run the UI's dev server locally, as before.)
+
+The UI shows **per-person usage of AI tools**, and with
+`interceptionMode: full`, what people sent. Give it to a small group (security,
+engineering leadership), only through an identity-aware proxy such as
+Cloudflare Access, Google IAP or oauth2-proxy, and never publicly. AIntercept
+has no login of its own.
+
+**Values:**
+
+```yaml
+api:
+  enabled: true
+  service:
+    type: ClusterIP            # or LoadBalancer + the cloud's internal-LB annotation
+    annotations: {}
+  networkPolicy:
+    ingressFrom:               # who may connect; empty = no pod (port-forward only)
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cloudflared } }
+  httpRoute:                   # optional, for Gateway API clusters
+    enabled: true
+    parentRefs: [{ name: internal-gateway, namespace: gateway }]
+    hostnames: [aintercept.internal.example.com]
+  auth:                        # verify the proxy's assertion (recommended)
+    jwtHeader: Cf-Access-Jwt-Assertion
+    jwksUrl: https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
+    audience: <application AUD tag>
+    issuer: https://<team>.cloudflareaccess.com
+```
+
+- **Route the proxy to the `api` Service** on port 8787: a tunnel connector
+  (`cloudflared`), an internal load balancer, or a Gateway (`httpRoute`). Then
+  admit that component in `api.networkPolicy.ingressFrom`. By default no pod may
+  connect.
+- **Verify the proxy's assertion with `api.auth`.** If the proxy is
+  misconfigured, or someone inside the network reaches the Service directly,
+  requests without a valid signed assertion get **401**. The API checks:
+  - the signature against the proxy's JWKS (keys are cached and refetched when
+    rotated);
+  - the audience, the issuer, if set, and the expiry.
+
+  If the JWKS can't be fetched, requests get **503**: AIntercept fails closed.
+  `/api/v1/status` stays open for probes.
+- **Access is logged:** each request's log line carries the verified identity
+  (`identity`: the email claim, else the subject), so who looked at whose data
+  is attributable.
+- **Header names by provider:** `Cf-Access-Jwt-Assertion` (Cloudflare Access),
+  `X-Goog-IAP-JWT-Assertion` (Google IAP; JWKS
+  `https://www.gstatic.com/iap/verify/public_key-jwk`), and for oauth2-proxy
+  with `--set-authorization-header`, `Authorization`: the ID token, signed by
+  your identity provider (use the provider's JWKS; a `Bearer ` prefix is
+  accepted).
+- **The image:** build it from the repository root, since the UI is part of it:
+  `docker build -f api/Dockerfile -t <registry>/aintercept-api:<tag> .`
+
 ## 6. Corporate vs personal accounts
 
 `complete` events carry `provider_org_id`, taken from the provider's response

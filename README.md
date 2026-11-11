@@ -134,6 +134,8 @@ certsvc **fails closed**: a handshake for a host not on the allowlist gets no ce
   - per-cloud object-store wiring;
   - the Interceptor settings.
 
+  The API image also serves the web UI, so with `api.enabled` one Service is the whole app: give it to a small group behind an identity-aware proxy (Cloudflare Access, IAP, oauth2-proxy), with the API verifying the proxy's signed assertion (`docs/PRODUCTION.md` §5d).
+
   Credentials and the key-hash salt are supplied via Secrets, never `helm --set`. [`docs/PRODUCTION.md`](docs/PRODUCTION.md) covers sizing, the two modes and enforce.
 - **DigitalOcean walkthrough:** [`docs/DEPLOY_DOKS.md`](docs/DEPLOY_DOKS.md) has the exact `doctl`, `kubectl` and `helm` steps end to end.
 - **Terraform:** `deploy/terraform/{aws,digitalocean}` provision the cluster and the object store.
