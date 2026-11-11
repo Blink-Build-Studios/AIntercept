@@ -336,6 +336,32 @@ something a deployment hits).
   WebSocket turn, each past the cap. Calls captured before the fix stay without
   usage (the API says why).
 
+### P7. Requests after an idle period fail in ~2 ms with `503 UC` behind a NAT gateway. Status: fixed
+- **What:** on EKS (nodes egress through AWS NAT gateways), the first
+  requests after a quiet spell failed with `503 UC` ("upstream connect error
+  or disconnect/reset before headers. reset reason: connection termination"),
+  often several in a row, each pod failing about once per pooled upstream
+  connection. Successful calls took 27-75 ms; every failure took 2 ms.
+- **Why:** a 2 ms failure never reached the provider; the reset came from
+  inside the VPC. An AWS NAT gateway expires a TCP flow after 350 s idle and
+  answers the next packet on it with a RST. Envoy's provider clusters had no
+  upstream idle timeout, so it kept pooled connections open past that and
+  reused one the NAT had already forgotten.
+- **Evidence (from one deployment):**
+  - per-connection idle under 350 s: 0 failures in 36 requests; idle about
+    420 s, 360 s, and ~30 min: failures every time;
+  - Envoy counters: every failure was `upstream_cx_destroy_remote_with_active_rq`
+    with `upstream_rq_pending_failure_eject`; `ssl.handshake` showed no TLS
+    errors (it isn't the fingerprint, B2);
+  - the same Envoy config run from a network with no NAT, idle 90 s between
+    bursts, never failed (48/48).
+- **Fixed:** every provider cluster sets
+  `common_http_protocol_options.idle_timeout: 60s`, so Envoy closes an
+  unused upstream connection long before a NAT expires it, and TCP keepalive
+  (`keepalive_time: 60`, every 20 s, 3 probes), so a connection that stays
+  open but quiet (a long streaming turn) keeps its NAT flow alive. Applies to
+  any stateful NAT or firewall between Envoy and the providers, not only AWS.
+
 ### P3. Captures redact the `authorization` header, which hides browser identity. Status: fixed
 - ChatGPT web (and Codex) authenticate with a bearer JWT whose claims carry
   the user's email, user ID and plan. We keep only `key_hash`/`key_hint`, so

@@ -149,10 +149,22 @@ static_resources:
     - name: upstream
       type: STRICT_DNS
       connect_timeout: 5s
+      # AWS NAT gateways (and other stateful NATs/firewalls) silently expire an
+      # idle TCP flow (350 s on AWS) and answer the next packet with a RST, so a
+      # pooled upstream connection that sat idle past that fails the next
+      # request in ~2 ms with 503 UC. TCP keepalive keeps the flow alive while a
+      # connection is open; idle_timeout (below) closes unused ones well first.
+      upstream_connection_options: &upstream_tcp_keepalive
+        tcp_keepalive: { keepalive_time: 60, keepalive_interval: 20, keepalive_probes: 3 }
       # HTTP/2 upstream with HTTP/1.1 fallback via ALPN.
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          # Close an upstream connection after 60 s with no requests: well
+          # inside NAT idle timeouts (AWS NAT gateway: 350 s), so Envoy never
+          # reuses a connection the network path has already forgotten.
+          common_http_protocol_options:
+            idle_timeout: 60s
           auto_config:
             http2_protocol_options: {}
             http_protocol_options: {}
