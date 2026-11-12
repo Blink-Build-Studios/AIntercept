@@ -1,22 +1,12 @@
 package observer
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
-	"net"
-	"net/http"
 	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/orca"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 )
@@ -85,40 +75,6 @@ func parseSize(s string) (int64, error) {
 	return n * mult, nil
 }
 
-// minReportedUtilization floors the utilization reported to Envoy, which
-// ignores a zero report; it also bounds how strongly an idle pod is favored.
-const minReportedUtilization = 0.05
-
-// startLoadReports serves ORCA out-of-band load reports on the gRPC server so
-// Envoy's client-side weighted round robin sends new streams to the observer
-// pods with the most budget left. Envoy weighs a pod by rps / utilization;
-// streams here last from milliseconds to minutes, so a stream rate says
-// little about load, and a constant rate makes the weight inversely
-// proportional to budget utilization. grpc-go reports at most every 30s,
-// ample for load that builds over minutes. Returns a stop function.
-func startLoadReports(s *grpc.Server, budget *membudget.Budget) func() {
-	rec := orca.NewServerMetricsRecorder()
-	rec.SetQPS(1)
-	update := func() { rec.SetApplicationUtilization(math.Max(budget.Utilization(), minReportedUtilization)) }
-	update()
-	if err := orca.Register(s, orca.ServiceOptions{ServerMetricsProvider: rec}); err != nil {
-		fatal("orca load reports", "err", err)
-	}
-	t := time.NewTicker(5 * time.Second)
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case <-t.C:
-				update()
-			}
-		}
-	}()
-	return func() { t.Stop(); close(done) }
-}
-
 // budgetStats is the memory budget as served on /stats.
 type budgetStats struct {
 	HeldBytes   int64   `json:"held_bytes"`
@@ -129,68 +85,4 @@ type budgetStats struct {
 
 func statsOf(b *membudget.Budget) budgetStats {
 	return budgetStats{HeldBytes: b.Held(), PeakBytes: b.Peak(), LimitBytes: b.Limit(), Utilization: b.Utilization()}
-}
-
-// fleetHandler serves the memory-budget utilization averaged over every
-// observer pod (found through the headless Service named by
-// OBSERVER_PEERS_DNS), as a percentage, for the autoscaler: KEDA polls one
-// URL, and any pod answers for the fleet. Peers that don't answer are left
-// out; without a peers name it reports this pod alone.
-func fleetHandler(budget *membudget.Budget, peersDNS, port string) http.HandlerFunc {
-	client := &http.Client{Timeout: 2 * time.Second}
-	return func(w http.ResponseWriter, r *http.Request) {
-		utils := []float64{budget.Utilization()}
-		if peersDNS != "" {
-			ips, err := net.DefaultResolver.LookupHost(r.Context(), peersDNS)
-			if err == nil {
-				utils = utils[:0]
-				var mu sync.Mutex
-				var wg sync.WaitGroup
-				for _, ip := range ips {
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						u, ok := peerUtilization(r.Context(), client, net.JoinHostPort(ip, port))
-						if ok {
-							mu.Lock()
-							utils = append(utils, u)
-							mu.Unlock()
-						}
-					}()
-				}
-				wg.Wait()
-				if len(utils) == 0 {
-					utils = []float64{budget.Utilization()}
-				}
-			}
-		}
-		sum := 0.0
-		for _, u := range utils {
-			sum += u
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"pods":                    len(utils),
-			"avg_utilization_percent": math.Round(sum / float64(len(utils)) * 100),
-		})
-	}
-}
-
-func peerUtilization(ctx context.Context, c *http.Client, addr string) (float64, bool) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/stats", nil)
-	if err != nil {
-		return 0, false
-	}
-	resp, err := c.Do(req)
-	if err != nil {
-		return 0, false
-	}
-	defer resp.Body.Close()
-	var s struct {
-		Memory budgetStats `json:"memory"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&s) != nil || s.Memory.LimitBytes == 0 {
-		return 0, false
-	}
-	return s.Memory.Utilization, true
 }

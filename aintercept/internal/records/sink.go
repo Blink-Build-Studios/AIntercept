@@ -11,12 +11,37 @@ import (
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 )
 
-// Putter writes one object. In the observer it's the single writer every
-// output goes through.
+// Putter writes one records object. In the observer it's the single writer
+// every output goes through (WriterPutter).
 type Putter interface {
 	Put(ctx context.Context, key string, body []byte) error
+}
+
+// DetailPutter is a Putter that writes call detail objects apart (their own
+// content type and encoding). A Putter without it writes them with Put.
+type DetailPutter interface {
+	PutDetail(ctx context.Context, key string, body []byte) error
+}
+
+// WriterPutter is the observer's single writer as a Putter: records and call
+// detail objects each go through an object stream of it, to target.
+func WriterPutter(w *events.Writer, target string) Putter {
+	return writerPutter{
+		records: w.NewObjectStream(events.ObjectStreamConfig{Target: target, ContentType: "application/vnd.apache.parquet"}),
+		details: w.NewObjectStream(events.ObjectStreamConfig{Target: target, ContentType: "application/x-ndjson", ContentEncoding: "gzip"}),
+	}
+}
+
+type writerPutter struct{ records, details *events.ObjectStream }
+
+func (p writerPutter) Put(_ context.Context, key string, body []byte) error {
+	return p.records.Put(key, body)
+}
+func (p writerPutter) PutDetail(_ context.Context, key string, body []byte) error {
+	return p.details.Put(key, body)
 }
 
 // SinkConfig configures a records Sink.
@@ -32,7 +57,9 @@ type SinkConfig struct {
 	Content bool
 	// Details writes each call's detail object (DetailKey) when it ends.
 	Details bool
-	Now     func() time.Time
+	// Budget is charged for the rows held for detail objects.
+	Budget *membudget.Budget
+	Now    func() time.Time
 }
 
 // Sink is an events.Sink that assembles the rows it's given into records and
@@ -61,7 +88,7 @@ func NewSink(cfg SinkConfig) *Sink {
 		cfg.MaxRecords = 20000
 	}
 	s := &Sink{cfg: cfg, asm: NewAssembler(cfg.Incarnation)}
-	s.asm.KeepDetail = cfg.Details
+	s.asm.KeepDetail, s.asm.Budget = cfg.Details, cfg.Budget
 	return s
 }
 
@@ -166,7 +193,11 @@ func (s *Sink) putDetail(d Detail) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if err := s.cfg.Putter.Put(context.Background(), key, buf.Bytes()); err != nil {
+		put := s.cfg.Putter.Put
+		if dp, ok := s.cfg.Putter.(DetailPutter); ok {
+			put = dp.PutDetail
+		}
+		if err := put(context.Background(), key, buf.Bytes()); err != nil {
 			s.mu.Lock()
 			s.errs = append(s.errs, err)
 			s.mu.Unlock()

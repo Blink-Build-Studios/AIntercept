@@ -231,3 +231,47 @@ func generate(r *rand.Rand) []events.Event {
 		streams[i] = streams[i][1:]
 	}
 }
+
+// Every generated batch's Claude Code events are ranked exactly as the event
+// rows number them.
+func TestGeneratedRanksMatchTheEventRows(t *testing.T) {
+	for seed := int64(1); seed <= 25; seed++ {
+		rows := generate(rand.New(rand.NewSource(seed)))
+		a := records.NewAssembler("inc")
+		x := process.NewShaper()
+		var got []records.Record
+		for i := range rows {
+			l, _ := json.Marshal(rows[i])
+			x.Apply(&rows[i], l, "f")
+			got = append(got, a.Apply(&rows[i], l, "f")...)
+		}
+		got = append(got, a.Flush()...)
+		_, evs := x.Rows()
+		want := process.EventNumbers(evs) // in the order the events arrived
+		var gotEvs []records.Record
+		for _, r := range got {
+			if r.Kind == records.KindClientEvent {
+				gotEvs = append(gotEvs, r)
+			}
+		}
+		if len(gotEvs) != len(evs) {
+			t.Fatalf("seed %d: %d event records, %d events", seed, len(gotEvs), len(evs))
+		}
+		n := 0
+		for i, r := range gotEvs {
+			if r.Event.EventKey != evs[i].EventKey {
+				t.Fatalf("seed %d: event %d is %s, want %s", seed, i, r.Event.EventKey, evs[i].EventKey)
+			}
+			if want[i] == 0 {
+				continue
+			}
+			n++
+			if int64(want[i]) != r.BatchCCN {
+				t.Errorf("seed %d %s: rank %d, event rows number it %d", seed, r.Event.EventKey, r.BatchCCN, want[i])
+			}
+		}
+		if n == 0 {
+			t.Fatalf("seed %d: no numbered event", seed)
+		}
+	}
+}

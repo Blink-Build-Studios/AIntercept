@@ -11,23 +11,17 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 func TestLocalDirSinkWritesPartitionedGzipNDJSON(t *testing.T) {
 	dir := t.TempDir()
-	sink, err := NewLocalDirSink(dir, S3Config{InstanceID: "observer-local-0", MaxEvents: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
+	sink, w := localSink(t, dir, S3Config{InstanceID: "observer-local-0", MaxEvents: 2})
 	for i := 0; i < 3; i++ {
 		if err := sink.Emit(Event{Phase: PhaseComplete, CorrelationID: "c", Seq: uint64(i), Host: "api.anthropic.com"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := sink.Close(); err != nil {
+	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,13 +61,10 @@ func TestLocalDirSinkWritesPartitionedGzipNDJSON(t *testing.T) {
 
 func TestLocalDirSinkPrefixAndContentStripping(t *testing.T) {
 	dir := t.TempDir()
-	sink, err := NewLocalDirSink(dir, S3Config{InstanceID: "i", Prefix: "telemetry"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	sink, w := localSink(t, dir, S3Config{InstanceID: "i", Prefix: "telemetry"})
 	e := Event{Phase: PhaseComplete, CorrelationID: "c", BodyPreview: "SECRET-PROMPT-TEXT"}
 	_ = sink.Emit(e)
-	_ = sink.Close()
+	_ = w.Close()
 	files, _ := filepath.Glob(filepath.Join(dir, "telemetry", "dt=*", "hour=*", "instance=i", "*.ndjson.gz"))
 	if len(files) != 1 {
 		t.Fatalf("want 1 object under the prefix, got %v", files)
@@ -89,10 +80,9 @@ func TestLocalDirSinkPrefixAndContentStripping(t *testing.T) {
 
 func TestDirPutterRefusesKeysOutsideRoot(t *testing.T) {
 	root := t.TempDir()
-	p := dirPutter{root: root}
+	p, _ := NewDirTarget("local", root)
 	for _, key := range []string{"../escape.ndjson.gz", "a/../../escape.ndjson.gz", ""} {
-		_, err := p.PutObject(context.Background(), &s3.PutObjectInput{Key: aws.String(key), Body: strings.NewReader("x")})
-		if err == nil {
+		if err := p.Put(context.Background(), Object{Key: key, Body: []byte("x")}); err == nil {
 			t.Fatalf("key %q was accepted", key)
 		}
 	}
@@ -103,10 +93,10 @@ func TestDirPutterRefusesKeysOutsideRoot(t *testing.T) {
 
 func TestDirPutterNeverExposesAPartialFile(t *testing.T) {
 	root := t.TempDir()
-	p := dirPutter{root: root}
+	p, _ := NewDirTarget("local", root)
 	// A body that fails halfway: the destination must not appear at all.
 	body := &failingReader{data: []byte("half a gzip stream"), failAfter: 5}
-	if _, err := p.PutObject(context.Background(), &s3.PutObjectInput{Key: aws.String("dt=2026-11-04/hour=18/instance=i/1-000001.ndjson.gz"), Body: body}); err == nil {
+	if err := p.write("dt=2026-11-04/hour=18/instance=i/1-000001.ndjson.gz", body); err == nil {
 		t.Fatal("want the copy error")
 	}
 	var found []string
@@ -134,4 +124,16 @@ func (r *failingReader) Read(b []byte) (int, error) {
 	n := copy(b, r.data[r.n:min(len(r.data), r.failAfter)])
 	r.n += n
 	return n, nil
+}
+
+// localSink is an S3 sink on a writer whose target is a local directory.
+func localSink(t *testing.T, dir string, cfg S3Config) (*S3Sink, *Writer) {
+	t.Helper()
+	tgt, err := NewDirTarget("local", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := testWriter(t, WriterConfig{Targets: []Target{tgt}})
+	cfg.Target = "local"
+	return NewS3Sink(w, cfg), w
 }

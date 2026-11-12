@@ -1,19 +1,19 @@
 {{- /*
 Optional PodDisruptionBudgets, one per component, off by default (the
-observer's is on whenever interceptor.enforce lists a scope). Voluntary
+envoy pod's, which runs the observer, is on whenever interceptor.enforce lists a scope). Voluntary
 disruptions (node drains, cluster-autoscaler / Karpenter consolidation) honor
 them, so a node replacement never takes a component to zero replicas. Envoy's
 in-flight streams are drained by its own preStop hook either way.
 */ -}}
-{{- range $name := list "envoy" "certsvc" "observer" "process" "api" }}
+{{- range $name := list "envoy" "certsvc" "process" "api" }}
 {{- $component := index $.Values $name | default dict }}
 {{- $pdb := $component.podDisruptionBudget | default dict }}
 {{- $enabled := $pdb.enabled }}
 {{- if and $enabled (has $name (list "process" "api")) }}
 {{- $enabled = (index $.Values $name).enabled }}
 {{- end }}
-{{- /* Enforced calls depend on the observer: with any enforce scope, its PDB is on. */ -}}
-{{- if and (eq $name "observer") ($.Values.interceptor | default dict).enforce }}
+{{- /* Enforced calls depend on the observer (in the envoy pod): with any enforce scope, its PDB is on. */ -}}
+{{- if and (eq $name "envoy") ($.Values.interceptor | default dict).enforce }}
 {{- $enabled = true }}
 {{- end }}
 {{- if $enabled }}

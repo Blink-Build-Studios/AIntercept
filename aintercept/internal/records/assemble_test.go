@@ -136,6 +136,10 @@ type atomicCase struct {
 	prior []events.Event
 	row   *events.Event // nil: Flush
 	want  []want
+	// flush also flushes after the row: an analytics batch's records come out
+	// when it's released. only compares just the records of that kind.
+	flush bool
+	only  string
 }
 
 func row(e events.Event) *events.Event { return &e }
@@ -225,26 +229,30 @@ func atomicCases() []atomicCase {
 			{KindCallEnd, "cx", "s:t9", nil},
 			{KindCallEnd, "cx", "c:" + kh + ":" + day, nil},
 		}},
-		{label: CaseEventWithID, prior: ana, row: row(clientEvent("a1", "e1", "s1", 0)),
+		{flush: true, only: KindClientEvent, label: CaseEventWithID, prior: ana, row: row(clientEvent("a1", "e1", "s1", 0)),
 			want: []want{{KindClientEvent, "", "s:s1", func(t *testing.T, r Record) {
 				if r.BatchID != "a1" || r.BatchN != 1 || r.Event.EventKey != "a1/e1" || r.EventKey != r.RecordID {
 					t.Errorf("event: %+v / %+v", r, r.Event)
 				}
 			}}}},
-		{label: CaseEventNoID, prior: ana, row: row(clientEvent("a1", "", "s1", 0)),
+		{flush: true, only: KindClientEvent, label: CaseEventNoID, prior: ana, row: row(clientEvent("a1", "", "s1", 0)),
 			want: []want{{KindClientEvent, "", "s:s1", func(t *testing.T, r Record) {
 				if !strings.HasPrefix(r.Event.EventKey, "a1/h") || strings.Count(r.Event.EventKey, "-") != 0 {
 					t.Errorf("hashed key %q", r.Event.EventKey)
 				}
 			}}}},
-		{label: CaseEventRepeat, prior: append(append([]events.Event{}, ana...), clientEvent("a1", "", "s1", 0)), row: row(clientEvent("a1", "", "s1", 0)),
+		{flush: true, only: KindClientEvent, label: CaseEventRepeat, prior: append(append([]events.Event{}, ana...), clientEvent("a1", "", "s1", 0)), row: row(clientEvent("a1", "", "s1", 0)),
 			want: []want{{KindClientEvent, "", "s:s1", func(t *testing.T, r Record) {
+				if strings.HasSuffix(r.Event.EventKey, "-2") || r.BatchN != 1 {
+					t.Errorf("first: key %q n %d", r.Event.EventKey, r.BatchN)
+				}
+			}}, {KindClientEvent, "", "s:s1", func(t *testing.T, r Record) {
 				if !strings.HasSuffix(r.Event.EventKey, "-2") || r.BatchN != 2 {
 					t.Errorf("repeat: key %q n %d", r.Event.EventKey, r.BatchN)
 				}
 			}}}},
 		{label: CaseEventNoPayload, prior: ana, row: row(noPayload)},
-		{label: CaseBatchSession, prior: append(append([]events.Event{}, ana...),
+		{only: KindCallEnd, label: CaseBatchSession, prior: append(append([]events.Event{}, ana...),
 			clientEvent("a1", "e1", "s2", 5*time.Second), clientEvent("a1", "e2", "s1", 3*time.Second)),
 			row: row(hdr("c2", false, ccHeaders)),
 			// Its start named no session (the batch hadn't been read): its end goes
@@ -254,7 +262,7 @@ func atomicCases() []atomicCase {
 					t.Errorf("batch call: session %q id %q", r.BatchSession, r.BatchID)
 				}
 			}}, {KindCallEnd, "a1", "c:" + kh + ":" + day, nil}}},
-		{label: CaseBatchNoSession, prior: append(append([]events.Event{}, ana...), clientEvent("a1", "e1", "", 0)),
+		{only: KindCallEnd, label: CaseBatchNoSession, prior: append(append([]events.Event{}, ana...), clientEvent("a1", "e1", "", 0)),
 			want: []want{{KindCallEnd, "a1", "c:" + kh + ":" + day, nil}}},
 		{label: CaseAccountSighting, row: row(withAuth), want: []want{
 			{KindAccount, "", "a:acct-9", func(t *testing.T, r Record) {
@@ -267,7 +275,7 @@ func atomicCases() []atomicCase {
 		{label: CaseEndWSConnection + "/no headers seen", row: row(wsConn("w2")), want: []want{{KindWSConnection, "w2", "c:" + kh + ":" + day, nil}}},
 		{label: CaseEndWSTurn + "/after the connection closed", prior: []events.Event{wsHdr("w1"), wsConn("w1")}, row: row(wsTurn("w1", 2, "t1")),
 			want: []want{{KindCallEnd, "w1#2", "s:t1", nil}}},
-		{label: CaseEventWithID + "/no request seen", row: row(clientEvent("a9", "e9", "s1", 0)), want: []want{{KindClientEvent, "", "s:s1", nil}}},
+		{flush: true, only: KindClientEvent, label: CaseEventWithID + "/no request seen", row: row(clientEvent("a9", "e9", "s1", 0)), want: []want{{KindClientEvent, "", "s:s1", nil}}},
 		{label: CaseEndComplete + "/recorded bodies", prior: fullModeCall(), row: row(complete("f1", ccClient)),
 			want: []want{{KindCallEnd, "f1", "s:s1", func(t *testing.T, r Record) {
 				if !strings.Contains(r.Call.DetailJSON, "Running the tests.") || r.Call.RequestBytes == 0 {
@@ -305,6 +313,18 @@ func TestAtomicCases(t *testing.T) {
 				got = a.Flush()
 			} else {
 				got = a.Apply(c.row, line(*c.row), "f")
+				if c.flush {
+					got = append(got, a.Flush()...)
+				}
+			}
+			if c.only != "" {
+				var kept []Record
+				for _, r := range got {
+					if r.Kind == c.only {
+						kept = append(kept, r)
+					}
+				}
+				got = kept
 			}
 			label, _, _ := strings.Cut(c.label, "/")
 			if a.Cases()[label] <= before[label] {

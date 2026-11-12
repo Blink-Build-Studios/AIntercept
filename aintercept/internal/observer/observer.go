@@ -96,30 +96,66 @@ func Run() {
 		slog.Info("capturing full-fidelity events to file", "path", captureFile)
 	}
 
-	// S3-compatible durable sink. Enabled when a bucket is configured. On AWS,
-	// leave the keys unset to use IRSA; on DigitalOcean Spaces (or MinIO), set
-	// OBSERVER_S3_ENDPOINT + static keys. ALWAYS body-stripped.
-	var s3Sink *events.S3Sink
-	var s3Cfg events.S3Config
-	if bucket := os.Getenv("OBSERVER_S3_BUCKET"); bucket != "" {
-		s3Cfg = events.S3Config{
+	// The writer: the one way to object storage (or the local directory). Every
+	// durable sink below is a stream of it. It seals on a ticker and a byte cap
+	// into an on-disk spool and uploads from there, retrying until the store
+	// accepts each file (docs/STREAMING_PIPELINE.md, phase 1).
+	bucket := os.Getenv("OBSERVER_S3_BUCKET")
+	localDir := os.Getenv("OBSERVER_LOCAL_DIR")
+	var writer *events.Writer
+	var targets []events.Target
+	if bucket != "" {
+		// On AWS, leave the keys unset to use IRSA or Pod Identity; on
+		// DigitalOcean Spaces (or MinIO), set OBSERVER_S3_ENDPOINT + static keys.
+		t, err := events.NewS3Target(context.Background(), "s3", events.S3TargetConfig{
 			Bucket:          bucket,
-			Prefix:          os.Getenv("OBSERVER_S3_PREFIX"),
 			Region:          os.Getenv("OBSERVER_S3_REGION"),
 			Endpoint:        os.Getenv("OBSERVER_S3_ENDPOINT"),
 			AccessKeyID:     os.Getenv("OBSERVER_S3_ACCESS_KEY_ID"),
 			SecretAccessKey: os.Getenv("OBSERVER_S3_SECRET_ACCESS_KEY"),
-			InstanceID:      instanceID,
-			MaxBytes:        envInt("OBSERVER_S3_MAX_BYTES", 0),
-			MaxEvents:       envInt("OBSERVER_S3_MAX_EVENTS", 0),
-			MaxAge:          time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 0)) * time.Second,
 			ForcePathStyle:  os.Getenv("OBSERVER_S3_FORCE_PATH_STYLE") == "true",
-		}
-		ss, err := events.NewS3Sink(context.Background(), s3Cfg)
+		})
 		if err != nil {
-			fatal("s3 sink init failed", "err", err)
+			fatal("s3 target init failed", "err", err)
 		}
-		s3Sink = ss
+		targets = append(targets, t)
+	}
+	if localDir != "" {
+		t, err := events.NewDirTarget("local", localDir)
+		if err != nil {
+			fatal("local target init failed", "dir", localDir, "err", err)
+		}
+		targets = append(targets, t)
+	}
+	if len(targets) > 0 {
+		spoolDir := envDefault("OBSERVER_SPOOL_DIR", filepath.Join(os.TempDir(), "aintercept-spool"))
+		w, err := events.NewWriter(events.WriterConfig{
+			SpoolDir:      spoolDir,
+			SpoolMaxBytes: int64(envInt("OBSERVER_SPOOL_MAX_BYTES", 0)),
+			FlushEvery:    time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
+			UploadTimeout: time.Duration(envInt("OBSERVER_UPLOAD_TIMEOUT_SECONDS", 0)) * time.Second,
+			Targets:       targets,
+		})
+		if err != nil {
+			fatal("writer init failed", "spool", spoolDir, "err", err)
+		}
+		writer = w
+		slog.Info("writer enabled", "spool", spoolDir, "flush_every_seconds", envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10))
+	}
+	streamCfg := func(target, prefix string) events.S3Config {
+		return events.S3Config{
+			Target:     target,
+			Prefix:     prefix,
+			InstanceID: instanceID,
+			MaxBytes:   envInt("OBSERVER_S3_MAX_BYTES", 0),
+			MaxEvents:  envInt("OBSERVER_S3_MAX_EVENTS", 0),
+		}
+	}
+
+	// The content-free stream in object storage. ALWAYS body-stripped.
+	var s3Sink *events.S3Sink
+	if bucket != "" {
+		s3Sink = events.NewS3Sink(writer, streamCfg("s3", os.Getenv("OBSERVER_S3_PREFIX")))
 		bodyStripped = append(bodyStripped, s3Sink) // body-stripped tier: never full content
 		slog.Info("durable S3 sink enabled",
 			"bucket", bucket,
@@ -128,23 +164,11 @@ func Run() {
 	}
 
 	// Local partitioned sink (a stack on one machine; docs/ui/BUILD_PLAN.md §5):
-	// the S3 sink's batching and key layout, written to a directory instead of a
-	// bucket, so the query API reads it like object storage. ALWAYS body-stripped.
+	// the S3 sink's key layout in a directory instead of a bucket, so the query
+	// API reads it like object storage. ALWAYS body-stripped.
 	var localSink *events.S3Sink
-	var localCfg events.S3Config
-	localDir := os.Getenv("OBSERVER_LOCAL_DIR")
 	if localDir != "" {
-		localCfg = events.S3Config{
-			InstanceID: instanceID,
-			MaxBytes:   envInt("OBSERVER_S3_MAX_BYTES", 0),
-			MaxEvents:  envInt("OBSERVER_S3_MAX_EVENTS", 0),
-			MaxAge:     time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 0)) * time.Second,
-		}
-		ls, err := events.NewLocalDirSink(localDir, localCfg)
-		if err != nil {
-			fatal("local sink init failed", "dir", localDir, "err", err)
-		}
-		localSink = ls
+		localSink = events.NewS3Sink(writer, streamCfg("local", ""))
 		bodyStripped = append(bodyStripped, localSink)
 		slog.Info("local partitioned sink enabled", "dir", localDir)
 	}
@@ -153,35 +177,21 @@ func Run() {
 	// file and, when the S3 or local sink is configured, under <prefix>/capture/,
 	// which the processor reads in this mode. The content-free stream is written
 	// alongside it either way.
-	var captureS3 *events.S3Sink
-	var captureLocal *events.S3Sink
 	if captureFullBodies {
 		if captureFile == "" && s3Sink == nil && localSink == nil {
 			fatal("INTERCEPTION_MODE=full needs OBSERVER_CAPTURE_FILE, the S3 sink or OBSERVER_LOCAL_DIR to write bodies to; never stdout")
 		}
 		if localSink != nil {
-			cfg := localCfg
-			cfg.Prefix = "capture"
+			cfg := streamCfg("local", "capture")
 			cfg.IncludeContent = true
-			cl, err := events.NewLocalDirSink(localDir, cfg)
-			if err != nil {
-				fatal("capture local sink init failed", "err", err)
-			}
-			captureLocal = cl
-			full = append(full, captureLocal)
+			full = append(full, events.NewS3Sink(writer, cfg))
 			slog.Info("full interception: request and response bodies are recorded locally", "dir", filepath.Join(localDir, "capture"))
 		}
 		if s3Sink != nil {
-			cfg := s3Cfg
-			cfg.Prefix = strings.Trim(cfg.Prefix+"/capture", "/")
+			cfg := streamCfg("s3", strings.Trim(os.Getenv("OBSERVER_S3_PREFIX")+"/capture", "/"))
 			cfg.IncludeContent = true
-			cs, err := events.NewS3Sink(context.Background(), cfg)
-			if err != nil {
-				fatal("capture s3 sink init failed", "err", err)
-			}
-			captureS3 = cs
-			full = append(full, captureS3)
-			slog.Info("full interception: request and response bodies are recorded to object storage", "bucket", cfg.Bucket, "prefix", cfg.Prefix)
+			full = append(full, events.NewS3Sink(writer, cfg))
+			slog.Info("full interception: request and response bodies are recorded to object storage", "bucket", bucket, "prefix", cfg.Prefix)
 		}
 	}
 
@@ -189,18 +199,19 @@ func Run() {
 	// processor's input, beside the raw log, through the same bucket or
 	// directory. From the full rows when bodies are recorded (a call's detail
 	// is read from them), else from the body-stripped ones.
+	budget := setupMemory()
 	var recordsSink *records.Sink
 	if os.Getenv("OBSERVER_RECORDS") != "false" {
 		var put records.Putter
 		prefix := ""
 		switch {
 		case s3Sink != nil:
-			put, prefix = s3Sink, s3Cfg.Prefix
+			put, prefix = records.WriterPutter(writer, "s3"), os.Getenv("OBSERVER_S3_PREFIX")
 		case localSink != nil:
-			put = localSink
+			put = records.WriterPutter(writer, "local")
 		}
 		if put != nil {
-			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix,
+			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
 				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies, Details: true,
 				MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
 			if captureFullBodies {
@@ -230,20 +241,7 @@ func Run() {
 		if basePrefix != "" {
 			samplePrefix = basePrefix + "/schema-samples"
 		}
-		ss, err := events.NewS3Sink(context.Background(), events.S3Config{
-			Bucket:          os.Getenv("OBSERVER_S3_BUCKET"),
-			Prefix:          samplePrefix,
-			Region:          os.Getenv("OBSERVER_S3_REGION"),
-			Endpoint:        os.Getenv("OBSERVER_S3_ENDPOINT"),
-			AccessKeyID:     os.Getenv("OBSERVER_S3_ACCESS_KEY_ID"),
-			SecretAccessKey: os.Getenv("OBSERVER_S3_SECRET_ACCESS_KEY"),
-			InstanceID:      instanceID,
-			ForcePathStyle:  os.Getenv("OBSERVER_S3_FORCE_PATH_STYLE") == "true",
-		})
-		if err != nil {
-			fatal("schema-sample sink init failed", "err", err)
-		}
-		schemaSink = ss
+		schemaSink = events.NewS3Sink(writer, events.S3Config{Target: "s3", Prefix: samplePrefix, InstanceID: instanceID})
 		slog.Info("unrecognized-shape sampling enabled",
 			"prefix", samplePrefix,
 			"samples_per_minute", envInt("OBSERVER_SCHEMA_SAMPLES_PER_MINUTE", 120))
@@ -257,8 +255,12 @@ func Run() {
 		fatal("a key-hash salt (OBSERVER_KEY_HASH_SALT or OBSERVER_KEY_HASH_SALT_SECRET_ID) is required when the S3 sink is enabled — without it key_hash is a reversible sha256(key); set a strong random salt")
 	}
 
-	budget := setupMemory()
 	procCfg := events.ProcessorConfig{BufferSize: bufferSize, Budget: budget}
+	var spoolFull func() bool
+	if writer != nil {
+		spoolFull = writer.Full
+		procCfg.Full = spoolFull
+	}
 	if schemaSink != nil {
 		procCfg.SchemaSink = schemaSink
 		procCfg.SchemaSamplesPerMinute = envInt("OBSERVER_SCHEMA_SAMPLES_PER_MINUTE", 120)
@@ -316,15 +318,15 @@ func Run() {
 		ClientIPHeaders: envList("OBSERVER_CLIENT_IP_HEADERS"),
 		ProbeMarker:     probeMarker(keyHashSalt),
 		Interceptor:     ic,
+		Full:            spoolFull,
 	})
 
 	// Bound concurrent ext_proc streams (one per in-flight transaction). This
 	// caps work, not memory: what streams hold is measured by the memory
-	// budget, which steers load (ORCA) and drives autoscaling.
+	// budget.
 	maxStreams := uint32(envInt("OBSERVER_MAX_CONCURRENT_STREAMS", 2048))
 	grpcServer := grpc.NewServer(grpc.MaxConcurrentStreams(maxStreams))
 	extprocv3.RegisterExternalProcessorServer(grpcServer, srv)
-	stopLoadReports := startLoadReports(grpcServer, budget)
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(grpcServer, healthSrv)
@@ -336,9 +338,9 @@ func Run() {
 	}
 
 	// HTTP side: liveness + stats, for probes and operators.
-	mux := statsMux(proc, budget, ic)
-	_, httpPort, _ := net.SplitHostPort(httpAddr)
-	mux.Handle("/stats/fleet", fleetHandler(budget, os.Getenv("OBSERVER_PEERS_DNS"), httpPort))
+	mux := statsMux(proc, budget, ic, writer)
+	mux.HandleFunc("/prestop", preStop(envDefault("OBSERVER_ENVOY_ADMIN", "127.0.0.1:9901"),
+		time.Duration(envInt("OBSERVER_PRESTOP_TIMEOUT_SECONDS", 600))*time.Second))
 	stopPathProbe := startPathProbe(mux, keyHashSalt)
 	httpSrv := &http.Server{Addr: httpAddr, Handler: mux}
 	go func() {
@@ -376,7 +378,6 @@ func Run() {
 	stopStats()
 	stopFlush()
 	stopPathProbe()
-	stopLoadReports()
 	grpcServer.GracefulStop()
 	if ic != nil {
 		ic.Close() // delivers queued callbacks (bounded by their timeout)
@@ -387,28 +388,13 @@ func Run() {
 			slog.Error("capture file close error", "err", err)
 		}
 	}
-	if s3Sink != nil {
-		// Close seals the final batch and blocks until in-flight uploads drain,
-		// so no captured events are lost on a graceful scale-down.
-		if err := s3Sink.Close(); err != nil {
-			slog.Error("s3 sink close error", "err", err)
-		}
-	}
-	if captureS3 != nil {
-		if err := captureS3.Close(); err != nil {
-			slog.Error("capture s3 sink close error", "err", err)
-		}
-	}
-	for name, ls := range map[string]*events.S3Sink{"local": localSink, "capture local": captureLocal} {
-		if ls != nil {
-			if err := ls.Close(); err != nil {
-				slog.Error(name+" sink close error", "err", err)
-			}
-		}
-	}
-	if schemaSink != nil {
-		if err := schemaSink.Close(); err != nil {
-			slog.Error("schema-sample sink close error", "err", err)
+	if writer != nil {
+		// Seals what's buffered and waits until the spool is empty, so a graceful
+		// shutdown uploads everything. Whatever can't be uploaded before the pod
+		// is killed stays in the spool for the next observer on it.
+		slog.Info("flushing the writer", "spool_files", writer.Stats().SpoolFiles)
+		if err := writer.Close(); err != nil {
+			slog.Error("writer close error", "err", err)
 		}
 	}
 	_ = httpSrv.Close()
@@ -416,7 +402,8 @@ func Run() {
 	slog.Info("final stats",
 		"accepted", s.Accepted,
 		"emitted", s.Emitted,
-		"dropped", s.Dropped,
+		"last_resort_drops", s.LastResortDrops,
+		"panics", s.Panics,
 		"emit_errs", s.EmitErrs,
 		"schema_sampled", s.SchemaSampled,
 		"schema_cap_hit", s.SchemaCapHit)
@@ -513,9 +500,17 @@ func startPathProbe(mux *http.ServeMux, salt string) func() {
 	return cancel
 }
 
-func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.Client) *http.ServeMux {
+func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.Client, writer *events.Writer) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	// Readiness never depends on the spool. A full spool fails closed only for
+	// enforced calls, which are refused per stream; readiness gates the whole
+	// pod, and observed traffic must keep flowing. Fullness is on /stats
+	// (writer.full, LastResortDrops) for alerting.
+	mux.HandleFunc("/healthz/ready", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
@@ -526,11 +521,17 @@ func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.
 			s := ic.Stats()
 			ics = &s
 		}
+		var ws *events.WriterStats
+		if writer != nil {
+			s := writer.Stats()
+			ws = &s
+		}
 		_ = json.NewEncoder(w).Encode(struct {
 			events.Stats
-			Memory      budgetStats        `json:"memory"`
-			Interceptor *interceptor.Stats `json:"interceptor,omitempty"`
-		}{proc.Stats(), statsOf(budget), ics})
+			Memory      budgetStats         `json:"memory"`
+			Interceptor *interceptor.Stats  `json:"interceptor,omitempty"`
+			Writer      *events.WriterStats `json:"writer,omitempty"`
+		}{proc.Stats(), statsOf(budget), ics, ws})
 	})
 	return mux
 }
@@ -588,4 +589,26 @@ func envDuration(key string, def time.Duration) time.Duration {
 		slog.Warn("invalid duration env var, using default", "key", key, "value", v, "default", def)
 	}
 	return def
+}
+
+// preStop is the observer container's preStop hook (an httpGet), for the pod
+// it shares with Envoy: it returns once Envoy has exited, so the observer keeps
+// recording every stream Envoy still serves while it drains, and only then
+// gets SIGTERM. Envoy is gone when its admin port refuses connections.
+func preStop(envoyAdmin string, timeout time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			c, err := net.DialTimeout("tcp", envoyAdmin, time.Second)
+			if err != nil {
+				slog.Info("preStop: Envoy has exited; shutting down", "envoy_admin", envoyAdmin)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			_ = c.Close()
+			time.Sleep(time.Second)
+		}
+		slog.Warn("preStop: Envoy still up at the deadline; shutting down anyway", "envoy_admin", envoyAdmin)
+		w.WriteHeader(http.StatusOK)
+	}
 }

@@ -164,6 +164,37 @@ func verifyCanon(shaper *process.Shaper, got, live *collect) bool {
 	}
 	diff("events vs processor", len(wantEv), missing, len(evs)-len(seenEv)+missing, differ)
 
+	// Event ids: each Claude Code event's rank among its batch's, as the event
+	// rows number them, compared per event key (as a multiset: identical events
+	// share a key).
+	ref := process.EventNumbers(wantEv)
+	wantN, gotN := map[string][]int64{}, map[string][]int64{}
+	for i, e := range wantEv {
+		if ref[i] != 0 {
+			wantN[e.EventKey] = append(wantN[e.EventKey], int64(ref[i]))
+		}
+	}
+	for _, r := range got.recs {
+		if r.Kind == records.KindClientEvent && r.Event.Source == canon.ProductClaudeCode && r.Event.SessionID != "" {
+			gotN[r.Event.EventKey] = append(gotN[r.Event.EventKey], r.BatchCCN)
+		}
+	}
+	idMiss, idDiff := 0, 0
+	for k, w := range wantN {
+		g, ok := gotN[k]
+		sort.Slice(w, func(i, j int) bool { return w[i] < w[j] })
+		sort.Slice(g, func(i, j int) bool { return g[i] < g[j] })
+		switch {
+		case !ok:
+			idMiss++
+		case !reflect.DeepEqual(g, w):
+			if idDiff++; idDiff <= 3 {
+				fmt.Printf("  event id %s: got %v, want %v\n", k, g, w)
+			}
+		}
+	}
+	diff("event ids vs the event rows' numbering", len(wantN), idMiss, len(gotN)-len(wantN)+idMiss, idDiff)
+
 	// The live sink's records, as a multiset of contents (ids aside).
 	g, l := got.hashes(), live.hashes()
 	lm, em := 0, 0

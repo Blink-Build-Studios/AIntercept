@@ -17,9 +17,3 @@ services:
     volumes:
       - ./envoy/envoy.multi.yaml:/etc/envoy/envoy.yaml:ro
 
-  # envoy.multi.yaml reaches the observer as observer-pods (a headless Service
-  # in Kubernetes); here it's just another name for the one container.
-  observer:
-    networks:
-      default:
-        aliases: [observer-pods]

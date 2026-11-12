@@ -20,6 +20,11 @@ spec:
     # Data plane: the proxied TLS port is open to the LoadBalancer / clients.
     - ports:
         - { protocol: TCP, port: 443 }
+    # The observer's HTTP port (9001: /healthz, /healthz/path, /stats) stays
+    # reachable for kubelet probes and kill-switch pollers. Its ext_proc port
+    # listens on localhost only: Envoy reaches it inside the pod.
+    - ports:
+        - { protocol: TCP, port: 9001 }
     # Admin/metrics port: only the KEDA operator namespace may reach 9901.
     - from:
         - namespaceSelector:
@@ -48,29 +53,6 @@ spec:
             matchLabels: { app: envoy }
       ports:
         - { protocol: TCP, port: 18000 }
----
-# The observer's ext_proc port receives decrypted traffic; only Envoy sends
-# it. Its HTTP port (9001: /healthz, /healthz/path, /stats) stays reachable
-# for kubelet probes and kill-switch pollers.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: observer-extproc-restrict
-  labels:
-    app: observer
-    {{- include "aintercept.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels: { app: observer }
-  policyTypes: ["Ingress"]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: { app: envoy }
-      ports:
-        - { protocol: TCP, port: 9000 }
-    - ports:
-        - { protocol: TCP, port: 9001 }
 {{- if .Values.api.enabled }}
 ---
 # The query API (and the UI it serves) shows everything captured. By default no
