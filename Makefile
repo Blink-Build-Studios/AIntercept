@@ -160,7 +160,11 @@ GO_MODULES := aintercept fixture
 check-go: ## Go: gofmt clean, go vet, go test (with -race) in every module
 	@unformatted="$$(gofmt -l $(GO_MODULES))"; test -z "$$unformatted" || { echo "gofmt needed:"; echo "$$unformatted"; exit 1; }
 	for m in $(GO_MODULES); do (cd $$m && go vet ./...) || exit 1; done
-	cd aintercept && go test -race -count=1 -timeout 20m ./...
+	cd aintercept && go test -race -count=1 -timeout 10m ./...
+
+.PHONY: test-full
+test-full: ## Go: the exhaustive variants too (-tags full: more seeds, longer captures); nightly in CI
+	cd aintercept && go test -race -count=1 -timeout 45m -tags full ./...
 
 .PHONY: check-api
 check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with a 90% coverage floor, requirements.json

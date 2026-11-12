@@ -18,7 +18,7 @@ jobs:
   go:
     name: Go (gofmt, vet, tests with -race)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

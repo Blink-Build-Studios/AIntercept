@@ -76,6 +76,10 @@ type Config struct {
 	// SweepAll lists and loads sealed days too: a one-off sweep for a raw file
 	// that landed more than days late (PROCESS_SWEEP_ALL).
 	SweepAll bool
+	// SkipDerive leaves out the derived tables (request_rows … call_tool_uses).
+	// Every run otherwise rebuilds them all from the committed data, which is
+	// most of a run's time, so tests of the facts and snapshots alone skip it.
+	SkipDerive bool
 }
 
 // Manifest is the commit point: the files that make up each table now.
@@ -532,54 +536,10 @@ func (p *Processor) run(ctx context.Context, files []Object) error {
 		}
 	}
 	// Derived from all the committed data, so after the parts and compaction.
-	derived, err := p.rowParts.derive(ctx, &next, pending, p.st.accountRows(), people, sessions)
-	if err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "request_rows", tag, derived.RequestRows); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "person_last", tag, derived.PersonLast); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "prompt_rows", tag, derived.PromptRows); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "prompt_steps", tag, derived.PromptSteps); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "session_rows", tag, derived.SessionRows); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "session_marks", tag, derived.SessionMarks); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "presence_segments", tag, derived.Presence); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "event_rows", tag, derived.EventRows); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "session_tools", tag, derived.SessionTools); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "session_request_rows", tag, derived.SessionReqs); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "person_map", tag, derived.PersonMap); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "person_sessions", tag, derived.PersonSess); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "account_facts", tag, derived.AcctFacts); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "account_devices", tag, derived.AcctDevices); err != nil {
-		return err
-	}
-	if err := setSnapshot(ctx, p, &next, "call_tool_uses", tag, derived.CallTools); err != nil {
-		return err
+	if !p.cfg.SkipDerive {
+		if err := p.writeDerived(ctx, &next, tag, pending, people, sessions); err != nil {
+			return err
+		}
 	}
 	next.SealedThrough = p.sealThrough(&next)
 	if err := p.commit(ctx, next); err != nil {
@@ -790,4 +750,58 @@ func eachParquet[T any](ctx context.Context, s Store, key string, fn func(T)) er
 			return err
 		}
 	}
+}
+
+// writeDerived writes every derived table, built from all the committed data.
+func (p *Processor) writeDerived(ctx context.Context, next *Manifest, tag string, pending []Pending, people []Person, sessions []Session) error {
+	derived, err := p.rowParts.derive(ctx, next, pending, p.st.accountRows(), people, sessions)
+	if err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "request_rows", tag, derived.RequestRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "person_last", tag, derived.PersonLast); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "prompt_rows", tag, derived.PromptRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "prompt_steps", tag, derived.PromptSteps); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "session_rows", tag, derived.SessionRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "session_marks", tag, derived.SessionMarks); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "presence_segments", tag, derived.Presence); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "event_rows", tag, derived.EventRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "session_tools", tag, derived.SessionTools); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "session_request_rows", tag, derived.SessionReqs); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "person_map", tag, derived.PersonMap); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "person_sessions", tag, derived.PersonSess); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "account_facts", tag, derived.AcctFacts); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "account_devices", tag, derived.AcctDevices); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, next, "call_tool_uses", tag, derived.CallTools); err != nil {
+		return err
+	}
+	return nil
 }

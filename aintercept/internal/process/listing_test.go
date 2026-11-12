@@ -31,6 +31,7 @@ func (c *countingStore) ListAfter(ctx context.Context, prefix, after string) ([]
 // A poll lists only the files after each pod folder's cursor: its cost is the
 // new files, not the hour's.
 func TestPollListsOnlyNewFiles(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	raw, out := &countingStore{memStore: newMem()}, newMem()
 	files := newCapture().sorted()
