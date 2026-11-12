@@ -10,6 +10,7 @@ import (
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 )
 
 // The assembler's cases: every branch a row can take is labelled, counted in
@@ -113,8 +114,11 @@ type Assembler struct {
 	// without their bodies.
 	KeepDetail bool
 	DetailCap  int
-	lines      map[string]*detailLines
-	details    []Detail
+	// Budget is charged for the rows held for detail objects (the observer's
+	// memory budget), so they're counted and visible like the stream buffers.
+	Budget  *membudget.Budget
+	lines   map[string]*detailLines
+	details []Detail
 }
 
 // Detail is one call's detail object: its rows, as the raw log has them, in order.
@@ -165,13 +169,29 @@ func (a *Assembler) keepLine(e *events.Event, line []byte) {
 	}
 	d.lines = append(d.lines, line)
 	d.bytes += len(line)
+	a.charge(int64(len(line)))
+}
+
+func (a *Assembler) charge(n int64) {
+	if a.Budget != nil && n != 0 {
+		a.Budget.Add(n)
+	}
+}
+
+// dropLines forgets a call's held rows and releases their budget.
+func (a *Assembler) dropLines(id string) *detailLines {
+	d := a.lines[id]
+	if d != nil {
+		delete(a.lines, id)
+		a.charge(-int64(d.bytes))
+	}
+	return d
 }
 
 // writeDetail completes a call's detail object.
 func (a *Assembler) writeDetail(id string) {
-	if d := a.lines[id]; d != nil {
+	if d := a.dropLines(id); d != nil {
 		a.details = append(a.details, Detail{CorrelationID: id, Lines: d.lines})
-		delete(a.lines, id)
 	}
 }
 
@@ -536,11 +556,11 @@ func (a *Assembler) sweep() {
 		}
 		delete(a.calls, id)
 		delete(a.copies, id)
-		delete(a.lines, id)
+		a.dropLines(id)
 	}
 	for id := range a.lines { // rows of a call with no state left (a turn of a connection never seen)
 		if a.calls[id] == nil {
-			delete(a.lines, id)
+			a.dropLines(id)
 		}
 	}
 }

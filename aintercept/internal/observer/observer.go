@@ -199,18 +199,19 @@ func Run() {
 	// processor's input, beside the raw log, through the same bucket or
 	// directory. From the full rows when bodies are recorded (a call's detail
 	// is read from them), else from the body-stripped ones.
+	budget := setupMemory()
 	var recordsSink *records.Sink
 	if os.Getenv("OBSERVER_RECORDS") != "false" {
 		var put records.Putter
 		prefix := ""
 		switch {
 		case s3Sink != nil:
-			put, prefix = s3Sink, s3Cfg.Prefix
+			put, prefix = records.WriterPutter(writer, "s3"), os.Getenv("OBSERVER_S3_PREFIX")
 		case localSink != nil:
-			put = localSink
+			put = records.WriterPutter(writer, "local")
 		}
 		if put != nil {
-			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix,
+			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
 				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies, Details: true,
 				MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
 			if captureFullBodies {
@@ -254,7 +255,6 @@ func Run() {
 		fatal("a key-hash salt (OBSERVER_KEY_HASH_SALT or OBSERVER_KEY_HASH_SALT_SECRET_ID) is required when the S3 sink is enabled — without it key_hash is a reversible sha256(key); set a strong random salt")
 	}
 
-	budget := setupMemory()
 	procCfg := events.ProcessorConfig{BufferSize: bufferSize, Budget: budget}
 	var spoolFull func() bool
 	if writer != nil {
