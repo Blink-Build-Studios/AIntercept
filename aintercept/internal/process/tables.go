@@ -231,6 +231,9 @@ type Pending struct {
 	SourceFile    string `parquet:"source_file,optional"`
 	SeenNS        int64  `parquet:"seen_ns"` // its first row, or for Done its ending
 	Done          bool   `parquet:"done"`
+	// Expired marks a Done transaction that was written without its ending
+	// (it waited past pendingTTL): its marker is kept for expiredTTL.
+	Expired bool `parquet:"expired,optional"`
 	// A disconnect that arrived before the request's headers: the row is
 	// written, with this ending, once they arrive.
 	EndNS           int64  `parquet:"end_ns,optional"`

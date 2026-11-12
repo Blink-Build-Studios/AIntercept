@@ -27,8 +27,8 @@ type ReplayConfig struct {
 	// processor (a new one resuming from the last commit) after about this many
 	// polls (0: never).
 	BatchEvents, PollEvery, RestartEvery int
-	// MaxAgeNS cuts a pod's batch once it spans this much data time, like the
-	// observer's 60 s flush (default 60 s).
+	// MaxAgeNS cuts a pod's batch once this much data time has passed since its
+	// first event, like the observer's 60 s flush timer (default 60 s).
 	MaxAgeNS int64
 	// MaxLagNS is how far a pod's uploads may trail the others (default 3 min).
 	MaxLagNS int64
@@ -290,9 +290,13 @@ func Replay(ctx context.Context, cfg ReplayConfig) (ReplayReport, error) {
 			break
 		}
 		ts := pick.ts[pick.next]
-		if len(pick.buf) > 0 && ts-pick.first > cfg.MaxAgeNS {
-			if err := flush(pick); err != nil {
-				return rep, err
+		// The observer cuts a batch on a timer, not on its next event: a pod that
+		// went quiet (or away) uploads what it holds once it's MaxAge old.
+		for _, p := range pods {
+			if len(p.buf) > 0 && ts-p.first > cfg.MaxAgeNS {
+				if err := flush(p); err != nil {
+					return rep, err
+				}
 			}
 		}
 		if len(pick.buf) == 0 {

@@ -1047,3 +1047,66 @@ func TestRepeatedEventsGetTheirOwnKeys(t *testing.T) {
 		t.Fatalf("repeated event keys %v", copies)
 	}
 }
+
+// A call written without its ending (it waited past pendingTTL) keeps a marker,
+// across restarts and for expiredTTL: its ending, arriving however late within
+// that, isn't written as a second row.
+func TestLateEndingOfAnExpiredCallIsNotWrittenTwice(t *testing.T) {
+	ctx := context.Background()
+	id := "obs-1-1-late"
+	at := ns(t0)
+	call := func(id string, at int64, seq0 uint64) []events.Event {
+		return []events.Event{
+			{CorrelationID: id, TimestampNS: at, Seq: seq0, Phase: events.PhaseRequestHeaders, Host: "api.anthropic.com",
+				Method: "POST", Path: "/v1/messages", KeyHash: "k1"},
+			{CorrelationID: id, TimestampNS: at + 3e9, Seq: seq0 + 1, Phase: events.PhaseComplete, Host: "api.anthropic.com",
+				Method: "POST", Path: "/v1/messages", Status: 200},
+		}
+	}
+	file := func(pod string, at int64, n int, rows []events.Event) *rawFile {
+		t := time.Unix(0, at).UTC()
+		return &rawFile{key: fmt.Sprintf("aintercept/dt=%s/hour=%02d/instance=%s/%d-%06d.ndjson.gz",
+			t.Format("2006-01-02"), t.Hour(), pod, at, n), rows: rows}
+	}
+	rows := call(id, at, 0)
+	headers := file("obs-1", at, 1, rows[:1])
+	ending := file("obs-1", at+3e9, 2, rows[1:])
+	// Another pod's traffic moves data time on: 7 hours (the call expires), then 14
+	// (past the 6 hours an ordinary end marker is kept).
+	other := []*rawFile{
+		file("obs-2", at+int64(7*time.Hour), 1, call("obs-2-1-a", at+int64(7*time.Hour), 0)),
+		file("obs-2", at+int64(14*time.Hour), 2, call("obs-2-1-b", at+int64(14*time.Hour), 2)),
+	}
+	count := func(tb tables) int {
+		n := 0
+		for _, r := range tb.Requests {
+			if r.CallID == id {
+				n++
+			}
+		}
+		return n
+	}
+	for _, restart := range []bool{false, true} {
+		raw, out := newMem(), newMem()
+		now := t0.Add(15 * time.Hour)
+		p := newProc(raw, out, &now, 10, 100)
+		if err := p.Open(ctx); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range []*rawFile{headers, other[0], other[1], ending} {
+			put(t, raw, f)
+			if restart {
+				p = newProc(raw, out, &now, 10, 100)
+				if err := p.Open(ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := p.Poll(ctx, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if n := count(readTables(t, out, "aintercept/shaped")); n != 1 {
+			t.Fatalf("restarts %v: the call has %d rows, want 1", restart, n)
+		}
+	}
+}

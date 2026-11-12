@@ -18,6 +18,12 @@ import (
 const (
 	pendingTTL   = 6 * time.Hour
 	pendingTTLWS = 7 * 24 * time.Hour
+	// expiredTTL is how long the marker of a transaction written without its
+	// ending (expire) is kept: its late rows, however late within it, are
+	// recognized and not written as a second row. These markers are few (one per
+	// transaction that never ended in time), so they're committed with the
+	// in-flight transactions rather than rebuilt from the requests.
+	expiredTTL = 7 * 24 * time.Hour
 )
 
 // Request header values a pending transaction keeps for its request row.
@@ -241,9 +247,17 @@ func (s *state) done(id string, at int64) {
 	delete(s.bodies, id)
 }
 
+// markTTL is how long an end marker is kept.
+func markTTL(p *Pending) time.Duration {
+	if p.Expired {
+		return expiredTTL
+	}
+	return pendingTTL
+}
+
 // markDone restores an end marker at open, unless a newer state already has one.
 func (s *state) markDone(id string, at int64) {
-	if p := s.pending[id]; p == nil || p.Done {
+	if p := s.pending[id]; p == nil || p.Done && !p.Expired {
 		if s.newestNS-at <= int64(pendingTTL) {
 			s.done(id, at)
 		}
@@ -253,7 +267,7 @@ func (s *state) markDone(id string, at int64) {
 // dropOldMarkers forgets restored markers past their window, as expire would have.
 func (s *state) dropOldMarkers() {
 	for id, p := range s.pending {
-		if p.Done && s.newestNS-p.SeenNS > int64(pendingTTL) {
+		if p.Done && s.newestNS-p.SeenNS > int64(markTTL(p)) {
 			delete(s.pending, id)
 			delete(s.eventCopies, id)
 		}
@@ -265,7 +279,10 @@ func (s *state) dropOldMarkers() {
 func (s *state) expire(out *batch) {
 	for id, p := range s.pending {
 		ttl := pendingTTL
-		if p.WebSocket {
+		switch {
+		case p.Done:
+			ttl = markTTL(p)
+		case p.WebSocket:
 			ttl = pendingTTLWS
 		}
 		if s.newestNS-p.SeenNS <= int64(ttl) {
@@ -278,6 +295,7 @@ func (s *state) expire(out *batch) {
 		}
 		s.addRequest(requestFromPending(p), out)
 		s.done(id, s.newestNS)
+		s.pending[id].Expired = true
 	}
 }
 
@@ -455,11 +473,12 @@ func (s *state) snapshot() ([]Session, []Prompt, []PersonDevice, []Person, []Pen
 		inFlight(s.pending)
 }
 
-// inFlight is the pending transactions still waiting for their ending, by key.
+// inFlight is the pending transactions still waiting for their ending, and the
+// markers of those written without one, by key.
 func inFlight(m map[string]*Pending) []Pending {
 	var out []Pending
 	for _, p := range m {
-		if !p.Done {
+		if !p.Done || p.Expired {
 			out = append(out, *p)
 		}
 	}

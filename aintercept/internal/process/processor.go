@@ -21,8 +21,10 @@
 // transaction's rows are seen in the order they happened. Files from different
 // pods may arrive in any order. Within that, a call's ending row arriving
 // before its headers is still handled (end markers, kept for 6 hours of data
-// time); a disconnect arriving before an earlier complete of the same call is
-// not (it can only happen when a pod's earlier upload failed and was retried).
+// time, or 7 days for a call written without its ending because it waited past
+// those 6 hours); a disconnect arriving before an earlier complete of the same
+// call is not (it can only happen when a pod's earlier upload failed and was
+// retried).
 package process
 
 import (
