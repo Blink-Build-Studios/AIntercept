@@ -459,7 +459,7 @@ func generateDims(rng *rand.Rand, n int) []records.Record {
 }
 
 func TestDimsGeneratedSequences(t *testing.T) {
-	for seed := int64(1); seed <= 25; seed++ {
+	for seed := int64(1); seed <= 25/seedFrac; seed++ {
 		rng := rand.New(rand.NewSource(seed))
 		batchN = map[string]int64{}
 		rs := generateDims(rng, 300)
@@ -513,7 +513,7 @@ func TestDimsFlatCost(t *testing.T) {
 	}
 	a10, t10 := measure(10)
 	a1k, t1k := measure(1_000)
-	a100k, t100k := measure(100_000)
+	a100k, t100k := measure(flatBig)
 	t.Logf("per record: n=10 %.1f allocs %v; n=1,000 %.1f allocs %v; n=100,000 %.1f allocs %v", a10, t10, a1k, t1k, a100k, t100k)
 	if a100k > a10*1.5+4 {
 		t.Errorf("allocations grow with the session: %.1f at 10, %.1f at 100,000", a10, a100k)

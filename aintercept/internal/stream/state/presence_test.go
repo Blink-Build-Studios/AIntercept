@@ -274,7 +274,7 @@ func permute(n int, fn func([]int)) {
 // duplicates, applied one at a time (and through a checkpoint), end in the
 // reference's rows.
 func TestPresenceGeneratedSequences(t *testing.T) {
-	for seed := int64(1); seed <= 20; seed++ {
+	for seed := int64(1); seed <= 20/seedFrac; seed++ {
 		rng := rand.New(rand.NewSource(seed))
 		batchN = map[string]int64{}
 		rs := generateSessions(rng, 4, 300)
@@ -387,7 +387,7 @@ func TestPresenceFlatCost(t *testing.T) {
 		}
 		return cost{allocs, time.Since(start) / time.Duration(len(pre)-1000)}
 	}
-	small, big := measure(10), measure(100_000)
+	small, big := measure(10), measure(flatBig)
 	mid := measure(1_000)
 	t.Logf("per record: n=10 %.1f allocs %v; n=1,000 %.1f allocs %v; n=100,000 %.1f allocs %v",
 		small.allocs, small.perOp, mid.allocs, mid.perOp, big.allocs, big.perOp)
