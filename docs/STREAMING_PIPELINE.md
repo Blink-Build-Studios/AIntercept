@@ -110,47 +110,79 @@ Each call or event record belongs to a **key**:
 - for records that carry no session, a fallback key: the credential and client
   for unattributed calls, or the batch for analytics.
 
-For a key, S3 holds:
+**The update is incremental, even within a session.** A record changes only the
+rows it affects, and nothing ever rewrites a whole session. Every derived value
+is one of three kinds:
 
-- `state/session/<key>.bin`: **the session's state.** It holds the compact
-  projection of every record applied so far: only the fields the derived tables
-  need, never bodies. It also holds the set of applied record ids.
-- `rows/<table>/session/<key>.parquet`: **that session's rows** in each derived
-  table (request rows, prompt rows and steps, session row, marks, presence,
-  event rows).
+1. **Append-only rows.** Event rows, a call's request row and step, and a
+   session's marks. A new record adds its own rows and touches nothing else.
+   Constant cost.
+2. **Values that depend on a few neighbors.** These are updated through indexes
+   kept in the session's state:
+   - **Captured vs. reported:** a map from request id to row. Whichever of the
+     report and the call arrives second updates one row.
+   - **Retries and prompt membership:** a sorted index by time per prompt finds
+     the nearest neighbor, so one or two rows change.
+   - **Prompt totals** (steps, tokens, tools, friction, duration): running
+     totals per prompt. A step adds to them, and a turn's end sets the duration.
+     One prompt row changes.
+   - **Presence:** an interval index of blur and sleep windows. A new window
+     merges with at most its neighbors and changes only the segments it
+     overlaps.
+   - **Session totals** (counts, first and last, coverage inputs): running
+     totals.
+3. **Positions that a late arrival would shift:** step numbers, prompt numbers
+   and row order. The tables store a sort key (time, then id), not the number,
+   and the query numbers the rows it returns with `row_number()` over the prompt
+   or session shown. A late call shifts nothing in storage. Decision 4 allows
+   this kind of per-request ordering.
+
+**Cost per record** is an index lookup plus the handful of rows the record
+affects, independent of the session's size. A 50,000-event session costs the
+same per record as a 50-event one.
+
+**The session in S3 is a checkpoint plus a log of deltas**, so no object is
+rewritten on the hot path:
+
+- `sessions/<key>/delta-<seq>`: one apply's changes. It holds the ids of the
+  records applied, the state changes (index and total updates), and the row
+  upserts, keyed by row id, for every derived table. One object per apply makes
+  each apply atomic.
+- `sessions/<key>/checkpoint-<seq>`: the full state and rows as of `seq`.
+  Checkpoints are written in the background, every 1,000 deltas. A checkpoint is
+  deterministic from the deltas before it, so any pod may write it, and two pods
+  writing the same one write the same bytes.
 
 **Applying a batch of records to a key:**
 
-1. Read the state. Use the pod's cached copy if its ETag still matches S3; fetch
-   it otherwise.
-2. Drop records already in the applied set. Duplicates and replays then have no
-   effect.
-3. Add the new records to the state, and **recompute that session's derived rows
-   from the state.** That's the per-session builders written during the
-   precompute work.
-4. Write the rows, then write the state with `If-Match: <etag>`. That's a
-   conditional PUT, which AWS S3 supports, as do DigitalOcean Spaces, R2 and
-   MinIO.
-5. On `412 Precondition Failed` another pod updated the session first. Reload,
-   go back to step 2 and retry.
+1. Bring the state up to date. That's the pod's cached copy plus any deltas
+   written since; on a cold start, the latest checkpoint plus the deltas after
+   it.
+2. Drop records already applied, using the id set in the state. Duplicates and
+   replays then have no effect.
+3. Apply each new record incrementally, as above. This collects the state
+   changes and row upserts.
+4. Write them as `delta-<seq+1>` with `If-None-Match: *`, so the PUT creates the
+   object only if it doesn't exist yet. AWS S3 supports this, and DigitalOcean
+   Spaces, R2 and MinIO are to be confirmed (§8).
+5. If the object already exists, another pod applied to this session first.
+   Read its delta, go back to step 2, and retry at the next number.
 
-The state is the rows' source of truth. If a crash lands between writing the
-rows and writing the state, the next apply rewrites the rows from the state.
+**Why this is exactly right:** each incremental update has to give the same
+state and rows as a single pass over the session's records in sort order,
+whatever order the records arrived in. The tables then depend only on the *set*
+of records: arrival order, batching, duplicates and which pod does the work
+can't change them. Every update kind gets a randomized test of this (shuffled
+input, against a single pass), and the replay test in §6 checks the whole
+pipeline.
 
-**Why this is exactly right:** the derived rows are a pure function of the
-*set* of records in the state. Arrival order, batching, duplicates and which pod
-does the work can't change the result. That's the property the replay test in
-§6 checks.
+**Batching per key.** A pod groups the records that arrived for a key over one
+interval (1 s by default) into a single delta. A busy session then writes one
+small object a second, not one per record.
 
-**Cost:**
-- **One apply is linear in the session's size.** A pod groups the records that
-  arrived for a key over one interval (1 s by default) into a single apply, so a
-  busy session costs one state read and write per second, not per record.
-- **The largest session in today's capture** (53,000 events, 1,500 calls) is
-  about 2–3 MB of state. Recomputing it once a second is well within one core.
-  Sessions much larger than that are the main thing to measure (§8).
-- **Pod memory is bounded** by the in-flight calls plus the cache of recently
-  touched sessions (an LRU with a byte cap).
+**Pod memory is bounded** by the calls in flight plus the cache of recently
+touched sessions' state (an LRU with a byte cap). A cold session is rebuilt from
+its latest checkpoint and the few deltas after it.
 
 **Freshness.** A record reaches the tables within about the apply interval plus
 one S3 round trip, a couple of seconds. That's well inside today's ~30-second
@@ -165,7 +197,7 @@ There's no separate batch mode to keep in step with the streaming one.
 
 **Late records need nothing special.** A late analytics upload, or a call's
 ending that arrives hours after its start, is just another record for its key.
-Applying it recomputes that session, so the session's rows change.
+Applying it updates the rows it affects, the same as any other record.
 
 ### 5. Cross-session values: dimensions and aggregates
 
@@ -199,15 +231,15 @@ milliseconds once they're compacted.
 There are two tiers: per-session objects for sessions that are changing, and
 compacted files for sessions that have settled.
 
-- **Hot:** the per-session objects above. A session is hot while it's receiving
-  records.
+- **Hot:** the per-session checkpoint and deltas above. A session is hot while
+  it's receiving records.
 - **Compacted:**
   - Once a session has had no new records for 2 hours, the compactor merges its
     rows into `tables/<table>/dt=<day>/part-<n>.parquet`, sorted by person,
     session and time.
-  - Each table-day has a small manifest object, `tables/<table>/dt=<day>/manifest.json`,
-    that lists the day's files. It's updated with a conditional write, the same
-    way session state is.
+  - Each table-day has a versioned manifest,
+    `tables/<table>/dt=<day>/manifest-<n>.json`, that lists the day's files.
+    A new version is written create-only, the same way session deltas are.
   - The compacted files are immutable, so readers can cache them for as long as
     they like.
 - **Who compacts:** any pod. A pod claims a table-day by taking a short lease
@@ -217,8 +249,8 @@ compacted files for sessions that have settled.
   key goes on the table-day's reopen list, queries prefer its hot rows, and the
   next compaction rewrites the affected file without it.
 
-Small-object counts stay bounded. A hot session has a handful of objects, and
-compaction folds settled sessions into a few files per table and day.
+Hot sessions produce many small objects, and that's fine. Compaction folds
+settled sessions into a few files per table and day, so reads stay cheap.
 
 ### 7. The query API
 
@@ -226,11 +258,13 @@ compaction folds settled sessions into a few files per table and day.
 1. reads the manifests and dimension rows it needs;
 2. picks the compacted files and row groups by person, session and time range,
    using the sort order and the files' min/max statistics;
-3. adds the hot objects for the sessions involved;
+3. adds the hot sessions involved: each one's latest checkpoint plus the deltas
+   after it, with row upserts applied by row id;
 4. runs the endpoint's SQL over that set in an in-process DuckDB.
 
-Each replica keeps a byte-capped LRU cache of immutable files and of recent hot
-objects. A cached hot object is checked against S3 by its ETag before it's used.
+Each replica keeps a byte-capped LRU cache. Every object it caches (compacted
+files, checkpoints, deltas) is immutable, so a cached copy never goes stale.
+Freshness comes from listing a hot session's new deltas.
 Any replica can serve any request, nothing holds all the data, and the Python
 stays thin: SQL and field copies, as Decision 4 requires.
 
@@ -309,10 +343,11 @@ random routing and kills) so the guarantee stays enforced.
 - **The observer and its raw log format,** with the 10-second timer, the byte
   cap, the upload goroutine, and a channel to the processor.
 - **Call assembly** (`shape.go`), fed from the channel.
-- **The derived tables' builders and their value logic** from the precompute
-  work, each run per session over the session's state. That includes the bugs
-  the replays found and fixed: batch numbering, session and account picks, and
-  same-time ordering.
+- **The derived tables' value logic** from the precompute work. It's
+  restructured from per-session builders into per-record incremental updates,
+  and the builders stay as the single-pass reference those updates are tested
+  against. That includes the bugs the replays found and fixed: batch numbering,
+  session and account picks, and same-time ordering.
 - **The table shapes and the endpoints' SQL**, pointed at the new read path.
 - **The replay and parity tooling**, extended to many pods.
 
@@ -324,13 +359,10 @@ Replaced:
 
 ## Open questions and risks
 
-- **Very large sessions.** An apply recomputes the whole session. A session of
-  10× today's largest would need incremental builders (or a size-capped
-  recompute window) for the heaviest tables. The load test measures where that
-  line is.
-- **Conditional-write behavior on the target store.** AWS S3 supports
-  `If-Match` and `If-None-Match` on PUT. DigitalOcean Spaces (the demo cluster)
-  must be confirmed before building on it. If it falls short, a per-key lease
+- **Create-only writes on the target store.** The design needs one primitive:
+  `If-None-Match: *` on PUT, which creates an object only if it doesn't exist.
+  AWS S3 supports it. DigitalOcean Spaces (the demo cluster), R2 and MinIO must
+  be confirmed before building on them. If a store lacks it, a per-key lease
   object gives the same guarantee.
 - **How the API reads S3.** Either DuckDB reads the objects directly (its httpfs
   extension), or the Python fetches the objects and DuckDB reads them locally.
@@ -342,8 +374,10 @@ Replaced:
 
 ## Build order
 
-1. **Session state and apply.** A pure function: records in, state and rows out.
-   Proven against the answer key with random order and duplicates, in memory.
+1. **Session state and incremental apply.** Records go in; state changes and row
+   upserts come out. In memory, it's proven against the single-pass builders and
+   the answer key, with random order and duplicates. A test also checks that an
+   apply's work doesn't grow with the session's size.
 2. **Conditional writes, leases and compaction,** against the S3 emulator, with
    the distributed replay.
 3. **Observer → channel → processor,** the streaming flush interval, and the
