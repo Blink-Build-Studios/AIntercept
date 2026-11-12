@@ -256,6 +256,18 @@ type Pending struct {
 	ProviderJSON    string `parquet:"provider_json,optional"` // allowlisted response header values
 }
 
+// PendingBodies is an in-flight model call's recorded bodies so far (full
+// interception only), so a restart mid-call still builds its complete
+// detail_json. Processor state, like pending's in-flight rows; the API never
+// reads it. Snapshot table.
+type PendingBodies struct {
+	CorrelationID    string `parquet:"correlation_id"`
+	Request          []byte `parquet:"request,optional"`
+	Response         []byte `parquet:"response,optional"`
+	RequestEncoding  string `parquet:"request_encoding,optional"`
+	ResponseEncoding string `parquet:"response_encoding,optional"`
+}
+
 // Ledger records each raw file a committed run processed: what makes a file
 // processed exactly once. Fact table.
 //

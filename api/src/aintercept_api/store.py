@@ -229,6 +229,9 @@ FROM analytics WHERE source = 'codex';
 """
 
 
+_COPY = re.compile(r"^(h[0-9a-f]{16})-\d+$")
+
+
 def _remove(con: duckdb.DuckDBPyConnection, db_dir: str) -> None:
     con.close()
     shutil.rmtree(db_dir, ignore_errors=True)
@@ -466,6 +469,9 @@ class Store:
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
         """The raw client_event row an analytics event came from."""
         want = event_key.split("/", 1)[1] if "/" in event_key else ""
+        # A repeat of an identical row is keyed <hash>-2, -3 (the processor's eventCopies):
+        # any of the identical rows is it.
+        want = _COPY.sub(r"\1", want)
         for line in raw.lines(self.raw.read(source_file)):
             try:
                 r = json.loads(line)

@@ -40,9 +40,15 @@ type state struct {
 	accounts map[string]*Account
 	newestNS int64 // the newest row time seen (data time, for pending expiry)
 	// bodies are an HTTP model call's recorded bodies (full interception only), held
-	// until its complete row, which carries what they show (Request.DetailJSON). In
-	// memory only: never written to a table.
+	// until its complete row, which carries what they show (Request.DetailJSON).
+	// Committed with the in-flight transactions (pending_bodies), so a restart
+	// mid-call keeps what came before it.
 	bodies map[string]*callBodies
+	// eventCopies counts, per transaction, the identical client_event rows seen
+	// (by the hash their key is made of): rows from observers that didn't number
+	// a batch's events repeat byte for byte when a client sends an event twice,
+	// and each copy needs a key of its own. Forgotten with the transaction.
+	eventCopies map[string]map[string]int
 }
 
 // callBodies is one call's request and response bodies as recorded, and their encodings.
@@ -111,12 +117,13 @@ func (s *state) detail(id string) string {
 
 func newState() *state {
 	return &state{
-		sessions: map[string]*Session{},
-		prompts:  map[string]*Prompt{},
-		devices:  map[[2]string]*PersonDevice{},
-		pending:  map[string]*Pending{},
-		accounts: map[string]*Account{},
-		bodies:   map[string]*callBodies{},
+		sessions:    map[string]*Session{},
+		prompts:     map[string]*Prompt{},
+		devices:     map[[2]string]*PersonDevice{},
+		pending:     map[string]*Pending{},
+		accounts:    map[string]*Account{},
+		bodies:      map[string]*callBodies{},
+		eventCopies: map[string]map[string]int{},
 	}
 }
 
@@ -197,7 +204,21 @@ func (s *state) apply(e *events.Event, line []byte, file string, out *batch) {
 		}
 	case events.PhaseClientEvent:
 		if e.ClientEvent != nil {
-			s.addEvent(eventFrom(e, line, file), out)
+			ev := eventFrom(e, line, file)
+			if ev.ClientEventID == "" {
+				// A repeat of an identical row (an unnumbered batch's duplicate event)
+				// is its own event: key it <key>-2, -3, ….
+				copies := s.eventCopies[e.CorrelationID]
+				if copies == nil {
+					copies = map[string]int{}
+					s.eventCopies[e.CorrelationID] = copies
+				}
+				copies[ev.EventKey]++
+				if n := copies[ev.EventKey]; n > 1 {
+					ev.EventKey += "-" + strconv.Itoa(n)
+				}
+			}
+			s.addEvent(ev, out)
 		}
 	}
 }
@@ -234,6 +255,7 @@ func (s *state) dropOldMarkers() {
 	for id, p := range s.pending {
 		if p.Done && s.newestNS-p.SeenNS > int64(pendingTTL) {
 			delete(s.pending, id)
+			delete(s.eventCopies, id)
 		}
 	}
 }
@@ -251,6 +273,7 @@ func (s *state) expire(out *batch) {
 		}
 		if p.Done {
 			delete(s.pending, id)
+			delete(s.eventCopies, id)
 			continue
 		}
 		s.addRequest(requestFromPending(p), out)
@@ -442,6 +465,27 @@ func inFlight(m map[string]*Pending) []Pending {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CorrelationID < out[j].CorrelationID })
 	return out
+}
+
+// bodyRows is the in-flight calls' recorded bodies, by key, to commit.
+func (s *state) bodyRows() []PendingBodies {
+	out := make([]PendingBodies, 0, len(s.bodies))
+	for id, b := range s.bodies {
+		if p := s.pending[id]; p == nil || p.Done || len(b.req)+len(b.resp) == 0 && b.reqEnc == "" && b.respEnc == "" {
+			continue
+		}
+		out = append(out, PendingBodies{CorrelationID: id, Request: b.req, Response: b.resp,
+			RequestEncoding: b.reqEnc, ResponseEncoding: b.respEnc})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CorrelationID < out[j].CorrelationID })
+	return out
+}
+
+// loadBodies restores the in-flight calls' recorded bodies.
+func (s *state) loadBodies(rows []PendingBodies) {
+	for _, r := range rows {
+		s.bodies[r.CorrelationID] = &callBodies{req: r.Request, resp: r.Response, reqEnc: r.RequestEncoding, respEnc: r.ResponseEncoding}
+	}
 }
 
 // load restores the state from committed snapshot tables.

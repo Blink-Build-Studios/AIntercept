@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -923,5 +924,126 @@ func TestAccountsSnapshot(t *testing.T) {
 	}
 	if a := p.st.accounts["acct-a"]; a == nil || a.Name != "Ada Lovelace" {
 		t.Fatalf("after restart: %+v", a)
+	}
+}
+
+// A model call whose rows straddle a restart keeps the bodies recorded before it:
+// its detail is what one full pass makes.
+func TestBodiesSurviveRestart(t *testing.T) {
+	ctx := context.Background()
+	id := "obs-1-1-body"
+	at := ns(t0)
+	body := base64.StdEncoding.EncodeToString([]byte(`{"messages":[{"role":"user","content":"rename the config loader"}]}`))
+	first := []events.Event{
+		{CorrelationID: id, TimestampNS: at, Seq: 0, Phase: events.PhaseRequestHeaders, Host: "api.anthropic.com",
+			Method: "POST", Path: "/v1/messages", KeyHash: "k1", Headers: map[string]string{"x-claude-code-session-id": "sess-b"}},
+		{CorrelationID: id, TimestampNS: at + 1, Seq: 1, Phase: events.PhaseRequestBodyChunk, Bytes: 70, BodyB64: body},
+	}
+	second := []events.Event{
+		{CorrelationID: id, TimestampNS: at + 2e9, Seq: 2, Phase: events.PhaseResponseHeaders, Status: 200},
+		{CorrelationID: id, TimestampNS: at + 3e9, Seq: 3, Phase: events.PhaseComplete, Host: "api.anthropic.com",
+			Method: "POST", Path: "/v1/messages", Status: 200},
+	}
+	files := []*rawFile{
+		{key: fmt.Sprintf("aintercept/dt=2026-11-04/hour=09/instance=obs-1/%d-000001.ndjson.gz", at), rows: first},
+		{key: fmt.Sprintf("aintercept/dt=2026-11-04/hour=09/instance=obs-1/%d-000002.ndjson.gz", at+2e9), rows: second},
+	}
+	detail := func(tb tables) string {
+		for _, r := range tb.Requests {
+			if r.CallID == id {
+				return r.DetailJSON
+			}
+		}
+		t.Fatalf("no row for %s", id)
+		return ""
+	}
+
+	raw, out := newMem(), newMem()
+	now := t0.Add(time.Hour)
+	for _, f := range files {
+		put(t, raw, f)
+	}
+	p := newProc(raw, out, &now, 10, 100)
+	if err := p.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Poll(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	want := detail(readTables(t, out, "aintercept/shaped"))
+	if !strings.Contains(want, "rename the config loader") {
+		t.Fatalf("one pass: detail %q has no prompt", want)
+	}
+
+	raw, out = newMem(), newMem()
+	put(t, raw, files[0])
+	p = newProc(raw, out, &now, 10, 100)
+	if err := p.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Poll(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	put(t, raw, files[1])
+	p = newProc(raw, out, &now, 10, 100) // a restart between the call's rows
+	if err := p.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Poll(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	got := readTables(t, out, "aintercept/shaped")
+	if g := detail(got); g != want {
+		t.Fatalf("across a restart: detail %q, one pass %q", g, want)
+	}
+	if k := p.man.Snapshots["pending_bodies"]; k != "" {
+		if rows := readAll[PendingBodies](t, out, []string{k}); len(rows) != 0 {
+			t.Fatalf("a finished call's bodies are still held: %d", len(rows))
+		}
+	}
+}
+
+// A client that sends the same event twice in one batch makes identical rows when
+// the observer didn't number them; each is an event of its own, with its own key.
+// Numbered rows (the observer's index) differ, so their keys do too.
+func TestRepeatedEventsGetTheirOwnKeys(t *testing.T) {
+	ctx := context.Background()
+	at := ns(t0)
+	ev := func(id string, index int) events.Event {
+		return events.Event{CorrelationID: id, TimestampNS: at, Seq: 4, Phase: events.PhaseClientEvent,
+			Host: "claude.ai", Method: "POST", Path: "/api/event_logging/v2/batch",
+			ClientEvent: &events.ClientEvent{Source: "claude_web", Name: "page_view", Index: index}}
+	}
+	rows := []events.Event{ev("obs-1-1-a", 0), ev("obs-1-1-a", 0), ev("obs-1-1-a", 0), ev("obs-1-1-b", 1), ev("obs-1-1-b", 2)}
+	raw, out := newMem(), newMem()
+	put(t, raw, &rawFile{key: fmt.Sprintf("aintercept/dt=2026-11-04/hour=09/instance=obs-1/%d-000001.ndjson.gz", at), rows: rows})
+	now := t0.Add(time.Hour)
+	p := newProc(raw, out, &now, 10, 100)
+	if err := p.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Poll(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	got := readTables(t, out, "aintercept/shaped")
+	keys := map[string]bool{}
+	for _, e := range got.Events {
+		if keys[e.EventKey] {
+			t.Fatalf("key %s written twice", e.EventKey)
+		}
+		keys[e.EventKey] = true
+	}
+	if len(got.Events) != len(rows) {
+		t.Fatalf("events %d, want %d", len(got.Events), len(rows))
+	}
+	var copies []string
+	for k := range keys {
+		if strings.HasPrefix(k, "obs-1-1-a/") {
+			copies = append(copies, k)
+		}
+	}
+	sort.Strings(copies)
+	if len(copies) != 3 || copies[1] != copies[0]+"-2" || copies[2] != copies[0]+"-3" {
+		t.Fatalf("repeated event keys %v", copies)
 	}
 }

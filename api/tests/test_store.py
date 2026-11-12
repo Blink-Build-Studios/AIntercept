@@ -2,12 +2,13 @@
 loads, rebuilt output, and raw rows read from a transaction's lineage."""
 
 import gzip
+import hashlib
 import itertools
 import json
 import pathlib
 
 from aintercept_api.raw import HttpRaw, LocalRaw
-from aintercept_api.store import Store
+from aintercept_api.store import SNAPSHOTS, Store
 from tests.builders import Dataset, ns
 from tests.conftest import make_client, run_processor
 
@@ -52,7 +53,8 @@ def test_polling_cost_is_only_new_parts(dataset):
     run_processor(root, root.parent / "shaped", fresh=False)  # the processor's next run
     after = manifest(root)
     new_facts = sum(len(after["facts"][t]) - len(before["facts"].get(t, [])) for t in after["facts"])
-    new_snaps = sum(after["snapshots"][t] != before["snapshots"].get(t) for t in after["snapshots"])
+    # The snapshots this store loads (the processor keeps others for itself, e.g. pending_bodies).
+    new_snaps = sum(after["snapshots"][t] != before["snapshots"].get(t) for t in after["snapshots"] if t in SNAPSHOTS)
     r = client.get("/api/v1/status")
     assert store.parts_read == first + new_facts + new_snaps  # exactly the new commit's files
     assert r.json()["data"]["lastIngestAt"] == "2026-11-04T19:00:00.002000Z"
@@ -260,3 +262,21 @@ def test_a_compaction_swaps_only_the_parts_it_replaced(dataset):
     assert store.query("SELECT * EXCLUDE (filename) FROM requests ORDER BY call_id") == fresh.query(
         "SELECT * EXCLUDE (filename) FROM requests ORDER BY call_id"
     )
+
+
+def test_a_repeated_events_row_opens_from_its_copy_key(tmp_path):
+    # A client that sends one event twice in a batch makes identical raw rows (from an
+    # observer that didn't number them); the processor keys the copies <hash>-2, -3.
+    event = {"source": "claude_web", "name": "v"}
+    line = json.dumps({"correlation_id": "c-1", "phase": "client_event", "seq": 4, "client_event": event}).encode()
+    (tmp_path / "f.ndjson.gz").write_bytes(gzip.compress(line + b"\n" + line + b"\n"))
+    store = Store(tmp_path, tmp_path / "shaped")
+    h = "h" + hashlib.sha256(line).hexdigest()[:16]
+    for key in (f"c-1/{h}", f"c-1/{h}-2"):
+        assert store.raw_event("c-1", key, "f.ndjson.gz") == json.loads(line)
+    assert store.raw_event("c-1", f"c-1/{h}x-2", "f.ndjson.gz") is None
+    # A client's own id is matched whole, dashes and all.
+    own = json.dumps({"correlation_id": "c-2", "phase": "client_event", "client_event": {"id": "ab-2"}}).encode()
+    (tmp_path / "g.ndjson.gz").write_bytes(gzip.compress(own + b"\n"))
+    assert store.raw_event("c-2", "c-2/ab-2", "g.ndjson.gz") == json.loads(own)
+    assert store.raw_event("c-2", "c-2/ab", "g.ndjson.gz") is None

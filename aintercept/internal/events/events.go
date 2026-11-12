@@ -770,6 +770,7 @@ func (e *Event) ClientEventRows() []Event {
 	rows := make([]Event, 0, len(e.clientEvents))
 	for i := range e.clientEvents {
 		ce := e.clientEvents[i]
+		ce.Index = i + 1
 		rows = append(rows, Event{
 			CorrelationID:    e.CorrelationID,
 			TimestampNS:      e.TimestampNS,
