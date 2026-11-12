@@ -44,11 +44,18 @@ const bucket, prefix = "e2e", "e2e/"
 
 func dc(t *testing.T, args ...string) {
 	t.Helper()
-	a := append([]string{"compose", "--project-directory", composeDir}, strings.Fields(os.Getenv("E2E_COMPOSE_FILES"))...)
-	cmd := exec.Command("docker", append(a, args...)...)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := compose(args...).CombinedOutput(); err != nil {
 		t.Fatalf("docker compose %v: %v\n%s", args, err, out)
 	}
+}
+
+// dcTry is dc for cleanup, where the state may already be what's wanted (e.g.
+// unpausing a container that isn't paused).
+func dcTry(args ...string) { _ = compose(args...).Run() }
+
+func compose(args ...string) *exec.Cmd {
+	a := append([]string{"compose", "--project-directory", composeDir}, strings.Fields(os.Getenv("E2E_COMPOSE_FILES"))...)
+	return exec.Command("docker", append(a, args...)...)
 }
 
 func s3Client(t *testing.T) *s3.Client {
@@ -214,17 +221,11 @@ func TestZZNoLossThroughStoreOutage(t *testing.T) {
 	c := s3Client(t)
 	ids := traffic(t, "outage-before", 15, "observe.test")
 	dc(t, "pause", "moto")
-	unpaused := false
-	defer func() {
-		if !unpaused {
-			dc(t, "unpause", "moto")
-		}
-	}()
+	defer dcTry("unpause", "moto")
 	ids = append(ids, traffic(t, "outage-during", 15, "observe.test")...)
 	d, _ := time.ParseDuration(outage)
 	time.Sleep(d)
 	dc(t, "unpause", "moto")
-	unpaused = true
 	waitUntil(t, 3*time.Minute, "the spool to drain", spoolDrained(t))
 	assertEachRecordedOnce(t, c, ids, events.PhaseComplete)
 }
@@ -254,7 +255,7 @@ func TestZZSpoolFull(t *testing.T) {
 	dc(t, "up", "-d", "observer")
 	defer func() {
 		os.Unsetenv("OBSERVER_SPOOL_MAX_BYTES")
-		dc(t, "unpause", "moto")
+		dcTry("unpause", "moto")
 		dc(t, "up", "-d", "observer")
 		waitUntil(t, 2*time.Minute, "the observer to come back", func() bool { _, ok := stats(t); return ok })
 	}()
