@@ -1,0 +1,3663 @@
+{
+ "dim_account": [
+  {
+   "account_id": "a1",
+   "email": "X@Y.Z",
+   "email_ns": 100723000000,
+   "id": "acct",
+   "key": "a:a1",
+   "name": "N2",
+   "name_ns": 71465000000,
+   "org": "O",
+   "org_ns": 18500000000,
+   "seen_ns": 100723000000
+  },
+  {
+   "account_id": "a2",
+   "email": "v@y.z",
+   "email_ns": 92440000000,
+   "id": "acct",
+   "key": "a:a2",
+   "name": "N2",
+   "name_ns": 92440000000,
+   "org": "O",
+   "org_ns": 52536000000,
+   "seen_ns": 92440000000
+  },
+  {
+   "account_id": "a3",
+   "email": "x@y.z",
+   "email_ns": 82445000000,
+   "id": "acct",
+   "key": "a:a3",
+   "name": "N1",
+   "name_ns": 82445000000,
+   "org": "O",
+   "org_ns": 82445000000,
+   "seen_ns": 82445000000
+  },
+  {
+   "account_id": "a4",
+   "email": "w@y.z",
+   "email_ns": 100286000000,
+   "id": "acct",
+   "key": "a:a4",
+   "name": "N2",
+   "name_ns": 100286000000,
+   "org": "O",
+   "org_ns": 100286000000,
+   "seen_ns": 100286000000
+  },
+  {
+   "account_id": "a5",
+   "email": "x@y.z",
+   "email_ns": 93513000000,
+   "id": "acct",
+   "key": "a:a5",
+   "name": "N1",
+   "name_ns": 79501000000,
+   "org": "O",
+   "org_ns": 93513000000,
+   "seen_ns": 93513000000
+  }
+ ],
+ "dim_account_device": [
+  {
+   "account_id": "a1",
+   "device_id": "dev0",
+   "id": "ad:a1\u0000dev0",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 62929000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a1",
+   "device_id": "dev1",
+   "id": "ad:a1\u0000dev1",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 85283000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 55177000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev0",
+   "id": "ad:a2\u0000dev0",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 69111000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev2",
+   "id": "ad:a2\u0000dev2",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 54090000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev0",
+   "id": "ad:a3\u0000dev0",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 48855000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 48855000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev1",
+   "id": "ad:a3\u0000dev1",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev2",
+   "id": "ad:a3\u0000dev2",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev1",
+   "id": "ad:a4\u0000dev1",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 15466000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev0",
+   "id": "ad:a5\u0000dev0",
+   "key": "c::1970-01-01",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 82866000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev1",
+   "id": "ad:a2\u0000dev1",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 35886000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 46170000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev2",
+   "id": "ad:a2\u0000dev2",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 59930000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev0",
+   "id": "ad:a3\u0000dev0",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 32260000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev1",
+   "id": "ad:a3\u0000dev1",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 73101000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev2",
+   "id": "ad:a3\u0000dev2",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 85153000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 85153000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev0",
+   "id": "ad:a5\u0000dev0",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 3269000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 3269000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev2",
+   "id": "ad:a5\u0000dev2",
+   "key": "s:ds-0",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 46255000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a1",
+   "device_id": "dev1",
+   "id": "ad:a1\u0000dev1",
+   "key": "s:ds-1",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 98919000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a1",
+   "device_id": "dev2",
+   "id": "ad:a1\u0000dev2",
+   "key": "s:ds-1",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 94449000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 94449000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev2",
+   "id": "ad:a2\u0000dev2",
+   "key": "s:ds-1",
+   "on_events": false,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev0",
+   "id": "ad:a4\u0000dev0",
+   "key": "s:ds-1",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 87871000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 87871000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev1",
+   "id": "ad:a4\u0000dev1",
+   "key": "s:ds-1",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 3097000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev1",
+   "id": "ad:a5\u0000dev1",
+   "key": "s:ds-1",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 29100000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a1",
+   "device_id": "dev0",
+   "id": "ad:a1\u0000dev0",
+   "key": "s:ds-2",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev0",
+   "id": "ad:a2\u0000dev0",
+   "key": "s:ds-2",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 29274000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev0",
+   "id": "ad:a3\u0000dev0",
+   "key": "s:ds-2",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 69103000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev0",
+   "id": "ad:a4\u0000dev0",
+   "key": "s:ds-2",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 36576000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 36576000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev1",
+   "id": "ad:a4\u0000dev1",
+   "key": "s:ds-2",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev0",
+   "id": "ad:a5\u0000dev0",
+   "key": "s:ds-2",
+   "on_events": false,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev1",
+   "id": "ad:a2\u0000dev1",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev2",
+   "id": "ad:a2\u0000dev2",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 17019000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev0",
+   "id": "ad:a3\u0000dev0",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 91086000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev1",
+   "id": "ad:a3\u0000dev1",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev0",
+   "id": "ad:a4\u0000dev0",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 68246000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev2",
+   "id": "ad:a4\u0000dev2",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev1",
+   "id": "ad:a5\u0000dev1",
+   "key": "s:ds-3",
+   "on_events": false,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev2",
+   "id": "ad:a5\u0000dev2",
+   "key": "s:ds-3",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev1",
+   "id": "ad:a2\u0000dev1",
+   "key": "s:ds-4",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev0",
+   "id": "ad:a3\u0000dev0",
+   "key": "s:ds-4",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev2",
+   "id": "ad:a3\u0000dev2",
+   "key": "s:ds-4",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev1",
+   "id": "ad:a4\u0000dev1",
+   "key": "s:ds-4",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 35774000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev0",
+   "id": "ad:a5\u0000dev0",
+   "key": "s:ds-4",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 43536000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a1",
+   "device_id": "dev2",
+   "id": "ad:a1\u0000dev2",
+   "key": "s:ds-5",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev0",
+   "id": "ad:a4\u0000dev0",
+   "key": "s:ds-5",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 47556000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev0",
+   "id": "ad:a2\u0000dev0",
+   "key": "s:ds-6",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev1",
+   "id": "ad:a2\u0000dev1",
+   "key": "s:ds-6",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev0",
+   "id": "ad:a4\u0000dev0",
+   "key": "s:ds-6",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 30578000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev0",
+   "id": "ad:a5\u0000dev0",
+   "key": "s:ds-6",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 21638000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 21638000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev1",
+   "id": "ad:a5\u0000dev1",
+   "key": "s:ds-6",
+   "on_events": false,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev2",
+   "id": "ad:a5\u0000dev2",
+   "key": "s:ds-6",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a1",
+   "device_id": "dev2",
+   "id": "ad:a1\u0000dev2",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 98193000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev0",
+   "id": "ad:a2\u0000dev0",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 7573000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "device_id": "dev2",
+   "id": "ad:a2\u0000dev2",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 21670000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev0",
+   "id": "ad:a3\u0000dev0",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 47496000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 47496000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "device_id": "dev2",
+   "id": "ad:a3\u0000dev2",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 54976000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": true,
+    "ts": 64670000000,
+    "v": "t"
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev0",
+   "id": "ad:a4\u0000dev0",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a4",
+   "device_id": "dev1",
+   "id": "ad:a4\u0000dev1",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 77579000000,
+    "v": "darwin"
+   },
+   "shell": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "device_id": "dev2",
+   "id": "ad:a5\u0000dev2",
+   "key": "s:ds-7",
+   "on_events": true,
+   "platform": {
+    "ok": true,
+    "ts": 99910000000,
+    "v": "linux"
+   },
+   "shell": {
+    "ok": true,
+    "ts": 99910000000,
+    "v": "zsh"
+   },
+   "terminal": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  }
+ ],
+ "dim_account_events": [
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "c::1970-01-01",
+   "org": "org-a1",
+   "org_ns": 30376000000,
+   "plan": {
+    "ok": true,
+    "ts": 99940000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "c::1970-01-01",
+   "org": "org-a2",
+   "org_ns": 5643000000,
+   "plan": {
+    "ok": true,
+    "ts": 69111000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "c::1970-01-01",
+   "org": "org-a3",
+   "org_ns": 26164000000,
+   "plan": {
+    "ok": true,
+    "ts": 77354000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "c::1970-01-01",
+   "org": "org-a4",
+   "org_ns": 15466000000,
+   "plan": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "c::1970-01-01",
+   "org": "org-a5",
+   "org_ns": 33523000000,
+   "plan": {
+    "ok": true,
+    "ts": 82866000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-0",
+   "org": "org-a1",
+   "org_ns": 82022000000,
+   "plan": {
+    "ok": true,
+    "ts": 82022000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-0",
+   "org": "org-a2",
+   "org_ns": 19124000000,
+   "plan": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-0",
+   "org": "org-a3",
+   "org_ns": 32260000000,
+   "plan": {
+    "ok": true,
+    "ts": 73101000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-0",
+   "org": "org-a4",
+   "org_ns": 41579000000,
+   "plan": {
+    "ok": true,
+    "ts": 41579000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-0",
+   "org": "org-a5",
+   "org_ns": 3269000000,
+   "plan": {
+    "ok": true,
+    "ts": 46255000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-1",
+   "org": "org-a1",
+   "org_ns": 37843000000,
+   "plan": {
+    "ok": true,
+    "ts": 57996000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-1",
+   "org": "org-a2",
+   "org_ns": 58401000000,
+   "plan": {
+    "ok": true,
+    "ts": 86232000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-1",
+   "org": "org-a3",
+   "org_ns": 88242000000,
+   "plan": {
+    "ok": true,
+    "ts": 88242000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-1",
+   "org": "org-a4",
+   "org_ns": 3097000000,
+   "plan": {
+    "ok": true,
+    "ts": 15877000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-1",
+   "org": "org-a5",
+   "org_ns": 26236000000,
+   "plan": {
+    "ok": true,
+    "ts": 29100000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-2",
+   "org": "org-a1",
+   "org_ns": 49936000000,
+   "plan": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-2",
+   "org": "org-a2",
+   "org_ns": 29274000000,
+   "plan": {
+    "ok": true,
+    "ts": 38759000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-2",
+   "org": "org-a3",
+   "org_ns": 69103000000,
+   "plan": {
+    "ok": true,
+    "ts": 69103000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-2",
+   "org": "org-a4",
+   "org_ns": 30162000000,
+   "plan": {
+    "ok": true,
+    "ts": 36576000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-2",
+   "org": "org-a5",
+   "org_ns": 43035000000,
+   "plan": {
+    "ok": true,
+    "ts": 87779000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-3",
+   "org": "org-a2",
+   "org_ns": 5123000000,
+   "plan": {
+    "ok": true,
+    "ts": 79652000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-3",
+   "org": "org-a3",
+   "org_ns": 13840000000,
+   "plan": {
+    "ok": true,
+    "ts": 91086000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-3",
+   "org": "org-a4",
+   "org_ns": 20614000000,
+   "plan": {
+    "ok": true,
+    "ts": 68246000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-3",
+   "org": "org-a5",
+   "org_ns": 57598000000,
+   "plan": {
+    "ok": true,
+    "ts": 59452000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-4",
+   "org": "org-a1",
+   "org_ns": 12550000000,
+   "plan": {
+    "ok": true,
+    "ts": 53252000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-4",
+   "org": "org-a2",
+   "org_ns": 89570000000,
+   "plan": {
+    "ok": true,
+    "ts": 89570000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-4",
+   "org": "org-a3",
+   "org_ns": 34952000000,
+   "plan": {
+    "ok": true,
+    "ts": 59182000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-4",
+   "org": "org-a4",
+   "org_ns": 35774000000,
+   "plan": {
+    "ok": true,
+    "ts": 35774000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-4",
+   "org": "org-a5",
+   "org_ns": 43536000000,
+   "plan": {
+    "ok": true,
+    "ts": 92995000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-5",
+   "org": "org-a1",
+   "org_ns": 17628000000,
+   "plan": {
+    "ok": true,
+    "ts": 85739000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-5",
+   "org": "org-a3",
+   "org_ns": 13924000000,
+   "plan": {
+    "ok": true,
+    "ts": 53121000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-5",
+   "org": "org-a4",
+   "org_ns": 47556000000,
+   "plan": {
+    "ok": true,
+    "ts": 97729000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-5",
+   "org": "org-a5",
+   "org_ns": 29902000000,
+   "plan": {
+    "ok": false,
+    "ts": 0,
+    "v": ""
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-6",
+   "org": "org-a1",
+   "org_ns": 35597000000,
+   "plan": {
+    "ok": true,
+    "ts": 35597000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-6",
+   "org": "org-a2",
+   "org_ns": 61100000000,
+   "plan": {
+    "ok": true,
+    "ts": 93981000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-6",
+   "org": "org-a3",
+   "org_ns": 53706000000,
+   "plan": {
+    "ok": true,
+    "ts": 53706000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-6",
+   "org": "org-a4",
+   "org_ns": 30578000000,
+   "plan": {
+    "ok": true,
+    "ts": 78198000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-6",
+   "org": "org-a5",
+   "org_ns": 21638000000,
+   "plan": {
+    "ok": true,
+    "ts": 62106000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "ae:a1",
+   "key": "s:ds-7",
+   "org": "org-a1",
+   "org_ns": 8439000000,
+   "plan": {
+    "ok": true,
+    "ts": 98193000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "ae:a2",
+   "key": "s:ds-7",
+   "org": "org-a2",
+   "org_ns": 7573000000,
+   "plan": {
+    "ok": true,
+    "ts": 21670000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "ae:a3",
+   "key": "s:ds-7",
+   "org": "org-a3",
+   "org_ns": 47496000000,
+   "plan": {
+    "ok": true,
+    "ts": 87002000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "ae:a4",
+   "key": "s:ds-7",
+   "org": "org-a4",
+   "org_ns": 64471000000,
+   "plan": {
+    "ok": true,
+    "ts": 77579000000,
+    "v": "max"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "ae:a5",
+   "key": "s:ds-7",
+   "org": "org-a5",
+   "org_ns": 15425000000,
+   "plan": {
+    "ok": true,
+    "ts": 99910000000,
+    "v": "pro"
+   }
+  }
+ ],
+ "dim_codex_plan": [
+  {
+   "account_id": "a1",
+   "id": "cp:a1",
+   "key": "s:th-ds-0",
+   "plan": {
+    "ok": true,
+    "ts": 24819000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "cp:a3",
+   "key": "s:th-ds-0",
+   "plan": {
+    "ok": true,
+    "ts": 19836000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "cp:a5",
+   "key": "s:th-ds-0",
+   "plan": {
+    "ok": true,
+    "ts": 73077000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "cp:a2",
+   "key": "s:th-ds-1",
+   "plan": {
+    "ok": true,
+    "ts": 47472000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "cp:a4",
+   "key": "s:th-ds-1",
+   "plan": {
+    "ok": true,
+    "ts": 88856000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "cp:a5",
+   "key": "s:th-ds-1",
+   "plan": {
+    "ok": true,
+    "ts": 52840000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "cp:a1",
+   "key": "s:th-ds-2",
+   "plan": {
+    "ok": true,
+    "ts": 34112000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "cp:a5",
+   "key": "s:th-ds-2",
+   "plan": {
+    "ok": true,
+    "ts": 28903000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "cp:a1",
+   "key": "s:th-ds-3",
+   "plan": {
+    "ok": true,
+    "ts": 1815000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "cp:a2",
+   "key": "s:th-ds-3",
+   "plan": {
+    "ok": true,
+    "ts": 88695000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "cp:a5",
+   "key": "s:th-ds-3",
+   "plan": {
+    "ok": true,
+    "ts": 72574000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "cp:a1",
+   "key": "s:th-ds-4",
+   "plan": {
+    "ok": true,
+    "ts": 78584000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a3",
+   "id": "cp:a3",
+   "key": "s:th-ds-4",
+   "plan": {
+    "ok": true,
+    "ts": 97306000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "cp:a5",
+   "key": "s:th-ds-4",
+   "plan": {
+    "ok": true,
+    "ts": 60402000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "cp:a2",
+   "key": "s:th-ds-6",
+   "plan": {
+    "ok": true,
+    "ts": 97703000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "cp:a4",
+   "key": "s:th-ds-6",
+   "plan": {
+    "ok": true,
+    "ts": 43062000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a5",
+   "id": "cp:a5",
+   "key": "s:th-ds-6",
+   "plan": {
+    "ok": true,
+    "ts": 61133000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a1",
+   "id": "cp:a1",
+   "key": "s:th-ds-7",
+   "plan": {
+    "ok": true,
+    "ts": 97807000000,
+    "v": "pro"
+   }
+  },
+  {
+   "account_id": "a2",
+   "id": "cp:a2",
+   "key": "s:th-ds-7",
+   "plan": {
+    "ok": true,
+    "ts": 81474000000,
+    "v": "plus"
+   }
+  },
+  {
+   "account_id": "a4",
+   "id": "cp:a4",
+   "key": "s:th-ds-7",
+   "plan": {
+    "ok": true,
+    "ts": 61217000000,
+    "v": "pro"
+   }
+  }
+ ],
+ "dim_person_device": [
+  {
+   "device_id": "dev0",
+   "id": "pd:a1\u0000dev0",
+   "key": "c::1970-01-01",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a1\u0000dev1",
+   "key": "c::1970-01-01",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a2\u0000dev0",
+   "key": "c::1970-01-01",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a2\u0000dev2",
+   "key": "c::1970-01-01",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a3\u0000dev0",
+   "key": "c::1970-01-01",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a3\u0000dev1",
+   "key": "c::1970-01-01",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a3\u0000dev2",
+   "key": "c::1970-01-01",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a4\u0000dev1",
+   "key": "c::1970-01-01",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a5\u0000dev0",
+   "key": "c::1970-01-01",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a2\u0000dev1",
+   "key": "s:ds-0",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a2\u0000dev2",
+   "key": "s:ds-0",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a3\u0000dev0",
+   "key": "s:ds-0",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a3\u0000dev1",
+   "key": "s:ds-0",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a3\u0000dev2",
+   "key": "s:ds-0",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a5\u0000dev0",
+   "key": "s:ds-0",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a5\u0000dev2",
+   "key": "s:ds-0",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a1\u0000dev1",
+   "key": "s:ds-1",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a1\u0000dev2",
+   "key": "s:ds-1",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a2\u0000dev2",
+   "key": "s:ds-1",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-1",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a4\u0000dev1",
+   "key": "s:ds-1",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a5\u0000dev1",
+   "key": "s:ds-1",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a1\u0000dev0",
+   "key": "s:ds-2",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a2\u0000dev0",
+   "key": "s:ds-2",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a3\u0000dev0",
+   "key": "s:ds-2",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-2",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a4\u0000dev1",
+   "key": "s:ds-2",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a5\u0000dev0",
+   "key": "s:ds-2",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a1\u0000dev0",
+   "key": "s:ds-3",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a2\u0000dev1",
+   "key": "s:ds-3",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a2\u0000dev2",
+   "key": "s:ds-3",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a3\u0000dev0",
+   "key": "s:ds-3",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a3\u0000dev1",
+   "key": "s:ds-3",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-3",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a4\u0000dev1",
+   "key": "s:ds-3",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a4\u0000dev2",
+   "key": "s:ds-3",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a5\u0000dev1",
+   "key": "s:ds-3",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a5\u0000dev2",
+   "key": "s:ds-3",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a1\u0000dev0",
+   "key": "s:ds-4",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a2\u0000dev1",
+   "key": "s:ds-4",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a3\u0000dev0",
+   "key": "s:ds-4",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a3\u0000dev2",
+   "key": "s:ds-4",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-4",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a4\u0000dev1",
+   "key": "s:ds-4",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a5\u0000dev0",
+   "key": "s:ds-4",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a1\u0000dev2",
+   "key": "s:ds-5",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-5",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a2\u0000dev0",
+   "key": "s:ds-6",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a2\u0000dev1",
+   "key": "s:ds-6",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-6",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a5\u0000dev0",
+   "key": "s:ds-6",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a5\u0000dev1",
+   "key": "s:ds-6",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a5\u0000dev2",
+   "key": "s:ds-6",
+   "person_id": "a5"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a1\u0000dev2",
+   "key": "s:ds-7",
+   "person_id": "a1"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a2\u0000dev0",
+   "key": "s:ds-7",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a2\u0000dev2",
+   "key": "s:ds-7",
+   "person_id": "a2"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a3\u0000dev0",
+   "key": "s:ds-7",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a3\u0000dev2",
+   "key": "s:ds-7",
+   "person_id": "a3"
+  },
+  {
+   "device_id": "dev0",
+   "id": "pd:a4\u0000dev0",
+   "key": "s:ds-7",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev1",
+   "id": "pd:a4\u0000dev1",
+   "key": "s:ds-7",
+   "person_id": "a4"
+  },
+  {
+   "device_id": "dev2",
+   "id": "pd:a5\u0000dev2",
+   "key": "s:ds-7",
+   "person_id": "a5"
+  }
+ ],
+ "dim_session_account": [
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-0",
+   "session_id": "ds-0"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-0",
+   "session_id": "ds-0"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-0",
+   "session_id": "ds-0"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-0",
+   "session_id": "ds-0"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-0",
+   "session_id": "ds-0"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-1",
+   "session_id": "ds-1"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-1",
+   "session_id": "ds-1"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-1",
+   "session_id": "ds-1"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-1",
+   "session_id": "ds-1"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-1",
+   "session_id": "ds-1"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-2",
+   "session_id": "ds-2"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-2",
+   "session_id": "ds-2"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-2",
+   "session_id": "ds-2"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-2",
+   "session_id": "ds-2"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-2",
+   "session_id": "ds-2"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-3",
+   "session_id": "ds-3"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-3",
+   "session_id": "ds-3"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-3",
+   "session_id": "ds-3"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-3",
+   "session_id": "ds-3"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-4",
+   "session_id": "ds-4"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-4",
+   "session_id": "ds-4"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-4",
+   "session_id": "ds-4"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-4",
+   "session_id": "ds-4"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-4",
+   "session_id": "ds-4"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-5",
+   "session_id": "ds-5"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-5",
+   "session_id": "ds-5"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-5",
+   "session_id": "ds-5"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-5",
+   "session_id": "ds-5"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-6",
+   "session_id": "ds-6"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-6",
+   "session_id": "ds-6"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-6",
+   "session_id": "ds-6"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-6",
+   "session_id": "ds-6"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-6",
+   "session_id": "ds-6"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:ds-7",
+   "session_id": "ds-7"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:ds-7",
+   "session_id": "ds-7"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:ds-7",
+   "session_id": "ds-7"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:ds-7",
+   "session_id": "ds-7"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:ds-7",
+   "session_id": "ds-7"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:th-ds-0",
+   "session_id": "th-ds-0"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:th-ds-0",
+   "session_id": "th-ds-0"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:th-ds-0",
+   "session_id": "th-ds-0"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-0",
+   "session_id": "th-ds-0"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:th-ds-1",
+   "session_id": "th-ds-1"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:th-ds-1",
+   "session_id": "th-ds-1"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-1",
+   "session_id": "th-ds-1"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:th-ds-2",
+   "session_id": "th-ds-2"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-2",
+   "session_id": "th-ds-2"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:th-ds-3",
+   "session_id": "th-ds-3"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:th-ds-3",
+   "session_id": "th-ds-3"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-3",
+   "session_id": "th-ds-3"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:th-ds-4",
+   "session_id": "th-ds-4"
+  },
+  {
+   "account_id": "a3",
+   "id": "sa:a3",
+   "key": "s:th-ds-4",
+   "session_id": "th-ds-4"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:th-ds-4",
+   "session_id": "th-ds-4"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-4",
+   "session_id": "th-ds-4"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:th-ds-5",
+   "session_id": "th-ds-5"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:th-ds-5",
+   "session_id": "th-ds-5"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:th-ds-6",
+   "session_id": "th-ds-6"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:th-ds-6",
+   "session_id": "th-ds-6"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-6",
+   "session_id": "th-ds-6"
+  },
+  {
+   "account_id": "a1",
+   "id": "sa:a1",
+   "key": "s:th-ds-7",
+   "session_id": "th-ds-7"
+  },
+  {
+   "account_id": "a2",
+   "id": "sa:a2",
+   "key": "s:th-ds-7",
+   "session_id": "th-ds-7"
+  },
+  {
+   "account_id": "a4",
+   "id": "sa:a4",
+   "key": "s:th-ds-7",
+   "session_id": "th-ds-7"
+  },
+  {
+   "account_id": "a5",
+   "id": "sa:a5",
+   "key": "s:th-ds-7",
+   "session_id": "th-ds-7"
+  }
+ ],
+ "dim_session_credential": [
+  {
+   "id": "sc:k0",
+   "key": "s:ds-0",
+   "key_hash": "k0",
+   "session_id": "ds-0"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-0",
+   "key_hash": "k1",
+   "session_id": "ds-0"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-0",
+   "key_hash": "k2",
+   "session_id": "ds-0"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-1",
+   "key_hash": "k1",
+   "session_id": "ds-1"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-1",
+   "key_hash": "k2",
+   "session_id": "ds-1"
+  },
+  {
+   "id": "sc:k0",
+   "key": "s:ds-2",
+   "key_hash": "k0",
+   "session_id": "ds-2"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-2",
+   "key_hash": "k1",
+   "session_id": "ds-2"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-2",
+   "key_hash": "k2",
+   "session_id": "ds-2"
+  },
+  {
+   "id": "sc:k0",
+   "key": "s:ds-3",
+   "key_hash": "k0",
+   "session_id": "ds-3"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-3",
+   "key_hash": "k1",
+   "session_id": "ds-3"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-3",
+   "key_hash": "k2",
+   "session_id": "ds-3"
+  },
+  {
+   "id": "sc:k0",
+   "key": "s:ds-4",
+   "key_hash": "k0",
+   "session_id": "ds-4"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-4",
+   "key_hash": "k1",
+   "session_id": "ds-4"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-4",
+   "key_hash": "k2",
+   "session_id": "ds-4"
+  },
+  {
+   "id": "sc:k0",
+   "key": "s:ds-5",
+   "key_hash": "k0",
+   "session_id": "ds-5"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-5",
+   "key_hash": "k1",
+   "session_id": "ds-5"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-5",
+   "key_hash": "k2",
+   "session_id": "ds-5"
+  },
+  {
+   "id": "sc:k0",
+   "key": "s:ds-6",
+   "key_hash": "k0",
+   "session_id": "ds-6"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-6",
+   "key_hash": "k1",
+   "session_id": "ds-6"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-6",
+   "key_hash": "k2",
+   "session_id": "ds-6"
+  },
+  {
+   "id": "sc:k0",
+   "key": "s:ds-7",
+   "key_hash": "k0",
+   "session_id": "ds-7"
+  },
+  {
+   "id": "sc:k1",
+   "key": "s:ds-7",
+   "key_hash": "k1",
+   "session_id": "ds-7"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:ds-7",
+   "key_hash": "k2",
+   "session_id": "ds-7"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-0",
+   "key_hash": "k2",
+   "session_id": "th-ds-0"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-1",
+   "key_hash": "k2",
+   "session_id": "th-ds-1"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-2",
+   "key_hash": "k2",
+   "session_id": "th-ds-2"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-3",
+   "key_hash": "k2",
+   "session_id": "th-ds-3"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-4",
+   "key_hash": "k2",
+   "session_id": "th-ds-4"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-5",
+   "key_hash": "k2",
+   "session_id": "th-ds-5"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-6",
+   "key_hash": "k2",
+   "session_id": "th-ds-6"
+  },
+  {
+   "id": "sc:k2",
+   "key": "s:th-ds-7",
+   "key_hash": "k2",
+   "session_id": "th-ds-7"
+  }
+ ],
+ "dim_session_person": [
+  {
+   "id": "sp",
+   "key": "s:ds-0",
+   "person_id": "a1",
+   "session_id": "ds-0"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-1",
+   "person_id": "a1",
+   "session_id": "ds-1"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-2",
+   "person_id": "a1",
+   "session_id": "ds-2"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-3",
+   "person_id": "a1",
+   "session_id": "ds-3"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-4",
+   "person_id": "a1",
+   "session_id": "ds-4"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-5",
+   "person_id": "a1",
+   "session_id": "ds-5"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-6",
+   "person_id": "a1",
+   "session_id": "ds-6"
+  },
+  {
+   "id": "sp",
+   "key": "s:ds-7",
+   "person_id": "a1",
+   "session_id": "ds-7"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-0",
+   "person_id": "a1",
+   "session_id": "th-ds-0"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-1",
+   "person_id": "a2",
+   "session_id": "th-ds-1"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-2",
+   "person_id": "a1",
+   "session_id": "th-ds-2"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-3",
+   "person_id": "a1",
+   "session_id": "th-ds-3"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-4",
+   "person_id": "a1",
+   "session_id": "th-ds-4"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-5",
+   "person_id": "a1",
+   "session_id": "th-ds-5"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-6",
+   "person_id": "a2",
+   "session_id": "th-ds-6"
+  },
+  {
+   "id": "sp",
+   "key": "s:th-ds-7",
+   "person_id": "a1",
+   "session_id": "th-ds-7"
+  }
+ ],
+ "dim_session_visible": [
+  {
+   "id": "sv",
+   "key": "s:ds-0",
+   "session_id": "ds-0"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-1",
+   "session_id": "ds-1"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-2",
+   "session_id": "ds-2"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-3",
+   "session_id": "ds-3"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-4",
+   "session_id": "ds-4"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-5",
+   "session_id": "ds-5"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-6",
+   "session_id": "ds-6"
+  },
+  {
+   "id": "sv",
+   "key": "s:ds-7",
+   "session_id": "ds-7"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-0",
+   "session_id": "th-ds-0"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-1",
+   "session_id": "th-ds-1"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-2",
+   "session_id": "th-ds-2"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-3",
+   "session_id": "th-ds-3"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-4",
+   "session_id": "th-ds-4"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-5",
+   "session_id": "th-ds-5"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-6",
+   "session_id": "th-ds-6"
+  },
+  {
+   "id": "sv",
+   "key": "s:th-ds-7",
+   "session_id": "th-ds-7"
+  }
+ ],
+ "want": {
+  "account_devices": [
+   {
+    "account_id": "a1",
+    "device_id": "dev0",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": null
+   },
+   {
+    "account_id": "a1",
+    "device_id": "dev1",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": "t"
+   },
+   {
+    "account_id": "a1",
+    "device_id": "dev2",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": "zsh",
+    "terminal": null
+   },
+   {
+    "account_id": "a2",
+    "device_id": "dev0",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": "t"
+   },
+   {
+    "account_id": "a2",
+    "device_id": "dev1",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": "t"
+   },
+   {
+    "account_id": "a2",
+    "device_id": "dev2",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": "t"
+   },
+   {
+    "account_id": "a3",
+    "device_id": "dev0",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": "zsh",
+    "terminal": "t"
+   },
+   {
+    "account_id": "a3",
+    "device_id": "dev1",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": null
+   },
+   {
+    "account_id": "a3",
+    "device_id": "dev2",
+    "on_events": true,
+    "platform": "linux",
+    "shell": "zsh",
+    "terminal": "t"
+   },
+   {
+    "account_id": "a4",
+    "device_id": "dev0",
+    "on_events": true,
+    "platform": "linux",
+    "shell": "zsh",
+    "terminal": "t"
+   },
+   {
+    "account_id": "a4",
+    "device_id": "dev1",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": "t"
+   },
+   {
+    "account_id": "a4",
+    "device_id": "dev2",
+    "on_events": true,
+    "platform": null,
+    "shell": null,
+    "terminal": null
+   },
+   {
+    "account_id": "a5",
+    "device_id": "dev0",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": "zsh",
+    "terminal": "t"
+   },
+   {
+    "account_id": "a5",
+    "device_id": "dev1",
+    "on_events": true,
+    "platform": "darwin",
+    "shell": null,
+    "terminal": null
+   },
+   {
+    "account_id": "a5",
+    "device_id": "dev2",
+    "on_events": true,
+    "platform": "linux",
+    "shell": "zsh",
+    "terminal": null
+   }
+  ],
+  "account_facts": [
+   {
+    "account_id": "a1",
+    "codex_plan": "pro",
+    "org": "org-a1",
+    "plan": "max"
+   },
+   {
+    "account_id": "a2",
+    "codex_plan": "pro",
+    "org": "org-a2",
+    "plan": "pro"
+   },
+   {
+    "account_id": "a3",
+    "codex_plan": "pro",
+    "org": "org-a3",
+    "plan": "max"
+   },
+   {
+    "account_id": "a4",
+    "codex_plan": "pro",
+    "org": "org-a4",
+    "plan": "max"
+   },
+   {
+    "account_id": "a5",
+    "codex_plan": "pro",
+    "org": "org-a5",
+    "plan": "pro"
+   }
+  ],
+  "person_map": [
+   {
+    "account_id": "a1",
+    "directory": true,
+    "person_id": "a1"
+   },
+   {
+    "account_id": "a3",
+    "directory": true,
+    "person_id": "a1"
+   },
+   {
+    "account_id": "a5",
+    "directory": true,
+    "person_id": "a1"
+   },
+   {
+    "account_id": "a2",
+    "directory": true,
+    "person_id": "a2"
+   },
+   {
+    "account_id": "a1",
+    "directory": false,
+    "person_id": "a3"
+   },
+   {
+    "account_id": "a3",
+    "directory": false,
+    "person_id": "a3"
+   },
+   {
+    "account_id": "a5",
+    "directory": false,
+    "person_id": "a3"
+   },
+   {
+    "account_id": "a4",
+    "directory": true,
+    "person_id": "a4"
+   },
+   {
+    "account_id": "a1",
+    "directory": false,
+    "person_id": "a5"
+   },
+   {
+    "account_id": "a3",
+    "directory": false,
+    "person_id": "a5"
+   },
+   {
+    "account_id": "a5",
+    "directory": false,
+    "person_id": "a5"
+   }
+  ],
+  "person_sessions": [
+   {
+    "person_id": "a1",
+    "session_id": "ds-0"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-1"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-2"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-3"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-4"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-5"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-6"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "ds-7"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-0"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-1"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-2"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-3"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-4"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-5"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-6"
+   },
+   {
+    "person_id": "a1",
+    "session_id": "th-ds-7"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-0"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-1"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-2"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-3"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-4"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-6"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "ds-7"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "th-ds-1"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "th-ds-3"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "th-ds-6"
+   },
+   {
+    "person_id": "a2",
+    "session_id": "th-ds-7"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-0"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-1"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-2"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-3"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-4"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-5"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-6"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "ds-7"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-0"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-1"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-2"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-3"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-4"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-5"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-6"
+   },
+   {
+    "person_id": "a3",
+    "session_id": "th-ds-7"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-0"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-1"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-2"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-3"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-4"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-5"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-6"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "ds-7"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "th-ds-0"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "th-ds-1"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "th-ds-4"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "th-ds-5"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "th-ds-6"
+   },
+   {
+    "person_id": "a4",
+    "session_id": "th-ds-7"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-0"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-1"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-2"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-3"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-4"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-5"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-6"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "ds-7"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-0"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-1"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-2"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-3"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-4"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-5"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-6"
+   },
+   {
+    "person_id": "a5",
+    "session_id": "th-ds-7"
+   }
+  ]
+ }
+}

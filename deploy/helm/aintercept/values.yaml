@@ -233,6 +233,16 @@ api:
     resources:
       requests: { cpu: "20m", memory: "64Mi" }
       limits: { cpu: "500m", memory: "256Mi" }
+  # The stateless read path (docs/STREAMING_PIPELINE.md §5): the API reads the stream
+  # processor's bucketed tables from the object store, keeping only a cache, and an HPA
+  # on CPU sets its replica count. Off until the cutover (§6).
+  stateless:
+    enabled: false
+    cacheSizeLimit: 4Gi
+    cacheBytes: "3221225472"   # the cache's own cap, under cacheSizeLimit
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilization: 70
   # The mirrored tables (tens of MB per million rows).
   shapedSizeLimit: 2Gi
   # The API's DuckDB file (about twice the mirrored tables) and its spill space.

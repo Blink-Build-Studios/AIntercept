@@ -3,6 +3,7 @@ package events
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -42,6 +43,18 @@ func (d *DirTarget) Name() string { return d.name }
 
 func (d *DirTarget) Put(_ context.Context, o Object) error {
 	return d.write(o.Key, bytes.NewReader(o.Body))
+}
+
+// Exists reports whether key has been written.
+func (d *DirTarget) Exists(_ context.Context, key string) (bool, error) {
+	_, err := os.Stat(filepath.Join(d.root, filepath.FromSlash(key)))
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 func (d *DirTarget) write(key string, body io.Reader) error {

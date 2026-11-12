@@ -46,7 +46,7 @@ def pytest_collection_modifyitems(config, items):
         items[:] = [i for i in items if "test_requirements" not in i.nodeid]
 
 
-def make_client(store: Store, **kwargs) -> TestClient:
+def make_client(store, **kwargs) -> TestClient:
     """Ingests on every request (interval 0), so a test sees exactly the files it wrote."""
     app = create_app(store=store, clock=lambda: FROZEN_NOW, query_id=lambda: FROZEN_QUERY_ID, ingest_interval_s=0)
     return TestClient(app, **kwargs)
