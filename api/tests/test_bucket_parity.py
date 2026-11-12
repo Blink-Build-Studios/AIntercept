@@ -69,6 +69,9 @@ def _urls(old) -> list[str]:
             urls += [f"/api/v1/requests/{q['requestId']}", f"/api/v1/requests/{q['requestId']}/details"]
     for sid in [*sessions, "no-such-session"]:
         base = f"/api/v1/sessions/{sid}"
+        for e in old.get(f"{base}/events?pageSize=3").json().get("data", []):
+            if e.get("eventId"):
+                urls.append(f"/api/v1/events/{e['eventId']}")
         urls += [
             base,
             f"{base}/timeline",
