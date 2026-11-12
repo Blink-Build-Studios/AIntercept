@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,6 +28,8 @@ func replay() {
 	seed := fs.Int64("seed", 1, "random seed (pod lag, restarts)")
 	from := fs.String("from", "", "only raw files from this hour on (2006-01-02T15)")
 	to := fs.String("to", "", "only raw files before this hour (2006-01-02T15)")
+	checkEvery := fs.Int64("checkpoint-every", 0, "run -checkpoint-cmd after this many polls, and at the end (0: never)")
+	checkCmd := fs.String("checkpoint-cmd", "", "a shell command run at each checkpoint, with SHAPED set to the replay's tables so far; failing stops the replay")
 	fs.Parse(os.Args[2:])
 	if *src == "" || *work == "" {
 		fs.Usage()
@@ -58,6 +62,17 @@ func replay() {
 				fatalf("bad hour %q: %v", x.s, err)
 			}
 			*x.at = t
+		}
+	}
+	if *checkCmd != "" {
+		shaped := filepath.Join(*work, "replay")
+		cfg.CheckpointEvery = *checkEvery
+		cfg.Checkpoint = func(ctx context.Context, polls int64) error {
+			fmt.Fprintf(os.Stderr, "replay: checkpoint after %d polls\n", polls)
+			cmd := exec.CommandContext(ctx, "sh", "-c", *checkCmd)
+			cmd.Env = append(os.Environ(), "SHAPED="+shaped, fmt.Sprintf("POLLS=%d", polls))
+			cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+			return cmd.Run()
 		}
 	}
 	cfg.Progress = func(p process.ReplayProgress) {

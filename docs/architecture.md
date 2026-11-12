@@ -167,9 +167,15 @@ cache only hides it until the next commit.
 running one's do, and so do some values in finished sessions when late data
 arrives: a reported call is matched to the capture that arrives after it, step
 numbers shift with an out-of-order call, a credential's owner becomes known.
-The processor doesn't only append for these tables. Each run rewrites the rows
-of every session (or person) the run touched, so the tables always equal a
-rebuild from all the raw data so far.
+The processor doesn't only append for these tables. It takes only what's new
+(delta in) and updates just the rows each new record affects. It never
+rebuilds a session, a person or a table from all of history, so its cost
+follows traffic, not stored data. The tables still always equal one pass over
+all the raw data so far. How that runs at scale (canonical records at ingest,
+a processor sharded by key bucket and scaled on lag, a stateless API) is in
+`docs/STREAMING_PIPELINE.md` (proposed). The first implementation of these tables
+rebuilds every derived table each run. Its memory grows with history, so it
+isn't deployed: it's the reference and the API contract the pipeline must match.
 
 **How a table moves from the API to the processor: proven equal first.** Each
 table moves on its own, behind a parity test:

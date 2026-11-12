@@ -400,17 +400,36 @@ func (s *state) device(person, device string, at int64) {
 	d.FirstNS, d.LastNS = minNZ(d.FirstNS, at), max(d.LastNS, at)
 }
 
-// account records who an account is; the latest sighting wins (order independent).
+// account records who an account is. Each field is the latest sighting's that
+// says it (the greatest value at the same time), so the result is the same in
+// any arrival order: a sighting without an email never hides an older one's.
 func (s *state) account(a *events.AuthIdentity, at int64) {
 	cur := s.accounts[a.AccountID]
-	if cur != nil && cur.SeenNS > at {
-		return
+	if cur == nil {
+		cur = &Account{AccountID: a.AccountID}
+		s.accounts[a.AccountID] = cur
 	}
-	next := &Account{AccountID: a.AccountID, Email: a.Email, Name: a.Name, Org: a.Org, SeenNS: at}
-	if cur != nil { // keep what this sighting doesn't say (bootstrap names no one)
-		next.Email, next.Name, next.Org = firstStr(a.Email, cur.Email), firstStr(a.Name, cur.Name), firstStr(a.Org, cur.Org)
+	cur.SeenNS = max(cur.SeenNS, at)
+	cur.Email, cur.EmailNS = newer(cur.Email, cur.fieldNS(cur.EmailNS, cur.Email), a.Email, at)
+	cur.Name, cur.NameNS = newer(cur.Name, cur.fieldNS(cur.NameNS, cur.Name), a.Name, at)
+	cur.Org, cur.OrgNS = newer(cur.Org, cur.fieldNS(cur.OrgNS, cur.Org), a.Org, at)
+}
+
+// fieldNS is when a field was seen; a snapshot written before the per-field times
+// has only the account's latest sighting.
+func (a *Account) fieldNS(ns int64, v string) int64 {
+	if ns == 0 && v != "" {
+		return a.SeenNS
 	}
-	s.accounts[a.AccountID] = next
+	return ns
+}
+
+// newer is (v, at) if it's set and later than (cur, curNS), or as late and greater.
+func newer(cur string, curNS int64, v string, at int64) (string, int64) {
+	if v != "" && (cur == "" || at > curNS || at == curNS && v > cur) {
+		return v, at
+	}
+	return cur, curNS
 }
 
 // accountRows is the accounts snapshot, by account id.

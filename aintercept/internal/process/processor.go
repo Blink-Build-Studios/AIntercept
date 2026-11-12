@@ -53,7 +53,7 @@ var rawKey = regexp.MustCompile(`(^|/)dt=\d{4}-\d{2}-\d{2}/hour=\d{2}/instance=[
 
 // Fact tables gain a part per run; snapshot tables are replaced each run.
 var factTables = []string{"requests", "events", "ledger"}
-var snapshotTables = []string{"sessions", "prompts", "person_devices", "people", "pending", "pending_bodies"}
+var snapshotTables = []string{"sessions", "prompts", "person_devices", "people", "pending", "pending_bodies", "request_rows", "person_last", "prompt_rows", "prompt_steps", "session_rows", "session_marks", "presence_segments", "event_rows", "session_tools", "session_request_rows", "person_map", "person_sessions", "account_facts", "account_devices", "call_tool_uses"}
 
 // Config wires a processor to its stores.
 type Config struct {
@@ -137,6 +137,9 @@ type Processor struct {
 	// dirty: a run failed after folding rows into st, so st no longer matches the
 	// last commit; the next poll reloads it before going on.
 	dirty bool
+	// rowParts is what each committed fact part gives the request rows
+	// (requestrows.go). Reset at Open: a failed run's keys are reused by its retry.
+	rowParts *rowParts
 
 	mu    sync.Mutex
 	stats Stats
@@ -160,7 +163,8 @@ func New(cfg Config) *Processor {
 	}
 	cfg.RawPrefix = strings.Trim(cfg.RawPrefix, "/")
 	cfg.OutPrefix = strings.Trim(cfg.OutPrefix, "/")
-	return &Processor{cfg: cfg, st: newState(), seen: map[string]int64{}, cursor: map[string]string{}, unread: map[string]int64{}}
+	return &Processor{cfg: cfg, st: newState(), seen: map[string]int64{}, cursor: map[string]string{}, unread: map[string]int64{},
+		rowParts: newRowParts(cfg.Out)}
 }
 
 func (p *Processor) Stats() Stats {
@@ -178,6 +182,7 @@ func (p *Processor) outKey(parts ...string) string {
 // Open loads the last commit and removes what an uncommitted run left behind.
 func (p *Processor) Open(ctx context.Context) error {
 	p.st, p.seen, p.cursor, p.unread = newState(), map[string]int64{}, map[string]string{}, map[string]int64{}
+	p.rowParts = newRowParts(p.cfg.Out)
 	b, err := p.cfg.Out.Get(ctx, p.outKey("manifest.json"))
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -491,6 +496,9 @@ func (p *Processor) run(ctx context.Context, files []Object) error {
 	if err := addPart(ctx, p, &next, "events", tag, out.events); err != nil {
 		return err
 	}
+	// Written: let them go before the request rows read everything back.
+	nRequests, nEvents := int64(len(out.requests)), int64(len(out.events))
+	out = batch{}
 	if err := addPart(ctx, p, &next, "ledger", tag, ledger); err != nil {
 		return err
 	}
@@ -523,6 +531,56 @@ func (p *Processor) run(ctx context.Context, files []Object) error {
 			}
 		}
 	}
+	// Derived from all the committed data, so after the parts and compaction.
+	derived, err := p.rowParts.derive(ctx, &next, pending, p.st.accountRows(), people, sessions)
+	if err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "request_rows", tag, derived.RequestRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "person_last", tag, derived.PersonLast); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "prompt_rows", tag, derived.PromptRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "prompt_steps", tag, derived.PromptSteps); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "session_rows", tag, derived.SessionRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "session_marks", tag, derived.SessionMarks); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "presence_segments", tag, derived.Presence); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "event_rows", tag, derived.EventRows); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "session_tools", tag, derived.SessionTools); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "session_request_rows", tag, derived.SessionReqs); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "person_map", tag, derived.PersonMap); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "person_sessions", tag, derived.PersonSess); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "account_facts", tag, derived.AcctFacts); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "account_devices", tag, derived.AcctDevices); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "call_tool_uses", tag, derived.CallTools); err != nil {
+		return err
+	}
 	next.SealedThrough = p.sealThrough(&next)
 	if err := p.commit(ctx, next); err != nil {
 		return err
@@ -540,8 +598,8 @@ func (p *Processor) run(ctx context.Context, files []Object) error {
 	p.stats.FilesProcessed += int64(len(ledger))
 	p.stats.RowsRead += rows
 	p.stats.BadLines += bad
-	p.stats.Requests += int64(len(out.requests))
-	p.stats.Events += int64(len(out.events))
+	p.stats.Requests += nRequests
+	p.stats.Events += nEvents
 	p.stats.Sessions = len(sessions)
 	p.stats.FilesUnread = p.stats.FilesUnread[:0]
 	for k := range p.unread {

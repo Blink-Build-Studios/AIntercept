@@ -265,26 +265,14 @@ def test_codex_limits_skip_a_zero_minute_window_and_format_credits():
     assert lim.credits == "50,652"
 
 
-def test_usage_reasons_and_step_kinds():
+def test_usage_reasons():
+    # (What a step did, rows.step_kind, is the processor's now: promptrows_test.go TestStepKind.)
     assert rows.usage_missing(640, 200, "completed", None, 900_000, None) is None
     assert rows.usage_missing(None, 200, None, None, 900_000, None) == "parseBuffer"
     assert rows.usage_missing(None, 200, None, None, 300_000, None) == "streamCut"
     assert rows.usage_missing(None, 101, "incomplete:interrupted", 3, None, None) == "interrupted"
     assert rows.usage_missing(None, 401, None, None, 0, None) == "failed"
     assert rows.usage_missing(None, 101, None, 2, None, "prewarm") is None  # a prewarm reads in → 0
-
-    def uses(*names):
-        return json.dumps(
-            [{"name": n, "kind": "mcp" if n.startswith("mcp__") else "builtin", "count": 1} for n in names]
-        )
-
-    assert rows.step_kind(uses("exec"), "completed") == "exec"
-    assert rows.step_kind(uses("exec", "apply_patch"), "completed") == "patch"
-    assert rows.step_kind(uses("Bash", "Task"), "tool_use") == "spawn"
-    assert rows.step_kind(uses("mcp__fs__read"), None) == "mcp"
-    assert rows.step_kind(uses("Read"), None) == "tool"
-    assert rows.step_kind(None, "end_turn") == "text"
-    assert rows.step_kind(uses("exec"), "incomplete:interrupted") == "interrupt"
 
 
 def test_org_kind_needs_the_customer_org_ids(monkeypatch):

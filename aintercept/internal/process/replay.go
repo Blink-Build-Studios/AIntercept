@@ -37,6 +37,12 @@ type ReplayConfig struct {
 	From, To time.Time
 	// Progress, if set, is called every so often.
 	Progress func(ReplayProgress)
+	// Checkpoint, if set, is called after every CheckpointEvery polls and after the
+	// last, with the replay's tables committed so far (under Work, prefix
+	// "replay"): a check of what the tables hold mid-stream, while sessions are
+	// still running. An error stops the replay.
+	Checkpoint      func(ctx context.Context, polls int64) error
+	CheckpointEvery int64
 }
 
 type ReplayProgress struct {
@@ -265,6 +271,11 @@ func Replay(ctx context.Context, cfg ReplayConfig) (ReplayReport, error) {
 		if rep.Polls%1000 == 0 {
 			report()
 		}
+		if cfg.Checkpoint != nil && cfg.CheckpointEvery > 0 && rep.Polls%cfg.CheckpointEvery == 0 {
+			if err := cfg.Checkpoint(ctx, rep.Polls); err != nil {
+				return fmt.Errorf("checkpoint after %d polls: %w", rep.Polls, err)
+			}
+		}
 		if cfg.RestartEvery > 0 && rng.Intn(cfg.RestartEvery) == 0 {
 			if proc, err = newProc(); err != nil {
 				return fmt.Errorf("restart: %w", err)
@@ -321,6 +332,11 @@ func Replay(ctx context.Context, cfg ReplayConfig) (ReplayReport, error) {
 		return rep, fmt.Errorf("final poll: %w", err)
 	}
 	report()
+	if cfg.Checkpoint != nil {
+		if err := cfg.Checkpoint(ctx, rep.Polls); err != nil {
+			return rep, fmt.Errorf("final checkpoint: %w", err)
+		}
+	}
 
 	got, err := ReadTables(ctx, cfg.Work, "replay")
 	if err != nil {

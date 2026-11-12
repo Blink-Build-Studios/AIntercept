@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,23 @@ type Tables struct {
 	Devices  []PersonDevice
 	People   []Person
 	Ledger   []Ledger
+	Accounts []Account
+	// RequestRows is derived (requestrows.go): equal when the tables it's built from are.
+	RequestRows  []RequestRow
+	PersonLast   []PersonLast
+	PromptRows   []PromptRow
+	PromptSteps  []PromptStep
+	SessionRows  []SessionRow
+	SessionMarks []SessionMark
+	Presence     []PresenceSegment
+	EventRows    []EventRow
+	SessionTools []SessionTool
+	SessionReqs  []SessionRequestRow
+	PersonMap    []PersonMapRow
+	PersonSess   []PersonSession
+	AcctFacts    []AccountFact
+	AcctDevices  []AccountDevice
+	CallTools    []CallToolUse
 }
 
 // ReadTables reads the tables the manifest under prefix names.
@@ -41,10 +59,28 @@ func ReadTables(ctx context.Context, s Store, prefix string) (Tables, error) {
 		return out, err
 	}
 	for table, into := range map[string]func([]string) error{
-		"sessions":       func(k []string) error { return readInto(ctx, s, k, &out.Sessions) },
-		"prompts":        func(k []string) error { return readInto(ctx, s, k, &out.Prompts) },
-		"person_devices": func(k []string) error { return readInto(ctx, s, k, &out.Devices) },
-		"people":         func(k []string) error { return readInto(ctx, s, k, &out.People) },
+		"sessions":          func(k []string) error { return readInto(ctx, s, k, &out.Sessions) },
+		"prompts":           func(k []string) error { return readInto(ctx, s, k, &out.Prompts) },
+		"person_devices":    func(k []string) error { return readInto(ctx, s, k, &out.Devices) },
+		"people":            func(k []string) error { return readInto(ctx, s, k, &out.People) },
+		"accounts":          func(k []string) error { return readInto(ctx, s, k, &out.Accounts) },
+		"request_rows":      func(k []string) error { return readInto(ctx, s, k, &out.RequestRows) },
+		"person_last":       func(k []string) error { return readInto(ctx, s, k, &out.PersonLast) },
+		"prompt_rows":       func(k []string) error { return readInto(ctx, s, k, &out.PromptRows) },
+		"prompt_steps":      func(k []string) error { return readInto(ctx, s, k, &out.PromptSteps) },
+		"session_rows":      func(k []string) error { return readInto(ctx, s, k, &out.SessionRows) },
+		"session_marks":     func(k []string) error { return readInto(ctx, s, k, &out.SessionMarks) },
+		"presence_segments": func(k []string) error { return readInto(ctx, s, k, &out.Presence) },
+		"event_rows":        func(k []string) error { return readInto(ctx, s, k, &out.EventRows) },
+		"session_tools":     func(k []string) error { return readInto(ctx, s, k, &out.SessionTools) },
+		"session_request_rows": func(k []string) error {
+			return readInto(ctx, s, k, &out.SessionReqs)
+		},
+		"person_map":      func(k []string) error { return readInto(ctx, s, k, &out.PersonMap) },
+		"person_sessions": func(k []string) error { return readInto(ctx, s, k, &out.PersonSess) },
+		"account_facts":   func(k []string) error { return readInto(ctx, s, k, &out.AcctFacts) },
+		"account_devices": func(k []string) error { return readInto(ctx, s, k, &out.AcctDevices) },
+		"call_tool_uses":  func(k []string) error { return readInto(ctx, s, k, &out.CallTools) },
 	} {
 		if k := m.Snapshots[table]; k != "" {
 			if err := into([]string{k}); err != nil {
@@ -104,6 +140,38 @@ func Diff(got, want Tables, limit int) []string {
 	add("person_devices", diffRows(got.Devices, want.Devices, func(d PersonDevice) string { return d.PersonID + "|" + d.DeviceID }))
 	add("people", diffRows(got.People, want.People, func(p Person) string { return p.PersonID }))
 	add("ledger", diffRows(got.Ledger, want.Ledger, func(l Ledger) string { return l.RawKey }))
+	add("accounts", diffRows(got.Accounts, want.Accounts, func(a Account) string { return a.AccountID }))
+	add("request_rows", diffRows(got.RequestRows, want.RequestRows, func(r RequestRow) string { return r.PersonID + "|" + r.RequestID }))
+	add("person_last", diffRows(got.PersonLast, want.PersonLast, func(r PersonLast) string { return r.PersonID }))
+	add("prompt_rows", diffRows(got.PromptRows, want.PromptRows, func(r PromptRow) string {
+		return r.SessionID + "|" + strconv.FormatInt(r.Seq, 10)
+	}))
+	add("prompt_steps", diffRows(got.PromptSteps, want.PromptSteps, func(r PromptStep) string {
+		return r.SessionID + "|" + strconv.FormatInt(r.Seq, 10) + "|" + strconv.FormatInt(r.Step, 10)
+	}))
+	add("session_rows", diffRows(got.SessionRows, want.SessionRows, func(r SessionRow) string { return r.SessionID }))
+	add("session_marks", diffRows(got.SessionMarks, want.SessionMarks, func(r SessionMark) string {
+		return r.SessionID + "|" + strconv.FormatInt(r.Seq, 10)
+	}))
+	add("presence_segments", diffRows(got.Presence, want.Presence, func(r PresenceSegment) string {
+		return r.SessionID + "|" + strconv.FormatInt(r.Seq, 10)
+	}))
+	add("event_rows", diffRows(got.EventRows, want.EventRows, func(r EventRow) string {
+		return r.SessionID + "|" + strconv.FormatInt(r.Seq, 10)
+	}))
+	add("session_tools", diffRows(got.SessionTools, want.SessionTools, func(r SessionTool) string {
+		return r.SessionID + "|" + r.Kind + "|" + r.Server + "|" + r.Tool
+	}))
+	add("session_request_rows", diffRows(got.SessionReqs, want.SessionReqs, func(r SessionRequestRow) string {
+		return r.Scope + "|" + strconv.FormatInt(r.Seq, 10)
+	}))
+	add("person_map", diffRows(got.PersonMap, want.PersonMap, func(r PersonMapRow) string { return r.PersonID + "|" + r.AccountID }))
+	add("person_sessions", diffRows(got.PersonSess, want.PersonSess, func(r PersonSession) string { return r.PersonID + "|" + r.SessionID }))
+	add("account_facts", diffRows(got.AcctFacts, want.AcctFacts, func(r AccountFact) string { return r.AccountID }))
+	add("account_devices", diffRows(got.AcctDevices, want.AcctDevices, func(r AccountDevice) string { return r.AccountID + "|" + r.DeviceID }))
+	add("call_tool_uses", diffRows(got.CallTools, want.CallTools, func(r CallToolUse) string {
+		return r.SessionID + "|" + strconv.FormatInt(r.TsNS, 10) + "|" + r.Kind + "|" + r.Server + "|" + r.Tool
+	}))
 	return out
 }
 
