@@ -720,19 +720,39 @@ review found these order dependences:
 - **The bug list.** Record each change in the parity oddities list as a
   deliberate behavior pin.
 
-### 2.3 Inventory what's left
+### 2.3 Inventory what's left (as of the precompute PR)
 
-After 2.1, list every API query that still touches a raw fact view (`calls`,
-`cc_events`, `codex_events`, `analytics`, `requests`, `accounts`, `sessions`,
-`people`, `person_devices`, `pending`). The expected list:
-- `/status` (counts and probes);
-- the request drawer: `detail`, `raw` and `details`, through `load_wire`,
-  `_wire_from_tables`, `ss.events(about=)`, `ss.steps`, `pp.prompt_indexes`,
-  `find_report` and `reported_detail`;
-- `/events/{id}`.
+After 2.1, these API queries still read a fact table or a snapshot instead of a
+precomputed table. The files are in `api/src/aintercept_api/`.
 
-Each one gets a home in phase 3 or phase 4 (see 3.6 and 4.9). Write the
-inventory into this document when 2.1 lands.
+| Endpoint | Function | Reads | Where |
+|---|---|---|---|
+| `GET /status` | `get_status` | `calls`, `analytics`, `probes` (first and newest data, probe times) | `routers/status.py:11-16` |
+| `GET /overview` | `directory.overview` | `calls` (requests in the window) | `directory.py:222-226` |
+| `GET /people`, `/overview` | `_DIRECTORY` | `sessions` snapshot (drops sessions far outside the range) | `directory.py:122-125` |
+| `GET /people`, `/overview` | `_MEMBERS` | `accounts` snapshot (names, emails) | `directory.py:128-133` |
+| `GET /people/{id}` | `get_person` | `accounts` snapshot (name, email) | `routers/people.py:244-252` |
+| `GET /people/{id}/*` | `rollups.linked` → `cc.linked_accounts` | `accounts` (email group) | `claude_code.py:149-158` |
+| `GET /requests/{id}` (drawer) | `detail` → `load_wire` / `_wire_from_tables` | raw files; `calls`; `cc_events` (a batch's session) | `request_detail.py:200-337` |
+| | `detail` → `cc.load_session` | `cc_calls`, `hidden_calls`, `sessions`, `cc_events` | `claude_code.py:198-320` |
+| | `facts` → `ss.events(about=…)` | `cc_events` | `request_detail.py:498`, `session.py:157-212` |
+| | `position` → `ss.steps`, the message-id chain | `cc_calls`, `calls` | `request_detail.py:603-638`, `session.py:121-135` |
+| | `find_report`, `reported_detail` (`reported:` ids) | `cc_events` | `request_detail.py:881-909` |
+| `GET /requests/{id}/raw` | `raw` → `load_wire` / `find_report` | as above | `request_detail.py:1015` |
+| `GET /requests/{id}/details` | `details` → `_event_rows` → `pp.prompt_indexes` | `cc_events`, `cc_calls` | `request_detail.py:1084-1102,1174`, `person.py:239-256` |
+| `GET /events/{id}` | `event` | `cc_events`, then the raw file | `request_detail.py:1386-1406` |
+
+No endpoint calls `rows.request_rows`, `pp.transactions`, `pp.key_hashes`,
+`pp.reports`, `pp.retries`, `cc.load_person`, `cc.person_sessions` or
+`cc.unattributed_sessions` any more. They stay as the test suite's request-row
+parity reference (`tests/conftest.py:132-155`).
+
+Each remaining read gets a home in a later phase:
+- **The `accounts` reads and the email group** become dimensions (4.6).
+- **The drawer** reads per-call detail objects plus per-key outputs (3.2, 4.9).
+- **`/status` and the overview's request count** become a count over the
+  bucketed records.
+- **The `sessions`-snapshot range filter** becomes `session_rows`.
 
 ### 2.4 The deliverable
 
