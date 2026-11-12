@@ -138,8 +138,8 @@ runtime failure in-cluster.
 {{- if and .enforce (not .endpoint) -}}
 {{- fail "interceptor.enforce needs interceptor.endpoint: enforced calls go through the Interceptor" -}}
 {{- end -}}
-{{- if and .enforce (lt (int $.Values.observer.autoscaling.minReplicas) 2) -}}
-{{- fail "interceptor.enforce needs observer.autoscaling.minReplicas >= 2: enforced calls are refused while no observer is up" -}}
+{{- if and .enforce (lt (int $.Values.envoy.autoscaling.minReplicas) 2) -}}
+{{- fail "interceptor.enforce needs envoy.autoscaling.minReplicas >= 2: enforced calls are refused while no observer is up, and each envoy pod runs one" -}}
 {{- end -}}
 {{- if not (has (.onError | default "deny") (list "deny" "allow")) -}}
 {{- fail "interceptor.onError must be deny or allow" -}}

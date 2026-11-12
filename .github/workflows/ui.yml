@@ -26,7 +26,14 @@ jobs:
           go-version-file: aintercept/go.mod
           cache-dependency-path: |
             aintercept/go.sum
+      - name: Install helm 3.16.3 (checksum-verified), for the chart test
+        run: |
+          curl -sSfLO https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz
+          echo "f5355c79190951eed23c5432a3b920e071f4c00a64f75e077de0dd4cb7b294ea  helm-v3.16.3-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf helm-v3.16.3-linux-amd64.tar.gz -C /tmp && sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
       - run: make check-go
+        env:
+          CHART_TEST_REQUIRED: "1"
 
   api:
     name: API (ruff, format, mypy strict, tests, coverage >= 90%)
