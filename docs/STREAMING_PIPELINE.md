@@ -451,7 +451,7 @@ the ones before it.
 | Phase | What | Fixes | Ships to the cluster? |
 |---|---|---|---|
 | 1 | Stop losing data | data loss happening today | yes, on its own |
-| 2 | Finish the table work and make it deterministic | the API contract the new processor must produce | no (reference only) |
+| 2 | Finish the table work and make it deterministic | the API contract the new processor must produce | no: merged as the reference (2.5) |
 | 3 | Canonical records at ingest, by bucket | the processor's input | yes, written alongside today's raw log |
 | 4 | The bucketed processor | the bottleneck | yes, alongside the old processor |
 | 5 | The API reads the bucketed tables | the whole-history load | yes, after a live parity soak |
@@ -760,28 +760,24 @@ Each remaining read gets a home in a later phase:
 stack. It's merged so that main carries the reference builders, the table
 schemas, the SQL endpoints and the parity tooling that phases 4 and 5 build on.
 
-### 2.5 Deploy it as interim relief (decided)
+### 2.5 Merged, not deployed (decided)
 
-It makes the person page fast now. Its memory still grows with history, so it's
-deployed with guard rails and replaced by phase 6.
+The precompute PR is merged as the **reference implementation and the API
+contract** for the streaming pipeline. It is **not deployed**, and the cluster
+stays on today's processor.
 
-1. **Measure first.** Run a full `aintercept process` on a copy of the demo
-   bucket's entire history (every day since capture began), locally.
-   - Record the peak RSS, the time per run, and how both grow per day of
-     history.
-   - Project when it would reach the processor's 2 GiB limit (in
-     `deploy/aintercept/values.yaml` in stitchwork).
-   - If it's under 50% of the limit with at least 30 days of headroom, deploy.
-     If not, raise the limit to fit, and record the date it runs out.
-2. **Deploy.** Use the same Helm release with new images (process and API). The
-   processor backfills the derived tables on its first run, then the API serves
-   them.
-3. **Watch it.** Add an alert on the processor's RSS at 70% of its limit, and on
-   run time above 60 s.
-4. **Check it.** Run the endpoint parity tools against the deployed API once,
-   comparing it with the previous release on the same data at a pinned now.
-5. **Replace it.** It stays until phase 6 lands. Phase 6 replaces it, and its
-   RSS alert is the backstop.
+**Why it isn't deployed:** memory.
+- **Full history:** the derive step over the demo cluster's whole history (22
+  days, 7.9 GB of raw capture) peaks at **1.9 GB RSS**, with about 930 MB of live
+  heap.
+- **Two days:** the same step over two days peaks at 705 MB RSS, with 337 MB of
+  live heap.
+- **Growth:** live heap grows about 145 MB per GB of raw. Recent days bring
+  1.8–3.1 GB of raw each, so that's roughly **+250–450 MB per day**.
+- **The limit:** the nodes have about 2.9 GiB allocatable each, so it would
+  outgrow them within days.
+
+The person page stays slow until phases 3–6 replace the full rebuild.
 
 ---
 
@@ -1249,7 +1245,7 @@ Decided on 2026-11-12:
    and scale together (1.2).
 2. **Only enforce mode fails closed.** Observe mode does its utmost not to drop
    data, but never breaks traffic (1.1, 1.5).
-3. **The phase 2 stack goes to the cluster as interim relief,** behind the
-   memory measurement and alerts in 2.5.
+3. **The phase 2 stack is merged but not deployed:** its memory grows with
+   history, about 1.9 GB over 22 days and 250–450 MB more a day (2.5).
 4. **Lag scaling uses KEDA's `metrics-api` trigger** on the processor's `/lag`
    endpoint. KEDA already runs in the cluster (4.10).
