@@ -1,6 +1,8 @@
 package records
 
 import (
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+
 	"fmt"
 	"hash/fnv"
 	"strings"
@@ -67,6 +69,13 @@ func ObjectKeyPrefix(prefix string, bucket int) string {
 func ObjectKey(prefix string, bucket int, uploaded time.Time, incarnation string, seq int64) string {
 	return fmt.Sprintf("%sminute=%s/%s-%012d.parquet", ObjectKeyPrefix(prefix, bucket),
 		uploaded.UTC().Format("2006-01-02T15:04"), incarnation, seq)
+}
+
+// ObjectKeyTemplate is ObjectKey with its minute left as events.UploadMinute,
+// for the writer to fill in at each upload attempt.
+func ObjectKeyTemplate(prefix string, bucket int, incarnation string, seq int64) string {
+	return fmt.Sprintf("%sminute=%s/%s-%012d.parquet", ObjectKeyPrefix(prefix, bucket),
+		events.UploadMinute, incarnation, seq)
 }
 
 func withSlash(p string) string {

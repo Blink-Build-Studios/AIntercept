@@ -99,6 +99,8 @@ type WriterConfig struct {
 	NewTicker func(time.Duration) (<-chan time.Time, func())
 	// SkipFsync skips fsync on spooled files (tests only).
 	SkipFsync bool
+	// Now is the clock upload-minute keys are named by (tests). Default time.Now.
+	Now func() time.Time
 }
 
 // StreamConfig configures one Stream: a sequence of NDJSON lines sealed into

@@ -20,6 +20,13 @@ type Putter interface {
 	Put(ctx context.Context, key string, body []byte) error
 }
 
+// UploadKeyPutter is a Putter that names records files by their upload minute
+// (ObjectKeyTemplate) when they're uploaded, not when they're sealed. The
+// observer's writer is one.
+type UploadKeyPutter interface {
+	PutAtUpload(ctx context.Context, tmpl string, body []byte) error
+}
+
 // DetailPutter is a Putter that writes call detail objects apart (their own
 // content type and encoding). A Putter without it writes them with Put.
 type DetailPutter interface {
@@ -39,6 +46,9 @@ type writerPutter struct{ records, details *events.ObjectStream }
 
 func (p writerPutter) Put(_ context.Context, key string, body []byte) error {
 	return p.records.Put(key, body)
+}
+func (p writerPutter) PutAtUpload(_ context.Context, tmpl string, body []byte) error {
+	return p.records.PutAtUpload(tmpl, body)
 }
 func (p writerPutter) PutDetail(_ context.Context, key string, body []byte) error {
 	return p.details.Put(key, body)
@@ -160,24 +170,34 @@ func (s *Sink) seal() {
 	now := s.cfg.Now()
 	for b, rs := range by {
 		s.seq++
-		key := ObjectKey(s.cfg.Prefix, int(b), now, s.cfg.Incarnation, s.seq)
 		body, err := Encode(rs)
 		if err != nil {
 			s.errs = append(s.errs, err)
-			slog.Error("ALARM records encode failed", "key", key, "err", err)
+			slog.Error("ALARM records encode failed", "bucket", b, "err", err)
 			continue
 		}
+		seq := s.seq
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			if err := s.cfg.Putter.Put(context.Background(), key, body); err != nil {
+			if err := PutBucketFile(context.Background(), s.cfg.Putter, s.cfg.Prefix, int(b), s.cfg.Incarnation, seq, body, now); err != nil {
 				s.mu.Lock()
 				s.errs = append(s.errs, err)
 				s.mu.Unlock()
-				slog.Error("ALARM records put failed", "key", key, "err", err)
+				slog.Error("ALARM records put failed", "bucket", b, "err", err)
 			}
 		}()
 	}
+}
+
+// PutBucketFile writes one bucket's encoded records file. A Putter that names
+// files at upload (UploadKeyPutter: the observer's writer) gets the key
+// template; any other is given the key for now.
+func PutBucketFile(ctx context.Context, put Putter, prefix string, bucket int, incarnation string, seq int64, body []byte, now time.Time) error {
+	if up, ok := put.(UploadKeyPutter); ok {
+		return up.PutAtUpload(ctx, ObjectKeyTemplate(prefix, bucket, incarnation, seq), body)
+	}
+	return put.Put(ctx, ObjectKey(prefix, bucket, now, incarnation, seq), body)
 }
 
 // putDetail writes one call's detail object, gzipped. Called with mu held.
