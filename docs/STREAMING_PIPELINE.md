@@ -343,19 +343,867 @@ enforced.
 - **The endpoints' SQL,** pointed at the bucketed tables.
 - **The replay and parity tooling,** extended to many pods and replicas.
 
-## Build order
 
-The current deployment is broken at three people, so the build starts with what's
-broken now:
+# Implementation plan
 
-1. **Stop losing data.** The single writer, the disk spool, failing closed, and
-   the `preStop` ordering. Data is being lost today.
-2. **Canonical records,** by bucket and minute, plus the per-call detail objects.
-3. **The bucketed processor:** leases, watermarks, per-record updates, run files
-   and compaction. It's proven against the answer key with the distributed
-   replay.
-4. **The API read path,** with endpoint parity against today.
-5. **The lag scaler,** then deploy.
+This part says how to get from today's code to the design above, in order. Each
+step names the code it changes, what's built, how it's tested, and the gate that
+must pass before the next step starts.
 
-Each step has to pass the same gate before the next one starts: an exact match
-with the answer key, and flat cost.
+File references are to `main` at `dd2797b` unless marked **PORT**. PORT is the
+precompute branch stack, `precompute-request-rows` … `precompute-event-rows`,
+plus the uncommitted table-7 work.
+
+## Where things stand
+
+### Ingest (`aintercept/internal/observer`, `internal/events`, `internal/extproc`)
+
+- **Envoy and the observer are two Deployments.** They talk over the network:
+  Envoy reaches the headless `observer-pods` Service through ORCA-weighted round
+  robin (`deploy/helm/aintercept/templates/observer.yaml:20-219`,
+  `templates/envoy.yaml`, `files/envoy.multi.yaml:382-411`). The observer
+  autoscales on CPU or memory budget, through KEDA or HPA
+  (`observer.yaml:220-290`).
+- **Everything fails open.** The observing ext_proc filter runs with
+  `observability_mode: true` and `failure_mode_allow: true`
+  (`envoy.multi.yaml:157,159`), and `scripts/smoke-test.sh:118` asserts that a
+  request succeeds with the observer stopped.
+- **Captured data is dropped in six places:**
+  1. **`events/processor.go:113-128`.** The ext_proc buffer (`OBSERVER_BUFFER_SIZE`,
+     16,384 in Helm) drops the **whole event** when full, `complete` rows
+     included.
+  2. **`events/processor.go:148-157`.** A panic in processing drops the event.
+  3. **`events/processor.go:194-211`.** A sink error skips the row and that
+     transaction's client events.
+  4. **`events/s3sink.go:313-320`.** A full upload queue (depth 8) drops a sealed
+     batch.
+  5. **`events/s3sink.go:349-351`.** A failed PUT is never retried, so the batch
+     is lost.
+  6. **SIGKILL.** Every unsealed or in-flight batch is in memory only, with no
+     disk spool.
+- **Five independent `S3Sink`s each run their own upload goroutine**
+  (`observer.go:101-221`): body-stripped, capture, two local sinks, and schema
+  samples.
+- **Raw keys.** Raw files go to
+  `<prefix>/dt=/hour=/instance=<pod>/<batchStartNanos>-<seq>.ndjson.gz`
+  (`s3sink.go:325-341`), with the batch **start** time in the key, not the upload
+  time.
+- **Assembly is split.** The observer keeps per-stream state and already builds
+  call start and call end records, but only for the Interceptor
+  (`interceptor/build.go:10-161`). It writes phase rows: headers, body chunks,
+  complete, disconnect, ws_connection, client_event. Pairing them into calls
+  happens in the processor (`process/shape.go`).
+- **Session ids are known at request time** for Claude Code
+  (`x-claude-code-session-id`) and Codex HTTP (`x-codex-turn-metadata`). Codex
+  WebSocket ids are known per turn, at `response.create`. Analytics events
+  carry their session id per event. claude.ai chat turns have none; they're
+  identified by credential and conversation.
+
+### Processor (`aintercept/internal/process`)
+
+- **It's a single process by construction.**
+  - Helm runs `replicas: 1` with `strategy: Recreate` (`templates/process.yaml:15-16`).
+  - `processor.go:123-124` says so.
+  - The manifest commit is a plain PUT with no compare-and-swap
+    (`processor.go:573-583`, `store.go:30-42`).
+  - Run numbers come from `man.Run + 1`.
+  - `removeOrphans` deletes any output its manifest doesn't name
+    (`processor.go:271-302`).
+- **State is global:**
+  - one map each for sessions, prompts, devices, pending, accounts and bodies
+    (`shape.go:35-52`);
+  - one data clock, `newestNS`, that drives every key's expiry
+    (`shape.go:263-282`);
+  - people derived from everything at each snapshot (`shape.go:412-456`);
+  - every snapshot table rewritten whole each run (`processor.go:626-636`).
+- **PORT adds a full rebuild of every derived table on every run**
+  (`requestrows.go:478-556`), which is what made memory grow with history.
+
+### API (`api/src/aintercept_api`)
+
+- **One replica** (`templates/api.yaml:15`), with a `mirror` sidecar that copies
+  the whole shaped output to local disk. `store.py:396-451` loads every fact and
+  snapshot table into DuckDB on each commit.
+- **On PORT**, the session endpoints and `/people/{id}/requests` and `/timeline`
+  are SQL over precomputed tables. These still derive from raw fact views
+  (`calls`, `cc_events`, `accounts`):
+  - `/people` and `/overview` (`directory.py`);
+  - `/people/{id}` (header facts);
+  - `/people/{id}/summary`;
+  - `/coverage`;
+  - the person→sessions lookup (`claude_code.py:147-205`);
+  - `/status`;
+  - the request drawer (`request_detail.py`).
+- **The uncommitted table-7 work** (`git stash@{0}`, 14 files, +585/−678, plus
+  `personmap.go`, `personmap_test.go` and `rollups.py`) moves most of the person
+  and directory endpoints onto five new tables.
+- **The request drawer reads raw files** between a call's first and last file
+  for its pod (`store.py:546-606`, `raw.py:88-108`).
+
+## Sequence
+
+There are seven phases, each delivered as one PR or a small stack. Phases 1 and 2
+don't depend on each other and can run in parallel; every other phase depends on
+the ones before it.
+
+| Phase | What | Fixes | Ships to the cluster? |
+|---|---|---|---|
+| 1 | Stop losing data | data loss happening today | yes, on its own |
+| 2 | Finish the table work and make it deterministic | the API contract the new processor must produce | no (reference only) |
+| 3 | Canonical records at ingest, by bucket | the processor's input | yes, written alongside today's raw log |
+| 4 | The bucketed processor | the bottleneck | yes, alongside the old processor |
+| 5 | The API reads the bucketed tables | the whole-history load | yes, after a live parity soak |
+| 6 | Lag scaler, cutover, deletion | the single process | yes |
+| 7 | The behavior fixes (the parity oddities list) | 50 known Python quirks | yes |
+
+---
+
+## Phase 0: housekeeping, before anything else
+
+1. **Merge PR #13** (late endings of expired calls no longer written twice; the
+   replay flushes quiet pods on time). It fixes the processor that's running
+   today, and every replay below relies on its harness fix.
+2. **Rebase the PORT stack onto `main`**, keeping it a stack. Re-run
+   `make check` on its tip.
+3. **Confirm create-only writes on every target store** with a small command,
+   `aintercept storecheck -bucket … -prefix …`:
+   - a `PutObject` with `If-None-Match: *` succeeds;
+   - a second one fails with 412;
+   - a listing returns the new object at once.
+
+   Run it against AWS S3 (the production target) and against MinIO (CI). The
+   demo cluster's DigitalOcean Spaces bucket is checked too and the result
+   recorded. If Spaces fails, the demo cluster is moved to AWS for phase 4 or
+   later; the design isn't weakened to fit it.
+4. **Resolve the four decisions** listed at the end. Decision 1, co-location,
+   changes phase 1.
+
+---
+
+## Phase 1: stop losing data (ingest completeness)
+
+This ships to the cluster on its own. It changes no table or UI output.
+
+### 1.1 Spike: Envoy's fail-closed behavior (do this first, a day at most)
+
+- **The question.** `observability_mode: true` makes Envoy send to ext_proc
+  without waiting. What does `failure_mode_allow: false` do then in three cases?
+  1. no healthy observer endpoint;
+  2. the observer refuses or closes the stream;
+  3. the observer applies gRPC flow-control backpressure.
+- **How.** Build each case in `test/interceptor/compose.yml` (Envoy + observer +
+  MinIO), and write the result into `docs/INTERCEPTION_ISSUES.md`.
+- **Plan A.** If closing the stream, or failing readiness, makes Envoy reject
+  the request, the observer fails closed by refusing new streams.
+- **Plan B.** Otherwise, the observing filter leaves observability mode only
+  when fail-closed is enabled. Envoy then waits for the observer's
+  acknowledgement of each phase, which costs one localhost round trip per phase.
+  Measure that latency in the spike and record it as an addendum to Decision 1.
+
+### 1.2 Co-locate the observer with Envoy (if decision 1 says so)
+
+This is recommended. Each pod is then the full ingest stack, ext_proc goes over
+localhost, and fail-closed and the shutdown order are local to the pod.
+
+1. **The pod.** Add an `observer` container to the Envoy Deployment
+   (`templates/envoy.yaml`). Point the `observer` cluster in `envoy.multi.yaml`
+   at `127.0.0.1:9000`, as a `STATIC` single endpoint with no ORCA.
+2. **Retire the observer's own Deployment.** Remove the separate observer
+   Deployment, the `observer-pods` headless Service, ORCA weighting,
+   `/stats/fleet` and the observer's KEDA/HPA. Autoscale the combined pod on
+   CPU, as Envoy does today (or with KEDA if that's already configured).
+3. **Keep the observer's code unchanged otherwise.** `OBSERVER_INSTANCE` stays
+   the pod name.
+4. **Resources and policy.** Size requests and limits for both containers, and
+   keep the NetworkPolicy in line (`templates/networkpolicy.yaml:52-73`).
+5. **Update** `docs/DEPLOY_DOKS.md` and `docs/PRODUCTION.md`.
+
+### 1.3 The single writer (`aintercept/internal/events/writer.go`, new)
+
+1. **The type.**
+   `type Writer struct{ in chan item; spool *Spool; uploads chan sealed; … }`.
+   The `item` is `{Key string; Body []byte; ContentType, ContentEncoding string}`.
+   A `Run(ctx)` select loop runs over `ctx.Done()`, `in`, a 10 s ticker and the
+   byte cap. It follows the hopper pattern: a worker struct, `Run(ctx)`, and
+   channels in and out.
+2. **Sealing.** A batch of items is sealed by writing each item to the spool
+   (`spool.Put` writes a temp file, fsyncs, renames it into `spool/ready/`, then
+   fsyncs the directory) and handing the key to the uploader.
+3. **Uploaders.** A small pool, 4 goroutines by default. Each reads from
+   `spool/ready/`, calls `PutObject` with a 30 s timeout, and deletes the spool
+   file only after a successful upload. A failure retries with capped
+   exponential backoff (1 s up to 60 s) and jitter, **forever**. A file is never
+   dropped.
+4. **Startup.** Every file left in `spool/ready/` is re-queued. That covers a
+   crash, an OOM, or a restarted container.
+5. **Spool limits.** The spool's byte limit is
+   `OBSERVER_SPOOL_MAX_BYTES` (the default matches the volume's size limit).
+   It reports `Full() bool` past 95% and clears below 80%.
+6. **Moving the existing sinks onto the writer.** Each `S3Sink` keeps its
+   batching (MaxBytes/MaxEvents/MaxAge), but its seal calls `writer.Put`
+   instead of queuing to its own goroutine:
+   - delete `uploadLoop`, `uploads`, the queue-full drop at `s3sink.go:313-320`
+     and the PUT-failure drop at `349-351`;
+   - `S3Sink.Flush` becomes "seal, then `writer.Flush`";
+   - `writer.Flush` waits until the spool is empty.
+
+   `localdir.go` becomes a different putter under the same writer.
+7. **Defaults.** `OBSERVER_S3_MAX_AGE_SECONDS` defaults to 10 (it's 60 today).
+   Update the Helm `objectStore.maxAgeSeconds` default and `docker-compose.yml`.
+8. **Metrics** on `/stats` and in Prometheus:
+   - spool bytes and files;
+   - age of the oldest spooled file;
+   - upload attempts, failures and retries;
+   - full state;
+   - fail-closed rejections.
+9. **Readiness.** `/healthz/ready` fails when `spool.Full()`. `/healthz` (liveness)
+   stays as it is. Split the Helm readiness probe off from liveness
+   (`templates/observer.yaml:149-156`).
+10. **The volume.** Mount an `emptyDir` with `sizeLimit` (value
+    `observer.spool.sizeLimit`, default 10Gi) at `/spool`. The container's root
+    filesystem stays read-only.
+
+### 1.4 Remove the drop paths in `events/processor.go`
+
+1. **`Offer` (113-128).**
+   - Replace the non-blocking send with a blocking send that respects the
+     stream's context.
+   - When the buffer is full, the ext_proc stream goroutine waits, and gRPC flow
+     control pushes back on Envoy. That's the fail-closed path from 1.1.
+   - Count waits that last longer than 100 ms as a metric.
+   - Remove `dropped`. Keep `OBSERVER_BUFFER_SIZE`.
+2. **A panic (148-157)** still recovers, but the original event is emitted
+   unprocessed (`Phase`, `CorrelationID`, the raw fields) so the raw log keeps
+   it. Count it.
+3. **A sink error (194-211)** can only mean the writer has closed during
+   shutdown, so it becomes a fatal log line, not a silent skip.
+4. **Schema sampling caps (172-187, 306-309)** stay. Samples are diagnostics,
+   not data.
+
+### 1.5 Fail closed
+
+- **When.** The writer's spool is full, or the observer is unready or down.
+- **What Envoy does then.** It rejects new AI requests, by plan A or plan B
+  from 1.1.
+- **Envoy config.** Set `failure_mode_allow: false` on the observing filter
+  (`envoy.multi.yaml:159`). It becomes the Helm value
+  `observer.failClosed: true`, which is the default.
+- **The smoke test.** Change `scripts/smoke-test.sh:118` to assert the
+  **rejection** when the observer is stopped. Add a second case, with
+  `failClosed: false`, that keeps the old assertion.
+- **Ownership checks.** The observer's interceptor path (`interceptor.go`)
+  already fails closed in enforce mode. Check that the two settings compose.
+
+### 1.6 Shutdown order (with co-location)
+
+1. **Envoy's `preStop`** (`templates/envoy.yaml:83-108`) stays as it is: sleep,
+   `drain_listeners?graceful`, then wait for active requests to reach 0 or the
+   drain timeout.
+2. **WebSockets.** Before `drainTimeSeconds`, Envoy's `preStop` calls
+   `POST /drain_listeners` (non-graceful) 60 s before the deadline. That forces
+   upgraded connections closed. Each WebSocket's ext_proc stream ends, so
+   `wsClose` writes its `ws_connection` row (`extproc/ws.go:176-209`). Clients
+   reconnect to another pod.
+3. **The observer's `preStop`** waits until Envoy's admin port stops answering
+   (Envoy has exited) or the deadline is near. Only then does the observer start
+   its existing shutdown sequence (`observer.go:334-393`):
+   `GracefulStop` → `proc.Close` → `writer.Flush` → spool empty → exit.
+4. **`terminationGracePeriodSeconds`** = Envoy drain + 60 s for WebSocket close
+   + writer flush time (bounded by spool size ÷ upload rate) + margin. Default
+   300.
+5. **Data on a SIGKILL.** Anything already in the spool survives a restart of
+   the same pod. If the node is lost, `emptyDir` is lost with it; that's the
+   accepted bound. What's at risk is the ≤ 10 s of unsealed buffer plus any
+   unuploaded spool. Document it in `docs/PRODUCTION.md`.
+
+### 1.7 Tests and the gate for phase 1
+
+- **Unit tests** (`events/writer_test.go`):
+  - nothing is ever dropped under random PUT failures;
+  - a spool left by a crash is uploaded on restart;
+  - `Full()` follows the high and low watermarks;
+  - `Flush` waits for the spool to empty;
+  - ordering within a key is kept.
+- **Processor test:** replace `processor_test.go` `DropsWhenBufferFull` with
+  `BlocksWhenBufferFull`.
+- **End to end** (`internal/e2e`, run by `make test-interceptor`): send N
+  requests (mixed HTTP, SSE, WebSocket, analytics) while:
+  - MinIO is stopped for 2 minutes, then restarted;
+  - the observer container is killed (SIGKILL) and restarted;
+  - the spool is forced full: requests are rejected, and accepted again once it
+    drains.
+- **Gate:**
+  - **No call goes missing.** Every request that Envoy *accepted* has exactly
+    one `complete` (or `disconnect`) row in the bucket, and every rejected
+    request has none. Counted by correlation id.
+  - **No silent drops.** No drop counters remain in the code.
+  - `make check` and `make test-interceptor` pass.
+- **Deploy** to the demo cluster with the spool volume and `failClosed: true`.
+  Watch spool depth and rejections for a day.
+
+---
+
+## Phase 2: finish the table work and make it deterministic
+
+This is the existing precompute work, finished. Nothing here is deployed. Its
+outputs, the seven tables and their API SQL, are the **contract** phases 4 and 5
+must produce exactly. Its single-pass builders are the **reference** the
+incremental processor is tested against.
+
+### 2.1 Finish table 7
+
+Apply `stash@{0}` on a branch `precompute-person-map` from `precompute-event-rows`.
+
+1. **Go: `process/personmap.go`.** It builds:
+   - `person_map` (person, account, directory);
+   - `person_sessions`;
+   - `account_facts` (org, plan, codex_plan);
+   - `account_devices` (devices and the newest env per account and device);
+   - `call_tool_uses`.
+
+   It also adds columns to `session_rows` (`prompt_ids`, `devices`,
+   `call_accounts`, `queries`, `bypassed`, `cli_version`, `rl_*`, `sandbox`,
+   `custom_ca`, `limits_ns`), to `session_marks` (token columns, `prompt_id`,
+   `unreported`) and to `event_rows` (tool, hook, argv0, category, PR, cost
+   columns).
+2. **API.** `store.py` loads the five tables. `routers/people.py`,
+   `directory.py` and `rollups.py` (new) move these onto SQL:
+   - `/people`;
+   - `/overview`;
+   - `/people/{id}`;
+   - `/people/{id}/summary`;
+   - `/coverage`;
+   - the person→sessions lookup.
+
+   Delete `email_groups`, `_attribution`, `_outside`, `header_facts`,
+   `event_rollup`, `call_tokens`, `tool_uses` and `latest_md`.
+3. **Parity, using the fast gate:**
+   - the derive against the answer key on the two-day capture, at the four
+     fixed now values;
+   - four stress replay windows;
+   - endpoint parity for every endpoint switched;
+   - re-checks of tables 1–6 and their endpoints.
+
+   All must show 0 differences.
+4. **Fix `verify.go:131-153`** so its `Diff` covers `request_rows` and
+   `person_last` too. Today it loads them but doesn't compare them.
+
+### 2.2 Make the reference deterministic
+
+Every value must depend only on the **set** of records, never on their order. The
+review found these order dependences:
+
+| Where | Today | Becomes |
+|---|---|---|
+| `shape.go:385-396` account email/name | the latest *arriving* sighting wins | latest by `(ts, record id)`, field by field |
+| `shape.go:294-352` `minStr` person/org/device | lexically smallest | unchanged (already order-free) |
+| `requestrows.go:781-788` reports | first in table order | earliest `(ts, event id)` |
+| `requestrows.go:1025` `nearestRetry` ties | table order | `(ts, call id)` |
+| `requestrows.go:847-852` prompt index merge across sessions | "later wins" | latest `(ts, event id)` |
+| `sessionrows.go:84-94` env/device pick | strict `>`/`<` on ms client time | `(ts, event id)` |
+| `sessionrows.go:637` Codex limits | `>=` | `(ts, call id)` |
+| `prompt_rows`/`marks`/`event_rows` same-time ordering | `(ts, corr, n)`, with `n` per part | `(ts, corr, n)`, with `n` per batch (already fixed in `eventrows.go` `renumberSpanning`) |
+
+- **Tests.** Each change gets a Go test that shuffles the input and checks the
+  output is identical.
+- **The answer key.** `oracle.py` and `det.py` (gitignored) pin the same rules,
+  so main's Python and the reference agree.
+- **The bug list.** Record each change in the parity oddities list as a
+  deliberate behavior pin.
+
+### 2.3 Inventory what's left
+
+After 2.1, list every API query that still touches a raw fact view (`calls`,
+`cc_events`, `codex_events`, `analytics`, `requests`, `accounts`, `sessions`,
+`people`, `person_devices`, `pending`). The expected list:
+- `/status` (counts and probes);
+- the request drawer: `detail`, `raw` and `details`, through `load_wire`,
+  `_wire_from_tables`, `ss.events(about=)`, `ss.steps`, `pp.prompt_indexes`,
+  `find_report` and `reported_detail`;
+- `/events/{id}`.
+
+Each one gets a home in phase 3 or phase 4 (see 3.6 and 4.9). Write the
+inventory into this document when 2.1 lands.
+
+### 2.4 The deliverable
+
+**One PR: "Precompute: the seven tables, every endpoint SQL"** holds the whole
+stack. It isn't deployed: the processor still rebuilds everything on every run.
+It's merged so that main carries the reference builders, the table schemas, the
+SQL endpoints and the parity tooling that phases 4 and 5 build on.
+
+**Decision 3** (below) says whether it's deployed as interim relief.
+
+---
+
+## Phase 3: canonical records at ingest
+
+The observer starts writing the processor's new input **alongside** today's raw
+log, through the single writer. The old processor keeps running unchanged.
+
+### 3.1 The canonical record (`aintercept/internal/records`, new package)
+
+- **One Parquet schema, versioned (`record_version`).** Its columns are the
+  union of today's `Request` (`process/tables.go:9-91`) and `Event`
+  (`tables.go:93-130`), plus:
+  - `record_id`: `<incarnation>-<seq>`. The incarnation is the pod name plus the
+    process start time in nanoseconds plus 4 random bytes. That's unique across
+    container restarts, which fixes the hostname reuse at `observer.go:509-514`.
+  - `kind`: `call_start`, `call_end`, `ws_turn`, `ws_connection`,
+    `client_event`, `verdict`, `analytics_batch`.
+  - `call_id`: `correlation_id`, or `correlation_id#turn` for a WebSocket turn,
+    as today.
+  - `routing_key` and `bucket` (3.3).
+  - `batch_id` and `batch_n`: an analytics event's batch and its number in the
+    **whole** batch, assigned at ingest where the whole batch is in hand. That
+    retires the processor's per-part numbering and `renumberSpanning`.
+  - `event_key`: the record id for client events. This replaces
+    `corr/h<hash>-N`, which removes the duplicate-key problem (PR #12) for new
+    data.
+- **Codegen.** Go struct tags drive the Parquet schema, as `tables.go` does
+  today. A test pins the column list, so the schema can't change silently.
+
+### 3.2 Move assembly from the processor into the observer
+
+Today `shape.go` pairs phase rows across files, because rows of one call could
+arrive in different files. Inside the observer, all of a call's rows pass
+through one ext_proc stream, so assembly becomes per stream.
+
+1. **`call_start`**, emitted when the request is known:
+   - for HTTP, at request end of stream (headers and body, so the model and
+     metadata are parsed);
+   - for WebSocket, at each turn's `response.create` (`extproc/ws.go:107-111`).
+
+   It holds the fields `requestFrom` fills from the pending state today
+   (`shape.go:508-557`), and the client headers (`pendingClientHeaders`,
+   `shape.go:24-28`). This is what lets the UI show a call while it streams.
+2. **`call_end`**, emitted at completion (`emitComplete`, `server.go:465-511`),
+   on a disconnect (`server.go:213-220`), and at each WebSocket turn's end.
+   - It holds everything `requestFrom` produces.
+   - Request and response byte counts are summed in stream state (the
+     `RequestBytes += …` at `shape.go:175-180` moves here).
+3. **`ws_connection`**: unchanged in content (`ws.go:176-209`).
+4. **Provider classification** (`products.go:20-61`, `applyCodex` `85-111`,
+   `setClient` `shape.go:584-595`) moves into the canonicalizer, so every record
+   carries `product`, `client`, `client_version`, `hidden_kind`, `session_id`,
+   `prompt_id` and `ext_json`, exactly as the processor sets them today.
+5. **Client events.** `eventFrom` (`shape.go:597-646`) moves into the
+   canonicalizer: one `client_event` record per event, with session and prompt
+   resolved exactly as today.
+6. **The analytics request.** Its own call records carry
+   `batch_session = the earliest event's session` (the rule fixed by the
+   replays, `requestrows.go:291-303`).
+7. **Per-call detail** (full interception mode):
+   - At call end, `DetailFromBodies` (`events/detail.go:56-69`) runs in the
+     observer on the stream's buffered bodies.
+   - The writer writes `calls/<call_id>.json.gz` holding headers, the detail,
+     and the bodies, capped as today (`maxCallBody`, `shape.go:61`).
+   - That retires `pending_bodies` and the drawer's raw-file scans.
+8. **What retires once this lands:** `pending`, `pending_bodies`, the done
+   markers, `pendingTTL` expiry and the global `newestNS` clock
+   (`shape.go:16-21,238-282`). A call whose pod died has a `call_start` and no
+   `call_end`, and so does a one-pass run over the same records.
+9. **Today's raw ndjson log** (headers, body chunks, phase rows) stays exactly
+   as it is, written through the same writer. It's the raw source of truth and
+   the replay input.
+
+### 3.3 Routing keys and buckets (`records/route.go`)
+
+1. **The routing key:**
+   - `s:<session_id>` when the record has one. For a Codex record that's the
+     thread id. For an analytics event it's the event's own session. For the
+     analytics request's call records it's `batch_session`.
+   - Otherwise `c:<key_hash>:<YYYY-MM-DD of ts>`. That covers flag and catalog
+     calls, Codex usage polls, claude.ai chat turns and similar.
+2. **The bucket:** `bucket = fnv64a(routing_key) >> (64 - BUCKET_BITS)`, with
+   `BUCKET_BITS = 6` (64 buckets). The value is stored in the record and in the
+   object key.
+3. **Records with two keys get both.** A record that two keys need is written
+   once per key, each copy with its own routing key and the same `record_id`.
+   Expected uses:
+   - a Codex HTTP call before its thread id is known, if the spike in 3.4 finds
+     any;
+   - claude.ai `/api/account` bootstrap rows, which feed account identity.
+4. **Object key:** `records/v1/bucket=NN/minute=<upload UTC minute>/<incarnation>-<seq>.parquet`.
+   The minute is the writer's **upload-time** minute, taken when the batch is
+   sealed, so a spool replayed after an outage lands at the current minute.
+
+### 3.4 Spike: when the session is known
+
+Assert in tests where each client's session id first appears:
+- Claude Code: request header;
+- Codex HTTP: `x-codex-turn-metadata`;
+- Codex WebSocket: per turn;
+- analytics: per event.
+
+Any client whose session appears only at completion gets the two-key write from
+3.3. The capture in `data/parity` is used to check this (locally, never
+committed).
+
+### 3.5 A tool to canonicalize the old raw log
+
+`aintercept canon -src <raw ndjson dir|s3://…> -out <records dir>` runs the new
+assembler and canonicalizer over the old raw log.
+
+- It's how existing data is backfilled (phase 6).
+- It's how the replay harness gets records (phase 4).
+- It's how 3.6 is proven.
+
+### 3.6 The gate for phase 3
+
+- **`canon` over the two-day capture matches today's processor.** The
+  `call_end` records must equal today's `requests` table row for row, field by
+  field. The `client_event` records must equal `events`, except `event_key`,
+  which is compared through a mapping table.
+- **The live observer matches `canon`.** Replay the capture's raw rows through
+  the observer's code path (`aintercept replay` with a canon sink), and the
+  records must equal what `canon` produces from the same raw rows.
+- **Tests and checks:** `make check`; the phase 1 e2e test with records
+  counted; deploy to the demo cluster and run `canon` over the same hours
+  daily. The records it produces must equal what the observer wrote.
+
+---
+
+## Phase 4: the bucketed processor (`aintercept/internal/stream`, new)
+
+It's built next to `internal/process`, which keeps running until phase 6. It
+reads `records/v1`, writes `v1/` tables, and is driven by `aintercept stream`.
+
+### 4.1 Store primitives (`process/store.go`, extended)
+
+Add `PutIfAbsent(ctx, key, body) (created bool, err error)`, which is S3
+`If-None-Match: *`. The local-directory store does it with `O_CREAT|O_EXCL` and
+a rename, and the test emulator does it in memory.
+
+Add `ListAfter(prefix, startAfter)` paging, and `Stat` with `LastModified` for
+lease ages measured on S3's clock.
+
+### 4.2 The per-bucket commit log
+
+There's no global manifest.
+
+- **Commits.** Each bucket has `buckets/NN/commit-%012d.json`, created only with
+  `PutIfAbsent`. A commit names:
+  - the run files written for each table;
+  - the state checkpoint files;
+  - the watermark: the last fully processed minute, plus the names of files
+    processed in the grace window;
+  - the lease epoch that wrote it;
+  - the current base file per table, and the generation.
+- **Readers** (the API and the next owner) find the newest commit by listing
+  from the last commit they know.
+- **The commit is the compare-and-swap point.** A paused old owner can't create
+  `commit-(n+1)` once the new owner has. Its run files stay unreferenced and are
+  deleted after the grace period. That's the fencing.
+
+### 4.3 Leases (`stream/lease.go`)
+
+1. **Claim.** `leases/bucket=NN/epoch-%010d` is created with `PutIfAbsent`. The
+   body holds the replica id and the time it was claimed.
+2. **Renew.** Every 10 s, the owner creates the next epoch. The age of the
+   newest epoch is judged by S3's `LastModified` against the S3 `Date` header,
+   never by pod clocks.
+3. **Takeover.** A bucket whose newest epoch is older than 30 s is free. Any
+   replica may create the next epoch.
+4. **Balancing.** Each replica lists the live leases. It claims free buckets up
+   to `ceil(B / live replicas)`, and releases any above that by letting them
+   lapse. A replica that's shutting down stops renewing after its final commit.
+5. **The scaler lease** (4.10) uses the same mechanism under
+   `leases/scaler/epoch-*`.
+
+### 4.4 The cycle (`stream/cycle.go`)
+
+The cycle is a worker in the hopper pattern: a lister, then a reader pool, then
+per-bucket appliers, then a writer.
+
+1. Per owned bucket, every `STREAM_CYCLE_SECONDS` (5 by default):
+   1. List `records/v1/bucket=NN/minute=` prefixes from the watermark minute
+      minus the grace window (5 min) up to now. Skip file names already in the
+      watermark set.
+   2. Read the new files: Parquet, only the needed columns.
+   3. Group the records by routing key and order them within a key by
+      `(ts, record_id)`.
+   4. Apply each record to its key's state (4.5).
+   5. Write one run file per table that changed:
+      `v1/tables/<table>/bucket=NN/run-%012d.parquet`. Rows are upserts keyed by
+      row id; a deletion is a tombstone row.
+   6. Write the touched keys' state: `v1/state/bucket=NN/run-%012d.parquet`
+      (key → state blob).
+   7. Create `commit-(n+1)`.
+2. **Memory.** An LRU keeps touched keys' state, capped by bytes. A key that
+   isn't in memory is loaded from the newest state file that holds it. A
+   per-bucket key→file index lives in each commit, and compaction (4.8) keeps it
+   short.
+3. **Concurrency.** Buckets are processed in parallel up to `GOMAXPROCS`. Each
+   bucket is single-threaded, so no state needs locks.
+
+### 4.5 Per-key incremental state: porting the reference builders
+
+Each table's single-pass builder (PORT) is restructured into **per-record
+updates** over per-key state. The builders stay as the reference.
+
+The work goes table by table, in the same order as the precompute work, and each
+table has its own gate (4.11).
+
+| Table | Key | State per key | What a record touches | Values that move to query-time lookups |
+|---|---|---|---|---|
+| **request rows** (PORT `requestrows.go`) | `s:` session / `c:` credential-day | the key's transactions indexed by `request_id`/`client_request_id`; reports by request id; retry index by (prompt, class, time); step index per prompt | its own row; the matched report row; the previous/next attempt's retry fields | **Person view:** `request_rows` stops being stored per person. Rows are stored per key and carry `session_id`, `key_hash` and `account_id`. The person view is a SQL union of the person's session keys and credential-day keys (4.6). TTFT and cache from reports, and the person-wide prompt-index merge, become joins to small per-key tables (`report_facts`, `prompt_index`). `person_last` becomes `max(last_ns)` over the person's keys. |
+| **prompt rows / steps** (`promptrows.go`) | session | prompts sorted by `(start, prompt id)`; running totals per prompt; open-tail flags; hidden-call assignment | its prompt's row; its step row; at most one neighbouring prompt (hidden calls) | `session_last_ns` → join to the `session_rows` key. Positional `seq` → a sort key, with `row_number()` in SQL. Codex turn numbers → `dense_rank()` over the first call per turn. |
+| **session rows** (`sessionrows.go`) | session | min/max/sums; coverage windows (interval list); newest-by-`(ts,id)` picks for env, device, version, limits | the one session row | `children_json` → `session_edges` (parent, child, kind), joined. Codex titles → per-account `title_calls` and `thread_starts`, resolved with a DuckDB `ASOF JOIN` within 5 minutes. |
+| **session marks** (`sessionmarks.go`) | session | the session's marks by `(ts, kind, id)` | appended mark rows; the network or permission segment the record extends | prompt index on marks → join to `prompt_index` |
+| **presence** (`presence.go`) | session | blur and sleep intervals; open and last | the segments the new window overlaps | already combined per person in SQL (`timeline.py:132-162`), unchanged |
+| **event rows / session tools** (`eventrows.go`) | session | event links by request id and tool id | its own row; `first_ns` per tool | `#n` labels and prompt index → joins to `prompt_index`. Call labels (class, model, stop reason) → join to the call's request row. |
+| **session request rows** | session | — | — | stops being stored. It's the request-rows query scoped to one session. The Codex rule that attaches sessionless calls by time becomes a SQL range join over the credential-day keys of the thread's credentials, within `[start, last+60s]`. |
+| **table 7** (`personmap.go`) | dimensions (4.6) | — | — | the person map, person sessions and account facts become the dimension tables of 4.6 |
+
+**For every table:**
+- **The order test.** A randomized Go test shuffles the key's records, applies
+  them one at a time, and requires the output to equal the reference builder
+  over the same set.
+- **The flat-cost test.** It applies record N+1 to a key that already holds 10,
+  1,000 and 100,000 records. Work and allocations must not grow.
+
+### 4.6 Dimensions: values that span keys
+
+These are small tables, written by each bucket's applier as upsert rows for the
+facts that bucket sees:
+
+| Table | Row | Replaces |
+|---|---|---|
+| `dim_session_account` | (session, account, first_ts, record_id) | `byAccount`, session `person_id` |
+| `dim_session_credential` | (session, key_hash) | `callHashes`, `eventCorrs → corrHashes` |
+| `dim_account` | (account, email, name, ts, record_id), latest by `(ts, id)` | the `accounts` snapshot |
+| `dim_account_device` | (account, device, env, ts) | `person_devices`, `account_devices` |
+| `dim_thread` | (credential, client, session, start, last) | Codex time attribution |
+| `title_calls`, `thread_starts` | per account | Codex titles |
+| `session_edges` | (parent, child, kind) | lineage, `children_json` |
+
+**A person is resolved at query time:**
+1. Email groups come from `dim_account`, which is tiny: one row per account.
+2. Then accounts → sessions through `dim_session_account`.
+3. Then sessions → credentials through `dim_session_credential`.
+4. "Unattributed" means sessions with a call and no row in
+   `dim_session_account`.
+
+All of it is SQL. Nothing is stored per person, so a new link changes one row,
+not history.
+
+### 4.7 Time-dependent values
+
+Today's `now()` CASE expressions (live, streaming, in flight, open tails) stay in
+SQL, over stored inputs. Per-key "last" values are joined in from `session_rows`
+instead of being copied into rows (4.5).
+
+### 4.8 Compaction and garbage collection (`stream/compact.go`)
+
+- **When.** It runs within the cycle once a bucket has more than 64 run files
+  for a table, or every 10 minutes.
+- **What it writes.** It merges `base-<gen>` + runs into
+  `base-<gen+1>.parquet`. Rows are sorted by key and then row id, the newest
+  version wins and tombstones drop out. It writes per-file min and max of the
+  key into the commit, so readers can skip files.
+- **The state files** are compacted the same way.
+- **Garbage collection.** A file is deleted only when no commit from the last
+  10 minutes names it.
+
+### 4.9 The request drawer
+
+**What it reads.** `detail`, `raw` and `/events/{id}` read
+`calls/<call_id>.json.gz` (3.2), plus the event rows of the call's key.
+
+**What's precomputed.** The drawer's derived parts become per-key outputs of the
+request-rows state:
+- `facts` (`request_detail.py:498-526`): events about the call.
+- `position` (`603-638`): steps and the message-id chain.
+- `pp.prompt_indexes`.
+
+**What it no longer reads:** raw-file listings (`store.py:546-606`,
+`raw.py:88-108`).
+
+**Old calls.** Calls captured before phase 3 have no detail object. The drawer
+falls back to today's raw read for them until the backfill (6.3) writes their
+detail objects.
+
+### 4.10 The lag scaler (`stream/scale.go`)
+
+- **Lag, per bucket:** `now − mtime(oldest record file after the watermark)`, or
+  0 if there's nothing to process. Each replica exports this as a Prometheus
+  gauge, `stream_bucket_lag_seconds{bucket}`. **Pipeline lag** is the maximum
+  over all buckets.
+- **The scaler.** Whichever replica holds `leases/scaler` runs a loop every
+  30 s:
+  - It reads every bucket's newest commit (one LIST plus one GET per bucket).
+  - It computes the lag from the files listed after each watermark.
+  - It sets `spec.replicas` through the Kubernetes `scale` subresource of its
+    own Deployment. RBAC is a Role with `get`/`patch` on
+    `deployments/scale` for that one name.
+- **Policy:**
+  - scale out ×2 (capped at B) when pipeline lag is above `STREAM_LAG_TARGET`
+    (30 s) for 2 minutes;
+  - scale in by 1 when lag is under 5 s for 10 minutes;
+  - min 1, max B.
+- **Alternative.** If the cluster already runs KEDA (the chart supports it for
+  the observer), the processor can export the gauge and use a KEDA `prometheus`
+  trigger instead. That's decision 4.
+
+### 4.11 Replay harness v2 and the gate
+
+**`aintercept replay` is extended** to take `-ingest-pods N` and
+`-processors R`. It:
+1. canonicalizes the capture with the phase-3 code;
+2. spreads connections across N ingest writers at random;
+3. runs R stream replicas against an in-memory S3 emulator with real
+   conditional-write semantics;
+4. injects chaos throughout: kills (graceful and hard), lease steals, paused
+   owners resuming late, PUT failures, delayed uploads, and replicas added and
+   removed.
+
+**At each checkpoint and at the end**, it compares every table against the
+phase-2 reference builders run once over all records. The endpoint parity tools
+compare the API (phase 5) the same way.
+
+**Gate per table, then for the whole pipeline:**
+- 0 differences on the full two-day capture, for N ∈ {1, 3, 8} and
+  R ∈ {1, 3, 8};
+- 0 differences at every checkpoint in all four stress windows;
+- **flat cost:** the capture replayed with 2×, 4× and 8× synthetic history
+  before it, with per-record time and per-replica memory flat to within 10%;
+- **lag:** a 10× burst drives lag up, the scaler adds replicas, and lag returns
+  under target with no loss or duplicates.
+
+---
+
+## Phase 5: the API reads the bucketed tables
+
+### 5.1 A new store (`api/src/aintercept_api/store.py`, rewritten)
+
+1. **Remove the whole-history load:** `ingest`, `maybe_ingest`, `_WIRES`, the
+   `mirror` sidecar (`templates/api.yaml`, `process/mirror.go`), and the
+   `shaped`/`db` emptyDirs.
+2. **Resolve a request in five steps:**
+   1. Resolve keys through the dimensions (4.6). The dimension tables are
+      cached by commit and refreshed by listing each bucket's newest commit,
+      at most once a second per bucket.
+   2. Map keys to buckets with the same `fnv64a` rule. The function is shared
+      by a test vector checked in both Go and Python.
+   3. For each bucket, read the base file (skipping files by key min and max)
+      plus the run files since, and build a view where the newest row wins.
+   4. Run today's endpoint SQL, plus the joins from 4.5, on DuckDB.
+   5. Cache every object fetched from S3 in a local, byte-capped LRU. They're
+      all immutable, so the cache needs no invalidation.
+3. **Fetching** uses boto3, which is already a dependency through the API's S3
+   access, or the plain S3 HTTP API. DuckDB reads only local files, so there's
+   no `httpfs` extension and no new dependency.
+
+### 5.2 The endpoints, one at a time
+
+Every endpoint in the phase 2.3 inventory is moved and checked for parity. The
+order:
+1. the session endpoints;
+2. `/people/{id}/requests` and `/timeline`;
+3. person header and summary, and `/coverage`;
+4. `/people` and `/overview`;
+5. `/status`;
+6. the drawer.
+
+The UI samples are regenerated (`make regen`), and the diff must be empty.
+
+### 5.3 Replicas
+
+The API Deployment drops `replicas: 1` and gets an HPA on CPU (built in, no
+adapter). Stateless replicas can serve any request.
+
+### 5.4 The gate for phase 5
+
+- **Endpoint parity.** Every endpoint's response is byte-identical to the
+  phase-2 API on the same data, at the fixed now values, over the two-day
+  capture and the four windows.
+- **Timings.** A person-page poll and a session-page poll are measured locally,
+  and the p95 recorded.
+- **`make check`** passes.
+
+---
+
+## Phase 6: lag scaling, cutover, deletion
+
+### 6.1 Helm
+
+- **New: `templates/stream.yaml`.** A Deployment with no fixed `replicas` (the
+  scaler owns it), `RollingUpdate`, the scaler RBAC, `/healthz` and a metrics
+  port. Values: `stream.{bucketBits, cycleSeconds, lagTarget, minReplicas,
+  maxReplicas, resources}`.
+- **The ingest pod** gets the phase-1 changes.
+- **The API** loses its sidecar and gains its HPA.
+
+### 6.2 Run old and new side by side
+
+On the demo cluster (stitchwork `deploy/aintercept/values.yaml`):
+1. Deploy with ingest writing raw and records, the old processor writing
+   `shaped/`, and the stream processor writing `v1/`.
+2. Run a second API Deployment, `api-v1` (internal only), that reads `v1/`.
+3. A parity job (`aintercept parity-live`) compares every endpoint between
+   `api` and `api-v1` every 15 minutes, at the same pinned now, for the people
+   and sessions active in the last hour.
+4. Soak for 3 days with **0 differences**.
+
+### 6.3 Backfill history
+
+1. `aintercept canon -src s3://…/ailogger -out s3://…/records/v1` re-canonicalizes
+   all existing raw data. Its minutes come from the original upload times, so
+   the watermarks see it as old data. The stream processor picks it up through a
+   one-time watermark reset per bucket (`aintercept stream -rewind`).
+2. The detail objects for historic calls are written by the same `canon` pass.
+3. **The gate:** `v1/` tables over all history equal a one-pass reference over
+   all history.
+
+### 6.4 Cutover
+
+1. The UI's `api` Service points at `api-v1`.
+2. Watch for a day.
+3. Stop the old processor.
+
+**Rollback** is to point the Service back. The old processor's output stays in
+the bucket for 7 days.
+
+### 6.5 Delete the old path
+
+Delete:
+- `internal/process` processor, shape snapshots, derive and the mirror;
+- `templates/process.yaml`;
+- the old store code;
+- `rows.request_rows` and the other Python derivation the parity tests no
+  longer need.
+
+The reference builders move to `internal/stream/reference` and stay as the test
+oracle.
+
+---
+
+## Phase 7: the behavior fixes
+
+One PR, stacked on phase 6. It fixes the 50 entries on the parity oddities list
+in Go, regenerates the UI samples, and re-runs the replay gate against the
+corrected reference. Each fix gets a test. Examples:
+- a call reporting 0 output tokens counted as missing;
+- `bypassPct` measured against the wrong base;
+- a prompt number that rounds in one place and truncates in another;
+- the 10-minute and 5-minute windows disagreeing.
+
+---
+
+## Decisions needed before phase 1
+
+1. **Co-locate the observer in the Envoy pod** (recommended): one pod is the
+   whole ingest stack, ext_proc goes over localhost, and fail-closed and the
+   shutdown order stay inside the pod. The alternative keeps two Deployments
+   joined over the network.
+2. **How fail-closed works.** If the 1.1 spike shows Envoy only fails closed
+   outside observability mode, accept a localhost round trip per phase while
+   fail-closed is on.
+3. **Whether the phase 2 stack is deployed as interim relief.** It makes the
+   person page fast now, but its memory grows with history. If it's deployed,
+   that's only after a full run on the cluster's actual history shows it fits
+   under 2 GiB with room to spare, and the deploy is reverted as soon as phase 6
+   lands.
+4. **Lag scaling:** the in-process scaler (recommended, no new components), or
+   KEDA if the cluster already runs it.
