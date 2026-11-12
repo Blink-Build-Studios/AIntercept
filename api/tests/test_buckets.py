@@ -427,3 +427,48 @@ def test_s3_requests_are_signed(monkeypatch):
         auth = r.get_header("Authorization")
         assert auth.startswith("AWS4-HMAC-SHA256 Credential=AK/") and "Signature=" in auth
     assert "start-after=p%2F" in sent[0].full_url and sent[1].full_url == "https://example.test/bkt/p/a"
+
+
+# --- the processor's own layout: one contract (aintercept/internal/stream/CONTRACT.md) -------
+
+GOLDEN = pathlib.Path(__file__).resolve().parents[2] / "testdata" / "stream-golden"
+
+
+def test_reader_matches_stream_golden():
+    """The layout the Go writer produces (TestStreamGolden) reads back as expected.json: the newest
+    commit per bucket, base parts then runs in order, the newest row per (key, id), tombstones
+    dropped, garbage and state never read, nanoseconds exact."""
+    import json
+    import os
+
+    golden = pathlib.Path(os.environ.get("STREAM_GOLDEN_DIR") or GOLDEN)
+    if not (golden / "expected.json").exists():
+        pytest.skip("no stream golden layout (aintercept/internal/stream TestStreamGolden writes it)")
+    want = json.loads((golden / "expected.json").read_text())
+    store = BucketStore(
+        LocalSource(golden),
+        pathlib.Path(__import__("tempfile").mkdtemp()),
+        prefix="golden/",
+        tables={t: ("*", "") for t in want},
+        keep_keys=True,
+        clock=Clock(),
+    )
+    with store.scope(Scope.everything()):
+        for table, rows in want.items():
+            got = store.query_dicts(f"SELECT * FROM {table} ORDER BY key, id")  # noqa: S608
+            assert [{"key": r.pop("key"), "id": r.pop("id"), "value": r} for r in got] == rows, table
+    read = {p for p in store.cache_keys()}
+    assert not any("/state/" in k for k in read), "a reader never reads state checkpoints"
+    garbage = set()
+    for c in golden.rglob("commit-*.json"):
+        garbage |= {g["key"] for g in json.loads(c.read_text()).get("garbage") or []}
+    newest = {c.parent.name: c for c in golden.rglob("commit-*.json")}
+    current = set()
+    for c in sorted(golden.rglob("commit-*.json")):
+        if newest[c.parent.name] == c or c > newest[c.parent.name]:
+            newest[c.parent.name] = c
+    for c in newest.values():
+        m = json.loads(c.read_text())
+        for refs in [*(m.get("base") or {}).values(), *(m.get("runs") or {}).values()]:
+            current |= {r["key"] for r in refs or []}
+    assert read <= current and not (read & (garbage - current)), "read only the newest commits' files"
