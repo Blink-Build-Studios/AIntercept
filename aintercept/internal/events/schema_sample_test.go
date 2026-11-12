@@ -276,8 +276,9 @@ func TestProcessor_PanicInEmitDoesNotKillDrain(t *testing.T) {
 	p.Close()
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
-	if len(sink.got) != 2 {
-		t.Fatalf("drain goroutine died after panic: later events=%d, want 2", len(sink.got))
+	// The panicking event is recorded unprocessed, then the later two.
+	if len(sink.got) != 3 || sink.got[0].Seq != 1 {
+		t.Fatalf("after a panic: got %d events (first seq %d), want 3 with the panicking one recorded raw", len(sink.got), sink.got[0].Seq)
 	}
 }
 

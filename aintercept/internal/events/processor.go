@@ -8,16 +8,17 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 )
 
-// Processor is the non-blocking telemetry path. The ext_proc handler calls
-// Offer(event) and returns to Envoy immediately; a background goroutine drains
-// the buffer into the Sink. This is the "buffer-and-ack-immediately, process
-// separately" design: the request path never waits on event processing or on
-// the sink.
+// Processor is the telemetry path. The ext_proc handler calls Offer(event); a
+// background goroutine drains the buffer into the Sink, whose writer spools to
+// disk and never waits on the object store.
 //
-// Backpressure policy: the buffer is bounded. If it is full, Offer DROPS the
-// event, increments a dropped counter, and raises an alarm (logged loudly, and
-// periodically summarized). Dropping is deliberate — losing telemetry is always
-// preferable to adding latency to, or stalling, real API traffic.
+// Backpressure policy (docs/STREAMING_PIPELINE.md §1.4–1.5): nothing is
+// dropped while the writer's spool has room. When the buffer is full, Offer
+// waits for room, which pushes back through gRPC flow control instead of
+// shedding data. Only once the spool is full (Full reports true) does Offer
+// drop, as observe mode's counted last resort: observed traffic must never
+// break. Enforced streams use OfferMust, which never drops: their calls are
+// refused at the start instead while the spool is full.
 type Processor struct {
 	buf  chan Event
 	sink Sink
@@ -34,17 +35,19 @@ type Processor struct {
 	// touched by the drain goroutine.
 	clientShapesSeen map[string]struct{}
 
-	accepted       atomic.Uint64
-	dropped        atomic.Uint64
-	emitted        atomic.Uint64
-	emitErrs       atomic.Uint64
-	schemaSampled  atomic.Uint64
-	schemaCapHit   atomic.Uint64
-	schemaEmitErrs atomic.Uint64
-	panics         atomic.Uint64
+	accepted        atomic.Uint64
+	lastResortDrops atomic.Uint64
+	emitted         atomic.Uint64
+	emitErrs        atomic.Uint64
+	schemaSampled   atomic.Uint64
+	schemaCapHit    atomic.Uint64
+	schemaEmitErrs  atomic.Uint64
+	panics          atomic.Uint64
 
 	// alarmEvery controls how often a sustained-drop summary is logged.
 	alarmEvery uint64
+	// full reports the writer's spool full (nil: never).
+	full       func() bool
 	budget     *membudget.Budget
 	onComplete func(*Event)
 	done       chan struct{}
@@ -52,7 +55,7 @@ type Processor struct {
 
 // Config configures a Processor.
 type ProcessorConfig struct {
-	// BufferSize bounds in-flight events. Full buffer => drop + alarm.
+	// BufferSize bounds in-flight events. A full buffer makes Offer wait.
 	BufferSize int
 	// AlarmEveryDrops logs a summary every N drops (in addition to the first).
 	AlarmEveryDrops uint64
@@ -74,6 +77,10 @@ type ProcessorConfig struct {
 	// complete event (and WebSocket connection row) once its metadata is
 	// extracted: the Interceptor's OnCallComplete. It must not block.
 	OnComplete func(*Event)
+
+	// Full reports the writer's spool full; while it does, Offer drops (the
+	// counted last resort). nil: never full.
+	Full func() bool
 }
 
 // NewProcessor starts the drain goroutine and returns the processor.
@@ -93,6 +100,7 @@ func NewProcessor(sink Sink, cfg ProcessorConfig) *Processor {
 		alarmEvery:       cfg.AlarmEveryDrops,
 		budget:           cfg.Budget,
 		onComplete:       cfg.OnComplete,
+		full:             cfg.Full,
 		done:             make(chan struct{}),
 	}
 	if cfg.SchemaSink != nil {
@@ -106,25 +114,30 @@ func NewProcessor(sink Sink, cfg ProcessorConfig) *Processor {
 	return p
 }
 
-// Offer enqueues an event without blocking. Returns false if the event was
-// dropped because the buffer was full. The caller (ext_proc handler) ignores
-// the return and acks Envoy regardless — the bool exists for testing and
-// metrics.
+// Offer enqueues an event from an observed stream. It waits while the buffer
+// is full; it drops the event only while the writer's spool is full, counting
+// it (observe mode's last resort). Returns false if it dropped.
 func (p *Processor) Offer(e Event) bool {
-	select {
-	case p.buf <- e:
-		p.accepted.Add(1)
-		return true
-	default:
+	if p.full != nil && p.full() {
 		p.budget.Add(-e.held)
-		n := p.dropped.Add(1)
-		// Alarm: first drop is always loud; thereafter every alarmEvery drops.
+		n := p.lastResortDrops.Add(1)
 		if n == 1 || n%p.alarmEvery == 0 {
-			slog.Warn("ALARM telemetry buffer full — dropping events; real traffic unaffected, telemetry being shed",
-				"total_dropped", n, "buffer", cap(p.buf))
+			slog.Error("ALARM spool full: dropping observed events as a last resort; real traffic unaffected",
+				"last_resort_drops", n)
 		}
 		return false
 	}
+	p.buf <- e
+	p.accepted.Add(1)
+	return true
+}
+
+// OfferMust enqueues an event from an enforced stream. It never drops: it
+// waits for room. (Enforced calls are refused at the start while the spool is
+// full, so the calls already admitted are the ones that keep writing.)
+func (p *Processor) OfferMust(e Event) {
+	p.buf <- e
+	p.accepted.Add(1)
 }
 
 // drain moves buffered events into the sink on a single goroutine.
@@ -146,13 +159,15 @@ func (p *Processor) drain() {
 // panic anywhere here is recovered and counted, so one bad event never kills the
 // drain goroutine.
 func (p *Processor) processOne(e Event) {
+	raw := e // as it arrived, for a panic below
 	defer func() {
 		if r := recover(); r != nil {
 			n := p.panics.Add(1)
 			if n == 1 || n%p.alarmEvery == 0 {
-				slog.Error("ALARM recovered panic while processing event — event dropped, drain goroutine survives",
+				slog.Error("ALARM recovered panic while processing event; recording it unprocessed",
 					"total_panics", n, "panic", r)
 			}
+			p.emitRaw(raw)
 		}
 	}()
 
@@ -191,25 +206,35 @@ func (p *Processor) processOne(e Event) {
 	// Drop the raw buffers now that extraction and sampling are done — content
 	// never leaves the process beyond the structure-only fingerprint above.
 	e.clearBuffers()
+	p.emit(e)
+	for _, row := range clientRows {
+		p.sampleNewClientEvent(row)
+		p.emit(row)
+	}
+}
+
+// emit sends one row to the sink. The writer only refuses a row once it's
+// closed, which happens after the processor drains, so an error here is a bug
+// that loses data: logged as such every time.
+func (p *Processor) emit(e Event) {
 	if err := p.sink.Emit(e); err != nil {
-		n := p.emitErrs.Add(1)
-		if n == 1 || n%p.alarmEvery == 0 {
-			slog.Warn("ALARM sink emit error", "total", n, "err", err)
-		}
+		p.emitErrs.Add(1)
+		slog.Error("ALARM sink refused an event; it is NOT recorded", "correlation_id", e.CorrelationID, "phase", e.Phase, "err", err)
 		return
 	}
 	p.emitted.Add(1)
-	for _, row := range clientRows {
-		p.sampleNewClientEvent(row)
-		if err := p.sink.Emit(row); err != nil {
-			n := p.emitErrs.Add(1)
-			if n == 1 || n%p.alarmEvery == 0 {
-				slog.Warn("ALARM sink emit error", "total", n, "err", err)
-			}
-			continue
+}
+
+// emitRaw records an event whose processing panicked, without its buffers and
+// without the deferred extraction that failed.
+func (p *Processor) emitRaw(e Event) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("ALARM recovered panic recording an event unprocessed; it is NOT recorded", "panic", r)
 		}
-		p.emitted.Add(1)
-	}
+	}()
+	e.clearBuffers()
+	p.emit(e)
 }
 
 // Close stops accepting events, drains the buffer, and flushes the sink(s).
@@ -228,27 +253,29 @@ func (p *Processor) Close() {
 
 // Stats is a snapshot of processor counters.
 type Stats struct {
-	Accepted      uint64
-	Dropped       uint64
-	Emitted       uint64
-	EmitErrs      uint64
-	SchemaSampled uint64 // unrecognized-shape fingerprints emitted
-	SchemaCapHit  uint64 // samples suppressed by the per-minute cap
-	Depth         int
-	Capacity      int
+	Accepted        uint64
+	LastResortDrops uint64
+	Panics          uint64
+	Emitted         uint64
+	EmitErrs        uint64
+	SchemaSampled   uint64 // unrecognized-shape fingerprints emitted
+	SchemaCapHit    uint64 // samples suppressed by the per-minute cap
+	Depth           int
+	Capacity        int
 }
 
 // Stats returns a counter snapshot (for the /stats endpoint and periodic logs).
 func (p *Processor) Stats() Stats {
 	return Stats{
-		Accepted:      p.accepted.Load(),
-		Dropped:       p.dropped.Load(),
-		Emitted:       p.emitted.Load(),
-		EmitErrs:      p.emitErrs.Load(),
-		SchemaSampled: p.schemaSampled.Load(),
-		SchemaCapHit:  p.schemaCapHit.Load(),
-		Depth:         len(p.buf),
-		Capacity:      cap(p.buf),
+		Accepted:        p.accepted.Load(),
+		LastResortDrops: p.lastResortDrops.Load(),
+		Panics:          p.panics.Load(),
+		Emitted:         p.emitted.Load(),
+		EmitErrs:        p.emitErrs.Load(),
+		SchemaSampled:   p.schemaSampled.Load(),
+		SchemaCapHit:    p.schemaCapHit.Load(),
+		Depth:           len(p.buf),
+		Capacity:        cap(p.buf),
 	}
 }
 
@@ -271,7 +298,7 @@ func (p *Processor) StartStatsLogger(every time.Duration) func() {
 				slog.Info("observer stats",
 					"accepted", s.Accepted,
 					"emitted", s.Emitted,
-					"dropped", s.Dropped,
+					"last_resort_drops", s.LastResortDrops,
 					"emit_errs", s.EmitErrs,
 					"schema_sampled", s.SchemaSampled,
 					"schema_cap_hit", s.SchemaCapHit,

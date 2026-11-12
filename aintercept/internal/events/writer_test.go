@@ -81,6 +81,7 @@ func testWriter(t *testing.T, cfg WriterConfig) *Writer {
 	if cfg.SpoolDir == "" {
 		cfg.SpoolDir = t.TempDir()
 	}
+	cfg.SkipFsync = true
 	if cfg.RetryMin == 0 {
 		cfg.RetryMin = time.Millisecond
 	}
@@ -220,7 +221,7 @@ func TestWriterSpoolSurvivesCrash(t *testing.T) {
 		_ = s1.Write([]byte(fmt.Sprintf("crash-%02d-padding", i)))
 	}
 	waitFor(t, func() bool { return w1.Stats().SpoolFiles > 0 })
-	sealed := w1.Stats().SpoolFiles
+	sealed := int(w1.Stats().SpoolFiles)
 	w1.Abandon() // a crash: no flush, no close
 
 	tgt2 := newMemTarget("mem")
