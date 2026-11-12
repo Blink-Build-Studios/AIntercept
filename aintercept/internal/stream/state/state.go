@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"encoding/gob"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -76,11 +77,20 @@ func (rs rowSet) put(d *Delta, table, id string, row any) {
 		t = map[string]any{}
 		rs[table] = t
 	}
-	if cur, ok := t[id]; ok && cur == row {
+	if cur, ok := t[id]; ok && sameRow(cur, row) {
 		return
 	}
 	t[id] = row
 	d.Changes = append(d.Changes, Change{Table: table, ID: id, Row: row})
+}
+
+// sameRow is whether a row is unchanged: == for a comparable row (pointer fields
+// compare as unchanged only when shared), else deep equality (a row with lists).
+func sameRow(a, b any) bool {
+	if ta := reflect.TypeOf(a); ta == reflect.TypeOf(b) && ta.Comparable() {
+		return a == b
+	}
+	return reflect.DeepEqual(a, b)
 }
 
 func (rs rowSet) drop(d *Delta, table, id string) {
@@ -131,7 +141,8 @@ type LinkEntry struct {
 // (rowtypes_test.go), so table files name their columns.
 var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
-	AccountEvents{}, AccountDevice{}, CodexPlan{}}
+	AccountEvents{}, AccountDevice{}, CodexPlan{},
+	PromptItem{}, StepRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{}}
 
 func init() {
 	for _, v := range RowTypes {

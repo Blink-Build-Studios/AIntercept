@@ -50,7 +50,7 @@ func TestRealData(t *testing.T) {
 	}
 	sort.Strings(names)
 	covered := map[string]bool{CaseDuplicate: true}
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases} {
+	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases} {
 		for _, c := range cs {
 			for _, x := range c.cases {
 				covered[x] = true
@@ -122,6 +122,18 @@ func TestRealData(t *testing.T) {
 			t.Logf("%s: %d rows, equal", c.name, reflect.ValueOf(c.want).Len())
 		}
 	}
+	wr, wst, wm := refPrompts(ref)
+	gr, gst, gm := promptViewOf(o)
+	if !reflect.DeepEqual(nonNil(gr), nonNil(wr)) {
+		t.Errorf("prompt rows: %d, want %d: %s", len(gr), len(wr), fieldDiff(gr, wr))
+	}
+	if !reflect.DeepEqual(nonNil(gst), nonNil(wst)) {
+		t.Errorf("prompt steps: %d, want %d: %s", len(gst), len(wst), fieldDiff(gst, wst))
+	}
+	if !reflect.DeepEqual(nonNil(gm), nonNil(wm)) {
+		t.Errorf("session marks: %d, want %d: %s", len(gm), len(wm), fieldDiff(gm, wm))
+	}
+	t.Logf("prompt rows %d, prompt steps %d, session marks %d: compared", len(wr), len(wst), len(wm))
 	t.Logf("presence %d rows, event rows %d, session tools %d: compared", len(want), len(wantEv), len(wantTools))
 }
 
