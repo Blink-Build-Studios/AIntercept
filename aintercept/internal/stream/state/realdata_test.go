@@ -108,6 +108,20 @@ func TestRealData(t *testing.T) {
 	if got := sessionToolsOf(o); !reflect.DeepEqual(got, wantTools) {
 		t.Errorf("session tools: %d, want %d", len(got), len(wantTools))
 	}
+	pm, ps, af, ad := personTables(o)
+	for _, c := range []struct {
+		name      string
+		got, want any
+	}{
+		{"person_map", pm, ref.PersonMap}, {"person_sessions", ps, ref.PersonSess},
+		{"account_facts", af, ref.AcctFacts}, {"account_devices", ad, ref.AcctDevices},
+	} {
+		if !reflect.DeepEqual(c.got, c.want) {
+			t.Errorf("%s: %d rows, want %d", c.name, reflect.ValueOf(c.got).Len(), reflect.ValueOf(c.want).Len())
+		} else {
+			t.Logf("%s: %d rows, equal", c.name, reflect.ValueOf(c.want).Len())
+		}
+	}
 	t.Logf("presence %d rows, event rows %d, session tools %d: compared", len(want), len(wantEv), len(wantTools))
 }
 

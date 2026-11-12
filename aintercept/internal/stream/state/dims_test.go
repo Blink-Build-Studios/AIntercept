@@ -300,12 +300,12 @@ var dimCases = []atomicCase{
 		func() records.Record { return account("a2", "x@Y.z", "", "", 2) }, []string{CaseAccount}},
 	{"a visible call names its session's account", nil,
 		func() records.Record { return callEnd(ccCallOf("c1", "s1", "a1", "d1", 10)) },
-		[]string{CaseSessionAccount, CaseSessionPerson, CasePersonDevice, CaseAccountDevice}},
+		[]string{CaseSessionAccount, CaseSessionPerson, CasePersonDevice, CaseAccountDevice, CaseSessionVisible, CaseSessionCredential}},
 	{"a hidden call names no session account", nil,
 		func() records.Record { return callEnd(hidden(ccCallOf("c1", "s1", "a1", "d1", 10))) },
 		[]string{CaseSessionPerson, CasePersonDevice}},
 	{"a call in flight makes a session visible, unattributed", nil,
-		func() records.Record { return callStart(ccCall("c1", "s1", 10)) }, []string{CaseSessionVisible}},
+		func() records.Record { return callStart(ccCall("c1", "s1", 10)) }, []string{CaseSessionVisible, CaseSessionCredential}},
 	{"its hidden ending takes that back",
 		func() []records.Record { return []records.Record{callStart(ccCall("c1", "s1", 10))} },
 		func() records.Record { return callEnd(hidden(ccCall("c1", "s1", 10))) },
@@ -334,7 +334,7 @@ var dimCases = []atomicCase{
 			c.PersonID, c.ProviderJSON = "a1", `{"x-codex-plan-type":"plus"}`
 			return callEnd(c)
 		},
-		[]string{CaseSessionAccount, CaseSessionPerson, CaseCodexPlan}},
+		[]string{CaseSessionAccount, CaseSessionPerson, CaseCodexPlan, CaseSessionVisible, CaseSessionCredential}},
 	{"an analytics batch's credential speaks for its sessions", nil,
 		func() records.Record {
 			r := ccEvent("s1", "tengu_api_query", 10, `{}`)
@@ -364,7 +364,11 @@ func TestDimsAtomic(t *testing.T) {
 			o := stream(before)
 			d := o.apply(r)
 			checkDims(t, c.name, append(before, r), o)
-			if got := dedupe(only(d.Cases, dimCaseSet)); !reflect.DeepEqual(got, c.cases) {
+			want := append([]string(nil), c.cases...)
+			sort.Strings(want)
+			got := dedupe(only(d.Cases, dimCaseSet))
+			sort.Strings(got)
+			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("cases %v, want %v", got, c.cases)
 			}
 			if d2 := o.apply(r); len(d2.Changes) != 0 {

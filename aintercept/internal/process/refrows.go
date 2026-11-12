@@ -1,6 +1,10 @@
 package process
 
-import "github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+import (
+	"strings"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+)
 
 // RefInput is everything the derived tables are built from, in memory: the
 // ended requests, the in-flight ones, the analytics events (one batch numbering:
@@ -94,4 +98,32 @@ func eventColsOf(e Event) eventCols {
 func AccountSighting(accounts map[string]*Account, id, email, name, org string, at int64) {
 	s := &state{accounts: accounts}
 	s.account(&events.AuthIdentity{AccountID: id, Email: email, Name: name, Org: org}, at)
+}
+
+// SubscriptionType is an event's subscription_type, as account_facts reads it.
+func SubscriptionType(metadataJSON string) (string, bool) {
+	if !strings.Contains(metadataJSON, "subscription_type") {
+		return "", false
+	}
+	return jsonString(jsonFields(metadataJSON, "subscription_type")["subscription_type"])
+}
+
+// EnvFields is an event's env platform, terminal and shell, as the device rows read them.
+func EnvFields(envJSON string) (v [3]string, ok [3]bool) {
+	if envJSON == "" {
+		return
+	}
+	md := jsonFields(envJSON, envKeys[:]...)
+	for i, k := range envKeys {
+		v[i], ok[i] = jsonString(md[k])
+	}
+	return
+}
+
+// CodexPlanOf is a Codex call's x-codex-plan-type, as account_facts reads it.
+func CodexPlanOf(providerJSON string) (string, bool) {
+	if providerJSON == "" {
+		return "", false
+	}
+	return jsonString(jsonFields(providerJSON, "x-codex-plan-type")["x-codex-plan-type"])
 }

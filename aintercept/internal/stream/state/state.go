@@ -38,12 +38,13 @@ type KeyState struct {
 	ses  *session
 	segs *omap[int64, Presence] // the span's focused and away segments, by start
 	ev   *eventsState
+	dm   *dimsState
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -103,6 +104,19 @@ type snapshot struct {
 	Links   map[string][]LinkEntry
 	Tools   map[string]int64
 	Turns   map[string]int64
+	Dims    dimsSnap
+}
+
+// dimsSnap is the dimension indexes, for Encode.
+type dimsSnap struct {
+	Account *process.Account
+	Visible bool
+	Person  string
+	Creds   map[string][]string
+	CredOf  map[string]string
+	AcctEv  []AccountEvents
+	AcctDev []AccountDevice
+	Codex   []CodexPlan
 }
 
 // LinkEntry is one visible call under a request id, for Encode.
@@ -124,7 +138,7 @@ func init() {
 // Encode is the state as bytes, for a checkpoint.
 func Encode(s *KeyState) ([]byte, error) {
 	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
-		Tools: s.ev.tools, Turns: s.ev.turns}
+		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap()}
 	byAt := map[string]string{}
 	for call, la := range s.ev.callLink {
 		byAt[la.rid+"\x00"+la.at.id] = call
@@ -182,5 +196,52 @@ func Decode(b []byte) (*KeyState, error) {
 	if snap.Turns != nil {
 		s.ev.turns = snap.Turns
 	}
+	s.dm = dimsFrom(snap.Dims)
 	return s, nil
+}
+
+func (x *dimsState) snap() dimsSnap {
+	y := dimsSnap{Account: x.account, Visible: x.visible, Person: x.person, Creds: map[string][]string{}, CredOf: x.credOf}
+	for h, set := range x.creds {
+		for src := range set {
+			y.Creds[h] = append(y.Creds[h], src)
+		}
+	}
+	for _, v := range x.acctEv {
+		y.AcctEv = append(y.AcctEv, *v)
+	}
+	for _, v := range x.acctDev {
+		y.AcctDev = append(y.AcctDev, *v)
+	}
+	for _, v := range x.codex {
+		y.Codex = append(y.Codex, *v)
+	}
+	return y
+}
+
+func dimsFrom(y dimsSnap) *dimsState {
+	x := newDimsState()
+	x.account, x.visible, x.person = y.Account, y.Visible, y.Person
+	for h, srcs := range y.Creds {
+		x.creds[h] = map[string]bool{}
+		for _, src := range srcs {
+			x.creds[h][src] = true
+		}
+	}
+	for k, v := range y.CredOf {
+		x.credOf[k] = v
+	}
+	for _, v := range y.AcctEv {
+		v := v
+		x.acctEv[v.AccountID] = &v
+	}
+	for _, v := range y.AcctDev {
+		v := v
+		x.acctDev[[2]string{v.AccountID, v.DeviceID}] = &v
+	}
+	for _, v := range y.Codex {
+		v := v
+		x.codex[v.AccountID] = &v
+	}
+	return x
 }
