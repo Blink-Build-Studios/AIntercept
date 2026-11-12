@@ -64,3 +64,44 @@ def test_person_tables_equal_the_reference(seed):
 
 def test_there_are_seeds():
     assert len(SEEDS) >= 10
+
+
+def test_the_store_builds_the_person_tables_from_bucketed_dimensions(tmp_path):
+    """A layout holding the dimension tables (as the processor writes them, each row under its
+    key): the store derives the person tables from them, and resolves a person through them."""
+    from aintercept_api.buckets import ROUTING, BucketStore, LocalSource, Scope, bucket_of
+    from tests.bucket_fixture import table_key, write_commit, write_rows
+    from tests.test_buckets import Clock
+
+    seed = SEEDS[0]
+    con, want = _load(seed)
+    data = json.loads(seed.read_text())
+    commits: dict[int, dict[str, list[str]]] = {}
+    for table in DIMENSIONS:
+        rows = data.get(table) or []
+        for b in sorted({bucket_of(r["key"]) for r in rows}):
+            k = table_key("", table, b, "base-1")
+            # one row per (key, id), in the fixture's order
+            con.execute("DROP TABLE IF EXISTS one")
+            con.execute(f"CREATE TABLE one AS SELECT *, ''::VARCHAR AS key, ''::VARCHAR AS id, false AS tomb FROM {table} LIMIT 0")  # noqa: S608,E501
+            for r in rows:
+                if bucket_of(r["key"]) != b:
+                    continue
+                cols = [c for c in r if c not in ("key", "id")]
+                con.execute(
+                    f"INSERT INTO one BY NAME SELECT ? AS key, ? AS id, {', '.join('?::' + _type(_SHAPES[table], c) + ' AS ' + c for c in cols)}",  # noqa: S608,E501
+                    [r["key"], r["id"], *[r[c] for c in cols]],
+                )
+            write_rows(tmp_path, k, con, "SELECT * FROM one", [])
+            commits.setdefault(b, {})[table] = [k]
+    for b, base in commits.items():
+        write_commit(tmp_path, "", b, 1, base, {})
+    tables = {t: ROUTING[t] for t in (*DIMENSIONS, "person_map", "person_sessions", "account_facts", "account_devices")}
+    store = BucketStore(LocalSource(tmp_path), tmp_path / ".cache", tables=tables, clock=Clock())
+    with store.scope(Scope.everything()):
+        for table in PERSON_TABLES:
+            cur_rows = store.query_dicts(f"SELECT * FROM {table}")  # noqa: S608
+            assert cur_rows == (want.get(table) or []), table
+    pid = want["person_sessions"][0]["person_id"]
+    sessions = {r["session_id"] for r in want["person_sessions"] if r["person_id"] == pid}
+    assert store.resolve_person(pid).sessions == sessions
