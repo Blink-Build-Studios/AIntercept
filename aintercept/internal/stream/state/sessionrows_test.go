@@ -241,11 +241,11 @@ const (
 var sessionCases = []atomicCase{
 	{"a visible call opens the session's row", nil,
 		func() records.Record { return callEnd(richCall("c1", "s1", 10, nil)) },
-		[]string{CaseSesCallVisible}},
+		[]string{CaseSesCallVisible, CaseSesOrigin}},
 	{"a call in flight counts, and its ending replaces it",
 		func() []records.Record { return []records.Record{callStart(richCall("c1", "s1", 10, nil))} },
 		func() records.Record { return callEnd(richCall("c1", "s1", 10, nil)) },
-		[]string{CaseSesCallVisible}},
+		[]string{CaseSesCallVisible, CaseSesOrigin}},
 	{"a call in flight alone", nil,
 		func() records.Record { return callStart(ccCall("c1", "s1", 10)) },
 		[]string{CaseSesCallVisible}},
@@ -318,10 +318,14 @@ var sessionCases = []atomicCase{
 		},
 		[]string{CaseSesEvent, CaseSesEventFriction}},
 	{"a report of a call not captured", nil,
-		func() records.Record { return ccEvent("s1", "tengu_api_success", 10, `{"requestId":"r9","gzipSkipReason":"custom_ca"}`) },
+		func() records.Record {
+			return ccEvent("s1", "tengu_api_success", 10, `{"requestId":"r9","gzipSkipReason":"custom_ca"}`)
+		},
 		[]string{CaseSesEvent, CaseSesEventReport, CaseSesReportMissed}},
 	{"a report of a captured call",
-		func() []records.Record { return []records.Record{callEnd(withReq(richCall("c1", "s1", 10, nil), "r1"))} },
+		func() []records.Record {
+			return []records.Record{callEnd(withReq(richCall("c1", "s1", 10, nil), "r1"))}
+		},
 		func() records.Record { return ccEvent("s1", "tengu_api_success", 20, `{"requestId":"r1"}`) },
 		[]string{CaseSesEvent, CaseSesEventReport}},
 	{"a call captured after its report",
