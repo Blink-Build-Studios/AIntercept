@@ -56,7 +56,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	var d Delta
 	ch := s.ses.apply(r, &d)
 	s.presence(&d, ch)
-	// s.events(r, &d): not built yet; the event tests define it
+	s.events(r, &d)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
