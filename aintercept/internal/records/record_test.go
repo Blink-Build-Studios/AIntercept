@@ -12,7 +12,7 @@ import (
 func TestColumnsPinned(t *testing.T) {
 	want := []string{
 		"record_version", "record_id", "kind", "instance", "call_id", "routing_key", "bucket",
-		"batch_id", "batch_n", "batch_session", "event_key",
+		"batch_id", "batch_n", "batch_cc_n", "batch_session", "event_key",
 		"call.call_id", "call.correlation_id", "call.source_file", "call.first_file", "call.ws_turn", "call.transport",
 		"call.start_ns", "call.response_start_ns", "call.end_ns", "call.host", "call.method", "call.path", "call.status",
 		"call.synthetic", "call.ip", "call.key_hash", "call.key_hint", "call.error",

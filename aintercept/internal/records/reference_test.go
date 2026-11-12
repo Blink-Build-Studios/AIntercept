@@ -231,3 +231,37 @@ func generate(r *rand.Rand) []events.Event {
 		streams[i] = streams[i][1:]
 	}
 }
+
+// Every generated batch's Claude Code events are ranked exactly as the event
+// rows number them.
+func TestGeneratedRanksMatchTheEventRows(t *testing.T) {
+	for seed := int64(1); seed <= 25; seed++ {
+		rows := generate(rand.New(rand.NewSource(seed)))
+		a := records.NewAssembler("inc")
+		x := process.NewShaper()
+		var got []records.Record
+		for i := range rows {
+			l, _ := json.Marshal(rows[i])
+			x.Apply(&rows[i], l, "f")
+			got = append(got, a.Apply(&rows[i], l, "f")...)
+		}
+		got = append(got, a.Flush()...)
+		_, evs := x.Rows()
+		want := process.EventNumbers(evs)
+		n := 0
+		for _, r := range got {
+			if r.Kind != records.KindClientEvent {
+				continue
+			}
+			if w, ok := want[r.Event.EventKey]; ok {
+				n++
+				if int64(w) != r.BatchCCN {
+					t.Errorf("seed %d %s: rank %d, event rows number it %d", seed, r.Event.EventKey, r.BatchCCN, w)
+				}
+			}
+		}
+		if n == 0 {
+			t.Fatalf("seed %d: no numbered event", seed)
+		}
+	}
+}
