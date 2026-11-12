@@ -50,7 +50,7 @@ func TestRealData(t *testing.T) {
 	}
 	sort.Strings(names)
 	covered := map[string]bool{CaseDuplicate: true}
-	for _, cs := range [][]atomicCase{presenceCases, eventCases} {
+	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases} {
 		for _, c := range cs {
 			for _, x := range c.cases {
 				covered[x] = true

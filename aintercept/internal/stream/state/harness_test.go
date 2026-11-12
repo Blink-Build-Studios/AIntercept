@@ -95,6 +95,7 @@ func reference(rs []records.Record) *process.Derived {
 	}
 	var in process.RefInput
 	seenCall, seenRec := map[string]bool{}, map[string]bool{}
+	var accts map[string]*process.Account
 	for _, r := range rs {
 		if seenRec[r.RecordID] {
 			continue
@@ -113,8 +114,18 @@ func reference(rs []records.Record) *process.Derived {
 			}
 		case records.KindClientEvent:
 			in.Events = append(in.Events, *r.Event)
+		case records.KindAccount:
+			if accts == nil {
+				accts = map[string]*process.Account{}
+			}
+			a := r.Account
+			process.AccountSighting(accts, a.AccountID, a.Email, a.Name, a.Org, a.NS)
 		}
 	}
+	for _, a := range accts {
+		in.Accounts = append(in.Accounts, *a)
+	}
+	sort.Slice(in.Accounts, func(i, j int) bool { return in.Accounts[i].AccountID < in.Accounts[j].AccountID })
 	// The reference reads events in their part's order: by batch, then place.
 	sort.SliceStable(in.Events, func(i, j int) bool { return in.Events[i].EventKey < in.Events[j].EventKey })
 	return process.DeriveRows(in)

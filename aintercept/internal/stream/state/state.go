@@ -57,6 +57,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	ch := s.ses.apply(r, &d)
 	s.presence(&d, ch)
 	s.events(r, &d)
+	s.dims(r, &d)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
@@ -113,7 +114,9 @@ type LinkEntry struct {
 }
 
 func init() {
-	for _, v := range []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{}} {
+	for _, v := range []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
+		process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
+		AccountEvents{}, AccountDevice{}, CodexPlan{}} {
 		gob.Register(v)
 	}
 }

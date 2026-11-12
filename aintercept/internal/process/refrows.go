@@ -1,5 +1,7 @@
 package process
 
+import "github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+
 // RefInput is everything the derived tables are built from, in memory: the
 // ended requests, the in-flight ones, the analytics events (one batch numbering:
 // all in one part) and the accounts.
@@ -83,4 +85,13 @@ func eventColsOf(e Event) eventCols {
 		SessionID: e.SessionID, PromptID: e.PromptID, PersonID: e.PersonID, MetadataJSON: e.MetadataJSON,
 		DeviceID: e.DeviceID, EnvJSON: e.EnvJSON, HeadSHA: e.HeadSHA, OrgID: e.OrgID, EventKey: e.EventKey,
 	}
+}
+
+// AccountSighting folds one sighting of who an account is into the accounts
+// (state.account: each field the latest sighting's that says it, the greatest
+// value at the same time). The reference's accounts, and the streaming
+// processor's dim_account, from the same rule.
+func AccountSighting(accounts map[string]*Account, id, email, name, org string, at int64) {
+	s := &state{accounts: accounts}
+	s.account(&events.AuthIdentity{AccountID: id, Email: email, Name: name, Org: org}, at)
 }

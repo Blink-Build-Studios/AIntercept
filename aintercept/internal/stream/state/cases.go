@@ -22,6 +22,16 @@ const (
 	CaseSessionTool      = "tool.first"         // a session tool seen, or seen earlier
 	CaseRequestLink      = "call.request_link"  // a visible call put under its request id
 	CaseCodexTurn        = "call.codex_turn"    // a Codex turn's first visible call, or an earlier one
+
+	CaseAccount           = "dim.account"            // an account sighting
+	CaseSessionAccount    = "dim.session_account"    // a session names an account
+	CaseSessionVisible    = "dim.session_visible"    // a session's visible-call count went from or to none
+	CaseSessionPerson     = "dim.session_person"     // a session's least account (as the people list counts)
+	CasePersonDevice      = "dim.person_device"      // a person and device named together
+	CaseSessionCredential = "dim.session_credential" // a session's credential
+	CaseAccountEvents     = "dim.account_events"     // an account's org or plan from a Claude Code event
+	CaseAccountDevice     = "dim.account_device"     // an account's device (and env)
+	CaseCodexPlan         = "dim.codex_plan"         // an account's Codex plan
 )
 
 // AllCases is every case, for the coverage test.
@@ -31,4 +41,6 @@ var AllCases = []string{
 	CasePresenceRecut, CasePresenceSleepRow,
 	CaseEventRow + ".request", CaseEventRow + ".prompt", CaseEventRow + ".tool", CaseEventRow + ".device", CaseEventRow + ".session",
 	CasePromptIndex, CaseSessionTool, CaseRequestLink, CaseCodexTurn,
+	CaseAccount, CaseSessionAccount, CaseSessionVisible, CaseSessionPerson, CasePersonDevice, CaseSessionCredential,
+	CaseAccountEvents, CaseAccountDevice, CaseCodexPlan,
 }
