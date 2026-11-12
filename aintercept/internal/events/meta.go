@@ -243,6 +243,9 @@ func ProviderHeaderValues(hdrs map[string]string) map[string]string {
 
 // pickHeaders returns the allowlisted header values present in hdrs. A header
 // in the sensitive set is never returned, even if allowlisted by mistake.
+// ClientHeaders is the allowlisted client header values of a request's headers.
+func ClientHeaders(hdrs map[string]string) map[string]string { return pickHeaders(hdrs, clientHeaders) }
+
 func pickHeaders(hdrs map[string]string, names []string) map[string]string {
 	var out map[string]string
 	for _, n := range names {

@@ -1,15 +1,14 @@
 package process
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
 
@@ -25,13 +24,6 @@ const (
 	// in-flight transactions rather than rebuilt from the requests.
 	expiredTTL = 7 * 24 * time.Hour
 )
-
-// Request header values a pending transaction keeps for its request row.
-var pendingClientHeaders = []string{
-	"x-claude-code-session-id", "x-claude-code-prompt-id", "x-claude-code-request-class",
-	"x-client-request-id", "x-claude-code-agent-id", "x-claude-code-agent-type", "x-organization-uuid", "user-agent",
-	"originator", "version",
-}
 
 // state is what the shaped tables accumulate: the snapshot tables keyed by
 // their primary keys, and the transactions waiting for their ending. Every
@@ -158,12 +150,12 @@ func (s *state) apply(e *events.Event, line []byte, file string, out *batch) {
 		p.Synthetic = e.Synthetic
 		p.IP, p.KeyHash, p.KeyHint = e.IP, e.KeyHash, e.KeyHint
 		p.WebSocket = strings.EqualFold(e.Headers["upgrade"], "websocket")
-		p.ClientJSON = marshal(pick(e.Headers, pendingClientHeaders))
+		p.ClientJSON = marshal(canon.Pick(e.Headers, canon.PendingClientHeaders))
 		if b := s.bodiesFor(e.CorrelationID); b != nil {
 			b.reqEnc = e.Headers["content-encoding"]
 		}
 		if p.Error != "" { // its disconnect came first
-			s.addRequest(requestFromPending(p), out)
+			s.addRequest(canon.RequestFromPending(p), out)
 			s.done(e.CorrelationID, p.EndNS)
 		}
 	case events.PhaseResponseHeaders:
@@ -186,17 +178,17 @@ func (s *state) apply(e *events.Event, line []byte, file string, out *batch) {
 		s.body(e, true)
 	case events.PhaseComplete:
 		if e.Transport == events.TransportWebSocket { // a model turn; the connection stays open
-			r := requestFrom(e, nil, file)
+			r := canon.RequestFrom(e, nil, file)
 			r.CallID = e.CorrelationID + "#" + strconv.Itoa(e.WSTurn)
 			s.addRequest(r, out)
 			return
 		}
-		r := requestFrom(e, s.pending[e.CorrelationID], file)
+		r := canon.RequestFrom(e, s.pending[e.CorrelationID], file)
 		r.DetailJSON = s.detail(e.CorrelationID)
 		s.addRequest(r, out)
 		s.done(e.CorrelationID, e.TimestampNS)
 	case events.PhaseWSConnection:
-		s.addRequest(requestFrom(e, s.pending[e.CorrelationID], file), out)
+		s.addRequest(canon.RequestFrom(e, s.pending[e.CorrelationID], file), out)
 		s.done(e.CorrelationID, e.TimestampNS)
 	case events.PhaseDisconnect:
 		// Only a transaction that never completed becomes a row here; a disconnect
@@ -205,12 +197,12 @@ func (s *state) apply(e *events.Event, line []byte, file string, out *batch) {
 		p := s.pendingFor(e, file)
 		p.EndNS, p.Error, p.EndFile = e.TimestampNS, e.Error, file
 		if p.StartNS != 0 {
-			s.addRequest(requestFromPending(p), out)
+			s.addRequest(canon.RequestFromPending(p), out)
 			s.done(e.CorrelationID, e.TimestampNS)
 		}
 	case events.PhaseClientEvent:
 		if e.ClientEvent != nil {
-			ev := eventFrom(e, line, file)
+			ev := canon.EventFrom(e, line, file)
 			if ev.ClientEventID == "" {
 				// A repeat of an identical row (an unnumbered batch's duplicate event)
 				// is its own event: key it <key>-2, -3, ….
@@ -293,7 +285,7 @@ func (s *state) expire(out *batch) {
 			delete(s.eventCopies, id)
 			continue
 		}
-		s.addRequest(requestFromPending(p), out)
+		s.addRequest(canon.RequestFromPending(p), out)
 		s.done(id, s.newestNS)
 		s.pending[id].Expired = true
 	}
@@ -543,157 +535,7 @@ func (s *state) load(sessions []Session, prompts []Prompt, devices []PersonDevic
 	s.newestNS = newest
 }
 
-// requestFrom builds a request row from a transaction's ending row, filling
-// what the ending doesn't carry (rows from older observers) from its headers.
-func requestFrom(e *events.Event, p *Pending, file string) Request {
-	r := Request{CallID: e.CorrelationID}
-	if p != nil {
-		r = requestFromPending(p)
-	}
-	r.CorrelationID, r.SourceFile, r.EndNS = e.CorrelationID, file, e.TimestampNS
-	if r.FirstFile == "" {
-		r.FirstFile = file
-	}
-	r.WSTurn, r.Transport = int64(e.WSTurn), e.Transport
-	r.StartNS = firstNZ(e.RequestStartNS, r.StartNS)
-	r.ResponseStartNS = firstNZ(e.ResponseStartNS, r.ResponseStartNS)
-	r.RequestBytes = firstNZ(int64(e.RequestBytes), r.RequestBytes)
-	r.ResponseBytes = firstNZ(int64(e.ResponseBytes), r.ResponseBytes)
-	r.Host, r.Method, r.Path = firstStr(e.Host, r.Host), firstStr(e.Method, r.Method), firstStr(e.Path, r.Path)
-	r.Status = firstNZ(int64(e.Status), r.Status)
-	r.Synthetic = e.Synthetic || r.Synthetic
-	r.IP, r.KeyHash, r.KeyHint = firstStr(e.IP, r.IP), firstStr(e.KeyHash, r.KeyHash), firstStr(e.KeyHint, r.KeyHint)
-	r.Error = e.Error
-	if len(e.Client) > 0 {
-		setClient(&r, e.Client)
-	}
-	r.SessionID = firstStr(r.SessionID, e.SessionID)
-	r.PersonID, r.DeviceID = e.AccountUUID, e.DeviceID
-	if r.Product == productCodex {
-		applyCodex(&r, e)
-	}
-	r.RequestID = firstStr(e.Provider["request-id"], r.RequestID)
-	r.Model, r.StopReason, r.MessageID, r.PreviousMessageID = e.Model, e.StopReason, e.MessageID, e.PreviousMessageID
-	r.ThreadType, r.Stream, r.ServiceTier = e.ThreadType, e.Stream, e.ServiceTier
-	r.InputTokens, r.OutputTokens = int64(e.InputTokens), int64(e.OutputTokens)
-	r.CacheReadTokens, r.CacheWriteTokens = int64(e.CacheReadTokens), int64(e.CacheWriteTokens)
-	r.ReasoningTokens = int64(e.ReasoningTokens)
-	r.Effort = e.Effort
-	// Provider values from the response headers, overridden by the complete row's own.
-	provider := map[string]string{}
-	if p != nil && p.ProviderJSON != "" {
-		json.Unmarshal([]byte(p.ProviderJSON), &provider)
-	}
-	for k, v := range e.Provider {
-		provider[k] = v
-	}
-	r.ProviderJSON = marshal(provider)
-	if len(e.ToolUses) > 0 {
-		r.ToolUsesJSON = marshal(e.ToolUses)
-	}
-	return r
-}
-
-func requestFromPending(p *Pending) Request {
-	r := Request{
-		CallID: p.CorrelationID, CorrelationID: p.CorrelationID, SourceFile: p.SourceFile, FirstFile: p.SourceFile,
-		ContentEncoding: p.ContentEncoding, ProviderJSON: p.ProviderJSON,
-		StartNS: p.StartNS, ResponseStartNS: p.ResponseStartNS,
-		Host: p.Host, Method: p.Method, Path: p.Path, Status: p.Status, Synthetic: p.Synthetic,
-		IP: p.IP, KeyHash: p.KeyHash, KeyHint: p.KeyHint,
-		RequestBytes: p.RequestBytes, ResponseBytes: p.ResponseBytes, RequestID: p.RequestID,
-		EndNS: p.EndNS, Error: p.Error,
-	}
-	if p.EndFile != "" {
-		r.SourceFile = p.EndFile
-	}
-	if p.WebSocket {
-		r.Transport = events.TransportWebSocket
-	}
-	if p.ClientJSON != "" {
-		var c map[string]string
-		if json.Unmarshal([]byte(p.ClientJSON), &c) == nil {
-			setClient(&r, c)
-		}
-	}
-	return r
-}
-
-func setClient(r *Request, c map[string]string) {
-	r.SessionID = c["x-claude-code-session-id"]
-	r.PromptID = c["x-claude-code-prompt-id"]
-	r.RequestClass = c["x-claude-code-request-class"]
-	r.ClientRequestID = c["x-client-request-id"]
-	r.AgentID, r.AgentType = c["x-claude-code-agent-id"], c["x-claude-code-agent-type"]
-	r.OrgID = c["x-organization-uuid"]
-	r.UserAgent = c["user-agent"]
-	r.ClientJSON = marshal(c)
-	r.Product = productOf(r, c["originator"])
-	r.Client, r.ClientVersion = clientOf(r, c["originator"])
-}
-
-func eventFrom(e *events.Event, line []byte, file string) Event {
-	ce := e.ClientEvent
-	md, _ := ce.Data["additional_metadata"].(map[string]any)
-	key := e.CorrelationID + "/" + ce.ID
-	if ce.ID == "" {
-		h := sha256.Sum256(line)
-		key = e.CorrelationID + "/h" + hex.EncodeToString(h[:8])
-	}
-	ev := Event{
-		EventKey: key, CorrelationID: e.CorrelationID, SourceFile: file,
-		RowNS: e.TimestampNS, NS: e.TimestampNS, Seq: int64(e.Seq),
-		Source: ce.Source, Name: ce.Name, Type: ce.Type, ClientEventID: ce.ID,
-		SessionID: ce.SessionID, PersonID: ce.AccountUUID, OrgID: ce.OrganizationUUID, DeviceID: ce.DeviceID,
-		AgentID: ce.AgentID, AgentType: ce.AgentType, Model: ce.Model,
-		PromptID: str(md["cc_prompt_id"]), RequestID: str(md["requestId"]), ClientRequestID: str(md["clientRequestId"]),
-		ToolUseID:      firstStr(str(md["toolUseID"]), str(md["tool_use_id"])),
-		PromptIndex:    num(md["prompt_index"]),
-		PermissionMode: str(md["permissionMode"]),
-		HeadSHA:        str(ce.Data["head_sha"]),
-	}
-	if t, err := time.Parse(time.RFC3339Nano, ce.Timestamp); err == nil {
-		ev.NS = t.UnixNano()
-	}
-	if ce.Source == "codex" { // Codex sends no additional_metadata: its params are the event
-		ev.PromptID = str(ce.Data["turn_id"])
-		ev.MetadataJSON = marshal(ce.Data)
-		ev.PersonID = firstStr(ev.PersonID, e.AccountUUID)
-		return ev
-	}
-	// The metadata and env exactly as the client sent them: key order is the
-	// client's (summaries list fields in it), which a decoded map loses.
-	var raw struct {
-		ClientEvent struct {
-			Data struct {
-				Metadata json.RawMessage `json:"additional_metadata"`
-				Env      json.RawMessage `json:"env"`
-			} `json:"data"`
-		} `json:"client_event"`
-	}
-	if json.Unmarshal(line, &raw) == nil {
-		d := raw.ClientEvent.Data
-		if len(d.Metadata) > 0 && string(d.Metadata) != "null" {
-			ev.MetadataJSON = string(d.Metadata)
-		}
-		if len(d.Env) > 0 && string(d.Env) != "null" {
-			ev.EnvJSON = string(d.Env)
-		}
-	}
-	return ev
-}
-
 // --- small helpers -------------------------------------------------------------------
-
-func pick(h map[string]string, names []string) map[string]string {
-	out := map[string]string{}
-	for _, n := range names {
-		if v := h[n]; v != "" {
-			out[n] = v
-		}
-	}
-	return out
-}
 
 // marshal is JSON with sorted keys (encoding/json sorts maps), so output is stable.
 func marshal(v any) string {

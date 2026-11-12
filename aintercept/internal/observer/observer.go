@@ -39,6 +39,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
 func Run() {
@@ -191,6 +192,34 @@ func Run() {
 			cfg.IncludeContent = true
 			full = append(full, events.NewS3Sink(writer, cfg))
 			slog.Info("full interception: request and response bodies are recorded to object storage", "bucket", bucket, "prefix", cfg.Prefix)
+		}
+	}
+
+	// Canonical records (docs/STREAMING_PIPELINE.md §3): the bucketed
+	// processor's input, beside the raw log, through the same bucket or
+	// directory. From the full rows when bodies are recorded (a call's detail
+	// is read from them), else from the body-stripped ones.
+	var recordsSink *records.Sink
+	if os.Getenv("OBSERVER_RECORDS") != "false" {
+		var put records.Putter
+		prefix := ""
+		switch {
+		case s3Sink != nil:
+			put, prefix = s3Sink, s3Cfg.Prefix
+		case localSink != nil:
+			put = localSink
+		}
+		if put != nil {
+			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix,
+				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies,
+				MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
+			if captureFullBodies {
+				full = append(full, recordsSink)
+			} else {
+				bodyStripped = append(bodyStripped, recordsSink)
+			}
+			go recordsSink.Run(context.Background())
+			slog.Info("canonical records enabled", "prefix", records.ObjectKeyPrefix(prefix, 0))
 		}
 	}
 

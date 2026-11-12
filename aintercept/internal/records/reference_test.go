@@ -113,21 +113,25 @@ func compare[T any](t *testing.T, seed int64, what string, want, got map[string]
 func generate(r *rand.Rand) []events.Event {
 	t0 := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
 	ns := func(d time.Duration) int64 { return t0.Add(d).UnixNano() }
-	var streams [][]events.Event
+	var streams [][][]events.Event // each stream's steps: a row, or rows always emitted together
 	for i := 0; i < 40; i++ {
 		id := fmt.Sprintf("pod-%d-%d", r.Intn(3), i)
 		start := time.Duration(r.Intn(3600)) * time.Second
 		sess := fmt.Sprintf("s%d", r.Intn(5))
 		kh := fmt.Sprintf("kh%d", r.Intn(3))
-		var s []events.Event
+		var s [][]events.Event
 		seq := uint64(0)
-		add := func(e events.Event) {
+		stamp := func(e events.Event) events.Event {
 			seq++
 			e.CorrelationID, e.Seq = id, seq
 			if e.TimestampNS == 0 {
 				e.TimestampNS = ns(start + time.Duration(seq)*time.Second)
 			}
-			s = append(s, e)
+			return e
+		}
+		add := func(e events.Event) { s = append(s, []events.Event{stamp(e)}) }
+		with := func(e events.Event) { // emitted with the step before it (a batch's events, after its request)
+			s[len(s)-1] = append(s[len(s)-1], stamp(e))
 		}
 		switch r.Intn(5) {
 		case 0, 1: // a Claude Code model call
@@ -182,7 +186,7 @@ func generate(r *rand.Rand) []events.Event {
 					ce = &c
 				}
 				last = ce
-				add(events.Event{Phase: events.PhaseClientEvent, Host: "api.anthropic.com", Path: "/api/event_logging/v2/batch",
+				with(events.Event{Phase: events.PhaseClientEvent, Host: "api.anthropic.com", Path: "/api/event_logging/v2/batch",
 					KeyHash: kh, TimestampNS: ns(start + 3*time.Second), ClientEvent: ce})
 			}
 		case 3: // a Codex WebSocket with turns
@@ -223,7 +227,7 @@ func generate(r *rand.Rand) []events.Event {
 			return out
 		}
 		i := live[r.Intn(len(live))]
-		out = append(out, streams[i][0])
+		out = append(out, streams[i][0]...)
 		streams[i] = streams[i][1:]
 	}
 }

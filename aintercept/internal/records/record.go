@@ -1,0 +1,92 @@
+// Package records is the observer's canonical output (docs/STREAMING_PIPELINE.md
+// §3): each finished or started call, each analytics event and each account
+// sighting as one record, routed by key into a bucket, written as Parquet
+// under records/v1/bucket=NN/minute=<upload minute>/. The bucketed processor
+// reads only these. The raw log is written as before, beside them.
+package records
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+
+	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/compress/zstd"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+)
+
+// Version is the record schema's version: a column changes only with it.
+const Version = 1
+
+// The kinds of record.
+const (
+	KindCallStart    = "call_start"    // a call whose request is known (HTTP request end, a WebSocket turn's response.create)
+	KindCallEnd      = "call_end"      // a call's request row, as the processor writes it today
+	KindWSConnection = "ws_connection" // a WebSocket connection's own row, at its close
+	KindClientEvent  = "client_event"  // one analytics event a client reported
+	KindAccount      = "account"       // who an account is, as a row named it
+)
+
+// Record is one canonical record. Exactly one of Call, Event and Account is set,
+// except that a client event also carries its batch request's call (Call: the
+// carrier's identity, for routing an event that names no session).
+type Record struct {
+	Version  int32  `parquet:"record_version"`
+	RecordID string `parquet:"record_id"` // <incarnation>-<seq>: unique across pods and restarts
+	Kind     string `parquet:"kind"`
+	Instance string `parquet:"instance"` // the observer that saw it
+	CallID   string `parquet:"call_id,optional"`
+	// RoutingKey is the key the processor groups by (RoutingKey), Bucket its bucket.
+	RoutingKey string `parquet:"routing_key"`
+	Bucket     int32  `parquet:"bucket"`
+	// An analytics batch: the request that carried the event (BatchID, its
+	// correlation id), the event's place in the whole batch (BatchN), and on the
+	// request's own call record the session its earliest event names.
+	BatchID      string `parquet:"batch_id,optional"`
+	BatchN       int64  `parquet:"batch_n,optional"`
+	BatchSession string `parquet:"batch_session,optional"`
+	// EventKey is a client event's key: its record id.
+	EventKey string `parquet:"event_key,optional"`
+
+	Call    *canon.Request `parquet:"call,optional"`
+	Event   *canon.Event   `parquet:"event,optional"`
+	Account *Account       `parquet:"account,optional"`
+}
+
+// Account is one sighting of who an account is.
+type Account struct {
+	AccountID string `parquet:"account_id"`
+	Email     string `parquet:"email,optional"`
+	Name      string `parquet:"name,optional"`
+	Org       string `parquet:"org,optional"`
+	NS        int64  `parquet:"ns"`
+}
+
+// NewIncarnation names one run of an observer: its pod, start time and random
+// bytes, so record ids stay unique when a container restarts with the same name.
+func NewIncarnation(pod string) string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return fmt.Sprintf("%s-%d-%s", pod, time.Now().UnixNano(), hex.EncodeToString(b))
+}
+
+// Encode is records as a Parquet file (zstd).
+func Encode(rs []Record) ([]byte, error) {
+	var buf bytes.Buffer
+	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(&zstd.Codec{}))
+	if _, err := w.Write(rs); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// Decode reads a records file.
+func Decode(b []byte) ([]Record, error) {
+	return parquet.Read[Record](bytes.NewReader(b), int64(len(b)))
+}

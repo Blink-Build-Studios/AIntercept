@@ -128,7 +128,7 @@ func TestFlushSealsEverything(t *testing.T) {
 			calls++
 		}
 	}
-	if calls != 1 {
+	if calls != 2 { // under its batch's session, and under its start's credential key
 		t.Fatalf("the held analytics call must be released by Flush: %d", calls)
 	}
 }
