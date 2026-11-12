@@ -43,4 +43,6 @@ var AllCases = []string{
 	CasePromptIndex, CaseSessionTool, CaseRequestLink, CaseCodexTurn,
 	CaseAccount, CaseSessionAccount, CaseSessionVisible, CaseSessionPerson, CasePersonDevice, CaseSessionCredential,
 	CaseAccountEvents, CaseAccountDevice, CaseCodexPlan,
+	CaseTxEnd, CaseTxEndCopy, CaseTxStart, CaseTxNoRow, CaseReport, CaseMissed, CaseMatched,
+	CaseRetry, CaseRetryRow, CaseNeighbor, CaseBatchMember, CaseSessionLast,
 }

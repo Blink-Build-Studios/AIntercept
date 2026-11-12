@@ -59,6 +59,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.presence(&d, ch)
 	s.events(r, &d)
 	s.dims(r, &d)
+	s.requests(r, &d)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
@@ -131,7 +132,8 @@ type LinkEntry struct {
 // (rowtypes_test.go), so table files name their columns.
 var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
-	AccountEvents{}, AccountDevice{}, CodexPlan{}}
+	AccountEvents{}, AccountDevice{}, CodexPlan{},
+	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}}
 
 func init() {
 	for _, v := range RowTypes {
