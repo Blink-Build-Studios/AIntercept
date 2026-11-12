@@ -2,6 +2,7 @@ package records
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -65,8 +66,12 @@ const (
 	sweepEvery   = 4096 // rows between sweeps
 )
 
-// maxCallBody bounds a recorded body held for a call's detail.
+// maxCallBody bounds a recorded body held for a call's detail_json.
 const maxCallBody = 32 << 20
+
+// defaultDetailCap bounds what a call in flight holds for its detail object;
+// past it, its rows are kept without their bodies.
+const defaultDetailCap = 16 << 20
 
 // call is one transaction's state while it's open, then its end marker.
 type call struct {
@@ -101,12 +106,80 @@ type Assembler struct {
 	rows     int
 	cases    map[string]int64
 	accounts map[string]Account // the last sighting written per account
+
+	// KeepDetail keeps each call's rows and writes them as its detail object when
+	// it ends (TakeDetails): what the request drawer reads, without scanning the
+	// raw log. DetailCap bounds what a call holds: past it, rows are kept
+	// without their bodies.
+	KeepDetail bool
+	DetailCap  int
+	lines      map[string]*detailLines
+	details    []Detail
+}
+
+// Detail is one call's detail object: its rows, as the raw log has them, in order.
+type Detail struct {
+	CorrelationID string
+	Lines         [][]byte
+}
+
+type detailLines struct {
+	lines [][]byte
+	bytes int
+}
+
+// DetailKey is where a call's detail object is written.
+func DetailKey(prefix, correlationID string) string {
+	return withSlash(prefix) + "calls/" + correlationID + ".ndjson.gz"
+}
+
+// TakeDetails returns the detail objects completed since the last call.
+func (a *Assembler) TakeDetails() []Detail {
+	d := a.details
+	a.details = nil
+	return d
+}
+
+// keepLine adds a row to its call's detail, unless the call has ended (a late
+// row isn't part of the object already written).
+func (a *Assembler) keepLine(e *events.Event, line []byte) {
+	if !a.KeepDetail || e.Phase == events.PhaseVerdict {
+		return
+	}
+	if c := a.calls[e.CorrelationID]; c != nil && c.done && c != a.heldCall {
+		return
+	}
+	d := a.lines[e.CorrelationID]
+	if d == nil {
+		d = &detailLines{}
+		a.lines[e.CorrelationID] = d
+	}
+	limit := a.DetailCap
+	if limit <= 0 {
+		limit = defaultDetailCap
+	}
+	if d.bytes+len(line) > limit && e.BodyB64 != "" {
+		if b, err := json.Marshal(e.WithoutContent()); err == nil {
+			line = b
+		}
+	}
+	d.lines = append(d.lines, line)
+	d.bytes += len(line)
+}
+
+// writeDetail completes a call's detail object.
+func (a *Assembler) writeDetail(id string) {
+	if d := a.lines[id]; d != nil {
+		a.details = append(a.details, Detail{CorrelationID: id, Lines: d.lines})
+		delete(a.lines, id)
+	}
 }
 
 // NewAssembler starts an assembler whose record ids begin with incarnation.
 func NewAssembler(incarnation string) *Assembler {
 	return &Assembler{inc: incarnation, calls: map[string]*call{}, turns: map[string]string{},
-		copies: map[string]map[string]int{}, cases: map[string]int64{}, accounts: map[string]Account{}}
+		copies: map[string]map[string]int{}, cases: map[string]int64{}, accounts: map[string]Account{},
+		lines: map[string]*detailLines{}}
 }
 
 // Cases is how often each case was hit.
@@ -160,6 +233,7 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			out = append(out, a.record(Record{Kind: KindAccount, Account: &acct}, e.ObserverInstance))
 		}
 	}
+	a.keepLine(e, line)
 	if c := a.calls[e.CorrelationID]; c != nil && c.done && describesRequest(e) {
 		a.hit(CaseLateAfterDone)
 		return out
@@ -273,6 +347,7 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			c = a.callFor(e, file)
 		}
 		c.done, c.p.SeenNS, c.bodies = true, e.TimestampNS, nil
+		a.writeDetail(e.CorrelationID)
 		out = append(out, a.record(Record{Kind: KindWSConnection, CallID: r.CallID, Call: &r}, e.ObserverInstance))
 	case events.PhaseDisconnect:
 		c := a.callFor(e, file)
@@ -313,6 +388,7 @@ func (a *Assembler) start(c *call, e *events.Event) Record {
 // end is a call's call_end, and marks it ended.
 func (a *Assembler) end(c *call, r canon.Request, e *events.Event) []Record {
 	c.done, c.p.SeenNS, c.bodies = true, e.TimestampNS, nil
+	a.writeDetail(c.p.CorrelationID)
 	return a.endKeys(r, c.startKey, "", e.ObserverInstance)
 }
 
@@ -342,6 +418,7 @@ func (a *Assembler) release() []Record {
 	} else {
 		a.hit(CaseBatchNoSession)
 	}
+	a.writeDetail(h.CallID)
 	out := a.endKeys(*h.Call, c.startKey, c.session, h.Instance)
 	for i := range out {
 		out[i].BatchID = h.CallID
@@ -459,6 +536,12 @@ func (a *Assembler) sweep() {
 		}
 		delete(a.calls, id)
 		delete(a.copies, id)
+		delete(a.lines, id)
+	}
+	for id := range a.lines { // rows of a call with no state left (a turn of a connection never seen)
+		if a.calls[id] == nil {
+			delete(a.lines, id)
+		}
 	}
 }
 

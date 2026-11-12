@@ -30,6 +30,7 @@ func canonCmd() {
 	out := fs.String("out", "", "the directory to write records to (records/v1/…); empty: don't write")
 	verify := fs.Bool("verify", false, "compare with today's processor and with the live sink, on the same rows")
 	content := fs.Bool("content", false, "the rows carry bodies (a full-interception capture/ prefix)")
+	details := fs.Bool("details", false, "also write each call's detail object (calls/<id>.ndjson.gz)")
 	fs.Parse(os.Args[2:])
 	if *src == "" {
 		fs.Usage()
@@ -63,7 +64,7 @@ func canonCmd() {
 			s.Emit(*e)
 		}
 	}
-	st, err := records.CanonDirObserved(context.Background(), *src, put, "", observe)
+	st, err := records.CanonDirWith(context.Background(), *src, put, "", records.CanonOptions{Details: *details && *out != "", Observe: observe})
 	if err != nil {
 		fatalf("%v", err)
 	}

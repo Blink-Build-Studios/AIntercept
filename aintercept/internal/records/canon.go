@@ -49,12 +49,20 @@ func (s Stats) CheckCoverage() error {
 // Records are written with put under prefix, each bucket's per file, named by
 // the raw file's upload time.
 func CanonDir(ctx context.Context, dir string, put Putter, prefix string) (Stats, error) {
-	return CanonDirObserved(ctx, dir, put, prefix, nil)
+	return CanonDirWith(ctx, dir, put, prefix, CanonOptions{})
 }
 
-// CanonDirObserved is CanonDir, calling observe with each row as it's read (a
-// verification run feeds the same rows to other code to compare).
-func CanonDirObserved(ctx context.Context, dir string, put Putter, prefix string, observe func(pod string, e *events.Event, line []byte)) (Stats, error) {
+// CanonOptions are a canon run's options.
+type CanonOptions struct {
+	// Details also writes each call's detail object.
+	Details bool
+	// Observe is called with each row as it's read (a verification run feeds
+	// the same rows to other code to compare).
+	Observe func(pod string, e *events.Event, line []byte)
+}
+
+// CanonDirWith is CanonDir with options.
+func CanonDirWith(ctx context.Context, dir string, put Putter, prefix string, opt CanonOptions) (Stats, error) {
 	byPod := map[string][]string{}
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".ndjson.gz") {
@@ -82,17 +90,16 @@ func CanonDirObserved(ctx context.Context, dir string, put Putter, prefix string
 		files := byPod[pod]
 		// Upload order: a file is named by its batch start time and sequence.
 		sort.Slice(files, func(i, j int) bool { return filepath.Base(files[i]) < filepath.Base(files[j]) })
-		if err := canonPod(ctx, pod, files, put, prefix, &st, observe); err != nil {
+		if err := canonPod(ctx, pod, files, put, prefix, &st, opt); err != nil {
 			return st, err
 		}
 	}
 	return st, nil
 }
 
-func canonPod(ctx context.Context, pod string, files []string, put Putter, prefix string, st *Stats,
-	observe func(string, *events.Event, []byte)) error {
+func canonPod(ctx context.Context, pod string, files []string, put Putter, prefix string, st *Stats, opt CanonOptions) error {
 	var at time.Time
-	s := NewSink(SinkConfig{Putter: put, Prefix: prefix, Incarnation: "canon-" + pod, MaxRecords: 50000,
+	s := NewSink(SinkConfig{Putter: put, Prefix: prefix, Incarnation: "canon-" + pod, MaxRecords: 50000, Details: opt.Details,
 		MaxAge: 365 * 24 * time.Hour, Now: func() time.Time { return at }})
 	for _, f := range files {
 		if err := ctx.Err(); err != nil {
@@ -100,8 +107,8 @@ func canonPod(ctx context.Context, pod string, files []string, put Putter, prefi
 		}
 		at = fileTime(f)
 		n, bad, err := readRaw(f, func(e *events.Event, line []byte) {
-			if observe != nil {
-				observe(pod, e, line)
+			if opt.Observe != nil {
+				opt.Observe(pod, e, line)
 			}
 			s.mu.Lock()
 			s.add(s.asm.Apply(e, line, ""))
