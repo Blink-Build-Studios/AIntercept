@@ -273,6 +273,11 @@ func TestZZSpoolFull(t *testing.T) {
 	if resp, body := post(t, "enforce.test", "/v1/messages", prompt); resp.StatusCode == 200 {
 		t.Errorf("enforced call went through with the spool full: %d %s", resp.StatusCode, body)
 	}
+	if resp, err := http.Get(strings.Replace(statsURL, "/stats", "/healthz/ready", 1)); err != nil || resp.StatusCode != 200 {
+		t.Errorf("observer not ready with the spool full (%v %v); readiness must not depend on the spool", err, resp)
+	} else {
+		resp.Body.Close()
+	}
 	dc(t, "unpause", "moto")
 	waitUntil(t, 3*time.Minute, "the spool to drain", spoolDrained(t))
 	if resp, body := post(t, "enforce.test", "/v1/messages", prompt); resp.StatusCode != 200 {

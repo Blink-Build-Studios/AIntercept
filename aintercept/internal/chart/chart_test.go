@@ -167,3 +167,18 @@ func TestIngestPodIsTheFullStack(t *testing.T) {
 		t.Error("Envoy still weights observers (ORCA)")
 	}
 }
+
+// Even with enforcement on, the observer never asks to be taken out of
+// rotation when its spool is full: enforced calls are refused per stream, and
+// observed traffic must keep flowing.
+func TestFullSpoolNeverAffectsReadiness(t *testing.T) {
+	docs := render(t,
+		"interceptor.endpoint=ic:9100",
+		"interceptor.enforce[0].host=api.openai.com",
+		"interceptor.enforce[0].paths[0]=/v1/chat/completions")
+	envoy := find(docs, "Deployment", "envoy")
+	obs := byName(get(envoy, "spec", "template", "spec", "containers"))["observer"]
+	if _, ok := byName(get(obs, "env"))["OBSERVER_UNREADY_WHEN_FULL"]; ok {
+		t.Error("the observer is told to go unready when its spool is full; readiness must not depend on the spool")
+	}
+}
