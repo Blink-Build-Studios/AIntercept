@@ -1,14 +1,62 @@
 package stream
 
-import "github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+import (
+	"sort"
 
-// StateModel is the derived tables (internal/stream/state) as the processor's
-// model.
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
+)
+
+// StateModel is the derived tables (internal/stream/state, docs/STREAMING_PIPELINE.md
+// §4.5) as the processor's model: each key's state applies its records one at
+// a time, and every row it changes becomes an upsert (or, gone, a tombstone)
+// in its table's run file.
 type StateModel struct{}
 
-func (StateModel) Tables() []string                         { return nil }
-func (StateModel) New(key string) any                       { return nil }
-func (StateModel) Apply(st any, r *records.Record) Delta    { return nil }
-func (StateModel) Encode(st any) ([]byte, error)            { return nil, nil }
-func (StateModel) Decode(key string, b []byte) (any, error) { return nil, nil }
-func (StateModel) Size(st any) int                          { return 0 }
+func init() { RegisterStateTables() }
+
+// Tables is every table the state writes.
+func (StateModel) Tables() []string {
+	out := make([]string, 0, len(state.TableTypes))
+	for name := range state.TableTypes {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (StateModel) New(key string) any { return state.New(key) }
+
+func (StateModel) Apply(st any, r *records.Record) Delta {
+	s := st.(*state.KeyState)
+	d := s.Apply(*r)
+	if len(d.Changes) == 0 {
+		return nil
+	}
+	out := Delta{}
+	for _, c := range d.Changes {
+		out[c.Table] = append(out[c.Table], Row{Key: s.Key, ID: c.ID, Tomb: c.Row == nil, Value: c.Row})
+	}
+	return out
+}
+
+func (StateModel) Encode(st any) ([]byte, error) { return state.Encode(st.(*state.KeyState)) }
+
+func (StateModel) Decode(key string, b []byte) (any, error) {
+	s, err := state.Decode(b)
+	if err != nil {
+		return nil, err
+	}
+	s.Key = key
+	return s, nil
+}
+
+// Size estimates a key's state in memory from its rows (the indexes it keeps
+// are of the same order).
+func (StateModel) Size(st any) int {
+	n := 0
+	for _, rows := range st.(*state.KeyState).Rows() {
+		n += len(rows)
+	}
+	return 512 + 1024*n
+}

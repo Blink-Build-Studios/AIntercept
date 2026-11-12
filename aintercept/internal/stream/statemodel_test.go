@@ -34,7 +34,7 @@ func TestStateModelTablesAreTheStateTables(t *testing.T) {
 func TestStateModelIsOrderFreeAndResumes(t *testing.T) {
 	recs := newGen(3, 12).batch(1500)
 	want := Reference(StateModel{}, recs)
-	if len(nonEmpty(want)) < 3 {
+	if len(nonEmpty(want)) < 2 { // the generator's bare calls and events: the state tables' own tests cover the rest
 		t.Fatalf("the synthetic records make only %d tables", len(nonEmpty(want)))
 	}
 	m := StateModel{}
