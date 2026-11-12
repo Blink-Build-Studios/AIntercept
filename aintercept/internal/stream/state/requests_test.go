@@ -400,7 +400,7 @@ func requestDiffs(ref *process.Derived, o *streamOut, max int) []string {
 		} else {
 			for i := range got {
 				if !reflect.DeepEqual(got[i], want[i]) {
-					if add(fmt.Sprintf("person %s row %d: %s", p, i, fieldDiff(got[i], want[i]))) {
+					if add(fmt.Sprintf("person %s row %d: %s", p, i, reqFieldDiff(got[i], want[i]))) {
 						return out
 					}
 					break
@@ -434,7 +434,7 @@ func requestDiffs(ref *process.Derived, o *streamOut, max int) []string {
 		}
 		for i := range got {
 			if !reflect.DeepEqual(got[i], want[i]) {
-				if add(fmt.Sprintf("session %s row %d: %s", sr.SessionID, i, fieldDiff(got[i].Row, want[i].Row))) {
+				if add(fmt.Sprintf("session %s row %d: %s", sr.SessionID, i, reqFieldDiff(got[i].Row, want[i].Row))) {
 					return out
 				}
 				break
@@ -482,7 +482,7 @@ func head(s []string) []string {
 	return s
 }
 
-func fieldDiff(got, want process.RequestRow) string {
+func reqFieldDiff(got, want process.RequestRow) string {
 	gv, wv := reflect.ValueOf(got), reflect.ValueOf(want)
 	s := got.RequestID + ":"
 	for f := 0; f < gv.NumField(); f++ {

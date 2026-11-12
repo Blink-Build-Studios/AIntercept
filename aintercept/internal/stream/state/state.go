@@ -42,12 +42,13 @@ type KeyState struct {
 	dm   *dimsState
 	pr   *promptsState
 	rq   *reqState
+	sr   *sesRows
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -64,6 +65,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.dims(r, &d)
 	s.prompts(r, &d)
 	s.requests(r, &d)
+	s.sessionRows(r, &d)
 	d.Changes = lastChanges(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
@@ -147,6 +149,7 @@ type snapshot struct {
 	// them again to rebuild their indexes.
 	Prompts []records.Record
 	Request reqSnap
+	Ses     sesSnap
 }
 
 // dimsSnap is the dimension indexes, for Encode.
@@ -186,7 +189,7 @@ func init() {
 // Encode is the state as bytes, for a checkpoint.
 func Encode(s *KeyState) ([]byte, error) {
 	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
-		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Prompts: s.pr.snap(), Request: s.rq.snap()}
+		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Prompts: s.pr.snap(), Request: s.rq.snap(), Ses: s.sr.snap()}
 	byAt := map[string]string{}
 	for call, la := range s.ev.callLink {
 		byAt[la.rid+"\x00"+la.at.id] = call
@@ -247,6 +250,8 @@ func Decode(b []byte) (*KeyState, error) {
 	s.dm = dimsFrom(snap.Dims)
 	s.promptsFrom(snap.Prompts)
 	s.reqFrom(snap.Request)
+	s.sr = sesRowsFrom(snap.Ses)
+	s.restoreSessionRow()
 	return s, nil
 }
 

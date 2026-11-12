@@ -210,14 +210,14 @@ func (s *KeyState) requests(r records.Record, d *Delta) {
 func (x *reqState) addReport(key string, e repEnt) {
 	x.reps[key] = e
 	if e.reqID != "" {
-		addSet(x.byReq, e.reqID, key)
+		addSetReq(x.byReq, e.reqID, key)
 	}
 	if e.crid != "" {
-		addSet(x.byCRID, e.crid, key)
+		addSetReq(x.byCRID, e.crid, key)
 	}
 }
 
-func addSet(m map[string]map[string]bool, k, v string) {
+func addSetReq(m map[string]map[string]bool, k, v string) {
 	set := m[k]
 	if set == nil {
 		set = map[string]bool{}
