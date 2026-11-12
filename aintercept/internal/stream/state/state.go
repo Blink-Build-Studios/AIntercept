@@ -51,8 +51,8 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	}
 	s.seen[r.RecordID] = true
 	var d Delta
-	_ = r // not built yet: the tests below define it
-	return d
+	ch := s.ses.apply(r, &d)
+	s.presence(&d, ch)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
