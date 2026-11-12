@@ -221,8 +221,13 @@ func TestWriterSpoolSurvivesCrash(t *testing.T) {
 		_ = s1.Write([]byte(fmt.Sprintf("crash-%02d-padding", i)))
 	}
 	waitFor(t, func() bool { return w1.Stats().SpoolFiles > 0 })
-	sealed := int(w1.Stats().SpoolFiles)
 	w1.Abandon() // a crash: no flush, no close
+	// What the crash left: the sealed files on disk.
+	left, _ := filepath.Glob(filepath.Join(dir, "ready", "*.spool"))
+	sealed := len(left)
+	if sealed == 0 {
+		t.Fatal("nothing sealed before the crash")
+	}
 
 	tgt2 := newMemTarget("mem")
 	w2 := testWriter(t, WriterConfig{SpoolDir: dir, Targets: []Target{tgt2}})
