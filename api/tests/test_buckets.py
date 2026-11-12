@@ -187,17 +187,17 @@ def _layout(root, bucket, files):
 def _fold(root, bucket=3):
     store = BucketStore(LocalSource(root), root / ".cache", tables={"t": ("s:", "key")}, clock=Clock())
     with store.scope(Scope.everything()):
-        return store.query("SELECT key, id, v FROM t ORDER BY key, id")
+        return store.query("SELECT v FROM t ORDER BY v")
 
 
 def test_a_run_replaces_the_base_row(tmp_path):
     _layout(tmp_path, 3, [("base-1", [("s:a", "1", False, 1)]), ("run-2", [("s:a", "1", False, 2)])])
-    assert _fold(tmp_path) == [("s:a", "1", 2)]
+    assert _fold(tmp_path) == [(2,)]
 
 
 def test_a_tombstone_removes_the_row(tmp_path):
-    _layout(tmp_path, 3, [("base-1", [("s:a", "1", False, 1), ("s:a", "2", False, 1)]), ("run-2", [("s:a", "1", True, None)])])
-    assert _fold(tmp_path) == [("s:a", "2", 1)]
+    _layout(tmp_path, 3, [("base-1", [("s:a", "1", False, 1), ("s:a", "2", False, 5)]), ("run-2", [("s:a", "1", True, None)])])
+    assert _fold(tmp_path) == [(5,)]
 
 
 def test_a_row_put_back_after_its_tombstone(tmp_path):
@@ -206,18 +206,18 @@ def test_a_row_put_back_after_its_tombstone(tmp_path):
         3,
         [("base-1", [("s:a", "1", False, 1)]), ("run-2", [("s:a", "1", True, None)]), ("run-3", [("s:a", "1", False, 3)])],
     )
-    assert _fold(tmp_path) == [("s:a", "1", 3)]
+    assert _fold(tmp_path) == [(3,)]
 
 
 def test_file_order_is_the_commits_not_the_names(tmp_path):
     # "run-9" sorts after "run-10" by name, but the commit lists it first.
     _layout(tmp_path, 3, [("base-1", []), ("run-9", [("s:a", "1", False, 9)]), ("run-10", [("s:a", "1", False, 10)])])
-    assert _fold(tmp_path) == [("s:a", "1", 10)]
+    assert _fold(tmp_path) == [(10,)]
 
 
 def test_the_same_id_under_two_keys_is_two_rows(tmp_path):
     _layout(tmp_path, 3, [("base-1", [("s:a", "1", False, 1), ("s:b", "1", False, 2)])])
-    assert _fold(tmp_path) == [("s:a", "1", 1), ("s:b", "1", 2)]
+    assert _fold(tmp_path) == [(1,), (2,)]
 
 
 # --- scopes: a request reads only its keys' buckets ------------------------------------------
@@ -237,9 +237,13 @@ def test_a_session_scope_reads_only_its_bucket(tmp_path):
     _two_sessions(tmp_path)
     src = CountingSource(tmp_path)
     store = BucketStore(src, tmp_path / ".cache", tables={"t": ("s:", "session_id")}, clock=Clock())
+    fetched: list[str] = []
+    orig = src.get
+    src.get = lambda key: (fetched.append(key), orig(key))[1]  # type: ignore[method-assign]
     with store.scope(Scope(sessions={"one"})):
         assert store.query("SELECT v FROM t") == [(1,)]
-    assert src.gets == 1
+    # its bucket's commit and table file, nothing of the other session's bucket
+    assert fetched == [commit_key("", bucket_of("s:one"), 1), table_key("", "t", bucket_of("s:one"), "base-1")]
 
 
 def test_everything_reads_every_bucket(tmp_path):
@@ -272,6 +276,7 @@ def _people(root):
         "person_sessions": [("p", "s1"), ("p", "s2"), ("q", "s3"), ("unattributed", "s4")],
         "person_map": [("p", "acct-1"), ("p", "acct-2"), ("q", "acct-3")],
     }
+    commits: dict[int, dict[str, list[str]]] = {}
     for table, pairs in rows.items():
         by_bucket: dict[int, list[tuple[str, str]]] = {}
         for person, other in pairs:
@@ -283,7 +288,9 @@ def _people(root):
             con.executemany("INSERT INTO r VALUES (?, ?, false, ?, ?)", [[f"p:{p}", o, p, o] for p, o in ps])
             k = table_key("", table, b, "base-1")
             write_rows(root, k, con, "SELECT * FROM r", [])
-            write_commit(root, "", b, 1, {table: [k]}, {})
+            commits.setdefault(b, {})[table] = [k]
+    for b, base in commits.items():
+        write_commit(root, "", b, 1, base, {})
 
 
 def _people_store(root):
@@ -342,3 +349,60 @@ def test_requests_between_commits_reuse_the_loaded_tables(tmp_path):
             assert store.query("SELECT v FROM t") == [(1,)]
     assert src.gets == 2  # the commit and the one table file, fetched once
     assert store.loads == 1  # the tables were built once for this commit
+
+
+# --- the app picks the store from its environment --------------------------------------------
+
+
+def test_the_app_reads_bucketed_tables_when_told_to(tmp_path, monkeypatch):
+    from aintercept_api.app import create_app
+    from aintercept_api.buckets import S3Source
+
+    monkeypatch.setenv("AINTERCEPT_STORE", "buckets")
+    monkeypatch.setenv("AINTERCEPT_BUCKETS_DIR", str(tmp_path))
+    monkeypatch.setenv("AINTERCEPT_CACHE_DIR", str(tmp_path / "cache"))
+    store = create_app().state.store
+    assert isinstance(store, BucketStore) and isinstance(store.source, LocalSource)
+    monkeypatch.delenv("AINTERCEPT_BUCKETS_DIR")
+    monkeypatch.setenv("AINTERCEPT_S3_BUCKET", "b")
+    monkeypatch.setenv("AINTERCEPT_S3_REGION", "us-east-1")
+    monkeypatch.setenv("AINTERCEPT_S3_PREFIX", "ailogger")
+    store = create_app().state.store
+    assert isinstance(store.source, S3Source) and store.prefix == "ailogger/"
+
+
+def test_s3_requests_are_signed(monkeypatch):
+    from aintercept_api.buckets import S3Source
+
+    sent = []
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.body
+
+    def urlopen(req, timeout):
+        sent.append(req)
+        if "list-type" in req.full_url:
+            return Resp(
+                b'<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><IsTruncated>false</IsTruncated>'
+                b"<Contents><Key>p/a</Key></Contents><Contents><Key>p/b</Key></Contents></ListBucketResult>"
+            )
+        return Resp(b"body")
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    s = S3Source("bkt", "us-east-1", endpoint="https://example.test", access_key="AK", secret_key="SK")
+    assert s.list_after("p/", "p/") == ["p/a", "p/b"]
+    assert s.get("p/a") == b"body"
+    for r in sent:
+        auth = r.get_header("Authorization")
+        assert auth.startswith("AWS4-HMAC-SHA256 Credential=AK/") and "Signature=" in auth
+    assert "start-after=p%2F" in sent[0].full_url and sent[1].full_url == "https://example.test/bkt/p/a"
