@@ -87,6 +87,11 @@ func stored(t *testing.T, c *s3.Client) []events.Event {
 			t.Fatalf("list: %v", err)
 		}
 		for _, o := range page.Contents {
+			// The raw log only: the canonical records (records/) and call detail
+			// objects (calls/) are other outputs of the same writer.
+			if !strings.Contains(*o.Key, "/dt=") || !strings.HasSuffix(*o.Key, ".ndjson.gz") {
+				continue
+			}
 			obj, err := c.GetObject(context.Background(), &s3.GetObjectInput{Bucket: aws.String(bucket), Key: o.Key})
 			if err != nil {
 				t.Fatalf("get %s: %v", *o.Key, err)

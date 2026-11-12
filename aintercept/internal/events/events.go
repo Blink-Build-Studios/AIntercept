@@ -29,6 +29,9 @@ const (
 	PhaseResponseBodyChunk Phase = "response_body_chunk"
 	PhaseComplete          Phase = "complete"
 	PhaseDisconnect        Phase = "disconnect"
+	// PhaseWSTurnStart is a WebSocket model turn's start (its response.create),
+	// so a turn still streaming can be shown; its complete row ends it.
+	PhaseWSTurnStart Phase = "ws_turn_start"
 	// PhaseVerdict records one verdict a customer's Interceptor returned
 	// (applied in enforce mode, recorded only in observe mode).
 	PhaseVerdict Phase = "verdict"

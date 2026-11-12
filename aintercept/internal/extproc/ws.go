@@ -109,6 +109,7 @@ func (srv *Server) wsMessage(st *streamState, dir events.Direction, m wsframe.Me
 		// emitted as-is (it may lack usage).
 		srv.wsEmitTurn(st)
 		ws.turn = &wsTurn{req: m.Payload}
+		srv.wsTurnStart(st, m.Payload)
 	case dir == events.DirOutbound && ws.turn != nil:
 		// Streaming text/argument fragments carry content and nothing the
 		// extractors read; the completed items and response carry the rest.
@@ -128,6 +129,44 @@ func (srv *Server) wsMessage(st *streamState, dir events.Direction, m wsframe.Me
 			srv.wsEmitTurn(st)
 		}
 	}
+}
+
+// wsTurnStart emits the start of the turn a response.create opens, so a turn
+// still streaming can be shown. Its identity (the turn's Codex metadata, model)
+// is read from a copy of the request on the drain goroutine, off this path.
+func (srv *Server) wsTurnStart(st *streamState, req []byte) {
+	e := events.Event{
+		Phase:         events.PhaseWSTurnStart,
+		Transport:     events.TransportWebSocket,
+		WSTurn:        st.ws.turnsTotal + 1,
+		InterceptMode: st.interceptMode(),
+		Host:          st.host,
+		Method:        st.method,
+		Path:          st.path,
+		KeyHash:       st.keyHash,
+		KeyHint:       st.keyHint,
+		Auth:          st.auth,
+		IP:            st.ip,
+		Synthetic:     st.synthetic,
+	}
+	cp := append([]byte(nil), req...)
+	e.AttachBodies(cp, nil, "", nil)
+	srv.budget.Add(int64(len(cp)))
+	e.Hold(int64(len(cp)))
+	e.AttachRequestHeaders(withoutTurnMetadata(st.reqHeaders))
+	srv.offer(st, e)
+}
+
+// withoutTurnMetadata is the upgrade request's headers without its
+// x-codex-turn-metadata: per-turn identity is in each response.create body.
+func withoutTurnMetadata(h map[string]string) map[string]string {
+	out := make(map[string]string, len(h))
+	for k, v := range h {
+		if !strings.EqualFold(k, "x-codex-turn-metadata") {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // wsEmitTurn emits the current turn as a complete row (transport websocket),
@@ -161,13 +200,7 @@ func (srv *Server) wsEmitTurn(st *streamState) {
 	srv.handOff(st, &e, len(t.req)+len(t.resp))
 	// Per-turn identity is in the response.create body (client_metadata);
 	// the upgrade request's copy is from when the connection opened.
-	hdrs := make(map[string]string, len(st.reqHeaders))
-	for k, v := range st.reqHeaders {
-		if !strings.EqualFold(k, "x-codex-turn-metadata") {
-			hdrs[k] = v
-		}
-	}
-	e.AttachRequestHeaders(hdrs)
+	e.AttachRequestHeaders(withoutTurnMetadata(st.reqHeaders))
 	srv.offer(st, e)
 }
 

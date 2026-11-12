@@ -49,8 +49,9 @@ type Writer struct {
 	mu       sync.RWMutex // guards closed against Write racing close(in)
 	closed   bool
 
-	smu     sync.Mutex // guards streams
-	streams []*streamBuf
+	smu        sync.Mutex // guards streams and objStreams
+	streams    []*streamBuf
+	objStreams []*objectBuf
 
 	// The upload queue: spooled file paths waiting for an uploader.
 	qmu      sync.Mutex
@@ -133,14 +134,74 @@ type streamBuf struct {
 type item struct {
 	stream int
 	line   []byte
+	obj    *bundled // a whole object, for an object stream
 }
 
-// spoolHeader is the first line of a spooled file.
+// bundled is one whole object waiting in an object stream's bundle.
+type bundled struct {
+	stream int
+	key    string
+	body   []byte
+}
+
+// ObjectStreamConfig configures an ObjectStream: whole objects (each its own
+// key) of one content type on one target.
+type ObjectStreamConfig struct {
+	Target          string
+	ContentType     string
+	ContentEncoding string
+}
+
+// ObjectStream writes whole objects through the Writer. Objects are buffered
+// like lines and sealed together, on the tick or the byte cap, into one spool
+// file (one fsync), whose objects are then each uploaded at their own key.
+type ObjectStream struct {
+	w  *Writer
+	id int
+}
+
+type objectBuf struct {
+	cfg   ObjectStreamConfig
+	objs  []*bundled
+	bytes int
+}
+
+// NewObjectStream adds an object stream. Call at setup, like NewStream.
+func (w *Writer) NewObjectStream(cfg ObjectStreamConfig) *ObjectStream {
+	w.smu.Lock()
+	defer w.smu.Unlock()
+	w.objStreams = append(w.objStreams, &objectBuf{cfg: cfg})
+	return &ObjectStream{w: w, id: len(w.objStreams) - 1}
+}
+
+// Put queues one whole object. The writer owns body from here on. It blocks
+// only while the loop is busy, never on the object store; it fails once the
+// writer is closed.
+func (o *ObjectStream) Put(key string, body []byte) error {
+	w := o.w
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.closed {
+		return errors.New("writer: write after close")
+	}
+	w.in <- item{obj: &bundled{stream: o.id, key: key, body: body}}
+	return nil
+}
+
+// spoolHeader is the first line of a spooled file. A file is one object (Key),
+// or a bundle of whole objects (Bundle) whose bodies follow one after another.
 type spoolHeader struct {
-	Target          string `json:"target"`
-	Key             string `json:"key"`
-	ContentType     string `json:"ct,omitempty"`
-	ContentEncoding string `json:"ce,omitempty"`
+	Target          string         `json:"target"`
+	Key             string         `json:"key,omitempty"`
+	ContentType     string         `json:"ct,omitempty"`
+	ContentEncoding string         `json:"ce,omitempty"`
+	Bundle          []bundledEntry `json:"bundle,omitempty"`
+}
+
+// bundledEntry is one object of a bundle: its key and body length.
+type bundledEntry struct {
+	Key string `json:"key"`
+	Len int    `json:"len"`
 }
 
 // WriterStats is a snapshot of the writer's spool and uploads.
@@ -343,6 +404,19 @@ func (w *Writer) loop() {
 	defer stop()
 	buffered := 0
 	add := func(it item) {
+		if it.obj != nil {
+			w.smu.Lock()
+			ob := w.objStreams[it.obj.stream]
+			w.smu.Unlock()
+			ob.objs = append(ob.objs, it.obj)
+			ob.bytes += len(it.obj.body)
+			buffered += len(it.obj.body)
+			if buffered >= w.cfg.MaxBufferBytes {
+				w.sealAll()
+				buffered = 0
+			}
+			return
+		}
 		w.smu.Lock()
 		sb := w.streams[it.stream]
 		w.smu.Unlock()
@@ -396,10 +470,40 @@ func (w *Writer) loop() {
 func (w *Writer) sealAll() {
 	w.smu.Lock()
 	streams := append([]*streamBuf(nil), w.streams...)
+	objs := append([]*objectBuf(nil), w.objStreams...)
 	w.smu.Unlock()
 	for _, sb := range streams {
 		w.seal(sb)
 	}
+	for _, ob := range objs {
+		w.sealObjects(ob)
+	}
+}
+
+// sealObjects writes an object stream's buffered objects to the spool as one
+// bundle and queues it, retrying a spool write failure like seal.
+func (w *Writer) sealObjects(ob *objectBuf) {
+	if len(ob.objs) == 0 {
+		return
+	}
+	hdr := spoolHeader{Target: ob.cfg.Target, ContentType: ob.cfg.ContentType, ContentEncoding: ob.cfg.ContentEncoding}
+	body := make([]byte, 0, ob.bytes)
+	for _, o := range ob.objs {
+		hdr.Bundle = append(hdr.Bundle, bundledEntry{Key: o.key, Len: len(o.body)})
+		body = append(body, o.body...)
+	}
+	for attempt := 0; ; attempt++ {
+		path, size, err := w.spool(hdr, body)
+		if err == nil {
+			w.enqueue(path, size)
+			break
+		}
+		if attempt == 0 || attempt%60 == 0 {
+			slog.Error("ALARM writer: can't write to the spool; holding the objects in memory and retrying", "objects", len(ob.objs), "err", err)
+		}
+		time.Sleep(time.Second)
+	}
+	ob.objs, ob.bytes = nil, 0
 }
 
 // seal writes a stream's buffer to the spool and queues it for upload. A spool
@@ -574,10 +678,42 @@ func (w *Writer) upload(path string) bool {
 		w.stranded.Add(1)
 		return true
 	}
+	objs := []Object{{Key: hdr.Key, Body: body, ContentType: hdr.ContentType, ContentEncoding: hdr.ContentEncoding}}
+	if len(hdr.Bundle) > 0 { // a bundle: each object at its own key
+		objs = objs[:0]
+		off := 0
+		for _, e := range hdr.Bundle {
+			if off+e.Len > len(body) {
+				slog.Error("ALARM writer: truncated bundle left in place", "path", path)
+				w.stranded.Add(1)
+				return true
+			}
+			objs = append(objs, Object{Key: e.Key, Body: body[off : off+e.Len], ContentType: hdr.ContentType, ContentEncoding: hdr.ContentEncoding})
+			off += e.Len
+		}
+	}
+	for _, o := range objs {
+		if !w.putUntilAccepted(t, o) {
+			return false
+		}
+	}
+	w.uploads.Add(1)
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		slog.Error("writer: uploaded but couldn't remove the spool file", "path", path, "err", err)
+	}
+	w.oldest.Delete(path)
+	w.spoolFiles.Add(-1)
+	w.addSpoolBytes(-size)
+	return true
+}
+
+// putUntilAccepted uploads one object, retrying with capped backoff until the
+// store accepts it. It returns false only when the writer is abandoned.
+func (w *Writer) putUntilAccepted(t Target, o Object) bool {
 	backoff := w.cfg.RetryMin
 	for attempt := 1; ; attempt++ {
 		ctx, cancel := context.WithTimeout(w.ctx, w.cfg.UploadTimeout)
-		err := t.Put(ctx, Object{Key: hdr.Key, Body: body, ContentType: hdr.ContentType, ContentEncoding: hdr.ContentEncoding})
+		err := t.Put(ctx, o)
 		cancel()
 		if err == nil {
 			break
@@ -587,7 +723,7 @@ func (w *Writer) upload(path string) bool {
 		}
 		w.uploadFailures.Add(1)
 		if attempt == 1 || attempt%10 == 0 {
-			slog.Warn("ALARM writer: upload failed; retrying, the file stays in the spool", "key", hdr.Key, "attempt", attempt, "err", err)
+			slog.Warn("ALARM writer: upload failed; retrying, the file stays in the spool", "key", o.Key, "attempt", attempt, "err", err)
 		}
 		sleep := backoff/2 + time.Duration(rand.Int63n(int64(backoff/2)+1))
 		select {
@@ -599,13 +735,6 @@ func (w *Writer) upload(path string) bool {
 			backoff = w.cfg.RetryMax
 		}
 	}
-	w.uploads.Add(1)
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		slog.Error("writer: uploaded but couldn't remove the spool file", "path", path, "err", err)
-	}
-	w.oldest.Delete(path)
-	w.spoolFiles.Add(-1)
-	w.addSpoolBytes(-size)
 	return true
 }
 

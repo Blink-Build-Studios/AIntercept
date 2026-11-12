@@ -39,6 +39,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
 func Run() {
@@ -194,6 +195,35 @@ func Run() {
 		}
 	}
 
+	// Canonical records (docs/STREAMING_PIPELINE.md §3): the bucketed
+	// processor's input, beside the raw log, through the same bucket or
+	// directory. From the full rows when bodies are recorded (a call's detail
+	// is read from them), else from the body-stripped ones.
+	budget := setupMemory()
+	var recordsSink *records.Sink
+	if os.Getenv("OBSERVER_RECORDS") != "false" {
+		var put records.Putter
+		prefix := ""
+		switch {
+		case s3Sink != nil:
+			put, prefix = records.WriterPutter(writer, "s3"), os.Getenv("OBSERVER_S3_PREFIX")
+		case localSink != nil:
+			put = records.WriterPutter(writer, "local")
+		}
+		if put != nil {
+			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
+				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies, Details: true,
+				MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
+			if captureFullBodies {
+				full = append(full, recordsSink)
+			} else {
+				bodyStripped = append(bodyStripped, recordsSink)
+			}
+			go recordsSink.Run(context.Background())
+			slog.Info("canonical records enabled", "prefix", records.ObjectKeyPrefix(prefix, 0))
+		}
+	}
+
 	if len(full) > 0 || len(bodyStripped) > 1 {
 		sink = events.NewMultiSink(bodyStripped, full)
 	}
@@ -225,7 +255,6 @@ func Run() {
 		fatal("a key-hash salt (OBSERVER_KEY_HASH_SALT or OBSERVER_KEY_HASH_SALT_SECRET_ID) is required when the S3 sink is enabled — without it key_hash is a reversible sha256(key); set a strong random salt")
 	}
 
-	budget := setupMemory()
 	procCfg := events.ProcessorConfig{BufferSize: bufferSize, Budget: budget}
 	var spoolFull func() bool
 	if writer != nil {

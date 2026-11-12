@@ -359,3 +359,75 @@ func gunzipOrPlain(b []byte) []byte {
 	}
 	return b
 }
+
+// Whole objects (records files, call detail objects) go through the writer too:
+// buffered, sealed together into one spool file on the tick or the byte cap,
+// and each uploaded at its own key, exactly once.
+func TestWriterUploadsWholeObjects(t *testing.T) {
+	tgt := newMemTarget("store")
+	tick := newManualTick()
+	w := testWriter(t, WriterConfig{Targets: []Target{tgt}, NewTicker: tick.ticker})
+	o := w.NewObjectStream(ObjectStreamConfig{Target: "store", ContentType: "application/vnd.apache.parquet"})
+	for i := 0; i < 20; i++ {
+		if err := o.Put(fmt.Sprintf("objs/%02d", i), []byte(fmt.Sprintf("body-%02d", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tick.fire()
+	if err := w.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	objs, puts := tgt.snapshot()
+	if len(objs) != 20 {
+		t.Fatalf("uploaded %d objects", len(objs))
+	}
+	for i := 0; i < 20; i++ {
+		k := fmt.Sprintf("objs/%02d", i)
+		if string(objs[k]) != fmt.Sprintf("body-%02d", i) || puts[k] != 1 {
+			t.Fatalf("%s: %q x%d", k, objs[k], puts[k])
+		}
+	}
+	if st := w.Stats(); st.SpoolFiles != 0 || st.Uploads == 0 {
+		t.Fatalf("stats %+v", st)
+	}
+	_ = w.Close()
+}
+
+// A bundle of objects sealed before a crash is uploaded by the next writer on
+// the spool; one failing upload is retried without losing the others.
+func TestWriterObjectBundlesSurviveCrashAndFailures(t *testing.T) {
+	dir := t.TempDir()
+	tgt := newMemTarget("store")
+	tgt.block = make(chan struct{})
+	w1 := testWriter(t, WriterConfig{SpoolDir: dir, Targets: []Target{tgt}, MaxBufferBytes: 64})
+	o := w1.NewObjectStream(ObjectStreamConfig{Target: "store"})
+	for i := 0; i < 30; i++ {
+		_ = o.Put(fmt.Sprintf("k/%02d", i), []byte(strings.Repeat("x", 10)+fmt.Sprint(i)))
+	}
+	waitFor(t, func() bool { return w1.Stats().SpoolFiles > 0 })
+	w1.Abandon()
+
+	tgt2 := newMemTarget("store")
+	tgt2.failRate = 0.3
+	w2 := testWriter(t, WriterConfig{SpoolDir: dir, Targets: []Target{tgt2}})
+	if err := w2.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	objs, _ := tgt2.snapshot()
+	sealed := 0
+	for i := 0; i < 30; i++ {
+		if b, ok := objs[fmt.Sprintf("k/%02d", i)]; ok {
+			sealed++
+			if !strings.HasSuffix(string(b), fmt.Sprint(i)) {
+				t.Fatalf("k/%02d body %q", i, b)
+			}
+		}
+	}
+	if sealed == 0 {
+		t.Fatal("nothing from before the crash was uploaded")
+	}
+	if st := w2.Stats(); st.SpoolFiles != 0 || st.SpoolBytes != 0 {
+		t.Fatalf("spool not empty: %+v", st)
+	}
+	_ = w2.Close()
+}

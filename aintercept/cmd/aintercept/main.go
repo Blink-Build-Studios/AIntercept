@@ -7,6 +7,7 @@
 //	aintercept mirror     the query API's sidecar: mirrors the tables, serves raw files
 //	aintercept replay     streams an existing capture through the processor and checks it (a tool; takes flags)
 //	aintercept derive     builds the derived tables from an existing shaped output (a tool; takes flags)
+//	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
 //
 // The services are configured through environment variables.
 package main
@@ -27,10 +28,11 @@ var modes = map[string]func(){
 	"mirror":   process.RunMirror,
 	"replay":   replay,
 	"derive":   derive,
+	"canon":    canonCmd,
 }
 
 func main() {
-	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "replay" && os.Args[1] != "derive") {
+	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "replay" && os.Args[1] != "derive" && os.Args[1] != "canon") {
 		usage()
 	}
 	run, ok := modes[os.Args[1]]
@@ -41,6 +43,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|mirror, or aintercept replay|derive -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|mirror, or aintercept replay|derive|canon -h")
 	os.Exit(2)
 }
