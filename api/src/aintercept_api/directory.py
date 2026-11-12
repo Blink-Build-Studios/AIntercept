@@ -266,7 +266,8 @@ def people(store: Store, now_dt: datetime, lo: int | None = None, hi: int | None
     owned = _attribution(store)
     outside = _outside(store, lo, hi, now)
     sids = sorted({sid for ss in owned.values() for sid in ss if sid not in outside})
-    loaded = cc.load_sessions(store, sids)
+    # Once per commit for this set of sessions (a moving window rarely changes it).
+    loaded = store.memo(("sessions", tuple(sids)), lambda: cc.load_sessions(store, sids))
     orgs = dict(
         store.query(
             """SELECT account_uuid, any_value(organization_uuid) FILTER (WHERE organization_uuid IS NOT NULL)

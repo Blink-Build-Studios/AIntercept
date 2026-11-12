@@ -17,6 +17,8 @@ Rules (handoff §1.1, §5.2.5, §5.4; docs/ui/handoff/context/DATA_ANSWERS.md):
   a session is open.
 """
 
+import bisect
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -183,10 +185,16 @@ def person_sessions(store: Store, accounts: list[str]) -> list[str]:
 
 def load_person(store: Store, person_id: str) -> dict[str, Session]:
     """Every session attributed to the person (all their linked accounts), with its calls and the
-    events rollups need. `UNATTRIBUTED` loads the sessions no account id appears on, as one person-like page."""
-    if person_id == UNATTRIBUTED:
-        return load_sessions(store, unattributed_sessions(store))
-    return load_sessions(store, person_sessions(store, linked_accounts(store, person_id)))
+    events rollups need. `UNATTRIBUTED` loads the sessions no account id appears on, as one person-like page.
+    Shared: callers must not mutate it."""
+
+    def build() -> dict[str, Session]:
+        if person_id == UNATTRIBUTED:
+            return load_sessions(store, unattributed_sessions(store))
+        return load_sessions(store, person_sessions(store, linked_accounts(store, person_id)))
+
+    # Once per commit: every person endpoint starts here, several per poll.
+    return store.memo(("person", person_id), build)
 
 
 def unattributed_sessions(store: Store) -> list[str]:
@@ -442,7 +450,10 @@ def _merge(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 def _inside(t: int, intervals: list[tuple[int, int]]) -> bool:
-    return any(a <= t < b for a, b in intervals)
+    """Whether t falls in one of `_merge`'s intervals (sorted, disjoint): a binary search,
+    since presence asks once per cut."""
+    i = bisect.bisect_right(intervals, (t, math.inf)) - 1
+    return i >= 0 and t < intervals[i][1]
 
 
 def presence(sessions: list[Session], now: int) -> list[tuple[int, int, str]]:
