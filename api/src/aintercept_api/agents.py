@@ -13,11 +13,9 @@ same for both; this module holds what differs:
 import json
 import os
 from datetime import UTC, datetime
-from typing import Any, Literal, cast
+from typing import Literal
 
 from aintercept_api.models.common import Agent, AgentLimits, CapabilityField, LimitWindow, RequestKind
-from aintercept_api.models.sessions import SessionFacts, TurnReport
-from aintercept_api.store import Store
 
 AGENT: dict[str, Agent] = {"claude_code": "claude-code", "codex": "codex"}
 
@@ -138,111 +136,3 @@ def codex_limits(provider_json: str | None, at: datetime) -> AgentLimits | None:
     elif h.get("x-codex-credits-balance"):
         credits = _credits(h["x-codex-credits-balance"])
     return AgentLimits(agent="codex", plan=plan, windows=windows, credits=credits, asOf=at)
-
-
-def latest_codex_limits(store: Store, session_ids: list[str]) -> AgentLimits | None:
-    """The limits on the newest Codex response among these sessions."""
-    if not session_ids:
-        return None
-    rows = store.query(
-        """SELECT provider_json, ts FROM agent_calls
-           WHERE product = 'codex' AND session_id IN (SELECT unnest(?::VARCHAR[]))
-             AND provider_json LIKE '%x-codex-%'
-           ORDER BY ts DESC LIMIT 1""",
-        [session_ids],
-    )
-    if not rows:
-        return None
-    pj, ts = rows[0]
-    return codex_limits(pj, datetime.fromtimestamp(ts / 1e9, UTC))
-
-
-def _num(v: Any) -> float | None:
-    return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
-
-
-def _int(v: Any) -> int | None:
-    n = _num(v)
-    return int(n) if n is not None else None
-
-
-_TOOL_KINDS = {
-    "shell_command_count": "shell",
-    "mcp_tool_call_count": "mcp",
-    "file_change_count": "fileChange",
-    "web_search_count": "webSearch",
-    "subagent_tool_call_count": "subagent",
-    "dynamic_tool_call_count": "dynamic",
-}
-
-
-def turn_report(md: dict[str, Any]) -> TurnReport:
-    """One codex_turn_event's params as a TurnReport."""
-    return TurnReport(
-        status=md.get("status") if isinstance(md.get("status"), str) else None,
-        durationMs=_num(md.get("duration_ms")),
-        samplingMs=_num(md.get("sampling_ms")),
-        requests=_int(md.get("sampling_request_count")),
-        retries=_int(md.get("sampling_retry_count")),
-        toolCalls={k: n for f, k in _TOOL_KINDS.items() if (n := _int(md.get(f)))},
-        steers=_int(md.get("steer_count")),
-        compactionMs=_num(md.get("compaction_ms")) or None,
-        trigger=md.get("turn_trigger") if isinstance(md.get("turn_trigger"), str) else None,
-    )
-
-
-def turn_reports(store: Store, session_id: str) -> dict[str, TurnReport]:
-    """Each Codex turn's report, by turn id (the prompt id)."""
-    out: dict[str, TurnReport] = {}
-    for pid, md in store.query(
-        """SELECT prompt_id, md::VARCHAR FROM codex_events
-           WHERE session_id = ? AND name = 'codex_turn_event' AND prompt_id IS NOT NULL ORDER BY ts""",
-        [session_id],
-    ):
-        out[pid] = turn_report(json.loads(md) if md else {})
-    return out
-
-
-def codex_facts(store: Store, session_id: str) -> SessionFacts | None:
-    """Where a Codex thread ran: the workspace (client metadata), approval and sandbox (its turn events).
-    Shell and timezone ride in the prompt's environment block, which is content: not read."""
-    ext = store.query(
-        """SELECT arg_max(ext_json, ts) FROM agent_calls
-           WHERE session_id = ? AND product = 'codex' AND ext_json LIKE '%workspaces%'""",
-        [session_id],
-    )[0][0]
-    ev = store.query(
-        """SELECT arg_max(md::VARCHAR, ts) FROM codex_events WHERE session_id = ? AND name = 'codex_turn_event'""",
-        [session_id],
-    )[0][0]
-    sandbox_mode = store.query(
-        """SELECT arg_max(json_extract_string(ext_json, '$.sandbox_mode'), ts) FROM agent_calls
-           WHERE session_id = ? AND product = 'codex'""",
-        [session_id],
-    )[0][0]
-    ws = cast(dict[str, Any], json.loads(ext).get("workspaces") or {}) if ext else {}
-    md = cast(dict[str, Any], json.loads(ev)) if ev else {}
-    approval = md.get("approval_policy") if isinstance(md.get("approval_policy"), str) else None
-    sandbox = sandbox_mode or (md.get("sandbox_policy") if isinstance(md.get("sandbox_policy"), str) else None)
-    cwd = next(iter(ws), None)
-    if cwd is None and approval is None and sandbox is None:
-        return None
-    return SessionFacts(cwd=cwd, shell=None, tz=None, approval=approval, sandbox=sandbox)
-
-
-def workspace(store: Store, session_ids: list[str]) -> dict[str, tuple[str | None, str | None]]:
-    """Each Codex session's workspace basename and short commit (the repo cell, §11J.3)."""
-    if not session_ids:
-        return {}
-    out: dict[str, tuple[str | None, str | None]] = {}
-    for sid, ext in store.query(
-        """SELECT session_id, arg_max(ext_json, ts) FROM agent_calls
-           WHERE product = 'codex' AND ext_json LIKE '%workspaces%' AND session_id IN (SELECT unnest(?::VARCHAR[]))
-           GROUP BY 1""",
-        [session_ids],
-    ):
-        ws = cast(dict[str, Any], json.loads(ext).get("workspaces") or {})
-        path = next(iter(ws), None)
-        sha = (ws.get(path) or {}).get("latest_git_commit_hash") if path else None
-        out[sid] = (path.rstrip("/").rsplit("/", 1)[-1] if path else None, sha[:7] if isinstance(sha, str) else None)
-    return out

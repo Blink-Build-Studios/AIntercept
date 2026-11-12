@@ -78,7 +78,8 @@ def live_session(ds):
 
 
 def error_on_query(client, monkeypatch):
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+    for name in ("query", "query_dicts"):
+        monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0)
 
 
 # --- /sessions/{id} -----------------------------------------------------------------------------
@@ -550,6 +551,32 @@ def test_events_internals_hidden(dataset, client_for, write_sample):
     assert [x["collapsedCount"] for x in rows] == [None, 4]
     everything = client.get(f"{BASE}/events", params={"internal": "true", "collapseTicks": "false"}).json()
     assert everything["meta"]["shown"] == 8 and sum(x["internal"] for x in everything["data"]) == 3
+
+
+def test_events_fold_and_page_what_the_filters_leave(dataset, client_for):
+    """Ticks fold when nothing shown sits between them (a hidden internal doesn't), search is
+    case-insensitive over the name and summary, and pages count shown rows, not events."""
+    cc = ClaudeCode(dataset, S1)
+    cc.event(f"{H}:00:00", "tengu_input_prompt", cc_prompt_id="p1", prompt_index=1)
+    cc.event(f"{H}:00:01", "tengu_tool_use_progress", toolName="Bash")
+    cc.event(f"{H}:00:02", "tengu_tether_decision", decision="keep")
+    cc.event(f"{H}:00:03", "tengu_tool_use_progress", toolName="Bash")
+    cc.event(f"{H}:00:04", "tengu_feature_ok", feature="StatusLine")
+    cc.event(f"{H}:00:05", "tengu_tool_use_progress", toolName="Read")
+    client = client_for(dataset)
+    rows = client.get(f"{BASE}/events").json()["data"]
+    assert [(x["name"], x["collapsedCount"]) for x in rows] == [
+        ("tengu_input_prompt", None),
+        ("tengu_tool_use_progress", 2),
+        ("tengu_feature_ok", None),
+        ("tengu_tool_use_progress", None),
+    ]
+    shown = client.get(f"{BASE}/events", params={"internal": "true"}).json()["meta"]["shown"]
+    assert shown == 6  # the internal now splits the ticks
+    found = client.get(f"{BASE}/events", params={"q": "STATUSLINE"}).json()
+    assert [x["name"] for x in found["data"]] == ["tengu_feature_ok"] and found["meta"]["total"] == 6
+    page = client.get(f"{BASE}/events", params={"pageSize": 1, "page": 2}).json()
+    assert [x["collapsedCount"] for x in page["data"]] == [2] and page["meta"]["shown"] == 4
 
 
 def test_events_error(dataset, client_for, write_sample, monkeypatch):

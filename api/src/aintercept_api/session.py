@@ -19,16 +19,16 @@ default (docs/ui/BUILD_PLAN.md §2) and bodies aren't ingested.
 """
 
 import json
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Literal
+from typing import Any
 
-from aintercept_api import agents, rows
 from aintercept_api import claude_code as cc
 from aintercept_api import person as pp
-from aintercept_api.models.people import DeviceInfo, McpServer, PromptText, RequestRow, TokenCount
+from aintercept_api import rows
+from aintercept_api.models.people import McpServer, PromptText, TimelinePrompt, TokenCount
 from aintercept_api.models.sessions import (
     BetweenData,
     BetweenItem,
@@ -36,7 +36,6 @@ from aintercept_api.models.sessions import (
     DestructiveMark,
     EventLink,
     EventRow,
-    PatchFile,
     PromptData,
     PromptFriction,
     PromptItem,
@@ -52,7 +51,6 @@ from aintercept_api.models.sessions import (
 from aintercept_api.store import Store
 
 STREAMING_WITHIN_NS = 10 * 60 * cc.NS  # an unfinished call older than this never completed (aborted)
-IDLE_LEAD_NS = 10 * cc.NS  # tengu_idle_compact_fired precedes its compaction attempt by well under a second
 
 # Client internals hidden by default (handoff §5.2.9), matched without the tengu_ prefix.
 INTERNAL_NAMES = {
@@ -80,32 +78,6 @@ SUMMARY_SKIP = {
 }
 SUMMARY_PAIRS = 6
 SUMMARY_VALUE_CHARS = 40
-
-COMPACTION_EVENTS = ("tengu_reactive_compact_attempt", "tengu_reactive_compact_succeeded", "tengu_idle_compact_fired")
-PROMPT_EVENTS = (
-    "tengu_input_prompt",
-    "tengu_turn_end",
-    "tengu_cancel",
-    "tengu_bash_tool_command_executed",
-    "tengu_tool_use_success",
-    "tengu_tool_use_error",
-    TICK,
-    "tengu_api_success",
-    "tengu_paste_text",
-    "tengu_paste_image",
-    "tengu_return_to_session",
-    *COMPACTION_EVENTS,
-)
-STATE_EVENTS = (
-    "tengu_tool_use_success",
-    "tengu_run_hook",
-    "tengu_deferred_tools_pool_change",
-    "tengu_git_operation",
-    "tengu_session_linked_to_pr",
-    "tengu_return_to_session",
-    *COMPACTION_EVENTS,
-)
-REQUEST_CLASSES = ("main", "subagent", "auxiliary", "compaction")
 
 
 # --- loading ----------------------------------------------------------------------------------
@@ -267,114 +239,85 @@ def _destructive(e: Event) -> str | None:
     return cat if cat not in (None, "none") else None
 
 
-def start_of(s: cc.Session) -> int:
-    """The session's start, truncated to the microseconds every response time carries."""
-    return s.start - s.start % 1000
-
-
-def end_of(s: cc.Session, now: int) -> int:
-    """The session's open interval ends now while it is live."""
-    return now if s.live(now) else s.last
-
-
 # --- header -----------------------------------------------------------------------------------
-
-
-@dataclass
-class HeaderFacts:
-    person: str | None
-    device: DeviceInfo | None
-    networks: int | None
-
-
-def header_facts(store: Store, s: cc.Session) -> HeaderFacts:
-    person = store.query(
-        """SELECT coalesce(
-             (SELECT any_value(account_uuid) FROM cc_events WHERE session_id = ? AND account_uuid IS NOT NULL),
-             (SELECT any_value(account_uuid) FROM cc_calls WHERE session_id = ? AND account_uuid IS NOT NULL))""",
-        [s.id, s.id],
-    )[0][0]
-    platform, terminal, shell = store.query(
-        """SELECT arg_max(json_extract_string(env, '$.platform'), ts),
-                  arg_max(json_extract_string(env, '$.terminal'), ts),
-                  arg_max(json_extract_string(env, '$.shell'), ts)
-           FROM cc_events WHERE session_id = ?""",
-        [s.id],
-    )[0]
-    ips = store.query("SELECT count(DISTINCT ip) FROM cc_calls WHERE session_id = ?", [s.id])[0][0]
-    dev = s.device()
-    return HeaderFacts(
-        person=person,
-        device=DeviceInfo(deviceId=dev, platform=platform, terminal=terminal, shell=shell) if dev else None,
-        networks=ips or None,
-    )
 
 
 # --- timeline lanes ---------------------------------------------------------------------------
 
 
-@dataclass
-class CompactionFact:
-    t: int
-    start: int
-    tokens_from: int | None
-    tokens_to: int | None
-    idle: bool
-    wait_ms: float | None
-    request_id: str | None
+# The marks of the sessions in [lo, hi] (None: all), from the processor's session_marks.
+MARKS = """FROM session_marks WHERE kind = ? AND session_id IN (SELECT unnest(?::VARCHAR[]))
+            AND (? OR t_ns BETWEEN ? AND ?)"""
 
 
-def compactions(evs: list[Event], st: list[Step]) -> list[CompactionFact]:
-    main = [(x.ts, x.context) for x in st if x.request_class == "main" and x.context is not None]
-    attempts = [e.ts for e in evs if e.name == "tengu_reactive_compact_attempt"]
-    fired = [e.ts for e in evs if e.name == "tengu_idle_compact_fired"]
-    out: list[CompactionFact] = []
-    prev = -1
-    for e in (e for e in evs if e.name == "tengu_reactive_compact_succeeded"):
-        attempt = max((a for a in attempts if prev < a <= e.ts), default=None)
-        start = attempt if attempt is not None else e.ts
-        call = next((x for x in st if x.request_class == "compaction" and start <= x.ts <= e.ts), None)
-        out.append(
-            CompactionFact(
-                t=e.ts,
-                start=start,
-                tokens_from=next((c for t, c in reversed(main) if t < start), None),
-                tokens_to=next((c for t, c in main if t > e.ts), None),
-                idle=any(start - IDLE_LEAD_NS <= f <= start for f in fired),
-                wait_ms=round((e.ts - attempt) / 1e6, 1) if attempt is not None else None,
-                request_id=call.correlation_id if call else None,
-            )
-        )
-        prev = e.ts
-    return out
+def marks_params(kind: str, sids: list[str], lo: int | None, hi: int | None) -> list[object]:
+    return [kind, sids, lo is None or hi is None, lo or 0, hi or 0]
 
 
-def permission(evs: list[Event], end: int) -> list[tuple[int, int, str]]:
-    """permissionMode as a state band: a segment per run of the same mode."""
-    segs: list[list[Any]] = []
-    for e in evs:
-        mode = _str(e.md.get("permissionMode")) if e.name == "tengu_api_query" else None
-        if not mode or (segs and segs[-1][2] == mode):
-            continue
-        if segs:
-            segs[-1][1] = e.ts
-        segs.append([e.ts, max(end, e.ts), mode])
-    return [(a, b, m) for a, b, m in segs]
+def gap_windows(sids: list[str], lo: int | None, hi: int | None) -> tuple[str, list[object]]:
+    """A `windows` CTE: the not-captured calls in [lo, hi] grouped into (a, b, n) windows, split at
+    gaps of 15 minutes or more."""
+    return (
+        f"""windows AS (
+              SELECT min(t_ns) AS a, max(t_ns) AS b, count(*) AS n FROM (
+                SELECT t_ns, count_if(prev IS NULL OR t_ns - prev >= {cc.GAP_SPLIT_NS})
+                              OVER (ORDER BY t_ns ROWS UNBOUNDED PRECEDING) AS w
+                FROM (SELECT t_ns, lag(t_ns) OVER (ORDER BY t_ns) AS prev {MARKS}))
+              GROUP BY w)""",  # noqa: S608 (fixed text; values are parameters)
+        marks_params("missed", sids, lo, hi),
+    )
 
 
-def networks(st: list[Step], end: int, gaps: list[tuple[int, int, int]]) -> list[tuple[int, int, str, bool, bool]]:
-    """(from, to, ip, ipv6, bypassed) per run of calls from the same client IP."""
-    segs: list[list[Any]] = []
-    for x in st:
-        if not x.ip or (segs and segs[-1][2] == x.ip):
-            continue
-        if segs:
-            segs[-1][1] = x.ts
-        segs.append([x.ts, max(end, x.ts), x.ip])
-    return [
-        (a, b, ip, ":" in ip and not ip.lower().startswith("::ffff:"), any(ga <= b and gb >= a for ga, gb, _ in gaps))
-        for a, b, ip in segs
-    ]
+def compactions(store: Store, session_id: str) -> list[dict[str, Any]]:
+    """The session's compactions (the prompt list's compaction rows), oldest first."""
+    return store.query_dicts(
+        "SELECT * FROM session_marks WHERE session_id = ? AND kind = 'compaction' ORDER BY seq", [session_id]
+    )
+
+
+def context_points(store: Store, session_id: str) -> list[dict[str, Any]]:
+    """The context each main-thread call sent."""
+    return store.query_dicts(
+        """SELECT * FROM session_marks WHERE session_id = ? AND kind = 'call' AND request_class = 'main'
+             AND context IS NOT NULL ORDER BY seq""",
+        [session_id],
+    )
+
+
+def permission(store: Store, session_id: str, end: int) -> list[dict[str, Any]]:
+    """permissionMode as a state band: a segment per run of the same mode; the last one ends at `end`."""
+    return store.query_dicts(
+        """SELECT t_ns AS a, coalesce(to_ns, greatest(?, t_ns)) AS b, mode, prev_mode FROM session_marks
+           WHERE session_id = ? AND kind = 'permission' ORDER BY seq""",
+        [end, session_id],
+    )
+
+
+def networks(store: Store, session_id: str, end: int) -> list[dict[str, Any]]:
+    """A segment per run of calls from the same client IP; the last one ends at `end`. Bypassed: a
+    not-captured window overlaps it; notCaptured: the not-captured calls in it (segments share their
+    boundaries: the last one includes its end)."""
+    cte, params = gap_windows([session_id], None, None)
+    return store.query_dicts(
+        f"""WITH {cte},
+            s AS (SELECT seq, t_ns AS a, coalesce(to_ns, greatest(?, t_ns)) AS b, to_ns IS NULL AS last, ip, ipv6
+                  FROM session_marks WHERE session_id = ? AND kind = 'network')
+            SELECT a, b, ip, ipv6,
+                   EXISTS (SELECT 1 FROM windows w WHERE w.a <= s.b AND w.b >= s.a) AS bypassed,
+                   (SELECT count(*) FROM session_marks m WHERE m.session_id = ? AND m.kind = 'missed'
+                      AND m.t_ns >= s.a AND (m.t_ns < s.b OR s.last AND m.t_ns = s.b)) AS not_captured
+            FROM s ORDER BY seq""",  # noqa: S608 (fixed text; values are parameters)
+        [*params, end, session_id, session_id],
+    )
+
+
+def _count(store: Store, session_id: str, kind: str, lo: int, hi: int) -> int:
+    return int(
+        store.query(
+            "SELECT count(*) FROM session_marks WHERE session_id = ? AND kind = ? AND t_ns BETWEEN ? AND ?",
+            [session_id, kind, lo, hi],
+        )[0][0]
+    )
 
 
 # --- prompts and between rows -----------------------------------------------------------------
@@ -439,281 +382,179 @@ def _tool(e: Event, j: _Joins) -> ToolCallData:
     )
 
 
-def _step_status(x: Step, now: int, live: bool) -> Literal["done", "streaming", "error"]:
-    if x.end_ts is None:
-        return "streaming" if live and now - x.ts <= STREAMING_WITHIN_NS else "error"
-    return "error" if x.status is None or x.status >= 400 else "done"
+# --- prompts and between rows (the processor's prompt_rows, prompt_steps) ---------------------
+
+# What depends on the time of the request, from the inputs the processor stored (its
+# promptrows.go). `c.now` is the request's time.
+_LIVE = f"(c.now - r.session_last_ns <= {cc.LIVE_WITHIN_NS})"
+_IN_FLIGHT = f"""({_LIVE} AND (r.open_tail
+                OR coalesce(c.now - r.unfinished_max_ns <= {STREAMING_WITHIN_NS}, false)))"""
+_DURATION = f"""CASE WHEN r.duration_turn_ms IS NOT NULL AND NOT {_IN_FLIGHT}
+                     THEN r.duration_turn_ms ELSE r.duration_report_ms END"""
+_PROMPT_COLUMNS = f"r.*, {_IN_FLIGHT} AS in_flight, {_DURATION} AS duration_ms"
 
 
-def _step(x: Step, j: _Joins, now: int, live: bool) -> StepData:
-    succ = j.success.get(x.request_id or "") or j.success.get(x.client_request_id or "")
-    status = _step_status(x, now, live)
-    finished = j.tools.get(x.request_id or "", [])
-    tools = [_tool(e, j) for e in finished]
-    if live:  # progress ticks with no success/error yet are tools still running
-        done = {_str(e.md.get("toolUseID")) or _str(e.md.get("toolName")) for e in finished}
-        for e in j.ticks.get(x.request_id or "", []):
-            key = _str(e.md.get("toolUseID")) or _str(e.md.get("toolName"))
-            if key not in done:
-                done.add(key)
-                tools.append(_tool(e, j).model_copy(update={"status": "running"}))
-    md = succ.md if succ else {}
-    return StepData(
-        requestId=x.correlation_id,
-        t=rows.dt(x.ts),
-        kind="subagent" if x.request_class == "subagent" else "model",
-        model=x.model,
-        requestClass=x.request_class if x.request_class in REQUEST_CLASSES else None,
-        tokens=TokenCount(
-            input=x.input,
-            cacheRead=x.cache_read,
-            cacheWrite=x.cache_write,
-            cacheWrite5m=_int(md.get("cache_creation_5m_input_tokens")),
-            cacheWrite1h=_int(md.get("cache_creation_1h_input_tokens")),
-            output=x.output,
-            accuracy="exact" if x.output is not None else "missing",
-        ),
-        durationMs=round((x.end_ts - x.ts) / 1e6, 1) if x.end_ts else None,
-        ttftMs=_float(md.get("ttftMs")),
-        stopReason=x.stop_reason,
-        costUsd=_float(md.get("costUSD")),
-        status=status,
-        # Analytics trail the call by seconds: pending while nothing newer has arrived from a live session.
-        eventsPending=succ is None and live and (j.last_event is None or j.last_event <= (x.end_ts or x.ts)),
-        agentType=x.agent_type,
-        tools=tools,
-        does=rows.step_kind(x.tool_uses_json, x.stop_reason),
-        **_content(rows.detail_of(x.detail_json), j.results, tools),
-        usageMissing=rows.usage_missing(x.output, x.status, x.stop_reason, x.ws_turn, x.response_bytes, None),
+def _text(r: dict[str, Any]) -> PromptText:
+    return PromptText(
+        retained=r["text_retained"],
+        text=r["text"],
+        chars=r["text_chars"],
+        pastedBytes=r["pasted_bytes"],
+        images=r["images"],
     )
 
 
-def _content(d: dict[str, Any], results: dict[str, list[int]], tools: list[ToolCallData]) -> dict[str, Any]:
-    """A step's commands, patches, first words and exit codes, from its recorded bodies.
-    Without them, what the agent's own analytics report: Claude Code's Bash events name each
-    command's program (bash_argv0) and its exit code, in any mode."""
-    calls = [c for c in d.get("calls") or [] if isinstance(c, dict)]
-    if not calls:
-        bash = [t for t in tools if t.command]
-        return {
-            "commands": [t.command for t in bash if t.command],
-            "patches": [],
-            "text": d.get("text") or None,
-            "exitCodes": [t.exitCode for t in bash if t.exitCode is not None],
-        }
-    return {
-        "commands": [w for c in calls for w in c.get("commands") or []],
-        "patches": [
-            PatchFile(file=p["file"], added=int(p.get("added") or 0), removed=int(p.get("removed") or 0))
-            for c in calls
-            for p in c.get("patches") or []
-            if isinstance(p, dict) and p.get("file")
-        ],
-        "text": d.get("text") or None,
-        "exitCodes": [x for c in calls for x in results.get(str(c.get("id") or ""), [])],
-    }
+def _step_from_table(r: dict[str, Any]) -> StepData:
+    """A prompt_steps row as the API's StepData: field copies."""
+    return StepData(
+        requestId=r["request_id"],
+        t=rows.dt(r["t_ns"]),
+        kind=r["kind"],
+        model=r["model"],
+        requestClass=r["request_class"],
+        tokens=TokenCount(
+            input=r["tokens_input"],
+            cacheRead=r["tokens_cache_read"],
+            cacheWrite=r["tokens_cache_write"],
+            cacheWrite5m=r["tokens_cache_write_5m"],
+            cacheWrite1h=r["tokens_cache_write_1h"],
+            output=r["tokens_output"],
+            accuracy=r["tokens_accuracy"],
+        ),
+        durationMs=r["duration_ms"],
+        ttftMs=r["ttft_ms"],
+        stopReason=r["stop_reason"],
+        costUsd=r["cost_usd"],
+        status=r["status"],
+        eventsPending=r["events_pending"],
+        agentType=r["agent_type"],
+        tools=json.loads(r["tools"]),
+        does=r["does"],
+        commands=list(r["commands"]),
+        patches=json.loads(r["patches_json"]),
+        text=r["text"],
+        exitCodes=list(r["exit_codes"]),
+        usageMissing=r["usage_missing"],
+    )
 
 
-def _sum(vals: list[int | None]) -> int | None:
-    known = [v for v in vals if v is not None]
-    return sum(known) if known else None
-
-
-def _k(n: int) -> str:
-    return f"{round(n / 1000)}k" if n >= 1000 else str(n)
-
-
-def _hidden_by_prompt(s: cc.Session, starts: dict[str, int], order: list[str]) -> dict[str, dict[str, int]]:
-    """Each hidden call to a prompt: a prewarm to the next one to start (it warms the turn after it),
-    a title to the last one started before it (it names the turn it follows)."""
-    out: dict[str, dict[str, int]] = {}
-    for ts, kind in s.hidden_ts:
-        after = next((p for p in order if starts[p] >= ts), None)
-        before = next((p for p in reversed(order) if starts[p] < ts), None)
-        pid = (after or before) if kind == "prewarm" else (before or after)
-        if pid is not None:
-            out.setdefault(pid, {})
-            out[pid][kind] = out[pid].get(kind, 0) + 1
-    return out
-
-
-def _prompt_items(
-    s: cc.Session,
-    now: int,
-    st: list[Step],
-    evs: list[Event],
-    j: _Joins,
-    reports: dict[str, TurnReport] | None = None,
-) -> list[tuple[int, PromptItem, bool]]:
-    """(start, prompt row, typed) per prompt, oldest first; typed = its tengu_input_prompt was captured
-    (a Codex turn always counts as typed: its number is its place in the thread). `reports`: Codex's
-    turn reports by turn id."""
-    live = s.live(now)
-    has_events = s.event_count > 0
-    codex = s.product == "codex"
-    reports = reports or {}
-
-    # Prompts: each tengu_input_prompt, plus prompt ids seen only on calls (typed before capture began).
-    inputs: dict[str, Event] = {}
-    starts: dict[str, int] = {}
-    for e in evs:
-        if e.name == "tengu_input_prompt":
-            pid = e.prompt_id or f"input:{e.id}"
-            inputs.setdefault(pid, e)
-            starts.setdefault(pid, e.ts)
-    by_prompt: dict[str, list[Step]] = defaultdict(list)
-    for x in st:
-        if x.prompt_id:
-            by_prompt[x.prompt_id].append(x)
-            starts.setdefault(x.prompt_id, x.ts)
-    order = sorted(starts, key=lambda p: (starts[p], p))
-    hidden = _hidden_by_prompt(s, starts, order)
-    pastes = [e for e in evs if e.name in ("tengu_paste_text", "tengu_paste_image")]
-    typed = sorted(e.ts for e in inputs.values())
-
-    j.results = rows.exit_results([rows.detail_of(x.detail_json) for x in st])
-    out: list[tuple[int, PromptItem, bool]] = []
-    for n, pid in enumerate(order, 1):
-        t, inp, calls = starts[pid], inputs.get(pid), by_prompt.get(pid, [])
-        report = reports.get(pid)
-        prompt_events = j.by_prompt.get(pid, [])
-        step_data = [_step(x, j, now, live) for x in calls]
-        # What the prompt said: its first call's request, when bodies are recorded (full interception).
-        said = next((p for x in calls if (p := rows.detail_of(x.detail_json).get("prompt"))), None)
-        turn_ends = [e.ts for e in prompt_events if e.name == "tengu_turn_end"]
-        in_flight = any(x.status == "streaming" for x in step_data) or (
-            live and pid == order[-1] and not turn_ends and not (report and report.status)
-        )
-        if inp is not None:
-            prev = max((x for x in typed if x < t), default=-1)
-            pasted = [e for e in pastes if prev < e.ts <= t]
-            text_bytes = [_int(e.md.get("pastedTextBytes")) for e in pasted if e.name == "tengu_paste_text"]
-            pasted_bytes = _sum(text_bytes)
-            images: int | None = sum(1 for e in pasted if e.name == "tengu_paste_image")
-        else:
-            pasted_bytes, images = None, None
-        tool_counts = Counter(
-            _str(e.md.get("toolName")) or "—"
-            for e in prompt_events
-            if e.name in ("tengu_tool_use_success", "tengu_tool_use_error")
-        )
-        prompt = PromptData(
-            promptId=pid,
-            index=_int(inp.md.get("prompt_index")) if inp else n if codex else None,
-            t=rows.dt(t),
-            durationMs=round((max(turn_ends) - t) / 1e6, 1)
-            if turn_ends and not in_flight
-            else report.durationMs
-            if report
-            else None,
-            # Prompt text is content: never read (retention is off by default, BUILD_PLAN §2).
-            text=PromptText(
-                retained=said is not None,
-                text=said,
-                chars=_int(inp.md.get("prompt_length")) if inp else (len(said) if said else None),
-                pastedBytes=pasted_bytes,
-                images=images if has_events else None,
+def _item_from_table(r: dict[str, Any], steps: list[StepData]) -> PromptItem | BetweenItem:
+    """A prompt_rows row (with its steps) as the API's PromptItem or BetweenItem: field copies."""
+    if r["type"] == "between":
+        return BetweenItem(
+            type="between",
+            between=BetweenData(
+                kind=r["between_kind"],
+                t=rows.dt(r["t_ns"]),
+                detail=r["detail"],
+                requestId=r["request_id"],
+                tokensFrom=r["tokens_from"],
+                tokensTo=r["tokens_to"],
+                waitMs=r["wait_ms"],
             ),
-            steps=len(calls),
-            tokensIn=_sum([x.context for x in calls]),
-            tokensOut=_sum([x.output for x in calls]),
-            toolCounts=dict(sorted(tool_counts.items(), key=lambda x: (-x[1], x[0]))),
-            friction=PromptFriction(
-                frustrated=bool(inp and _true(inp.md.get("is_negative"))),
-                interrupted=any(e.name == "tengu_cancel" for e in prompt_events),
-                destructive=sum(
-                    1 for e in prompt_events if e.name == "tengu_bash_tool_command_executed" and _destructive(e)
-                ),
-            ),
-            inFlight=in_flight,
-            turnReport=report,
-            hidden=hidden.get(pid, {}),
         )
-        out.append((t, PromptItem(type="prompt", prompt=prompt, steps=step_data), inp is not None or codex))
-    return out
+    report = r["turn_report_json"]
+    prompt = PromptData(
+        promptId=r["prompt_id"],
+        index=r["prompt_index"],
+        t=rows.dt(r["t_ns"]),
+        durationMs=r["duration_ms"],
+        text=_text(r),
+        steps=r["steps"],
+        tokensIn=r["tokens_in"],
+        tokensOut=r["tokens_out"],
+        toolCounts=json.loads(r["tool_counts_json"]),
+        friction=PromptFriction(frustrated=r["frustrated"], interrupted=r["interrupted"], destructive=r["destructive"]),
+        inFlight=r["in_flight"],
+        turnReport=TurnReport.model_validate_json(report) if report else None,
+        hidden=json.loads(r["hidden_json"]),
+    )
+    return PromptItem(type="prompt", prompt=prompt, steps=steps)
 
 
-def typed_prompts(store: Store, s: cc.Session, now: int) -> list[PromptData]:
-    """The prompts whose tengu_input_prompt was captured (the timeline's prompt marks), oldest first."""
-    evs = events(store, s.id, PROMPT_EVENTS)
-    reports = agents.turn_reports(store, s.id) if s.product == "codex" else None
-    return [i.prompt for _, i, typed in _prompt_items(s, now, steps(store, s.id), evs, _joins(evs), reports) if typed]
+def prompt_items(
+    store: Store, session_id: str, now: int, lo: int, hi: int, page: int, size: int, prompt: int | None
+) -> tuple[list[PromptItem | BetweenItem], int, int]:
+    """One page of the session's prompts (steps inline) and between rows in [lo, hi], oldest first:
+    (items, total, page). `prompt`: the page holding that prompt number, in place of `page`."""
+    page_rows = store.query_dicts(
+        f"""WITH c AS (SELECT ?::BIGINT AS now),
+            items AS (
+              SELECT {_PROMPT_COLUMNS}, row_number() OVER (ORDER BY r.seq) AS pos, count(*) OVER () AS total,
+                     min(CASE WHEN r.type = 'prompt' AND r.prompt_index = ? THEN r.seq END) OVER () AS at_seq
+              FROM prompt_rows r, c
+              WHERE r.session_id = ? AND r.t_ns // 1000 * 1000 BETWEEN ? AND ?),
+            paged AS (
+              SELECT *, coalesce((max(CASE WHEN seq = at_seq THEN pos END) OVER () - 1) // ? + 1, ?) AS page_no
+              FROM items)
+            SELECT * FROM paged WHERE pos > (page_no - 1) * ? AND pos <= page_no * ? ORDER BY seq""",  # noqa: S608
+        [now, prompt, session_id, lo, hi, size, page, size, size],
+    )
+    if not page_rows:  # past the end: no rows carry the count
+        total, at = store.query(
+            """SELECT count(*), min(pos) FILTER (WHERE type = 'prompt' AND prompt_index = ?) FROM (
+                 SELECT type, prompt_index, row_number() OVER (ORDER BY seq) AS pos FROM prompt_rows
+                 WHERE session_id = ? AND t_ns // 1000 * 1000 BETWEEN ? AND ?)""",
+            [prompt, session_id, lo, hi],
+        )[0]
+        return [], total, (at - 1) // size + 1 if at is not None else page
+    seqs = [r["seq"] for r in page_rows if r["type"] == "prompt"]
+    steps: dict[int, list[StepData]] = defaultdict(list)
+    for r in store.query_dicts(
+        f"""WITH c AS (SELECT ?::BIGINT AS now)
+            SELECT s.*,
+                   CASE WHEN s.end_ns IS NULL
+                        THEN CASE WHEN {_LIVE} AND c.now - s.t_ns <= {STREAMING_WITHIN_NS}
+                                  THEN 'streaming' ELSE 'error' END
+                        WHEN s.failed THEN 'error' ELSE 'done' END AS status,
+                   {_LIVE} AND s.events_pending_if_live AS events_pending,
+                   CASE WHEN {_LIVE} AND s.tools_live_json IS NOT NULL THEN s.tools_live_json
+                        ELSE s.tools_json END AS tools,
+                   CASE WHEN {_LIVE} AND s.content_live THEN s.commands_live ELSE s.commands END AS commands,
+                   CASE WHEN {_LIVE} AND s.content_live THEN s.exit_codes_live ELSE s.exit_codes END AS exit_codes
+            FROM prompt_steps s JOIN prompt_rows r USING (session_id, seq), c
+            WHERE s.session_id = ? AND s.seq IN (SELECT unnest(?::BIGINT[]))
+            ORDER BY s.seq, s.step""",  # noqa: S608 (the clauses are fixed text; values are parameters)
+        [now, session_id, seqs],
+    ):
+        steps[r["seq"]].append(_step_from_table(r))
+    first = page_rows[0]
+    return [_item_from_table(r, steps[r["seq"]]) for r in page_rows], first["total"], first["page_no"]
 
 
-def items(store: Store, s: cc.Session, now: int) -> list[PromptItem | BetweenItem]:
-    """Every prompt (steps inline) and between row of the session, oldest first."""
-    st = steps(store, s.id)
-    evs = events(store, s.id, PROMPT_EVENTS)
-    reports = agents.turn_reports(store, s.id) if s.product == "codex" else None
-    out: list[tuple[int, PromptItem | BetweenItem]] = [
-        (t, i) for t, i, _ in _prompt_items(s, now, st, evs, _joins(evs), reports)
+def timeline_prompts(
+    store: Store, session_ids: Sequence[str], now: int, lo: int | None, hi: int | None
+) -> list[TimelinePrompt]:
+    """One mark per typed prompt of the sessions (its tengu_input_prompt was captured, or it's a
+    Codex turn) in [lo, hi] (None: all), by time then session."""
+    return [
+        TimelinePrompt(
+            t=rows.dt(r["t_ns"]),
+            index=r["prompt_index"],
+            sessionId=r["session_id"],
+            promptId=r["prompt_id"],
+            text=_text(r),
+            steps=r["steps"],
+            durationMs=r["duration_ms"],
+            tokensIn=r["tokens_in"],
+            tokensOut=r["tokens_out"],
+        )
+        for r in store.query_dicts(
+            f"""WITH c AS (SELECT ?::BIGINT AS now)
+                SELECT {_PROMPT_COLUMNS} FROM prompt_rows r, c
+                WHERE r.typed AND r.session_id IN (SELECT unnest(?::VARCHAR[]))
+                  AND (? OR r.t_ns // 1000 * 1000 BETWEEN ? AND ?)
+                ORDER BY r.t_ns // 1000, r.session_id, r.seq""",  # noqa: S608
+            [now, list(session_ids), lo is None, lo, hi],
+        )
     ]
-
-    comps = compactions(evs, st)
-    attached = {c.request_id for c in comps if c.request_id}
-    for c in comps:
-        tokens = f"context {_k(c.tokens_from)} → {_k(c.tokens_to)} tokens" if c.tokens_from and c.tokens_to else None
-        between = BetweenData(
-            kind="idle-compaction" if c.idle else "compaction",
-            t=rows.dt(c.t),
-            detail=" · ".join(x for x in ("idle compaction" if c.idle else "compaction", tokens) if x),
-            requestId=c.request_id,
-            tokensFrom=c.tokens_from,
-            tokensTo=c.tokens_to,
-            waitMs=c.wait_ms,
-        )
-        out.append((c.t, BetweenItem(type="between", between=between)))
-    for e in evs:
-        if e.name == "tengu_return_to_session" and _true(e.md.get("hadRecap")):
-            between = BetweenData(
-                kind="recap",
-                t=rows.dt(e.ts),
-                detail="recap shown on return",
-                requestId=None,
-                tokensFrom=None,
-                tokensTo=None,
-                waitMs=None,
-            )
-            out.append((e.ts, BetweenItem(type="between", between=between)))
-    for x in st:
-        if not x.prompt_id and x.correlation_id not in attached:
-            between = BetweenData(
-                kind="call",
-                t=rows.dt(x.ts),
-                detail=x.detail(),
-                requestId=x.correlation_id,
-                tokensFrom=None,
-                tokensTo=None,
-                waitMs=None,
-            )
-            out.append((x.ts, BetweenItem(type="between", between=between)))
-    out.sort(key=lambda p: (p[0], p[1].type))
-    return [item for _, item in out]
 
 
 # --- requests ---------------------------------------------------------------------------------
 
-
-def request_rows(store: Store, s: cc.Session) -> list[RequestRow]:
-    """The person request log's rows (rows.request_rows), scoped to this session. A Codex
-    thread also gets its client's calls that no thread id names (usage, catalog, metrics,
-    analytics: handoff §11L.6), by time: the same client of the same person, during the thread."""
-    if s.product != "codex":
-        return [r for r in rows.request_rows(store, {s.id: s}, only=s.id) if r.sessionId == s.id]
-    lo, hi = rows.dt(s.start), rows.dt(s.last + 60 * cc.NS)  # a turn's usage check lands just after it
-    return [
-        r
-        for r in rows.request_rows(store, {s.id: s})
-        if r.sessionId == s.id
-        or (
-            r.sessionId is None
-            and r.agent == "codex"
-            and r.kind != "model"
-            and r.client == s.client
-            and lo <= r.t <= hi
-        )
-    ]
-
+# The Requests tab is SQL over the processor's session_request_rows (its requestrows.go
+# sessionRequestRows): the request log's rows built over the session alone, and a Codex
+# thread's client calls no thread names, by time.
 
 # --- events -----------------------------------------------------------------------------------
 
@@ -761,130 +602,139 @@ def _marker(e: Event) -> str | None:
     return None
 
 
+# The Events tab is SQL over the processor's event_rows (its eventrows.go): the rows are stored
+# as shown, so a request only filters them (range, internals, `q` against the name and summary,
+# lowered as Python lowers them), folds consecutive tool-progress ticks and pages.
+_EVENTS = """
+WITH f AS (SELECT * FROM event_rows WHERE session_id = ? AND ts_ns BETWEEN ? AND ?),
+s AS (SELECT * FROM f WHERE (? OR NOT internal) AND (? = '' OR contains(name_lower, ?) OR contains(summary_lower, ?))),
+h AS (SELECT *, CASE WHEN ? AND name = 'tengu_tool_use_progress' AND lag(name) OVER (ORDER BY seq) = name
+                     THEN 0 ELSE 1 END AS head FROM s),
+g AS (SELECT *, sum(head) OVER (ORDER BY seq ROWS UNBOUNDED PRECEDING) AS grp FROM h)"""
+
+
 def event_rows(
     store: Store,
-    s: cc.Session,
+    session_id: str,
     lo: int,
     hi: int,
     internal: bool,
     collapse: bool,
     q: str | None,
-    page: int = 1,
-    page_size: int | None = None,
+    page: int,
+    page_size: int,
 ) -> tuple[int, int, list[EventRow]]:
-    """(events in range, rows to show, the page's rows): internals hidden unless asked, `q`
-    matched against name and summary, then consecutive tool-progress ticks folded into one
-    row. Every event is filtered and folded, but rows are built only for the page."""
-    evs = [e for e in events(store, s.id) if lo <= e.ts <= hi]
-    shown: list[list[Any]] = []  # [event, folded count]
-    for e in evs:
-        if is_internal(e.name) and not internal:
-            continue
-        if q and q.lower() not in e.name.lower() and q.lower() not in _summary(e.md).lower():
-            continue
-        if collapse and e.name == TICK and shown and shown[-1][0].name == TICK:
-            shown[-1][1] += 1
-            continue
-        shown.append([e, 1])
-    window = shown if page_size is None else shown[(page - 1) * page_size : page * page_size]
-    if not window:
-        return len(evs), len(shown), []
-    by_rid = {x.request_id: x for x in steps(store, s.id) if x.request_id}
-    index = pp.prompt_indexes(store, [s.id])
+    """(events in range, rows to show, the page's rows)."""
+    q = q.lower() if q else ""
+    params = [session_id, lo, hi, internal, q, q, q, collapse]
+    total, shown = store.query(
+        f"{_EVENTS} SELECT (SELECT count(*) FROM f), (SELECT coalesce(max(grp), 0) FROM g)",  # noqa: S608
+        params,
+    )[0]
     out = [
         EventRow(
-            eventId=e.id,
-            t=rows.dt(e.ts),
-            name=e.name,
-            promptIndex=index.get(e.prompt_id) if e.prompt_id else None,
-            linkedTo=_link(e, s.id, by_rid, index),
-            summary=_summary(e.md),
-            marker=_marker(e),
-            internal=is_internal(e.name),
-            collapsedCount=n if n > 1 else None,
+            eventId=r["event_id"],
+            t=rows.dt(r["ts_ns"]),
+            name=r["name"],
+            promptIndex=r["prompt_index"],
+            linkedTo=EventLink(kind=r["link_kind"], id=r["link_id"], label=r["link_label"]),
+            summary=r["summary"],
+            marker=r["marker"],
+            internal=r["internal"],
+            collapsedCount=r["n"] if r["n"] > 1 else None,
         )
-        for e, n in window
+        for r in store.query_dicts(
+            f"""{_EVENTS} SELECT g.*, n FROM g JOIN (SELECT grp, count(*) AS n FROM g GROUP BY grp) USING (grp)
+                WHERE head = 1 AND grp > ? AND grp <= ? ORDER BY seq""",  # noqa: S608
+            [*params, (page - 1) * page_size, page * page_size],
+        )
     ]
-    return len(evs), len(shown), out
+    return total, shown, out
 
 
 # --- state ------------------------------------------------------------------------------------
 
+# What the state readout counts of the session's events, as of `hi` (capabilities) or within
+# [lo, hi]: SQL over the processor's event_rows and session_tools.
+_STATE = """
+SELECT count(*) > 0,
+       count(*) FILTER (WHERE ts_ns BETWEEN $2 AND $3),
+       count(DISTINCT hook) FILTER (WHERE ts_ns <= $3),
+       count(*) FILTER (WHERE git_op = 'commit' AND ts_ns BETWEEN $2 AND $3),
+       count(*) FILTER (WHERE git_op = 'push' AND ts_ns BETWEEN $2 AND $3),
+       coalesce(list(DISTINCT pr ORDER BY pr) FILTER (WHERE pr IS NOT NULL AND ts_ns BETWEEN $2 AND $3), []),
+       coalesce(bool_or(recap_key), false),
+       count(*) FILTER (WHERE recap),
+       coalesce(list(ts_ns ORDER BY seq) FILTER (WHERE recap AND ts_ns BETWEEN $2 AND $3), []),
+       count(*) FILTER (WHERE name = 'tengu_deferred_tools_pool_change' AND ts_ns BETWEEN $2 AND $3),
+       arg_max(count, (ts_ns, count)) FILTER (WHERE name = 'tengu_tool_search_mode_decision' AND ts_ns <= $3),
+       arg_max(count, (ts_ns, count)) FILTER (WHERE name = 'tengu_skills_sync_success' AND ts_ns <= $3),
+       arg_min(head_sha, (ts_ns, head_sha)) FILTER (WHERE head_sha IS NOT NULL AND ts_ns BETWEEN $2 AND $3),
+       arg_max(head_sha, (ts_ns, head_sha)) FILTER (WHERE head_sha IS NOT NULL AND ts_ns BETWEEN $2 AND $3),
+       count(DISTINCT head_sha) FILTER (WHERE ts_ns BETWEEN $2 AND $3)
+FROM event_rows WHERE session_id = $1"""
 
-def state(store: Store, s: cc.Session, lo: int, hi: int, now: int, requests: int) -> SessionState:
+
+def state(store: Store, session_id: str, lo: int, hi: int, requests: int) -> SessionState:
     """`requests` is the Requests tab's total for the same range (its default range differs: see the router)."""
-    evs = events(store, s.id, STATE_EVENTS)
-    upto = [e for e in evs if e.ts <= hi]
-    within = [e for e in evs if lo <= e.ts <= hi]
-    has_events = s.event_count > 0
-
-    # MCP servers and tools from the responses' tool_use blocks: the analytics redact most
-    # MCP names to "mcp_tool" (isMcp marks them). Built-ins from both.
-    used = [e for e in upto if e.name == "tengu_tool_use_success" and e.md.get("toolName")]
-    mcp_used, builtin_used = pp.tool_uses(store, [s.id], 0, hi)
-    mcp: dict[str, set[str]] = defaultdict(set, {k: set(v) for k, v in mcp_used.items()})
-    for e in used:
-        server = _mcp_server(e)
-        if server:
-            mcp[server].add(str(e.md["toolName"]))
-    builtin = builtin_used | {
-        str(e.md["toolName"]) for e in used if not _mcp_server(e) and not _true(e.md.get("isMcp"))
-    }
-    hooks = {str(e.md["hookName"]) for e in upto if e.name == "tengu_run_hook" and e.md.get("hookName")}
-
-    head_from, head_to, heads = store.query(
-        """SELECT arg_min(head_sha, ts), arg_max(head_sha, ts), count(DISTINCT head_sha) FROM cc_events
-           WHERE session_id = ? AND ts BETWEEN ? AND ? AND head_sha IS NOT NULL""",
-        [s.id, lo, hi],
-    )[0]
-    git = Counter(_str(e.md.get("operation")) for e in within if e.name == "tengu_git_operation")
-    prs = {_int(e.md.get("prNumber")) for e in within if e.name == "tengu_session_linked_to_pr"}
-
-    returns = [e for e in evs if e.name == "tengu_return_to_session"]
-    reports_recaps = any("hadRecap" in e.md for e in returns)
-    recaps = [e for e in returns if _true(e.md.get("hadRecap"))]
-
-    n_events = store.query(
-        "SELECT count(*) FROM cc_events WHERE session_id = ? AND ts BETWEEN ? AND ?", [s.id, lo, hi]
+    (
+        has_events,
+        n_events,
+        hooks,
+        commits,
+        pushes,
+        prs,
+        reports_recaps,
+        recaps_total,
+        recaps,
+        pool,
+        mcp_total,
+        skills,
+        head_from,
+        head_to,
+        heads,
+    ) = store.query(_STATE, [session_id, lo, hi])[0]
+    tools = store.query(
+        """SELECT kind, server, count(DISTINCT tool) FROM session_tools WHERE session_id = ? AND first_ns <= ?
+           GROUP BY ALL ORDER BY kind, server""",
+        [session_id, hi],
+    )
+    builtin = next((n for kind, _, n in tools if kind == "builtin"), 0)
+    mcp = [(server, n) for kind, server, n in tools if kind == "mcp"]
+    prompts = store.query(
+        """SELECT count(*) FROM prompt_rows
+           WHERE session_id = ? AND type = 'prompt' AND t_ns // 1000 * 1000 BETWEEN ? AND ?""",
+        [session_id, lo, hi],
     )[0][0]
-    prompts = [i for i in items(store, s, now) if isinstance(i, PromptItem) and lo <= cc.to_ns(i.prompt.t) <= hi]
-    comps = [c for c in compactions(evs, steps(store, s.id)) if lo <= c.t <= hi]
     return SessionState(
         capabilitiesAt=CapabilitiesAt(
-            builtin=ToolTally(total=None, used=len(builtin) if has_events else None),  # total: M7 tool catalog
-            mcpServers=[McpServer(name=k, tools=None, toolsUsed=len(v), riskyVerbs=[]) for k, v in sorted(mcp.items())],
-            mcpTools=ToolTally(
-                total=pp.latest_md(store, [s.id], "tengu_tool_search_mode_decision", "mcpToolCount", hi),
-                used=sum(len(v) for v in mcp.values()) if has_events or mcp else None,
-            ),
-            skills=pp.latest_md(store, [s.id], "tengu_skills_sync_success", "total", hi),
-            hooks=len(hooks) if has_events else None,
-            poolChangesInRange=sum(1 for e in within if e.name == "tengu_deferred_tools_pool_change")
-            if has_events
-            else None,
+            builtin=ToolTally(total=None, used=builtin if has_events else None),  # total: M7 tool catalog
+            mcpServers=[McpServer(name=k, tools=None, toolsUsed=n, riskyVerbs=[]) for k, n in mcp],
+            mcpTools=ToolTally(total=mcp_total, used=sum(n for _, n in mcp) if has_events or mcp else None),
+            skills=skills,
+            hooks=hooks if has_events else None,
+            poolChangesInRange=pool if has_events else None,
         ),
         repoInRange=RepoInRange(
             branch=None,  # M7: from injected git status
             headFrom=head_from,
             headTo=head_to,
             headChanges=heads - 1 if heads else None,
-            commits=git.get("commit", 0),
-            pushed=git.get("push", 0) > 0,
+            commits=commits,
+            pushed=pushes > 0,
             cwdTrail=None,  # M7: from environment-update messages
-            prs=sorted(p for p in prs if p is not None),
+            prs=list(prs),
         ),
-        recapsInRange=[Recap(t=rows.dt(e.ts), text=None) for e in recaps if lo <= e.ts <= hi]
-        if reports_recaps
-        else None,
-        recapsTotal=len(recaps) if reports_recaps else None,
+        recapsInRange=[Recap(t=rows.dt(t), text=None) for t in recaps] if reports_recaps else None,
+        recapsTotal=recaps_total if reports_recaps else None,
         experimentsAt=None,  # M7: experiment assignments come from flag bodies
         flagFetchesInRange=None,  # M7: flag fetches carry the session only in their body
         flagsChangedInRange=None,
         counts=RangeCounts(
-            prompts=len(prompts),
-            modelCalls=sum(1 for c in s.calls if lo <= c.ts <= hi),
+            prompts=prompts,
+            modelCalls=_count(store, session_id, "call", lo, hi),
             requests=requests,
             events=n_events,
-            compactions=len(comps),
+            compactions=_count(store, session_id, "compaction", lo, hi),
         ),
     )

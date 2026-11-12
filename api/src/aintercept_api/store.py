@@ -12,6 +12,9 @@ Tables (columns as in aintercept/internal/process/tables.go):
   transactions still waiting for their ending (in flight).
 - `analytics`: each analytics event a client reported.
 - `sessions`, `prompts`, `person_devices`, `people`: snapshots.
+- `request_rows`, `person_last`, `prompt_rows`, `prompt_steps`, `session_rows`, `session_marks`,
+  `presence_segments`, `event_rows`, `session_tools`, `session_request_rows`: snapshots the
+  processor derives in the shape the endpoints serve (docs/architecture.md, Decision 4).
 - `probes`: the earliest time of each part's synthetic rows. The observers' path probe
   (`aintercept-proxyprobe`) is most of `requests` by row count and is never shown, so its
   rows aren't loaded; the setup screen's "waiting since" needs only when it started.
@@ -53,7 +56,29 @@ from aintercept_api.raw import LocalRaw, RawSource
 T = TypeVar("T")
 FACTS = ("requests", "analytics", "ledger")
 MEMO_SIZE = 64  # Store.memo entries (a few sessions' events, steps and calls)
-SNAPSHOTS = ("sessions", "prompts", "person_devices", "people", "pending", "accounts")
+SNAPSHOTS = (
+    "sessions",
+    "prompts",
+    "person_devices",
+    "people",
+    "pending",
+    "accounts",
+    "request_rows",
+    "person_last",
+    "prompt_rows",
+    "prompt_steps",
+    "session_rows",
+    "session_marks",
+    "presence_segments",
+    "event_rows",
+    "session_tools",
+    "session_request_rows",
+    "person_map",
+    "person_sessions",
+    "account_facts",
+    "account_devices",
+    "call_tool_uses",
+)
 _MANIFEST_TABLE = {"requests": "requests", "analytics": "events", "ledger": "ledger"}  # ours -> the manifest's
 
 # Loading statements per table, written out (no SQL is built from strings).
@@ -95,6 +120,32 @@ _REPLACE = {
     "people": "CREATE OR REPLACE TABLE people AS SELECT * FROM read_parquet(?)",
     "pending": "CREATE OR REPLACE TABLE pending AS SELECT * FROM read_parquet(?)",
     "accounts": "CREATE OR REPLACE TABLE accounts AS SELECT * FROM read_parquet(?)",
+    # Precomputed (docs/architecture.md, Decision 4). Stored in the order the endpoints
+    # read them, so a person's rows sit together and DuckDB's per-block min/max skip the rest.
+    "request_rows": "CREATE OR REPLACE TABLE request_rows AS SELECT * FROM read_parquet(?) "
+    "ORDER BY person_id, ts_ns, request_id",
+    "person_last": "CREATE OR REPLACE TABLE person_last AS SELECT * FROM read_parquet(?)",
+    "prompt_rows": "CREATE OR REPLACE TABLE prompt_rows AS SELECT * FROM read_parquet(?) ORDER BY session_id, seq",
+    "session_rows": "CREATE OR REPLACE TABLE session_rows AS SELECT * FROM read_parquet(?) ORDER BY session_id",
+    "session_marks": "CREATE OR REPLACE TABLE session_marks AS SELECT * FROM read_parquet(?) "
+    "ORDER BY session_id, kind, seq",
+    "presence_segments": "CREATE OR REPLACE TABLE presence_segments AS SELECT * FROM read_parquet(?) "
+    "ORDER BY session_id, seq",
+    "prompt_steps": "CREATE OR REPLACE TABLE prompt_steps AS SELECT * FROM read_parquet(?) "
+    "ORDER BY session_id, seq, step",
+    "event_rows": "CREATE OR REPLACE TABLE event_rows AS SELECT * FROM read_parquet(?) ORDER BY session_id, seq",
+    "session_tools": "CREATE OR REPLACE TABLE session_tools AS SELECT * FROM read_parquet(?) ORDER BY session_id",
+    # Its rows are a group of request_rows' columns (tables.go SessionRequestRow).
+    "session_request_rows": "CREATE OR REPLACE TABLE session_request_rows AS "
+    "SELECT scope_session_id, seq, unnest(row) FROM read_parquet(?) ORDER BY scope_session_id, seq",
+    "person_map": "CREATE OR REPLACE TABLE person_map AS SELECT * FROM read_parquet(?) ORDER BY person_id, account_id",
+    "person_sessions": "CREATE OR REPLACE TABLE person_sessions AS SELECT * FROM read_parquet(?) "
+    "ORDER BY person_id, session_id",
+    "account_facts": "CREATE OR REPLACE TABLE account_facts AS SELECT * FROM read_parquet(?) ORDER BY account_id",
+    "account_devices": "CREATE OR REPLACE TABLE account_devices AS SELECT * FROM read_parquet(?) "
+    "ORDER BY account_id, device_id",
+    "call_tool_uses": "CREATE OR REPLACE TABLE call_tool_uses AS SELECT * FROM read_parquet(?) "
+    "ORDER BY session_id, ts_ns",
 }
 
 # Columns newer processors write: added (as nulls) to tables loaded from older parts, so
@@ -163,6 +214,78 @@ _EMPTY = {
         client_json VARCHAR, request_id VARCHAR, content_encoding VARCHAR, provider_json VARCHAR)""",
     "accounts": """CREATE OR REPLACE TABLE accounts (account_id VARCHAR, email VARCHAR, name VARCHAR, org VARCHAR,
         seen_ns BIGINT)""",
+    "request_rows": """CREATE OR REPLACE TABLE request_rows (person_id VARCHAR, request_id VARCHAR, ts_ns BIGINT,
+        kind VARCHAR, agent VARCHAR, client VARCHAR, hidden_kind VARCHAR, session_id VARCHAR, session_label VARCHAR,
+        prompt_index BIGINT, method VARCHAR, path VARCHAR, detail VARCHAR, status BIGINT, status_err BOOLEAN,
+        duration_ms DOUBLE, retries BIGINT, bytes_up BIGINT, bytes_down BIGINT, background BOOLEAN, captured BOOLEAN,
+        status_text VARCHAR, stop_reason VARCHAR, ttft_ms DOUBLE, tokens_input BIGINT, tokens_cache_read BIGINT,
+        tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT, tokens_cache_write_1h BIGINT, tokens_output BIGINT,
+        tokens_accuracy VARCHAR, content_encoding VARCHAR, error_message VARCHAR, error_after_ms DOUBLE,
+        error_bytes_received BIGINT, error_retries BIGINT, error_retry_succeeded_ns BIGINT, model VARCHAR,
+        effort VARCHAR, step_index BIGINT, tool_calls VARCHAR[], usage_missing VARCHAR, text VARCHAR)""",
+    "person_last": "CREATE OR REPLACE TABLE person_last (person_id VARCHAR, last_ns BIGINT)",
+    "session_rows": """CREATE OR REPLACE TABLE session_rows (session_id VARCHAR, start_ns BIGINT, last_ns BIGINT,
+        product VARCHAR, agent VARCHAR, client VARCHAR, client_version VARCHAR, origin_kind VARCHAR,
+        origin_session_id VARCHAR, origin_json VARCHAR, children_json VARCHAR, hidden_calls BIGINT, label_text VARCHAR,
+        label_source VARCHAR, label_text_alone VARCHAR, label_source_alone VARCHAR, repo VARCHAR, commit VARCHAR,
+        prompts BIGINT, captured_from_prompt BIGINT, model_calls BIGINT, events BIGINT, frustrated BIGINT,
+        interrupted BIGINT, destructive BIGINT, bypass_pct DOUBLE, cov_reported BIGINT, cov_captured BIGINT,
+        cov_not_captured BIGINT, cov_window_from BIGINT[], cov_window_to BIGINT[], cov_window_count BIGINT[],
+        fields_missing BOOLEAN, person_id VARCHAR, device_id VARCHAR, device_platform VARCHAR, device_terminal VARCHAR,
+        device_shell VARCHAR, networks BIGINT, effort VARCHAR, tokens_input BIGINT, tokens_cache_read BIGINT,
+        tokens_cache_write BIGINT, tokens_output BIGINT, tokens_accuracy VARCHAR, tool_calls BIGINT, has_facts BOOLEAN,
+        facts_cwd VARCHAR, facts_approval VARCHAR, facts_sandbox VARCHAR, limits_json VARCHAR, limits_ns BIGINT,
+        prompt_ids VARCHAR[], devices VARCHAR[], call_accounts VARCHAR[], outputs_known BIGINT, queries BIGINT,
+        bypassed BIGINT, cli_version VARCHAR, cli_version_ns BIGINT, client_version_ns BIGINT, rl_status VARCHAR,
+        rl_util DOUBLE, rl_overage VARCHAR, rl_ns BIGINT, sandbox VARCHAR, sandbox_ns BIGINT, custom_ca BOOLEAN)""",
+    "presence_segments": """CREATE OR REPLACE TABLE presence_segments (session_id VARCHAR, seq BIGINT,
+        from_ns BIGINT, to_ns BIGINT, state VARCHAR)""",
+    "session_marks": """CREATE OR REPLACE TABLE session_marks (session_id VARCHAR, seq BIGINT, kind VARCHAR,
+        t_ns BIGINT, to_ns BIGINT, request_id VARCHAR, request_class VARCHAR, model VARCHAR, context BIGINT,
+        output BIGINT, prompt_index BIGINT, friction_kind VARCHAR, detail VARCHAR, tokens_from BIGINT, tokens_to BIGINT,
+        idle BOOLEAN, wait_ms DOUBLE, mode VARCHAR, prev_mode VARCHAR, ip VARCHAR, ipv6 BOOLEAN, input BIGINT,
+        cache_read BIGINT, cache_write BIGINT, prompt_id VARCHAR, unreported BOOLEAN)""",
+    "prompt_rows": """CREATE OR REPLACE TABLE prompt_rows (session_id VARCHAR, seq BIGINT, t_ns BIGINT, type VARCHAR,
+        typed BOOLEAN, session_last_ns BIGINT, prompt_id VARCHAR, prompt_index BIGINT, duration_turn_ms DOUBLE,
+        duration_report_ms DOUBLE, open_tail BOOLEAN, unfinished_max_ns BIGINT, text_retained BOOLEAN, text VARCHAR,
+        text_chars BIGINT, pasted_bytes BIGINT, images BIGINT, steps BIGINT, tokens_in BIGINT, tokens_out BIGINT,
+        tool_counts_json VARCHAR, frustrated BOOLEAN, interrupted BOOLEAN, destructive BIGINT,
+        turn_report_json VARCHAR, hidden_json VARCHAR, between_kind VARCHAR, detail VARCHAR, request_id VARCHAR,
+        tokens_from BIGINT, tokens_to BIGINT, wait_ms DOUBLE)""",
+    "event_rows": """CREATE OR REPLACE TABLE event_rows (session_id VARCHAR, seq BIGINT, event_id VARCHAR,
+        ts_ns BIGINT, name VARCHAR, name_lower VARCHAR, internal BOOLEAN, summary VARCHAR, summary_lower VARCHAR,
+        marker VARCHAR, link_kind VARCHAR, link_id VARCHAR, link_label VARCHAR, prompt_index BIGINT, head_sha VARCHAR,
+        hook VARCHAR, git_op VARCHAR, pr BIGINT, recap_key BOOLEAN, recap BOOLEAN, count BIGINT, unnamed BOOLEAN,
+        tool_name VARCHAR, is_mcp BOOLEAN, hook_ms DOUBLE, argv0 VARCHAR, category VARCHAR, outside_cwd BOOLEAN,
+        hook_name VARCHAR, operation VARCHAR, pr_number VARCHAR, cache_5m BIGINT, cache_1h BIGINT, cost_usd DOUBLE)""",
+    "person_map": "CREATE OR REPLACE TABLE person_map (person_id VARCHAR, account_id VARCHAR, directory BOOLEAN)",
+    "person_sessions": "CREATE OR REPLACE TABLE person_sessions (person_id VARCHAR, session_id VARCHAR)",
+    "account_facts": """CREATE OR REPLACE TABLE account_facts (account_id VARCHAR, org VARCHAR, plan VARCHAR,
+        codex_plan VARCHAR)""",
+    "account_devices": """CREATE OR REPLACE TABLE account_devices (account_id VARCHAR, device_id VARCHAR,
+        on_events BOOLEAN, platform VARCHAR, terminal VARCHAR, shell VARCHAR)""",
+    "call_tool_uses": """CREATE OR REPLACE TABLE call_tool_uses (session_id VARCHAR, ts_ns BIGINT, kind VARCHAR,
+        server VARCHAR, tool VARCHAR)""",
+    "session_tools": """CREATE OR REPLACE TABLE session_tools (session_id VARCHAR, kind VARCHAR, server VARCHAR,
+        tool VARCHAR, first_ns BIGINT)""",
+    "session_request_rows": """CREATE OR REPLACE TABLE session_request_rows (scope_session_id VARCHAR, seq BIGINT,
+        person_id VARCHAR, request_id VARCHAR, ts_ns BIGINT,
+        kind VARCHAR, agent VARCHAR, client VARCHAR, hidden_kind VARCHAR, session_id VARCHAR, session_label VARCHAR,
+        prompt_index BIGINT, method VARCHAR, path VARCHAR, detail VARCHAR, status BIGINT, status_err BOOLEAN,
+        duration_ms DOUBLE, retries BIGINT, bytes_up BIGINT, bytes_down BIGINT, background BOOLEAN, captured BOOLEAN,
+        status_text VARCHAR, stop_reason VARCHAR, ttft_ms DOUBLE, tokens_input BIGINT, tokens_cache_read BIGINT,
+        tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT, tokens_cache_write_1h BIGINT, tokens_output BIGINT,
+        tokens_accuracy VARCHAR, content_encoding VARCHAR, error_message VARCHAR, error_after_ms DOUBLE,
+        error_bytes_received BIGINT, error_retries BIGINT, error_retry_succeeded_ns BIGINT, model VARCHAR,
+        effort VARCHAR, step_index BIGINT, tool_calls VARCHAR[], usage_missing VARCHAR, text VARCHAR)""",
+    "prompt_steps": """CREATE OR REPLACE TABLE prompt_steps (session_id VARCHAR, seq BIGINT, step BIGINT,
+        request_id VARCHAR, t_ns BIGINT, end_ns BIGINT, kind VARCHAR, model VARCHAR, request_class VARCHAR,
+        tokens_input BIGINT, tokens_cache_read BIGINT, tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT,
+        tokens_cache_write_1h BIGINT, tokens_output BIGINT, tokens_accuracy VARCHAR, duration_ms DOUBLE,
+        ttft_ms DOUBLE, stop_reason VARCHAR, cost_usd DOUBLE, failed BOOLEAN, events_pending_if_live BOOLEAN,
+        agent_type VARCHAR, tools_json VARCHAR, tools_live_json VARCHAR, does VARCHAR, commands VARCHAR[],
+        exit_codes BIGINT[], content_live BOOLEAN, commands_live VARCHAR[], exit_codes_live BIGINT[],
+        patches_json VARCHAR, text VARCHAR, usage_missing VARCHAR)""",
 }
 
 VIEWS = """
@@ -426,6 +549,16 @@ class Store:
         self._cleanup()
 
     # --- queries -----------------------------------------------------------------------------
+
+    def query_dicts(self, sql: str, params: Sequence[object] | None = None) -> list[dict[str, Any]]:
+        """`query`, each row keyed by column name."""
+        cur = self._con.cursor()
+        try:
+            cur.execute(sql, params or [])
+            names = [d[0] for d in cur.description or []]
+            return [dict(zip(names, r, strict=True)) for r in cur.fetchall()]
+        finally:
+            cur.close()
 
     def query(self, sql: str, params: Sequence[object] | None = None) -> list[tuple[Any, ...]]:
         # A cursor per query: DuckDB runs them in parallel and isolates them from loading.

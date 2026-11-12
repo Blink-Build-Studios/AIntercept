@@ -2,7 +2,7 @@
 RequestRowData; §5.2.6-5.2.7), so both pages show the same row for the same thing."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
@@ -22,7 +22,6 @@ from aintercept_api.models.people import (
     ThreadChildren,
     TokenCount,
 )
-from aintercept_api.models.sessions import StepKind
 from aintercept_api.store import Store
 from aintercept_api.timeutil import ns_to_dt
 
@@ -49,29 +48,6 @@ def tool_labels(tool_uses_json: str | None) -> list[str]:
     return [f"{name} ×{n}" for name, _, n in tool_calls(tool_uses_json)]
 
 
-_EXEC = {"exec", "exec_command", "shell", "local_shell", "Bash", "BashOutput"}
-_PATCH = {"apply_patch", "Edit", "Write", "MultiEdit", "NotebookEdit"}
-_SPAWN = {"spawn_agent", "Task", "Agent"}
-
-
-def step_kind(tool_uses_json: str | None, stop_reason: str | None) -> StepKind:
-    """What a step did (handoff §11L.7): a patch or a spawn breaks a run of commands, so
-    they win over exec; a step with no tool call answered in text."""
-    if stop_reason and "interrupt" in stop_reason:
-        return "interrupt"
-    calls = tool_calls(tool_uses_json)
-    names = {n for n, _, _ in calls}
-    if names & _PATCH:
-        return "patch"
-    if names & _SPAWN:
-        return "spawn"
-    if any(k == "mcp" for _, k, _ in calls):
-        return "mcp"
-    if names & _EXEC:
-        return "exec"
-    return "tool" if calls else "text"
-
-
 def detail_of(detail_json: str | None) -> dict[str, Any]:
     """A call's detail from its recorded bodies (the processor's detail_json; full
     interception mode only): its tool calls, first words and earlier calls' results."""
@@ -80,18 +56,6 @@ def detail_of(detail_json: str | None) -> dict[str, Any]:
     except ValueError:
         return {}
     return d if isinstance(d, dict) else {}
-
-
-def exit_results(details: list[dict[str, Any]]) -> dict[str, list[int]]:
-    """Each tool call's exit codes, by call id, from the requests that carried them back."""
-    out: dict[str, list[int]] = {}
-    for d in details:
-        for cid, r in (d.get("results") or {}).items():
-            if isinstance(r, dict) and r.get("exit"):
-                out.setdefault(cid, [int(x) for x in r["exit"] if isinstance(x, int)])
-            elif isinstance(r, dict) and r.get("error"):
-                out.setdefault(cid, [1])
-    return out
 
 
 def usage_missing(
@@ -121,77 +85,57 @@ def dt(ns: int) -> datetime:
     return d
 
 
-def label(sid: str, title: str | None = None) -> SessionLabel:
-    """A Codex thread's generated title, when its title call's answer was recorded; else the id
-    (repo/branch and recaps arrive with M7 extraction, handoff §5.2.6)."""
-    if title:
-        return SessionLabel(text=title, source="title")
-    return SessionLabel(text=f"Session {sid[:8]}", source="none")
+SESSION_ROWS = "SELECT *, ? - last_ns <= ? AS live FROM session_rows"
 
 
-def coverage(s: cc.Session) -> Coverage:
-    reported, captured, missing, wins = cc.coverage(s)
-    return Coverage(
-        reported=reported,
-        captured=captured,
-        notCaptured=missing,
-        windows=[CoverageWindow(from_=dt(a), to=dt(b), count=n) for a, b, n in wins],
+def session_rows(store: Store, now: int, ids: Sequence[str] | None = None) -> list[dict[str, Any]]:
+    """The sessions' rows (every session's without `ids`), by id."""
+    if ids is None:
+        return store.query_dicts(f"{SESSION_ROWS} ORDER BY session_id", [now, cc.LIVE_WITHIN_NS])
+    return store.query_dicts(
+        f"{SESSION_ROWS} WHERE session_id IN (SELECT unnest(?::VARCHAR[])) ORDER BY session_id",
+        [now, cc.LIVE_WITHIN_NS, list(ids)],
     )
 
 
-def origin(s: cc.Session) -> SessionOrigin | None:
-    o = s.origin
-    if o is None or o.kind not in ("fork", "resume", "subagent", "review"):
-        return None
-    init = o.init if o.init in ("warm_fork", "cold_fork", "cold_resume") else None
-    return SessionOrigin.model_validate(
-        {"kind": o.kind, "sessionId": o.session_id, "turn": o.turn, "init": init, "agentName": o.agent_name}
-    )
-
-
-def children(s: cc.Session) -> ThreadChildren | None:
-    if not s.children:
-        return None
-    return ThreadChildren(
-        subagent=sum(k == "subagent" for _, k in s.children),
-        review=sum(k == "review" for _, k in s.children),
-        sessionIds=[sid for sid, _ in s.children],
-    )
-
-
-def session_row(s: cc.Session, now: int, workspace: tuple[str | None, str | None] | None = None) -> SessionRow:
-    """`workspace`: a Codex thread's (basename, short commit), from agents.workspace."""
-    live = s.live(now)
-    frustrated, interrupted, destructive = cc.friction_counts(s)
-    prompts = cc.prompt_ids(s)
+def session_row_from_table(r: Mapping[str, Any], alone: bool = False) -> SessionRow:
+    """A session_rows row (with `live`) as the API's SessionRow: field copies only. `alone`: the
+    label the session page shows (a Codex title thread can name another thread there)."""
     return SessionRow(
-        sessionId=s.id,
-        agent=agents.agent_of(s.product),
-        client=s.client,
-        clientVersion=s.client_version,
-        origin=origin(s),
-        children=children(s),
-        hiddenCalls=sum(s.hidden.values()),
-        start=dt(s.start),
-        end=None if live else dt(s.last),
-        live=live,
-        repo=workspace[0] if workspace else None,
+        sessionId=r["session_id"],
+        agent=r["agent"],
+        client=r["client"],
+        clientVersion=r["client_version"],
+        origin=SessionOrigin.model_validate_json(r["origin_json"]) if r["origin_json"] else None,
+        children=ThreadChildren.model_validate_json(r["children_json"]) if r["children_json"] else None,
+        hiddenCalls=r["hidden_calls"],
+        start=dt(r["start_ns"]),
+        end=None if r["live"] else dt(r["last_ns"]),
+        live=r["live"],
+        repo=r["repo"],
         branch=None,
-        commit=workspace[1] if workspace else None,
-        label=label(s.id, s.title),
-        prompts=len(prompts) or None,
-        capturedFromPrompt=cc.captured_from_prompt(s),
-        modelCalls=len(s.calls),
-        events=s.event_count or None,
-        friction=Friction(frustrated=frustrated, interrupted=interrupted, destructive=destructive),
-        bypassPct=cc.bypass_pct(s),
-        coverage=coverage(s),
-        fieldsMissing=bool(s.calls) and all(c.account is None and c.device is None for c in s.calls),
+        commit=r["commit"],
+        label=SessionLabel(
+            text=r["label_text_alone" if alone else "label_text"],
+            source=r["label_source_alone" if alone else "label_source"],
+        ),
+        prompts=r["prompts"],
+        capturedFromPrompt=r["captured_from_prompt"],
+        modelCalls=r["model_calls"],
+        events=r["events"],
+        friction=Friction(frustrated=r["frustrated"], interrupted=r["interrupted"], destructive=r["destructive"]),
+        bypassPct=r["bypass_pct"],
+        coverage=Coverage(
+            reported=r["cov_reported"],
+            captured=r["cov_captured"],
+            notCaptured=r["cov_not_captured"],
+            windows=[
+                CoverageWindow(from_=dt(a), to=dt(b), count=n)
+                for a, b, n in zip(r["cov_window_from"], r["cov_window_to"], r["cov_window_count"], strict=True)
+            ],
+        ),
+        fieldsMissing=r["fields_missing"],
     )
-
-
-def last_data(sessions: dict[str, cc.Session]) -> datetime | None:
-    return ns_to_dt(max((s.last for s in sessions.values()), default=None))
 
 
 def _phrase(status: int) -> str | None:
@@ -342,6 +286,104 @@ def request_rows(store: Store, sessions: dict[str, cc.Session], only: str | None
         for e in cc.missed_calls(s) or []:
             rows.append(missed_row(s.id, e, reported))
     return rows
+
+
+def request_row_from_table(r: Mapping[str, Any]) -> RequestRow:
+    """A row of the processor's request_rows table (columns as in aintercept/internal/process/tables.go
+    RequestRow) as the API's RequestRow: field copies only. The processor wrote every value already
+    as shown; status, tokens and error are spread over columns (see RequestRow there)."""
+    tokens = None
+    if r["tokens_accuracy"] is not None:
+        tokens = TokenCount(
+            input=r["tokens_input"],
+            cacheRead=r["tokens_cache_read"],
+            cacheWrite=r["tokens_cache_write"],
+            cacheWrite5m=r["tokens_cache_write_5m"],
+            cacheWrite1h=r["tokens_cache_write_1h"],
+            output=r["tokens_output"],
+            accuracy=r["tokens_accuracy"],
+        )
+    error = None
+    if r["error_message"] is not None:
+        error = RequestError(
+            message=r["error_message"],
+            afterMs=r["error_after_ms"],
+            bytesReceived=r["error_bytes_received"],
+            retries=r["error_retries"],
+            retrySucceededAt=ns_to_dt(r["error_retry_succeeded_ns"]),
+        )
+    return RequestRow(
+        requestId=r["request_id"],
+        t=dt(r["ts_ns"]),
+        kind=r["kind"],
+        agent=r["agent"],
+        client=r["client"],
+        hiddenKind=r["hidden_kind"],
+        sessionId=r["session_id"],
+        sessionLabel=r["session_label"],
+        promptIndex=r["prompt_index"],
+        method=r["method"],
+        path=r["path"],
+        detail=r["detail"],
+        status="ERR" if r["status_err"] else r["status"],
+        durationMs=r["duration_ms"],
+        retries=r["retries"],
+        bytesUp=r["bytes_up"],
+        bytesDown=r["bytes_down"],
+        background=r["background"],
+        captured=r["captured"],
+        statusText=r["status_text"],
+        stopReason=r["stop_reason"],
+        ttftMs=r["ttft_ms"],
+        tokens=tokens,
+        contentEncoding=r["content_encoding"],
+        error=error,
+        model=r["model"],
+        effort=r["effort"],
+        stepIndex=r["step_index"],
+        toolCalls=list(r["tool_calls"]),
+        usageMissing=r["usage_missing"],
+        text=r["text"],
+    )
+
+
+def request_filter(
+    scope: str,
+    value: str,
+    from_: datetime | None,
+    to: datetime | None,
+    q: str | None,
+    captured: bool | None,
+    agent: Sequence[str] | None = None,
+) -> tuple[str, list[object]]:
+    """The WHERE clause for a request log's stored rows (`scope` = `value`: a person's request_rows,
+    a session's session_request_rows): the window (rows' times are compared at the microseconds
+    they're shown with), captured, agent and `q` as `matches` reads it. Fixed text with every value
+    a parameter."""
+    lo = cc.to_ns(from_) // 1000 if from_ else None
+    hi = cc.to_ns(to) // 1000 if to else None
+    where = [
+        f"{scope} = ?",
+        "(?::BIGINT IS NULL OR ts_ns // 1000 >= ?)",
+        "(?::BIGINT IS NULL OR ts_ns // 1000 <= ?)",
+        "(?::BOOLEAN IS NULL OR captured = ?)",
+        "(? OR agent IN (SELECT unnest(?::VARCHAR[])))",
+    ]
+    params: list[object] = [value, lo, lo, hi, hi, captured, captured, not agent, list(agent or [])]
+    if q and "=" in q:
+        k, _, v = q.partition("=")
+        field = {
+            "kind": "kind",
+            "session": "coalesce(session_id, '')",
+            # str() of the shown status: a number, ERR, or None when there's none
+            "status": "CASE WHEN status_err THEN 'ERR' WHEN status IS NULL THEN 'None' ELSE status::VARCHAR END",
+        }.get(k.strip())
+        where.append(f"contains({field}, ?)" if field else "false")
+        params += [v.strip()] if field else []
+    elif q:
+        where.append("(contains(lower(path), ?) OR contains(lower(detail), ?))")
+        params += [q.lower(), q.lower()]
+    return " AND ".join(where), params
 
 
 def missed_row(session_id: str, e: cc.Ev, reported: dict[str, pp.Reported]) -> RequestRow:

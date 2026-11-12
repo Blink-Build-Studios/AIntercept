@@ -233,6 +233,40 @@ def test_timeline_coverage_gap_and_presence(dataset, client_for, write_sample):
     ]
 
 
+def test_timeline_presence_combines_the_sessions_shown(dataset, client_for):
+    one = ClaudeCode(dataset, S1)
+    one.call("2026-11-04T09:00:00")
+    one.call("2026-11-04T09:10:00")
+    two = ClaudeCode(dataset, S2)
+    two.call("2026-11-04T11:00:00")
+    # The device slept from 09:05 (two hours before the stall was noticed, in the later session).
+    two.event("2026-11-04T11:05:00", "tengu_event_loop_stall", likely_sleep=True, clock_jump_ms=7_200_000)
+    client = client_for(dataset)
+
+    def states(**window):
+        d = client.get(TIMELINE, params=window).json()["data"]
+        return [(p["from"][11:16], p["to"][11:16], p["state"]) for p in d["presence"]]
+
+    # Asleep wherever a shown session is open, whichever session reported the sleep.
+    assert states() == [("09:00", "09:05", "focused"), ("09:05", "09:10", "asleep"), ("11:00", "11:05", "asleep")]
+    # A range that ends before the later session starts doesn't show it, nor its sleep.
+    assert states(to="2026-11-04T10:00:00Z") == [("09:00", "09:10", "focused")]
+    assert states(**{"from": "2026-11-04T09:07:00Z"}) == [("09:07", "09:10", "asleep"), ("11:00", "11:05", "asleep")]
+
+
+def test_timeline_presence_of_a_live_session_runs_to_now(dataset, client_for):
+    cc = ClaudeCode(dataset, S1)
+    cc.call("2026-11-04T18:00:00")
+    cc.event("2026-11-04T18:03:00", "tengu_return_to_session", blurDurationMs=60_000)  # away 18:02-18:03
+    d = client_for(dataset).get(TIMELINE).json()["data"]
+    assert d["now"] == "2026-11-04T18:05:00Z"
+    assert [(p["from"][11:16], p["to"][11:16], p["state"]) for p in d["presence"]] == [
+        ("18:00", "18:02", "focused"),
+        ("18:02", "18:03", "away"),
+        ("18:03", "18:05", "focused"),
+    ]
+
+
 def test_timeline_error(dataset, client_for, write_sample, monkeypatch):
     client = client_for(dataset, raise_server_exceptions=False)
     monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)

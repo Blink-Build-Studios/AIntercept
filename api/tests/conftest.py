@@ -16,10 +16,13 @@ import subprocess
 import threading
 from datetime import UTC, datetime
 
+import duckdb
 import pytest
 from fastapi.testclient import TestClient
 
+from aintercept_api import claude_code as cc
 from aintercept_api.app import create_app
+from aintercept_api.rows import request_row_from_table, request_rows
 from aintercept_api.store import Store
 from tests.builders import Dataset
 
@@ -122,7 +125,34 @@ def client_for():
 
     yield make
     for s in stores:
+        assert_request_rows_parity(s)
         s.close()
+
+
+def assert_request_rows_parity(store: Store) -> None:
+    """The processor's request_rows table holds exactly the rows rows.request_rows derives, for every
+    person (docs/architecture.md, Decision 4): checked over every test's dataset at its end."""
+    store.ingest()
+    try:
+        manifest = json.loads((store.shaped_dir / "manifest.json").read_text())
+    except FileNotFoundError:
+        return
+    key = manifest.get("snapshots", {}).get("request_rows")
+    if not key:
+        return
+    people = {r[0] for r in store.query("SELECT account_id FROM accounts UNION SELECT person_id FROM people")}
+    want = sorted(
+        json.dumps({"person": pid, **r.model_dump(mode="json")}, sort_keys=True)
+        for pid in people | {cc.UNATTRIBUTED}
+        for r in request_rows(store, cc.load_person(store, pid))
+    )
+    cur = duckdb.connect().execute("SELECT * FROM read_parquet(?)", [str(store.shaped_dir / key)])
+    cols = [c[0] for c in cur.description]
+    got = sorted(
+        json.dumps({"person": r["person_id"], **request_row_from_table(r).model_dump(mode="json")}, sort_keys=True)
+        for r in (dict(zip(cols, t, strict=True)) for t in cur.fetchall())
+    )
+    assert got == want
 
 
 def operation_for(app, method: str, path: str, status: int) -> tuple[str, str]:

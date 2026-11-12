@@ -1,8 +1,8 @@
 """Timeline lanes shared by the person and session timelines (handoff §4 TimelineData,
 §5.2.5, §5.2.8). Every mark carries what its tooltip shows (§6B.10): tooltips never fetch."""
 
-from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Mapping
+from typing import Any
 
 from aintercept_api import claude_code as cc
 from aintercept_api import session as ss
@@ -17,7 +17,7 @@ from aintercept_api.models.people import (
     TimelinePrompt,
     TimelineSession,
 )
-from aintercept_api.rows import dt, label
+from aintercept_api.rows import dt
 from aintercept_api.store import Store
 
 TOP_EVENTS = 3
@@ -29,109 +29,98 @@ def _sum(vals: list[int | None]) -> int | None:
     return sum(known) if known else None
 
 
-def band(s: cc.Session, now: int, row: int) -> TimelineSession:
-    live = s.live(now)
+def band_from_table(r: Mapping[str, Any], row: int, alone: bool = False) -> TimelineSession:
+    """A session_rows row (with `live`) as its timeline band: field copies only."""
     return TimelineSession(
-        sessionId=s.id,
-        start=dt(s.start),
-        end=None if live else dt(s.last),
-        label=label(s.id, s.title).text,
+        sessionId=r["session_id"],
+        start=dt(r["start_ns"]),
+        end=None if r["live"] else dt(r["last_ns"]),
+        label=r["label_text_alone" if alone else "label_text"],
         row=row,
-        live=live,
-        capturedFromPrompt=cc.captured_from_prompt(s),
+        live=r["live"],
+        capturedFromPrompt=r["captured_from_prompt"],
         repo=None,  # M7 extraction
         branch=None,
-        prompts=len(cc.prompt_ids(s)) or None,
-        modelCalls=len(s.calls),
+        prompts=r["prompts"],
+        modelCalls=r["model_calls"],
     )
 
 
-def prompts(store: Store, sessions: list[cc.Session], now: int, within: Callable[[int], bool]) -> list[TimelinePrompt]:
-    """One mark per typed prompt (tengu_input_prompt), with the prompt row's numbers."""
-    out = [
-        TimelinePrompt(
-            t=p.t,
-            index=p.index,
-            sessionId=s.id,
-            promptId=p.promptId,
-            text=p.text,
-            steps=p.steps,
-            durationMs=p.durationMs,
-            tokensIn=p.tokensIn,
-            tokensOut=p.tokensOut,
-        )
-        for s in sessions
-        for p in ss.typed_prompts(store, s, now)
-        if within(cc.to_ns(p.t))
-    ]
-    return sorted(out, key=lambda p: (p.t, p.sessionId))
+def prompts(store: Store, session_ids: list[str], now: int, lo: int | None, hi: int | None) -> list[TimelinePrompt]:
+    """One mark per typed prompt (tengu_input_prompt) in [lo, hi] (None: all), with the prompt
+    row's numbers."""
+    return ss.timeline_prompts(store, session_ids, now, lo, hi)
 
 
-def model_calls(calls: list[cc.Call], missed: list[int], bin_s: int) -> list[ModelCallBin]:
+def model_calls(store: Store, sids: list[str], bin_s: int, lo: int | None, hi: int | None) -> list[ModelCallBin]:
     """Bins with a captured call or a reported-but-not-captured one."""
-    by_bin: dict[int, list[cc.Call]] = defaultdict(list)
-    for c in calls:
-        by_bin[cc.bin_start(c.ts, bin_s)].append(c)
-    gaps = Counter(cc.bin_start(t, bin_s) for t in missed)
-    out = []
-    for t in sorted(set(by_bin) | set(gaps)):
-        cs = by_bin.get(t, [])
-        classes = Counter(c.request_class for c in cs)
-        out.append(
-            ModelCallBin(
-                t=dt(t),
-                count=len(cs),
-                tokens=sum(c.output_tokens or 0 for c in cs),
-                byClass=CallClasses(
-                    main=classes["main"],
-                    subagent=classes["subagent"],
-                    auxiliary=len(cs) - classes["main"] - classes["subagent"],
-                ),
-                tokensIn=_sum([c.context for c in cs]),
-                tokensOut=_sum([c.output_tokens for c in cs]),
-                notCaptured=gaps.get(t, 0),
-            )
+    rows = store.query(
+        f"""WITH c AS (
+              SELECT t_ns - t_ns % ? AS t, count(*) AS n, coalesce(sum(output), 0) AS tokens,
+                     count_if(request_class = 'main') AS main, count_if(request_class = 'subagent') AS sub,
+                     sum(context) AS tin, sum(output) AS tout
+              {ss.MARKS} GROUP BY 1),
+            m AS (SELECT t_ns - t_ns % ? AS t, count(*) AS n {ss.MARKS} GROUP BY 1)
+            SELECT coalesce(c.t, m.t), coalesce(c.n, 0), coalesce(c.tokens, 0), coalesce(c.main, 0),
+                   coalesce(c.sub, 0), c.tin, c.tout, coalesce(m.n, 0)
+            FROM c FULL JOIN m ON c.t = m.t ORDER BY 1""",  # noqa: S608 (fixed text; values are parameters)
+        [
+            bin_s * cc.NS,
+            *ss.marks_params("call", sids, lo, hi),
+            bin_s * cc.NS,
+            *ss.marks_params("missed", sids, lo, hi),
+        ],
+    )
+    return [
+        ModelCallBin(
+            t=dt(t),
+            count=n,
+            tokens=tokens,
+            byClass=CallClasses(main=main, subagent=sub, auxiliary=n - main - sub),
+            tokensIn=tin,
+            tokensOut=tout,
+            notCaptured=missed,
         )
-    return out
-
-
-def _by_count(kv: tuple[str, int]) -> tuple[int, str]:
-    return -kv[1], kv[0]
+        for t, n, tokens, main, sub, tin, tout, missed in rows
+    ]
 
 
 def analytics(store: Store, sids: list[str], bin_s: int, lo: int | None, hi: int | None) -> list[AnalyticsBin]:
-    rows = store.query(
-        """SELECT ts - ts % ?, coalesce(name, '(unnamed)'), count(*) FROM cc_events
-           WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND (? OR ts BETWEEN ? AND ?) GROUP BY 1, 2""",
-        [bin_s * cc.NS, sids, lo is None or hi is None, lo or 0, hi or 0],
-    )
-    by_bin: dict[int, Counter[str]] = defaultdict(Counter)
-    for t, name, n in rows:
-        by_bin[t][name] += n
+    """Each bin's events and its three commonest names (most first, then by name): SQL over the
+    processor's event_rows."""
     return [
-        AnalyticsBin(
-            t=dt(t),
-            count=sum(names.values()),
-            top=[EventCount(name=k, count=n) for k, n in sorted(names.items(), key=_by_count)[:TOP_EVENTS]],
+        AnalyticsBin(t=dt(t), count=n, top=[EventCount(name=k, count=c) for k, c in zip(names, counts, strict=True)])
+        for t, n, names, counts in store.query(
+            f"""WITH c AS (
+                  SELECT ts_ns - ts_ns % ? AS t, name, count(*) AS n FROM event_rows
+                  WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND (? OR ts_ns BETWEEN ? AND ?) GROUP BY 1, 2)
+                SELECT t, sum(n)::BIGINT, list(name ORDER BY n DESC, name)[:{TOP_EVENTS}],
+                       list(n ORDER BY n DESC, name)[:{TOP_EVENTS}]
+                FROM c GROUP BY t ORDER BY t""",  # noqa: S608 (a constant; values are parameters)
+            [bin_s * cc.NS, sids, lo is None or hi is None, lo or 0, hi or 0],
         )
-        for t, names in sorted(by_bin.items())
     ]
 
 
-def gaps(sessions: list[cc.Session], within: Callable[[int], bool]) -> list[GapWindow]:
+def gaps(store: Store, sids: list[str], lo: int | None, hi: int | None) -> list[GapWindow]:
     """Not-captured windows, each with the reported calls inside it and how many were captured."""
-    missed = [t for s in sessions for t in (cc.unmatched_reports(s) or []) if within(t)]
-    reported = [e.ts for s in sessions for e in s.events if e.name == "tengu_api_success"]
-    captured = [c.ts for s in sessions for c in s.calls]
-    out = []
-    for a, b, n in cc.windows(missed):
-        r = sum(1 for t in reported if a <= t <= b)
-        # No model call captured at all while Claude Code's analytics were: the client was
-        # routing its model calls around the proxy (as over IPv6 before the AAAA fix).
-        bypassed = not any(a <= t <= b for t in captured)
-        cause = BYPASS_CAUSE if bypassed else None
-        out.append(GapWindow(from_=dt(a), to=dt(b), count=n, reported=r, captured=r - n, cause=cause))
-    return out
+    cte, params = ss.gap_windows(sids, lo, hi)
+    rows = store.query(
+        f"""WITH {cte}
+            SELECT a, b, n,
+                   (SELECT count(*) FROM session_marks r WHERE r.kind = 'reported'
+                      AND r.session_id IN (SELECT unnest(?::VARCHAR[])) AND r.t_ns BETWEEN a AND b),
+                   NOT EXISTS (SELECT 1 FROM session_marks c WHERE c.kind = 'call'
+                      AND c.session_id IN (SELECT unnest(?::VARCHAR[])) AND c.t_ns BETWEEN a AND b)
+            FROM windows ORDER BY a""",  # noqa: S608 (fixed text; values are parameters)
+        [*params, sids, sids],
+    )
+    # No model call captured at all while Claude Code's analytics were: the client was
+    # routing its model calls around the proxy (as over IPv6 before the AAAA fix).
+    return [
+        GapWindow(from_=dt(a), to=dt(b), count=n, reported=r, captured=r - n, cause=BYPASS_CAUSE if bypassed else None)
+        for a, b, n, r, bypassed in rows
+    ]
 
 
 BYPASS_CAUSE = (
@@ -140,38 +129,58 @@ BYPASS_CAUSE = (
 )
 
 
-def presence(segs: list[tuple[int, int, str]]) -> list[PresenceSegment]:
+PRESENCE_SQL = """
+    WITH s AS (SELECT session_id, last_ns, ? - last_ns <= ? AS live FROM session_rows
+               WHERE session_id IN (SELECT unnest(?::VARCHAR[]))),
+         seg AS (SELECT p.from_ns AS a, CASE WHEN s.live AND p.state <> 'asleep' THEN least(p.to_ns, ?)
+                                            ELSE p.to_ns END AS b, p.state
+                 FROM presence_segments p JOIN s USING (session_id)
+                 UNION ALL SELECT last_ns, ?, 'focused' FROM s WHERE live AND ? > last_ns),
+         cuts AS (SELECT a AS t FROM seg UNION SELECT b FROM seg),
+         pairs AS (SELECT t AS a, lead(t) OVER (ORDER BY t) AS b FROM cuts),
+         st AS (SELECT p.a, p.b, CASE WHEN bool_or(seg.state = 'asleep') THEN 'asleep'
+                                      WHEN bool_or(seg.state = 'focused') THEN 'focused' ELSE 'away' END AS state
+                FROM pairs p JOIN seg ON seg.a <= p.a AND p.a < seg.b
+                WHERE p.b IS NOT NULL GROUP BY p.a, p.b HAVING bool_or(seg.state <> 'asleep')),
+         runs AS (SELECT a, b, state, sum(CASE WHEN prev_b = a AND prev_state = state THEN 0 ELSE 1 END)
+                                         OVER (ORDER BY a) AS k
+                  FROM (SELECT *, lag(b) OVER (ORDER BY a) AS prev_b, lag(state) OVER (ORDER BY a) AS prev_state
+                        FROM st)),
+         merged AS (SELECT min(a) AS a, max(b) AS b, any_value(state) AS state FROM runs GROUP BY k)
+    SELECT greatest(a, ?), least(b, ?), state FROM merged WHERE b > ? AND a < ? ORDER BY a"""
+
+
+def presence(store: Store, sids: list[str], now: int, lo: int | None, hi: int | None) -> list[PresenceSegment]:
+    """Focused, away and asleep over the sessions shown, from their presence_segments rows (asleep
+    where any sleeps, else focused where any open one is, else away where one is open), cut to the
+    range. A live session is open, and focused, until now."""
+    lo_, hi_ = lo if lo is not None else -(2**63), hi if hi is not None else 2**63 - 1
+    rows = store.query(PRESENCE_SQL, [now, cc.LIVE_WITHIN_NS, sids, now, now, now, lo_, hi_, lo_, hi_])
     return [
         PresenceSegment(from_=dt(a), to=dt(b), state=st, source="sleep" if st == "asleep" else "focus")
-        for a, b, st in segs
+        for a, b, st in rows
     ]
 
 
-def friction(sessions: list[cc.Session], bin_s: int, within: Callable[[int], bool]) -> list[FrictionMark]:
+def friction(store: Store, sids: list[str], bin_s: int, lo: int | None, hi: int | None) -> list[FrictionMark]:
     """One mark per (bin, kind); its prompt is the first incident's, its detail lists what happened."""
-    marks: dict[tuple[int, str], list[tuple[int, cc.Ev, dict[str, int]]]] = defaultdict(list)
-    for s in sessions:
-        index = cc.prompt_index(s)
-        for t, kind, e in cc.friction_marks(s):
-            if within(t):
-                marks[(cc.bin_start(t, bin_s), kind)].append((t, e, index))
-    out = []
-    for (t, kind), incidents in sorted(marks.items()):
-        incidents.sort(key=lambda x: x[0])
-        _, first, index = incidents[0]
-        if kind == "destructive":
-            details = [" · ".join(x for x in (e.destructive, e.destructive_scope) if x) for _, e, _ in incidents]
-            detail = ", ".join(dict.fromkeys(details))
-        else:
-            detail = FRICTION_DETAIL[kind]
-        out.append(
-            FrictionMark(
-                t=dt(t),
-                kind=kind,
-                count=len(incidents),
-                promptIndex=first.prompt_index if kind == "frustrated" else index.get(first.prompt_id or ""),
-                detail=detail,
-                tool="Bash" if kind == "destructive" else None,  # destructive marks are Bash commands
-            )
+    rows = store.query(
+        f"""WITH f AS (SELECT t_ns - t_ns % ? AS b, friction_kind AS kind, (t_ns, session_id, seq) AS o, prompt_index,
+                              detail {ss.MARKS}),
+            d AS (SELECT b, kind, detail, min(o) AS o FROM f GROUP BY ALL)
+            SELECT b, kind, count(*), list(prompt_index ORDER BY o)[1],
+                   (SELECT string_agg(d.detail, ', ' ORDER BY d.o) FROM d WHERE d.b = f.b AND d.kind = f.kind)
+            FROM f GROUP BY 1, 2 ORDER BY 1, 2""",  # noqa: S608 (fixed text; values are parameters)
+        [bin_s * cc.NS, *ss.marks_params("friction", sids, lo, hi)],
+    )
+    return [
+        FrictionMark(
+            t=dt(t),
+            kind=kind,
+            count=n,
+            promptIndex=index,
+            detail=detail if kind == "destructive" else FRICTION_DETAIL[kind],
+            tool="Bash" if kind == "destructive" else None,  # destructive marks are Bash commands
         )
-    return out
+        for t, kind, n, index, detail in rows
+    ]

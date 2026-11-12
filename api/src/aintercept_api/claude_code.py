@@ -1,4 +1,7 @@
-"""Coding-agent person and session rollups, from the cc_calls / cc_events views.
+"""Coding-agent sessions loaded from the cc_calls / cc_events views: what the request drawer
+reads of a session, and the reference the processor's tables are tested against. Every page's
+rollups are SQL over the processor's tables (rollups.py; docs/architecture.md, Decision 4),
+which keep these rules.
 
 Every agent's sessions load the same way (cc_calls holds Claude Code's and Codex's
 model calls); the analytics-driven facts (coverage, presence, friction) come from
@@ -14,12 +17,9 @@ Rules (handoff §1.1, §5.2.5, §5.4; docs/ui/handoff/context/DATA_ANSWERS.md):
 - Presence: focus is per session (tengu_return_to_session blur windows), sleep
   per device (tengu_event_loop_stall likely_sleep). At each instant: asleep if
   any device sleeps, else focused if any open session is focused, else away if
-  a session is open.
+  a session is open. The processor writes it (presence_segments, timeline.presence).
 """
 
-import bisect
-import math
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -158,18 +158,6 @@ def linked_accounts(store: Store, person_id: str) -> list[str]:
     return sorted({person_id, *(r[0] for r in rows)})
 
 
-def email_groups(store: Store) -> dict[str, list[str]]:
-    """Each account linked to others by email -> the group's accounts, sorted (only groups of 2+)."""
-    groups: dict[str, list[str]] = {}
-    for (accts,) in store.query(
-        """SELECT list(DISTINCT account_id ORDER BY account_id) FROM accounts
-           WHERE email IS NOT NULL AND email <> '' GROUP BY lower(email) HAVING count(DISTINCT account_id) > 1"""
-    ):
-        for a in accts:
-            groups[a] = list(accts)
-    return groups
-
-
 def person_sessions(store: Store, accounts: list[str]) -> list[str]:
     """Every session any of the accounts appears on (a call or an event)."""
     return [
@@ -185,16 +173,10 @@ def person_sessions(store: Store, accounts: list[str]) -> list[str]:
 
 def load_person(store: Store, person_id: str) -> dict[str, Session]:
     """Every session attributed to the person (all their linked accounts), with its calls and the
-    events rollups need. `UNATTRIBUTED` loads the sessions no account id appears on, as one person-like page.
-    Shared: callers must not mutate it."""
-
-    def build() -> dict[str, Session]:
-        if person_id == UNATTRIBUTED:
-            return load_sessions(store, unattributed_sessions(store))
-        return load_sessions(store, person_sessions(store, linked_accounts(store, person_id)))
-
-    # Once per commit: every person endpoint starts here, several per poll.
-    return store.memo(("person", person_id), build)
+    events rollups need. `UNATTRIBUTED` loads the sessions no account id appears on, as one person-like page."""
+    if person_id == UNATTRIBUTED:
+        return load_sessions(store, unattributed_sessions(store))
+    return load_sessions(store, person_sessions(store, linked_accounts(store, person_id)))
 
 
 def unattributed_sessions(store: Store) -> list[str]:
@@ -351,73 +333,7 @@ def missed_calls(s: Session) -> list[Ev] | None:
     ]
 
 
-def unmatched_reports(s: Session) -> list[int] | None:
-    """Timestamps of reported-but-not-captured calls; None when the session has no analytics."""
-    missed = missed_calls(s)
-    return None if missed is None else [e.ts for e in missed]
-
-
-def windows(timestamps: list[int]) -> list[tuple[int, int, int]]:
-    """Group timestamps into (from, to, count) windows split by gaps >= 15 minutes."""
-    out: list[list[int]] = []
-    for t in sorted(timestamps):
-        if out and t - out[-1][1] < GAP_SPLIT_NS:
-            out[-1][1] = t
-            out[-1][2] += 1
-        else:
-            out.append([t, t, 1])
-    return [(a, b, n) for a, b, n in out]
-
-
-def coverage(s: Session) -> tuple[int | None, int, int, list[tuple[int, int, int]]]:
-    """(reported, captured, notCaptured, windows) for a session."""
-    missing = unmatched_reports(s)
-    if missing is None:
-        return None, len(s.calls), 0, []
-    reported = sum(1 for e in s.events if e.name == "tengu_api_success")
-    return reported, reported - len(missing), len(missing), windows(missing)
-
-
 # --- per-session facts ------------------------------------------------------------------------
-
-
-def bypass_pct(s: Session) -> float | None:
-    modes = [e.permission_mode for e in s.events if e.name == "tengu_api_query" and e.permission_mode]
-    if not modes:
-        return None
-    return round(100 * sum(m == "bypassPermissions" for m in modes) / len(modes), 1)
-
-
-def captured_from_prompt(s: Session) -> int | None:
-    idx = [e.prompt_index for e in s.events if e.name == "tengu_input_prompt" and e.prompt_index is not None]
-    return min(idx) if idx and min(idx) > 1 else None
-
-
-def friction_counts(s: Session) -> tuple[int, int, int]:
-    return (
-        sum(1 for e in s.events if e.name == "tengu_input_prompt" and e.is_negative),
-        sum(1 for e in s.events if e.name == "tengu_cancel"),
-        sum(1 for e in s.events if e.name == "tengu_bash_tool_command_executed" and e.destructive),
-    )
-
-
-def friction_marks(s: Session) -> list[tuple[int, str, Ev]]:
-    """(ts, kind, event) per friction incident."""
-    marks = [(e.ts, "frustrated", e) for e in s.events if e.name == "tengu_input_prompt" and e.is_negative]
-    marks += [(e.ts, "interrupted", e) for e in s.events if e.name == "tengu_cancel"]
-    marks += [
-        (e.ts, "destructive", e) for e in s.events if e.name == "tengu_bash_tool_command_executed" and e.destructive
-    ]
-    return marks
-
-
-def prompt_ids(s: Session) -> set[str]:
-    """Every prompt in the session, as the Prompts tab lists them: each typed prompt
-    (tengu_input_prompt), plus prompt ids seen only on calls (typed before capture
-    began). A prompt whose calls went around the proxy is still a prompt."""
-    ids = {c.prompt_id for c in s.calls if c.prompt_id}
-    ids |= {e.prompt_id or f"input:{e.ts}" for e in s.events if e.name == "tengu_input_prompt"}
-    return ids
 
 
 def prompt_index(s: Session) -> dict[str, int]:
@@ -427,63 +343,6 @@ def prompt_index(s: Session) -> dict[str, int]:
         for e in s.events
         if e.name == "tengu_input_prompt" and e.prompt_id and e.prompt_index is not None
     }
-
-
-def unreported_calls(s: Session) -> list[Call]:
-    """Captured calls with no tengu_api_success (by request id, else client request id): their cost is unknown."""
-    rids = {e.request_id for e in s.events if e.name == "tengu_api_success" and e.request_id}
-    crids = {e.client_request_id for e in s.events if e.name == "tengu_api_success" and e.client_request_id}
-    return [c for c in s.calls if c.request_id not in rids and c.client_request_id not in crids]
-
-
-# --- presence ---------------------------------------------------------------------------------
-
-
-def _merge(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    out: list[list[int]] = []
-    for a, b in sorted(intervals):
-        if out and a <= out[-1][1]:
-            out[-1][1] = max(out[-1][1], b)
-        else:
-            out.append([a, b])
-    return [(a, b) for a, b in out]
-
-
-def _inside(t: int, intervals: list[tuple[int, int]]) -> bool:
-    """Whether t falls in one of `_merge`'s intervals (sorted, disjoint): a binary search,
-    since presence asks once per cut."""
-    i = bisect.bisect_right(intervals, (t, math.inf)) - 1
-    return i >= 0 and t < intervals[i][1]
-
-
-def presence(sessions: list[Session], now: int) -> list[tuple[int, int, str]]:
-    """(from, to, state) segments, merged; empty where no session is open."""
-    opened = {s.id: (s.start, now if s.live(now) else s.last) for s in sessions}
-    blurred = {s.id: _merge([(e.ts - e.blur_ms * MS, e.ts) for e in s.events if e.blur_ms]) for s in sessions}
-    sleep = _merge([(e.ts - e.sleep_ms * MS, e.ts) for s in sessions for e in s.events if e.sleep_ms])
-    cuts = sorted(
-        {t for a, b in opened.values() for t in (a, b)}
-        | {t for iv in blurred.values() for a, b in iv for t in (a, b)}
-        | {t for a, b in sleep for t in (a, b)}
-    )
-    segs: list[tuple[int, int, str]] = []
-    for a, b in zip(cuts, cuts[1:], strict=False):
-        if a == b:
-            continue
-        open_ids = [sid for sid, (lo, hi) in opened.items() if lo <= a < hi]
-        if not open_ids:
-            continue
-        if _inside(a, sleep):
-            state = "asleep"
-        elif any(not _inside(a, blurred[sid]) for sid in open_ids):
-            state = "focused"
-        else:
-            state = "away"
-        if segs and segs[-1][2] == state and segs[-1][1] == a:
-            segs[-1] = (segs[-1][0], b, state)
-        else:
-            segs.append((a, b, state))
-    return segs
 
 
 def pack_rows(spans: list[tuple[str, int, int]]) -> dict[str, int]:
@@ -509,17 +368,3 @@ def auto_bin_seconds(span_ns: int) -> int:
     if span_ns <= 14 * 86400 * NS:
         return 3600
     return 86400
-
-
-def bin_start(ts: int, bin_s: int) -> int:
-    return ts - ts % (bin_s * NS)
-
-
-def group(items: list[tuple[int, int]], bin_s: int) -> list[tuple[int, int, int]]:
-    """(ts, value) -> sorted (bin, count, sum of values)."""
-    acc: dict[int, list[int]] = defaultdict(lambda: [0, 0])
-    for ts, v in items:
-        b = acc[bin_start(ts, bin_s)]
-        b[0] += 1
-        b[1] += v
-    return [(t, n, v) for t, (n, v) in sorted(acc.items())]
