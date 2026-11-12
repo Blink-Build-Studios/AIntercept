@@ -50,7 +50,7 @@ func TestRealData(t *testing.T) {
 	}
 	sort.Strings(names)
 	covered := map[string]bool{CaseDuplicate: true}
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases} {
+	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, sessionCases} {
 		for _, c := range cs {
 			for _, x := range c.cases {
 				covered[x] = true
@@ -121,6 +121,15 @@ func TestRealData(t *testing.T) {
 		} else {
 			t.Logf("%s: %d rows, equal", c.name, reflect.ValueOf(c.want).Len())
 		}
+	}
+	gotSes, wantSes := sessionRowsOf(o), refSessionRows(ref)
+	for i := range gotSes {
+		normalizeSessionRow(&gotSes[i])
+	}
+	if !reflect.DeepEqual(gotSes, wantSes) {
+		t.Errorf("session rows: %d, want %d; %s", len(gotSes), len(wantSes), sessionRowDiff(gotSes, wantSes))
+	} else {
+		t.Logf("session rows: %d, equal", len(wantSes))
 	}
 	t.Logf("presence %d rows, event rows %d, session tools %d: compared", len(want), len(wantEv), len(wantTools))
 }
