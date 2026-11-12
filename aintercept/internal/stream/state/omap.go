@@ -129,3 +129,46 @@ func (m *omap[K, V]) All(fn func(K, V) bool) {
 		}
 	}
 }
+
+// Lower is the greatest entry strictly before k.
+func (m *omap[K, V]) Lower(k K) (K, V, bool) {
+	var zk K
+	var zv V
+	if len(m.chunks) == 0 {
+		return zk, zv, false
+	}
+	ci, j, _ := m.find(k)
+	if j > 0 {
+		e := m.chunks[ci].e[j-1]
+		return e.k, e.v, true
+	}
+	if ci > 0 {
+		c := m.chunks[ci-1].e
+		e := c[len(c)-1]
+		return e.k, e.v, true
+	}
+	return zk, zv, false
+}
+
+// First is the least entry.
+func (m *omap[K, V]) First() (K, V, bool) {
+	var zk K
+	var zv V
+	if len(m.chunks) == 0 {
+		return zk, zv, false
+	}
+	e := m.chunks[0].e[0]
+	return e.k, e.v, true
+}
+
+// Last is the greatest entry.
+func (m *omap[K, V]) Last() (K, V, bool) {
+	var zk K
+	var zv V
+	if len(m.chunks) == 0 {
+		return zk, zv, false
+	}
+	c := m.chunks[len(m.chunks)-1].e
+	e := c[len(c)-1]
+	return e.k, e.v, true
+}

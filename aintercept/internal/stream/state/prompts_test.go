@@ -53,23 +53,29 @@ func codexTurnEvent(thread, turn string, t int64, md string) records.Record {
 	return rec(records.Record{Kind: records.KindClientEvent, EventKey: key, BatchID: b, BatchN: batchN[b], Event: e})
 }
 
+// typedPrompt is a tengu_input_prompt of prompt pid (in its prompt_id column and
+// metadata), numbered n.
+func typedPrompt(s, pid string, n string, t int64) records.Record {
+	return pev(s, pid, "tengu_input_prompt", t, fmt.Sprintf(`{"cc_prompt_id":%q,"prompt_index":%s,"prompt_length":%d}`, pid, n, len(pid)+3))
+}
+
 func prompted(pid string) func() []records.Record {
-	return func() []records.Record { return []records.Record{inputPrompt("s1", pid, "1", 1000)} }
+	return func() []records.Record { return []records.Record{typedPrompt("s1", pid, "1", 1000)} }
 }
 
 var promptCases = []atomicCase{
 	{"an input prompt makes its prompt", nil,
-		func() records.Record { return inputPrompt("s1", "p1", "3", 1000) },
+		func() records.Record { return typedPrompt("s1", "p1", "3", 1000) },
 		[]string{CasePromptInput, CaseMarkPromptIndex}},
 	{"a later input prompt takes over the marks' number", prompted("p1"),
-		func() records.Record { return inputPrompt("s1", "p1", "4", 2000) },
+		func() records.Record { return typedPrompt("s1", "p1", "4", 2000) },
 		[]string{CasePromptInput, CaseMarkPromptIndex}},
 	{"an earlier input prompt becomes the prompt's input", prompted("p1"),
-		func() records.Record { return inputPrompt("s1", "p1", "2", 500) },
+		func() records.Record { return typedPrompt("s1", "p1", "2", 500) },
 		[]string{CasePromptInput}},
 	{"a negative input is frustrated", nil,
 		func() records.Record {
-			return ccEvent("s1", "tengu_input_prompt", 1000, `{"cc_prompt_id":"p1","prompt_index":1,"is_negative":true}`)
+			return pev("s1", "p1", "tengu_input_prompt", 1000, `{"cc_prompt_id":"p1","prompt_index":1,"is_negative":true}`)
 		},
 		[]string{CasePromptInput, CaseMarkFriction}},
 	{"an input with no prompt id is a prompt of its own", nil,
@@ -100,9 +106,9 @@ var promptCases = []atomicCase{
 		[]string{CasePromptPaste}},
 	{"a typed prompt between a paste and its prompt takes the paste",
 		func() []records.Record {
-			return []records.Record{ccEvent("s1", "tengu_paste_text", 1500, `{"pastedTextBytes":40}`), inputPrompt("s1", "p2", "2", 2000)}
+			return []records.Record{ccEvent("s1", "tengu_paste_text", 1500, `{"pastedTextBytes":40}`), typedPrompt("s1", "p2", "2", 2000)}
 		},
-		func() records.Record { return inputPrompt("s1", "p1", "1", 1800) },
+		func() records.Record { return typedPrompt("s1", "p1", "1", 1800) },
 		[]string{CasePromptInput}},
 	{"a prewarm goes to the next prompt", prompted("p1"),
 		func() records.Record { return callEnd(hidden(step("h1", "s1", "", 500))) },
@@ -112,9 +118,9 @@ var promptCases = []atomicCase{
 		[]string{CasePromptHidden}},
 	{"a new prompt takes a hidden call from its neighbour",
 		func() []records.Record {
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callEnd(hidden(step("h1", "s1", "", 3000))), inputPrompt("s1", "p3", "3", 5000)}
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callEnd(hidden(step("h1", "s1", "", 3000))), typedPrompt("s1", "p3", "3", 5000)}
 		},
-		func() records.Record { return inputPrompt("s1", "p2", "2", 4000) },
+		func() records.Record { return typedPrompt("s1", "p2", "2", 4000) },
 		[]string{CasePromptInput, CasePromptHidden}},
 	{"a Codex turn's report", func() []records.Record {
 		return []records.Record{callEnd(codexCall("x1", "th1", "turn1", 1000))}
@@ -131,19 +137,19 @@ var promptCases = []atomicCase{
 		[]string{CaseStepPending, CaseMarkCall}},
 	{"its ending replaces a step in flight",
 		func() []records.Record {
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callStart(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))}
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callStart(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))}
 		},
 		func() records.Record { return callEnd(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1")) },
 		[]string{CaseStepCall, CaseMarkCall}},
 	{"its ending hides a step in flight",
 		func() []records.Record {
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callStart(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))}
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callStart(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))}
 		},
 		func() records.Record { return callEnd(hidden(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))) },
 		[]string{CaseStepGone, CasePromptHidden}},
 	{"a report reaches its step and call mark",
 		func() []records.Record {
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callEnd(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))}
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callEnd(withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1"))}
 		},
 		func() records.Record { return success("s1", 2600, "r1") },
 		[]string{CaseStepSuccess, CaseMarkReported, CaseMarkUnreported}},
@@ -168,7 +174,7 @@ var promptCases = []atomicCase{
 		[]string{CaseStepTick}},
 	{"a Bash event joins its step's tool",
 		func() []records.Record {
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callEnd(withIDs(step("c1", "s1", "p1", 2000), "r1", "")),
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callEnd(withIDs(step("c1", "s1", "p1", 2000), "r1", "")),
 				pev("s1", "p1", "tengu_tool_use_success", 2500, `{"requestId":"r1","toolName":"Bash","toolUseID":"tu1"}`)}
 		},
 		func() records.Record {
@@ -179,7 +185,7 @@ var promptCases = []atomicCase{
 		func() []records.Record {
 			a := step("c1", "s1", "p1", 2000)
 			a.DetailJSON = `{"calls":[{"id":"t1","commands":["ls"]}]}`
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callEnd(a)}
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callEnd(a)}
 		},
 		func() records.Record {
 			b := step("c2", "s1", "p1", 1500)
@@ -272,11 +278,11 @@ func TestPromptsShortSequencesEveryOrder(t *testing.T) {
 	sets := map[string]func() []records.Record{
 		"prompt, its step in flight and ended, its report": func() []records.Record {
 			c := withIDs(step("c1", "s1", "p1", 2000), "r1", "cr1")
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), callStart(c), callEnd(c), success("s1", 2600, "r1"),
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), callStart(c), callEnd(c), success("s1", 2600, "r1"),
 				pev("s1", "p1", "tengu_turn_end", 3000, `{}`)}
 		},
 		"two prompts, a paste and a hidden call": func() []records.Record {
-			return []records.Record{inputPrompt("s1", "p1", "1", 1000), inputPrompt("s1", "p2", "2", 4000),
+			return []records.Record{typedPrompt("s1", "p1", "1", 1000), typedPrompt("s1", "p2", "2", 4000),
 				ccEvent("s1", "tengu_paste_text", 3000, `{"pastedTextBytes":7}`), callEnd(hidden(step("h1", "s1", "", 2000))),
 				callEnd(step("c1", "s1", "p2", 4500))}
 		},
@@ -328,7 +334,7 @@ func generatePrompts(rng *rand.Rand, n, per int) []records.Record {
 			rid := fmt.Sprintf("r%d", rng.Intn(per/5+1))
 			switch rng.Intn(20) {
 			case 0, 1:
-				out = append(out, inputPrompt(s, pid, fmt.Sprint(rng.Intn(9)), t))
+				out = append(out, typedPrompt(s, pid, fmt.Sprint(rng.Intn(9)), t))
 			case 2:
 				out = append(out, ccEvent(s, "tengu_input_prompt", t, `{"prompt_length":5,"is_negative":true}`))
 			case 3:
@@ -448,7 +454,7 @@ func TestPromptsFlatCost(t *testing.T) {
 			at := int64(i) * 1000
 			switch i % 8 {
 			case 0:
-				s.Apply(inputPrompt("big", pid, "1", at))
+				s.Apply(typedPrompt("big", pid, "1", at))
 			case 1, 2:
 				s.Apply(callEnd(withIDs(step(fmt.Sprintf("c%d", i), "big", pid, at), fmt.Sprintf("r%d", i), "")))
 			case 3:
@@ -469,7 +475,7 @@ func TestPromptsFlatCost(t *testing.T) {
 			pid := fmt.Sprintf("q%d", k/6)
 			switch k % 6 {
 			case 0:
-				pre[k] = inputPrompt("big", pid, "1", at)
+				pre[k] = typedPrompt("big", pid, "1", at)
 			case 1:
 				pre[k] = callEnd(withIDs(step(fmt.Sprintf("cx%d", k), "big", pid, at), fmt.Sprintf("rx%d", k), ""))
 			case 2:

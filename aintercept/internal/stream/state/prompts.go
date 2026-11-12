@@ -1,9 +1,6 @@
 package state
 
-import (
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
-)
+import "github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 
 // The prompt list's tables (process promptrows.go) in their stored shape, and
 // the lookups the query joins to rebuild today's rows (the API's
@@ -110,10 +107,3 @@ type MarkPromptIndex struct {
 	PromptID  string `parquet:"prompt_id"`
 	Index     int64  `parquet:"prompt_index"`
 }
-
-// promptsState is the key's indexes for the prompt tables and marks.
-type promptsState struct{}
-
-func newPromptsState() *promptsState { return &promptsState{} }
-
-func (s *KeyState) prompts(r records.Record, d *Delta) {}

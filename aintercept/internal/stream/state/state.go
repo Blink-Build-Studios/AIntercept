@@ -40,12 +40,13 @@ type KeyState struct {
 	segs *omap[int64, Presence] // the span's focused and away segments, by start
 	ev   *eventsState
 	dm   *dimsState
+	pr   *promptsState
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -60,11 +61,36 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.presence(&d, ch)
 	s.events(r, &d)
 	s.dims(r, &d)
+	s.prompts(r, &d)
+	d.Changes = lastChanges(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
 	})
 	return d
+}
+
+// lastChanges keeps each row's last change: one record can write a row more than
+// once (a prompt its call and its hidden call both touch), and only the last is
+// the row.
+func lastChanges(cs []Change) []Change {
+	if len(cs) < 2 {
+		return cs
+	}
+	last := make(map[[2]string]int, len(cs))
+	for i, c := range cs {
+		last[[2]string{c.Table, c.ID}] = i
+	}
+	if len(last) == len(cs) {
+		return cs
+	}
+	out := cs[:0:0]
+	for i, c := range cs {
+		if last[[2]string{c.Table, c.ID}] == i {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // rowSet is the rows a key has written, by table and id: what a change is
@@ -115,6 +141,9 @@ type snapshot struct {
 	Tools   map[string]int64
 	Turns   map[string]int64
 	Dims    dimsSnap
+	// Prompts is the records the prompt tables and marks hold: Decode applies
+	// them again to rebuild their indexes.
+	Prompts []records.Record
 }
 
 // dimsSnap is the dimension indexes, for Encode.
@@ -153,7 +182,7 @@ func init() {
 // Encode is the state as bytes, for a checkpoint.
 func Encode(s *KeyState) ([]byte, error) {
 	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
-		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap()}
+		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Prompts: s.pr.snap()}
 	byAt := map[string]string{}
 	for call, la := range s.ev.callLink {
 		byAt[la.rid+"\x00"+la.at.id] = call
@@ -212,6 +241,7 @@ func Decode(b []byte) (*KeyState, error) {
 		s.ev.turns = snap.Turns
 	}
 	s.dm = dimsFrom(snap.Dims)
+	s.promptsFrom(snap.Prompts)
 	return s, nil
 }
 
