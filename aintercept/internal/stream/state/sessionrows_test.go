@@ -417,7 +417,7 @@ func generateSessionRows(rng *rand.Rand, n int) []records.Record {
 	var out []records.Record
 	pick := func(xs ...string) string { return xs[rng.Intn(len(xs))] }
 	for i := 0; i < n; i++ {
-		t := int64(1000 + rng.Intn(600_000))
+		t := int64(1000+rng.Intn(600_000)) + int64(rng.Intn(3))*20*60*1000 // some 20 minutes apart: coverage windows split
 		s := fmt.Sprintf("gs-%d", rng.Intn(5))
 		th := fmt.Sprintf("gt-%d", rng.Intn(4))
 		a := pick("a1", "a2", "")
