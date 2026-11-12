@@ -658,7 +658,7 @@ func sortedKeyList[T any](m map[string]T) []string {
 // two can't drift). Row's Seq, PromptIndex, LinkKind, LinkID and LinkLabel are
 // unset; the link's inputs are ReqID, Tool, ToolName, Device and Prompt.
 type EventFacts struct {
-	Row                                  EventRow
+	Row                                   EventRow
 	ReqID, Tool, ToolName, Device, Prompt string
 	// UsedTool is the tool a tengu_tool_use_success names for the session's
 	// tools ("" for none), with its MCP server, or IsMCP with none.

@@ -67,8 +67,16 @@ func eventRowsOf(o *streamOut) []process.EventRow {
 				return a.TsNS < b.TsNS
 			case a.BatchID != b.BatchID:
 				return a.BatchID < b.BatchID
+			case a.EvSeq != b.EvSeq:
+				return a.EvSeq < b.EvSeq
+			case a.RowNS != b.RowNS:
+				return a.RowNS < b.RowNS
+			case a.Name != b.Name:
+				return a.Name < b.Name
+			case a.OrderMD != b.OrderMD:
+				return a.OrderMD < b.OrderMD
 			}
-			return a.N < b.N
+			return a.EventKey < b.EventKey
 		})
 		for i, e := range evs {
 			r := e.EventRow
@@ -180,6 +188,9 @@ var eventCases = []atomicCase{
 			return ccEvent("s1", "tengu_tool_use_success", 1000, `{"toolName":"mcp__srv__go"}`) // earlier: the first time moves
 		},
 		[]string{CaseEventRow + ".session", CaseSessionTool}},
+	{"a tool link with no tool name", nil,
+		func() records.Record { return ccEvent("s1", "tengu_other", 1000, `{"tool_use_id":"tu9"}`) },
+		[]string{CaseEventRow + ".tool"}},
 	{"a later use of a tool keeps its first time",
 		func() []records.Record {
 			return []records.Record{ccEvent("s1", "tengu_tool_use_success", 1000, `{"toolName":"Read"}`)}

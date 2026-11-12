@@ -46,15 +46,6 @@ func (m *omap[K, V]) find(k K) (int, int, bool) {
 	return ci, j, j < len(e) && !m.less(k, e[j].k)
 }
 
-func (m *omap[K, V]) Get(k K) (V, bool) {
-	ci, j, ok := m.find(k)
-	if !ok {
-		var zero V
-		return zero, false
-	}
-	return m.chunks[ci].e[j].v, true
-}
-
 func (m *omap[K, V]) Set(k K, v V) {
 	if len(m.chunks) == 0 {
 		m.chunks = []*chunk[K, V]{{e: []entry[K, V]{{k, v}}}}
@@ -106,13 +97,9 @@ func (m *omap[K, V]) Floor(k K) (K, V, bool) {
 		e := m.chunks[ci].e[j]
 		return e.k, e.v, true
 	}
-	if j > 0 {
+	if j > 0 { // chunkFor picked the last chunk starting at or before k, so j is 0 only when k is before every entry
 		e := m.chunks[ci].e[j-1]
 		return e.k, e.v, true
-	}
-	if ci > 0 { // k sorts before this chunk's first entry: the previous chunk's last
-		p := m.chunks[ci-1].e
-		return p[len(p)-1].k, p[len(p)-1].v, true
 	}
 	return zk, zv, false
 }

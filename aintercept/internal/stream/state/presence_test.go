@@ -138,6 +138,22 @@ var presenceCases = []atomicCase{
 			return callStart(c)
 		},
 		[]string{CaseStartNotVisible}},
+	{"a call with no start time counts at its end",
+		func() []records.Record { return []records.Record{ccEvent("s1", "tengu_api_query", 1000, `{}`)} },
+		func() records.Record { c := ccCall("c1", "s1", 4000); c.StartNS = 0; return callEnd(c) },
+		[]string{CaseCallVisible, CasePresenceRecut}},
+	{"a synthetic call doesn't count", nil,
+		func() records.Record { c := ccCall("c1", "s1", 4000); c.Synthetic = true; return callEnd(c) },
+		[]string{CaseCallNotVisible}},
+	{"a Codex turn in flight doesn't count", nil,
+		func() records.Record { return callStart(codexCall("x1#1", "s1", "t", 4000)) },
+		[]string{CaseStartNotVisible}},
+	{"a Codex call is visible in its thread", nil,
+		func() records.Record { return callEnd(codexCall("x1", "s1", "t", 4000)) },
+		[]string{CaseCallVisible, CasePresenceRecut}},
+	{"another product's call isn't", nil,
+		func() records.Record { c := ccCall("c1", "s1", 4000); c.Product = "other"; return callEnd(c) },
+		[]string{CaseCallNotVisible}},
 	{"an event of no session", nil,
 		func() records.Record { return ccEvent("", "tengu_api_query", 1000, `{}`) },
 		[]string{CaseEventNotSession}},
@@ -380,5 +396,25 @@ func TestPresenceFlatCost(t *testing.T) {
 	}
 	if big.perOp > 8*small.perOp+20*time.Microsecond {
 		t.Errorf("time grows with the session: %v at 10, %v at 100,000", small.perOp, big.perOp)
+	}
+}
+
+// A checkpoint round trip keeps every row, and a damaged one is an error.
+func TestEncodeDecode(t *testing.T) {
+	o := stream([]records.Record{ccEvent("s1", "tengu_api_query", 1000, `{}`), blur("s1", 3000, 500), sleep("s1", 4000, 100)})
+	s := o.states["s:s1"]
+	b, err := Encode(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s2.Rows(), s.Rows()) {
+		t.Fatalf("rows differ after a round trip")
+	}
+	if _, err := Decode([]byte("not a checkpoint")); err == nil {
+		t.Fatal("a damaged checkpoint decoded")
 	}
 }

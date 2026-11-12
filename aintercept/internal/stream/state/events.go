@@ -26,14 +26,21 @@ const (
 )
 
 // Event is one Claude Code event's row (process EventRow) in its stored shape:
-// its place is (TsNS, BatchID, N), numbered by the query; its prompt's number
-// and a request or prompt link's target and label are joined from the lookups
-// above. LinkID is the request id for a request link.
+// its place is (TsNS, BatchID, then its order in the batch: Seq, RowNS, name,
+// metadata, key), numbered by the query; its prompt's number and a request or
+// prompt link's target and label are joined from the lookups above. LinkID is
+// the request id for a request link.
 type Event struct {
 	process.EventRow
 	BatchID  string `parquet:"batch_id"`
-	N        int64  `parquet:"n"`
+	N        int64  `parquet:"n"` // its place among all the batch's events, as ingest numbered it
 	PromptID string `parquet:"prompt_id,optional"`
+	// The batch order the reference numbers by (process batchKey): two events at
+	// the same time in the same batch are ordered by these.
+	EvSeq    int64  `parquet:"ev_seq"`
+	RowNS    int64  `parquet:"row_ns"`
+	OrderMD  string `parquet:"order_md"`
+	EventKey string `parquet:"event_key"`
 }
 
 // RequestLink is a request id's call (TableRequestLinks).
@@ -82,7 +89,8 @@ func (s *KeyState) events(r records.Record, d *Delta) {
 			return
 		}
 		f := process.EventFactsOf(*e)
-		row := Event{EventRow: f.Row, BatchID: e.CorrelationID, N: r.BatchN, PromptID: f.Prompt}
+		row := Event{EventRow: f.Row, BatchID: e.CorrelationID, N: r.BatchN, PromptID: f.Prompt,
+			EvSeq: e.Seq, RowNS: e.RowNS, OrderMD: e.MetadataJSON, EventKey: e.EventKey}
 		row.EventID = e.CorrelationID + ":" + strconv.FormatInt(r.BatchN, 10)
 		switch {
 		case f.Row.Name == "tengu_event_loop_stall" && f.Device != "":
