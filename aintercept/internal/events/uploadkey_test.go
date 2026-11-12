@@ -196,8 +196,10 @@ func TestUploadKeySameMinuteRetriesReuseTheKey(t *testing.T) {
 	if err := w.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	onlyObject(t, tgt, minuteKey("2027-03-01T10:00"))
-	_, keys := tgt.snapshot()
+	puts, keys := tgt.snapshot()
+	if len(puts) != 1 || tgt.heads != 0 {
+		t.Fatalf("objects %v, HEADs %d: want one object and no checks", puts, tgt.heads)
+	}
 	for _, k := range keys {
 		if k != minuteKey("2027-03-01T10:00") {
 			t.Fatalf("attempt under %s", k)
@@ -255,12 +257,11 @@ func TestUploadKeyHalfUploadedBundleIsNotRewritten(t *testing.T) {
 			once.Do(func() { close(crashed) })
 		}
 	}
-	tick := newManualTick()
-	w1 := testWriter(t, WriterConfig{SpoolDir: dir, Targets: []Target{tgt}, Now: clock.now, NewTicker: tick.ticker, RetryMin: time.Hour, RetryMax: time.Hour})
+	w1 := testWriter(t, WriterConfig{SpoolDir: dir, Targets: []Target{tgt}, Now: clock.now, RetryMin: time.Hour, RetryMax: time.Hour})
 	o := w1.NewObjectStream(ObjectStreamConfig{Target: "store"})
 	_ = o.PutAtUpload("r/minute="+UploadMinute+"/a", []byte("a"))
 	_ = o.PutAtUpload("r/minute="+UploadMinute+"/b", []byte("b"))
-	tick.fire()
+	go func() { _ = w1.Flush() }() // seals both into one bundle
 	<-crashed
 	w1.Abandon()
 

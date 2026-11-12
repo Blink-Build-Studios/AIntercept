@@ -26,6 +26,14 @@ production); a reader finds the buckets by listing `<p>/stream/v1/buckets/`.
 A key's bucket is the top `bits` bits of its 64-bit FNV-1a hash
 (`records.BucketOf`; the API pins the same test vectors).
 
+A records file's `minute` is the minute it was **uploaded** in, fixed at the
+upload attempt that landed (the observer's writer, `events.PutAtUpload`), not
+when it was sealed. The processor lists record files from its watermark minus a
+grace window, so a file that waited out a store outage in the ingest spool must
+land after the watermark, never behind it. The writer logs each attempted key
+and checks them (HEAD) before naming a file by a new minute, so a file is never
+written twice.
+
 ## A commit (`commit-*.json`)
 
 Only the newest commit of a bucket (highest sequence) is current; older ones

@@ -3,12 +3,14 @@ package events
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // Object is one file the Writer uploads.
@@ -111,4 +113,29 @@ func (t *S3Target) Put(ctx context.Context, o Object) error {
 	}
 	_, err := t.client.PutObject(ctx, in)
 	return err
+}
+
+// s3HeadObjectAPI is the S3 call Exists makes. The real client has it; a test
+// fake that only puts doesn't, and then the target can't check.
+type s3HeadObjectAPI interface {
+	HeadObject(ctx context.Context, in *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+}
+
+// Exists reports whether key is in the bucket (HEAD). A 404 is "no"; any other
+// failure is an error, and the writer retries rather than guess.
+func (t *S3Target) Exists(ctx context.Context, key string) (bool, error) {
+	h, ok := t.client.(s3HeadObjectAPI)
+	if !ok {
+		return false, fmt.Errorf("s3 target: client can't HEAD")
+	}
+	_, err := h.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(t.bucket), Key: aws.String(key)})
+	if err == nil {
+		return true, nil
+	}
+	var nf *types.NotFound
+	var status interface{ HTTPStatusCode() int }
+	if errors.As(err, &nf) || (errors.As(err, &status) && status.HTTPStatusCode() == 404) {
+		return false, nil
+	}
+	return false, err
 }
