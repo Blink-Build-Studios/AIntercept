@@ -1,12 +1,11 @@
 package records
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
 
 // Record ids are compared as strings wherever a tie is broken by (ts, record id):
@@ -21,7 +20,7 @@ func TestRecordIDsSortInEmissionOrder(t *testing.T) {
 	a := NewAssembler(inc)
 	var ids []string
 	for i := 0; i < 1005; i++ {
-		e := events.Event{CorrelationID: "c", Phase: events.PhaseVerdict, TimestampNS: int64(i)}
+		e := hdr(fmt.Sprintf("c%d", i), true, nil) // each one call's start
 		rs := a.Apply(&e, nil, "f")
 		for _, r := range rs {
 			ids = append(ids, r.RecordID)

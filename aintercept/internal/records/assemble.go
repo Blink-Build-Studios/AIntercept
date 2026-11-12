@@ -228,7 +228,7 @@ func (a *Assembler) hit(c string) { a.cases[c]++ }
 func (a *Assembler) record(r Record, instance string) Record {
 	a.seq++
 	r.Version, r.Instance = Version, instance
-	r.RecordID = fmt.Sprintf("%s-%012d", a.inc, a.seq)
+	r.RecordID = fmt.Sprintf("%s-%020d", a.inc, a.seq)
 	if r.Kind == KindClientEvent {
 		r.EventKey = r.RecordID
 	}
