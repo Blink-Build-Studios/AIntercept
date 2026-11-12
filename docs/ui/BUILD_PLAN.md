@@ -111,6 +111,8 @@ The query API was parsing raw JSON on every request: `/overview` and `/people` t
 3. **One Go binary, run in modes:** `aintercept observer`, `aintercept certsvc`, `aintercept process`. One module, one image, one mode per pod. Each pod's secrets stay its own: the CA key only reaches certsvc pods. The test fixture stays a separate module, out of the production binary.
 4. **Raw stays the source of truth.** When the UI needs a new shape, stage 2 rebuilds its tables from raw.
 
+   **Reaffirmed 2026-11-11, and widened: precompute everything** (`docs/architecture.md`, Decision 4). The API was still deriving almost everything from thin tables. Stage 2 now writes every value the UI shows, and the API only queries.
+
 5. **Keys between the shaped tables.** Every table has a primary key, and every reference to another table is a named foreign-key column, so any row traces to its person, session, prompt and call, and back to the raw rows it came from. The keys are ids the traffic already carries, never ones we invent:
 
    | Table | Primary key | References |

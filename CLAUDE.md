@@ -4,6 +4,7 @@
 - **Before every commit, run `make check`.** It runs exactly the checks CI requires. A commit that fails it won't go green.
 - **UI and query API work** (`ui/`, `api/`): follow `docs/ui/BUILD_PLAN.md`. It overrides the design handoff in `docs/ui/handoff/`, and §11 lists every automated rule.
 - **The definition of done is `docs/ui/requirements.json`.** Building a component means a story for each state listed there; implementing an endpoint means a sample for each scenario.
+- **Precompute everything** (`docs/architecture.md`, Decision 4). The processor writes every value the UI shows. An API endpoint only filters, aggregates, pages and applies `now()` over stored tables. A new UI value means a new processor column, never Python in an endpoint. Moving a derivation into the processor needs a parity test: the old output and the new must be identical on a real capture, replayed in pieces.
 - **Never hand-write API types or samples.** Change the Pydantic models or tests in `api/`, then run `make regen`.
 - **The UI needs Node 24:** run `nvm use` in `ui/`.
 - **The Interceptor** (the control-plane hook, `docs/INTERCEPTOR.md`): the contract is `aintercept/interceptor/v1/interceptor.proto`. After changing it run `make proto`; `make test-interceptor` runs observe and enforce end to end through a real Envoy (needs Docker).
