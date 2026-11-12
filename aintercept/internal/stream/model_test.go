@@ -10,23 +10,24 @@ import (
 
 // The stand-in model and the row machinery the pipeline is tested with.
 
-func TestRowsRoundTrip(t *testing.T) {
-	rows := []Row{{Key: "s:a", ID: "s:a", Data: []byte(`{"n":1}`)}, {Key: "s:b", ID: "x", Tomb: true}}
-	b, err := EncodeRows(rows)
+// State files (never queried) hold each key's state as an opaque blob.
+func TestStateFileRoundTrip(t *testing.T) {
+	rows := []StateRow{{Key: "s:a", Data: []byte(`{"n":1}`)}, {Key: "s:b", Data: []byte("x")}}
+	b, err := EncodeState(rows)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := DecodeRows(b)
+	got, err := DecodeState(b)
 	if err != nil || !reflect.DeepEqual(got, rows) {
 		t.Fatalf("%+v %v", got, err)
 	}
 }
 
 func TestMergeRowsNewestWinsAndTombstonesDrop(t *testing.T) {
-	older := []Row{{Key: "k", ID: "1", Data: []byte("a")}, {Key: "k", ID: "2", Data: []byte("b")}}
-	newer := []Row{{Key: "k", ID: "1", Data: []byte("A")}, {Key: "k", ID: "2", Tomb: true}, {Key: "j", ID: "3", Data: []byte("c")}}
+	older := []Row{{Key: "k", ID: "1", Value: "a"}, {Key: "k", ID: "2", Value: "b"}}
+	newer := []Row{{Key: "k", ID: "1", Value: "A"}, {Key: "k", ID: "2", Tomb: true}, {Key: "j", ID: "3", Value: "c"}}
 	got := MergeRows(older, newer)
-	want := []Row{{Key: "j", ID: "3", Data: []byte("c")}, {Key: "k", ID: "1", Data: []byte("A")}}
+	want := []Row{{Key: "j", ID: "3", Value: "c"}, {Key: "k", ID: "1", Value: "A"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v", got)
 	}
