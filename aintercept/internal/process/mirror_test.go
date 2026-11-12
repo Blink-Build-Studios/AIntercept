@@ -15,6 +15,7 @@ import (
 // The mirror copies what the newest commit names, prunes what it no longer
 // names, and serves raw objects under the raw prefix only.
 func TestMirrorFollowsCommits(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	c := newCapture()
 	raw, out := newMem(), newMem()

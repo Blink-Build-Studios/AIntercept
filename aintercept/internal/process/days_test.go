@@ -55,8 +55,13 @@ func (r *readLog) Get(ctx context.Context, key string) ([]byte, error) {
 // still equal to a full rebuild, settled into day files, and a restart reads
 // only the last week's request parts and the unsealed days' ledger.
 func TestStartupReadsOnlyRecentParts(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
-	c := longCapture(60)
+	n := 30
+	if full {
+		n = 60
+	}
+	c := longCapture(n)
 	want, _ := rebuild(t, c)
 	raw, out := newMem(), &readLog{memStore: newMem()}
 	now := t0
@@ -84,8 +89,8 @@ func TestStartupReadsOnlyRecentParts(t *testing.T) {
 			days++
 		}
 	}
-	if days < 55 {
-		t.Fatalf("%d request day files for 60 days", days)
+	if days < n-5 {
+		t.Fatalf("%d request day files for %d days", days, n)
 	}
 
 	out.gets = nil
@@ -130,7 +135,7 @@ func TestStartupReadsOnlyRecentParts(t *testing.T) {
 // day into its file and matches a full rebuild.
 func TestCompactionAfterARebuild(t *testing.T) {
 	ctx := context.Background()
-	c := longCapture(60)
+	c := longCapture(60) // one run: cheap at any size
 	want, _ := rebuild(t, c)
 	raw, out := newMem(), newMem()
 	for _, f := range c.sorted() {

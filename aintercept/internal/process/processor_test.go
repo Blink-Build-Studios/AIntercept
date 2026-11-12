@@ -286,20 +286,54 @@ func put(t *testing.T, s Store, f *rawFile) {
 	}
 }
 
-func newProc(raw, out Store, now *time.Time, batchFiles, compactAt int) *Processor {
-	return New(Config{Raw: raw, RawPrefix: "aintercept", Out: out, OutPrefix: "aintercept/shaped",
-		BatchFiles: batchFiles, CompactAt: compactAt, Grace: time.Minute, Now: func() time.Time { return *now }, Wall: func() time.Time { return *now }})
+// full is set by -tags full (processor_full_test.go): `make test-full` runs the
+// exhaustive variants (more seeds, longer captures); `make check` the smaller ones.
+var full bool
+
+// seeds is how many random schedules a schedule test tries.
+func seeds() int64 {
+	if full {
+		return 5
+	}
+	return 2
 }
 
-// rebuild processes every file in one full pass.
+// newProc makes a processor that skips the derived tables: the tests of the
+// facts and snapshots don't need them, and deriving every run is slow.
+func newProc(raw, out Store, now *time.Time, batchFiles, compactAt int) *Processor {
+	return New(procConfig(raw, out, now, batchFiles, compactAt, true))
+}
+
+// newProcDeriving makes a processor that writes the derived tables every run,
+// as the service does.
+func newProcDeriving(raw, out Store, now *time.Time, batchFiles, compactAt int) *Processor {
+	return New(procConfig(raw, out, now, batchFiles, compactAt, false))
+}
+
+func procConfig(raw, out Store, now *time.Time, batchFiles, compactAt int, skipDerive bool) Config {
+	return Config{Raw: raw, RawPrefix: "aintercept", Out: out, OutPrefix: "aintercept/shaped",
+		BatchFiles: batchFiles, CompactAt: compactAt, Grace: time.Minute, Now: func() time.Time { return *now }, Wall: func() time.Time { return *now },
+		SkipDerive: skipDerive}
+}
+
+// rebuild processes every file in one full pass (no derived tables).
 func rebuild(t *testing.T, c *capture) (tables, *memStore) {
+	return rebuildWith(t, c, newProc)
+}
+
+// rebuildDeriving is rebuild with the derived tables written too.
+func rebuildDeriving(t *testing.T, c *capture) (tables, *memStore) {
+	return rebuildWith(t, c, newProcDeriving)
+}
+
+func rebuildWith(t *testing.T, c *capture, mk func(raw, out Store, now *time.Time, batchFiles, compactAt int) *Processor) (tables, *memStore) {
 	t.Helper()
 	raw, out := newMem(), newMem()
 	for _, f := range c.sorted() {
 		put(t, raw, f)
 	}
 	now := t0.Add(24 * time.Hour)
-	p := newProc(raw, out, &now, 10000, 1000)
+	p := mk(raw, out, &now, 10000, 1000)
 	if err := p.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -314,74 +348,127 @@ func rebuild(t *testing.T, c *capture) (tables, *memStore) {
 // Arriving bit by bit, out of order, across restarts and compactions, the
 // tables come out exactly as one full rebuild makes them.
 func TestIncrementalMatchesRebuild(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
 	c := newCapture()
-	want, _ := rebuild(t, c)
+	want, wantOut := rebuild(t, c)
 	if len(want.Requests) == 0 || len(want.Sessions) != 5 {
 		t.Fatalf("rebuild made %d requests, %d sessions", len(want.Requests), len(want.Sessions))
 	}
-	files := c.sorted()
-	for seed := int64(1); seed <= 5; seed++ {
+	want = withDerived(want, derive(t, wantOut))
+	for seed := int64(1); seed <= seeds(); seed++ {
 		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
-			t.Parallel() // each seed is its own processor; every run derives every table, so they're slow
-			ctx := context.Background()
-			rng := rand.New(rand.NewSource(seed))
-			raw, out := newMem(), newMem()
-			now := t0
-			p := newProc(raw, out, &now, 1+rng.Intn(4), 4) // tiny runs, frequent compaction
-			if err := p.Open(ctx); err != nil {
-				t.Fatal(err)
-			}
-			// Each pod uploads its batches in order, one at a time (the observer's
-			// upload loop), each landing up to five batches late; pods interleave.
-			order := append([]*rawFile(nil), files...)
-			lands := map[*rawFile]time.Time{}
-			last := map[string]time.Time{}
-			for _, f := range order { // files are in key order: per pod, in batch order
-				pod := f.key[strings.Index(f.key, "instance="):strings.LastIndex(f.key, "/")]
-				at := f.at.Add(time.Duration(rng.Intn(6)) * 90 * time.Second)
-				if at.Before(last[pod]) {
-					at = last[pod]
-				}
-				lands[f], last[pod] = at, at
-			}
-			sort.SliceStable(order, func(i, j int) bool { return lands[order[i]].Before(lands[order[j]]) })
-			// One file is held back for hours: only the full listing finds it.
-			late := order[len(order)/3]
-			for _, f := range order {
-				if f == late {
-					continue
-				}
-				put(t, raw, f)
-				if f.at.After(now) {
-					now = f.at.Add(time.Minute)
-				}
-				if rng.Intn(2) == 0 {
-					if _, err := p.Poll(ctx, false); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if rng.Intn(15) == 0 { // restart: a new processor resumes from the commit
-					p = newProc(raw, out, &now, 1+rng.Intn(4), 4)
-					if err := p.Open(ctx); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-			put(t, raw, late)
-			now = now.Add(2 * time.Hour)
+			t.Parallel()
+			// The facts and snapshots arrive run by run; the derived tables are
+			// built once at the end, from what was committed.
+			out := incremental(t, c, seed, newProc, tinyRuns)
+			compareTables(t, withDerived(readTables(t, out, "aintercept/shaped"), derive(t, out)), want)
+		})
+	}
+}
+
+// The derived tables written every run, as the service writes them, match the
+// rebuild too: the parts cache follows the commits and compactions. One seed
+// here, with fewer, bigger runs; the five-seed, smallest-runs version runs with
+// -tags full.
+func TestIncrementalDerivingEveryRun(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
+	c := newCapture()
+	want, _ := rebuildDeriving(t, c)
+	out := incremental(t, c, 1, newProcDeriving, func(*rand.Rand) int { return 16 })
+	compareTables(t, readTables(t, out, "aintercept/shaped"), want)
+}
+
+func tinyRuns(rng *rand.Rand) int { return 1 + rng.Intn(4) }
+
+// incremental feeds the capture's files to processors made by mk, the way pods
+// upload them: late, interleaved, with restarts and one file hours late. It
+// returns the output store after a final full listing.
+func incremental(t *testing.T, c *capture, seed int64, mk func(raw, out Store, now *time.Time, batchFiles, compactAt int) *Processor, batch func(*rand.Rand) int) Store {
+	t.Helper()
+	files := c.sorted()
+	ctx := context.Background()
+	rng := rand.New(rand.NewSource(seed))
+	raw, out := newMem(), newMem()
+	now := t0
+	p := mk(raw, out, &now, batch(rng), 4) // small runs, frequent compaction
+	if err := p.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Each pod uploads its batches in order, one at a time (the observer's
+	// upload loop), each landing up to five batches late; pods interleave.
+	order := append([]*rawFile(nil), files...)
+	lands := map[*rawFile]time.Time{}
+	last := map[string]time.Time{}
+	for _, f := range order { // files are in key order: per pod, in batch order
+		pod := f.key[strings.Index(f.key, "instance="):strings.LastIndex(f.key, "/")]
+		at := f.at.Add(time.Duration(rng.Intn(6)) * 90 * time.Second)
+		if at.Before(last[pod]) {
+			at = last[pod]
+		}
+		lands[f], last[pod] = at, at
+	}
+	sort.SliceStable(order, func(i, j int) bool { return lands[order[i]].Before(lands[order[j]]) })
+	// One file is held back for hours: only the full listing finds it.
+	late := order[len(order)/3]
+	for _, f := range order {
+		if f == late {
+			continue
+		}
+		put(t, raw, f)
+		if f.at.After(now) {
+			now = f.at.Add(time.Minute)
+		}
+		if rng.Intn(2) == 0 {
 			if _, err := p.Poll(ctx, false); err != nil {
 				t.Fatal(err)
 			}
-			if _, ok := p.seen[late.key]; ok {
-				t.Fatal("a recent-hours poll shouldn't reach a file from hours ago")
-			}
-			if _, err := p.Poll(ctx, true); err != nil {
+		}
+		if rng.Intn(15) == 0 { // restart: a new processor resumes from the commit
+			p = mk(raw, out, &now, batch(rng), 4)
+			if err := p.Open(ctx); err != nil {
 				t.Fatal(err)
 			}
-			got := readTables(t, out, "aintercept/shaped")
-			compareTables(t, got, want)
-		})
+		}
 	}
+	put(t, raw, late)
+	now = now.Add(2 * time.Hour)
+	if _, err := p.Poll(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.seen[late.key]; ok {
+		t.Fatal("a recent-hours poll shouldn't reach a file from hours ago")
+	}
+	if _, err := p.Poll(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// derive builds the derived tables from what out has committed.
+func derive(t *testing.T, out Store) *Derived {
+	t.Helper()
+	d, err := Derive(context.Background(), out, "aintercept/shaped")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+// withDerived is tables with the derived ones set from d (empty as nil, as a
+// table read back from Parquet is).
+func withDerived(t tables, d *Derived) tables {
+	t.RequestRows, t.PersonLast, t.PromptRows, t.PromptSteps = orNil(d.RequestRows), orNil(d.PersonLast), orNil(d.PromptRows), orNil(d.PromptSteps)
+	t.SessionRows, t.SessionMarks, t.Presence, t.EventRows = orNil(d.SessionRows), orNil(d.SessionMarks), orNil(d.Presence), orNil(d.EventRows)
+	t.SessionTools, t.SessionReqs, t.PersonMap, t.PersonSess = orNil(d.SessionTools), orNil(d.SessionReqs), orNil(d.PersonMap), orNil(d.PersonSess)
+	t.AcctFacts, t.AcctDevices, t.CallTools = orNil(d.AcctFacts), orNil(d.AcctDevices), orNil(d.CallTools)
+	return t
+}
+
+func orNil[T any](rows []T) []T {
+	if len(rows) == 0 {
+		return nil
+	}
+	return rows
 }
 
 func compareTables(t *testing.T, got, want tables) {
@@ -773,6 +860,7 @@ func TestOlderRowsTakeTimingFromHeaders(t *testing.T) {
 // A call's header rows arriving after its complete row (a later file, a later
 // run) don't open a transaction that later expires into a second row.
 func TestLateHeaderRowsAreNotWrittenTwice(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	c := newCapture()
 	want, _ := rebuild(t, c)
@@ -834,6 +922,7 @@ func TestLateHeaderRowsAreNotWrittenTwice(t *testing.T) {
 
 // Replaced files stay readable for the grace period, then go.
 func TestReplacedFilesAreCollectedAfterGrace(t *testing.T) {
+	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	c := newCapture()
 	raw, out := newMem(), newMem()

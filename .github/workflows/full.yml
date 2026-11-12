@@ -1,0 +1,24 @@
+# The exhaustive Go tests (`make test-full`: -tags full, more seeds and longer
+# captures than `make check` runs). Too slow for every PR, so nightly and on demand.
+name: full
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go-full:
+    name: Go, exhaustive (-tags full, -race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: aintercept/go.mod
+          cache-dependency-path: |
+            aintercept/go.sum
+      - run: make test-full
