@@ -553,9 +553,9 @@ full list.
 
 ```bash
 # The observer logs its configuration at startup:
-kubectl -n aintercept logs deploy/observer | grep '"interceptor configured"'
+kubectl -n aintercept logs deploy/envoy -c observer | grep '"interceptor configured"'
 # Delivery counters (queued, delivered, dropped, failed, decided, decide_failed):
-kubectl -n aintercept port-forward deploy/observer 9001:9001 &
+kubectl -n aintercept port-forward deploy/envoy 9001:9001 &
 curl -s localhost:9001/stats | jq .interceptor
 # And your service's own logs should show OnCallStart/OnCallComplete for live traffic.
 ```
@@ -705,7 +705,7 @@ adding fields in v1. Regenerate when you update the copy you pinned.
 | A replaced response breaks the client | The replacement isn't valid for that message (invalid JSON, or a dropped structural event) | Parse, change, re-serialize; never drop `message_start`, `message_stop`, `response.completed` |
 | A phrase in a model's answer isn't caught | It spans two streamed deltas | Keep a per-`call_id` text tail and match across it (§4.3) |
 | `helm upgrade` fails: "interceptor.enforce host … isn't in interception.allowlist" | The scope's host isn't intercepted | Add it to `interception.allowlist`, or fix the host name |
-| `helm upgrade` fails: "interceptor.enforce needs observer.autoscaling.minReplicas >= 2" | Enforce with one observer | Raise `observer.autoscaling.minReplicas` |
+| `helm upgrade` fails: "interceptor.enforce needs envoy.autoscaling.minReplicas >= 2" | Enforce with one ingest pod | Raise `envoy.autoscaling.minReplicas` |
 | Verdicts say `applied: false` for a host you meant to enforce | The path isn't in the scope (prefix match) | Check `Call.path` in your logs against the scope's `paths` |
 | `OnCallComplete` arrives with no matching `OnCallStart` | Observe delivery is best-effort (a full queue, or a restart) | Expected; make your state tolerant of it (§4.5) |
 
@@ -727,7 +727,7 @@ adding fields in v1. Regenerate when you update the copy you pinned.
 **Before enforce:**
 - [ ] At least a week in observe; false positives reviewed; no `error` verdicts.
 - [ ] p99 per callback well under `deadlineMs`.
-- [ ] 3+ replicas of your service with a PodDisruptionBudget; `observer.autoscaling.minReplicas` 3+.
+- [ ] 3+ replicas of your service with a PodDisruptionBudget; `envoy.autoscaling.minReplicas` 3+.
 - [ ] `onError` chosen deliberately (deny fails closed, allow fails open).
 - [ ] The scope is the narrowest one that works; there's a rollback plan (remove the scope).
 - [ ] After enabling: a test call shows the change, and verdict rows say `applied: true`.

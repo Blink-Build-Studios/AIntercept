@@ -168,34 +168,43 @@ answered by the real provider.
   Cloudflare health check needs to poll it. Wiring that checker to disable
   steering is outside this chart.
 
-## 5a. Observer capacity: memory budget, load balancing, scaling
+## 5a. Ingest pods: capacity, data completeness, shutdown
 
-The observer never drops user traffic in observe mode; under memory pressure
-it would lose *telemetry*, and in enforce mode capacity decides whether
-traffic is checked. So capacity is managed ahead of time:
+Each `envoy` pod is the whole ingest stack: Envoy plus the observer, its
+ext_proc server, over localhost (docs/STREAMING_PIPELINE.md, phase 1). They
+scale together on Envoy's autoscaling (`envoy.autoscaling`); size
+`observer.resources` for the traffic one Envoy pod carries.
 
 - **Memory budget.** Each observer measures the bytes it holds for traffic in
   flight (buffered bodies, WebSocket decoder state and turns, bodies queued
   for extraction) against a budget: `observer.memoryBudget`, default half the
   pod's memory limit. `GOMEMLIMIT` defaults to 90% of the limit. `/stats`
   shows `memory.held_bytes`, `peak_bytes`, `limit_bytes`, `utilization`.
-- **Load balancing (ORCA).** Envoy reaches observer pods through the headless
-  Service `observer-pods`, each pod its own endpoint, and picks a pod per
-  stream by client-side weighted round robin on the load each pod reports out
-  of band every 30s (its budget utilization). A filling pod gets fewer new
-  streams; a new pod gets the median weight until its first reports. Confirm:
-  Envoy `/stats` shows `cluster.observer.lb_orca_oob.active_sessions` equal to
-  the observer pod count and `report_errors: 0`. Locally, a pod at 111% of its
-  budget got 2 of 60 new streams against an idle pod's 58.
-- **Scaling.** With `observer.autoscaling.mode: keda` (default), KEDA scales on
-  CPU or on the fleet's average budget utilization
-  (`targetMemoryBudgetPercent`, default 55), served by any pod at
-  `/stats/fleet`. Scale-out starts well before pods are full, because new pods
-  take 30-90s and open streams stay on their pod. `mode: cpu` keeps a plain
-  CPU HPA.
-- **Still to come:** a spill-to-disk tier, so a pod past its budget keeps
-  everything instead of shedding telemetry. See `docs/INTERCEPTION_ISSUES.md`
-  P4.
+- **Nothing captured is dropped.** All output goes through one writer, which
+  seals batches every `objectStore.maxAgeSeconds` (10 s) or at its byte cap
+  into an on-disk spool (an emptyDir, `observer.spool`) and uploads from there,
+  retrying each file until the store accepts it. A full event buffer makes the
+  observer wait rather than drop. `/stats` shows `writer.spool_files`,
+  `spool_bytes`, `oldest_spool_age_seconds`, `upload_failures` and `full`.
+- **When the spool is full** (past 95% of `observer.spool.maxBytes`, until it
+  falls under 80%): observed (async) traffic keeps flowing and new events are
+  dropped as a counted last resort (`LastResortDrops` on `/stats`; alert on any
+  value above zero). Enforced calls are refused, so none goes through
+  unrecorded, and with enforcement on the pod reports not ready so new
+  connections go elsewhere. Size the spool for the longest object-store outage
+  you want to ride out: at peak, about the observer's write rate times the
+  outage.
+- **What a hard kill can lose.** On SIGKILL (OOM, node failure, spot
+  reclaim) the observer loses its unsealed buffer: at most `maxAgeSeconds` of
+  data. Sealed files are in the spool and are uploaded by the restarted
+  container. If the node itself is lost, the emptyDir goes with it, along with
+  anything not yet uploaded.
+- **Shutdown order.** Envoy's preStop drains, then exits (closing what's still
+  open, WebSockets included). The observer's preStop (`/prestop`) returns only
+  once Envoy has exited, so every stream Envoy serves while draining is
+  recorded; then the observer drains, flushes its writer and exits. The grace
+  period covers Envoy's drain plus `observer.flushSeconds`, at least
+  `observer.terminationGracePeriodSeconds` (300).
 
 ## 5b. Query API capacity
 

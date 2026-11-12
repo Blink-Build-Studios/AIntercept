@@ -105,7 +105,6 @@ helm install aintercept deploy/helm/aintercept \
   --set objectStore.existingSecret=aintercept-objectstore \
   --set observer.keyHashSaltSecret=aintercept-keyhash-salt
 
-kubectl rollout status deploy/observer
 kubectl rollout status deploy/certsvc
 kubectl rollout status deploy/envoy
 kubectl get svc envoy -w   # wait for the LoadBalancer EXTERNAL-IP
@@ -121,7 +120,7 @@ curl -sS --cacert certs/root-ca.crt \
   --resolve api.anthropic.com:443:$EXTERNAL_IP \
   https://api.anthropic.com/v1/messages -X POST --data '{}' -i | head
 
-# Confirm a telemetry object landed in the Space (may take up to maxAgeSeconds):
+# Confirm a telemetry object landed in the Space (within about maxAgeSeconds, 10 s):
 AWS_ACCESS_KEY_ID=<scoped-access-key> AWS_SECRET_ACCESS_KEY=<scoped-secret> \
   aws s3 ls "s3://$SPACE/aintercept/" --recursive --endpoint-url $ENDPOINT
 ```

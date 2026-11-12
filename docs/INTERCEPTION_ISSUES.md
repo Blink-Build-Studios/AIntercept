@@ -269,17 +269,16 @@ something a deployment hits).
   × 4.5 MiB per stream is about 9 GiB against a 256 MiB pod. A stream count
   can't bound bytes.
 - **Done:** a per-pod memory budget measures every buffered byte (HTTP,
-  WebSocket, queued for extraction). Envoy load-balances observer pods on it
-  via ORCA (headless Service + client-side weighted round robin, out-of-band
-  reports), and KEDA scales on the fleet average (default 55%). Verified
-  locally: a pod over budget got 2 of 60 new streams. See
+  WebSocket, queued for extraction), reported on `/stats`. The observer now
+  runs in each Envoy pod (one ingest stack per pod, scaled with Envoy), so the
+  earlier ORCA weighting across observer pods is gone. See
   `docs/PRODUCTION.md` §5a.
 - **Decided against:** shedding (it loses telemetry, and in enforce mode
   checks), and 1s ORCA reporting (load builds over minutes; grpc-go's 30s
   minimum suffices).
-- **Open:** spill-to-disk past ~80% of budget, so an overloaded pod keeps
-  everything; it should also absorb the processor's queue overflow, today the
-  other place telemetry can be dropped. For enforce mode (Phase 3): keep the
+- **Done:** the writer's on-disk spool, with the drop paths removed: a full
+  event buffer waits, and only a full spool drops (observe mode, counted) or
+  refuses (enforce mode). See `docs/PRODUCTION.md` §5a. For enforce mode (Phase 3): keep the
   policy path's memory independent of telemetry buffers, and when truly
   saturated, slow streams (flow control) and refuse new connections cleanly
   (Envoy overload manager) rather than bypass or break them.
