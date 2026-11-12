@@ -26,38 +26,62 @@ const (
 // Pick is a value and when it was seen; the query keeps the newest (the
 // greatest at the same time).
 type Pick struct {
-	V  string
-	TS int64
-	OK bool
+	V  string `parquet:"v"`
+	TS int64  `parquet:"ts"`
+	OK bool   `parquet:"ok"`
 }
 
-type SessionAccount struct{ SessionID, AccountID string }
-type SessionVisible struct{ SessionID string }
-type SessionPerson struct{ SessionID, PersonID string }
-type PersonDevice struct{ PersonID, DeviceID string }
-type SessionCredential struct{ SessionID, KeyHash string }
+type SessionAccount struct {
+	SessionID string `parquet:"session_id"`
+	AccountID string `parquet:"account_id"`
+}
+
+type SessionVisible struct {
+	SessionID string `parquet:"session_id"`
+}
+
+type SessionPerson struct {
+	SessionID string `parquet:"session_id"`
+	PersonID  string `parquet:"person_id"`
+}
+
+type PersonDevice struct {
+	PersonID string `parquet:"person_id"`
+	DeviceID string `parquet:"device_id"`
+}
+
+type SessionCredential struct {
+	SessionID string `parquet:"session_id"`
+	KeyHash   string `parquet:"key_hash"`
+}
 
 // AccountEvents is what one key's Claude Code events say about an account: its
 // earliest org (the least at the same time) and newest plan.
 type AccountEvents struct {
-	AccountID string
-	Org       string
-	OrgNS     int64
-	Plan      Pick
+	AccountID string `parquet:"account_id"`
+	Org       string `parquet:"org"`
+	OrgNS     int64  `parquet:"org_ns"`
+	Plan      Pick   `parquet:"plan"`
 }
 
 // AccountDevice is an account's device as one key's records name it: OnEvents
 // when an event does, with each env field's newest value.
 type AccountDevice struct {
-	AccountID, DeviceID string
-	OnEvents            bool
-	Env                 [3]Pick // platform, terminal, shell
+	AccountID string `parquet:"account_id"`
+	DeviceID  string `parquet:"device_id"`
+	OnEvents  bool   `parquet:"on_events"`
+	Platform  Pick   `parquet:"platform"`
+	Terminal  Pick   `parquet:"terminal"`
+	Shell     Pick   `parquet:"shell"`
 }
+
+// env is the device's platform, terminal and shell, in process envKeys order.
+func (a *AccountDevice) env() [3]*Pick { return [3]*Pick{&a.Platform, &a.Terminal, &a.Shell} }
 
 // CodexPlan is an account's newest Codex plan in one key.
 type CodexPlan struct {
-	AccountID string
-	Plan      Pick
+	AccountID string `parquet:"account_id"`
+	Plan      Pick   `parquet:"plan"`
 }
 
 // dimsState is a key's indexes for the dimension tables.
@@ -216,9 +240,10 @@ func (s *KeyState) accountDevice(d *Delta, acct, dev string, onEvents bool, ts i
 		s.dm.acctDev[k] = ad
 	}
 	ad.OnEvents = ad.OnEvents || onEvents
+	env := ad.env()
 	for i := range v {
 		if ok[i] {
-			ad.Env[i].offer(ts, v[i])
+			env[i].offer(ts, v[i])
 		}
 	}
 	s.rows.put(d, TableAccountDevices, "ad:"+acct+"\x00"+dev, *ad)

@@ -127,10 +127,14 @@ type LinkEntry struct {
 	Link   RequestLink
 }
 
+// RowTypes is every stored row type: each field has a snake_case parquet tag
+// (rowtypes_test.go), so table files name their columns.
+var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
+	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
+	AccountEvents{}, AccountDevice{}, CodexPlan{}}
+
 func init() {
-	for _, v := range []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
-		process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
-		AccountEvents{}, AccountDevice{}, CodexPlan{}} {
+	for _, v := range RowTypes {
 		gob.Register(v)
 	}
 }

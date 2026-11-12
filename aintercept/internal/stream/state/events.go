@@ -45,21 +45,26 @@ type Event struct {
 
 // RequestLink is a request id's call (TableRequestLinks).
 type RequestLink struct {
-	SessionID, RequestID, CallID, Label string
+	SessionID string `parquet:"session_id"`
+	RequestID string `parquet:"request_id"`
+	CallID    string `parquet:"call_id"`
+	Label     string `parquet:"label"`
 }
 
 // PromptIndex is a Claude Code prompt's number (TablePromptIndex).
 type PromptIndex struct {
-	SessionID, PromptID string
-	Index               int64
-	TS                  int64
-	Key                 string // the event it's from: the latest wins
+	SessionID string `parquet:"session_id"`
+	PromptID  string `parquet:"prompt_id"`
+	Index     int64  `parquet:"prompt_index"`
+	TS        int64  `parquet:"ts_ns"`
+	Key       string `parquet:"event_key"` // the event it's from: the latest wins
 }
 
 // CodexTurn is a Codex turn's first visible call (TableCodexTurns).
 type CodexTurn struct {
-	SessionID, PromptID string
-	FirstNS             int64
+	SessionID string `parquet:"session_id"`
+	PromptID  string `parquet:"prompt_id"`
+	FirstNS   int64  `parquet:"first_ns"`
 }
 
 // eventsState is the key's indexes for the event tables.

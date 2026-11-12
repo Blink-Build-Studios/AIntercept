@@ -182,8 +182,8 @@ func personTables(o *streamOut) ([]process.PersonMapRow, []process.PersonSession
 			devs[k] = x
 		}
 		x.onEvents = x.onEvents || d.OnEvents
-		for i := range x.env {
-			x.env[i].offer(d.Env[i])
+		for i, p := range d.env() {
+			x.env[i].offer(*p)
 		}
 	}
 	var facts []process.AccountFact
