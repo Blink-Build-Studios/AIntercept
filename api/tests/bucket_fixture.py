@@ -30,7 +30,7 @@ def write_rows(root: pathlib.Path, key: str, con: duckdb.DuckDBPyConnection, sel
     path.parent.mkdir(parents=True, exist_ok=True)
     rel = con.sql(select, params=params)
     rel.write_parquet(str(path))
-    return int(con.execute("SELECT count(*) FROM read_parquet(?)", [str(path)]).fetchone()[0])  # type: ignore[index]
+    return int(con.execute("SELECT count(*) FROM read_parquet(?)", [str(path)]).fetchall()[0][0])
 
 
 def write_commit(
@@ -40,11 +40,12 @@ def write_commit(
     seq: int,
     base: dict[str, list[str]],
     runs: dict[str, list[str]],
+    **meta: Any,
 ) -> str:
     def refs(files: dict[str, list[str]]) -> dict[str, list[dict[str, Any]]]:
         return {t: [{"key": k, "min_key": "", "max_key": "￿", "rows": 0} for k in ks] for t, ks in files.items()}
 
-    body = {"bucket": bucket, "seq": seq, "epoch": 1, "base": refs(base), "runs": refs(runs)}
+    body = {"bucket": bucket, "seq": seq, "epoch": 1, "base": refs(base), "runs": refs(runs), **meta}
     key = commit_key(prefix, bucket, seq)
     path = root / key
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,11 +57,14 @@ def write_commit(
 _ROWS = """SELECT ? || coalesce(CAST(t.{col} AS VARCHAR), '') AS key,
        CAST(row_number() OVER (PARTITION BY t.{col}) AS VARCHAR) AS id, false AS tomb, t.*
 FROM {table} t"""
+# A table read whole: one key, the row's position its id.
+_WHOLE = """SELECT ? AS key, CAST(row_number() OVER () AS VARCHAR) AS id, false AS tomb, t.* FROM {table} t"""
 
 _HALF = "SELECT * EXCLUDE (_bucket) FROM src WHERE _bucket = ? AND CAST(id AS INTEGER) % 2 = 1"
 _REST = """SELECT * EXCLUDE (_bucket) FROM src WHERE _bucket = ? AND CAST(id AS INTEGER) % 2 = 0
 UNION ALL SELECT * FROM (SELECT * EXCLUDE (_bucket) REPLACE ('ghost' AS id) FROM src WHERE _bucket = ? LIMIT 1)"""
-_GHOST = "SELECT * FROM (SELECT * EXCLUDE (_bucket) REPLACE ('ghost' AS id, true AS tomb) FROM src WHERE _bucket = ? LIMIT 1)"
+_GHOST = """SELECT * FROM (
+    SELECT * EXCLUDE (_bucket) REPLACE ('ghost' AS id, true AS tomb) FROM src WHERE _bucket = ? LIMIT 1)"""
 
 
 def from_store(store: Store, root: pathlib.Path, prefix: str = "") -> None:
@@ -71,13 +75,13 @@ def from_store(store: Store, root: pathlib.Path, prefix: str = "") -> None:
     files: dict[int, tuple[dict[str, list[str]], dict[str, list[str]]]] = {}
     for table in (*FACTS, *SNAPSHOTS, "probes"):
         how, col = ROUTING[table]
-        arrow = store._con.sql(_ROWS.format(col=col, table=table), params=[how]).arrow()  # noqa: S608 (test fixture)
-        if arrow.num_rows == 0:
-            continue
+        stage = root / ".stage" / f"{table}.parquet"
+        stage.parent.mkdir(parents=True, exist_ok=True)
+        store._con.sql((_ROWS if col else _WHOLE).format(col=col, table=table), params=[how]).write_parquet(str(stage))  # noqa: S608
         con.execute("DROP TABLE IF EXISTS src")
-        con.register("src_rows", arrow)
-        con.execute("CREATE TABLE src AS SELECT *, 0 AS _bucket FROM src_rows")
-        con.unregister("src_rows")
+        con.execute("CREATE TABLE src AS SELECT *, 0 AS _bucket FROM read_parquet(?)", [str(stage)])
+        if not con.execute("SELECT count(*) FROM src").fetchall()[0][0]:
+            continue
         for (k,) in con.execute("SELECT DISTINCT key FROM src").fetchall():
             con.execute("UPDATE src SET _bucket = ? WHERE key = ?", [bucket_of(k), k])
         for (b,) in con.execute("SELECT DISTINCT _bucket FROM src ORDER BY 1").fetchall():
@@ -91,7 +95,8 @@ def from_store(store: Store, root: pathlib.Path, prefix: str = "") -> None:
             base[table] = [k0]
             runs[table] = [k1, k2]
     for b, (base, runs) in files.items():
-        write_commit(root, prefix, b, 3, base, runs)
+        # The newest data time and the retention mode, as the processor's commits carry them.
+        write_commit(root, prefix, b, 3, base, runs, newest_ns=store.newest_ns, content_retained=store.content_retained)
 
 
 __all__ = ["BUCKET_BITS", "commit_key", "from_store", "table_key", "write_commit", "write_rows"]

@@ -83,13 +83,14 @@ def test_the_store_builds_the_person_tables_from_bucketed_dimensions(tmp_path):
             k = table_key("", table, b, "base-1")
             # one row per (key, id), in the fixture's order
             con.execute("DROP TABLE IF EXISTS one")
-            con.execute(f"CREATE TABLE one AS SELECT *, ''::VARCHAR AS key, ''::VARCHAR AS id, false AS tomb FROM {table} LIMIT 0")  # noqa: S608,E501
+            empty = f"CREATE TABLE one AS SELECT *, ''::VARCHAR AS key, ''::VARCHAR AS id, false AS tomb FROM {table}"  # noqa: S608
+            con.execute(empty + " LIMIT 0")
             for r in rows:
                 if bucket_of(r["key"]) != b:
                     continue
                 cols = [c for c in r if c not in ("key", "id")]
                 con.execute(
-                    f"INSERT INTO one BY NAME SELECT ? AS key, ? AS id, {', '.join('?::' + _type(_SHAPES[table], c) + ' AS ' + c for c in cols)}",  # noqa: S608,E501
+                    f"INSERT INTO one BY NAME SELECT ? AS key, ? AS id, false AS tomb, {', '.join('?::' + _type(_SHAPES[table], c) + ' AS ' + c for c in cols)}",  # noqa: S608,E501
                     [r["key"], r["id"], *[r[c] for c in cols]],
                 )
             write_rows(tmp_path, k, con, "SELECT * FROM one", [])

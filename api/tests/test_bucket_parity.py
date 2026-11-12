@@ -46,7 +46,7 @@ def _same(old, new, url):
 
 def _urls(old) -> list[str]:
     urls = ["/api/v1/status", "/api/v1/overview", "/api/v1/people", "/api/v1/people?q=codex"]
-    people = [p["id"] for p in old.get("/api/v1/people").json()["data"]] + ["unattributed", "nobody"]
+    people = [p["personId"] for p in old.get("/api/v1/people").json()["data"]] + ["unattributed", "nobody"]
     sessions: list[str] = []
     for pid in people:
         base = f"/api/v1/people/{pid}"
@@ -63,10 +63,10 @@ def _urls(old) -> list[str]:
             f"/api/v1/coverage?personId={pid}",
         ]
         r = old.get(f"{base}/sessions?pageSize=100").json()
-        sessions += [s["id"] for s in r.get("data", [])]
+        sessions += [s["sessionId"] for s in r.get("data", [])]
         reqs = old.get(f"{base}/requests?pageSize=3").json().get("data", [])
         for q in reqs:
-            urls += [f"/api/v1/requests/{q['id']}", f"/api/v1/requests/{q['id']}/details"]
+            urls += [f"/api/v1/requests/{q['requestId']}", f"/api/v1/requests/{q['requestId']}/details"]
     for sid in [*sessions, "no-such-session"]:
         base = f"/api/v1/sessions/{sid}"
         urls += [

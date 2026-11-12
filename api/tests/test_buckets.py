@@ -65,6 +65,12 @@ class CountingSource(LocalSource):
         return super().get(key)
 
 
+def _seq(log):
+    c = log.latest()
+    assert c is not None
+    return c.seq
+
+
 def _commit(root, seq, bucket=7):
     return write_commit(root, "", bucket, seq, {}, {})
 
@@ -76,19 +82,19 @@ def test_no_commit_yet(tmp_path):
 
 def test_one_commit(tmp_path):
     _commit(tmp_path, 1)
-    assert CommitLog(LocalSource(tmp_path), "", 7, clock=Clock()).latest().seq == 1
+    assert _seq(CommitLog(LocalSource(tmp_path), "", 7, clock=Clock())) == 1
 
 
 def test_many_commits_newest_wins(tmp_path):
     for s in (1, 2, 3, 10, 11):
         _commit(tmp_path, s)
-    assert CommitLog(LocalSource(tmp_path), "", 7, clock=Clock()).latest().seq == 11
+    assert _seq(CommitLog(LocalSource(tmp_path), "", 7, clock=Clock())) == 11
 
 
 def test_a_gap_in_sequence_is_fine(tmp_path):
     for s in (1, 2, 5):
         _commit(tmp_path, s)
-    assert CommitLog(LocalSource(tmp_path), "", 7, clock=Clock()).latest().seq == 5
+    assert _seq(CommitLog(LocalSource(tmp_path), "", 7, clock=Clock())) == 5
 
 
 def test_a_stale_listing_never_goes_backwards(tmp_path):
@@ -96,10 +102,10 @@ def test_a_stale_listing_never_goes_backwards(tmp_path):
         _commit(tmp_path, s)
     src, clock = CountingSource(tmp_path), Clock()
     log = CommitLog(src, "", 7, clock=clock)
-    assert log.latest().seq == 2
+    assert _seq(log) == 2
     src.stale = [commit_key("", 7, 1)]  # a listing that hasn't caught up
     clock.t += 5
-    assert log.latest().seq == 2
+    assert _seq(log) == 2
 
 
 def test_lists_at_most_once_a_second_per_bucket(tmp_path):
@@ -111,9 +117,9 @@ def test_lists_at_most_once_a_second_per_bucket(tmp_path):
     assert src.lists == 1
     _commit(tmp_path, 2)
     clock.t += 0.5
-    assert log.latest().seq == 1  # not looked for yet
+    assert _seq(log) == 1  # not looked for yet
     clock.t += 0.6
-    assert log.latest().seq == 2 and src.lists == 2
+    assert _seq(log) == 2 and src.lists == 2
 
 
 def test_lists_only_after_the_newest_known(tmp_path):
@@ -196,7 +202,11 @@ def test_a_run_replaces_the_base_row(tmp_path):
 
 
 def test_a_tombstone_removes_the_row(tmp_path):
-    _layout(tmp_path, 3, [("base-1", [("s:a", "1", False, 1), ("s:a", "2", False, 5)]), ("run-2", [("s:a", "1", True, None)])])
+    _layout(
+        tmp_path,
+        3,
+        [("base-1", [("s:a", "1", False, 1), ("s:a", "2", False, 5)]), ("run-2", [("s:a", "1", True, None)])],
+    )
     assert _fold(tmp_path) == [(5,)]
 
 
@@ -204,7 +214,11 @@ def test_a_row_put_back_after_its_tombstone(tmp_path):
     _layout(
         tmp_path,
         3,
-        [("base-1", [("s:a", "1", False, 1)]), ("run-2", [("s:a", "1", True, None)]), ("run-3", [("s:a", "1", False, 3)])],
+        [
+            ("base-1", [("s:a", "1", False, 1)]),
+            ("run-2", [("s:a", "1", True, None)]),
+            ("run-3", [("s:a", "1", False, 3)]),
+        ],
     )
     assert _fold(tmp_path) == [(3,)]
 
@@ -228,7 +242,9 @@ def _two_sessions(root):
     for sid, v in (("one", 1), ("two", 2)):
         b = bucket_of(f"s:{sid}")
         k = table_key("", "t", b, "base-1")
-        write_rows(root, k, con, "SELECT ? AS key, '1' AS id, false AS tomb, ? AS session_id, ? AS v", [f"s:{sid}", sid, v])
+        write_rows(
+            root, k, con, "SELECT ? AS key, '1' AS id, false AS tomb, ? AS session_id, ? AS v", [f"s:{sid}", sid, v]
+        )
         write_commit(root, "", b, 1, {"t": [k]}, {})
     assert bucket_of("s:one") != bucket_of("s:two")
 
@@ -239,7 +255,12 @@ def test_a_session_scope_reads_only_its_bucket(tmp_path):
     store = BucketStore(src, tmp_path / ".cache", tables={"t": ("s:", "session_id")}, clock=Clock())
     fetched: list[str] = []
     orig = src.get
-    src.get = lambda key: (fetched.append(key), orig(key))[1]  # type: ignore[method-assign]
+
+    def get(key: str) -> bytes:
+        fetched.append(key)
+        return orig(key)
+
+    src.get = get  # type: ignore[method-assign]
     with store.scope(Scope(sessions={"one"})):
         assert store.query("SELECT v FROM t") == [(1,)]
     # its bucket's commit and table file, nothing of the other session's bucket
@@ -399,7 +420,7 @@ def test_s3_requests_are_signed(monkeypatch):
         return Resp(b"body")
 
     monkeypatch.setattr("urllib.request.urlopen", urlopen)
-    s = S3Source("bkt", "us-east-1", endpoint="https://example.test", access_key="AK", secret_key="SK")
+    s = S3Source("bkt", "us-east-1", endpoint="https://example.test", access_key="AK", secret_key="SK")  # noqa: S106 (a test signature)
     assert s.list_after("p/", "p/") == ["p/a", "p/b"]
     assert s.get("p/a") == b"body"
     for r in sent:
