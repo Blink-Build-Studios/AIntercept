@@ -16,9 +16,11 @@ constraint in `docs/ui/BUILD_PLAN.md` stay exactly as they are, values included.
   ran, and its cost follows what arrived, never how much is stored. The tables
   must equal one pass over all the records, whatever the arrival order,
   lateness, routing, restarts, scale-ups, scale-downs or crashes.
-- **Data completeness comes first.** The pipeline must never lose a captured
-  record. If it can't store records, it stops AI traffic rather than let traffic
-  go through unrecorded.
+- **Data completeness comes first.** The pipeline does everything it can not to
+  lose a captured record: a disk spool, retries forever, and pushing back
+  instead of dropping. In enforce mode it fails closed, rejecting a call it
+  can't record. In observe mode, a drop is a counted, alerted last resort, and
+  traffic is never broken.
 - **S3 is the only backing store.** No database, queue or table engine, and no
   new services. Everything is Go and Python in this repo, plus Kubernetes.
 - **The UI and the API contract don't change.**
@@ -110,12 +112,16 @@ What a flush writes:
 - **Spool:** uploads are retried until S3 accepts them. Sealed files waiting to
   upload sit in an on-disk spool, which survives container restarts and is sized
   for hours of peak traffic.
-- **Fail closed:**
-  - If the spool fills, the observer stops accepting new streams. Envoy's
-    ext_proc runs with `failure_mode_allow: false`, so AI traffic is rejected
-    instead of passing through unrecorded.
-  - If the observer is down, the same rule applies.
-  - Spool depth and fail-closed events are metrics with alerts.
+- **What happens when data can't be stored depends on the mode:**
+  - **Observe mode** (the async tee, today's default) does its utmost not to
+    drop: it spools, retries forever, and pushes back instead of dropping. But
+    it never breaks the user's traffic. If the spool fills or the observer is
+    down, traffic keeps flowing (`failure_mode_allow: true`, as today). Any
+    record dropped as a last resort is counted, and the count alerts.
+  - **Enforce mode** (the Interceptor's synchronous, in-path filter) fails
+    closed, as it does today (`failure_mode_allow: false`). If the observer
+    can't take the call, the call is rejected.
+  - Spool depth, last-resort drops and rejections are all metrics with alerts.
 
 **Shutdown.** Kubernetes signals every container at once, so the order is
 enforced with `preStop` hooks:
@@ -254,18 +260,14 @@ These are small tables joined at query time, never copied into rows:
 - **What lag means.** A bucket's lag is how far its watermark trails the newest
   file written to its prefix: now minus the time of its oldest unprocessed file,
   or 0 if it has none. **Pipeline lag** is the maximum over all buckets.
-- **Who measures it.** Each replica publishes its buckets' lag as a metric,
-  alongside the watermark.
-- **Who scales.** A scaler loop inside the processor, run by whichever replica
-  holds the scaler lease, reads every bucket's watermark from S3.
-  - It sets the Deployment's replica count through the Kubernetes scale API,
-    with RBAC limited to that one Deployment's `scale` subresource.
-  - It scales out when lag stays above a target (for example 30 seconds) and
-    scales in when lag stays near zero.
-  - Its limits are a minimum of 1 and a maximum of B.
-
-  This adds nothing to the dependency list. Kubernetes' own HPA can't read a
-  custom metric without a metrics adapter, which would be a new component.
+- **Who measures it.** Every processor replica serves the pipeline lag at
+  `GET /lag`. It computes this from each bucket's watermark and the files after
+  it in S3, so every replica gives the same answer.
+- **Who scales.** KEDA, which already runs in the cluster. A `ScaledObject` with
+  the `metrics-api` trigger polls `/lag`, scales out when lag stays above a
+  target (for example 30 seconds) and scales in when it stays near zero. The
+  limits are a minimum of 1 and a maximum of B. This needs no Prometheus and
+  adds no new component.
 - **Rebalancing.** When replicas are added or removed, buckets rebalance through
   the leases. A bucket's state and watermark are in S3, so its next owner picks
   up exactly where the last one stopped.
@@ -475,8 +477,7 @@ the ones before it.
    demo cluster's DigitalOcean Spaces bucket is checked too and the result
    recorded. If Spaces fails, the demo cluster is moved to AWS for phase 4 or
    later; the design isn't weakened to fit it.
-4. **Resolve the four decisions** listed at the end. Decision 1, co-location,
-   changes phase 1.
+4. The four decisions are settled (see "Decisions" at the end).
 
 ---
 
@@ -484,25 +485,27 @@ the ones before it.
 
 This ships to the cluster on its own. It changes no table or UI output.
 
-### 1.1 Spike: Envoy's fail-closed behavior (do this first, a day at most)
+### 1.1 Failure policy by mode (decided)
 
-- **The question.** `observability_mode: true` makes Envoy send to ext_proc
-  without waiting. What does `failure_mode_allow: false` do then in three cases?
-  1. no healthy observer endpoint;
-  2. the observer refuses or closes the stream;
-  3. the observer applies gRPC flow-control backpressure.
-- **How.** Build each case in `test/interceptor/compose.yml` (Envoy + observer +
-  MinIO), and write the result into `docs/INTERCEPTION_ISSUES.md`.
-- **Plan A.** If closing the stream, or failing readiness, makes Envoy reject
-  the request, the observer fails closed by refusing new streams.
-- **Plan B.** Otherwise, the observing filter leaves observability mode only
-  when fail-closed is enabled. Envoy then waits for the observer's
-  acknowledgement of each phase, which costs one localhost round trip per phase.
-  Measure that latency in the spike and record it as an addendum to Decision 1.
+- **Observe mode** (`observability_mode: true`, async). Best effort, never
+  breaks traffic.
+  - `failure_mode_allow` stays `true`.
+  - The observer does everything it can not to drop data: the spool, retrying
+    forever, and pushing back instead of dropping (1.4).
+  - Once the spool is full, it drops only as a last resort, with a counter and
+    an alert.
+- **Enforce mode** (the Interceptor's `FULL_DUPLEX_STREAMED` filter,
+  `envoy.multi.yaml:176-203`). Fails closed.
+  - That filter already runs with `failure_mode_allow: false`.
+  - Add: when the spool is full, or the writer can't accept, enforce-mode streams
+    are refused, so the call is rejected rather than allowed through
+    unrecorded.
+  - The e2e test covers it (1.7).
+- No spike is needed for observe mode. Its behavior doesn't change.
 
-### 1.2 Co-locate the observer with Envoy (if decision 1 says so)
+### 1.2 Co-locate the observer with Envoy (decided)
 
-This is recommended. Each pod is then the full ingest stack, ext_proc goes over
+Every ingest pod is the full stack, scaled as one unit. ext_proc goes over
 localhost, and fail-closed and the shutdown order are local to the pod.
 
 1. **The pod.** Add an `observer` container to the Envoy Deployment
@@ -580,19 +583,21 @@ localhost, and fail-closed and the shutdown order are local to the pod.
 4. **Schema sampling caps (172-187, 306-309)** stay. Samples are diagnostics,
    not data.
 
-### 1.5 Fail closed
+### 1.5 The last resort, by mode
 
-- **When.** The writer's spool is full, or the observer is unready or down.
-- **What Envoy does then.** It rejects new AI requests, by plan A or plan B
-  from 1.1.
-- **Envoy config.** Set `failure_mode_allow: false` on the observing filter
-  (`envoy.multi.yaml:159`). It becomes the Helm value
-  `observer.failClosed: true`, which is the default.
-- **The smoke test.** Change `scripts/smoke-test.sh:118` to assert the
-  **rejection** when the observer is stopped. Add a second case, with
-  `failClosed: false`, that keeps the old assertion.
-- **Ownership checks.** The observer's interceptor path (`interceptor.go`)
-  already fails closed in enforce mode. Check that the two settings compose.
+- **Observe mode.**
+  - When the spool passes its high watermark, `Offer` stops waiting. The event
+    is dropped, `last_resort_drops` is incremented and an alarm is logged. The
+    counter is exported, and alerts on any value above zero.
+  - Traffic is never blocked: the observing filter keeps
+    `failure_mode_allow: true`, and `scripts/smoke-test.sh:118` keeps its
+    assertion.
+- **Enforce mode.**
+  - When the spool is full, the enforce path (`extproc/enforce.go:66`) returns
+    an error for new streams. Envoy's enforcing filter has
+    `failure_mode_allow: false`, so it rejects the call.
+  - Add a smoke and e2e case that fills the spool in enforce mode and asserts
+    the rejection.
 
 ### 1.6 Shutdown order (with co-location)
 
@@ -630,16 +635,20 @@ localhost, and fail-closed and the shutdown order are local to the pod.
   requests (mixed HTTP, SSE, WebSocket, analytics) while:
   - MinIO is stopped for 2 minutes, then restarted;
   - the observer container is killed (SIGKILL) and restarted;
-  - the spool is forced full: requests are rejected, and accepted again once it
-    drains.
+  - the spool is forced full: in observe mode, traffic keeps flowing and drops
+    are counted; in enforce mode, requests are rejected and accepted again once
+    the spool drains.
 - **Gate:**
-  - **No call goes missing.** Every request that Envoy *accepted* has exactly
-    one `complete` (or `disconnect`) row in the bucket, and every rejected
-    request has none. Counted by correlation id.
-  - **No silent drops.** No drop counters remain in the code.
+  - **No call goes missing short of a full spool.** Through S3 outages shorter
+    than the spool's capacity, and through observer SIGKILLs, every request has
+    exactly one `complete` (or `disconnect`) row in the bucket. Counted by
+    correlation id.
+  - **Every drop is counted.** Drops happen only past the spool's high
+    watermark, and each one is counted. There are no silent drop paths left.
+  - **Enforce mode never lets an unrecorded call through.**
   - `make check` and `make test-interceptor` pass.
-- **Deploy** to the demo cluster with the spool volume and `failClosed: true`.
-  Watch spool depth and rejections for a day.
+- **Deploy** to the demo cluster with the spool volume. Watch spool depth and the
+  last-resort counter for a day.
 
 ---
 
@@ -728,11 +737,31 @@ inventory into this document when 2.1 lands.
 ### 2.4 The deliverable
 
 **One PR: "Precompute: the seven tables, every endpoint SQL"** holds the whole
-stack. It isn't deployed: the processor still rebuilds everything on every run.
-It's merged so that main carries the reference builders, the table schemas, the
-SQL endpoints and the parity tooling that phases 4 and 5 build on.
+stack. It's merged so that main carries the reference builders, the table
+schemas, the SQL endpoints and the parity tooling that phases 4 and 5 build on.
 
-**Decision 3** (below) says whether it's deployed as interim relief.
+### 2.5 Deploy it as interim relief (decided)
+
+It makes the person page fast now. Its memory still grows with history, so it's
+deployed with guard rails and replaced by phase 6.
+
+1. **Measure first.** Run a full `aintercept process` on a copy of the demo
+   bucket's entire history (every day since capture began), locally.
+   - Record the peak RSS, the time per run, and how both grow per day of
+     history.
+   - Project when it would reach the processor's 2 GiB limit (in
+     `deploy/aintercept/values.yaml` in stitchwork).
+   - If it's under 50% of the limit with at least 30 days of headroom, deploy.
+     If not, raise the limit to fit, and record the date it runs out.
+2. **Deploy.** Use the same Helm release with new images (process and API). The
+   processor backfills the derived tables on its first run, then the API serves
+   them.
+3. **Watch it.** Add an alert on the processor's RSS at 70% of its limit, and on
+   run time above 60 s.
+4. **Check it.** Run the endpoint parity tools against the deployed API once,
+   comparing it with the previous release on the same data at a pinned now.
+5. **Replace it.** It stays until phase 6 lands. Phase 6 replaces it, and its
+   RSS alert is the backstop.
 
 ---
 
@@ -908,8 +937,6 @@ There's no global manifest.
 4. **Balancing.** Each replica lists the live leases. It claims free buckets up
    to `ceil(B / live replicas)`, and releases any above that by letting them
    lapse. A replica that's shutting down stops renewing after its final commit.
-5. **The scaler lease** (4.10) uses the same mechanism under
-   `leases/scaler/epoch-*`.
 
 ### 4.4 The cycle (`stream/cycle.go`)
 
@@ -1030,21 +1057,24 @@ detail objects.
   0 if there's nothing to process. Each replica exports this as a Prometheus
   gauge, `stream_bucket_lag_seconds{bucket}`. **Pipeline lag** is the maximum
   over all buckets.
-- **The scaler.** Whichever replica holds `leases/scaler` runs a loop every
-  30 s:
-  - It reads every bucket's newest commit (one LIST plus one GET per bucket).
-  - It computes the lag from the files listed after each watermark.
-  - It sets `spec.replicas` through the Kubernetes `scale` subresource of its
-    own Deployment. RBAC is a Role with `get`/`patch` on
-    `deployments/scale` for that one name.
+- **The lag endpoint.** Every replica serves `GET /lag` on its HTTP port as
+  JSON: `{"lag_seconds": <pipeline lag>, "backlog_files": <n>}`.
+  - It computes this from S3: each bucket's newest commit, plus the files listed
+    after its watermark.
+  - It's cached for 10 s.
+  - Every replica returns the same answer, so it doesn't matter which one KEDA
+    reaches.
+- **Scaling with KEDA (decided; KEDA already runs in the cluster).** A
+  `ScaledObject` (`templates/stream.yaml`) uses the **`metrics-api`** trigger
+  against the processor Service's `/lag`, with `valueLocation: lag_seconds`.
+  This needs no Prometheus, no scaler lease and no RBAC.
 - **Policy:**
-  - scale out ×2 (capped at B) when pipeline lag is above `STREAM_LAG_TARGET`
-    (30 s) for 2 minutes;
-  - scale in by 1 when lag is under 5 s for 10 minutes;
-  - min 1, max B.
-- **Alternative.** If the cluster already runs KEDA (the chart supports it for
-  the observer), the processor can export the gauge and use a KEDA `prometheus`
-  trigger instead. That's decision 4.
+  - target value `STREAM_LAG_TARGET` (30 s), polled every 15 s;
+  - scale out quickly (`scaleUp` stabilization 60 s) and in slowly (`scaleDown`
+    stabilization 600 s);
+  - `minReplicaCount: 1`, `maxReplicaCount: B`.
+  - With the chart value `stream.autoscaling.enabled: false`, there's a fixed
+    replica count instead.
 
 ### 4.11 Replay harness v2 and the gate
 
@@ -1191,19 +1221,15 @@ corrected reference. Each fix gets a test. Examples:
 
 ---
 
-## Decisions needed before phase 1
+## Decisions
 
-1. **Co-locate the observer in the Envoy pod** (recommended): one pod is the
-   whole ingest stack, ext_proc goes over localhost, and fail-closed and the
-   shutdown order stay inside the pod. The alternative keeps two Deployments
-   joined over the network.
-2. **How fail-closed works.** If the 1.1 spike shows Envoy only fails closed
-   outside observability mode, accept a localhost round trip per phase while
-   fail-closed is on.
-3. **Whether the phase 2 stack is deployed as interim relief.** It makes the
-   person page fast now, but its memory grows with history. If it's deployed,
-   that's only after a full run on the cluster's actual history shows it fits
-   under 2 GiB with room to spare, and the deploy is reverted as soon as phase 6
-   lands.
-4. **Lag scaling:** the in-process scaler (recommended, no new components), or
-   KEDA if the cluster already runs it.
+Decided on 2026-11-12:
+
+1. **Each ingest pod is the full stack.** Envoy and the observer run in one pod
+   and scale together (1.2).
+2. **Only enforce mode fails closed.** Observe mode does its utmost not to drop
+   data, but never breaks traffic (1.1, 1.5).
+3. **The phase 2 stack goes to the cluster as interim relief,** behind the
+   memory measurement and alerts in 2.5.
+4. **Lag scaling uses KEDA's `metrics-api` trigger** on the processor's `/lag`
+   endpoint. KEDA already runs in the cluster (4.10).
