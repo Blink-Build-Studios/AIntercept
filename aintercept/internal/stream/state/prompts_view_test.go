@@ -49,17 +49,17 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 	items := map[string][]*PromptItem{}
 	for _, r := range o.rows[TablePromptItems] {
 		p := r.(PromptItem)
-		items[p.SessionID] = append(items[p.SessionID], &p)
+		items[p.Row.SessionID] = append(items[p.Row.SessionID], &p)
 	}
 	steps := map[string][]*StepRow{}
 	for _, r := range o.rows[TablePromptSteps] {
 		s := r.(StepRow)
-		steps[s.SessionID] = append(steps[s.SessionID], &s)
+		steps[s.Step.SessionID] = append(steps[s.Step.SessionID], &s)
 	}
 	marks := map[string][]*MarkRow{}
 	for _, r := range o.rows[TableMarks] {
 		m := r.(MarkRow)
-		marks[m.SessionID] = append(marks[m.SessionID], &m)
+		marks[m.Mark.SessionID] = append(marks[m.Mark.SessionID], &m)
 	}
 	index := map[[2]string]int64{}
 	for _, r := range o.rows[TableMarkPromptIndex] {
@@ -88,18 +88,18 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 		its := items[sid]
 		sort.Slice(its, func(i, j int) bool {
 			a, b := its[i], its[j]
-			return lessOrd(a.TNS, a.Type, a.Group, a.OrdCorr, a.OrdSeq, a.OrdRowNS, a.OrdName, a.OrdMD, a.OrdKey,
-				b.TNS, b.Type, b.Group, b.OrdCorr, b.OrdSeq, b.OrdRowNS, b.OrdName, b.OrdMD, b.OrdKey)
+			return lessOrd(a.Row.TNS, a.Row.Type, a.Group, a.OrdCorr, a.OrdSeq, a.OrdRowNS, a.OrdName, a.OrdMD, a.OrdKey,
+				b.Row.TNS, b.Row.Type, b.Group, b.OrdCorr, b.OrdSeq, b.OrdRowNS, b.OrdName, b.OrdMD, b.OrdKey)
 		})
 		// The prompts in their own order (start, id): Codex's numbers and the open tail.
 		var prompts []*PromptItem
 		for _, it := range its {
-			if it.Type == "prompt" {
+			if it.Row.Type == "prompt" {
 				prompts = append(prompts, it)
 			}
 		}
 		sort.Slice(prompts, func(i, j int) bool {
-			return prompts[i].TNS < prompts[j].TNS || prompts[i].TNS == prompts[j].TNS && prompts[i].OrdKey < prompts[j].OrdKey
+			return prompts[i].Row.TNS < prompts[j].Row.TNS || prompts[i].Row.TNS == prompts[j].Row.TNS && prompts[i].OrdKey < prompts[j].OrdKey
 		})
 		rank := map[*PromptItem]int{}
 		for n, p := range prompts {
@@ -107,9 +107,9 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 		}
 		seqOf := map[string]int64{}
 		for i, it := range its {
-			r := it.PromptRow
+			r := it.Row
 			r.Seq, r.SessionLastNS = int64(i+1), ps.LastNS
-			if it.Type == "prompt" {
+			if it.Row.Type == "prompt" {
 				seqOf[*r.PromptID] = r.Seq
 				r.Typed = it.HasInput || codex
 				if !it.HasInput {
@@ -132,7 +132,7 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 			if seqOf[a.PromptID] != seqOf[b.PromptID] {
 				return seqOf[a.PromptID] < seqOf[b.PromptID]
 			}
-			return a.TNS < b.TNS || a.TNS == b.TNS && a.RequestID < b.RequestID
+			return a.Step.TNS < b.Step.TNS || a.Step.TNS == b.Step.TNS && a.Step.RequestID < b.Step.RequestID
 		})
 		n, last := int64(0), ""
 		for _, s := range sts {
@@ -140,7 +140,7 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 				n, last = 0, s.PromptID
 			}
 			n++
-			st := s.PromptStep
+			st := s.Step
 			st.Seq, st.Step = seqOf[s.PromptID], n
 			st.EventsPendingIfLive = !s.HasSuccess && (!ps.HasPromptEvent || ps.LastPromptEventNS <= s.PendEnd)
 			stepRows = append(stepRows, st)
@@ -152,8 +152,8 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 			if a.Group != b.Group {
 				return a.Group < b.Group
 			}
-			if a.TNS != b.TNS {
-				return a.TNS < b.TNS
+			if a.Mark.TNS != b.Mark.TNS {
+				return a.Mark.TNS < b.Mark.TNS
 			}
 			if lessOrd(0, "", 0, a.OrdCorr, a.OrdSeq, a.OrdRowNS, a.OrdName, a.OrdMD, a.OrdKey,
 				0, "", 0, b.OrdCorr, b.OrdSeq, b.OrdRowNS, b.OrdName, b.OrdMD, b.OrdKey) {
@@ -178,7 +178,7 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 			}
 		}
 		for _, m := range ms {
-			x := m.SessionMark
+			x := m.Mark
 			if m.PromptRef != "" {
 				if n, ok := index[[2]string{sid, m.PromptRef}]; ok {
 					x.PromptIndex = &n
@@ -211,13 +211,13 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 				continue
 			}
 			if seg != nil {
-				ts := c.TNS
+				ts := c.Mark.TNS
 				seg.ToNS = &ts
 				flush()
 			}
 			ip := c.PointIP
 			v6 := strings.Contains(ip, ":") && !strings.HasPrefix(strings.ToLower(ip), "::ffff:")
-			seg = &process.SessionMark{Kind: "network", TNS: c.TNS, IP: &ip, IPv6: v6}
+			seg = &process.SessionMark{Kind: "network", TNS: c.Mark.TNS, IP: &ip, IPv6: v6}
 		}
 		flush()
 		markRows = append(markRows, out...)

@@ -339,7 +339,7 @@ func (s *KeyState) promptRowEvent(d *Delta, sid string, x *pEv) {
 	case f.Name == "tengu_return_to_session":
 		if f.HadRecap {
 			d.Cases = append(d.Cases, CaseBetweenRecap)
-			s.rows.put(d, TablePromptItems, "r:"+x.ord.key, PromptItem{PromptRow: process.PromptRow{SessionID: sid, TNS: x.ord.ts,
+			s.rows.put(d, TablePromptItems, "r:"+x.ord.key, PromptItem{Row: process.PromptRow{SessionID: sid, TNS: x.ord.ts,
 				Type: "between", BetweenKind: ptrS("recap"), Detail: ptrS("recap shown on return")}, Group: 2,
 				OrdCorr: x.ord.corr, OrdSeq: x.ord.seq, OrdRowNS: x.ord.rowNS, OrdName: x.ord.name, OrdMD: x.ord.md, OrdKey: x.ord.key})
 		}
@@ -707,7 +707,7 @@ func (s *KeyState) writeStep(d *Delta, sid string, c *pCall) {
 		end = sc.End()
 	}
 	st.EventsPendingIfLive = false
-	s.rows.put(d, TablePromptSteps, "s:"+c.key.id, StepRow{PromptStep: st, PromptID: sc.Prompt(),
+	s.rows.put(d, TablePromptSteps, "s:"+c.key.id, StepRow{Step: st, PromptID: sc.Prompt(),
 		HasSuccess: byReq != nil || byClient != nil, PendEnd: end})
 }
 
@@ -717,7 +717,7 @@ func (s *KeyState) writeBetweenCall(d *Delta, sid string, c *pCall) {
 		s.rows.drop(d, TablePromptItems, "b:"+c.key.id)
 		return
 	}
-	s.rows.put(d, TablePromptItems, "b:"+c.key.id, PromptItem{PromptRow: process.PromptRow{SessionID: sid, TNS: c.key.ts,
+	s.rows.put(d, TablePromptItems, "b:"+c.key.id, PromptItem{Row: process.PromptRow{SessionID: sid, TNS: c.key.ts,
 		Type: "between", BetweenKind: ptrS("call"), Detail: ptrS(process.CallLabel(sc.Class(), sc.Model(), sc.Stop())),
 		RequestID: ptrS(c.key.id)}, Group: 3, OrdKey: c.key.id})
 }
@@ -946,7 +946,7 @@ func (s *KeyState) writePrompt(d *Delta, sid string, p *pPrompt) {
 		return true
 	})
 	row.HiddenJSON = process.CountsJSON(kinds, counts, false)
-	s.rows.put(d, TablePromptItems, "p:"+pid, PromptItem{PromptRow: row, Group: 0, OrdKey: pid, HasInput: hasInput,
+	s.rows.put(d, TablePromptItems, "p:"+pid, PromptItem{Row: row, Group: 0, OrdKey: pid, HasInput: hasInput,
 		HasTurnEnd: p.hasTurnEnd, ReportStatus: p.report != nil && p.report.hasStatus})
 }
 
@@ -1058,10 +1058,10 @@ func (s *KeyState) recompact(d *Delta, sid string, k evOrd) {
 	if c.reqID != "" {
 		rid = ptrS(c.reqID)
 	}
-	s.rows.put(d, TablePromptItems, "c:"+k.key, PromptItem{PromptRow: process.PromptRow{SessionID: sid, TNS: k.ts,
+	s.rows.put(d, TablePromptItems, "c:"+k.key, PromptItem{Row: process.PromptRow{SessionID: sid, TNS: k.ts,
 		Type: "between", BetweenKind: ptrS(kind), Detail: ptrS(label), RequestID: rid, TokensFrom: c.from, TokensTo: c.to,
 		WaitMS: wait}, Group: 1, OrdCorr: k.corr, OrdSeq: k.seq, OrdRowNS: k.rowNS, OrdName: k.name, OrdMD: k.md, OrdKey: k.key})
-	s.rows.put(d, TableMarks, "cm:"+k.key, MarkRow{SessionMark: process.SessionMark{SessionID: sid, Kind: "compaction",
+	s.rows.put(d, TableMarks, "cm:"+k.key, MarkRow{Mark: process.SessionMark{SessionID: sid, Kind: "compaction",
 		TNS: k.ts, TokensFrom: c.from, TokensTo: c.to, Idle: c.idle, WaitMS: wait, RequestID: rid}, Group: 3,
 		OrdCorr: k.corr, OrdSeq: k.seq, OrdRowNS: k.rowNS, OrdName: k.name, OrdMD: k.md, OrdKey: k.key})
 }
@@ -1083,7 +1083,7 @@ func (s *KeyState) writeCallMark(d *Delta, sid string, c *pCall) {
 		Model: nzS(sc.Model()), Context: c.ctx, Output: nzI(sc.Output()), Input: nzI(sc.Input()), CacheRead: nzI(sc.CacheRead()),
 		CacheWrite: nzI(sc.CacheWrite()), PromptID: nzS(sc.Prompt()),
 		Unreported: !(sc.ReqID() != "" && ps.reported["r:"+sc.ReqID()] > 0) && !(sc.ClientReqID() != "" && ps.reported["c:"+sc.ClientReqID()] > 0)}
-	s.rows.put(d, TableMarks, "c:"+c.key.id, MarkRow{SessionMark: m, Group: 0, OrdKey: c.key.id, PromptRef: sc.Prompt(), PointIP: sc.IP()})
+	s.rows.put(d, TableMarks, "c:"+c.key.id, MarkRow{Mark: m, Group: 0, OrdKey: c.key.id, PromptRef: sc.Prompt(), PointIP: sc.IP()})
 }
 
 // stepIDs1 counts a step's ids in or out, and writes the missed marks of the
@@ -1124,7 +1124,7 @@ func (s *KeyState) writeMissed(d *Delta, sid string, r *pReport) bool {
 	missed := !(r.rid != "" && ps.stepIDs["r:"+r.rid] > 0) && !(r.crid != "" && ps.stepIDs["c:"+r.crid] > 0)
 	_, had := s.rows[TableMarks]["mis:"+r.key]
 	if missed {
-		s.rows.put(d, TableMarks, "mis:"+r.key, MarkRow{SessionMark: process.SessionMark{SessionID: sid, Kind: "missed", TNS: r.ts},
+		s.rows.put(d, TableMarks, "mis:"+r.key, MarkRow{Mark: process.SessionMark{SessionID: sid, Kind: "missed", TNS: r.ts},
 			Group: 1, Sub: 1, OrdKey: r.key})
 	} else {
 		s.rows.drop(d, TableMarks, "mis:"+r.key)
@@ -1138,7 +1138,7 @@ func (s *KeyState) reportEvent(d *Delta, sid string, e *canon.Event) {
 	r := &pReport{ts: e.NS, key: e.EventKey, rid: rid, crid: crid}
 	ps.reports[r.key] = r
 	d.Cases = append(d.Cases, CaseMarkReported)
-	s.rows.put(d, TableMarks, "rep:"+r.key, MarkRow{SessionMark: process.SessionMark{SessionID: sid, Kind: "reported", TNS: r.ts},
+	s.rows.put(d, TableMarks, "rep:"+r.key, MarkRow{Mark: process.SessionMark{SessionID: sid, Kind: "reported", TNS: r.ts},
 		Group: 1, Sub: 0, OrdKey: r.key})
 	s.writeMissed(d, sid, r)
 	touched := map[string]bool{}
@@ -1161,9 +1161,9 @@ func (s *KeyState) reportEvent(d *Delta, sid string, e *canon.Event) {
 	}
 	for raw := range touched {
 		c := ps.calls[raw]
-		before := s.rows[TableMarks]["c:"+c.key.id].(MarkRow).Unreported
+		before := s.rows[TableMarks]["c:"+c.key.id].(MarkRow).Mark.Unreported
 		s.writeCallMark(d, sid, c)
-		if before != s.rows[TableMarks]["c:"+c.key.id].(MarkRow).Unreported {
+		if before != s.rows[TableMarks]["c:"+c.key.id].(MarkRow).Mark.Unreported {
 			d.Cases = append(d.Cases, CaseMarkUnreported)
 		}
 	}
@@ -1190,12 +1190,12 @@ func (s *KeyState) markEvent(d *Delta, sid string, e *canon.Event) {
 		}
 		if mf.Negative {
 			d.Cases = append(d.Cases, CaseMarkFriction)
-			base.SessionMark = process.SessionMark{SessionID: sid, Kind: "friction", TNS: e.NS, FrictionKind: ptrS("frustrated"), PromptIndex: mf.Index}
+			base.Mark = process.SessionMark{SessionID: sid, Kind: "friction", TNS: e.NS, FrictionKind: ptrS("frustrated"), PromptIndex: mf.Index}
 			s.rows.put(d, TableMarks, "f:"+o.key, base)
 		}
 	case "tengu_cancel":
 		d.Cases = append(d.Cases, CaseMarkFriction)
-		base.SessionMark = process.SessionMark{SessionID: sid, Kind: "friction", TNS: e.NS, FrictionKind: ptrS("interrupted")}
+		base.Mark = process.SessionMark{SessionID: sid, Kind: "friction", TNS: e.NS, FrictionKind: ptrS("interrupted")}
 		base.PromptRef = mf.PromptID
 		s.rows.put(d, TableMarks, "f:"+o.key, base)
 	case "tengu_bash_tool_command_executed":
@@ -1207,7 +1207,7 @@ func (s *KeyState) markEvent(d *Delta, sid string, e *canon.Event) {
 					parts = append(parts, p)
 				}
 			}
-			base.SessionMark = process.SessionMark{SessionID: sid, Kind: "friction", TNS: e.NS, FrictionKind: ptrS("destructive"),
+			base.Mark = process.SessionMark{SessionID: sid, Kind: "friction", TNS: e.NS, FrictionKind: ptrS("destructive"),
 				Detail: ptrS(strings.Join(parts, " · "))}
 			base.PromptRef = mf.PromptID
 			s.rows.put(d, TableMarks, "f:"+o.key, base)
@@ -1216,7 +1216,7 @@ func (s *KeyState) markEvent(d *Delta, sid string, e *canon.Event) {
 		if mf.Mode != nil && *mf.Mode != "" {
 			d.Cases = append(d.Cases, CaseMarkPermission)
 			base.Group = 4
-			base.SessionMark = process.SessionMark{SessionID: sid, Kind: "permission", TNS: e.NS, Mode: mf.Mode}
+			base.Mark = process.SessionMark{SessionID: sid, Kind: "permission", TNS: e.NS, Mode: mf.Mode}
 			s.rows.put(d, TableMarks, "pm:"+o.key, base)
 		}
 	}

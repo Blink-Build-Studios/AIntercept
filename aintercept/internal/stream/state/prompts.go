@@ -30,7 +30,7 @@ const (
 // input prompt's; DurationReportMS and TurnReportJSON are its Codex turn
 // report's (shown for a Codex session only).
 type PromptItem struct {
-	process.PromptRow
+	Row process.PromptRow `parquet:"row"`
 	// Group orders rows at the same time and type: 0 a prompt, 1 a compaction,
 	// 2 a recap, 3 a call with no prompt.
 	Group int32 `parquet:"group"`
@@ -55,10 +55,10 @@ type PromptItem struct {
 // pending when live, unreported (HasSuccess false) and no prompt-row event
 // followed PendEnd (its end, else its start).
 type StepRow struct {
-	process.PromptStep
-	PromptID   string `parquet:"prompt_id"`
-	HasSuccess bool   `parquet:"has_success"`
-	PendEnd    int64  `parquet:"pend_end"`
+	Step       process.PromptStep `parquet:"step"`
+	PromptID   string             `parquet:"prompt_id"`
+	HasSuccess bool               `parquet:"has_success"`
+	PendEnd    int64              `parquet:"pend_end"`
 }
 
 // PromptSession is a session's values the prompt rows and marks join.
@@ -83,7 +83,7 @@ const (
 // query's too: a segment per run of one mode (from the permission points) or IP
 // (from the call marks' PointIP), each ending where the next starts.
 type MarkRow struct {
-	process.SessionMark
+	Mark process.SessionMark `parquet:"mark"`
 	// Group: 0 a call, 1 a report (Sub 0 reported, 1 missed), 2 friction, 3 a
 	// compaction, 4 a permission point.
 	Group    int32  `parquet:"group"`
