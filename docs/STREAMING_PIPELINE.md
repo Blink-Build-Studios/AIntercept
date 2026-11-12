@@ -870,8 +870,11 @@ through one ext_proc stream, so assembly becomes per stream.
      any;
    - claude.ai `/api/account` bootstrap rows, which feed account identity.
 4. **Object key:** `records/v1/bucket=NN/minute=<upload UTC minute>/<incarnation>-<seq>.parquet`.
-   The minute is the writer's **upload-time** minute, taken when the batch is
-   sealed, so a spool replayed after an outage lands at the current minute.
+   The minute is fixed at the **upload attempt that lands**, not when the file
+   is sealed, so a file that waits out a store outage in the spool lands after
+   the processor's watermark, never behind it (PR #22). The writer logs each
+   attempted key and HEADs them before naming the file by a new minute, so
+   it's never written twice.
 
 ### 3.4 Spike: when the session is known
 
