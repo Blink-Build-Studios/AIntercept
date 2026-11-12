@@ -51,7 +51,7 @@ var rawKey = regexp.MustCompile(`(^|/)dt=\d{4}-\d{2}-\d{2}/hour=\d{2}/instance=[
 
 // Fact tables gain a part per run; snapshot tables are replaced each run.
 var factTables = []string{"requests", "events", "ledger"}
-var snapshotTables = []string{"sessions", "prompts", "person_devices", "people", "pending"}
+var snapshotTables = []string{"sessions", "prompts", "person_devices", "people", "pending", "pending_bodies"}
 
 // Config wires a processor to its stores.
 type Config struct {
@@ -224,6 +224,11 @@ func (p *Processor) Open(ctx context.Context) error {
 		return err
 	}
 	p.st.load(sessions, prompts, devices, pending, p.man.NewestNS)
+	var bodies []PendingBodies
+	if err := loadSnapshot(ctx, p, "pending_bodies", &bodies); err != nil {
+		return err
+	}
+	p.st.loadBodies(bodies)
 	var accounts []Account
 	if err := loadSnapshot(ctx, p, "accounts", &accounts); err != nil {
 		return err
@@ -501,6 +506,9 @@ func (p *Processor) run(ctx context.Context, files []Object) error {
 		return err
 	}
 	if err := setSnapshot(ctx, p, &next, "pending", tag, pending); err != nil {
+		return err
+	}
+	if err := setSnapshot(ctx, p, &next, "pending_bodies", tag, p.st.bodyRows()); err != nil {
 		return err
 	}
 	if err := setSnapshot(ctx, p, &next, "accounts", tag, p.st.accountRows()); err != nil {

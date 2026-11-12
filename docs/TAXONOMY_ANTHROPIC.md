@@ -116,8 +116,10 @@ matched.
 
 Columns: `client_event.name`, `.type` (`ClaudeCodeInternalEvent`), `.id`,
 `.timestamp`, `.session_id`, `.device_id`, `.account_uuid`,
-`.organization_uuid`, `.model`, `.agent_id`, `.agent_type`, and `.data`: the
-full event, with `additional_metadata` and `process` decoded from base64.
+`.organization_uuid`, `.model`, `.agent_id`, `.agent_type`, `.index` (the
+event's place in its batch, 1-based: two identical events in one batch are still
+distinct rows), and `.data`: the full event, with `additional_metadata` and
+`process` decoded from base64.
 
 **On every event** (`data`): `env` (Claude Code version and build time,
 platform, arch, shell, terminal, Node version, package managers, VCS, CI /

@@ -93,6 +93,7 @@ type Request struct {
 // Event is one analytics event a client reported. Fact table.
 //
 //	PK  event_key         correlation_id/client id, or correlation_id/h<hash of the row> when it has none
+//	                      (a repeat of an identical row: …/h<hash>-2, -3, …)
 //	FK  correlation_id    → requests.call_id: the analytics request that carried it
 //	FK  session_id        → sessions
 //	FK  prompt_id         → prompts
@@ -254,6 +255,18 @@ type Pending struct {
 	RequestID       string `parquet:"request_id,optional"`
 	ContentEncoding string `parquet:"content_encoding,optional"`
 	ProviderJSON    string `parquet:"provider_json,optional"` // allowlisted response header values
+}
+
+// PendingBodies is an in-flight model call's recorded bodies so far (full
+// interception only), so a restart mid-call still builds its complete
+// detail_json. Processor state, like pending's in-flight rows; the API never
+// reads it. Snapshot table.
+type PendingBodies struct {
+	CorrelationID    string `parquet:"correlation_id"`
+	Request          []byte `parquet:"request,optional"`
+	Response         []byte `parquet:"response,optional"`
+	RequestEncoding  string `parquet:"request_encoding,optional"`
+	ResponseEncoding string `parquet:"response_encoding,optional"`
 }
 
 // Ledger records each raw file a committed run processed: what makes a file

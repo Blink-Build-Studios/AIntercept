@@ -37,6 +37,9 @@ type ClientEvent struct {
 	UserID           string         `json:"user_id,omitempty"`
 	Email            string         `json:"email,omitempty"`
 	Data             map[string]any `json:"data,omitempty"`
+	// Index is the event's place in its batch (1-based), so two identical
+	// events a client sends in one batch are still distinct rows.
+	Index int `json:"index,omitempty"`
 	// NewEvent / NewFields flag what the client-event registry doesn't know
 	// yet: an unregistered event name, or field paths new for this name.
 	NewEvent  bool     `json:"new_event,omitempty"`
