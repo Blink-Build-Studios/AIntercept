@@ -216,3 +216,40 @@ func TestMessageType(t *testing.T) {
 		}
 	}
 }
+
+// A turn's start is a row of its own (at response.create), so a turn that's
+// still streaming can be shown: it names the turn and its Codex identity.
+func TestWebSocketTurnStartRow(t *testing.T) {
+	sink := &memSink{}
+	proc := events.NewProcessor(sink, events.ProcessorConfig{BufferSize: 256})
+	srv := New(Config{Processor: proc, InstanceID: "test", KeyHashSalt: "salt"})
+	st := &streamState{correlationID: "conn-3"}
+	srv.handle(st, &extprocv3.ProcessingRequest{ObservabilityMode: true, Request: &extprocv3.ProcessingRequest_RequestHeaders{
+		RequestHeaders: headers(":authority", "chatgpt.com", ":method", "GET", ":path", "/backend-api/codex/responses",
+			"upgrade", "websocket", "authorization", "Bearer tok", "user-agent", "codex_exec/0.164.0", "originator", "codex_exec"),
+	}})
+	srv.handle(st, &extprocv3.ProcessingRequest{Request: &extprocv3.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: headers(":status", "101"),
+	}})
+	create := `{"type":"response.create","model":"gpt-6.1-sol",` +
+		`"client_metadata":{"x-codex-turn-metadata":"{\"thread_id\":\"thr-1\",\"turn_id\":\"turn-1\"}"}}`
+	frame := wsFrame([]byte(create), true)
+	frame[0] = 0x81 // uncompressed text
+	srv.handle(st, &extprocv3.ProcessingRequest{Request: &extprocv3.ProcessingRequest_RequestBody{
+		RequestBody: &extprocv3.HttpBody{Body: frame}}})
+	proc.Close()
+
+	var start *events.Event
+	for i := range sink.ev {
+		if sink.ev[i].Phase == events.PhaseWSTurnStart {
+			start = &sink.ev[i]
+		}
+	}
+	if start == nil {
+		t.Fatalf("no turn start row among %d events", len(sink.ev))
+	}
+	if start.WSTurn != 1 || start.Transport != events.TransportWebSocket || start.ClientMetadata["thread_id"] != "thr-1" ||
+		start.Client["originator"] != "codex_exec" || start.KeyHash == "" || start.Host != "chatgpt.com" {
+		t.Fatalf("turn start row: %+v", start)
+	}
+}
