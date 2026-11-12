@@ -23,6 +23,7 @@ import contextvars
 import datetime as dt
 import hashlib
 import hmac
+import importlib.resources
 import json
 import os
 import pathlib
@@ -93,7 +94,68 @@ ROUTING: dict[str, tuple[str, str]] = {
     "accounts": ("*", ""),
     # The dimension tables (§4.6): small, read whole; the person tables are built from them.
     **{t: ("*", "") for t in DIMENSIONS},
+    # session_rows' inputs (sql/session_rows.sql): a session's own rows, and the small tables
+    # that link sessions (calls' accounts, title calls, lineage edges), read whole.
+    "session_prompt_ids": ("s:", "session_id"),
+    "session_devices": ("s:", "session_id"),
+    "session_missed": ("s:", "session_id"),
+    "session_call_accounts": ("*", ""),
+    "session_title_calls": ("*", ""),
+    "session_edges": ("*", ""),
 }
+
+# The processor's per-session tables session_rows is rebuilt from: when they're in the layout,
+# they're loaded as _s_<table> and the API's session_rows is the SQL over them.
+SESSION_INPUTS = (
+    "session_rows",
+    "session_prompt_ids",
+    "session_devices",
+    "session_call_accounts",
+    "session_missed",
+    "session_edges",
+    "session_title_calls",
+)
+_SESSION_SQL = importlib.resources.files("aintercept_api").joinpath("sql/session_rows.sql").read_text()
+# Each input restricted to one run's sessions (and, for the title calls, the accounts behind
+# them), under the name the SQL reads.
+_RESTRICT = {
+    "session_rows": "CREATE OR REPLACE TEMP TABLE session_rows AS "
+    "SELECT * FROM _s_session_rows WHERE session_id IN (SELECT unnest(?::VARCHAR[]))",
+    "session_prompt_ids": "CREATE OR REPLACE TEMP TABLE session_prompt_ids AS "
+    "SELECT * FROM _s_session_prompt_ids WHERE session_id IN (SELECT unnest(?::VARCHAR[]))",
+    "session_devices": "CREATE OR REPLACE TEMP TABLE session_devices AS "
+    "SELECT * FROM _s_session_devices WHERE session_id IN (SELECT unnest(?::VARCHAR[]))",
+    "session_call_accounts": "CREATE OR REPLACE TEMP TABLE session_call_accounts AS "
+    "SELECT * FROM _s_session_call_accounts WHERE session_id IN (SELECT unnest(?::VARCHAR[]))",
+    "session_missed": "CREATE OR REPLACE TEMP TABLE session_missed AS "
+    "SELECT * FROM _s_session_missed WHERE session_id IN (SELECT unnest(?::VARCHAR[]))",
+    "session_edges": "CREATE OR REPLACE TEMP TABLE session_edges AS "
+    "SELECT * FROM _s_session_edges WHERE parent_session_id IN (SELECT unnest(?::VARCHAR[]))",
+    "session_title_calls": "CREATE OR REPLACE TEMP TABLE session_title_calls AS "
+    "SELECT * FROM _s_session_title_calls WHERE account_id IN (SELECT unnest(?::VARCHAR[]))",
+}
+_DROP_RESTRICTED = {t: f"DROP TABLE IF EXISTS temp.{t}" for t in SESSION_INPUTS}  # noqa: S608 (fixed names)
+# The small inputs, when a layout has none of their rows.
+_SESSION_EMPTY = {
+    "session_prompt_ids": "CREATE TABLE _s_session_prompt_ids (session_id VARCHAR, prompt_id VARCHAR)",
+    "session_devices": "CREATE TABLE _s_session_devices (session_id VARCHAR, device_id VARCHAR)",
+    "session_call_accounts": "CREATE TABLE _s_session_call_accounts (session_id VARCHAR, account_id VARCHAR)",
+    "session_missed": "CREATE TABLE _s_session_missed (session_id VARCHAR, ts_ns BIGINT, event_key VARCHAR)",
+    "session_edges": "CREATE TABLE _s_session_edges (parent_session_id VARCHAR, child_session_id VARCHAR, "
+    "kind VARCHAR, child_first_ns BIGINT)",
+    "session_title_calls": "CREATE TABLE _s_session_title_calls (session_id VARCHAR, ts_ns BIGINT, call_id VARCHAR, "
+    "account_id VARCHAR, title VARCHAR)",
+}
+
+
+@dataclass(frozen=True)
+class TitleRun:
+    """One run of session_rows' SQL: its sessions, and the accounts whose title calls it read."""
+
+    sessions: frozenset[str]
+    titles_accounts: frozenset[str]
+
+
 _PERSON_RESOLUTION = ("person_sessions", "person_map")
 
 # The newest row of each (key, id), across the files in commit order; tombstones drop out.
@@ -425,6 +487,8 @@ class BucketStore:
         self._loaded: OrderedDict[tuple[Any, ...], _Loaded] = OrderedDict()
         self._loaded_max = loaded_max
         self._lock = threading.Lock()
+        self.title_runs: list[TitleRun] = []  # the newest table build's session_rows runs (for tests)
+        self.title_all_sessions: frozenset[str] = frozenset()
 
     # --- scopes --------------------------------------------------------------------------------
 
@@ -473,6 +537,8 @@ class BucketStore:
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
         names = list(only) if only is not None else list(self.tables)
+        if scope.sessions is not None and self._has_session_inputs() and only is None:
+            scope = Scope(sessions=self._session_group(scope.sessions), people=scope.people, accounts=scope.accounts)
         wants = {t: None if self.tables[t][0] == "*" else scope.buckets(self.tables[t][0]) for t in names}
         needed: set[int] = set()
         for want in wants.values():
@@ -486,7 +552,7 @@ class BucketStore:
             if sig in self._loaded:
                 self._loaded.move_to_end(sig)
                 return self._loaded[sig]
-        loaded = _Loaded(self._build(plan), commits)
+        loaded = _Loaded(self._build(plan, scope), commits)
         with self._lock:
             self.loads += 1
             self._loaded[sig] = loaded
@@ -495,7 +561,7 @@ class BucketStore:
                 old.con.close()
         return loaded
 
-    def _build(self, plan: dict[str, list[str]]) -> duckdb.DuckDBPyConnection:
+    def _build(self, plan: dict[str, list[str]], scope: Scope | None = None) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect()
         con.execute("SET TimeZone='UTC'")
         if self.memory_limit:
@@ -504,16 +570,22 @@ class BucketStore:
             con.execute(f"SET memory_limit = '{self.memory_limit}'")
         if self.threads:
             con.execute(f"SET threads = {int(self.threads)}")
+        sessions_shape = self._has_session_inputs() and self._stored_sessions(plan.get("session_rows") or [])
         for table, keys in plan.items():
             paths = [str(self.cache.path(k)) for k in keys]
+            name = "_s_" + table if sessions_shape and table in SESSION_INPUTS else table
             if paths:
-                con.sql(_NEWEST_KEYED if self.keep_keys else _NEWEST, params=[paths, paths]).create(table)
+                con.sql(_NEWEST_KEYED if self.keep_keys else _NEWEST, params=[paths, paths]).create(name)
+            elif sessions_shape and table in _SESSION_EMPTY:
+                con.execute(_SESSION_EMPTY[table])
             elif table in self.empty:
                 con.execute(self.empty[table])
             elif table == "probes":
                 con.execute(legacy._PROBES_EMPTY)
         # With the dimension tables in the layout, the person tables are theirs (the stored ones,
         # from the full-rebuild processor, are the fallback until it's gone).
+        if sessions_shape:
+            self._session_rows(con, None if scope is None else scope.sessions)
         if all(plan.get(t) for t in DIMENSIONS):
             for sql in PERSON_TABLES.values():
                 con.execute(sql)
@@ -543,6 +615,87 @@ class BucketStore:
     def cache_keys(self) -> list[str]:
         """The objects read so far (for tests)."""
         return list(self.cache._lru)
+
+    def _stored_sessions(self, keys: list[str]) -> bool:
+        """Whether session_rows' files are the processor's per-session rows (with own_title) rather
+        than the full-rebuild processor's finished rows."""
+        if not keys:
+            return False
+        cur = duckdb.connect().execute("SELECT * FROM read_parquet(?) LIMIT 0", [str(self.cache.path(keys[0]))])
+        return "own_title" in [d[0] for d in cur.description or []]
+
+    def _has_session_inputs(self) -> bool:
+        return all(t in self.tables for t in SESSION_INPUTS)
+
+    def _session_group(self, sessions: frozenset[str] | set[str]) -> frozenset[str]:
+        """The sessions linked to these through their calls' accounts (transitively): the ones
+        whose Codex titles can affect theirs."""
+        loaded = self._load(Scope.everything(), only=("session_call_accounts",))
+        found = loaded.con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'session_call_accounts'")
+        if not found.fetchall()[0][0]:  # a layout without the per-session tables
+            return frozenset(sessions)
+        rows = loaded.con.execute("SELECT session_id, account_id FROM session_call_accounts").fetchall()
+        group, accounts = set(sessions), set[str]()
+        while True:
+            more = {a for s, a in rows if s in group} - accounts
+            if not more:
+                return frozenset(group)
+            accounts |= more
+            group |= {s for s, a in rows if a in more}
+
+    def _session_rows(self, con: duckdb.DuckDBPyConnection, sessions: frozenset[str] | set[str] | None) -> None:
+        """The API's session_rows from the per-session tables: the SQL run once per group of
+        sessions linked by their calls' accounts that has title calls (the recursive titles
+        query only ever sees one group), and once for the rest, with no title calls."""
+        have = {s for (s,) in con.execute("SELECT session_id FROM _s_session_rows").fetchall()}
+        if sessions is not None:
+            have &= set(sessions)
+        rows = [r for r in con.execute("SELECT session_id, account_id FROM _s_session_call_accounts").fetchall()]
+        titled = {a for (a,) in con.execute("SELECT DISTINCT account_id FROM _s_session_title_calls").fetchall()}
+        parent = {s: s for s in have}
+
+        def find(x: str) -> str:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        by_account: dict[str, str] = {}
+        for s_, a in rows:
+            if s_ not in parent:
+                continue
+            if a in by_account:
+                parent[find(s_)] = find(by_account[a])
+            else:
+                by_account[a] = s_
+        groups: dict[str, set[str]] = {}
+        for s_ in have:
+            groups.setdefault(find(s_), set()).add(s_)
+        runs, rest = [], set()
+        for g in groups.values():
+            accts = {a for s_, a in rows if s_ in g}
+            if accts & titled:
+                runs.append(TitleRun(frozenset(g), frozenset(accts & titled)))
+            else:
+                rest |= g
+        if rest or not runs:
+            runs.append(TitleRun(frozenset(rest), frozenset()))
+        first = True
+        for run in runs:
+            ids = sorted(run.sessions)
+            for t, sql in _RESTRICT.items():
+                con.execute(sql, [sorted(run.titles_accounts) if t == "session_title_calls" else ids])
+            out = con.sql(_SESSION_SQL)
+            if first:
+                out.create("_api_session_rows")
+                first = False
+            else:
+                out.insert_into("_api_session_rows")
+            for sql in _DROP_RESTRICTED.values():
+                con.execute(sql)
+        con.sql("SELECT * FROM _api_session_rows ORDER BY session_id").create("session_rows")
+        con.execute("DROP TABLE _api_session_rows")
+        self.title_runs, self.title_all_sessions = runs, frozenset(have)
 
     def _has_dimensions(self) -> bool:
         return all(t in self.tables for t in DIMENSIONS)
