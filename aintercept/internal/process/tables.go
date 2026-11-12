@@ -93,6 +93,7 @@ type Request struct {
 // Event is one analytics event a client reported. Fact table.
 //
 //	PK  event_key         correlation_id/client id, or correlation_id/h<hash of the row> when it has none
+//	                      (a repeat of an identical row: …/h<hash>-2, -3, …)
 //	FK  correlation_id    → requests.call_id: the analytics request that carried it
 //	FK  session_id        → sessions
 //	FK  prompt_id         → prompts
