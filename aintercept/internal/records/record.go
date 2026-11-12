@@ -43,10 +43,14 @@ type Record struct {
 	RoutingKey string `parquet:"routing_key"`
 	Bucket     int32  `parquet:"bucket"`
 	// An analytics batch: the request that carried the event (BatchID, its
-	// correlation id), the event's place in the whole batch (BatchN), and on the
+	// correlation id), the event's place in the whole batch (BatchN) and its rank
+	// among the batch's Claude Code events (BatchCCN), and on the
 	// request's own call record the session its earliest event names.
-	BatchID      string `parquet:"batch_id,optional"`
-	BatchN       int64  `parquet:"batch_n,optional"`
+	BatchID string `parquet:"batch_id,optional"`
+	BatchN  int64  `parquet:"batch_n,optional"`
+	// BatchCCN is a Claude Code event's rank among its batch's Claude Code
+	// events, as the event rows number them (their event id); 0 for others.
+	BatchCCN     int64  `parquet:"batch_cc_n,optional"`
 	BatchSession string `parquet:"batch_session,optional"`
 	// EventKey is a client event's key: its record id.
 	EventKey string `parquet:"event_key,optional"`

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -101,8 +102,7 @@ type Assembler struct {
 	calls    map[string]*call
 	turns    map[string]string         // a WebSocket turn's call id -> its call_start's key
 	copies   map[string]map[string]int // per transaction, identical unnumbered events seen
-	held     *Record                   // an analytics request's call, waiting for its events
-	heldCall *call
+	held     *heldBatch                // an analytics batch, until its last event
 	newestNS int64
 	rows     int
 	cases    map[string]int64
@@ -119,6 +119,17 @@ type Assembler struct {
 	Budget  *membudget.Budget
 	lines   map[string]*detailLines
 	details []Detail
+}
+
+// heldBatch is an analytics batch being read: its request's call_end (when
+// its complete came first, as the observer emits it) and its events, held
+// until the batch's last event, so each event can be ranked among the batch's
+// Claude Code events and the call routed with the batch's earliest session.
+type heldBatch struct {
+	corr   string
+	call   *Record
+	c      *call
+	events []Record
 }
 
 // Detail is one call's detail object: its rows, as the raw log has them, in order.
@@ -150,7 +161,7 @@ func (a *Assembler) keepLine(e *events.Event, line []byte) {
 	if !a.KeepDetail || e.Phase == events.PhaseVerdict {
 		return
 	}
-	if c := a.calls[e.CorrelationID]; c != nil && c.done && c != a.heldCall {
+	if c := a.calls[e.CorrelationID]; c != nil && c.done && (a.held == nil || a.held.c != c) {
 		return
 	}
 	d := a.lines[e.CorrelationID]
@@ -233,7 +244,7 @@ func (a *Assembler) record(r Record, instance string) Record {
 // file is the raw file it's in ("" live), kept as the call's provenance.
 func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 	var out []Record
-	if a.held != nil && (e.CorrelationID != a.held.CallID || e.Phase != events.PhaseClientEvent) {
+	if a.held != nil && (e.CorrelationID != a.held.corr || e.Phase != events.PhaseClientEvent) {
 		out = append(out, a.release()...)
 	}
 	if e.TimestampNS > a.newestNS {
@@ -350,8 +361,8 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			c.done = true
 			c.p.SeenNS = e.TimestampNS
 			c.bodies = nil
-			a.held = &Record{Kind: KindCallEnd, CallID: r.CallID, BatchID: r.CallID, Call: &r, Instance: e.ObserverInstance}
-			a.heldCall = c
+			a.held = &heldBatch{corr: e.CorrelationID, c: c,
+				call: &Record{Kind: KindCallEnd, CallID: r.CallID, BatchID: r.CallID, Call: &r, Instance: e.ObserverInstance}}
 			return out
 		}
 		out = append(out, a.end(c, r, e)...)
@@ -383,7 +394,11 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			a.hit(CaseEventNoPayload)
 			return out
 		}
-		out = append(out, a.event(e, line, file))
+		rec := a.event(e, line, file)
+		if a.held == nil { // events without their request's row before them
+			a.held = &heldBatch{corr: e.CorrelationID}
+		}
+		a.held.events = append(a.held.events, rec)
 	case events.PhaseVerdict:
 		a.hit(CaseVerdict)
 	default:
@@ -425,25 +440,66 @@ func (a *Assembler) endKeys(r canon.Request, startKey, batchSession, instance st
 	return out
 }
 
-// release ends the held analytics request: its call_end goes with the session
-// its batch's earliest event names.
+// release ends the held analytics batch: its request's call_end goes with the
+// session its batch's earliest event names, and each Claude Code event gets
+// its rank among the batch's Claude Code events.
 func (a *Assembler) release() []Record {
-	h, c := a.held, a.heldCall
-	a.held, a.heldCall = nil, nil
+	h := a.held
+	a.held = nil
 	if h == nil {
 		return nil
 	}
-	if c.session != "" {
-		a.hit(CaseBatchSession)
-	} else {
-		a.hit(CaseBatchNoSession)
+	var out []Record
+	if h.call != nil {
+		c := h.c
+		if c.session != "" {
+			a.hit(CaseBatchSession)
+		} else {
+			a.hit(CaseBatchNoSession)
+		}
+		a.writeDetail(h.corr)
+		out = a.endKeys(*h.call.Call, c.startKey, c.session, h.call.Instance)
+		for i := range out {
+			out[i].BatchID = h.corr
+		}
 	}
-	a.writeDetail(h.CallID)
-	out := a.endKeys(*h.Call, c.startKey, c.session, h.Instance)
-	for i := range out {
-		out[i].BatchID = h.CallID
+	rankClaudeCode(h.events)
+	return append(out, h.events...)
+}
+
+// rankClaudeCode numbers a batch's Claude Code events as the event rows do:
+// by sequence, row time, client time, name ("(unnamed)" for none) and metadata;
+// identical ones in arrival order.
+func rankClaudeCode(evs []Record) {
+	var cc []*Record
+	for i := range evs {
+		if evs[i].Event.Source == canon.ProductClaudeCode {
+			cc = append(cc, &evs[i])
+		}
 	}
-	return out
+	name := func(r *Record) string {
+		if r.Event.Name == "" {
+			return "(unnamed)"
+		}
+		return r.Event.Name
+	}
+	sort.SliceStable(cc, func(i, j int) bool {
+		x, y := cc[i].Event, cc[j].Event
+		switch {
+		case x.Seq != y.Seq:
+			return x.Seq < y.Seq
+		case x.RowNS != y.RowNS:
+			return x.RowNS < y.RowNS
+		case x.NS != y.NS:
+			return x.NS < y.NS
+		case name(cc[i]) != name(cc[j]):
+			return name(cc[i]) < name(cc[j])
+		}
+		return x.MetadataJSON < y.MetadataJSON
+	})
+	for i, r := range cc {
+		r.BatchCCN = int64(i + 1)
+	}
 }
 
 // Flush releases what's held (an analytics request waiting for more events).
@@ -551,7 +607,7 @@ func (a *Assembler) sweep() {
 		case c.p.WebSocket:
 			ttl = pendingTTLWS
 		}
-		if c == a.heldCall || a.newestNS-c.p.SeenNS <= int64(ttl) {
+		if a.held != nil && c == a.held.c || a.newestNS-c.p.SeenNS <= int64(ttl) {
 			continue
 		}
 		delete(a.calls, id)

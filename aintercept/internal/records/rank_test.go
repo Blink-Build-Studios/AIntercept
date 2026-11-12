@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
 
@@ -96,5 +97,24 @@ func TestIdenticalEventsRankInArrivalOrder(t *testing.T) {
 	}
 	if len(seen) != 3 || seen[0] != 2 || seen[1] != 3 || seen[2] != 1 {
 		t.Fatalf("ranks %v, want [2 3 1]", seen)
+	}
+}
+
+// The order's every key, one at a time: sequence, row time, client time, name
+// (unnamed as "(unnamed)"), metadata.
+func TestRankOrderKeys(t *testing.T) {
+	ev := func(id string, seq, row, ns int64, name, md string) Record {
+		return Record{Event: &canon.Event{EventKey: id, Source: "claude_code", Seq: seq, RowNS: row, NS: ns, Name: name, MetadataJSON: md}}
+	}
+	rs := []Record{
+		ev("md-b", 1, 1, 1, "n", "b"), ev("seq2", 2, 0, 0, "", ""), ev("row2", 1, 2, 0, "", ""), ev("ns2", 1, 1, 2, "", ""),
+		ev("unnamed", 1, 1, 1, "", ""), ev("md-a", 1, 1, 1, "n", "a"),
+	}
+	rankClaudeCode(rs)
+	want := map[string]int64{"unnamed": 1, "md-a": 2, "md-b": 3, "ns2": 4, "row2": 5, "seq2": 6}
+	for _, r := range rs {
+		if r.BatchCCN != want[r.Event.EventKey] {
+			t.Errorf("%s: %d, want %d", r.Event.EventKey, r.BatchCCN, want[r.Event.EventKey])
+		}
 	}
 }
