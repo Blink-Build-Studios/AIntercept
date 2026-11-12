@@ -97,6 +97,11 @@ ROUTING: dict[str, tuple[str, str]] = {
 _PERSON_RESOLUTION = ("person_sessions", "person_map")
 
 # The newest row of each (key, id), across the files in commit order; tombstones drop out.
+# (_NEWEST_KEYED keeps the key and id: the contract's tables as such, for tests and tools.)
+_NEWEST_KEYED = """SELECT * EXCLUDE (tomb, _file, _r) FROM (
+    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
+    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
+) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
 _NEWEST = """SELECT * EXCLUDE (key, id, tomb, _file, _r) FROM (
     SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
     FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
@@ -115,6 +120,10 @@ class Source(Protocol):
 
     def get(self, key: str) -> bytes: ...
 
+    def folders(self, prefix: str) -> list[str]:
+        """The names of the "folders" directly under prefix (S3 common prefixes)."""
+        ...
+
 
 class LocalSource:
     """A directory laid out like the bucket (tests, a local stack)."""
@@ -131,6 +140,10 @@ class LocalSource:
 
     def get(self, key: str) -> bytes:
         return (self.root / key).read_bytes()
+
+    def folders(self, prefix: str) -> list[str]:
+        base = self.root / prefix
+        return sorted(p.name for p in base.iterdir() if p.is_dir()) if base.is_dir() else []
 
 
 class S3Source:
@@ -176,6 +189,23 @@ class S3Source:
 
     def get(self, key: str) -> bytes:
         return self._request("/" + self.bucket + "/" + urllib.parse.quote(key, safe="/~"), {})
+
+    def folders(self, prefix: str) -> list[str]:
+        out: list[str] = []
+        token: str | None = None
+        while True:
+            q = {"list-type": "2", "prefix": prefix, "delimiter": "/"}
+            if token:
+                q["continuation-token"] = token
+            root = ET.fromstring(self._request("/" + self.bucket, q))  # noqa: S314 (S3's response)
+            ns = root.tag.split("}")[0] + "}" if root.tag.startswith("{") else ""
+            for c in root.findall(ns + "CommonPrefixes"):
+                out += [(p.text or "")[len(prefix) :].rstrip("/") for p in c.findall(ns + "Prefix")]
+            more = [e.text for e in root.findall(ns + "IsTruncated")]
+            nxt = [e.text or "" for e in root.findall(ns + "NextContinuationToken")]
+            if more != ["true"] or not nxt:
+                return out
+            token = nxt[0]
 
     def _request(self, path: str, query: dict[str, str]) -> bytes:
         now = dt.datetime.now(dt.UTC)
@@ -269,8 +299,8 @@ class Commit:
 def _parse_commit(key: str, body: bytes) -> Commit:
     m = json.loads(body)
 
-    def keys(refs: dict[str, list[dict[str, Any]]] | None) -> dict[str, list[str]]:
-        return {t: [r["key"] for r in rs] for t, rs in (refs or {}).items()}
+    def keys(refs: dict[str, list[dict[str, Any]] | None] | None) -> dict[str, list[str]]:
+        return {t: [r["key"] for r in rs or []] for t, rs in (refs or {}).items()}
 
     return Commit(
         bucket=int(m["bucket"]),
@@ -370,6 +400,7 @@ class BucketStore:
         empty: dict[str, str] | None = None,
         views: str | None = None,
         raw: RawSource | None = None,
+        keep_keys: bool = False,
         clock: Callable[[], float] = time.monotonic,
         cache_bytes: int = 2 << 30,
         loaded_max: int = 16,
@@ -382,7 +413,10 @@ class BucketStore:
         self.views = views if views is not None else (legacy.VIEWS if tables is None else "")
         self.raw = raw
         self.cache = ObjectCache(source, pathlib.Path(cache_dir), cache_bytes)
-        self.logs = [CommitLog(source, prefix, b, clock=clock) for b in range(BUCKETS)]
+        self.clock, self.keep_keys = clock, keep_keys
+        self._logs: dict[int, CommitLog] = {}
+        self._buckets: frozenset[int] = frozenset()
+        self._listed: float | None = None
         self.memory_limit, self.threads = memory_limit, threads
         self.data_dir = pathlib.Path(".")
         self.shaped_dir = pathlib.Path(prefix or ".")
@@ -442,8 +476,8 @@ class BucketStore:
         wants = {t: None if self.tables[t][0] == "*" else scope.buckets(self.tables[t][0]) for t in names}
         needed: set[int] = set()
         for want in wants.values():
-            needed |= set(range(BUCKETS)) if want is None else want
-        commits = {b: c for b in sorted(needed) if (c := self.logs[b].latest()) is not None}
+            needed |= set(range(1 << 16)) if want is None else want
+        commits = {b: c for b in sorted(needed & self._discover()) if (c := self._log(b).latest()) is not None}
         plan: dict[str, list[str]] = {}
         for t, want in wants.items():
             plan[t] = [k for b in sorted(commits) if want is None or b in want for k in commits[b].files(t)]
@@ -473,7 +507,7 @@ class BucketStore:
         for table, keys in plan.items():
             paths = [str(self.cache.path(k)) for k in keys]
             if paths:
-                con.sql(_NEWEST, params=[paths, paths]).create(table)
+                con.sql(_NEWEST_KEYED if self.keep_keys else _NEWEST, params=[paths, paths]).create(table)
             elif table in self.empty:
                 con.execute(self.empty[table])
             elif table == "probes":
@@ -486,6 +520,29 @@ class BucketStore:
         if self.views and all(t in plan for t in self.tables):
             con.execute(self.views)
         return con
+
+    def _discover(self) -> frozenset[int]:
+        """The buckets that have a commit log: the folders under stream/v1/buckets/, listed at most
+        every 30 seconds (buckets appear when the processor first commits one)."""
+        with self._lock:
+            now = self.clock()
+            if self._listed is not None and now - self._listed < 30.0:
+                return self._buckets
+            self._listed = now
+        found = {int(n) for n in self.source.folders(f"{self.prefix}{ROOT}buckets/") if n.isdigit()}
+        with self._lock:
+            self._buckets = frozenset(found)
+            return self._buckets
+
+    def _log(self, bucket: int) -> CommitLog:
+        with self._lock:
+            if bucket not in self._logs:
+                self._logs[bucket] = CommitLog(self.source, self.prefix, bucket, clock=self.clock)
+            return self._logs[bucket]
+
+    def cache_keys(self) -> list[str]:
+        """The objects read so far (for tests)."""
+        return list(self.cache._lru)
 
     def _has_dimensions(self) -> bool:
         return all(t in self.tables for t in DIMENSIONS)
