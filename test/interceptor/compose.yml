@@ -1,6 +1,7 @@
 # The Interceptor end-to-end test stack (scripts/test-interceptor.sh):
 # Envoy (both filters) → fixture, with the observer and the example redact
-# Interceptor. Records land in ./out/events.ndjson.
+# Interceptor. Records land in ./out/events.ndjson and, through the observer's
+# writer and its spool (./out/spool), in an S3 emulator (moto).
 name: aintercept-interceptor-test
 services:
   fixture:
@@ -8,13 +9,18 @@ services:
     environment:
       FIXTURE_PLAIN_LISTEN: "0.0.0.0:8080"
       FIXTURE_TLS: "off"
+  moto:
+    # S3 emulator for the no-drop tests. They simulate an outage by pausing it,
+    # which keeps its in-memory objects.
+    image: motoserver/moto:5.1.14@sha256:800719627036dc38dc699e9f314f624f2c98ac3d8bb754db078cb2698f08ee77
+    ports: ["19000:5000"]
   redact:
     build: ../../aintercept
     image: aintercept-test/aintercept:dev
     entrypoint: ["/redact-interceptor"]
   observer:
     image: aintercept-test/aintercept:dev
-    depends_on: [redact]
+    depends_on: [redact, moto]
     command: ["observer"]
     user: "0"
     environment:
@@ -25,7 +31,19 @@ services:
       INTERCEPTOR_ENDPOINT: redact:9100
       INTERCEPTOR_CONTENT: "true"
       INTERCEPTOR_DEADLINE_MS: "500"
-    volumes: ["./out:/out"]
+      OBSERVER_S3_BUCKET: e2e
+      OBSERVER_S3_PREFIX: e2e
+      OBSERVER_S3_REGION: us-east-1
+      OBSERVER_S3_ENDPOINT: http://moto:5000
+      OBSERVER_S3_FORCE_PATH_STYLE: "true"
+      OBSERVER_S3_ACCESS_KEY_ID: test
+      OBSERVER_S3_SECRET_ACCESS_KEY: test
+      OBSERVER_KEY_HASH_SALT: e2e-salt
+      OBSERVER_SCHEMA_SAMPLING: "false"
+      OBSERVER_SPOOL_DIR: /spool
+      OBSERVER_SPOOL_MAX_BYTES: ${OBSERVER_SPOOL_MAX_BYTES:-1073741824}
+      OBSERVER_UPLOAD_TIMEOUT_SECONDS: "5"
+    volumes: ["./out:/out", "./out/spool:/spool"]
     ports: ["19001:9001"]
   envoy:
     image: envoyproxy/envoy:v1.39.6@sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed
