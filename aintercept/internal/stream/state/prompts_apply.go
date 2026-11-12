@@ -404,6 +404,11 @@ func (s *KeyState) promptRowEvent(d *Delta, sid string, x *pEv) {
 				continue
 			}
 			evIndex(ps.success, k, x)
+			// A step reads only its id's first report: a later one changes no step,
+			// so a report costs the same however many steps share its id.
+			if firstEv(ps.success[k]) != x {
+				continue
+			}
 			for id := range ps.byAnyID[k] {
 				touched[id] = true
 			}
