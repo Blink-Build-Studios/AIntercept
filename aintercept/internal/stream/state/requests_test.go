@@ -878,24 +878,7 @@ func TestRequestsFlatCost(t *testing.T) {
 				s.Apply(reportEv("big", at, fmt.Sprintf("gone%d", i)))
 			}
 		}
-		pre := make([]records.Record, 3000)
-		for k := range pre {
-			at := int64(n)*1000 + int64(k)*10
-			switch k % 10 {
-			case 0:
-				pre[k] = callStart(rqCall(fmt.Sprintf("cx%d", k), "big", at, "px", fmt.Sprintf("rx%d", k)))
-			case 1:
-				pre[k] = callEnd(rqCall(fmt.Sprintf("cx%d", k-1), "big", at-10, "px", fmt.Sprintf("rx%d", k-1)))
-			case 2, 3:
-				pre[k] = reportEv("big", at, fmt.Sprintf("rx%d", k-2))
-			case 4:
-				pre[k] = callEnd(failed(rqCall(fmt.Sprintf("cx%d", k), "big", at, "px", fmt.Sprintf("rx%d", k)), 529))
-			case 5:
-				pre[k] = retryEv("big", at, "px", 1)
-			default:
-				pre[k] = callEnd(rqCall(fmt.Sprintf("cx%d", k), "big", at, fmt.Sprintf("py%d", k), fmt.Sprintf("rx%d", k)))
-			}
-		}
+		pre := requestsDenseMix(n)
 		k := 0
 		allocs := testing.AllocsPerRun(1000, func() { s.Apply(pre[k]); k++ })
 		start := time.Now()
@@ -1035,4 +1018,28 @@ func writeSQLFixture(t *testing.T, dir string, o *streamOut, ref *process.Derive
 	if diffs := requestDiffs(ref, o, 3); len(diffs) > 0 {
 		t.Errorf("%s: the stored tables don't rebuild the reference: %v", dir, diffs)
 	}
+}
+
+// requestsDenseMix is the flat-cost tests' new records after a session of n:
+// call starts and ends, reports, a failure and a retry every ten records.
+func requestsDenseMix(n int) []records.Record {
+	pre := make([]records.Record, 3000)
+	for k := range pre {
+		at := int64(n)*1000 + int64(k)*10
+		switch k % 10 {
+		case 0:
+			pre[k] = callStart(rqCall(fmt.Sprintf("cx%d", k), "big", at, "px", fmt.Sprintf("rx%d", k)))
+		case 1:
+			pre[k] = callEnd(rqCall(fmt.Sprintf("cx%d", k-1), "big", at-10, "px", fmt.Sprintf("rx%d", k-1)))
+		case 2, 3:
+			pre[k] = reportEv("big", at, fmt.Sprintf("rx%d", k-2))
+		case 4:
+			pre[k] = callEnd(failed(rqCall(fmt.Sprintf("cx%d", k), "big", at, "px", fmt.Sprintf("rx%d", k)), 529))
+		case 5:
+			pre[k] = retryEv("big", at, "px", 1)
+		default:
+			pre[k] = callEnd(rqCall(fmt.Sprintf("cx%d", k), "big", at, fmt.Sprintf("py%d", k), fmt.Sprintf("rx%d", k)))
+		}
+	}
+	return pre
 }

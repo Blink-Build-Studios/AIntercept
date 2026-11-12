@@ -118,6 +118,7 @@ type reqState struct {
 	byReq    map[string]map[string]bool     // request id → the reports naming it
 	byCRID   map[string]map[string]bool     // client request id → the same
 	maxSpan  int64                          // the longest failed call, start to end: how far before a retry its call can start
+	rebuilt  int                            // rows txRow has rebuilt (a test's measure of the work)
 	lastOK   bool                           // the session's newest time as last written
 	lastNS   int64
 }
@@ -377,6 +378,7 @@ func (s *KeyState) retryArrived(d *Delta, ts int64) {
 // txRow writes a call's row as it stands (or takes it back, when it has none).
 func (s *KeyState) txRow(d *Delta, callID string) {
 	x := s.rq
+	x.rebuilt++
 	e := x.txs[callID]
 	if e == nil {
 		s.rows.drop(d, TableRequestTxs, "tx:"+callID)
