@@ -477,16 +477,11 @@ func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	// Readiness. With OBSERVER_UNREADY_WHEN_FULL (set when enforcement is on),
-	// a full spool takes the pod out of rotation so new connections go to pods
-	// that can record them. Off by default: observed traffic must never break,
-	// and a fleet of unready pods would break it.
-	unreadyWhenFull := os.Getenv("OBSERVER_UNREADY_WHEN_FULL") == "true"
+	// Readiness never depends on the spool. A full spool fails closed only for
+	// enforced calls, which are refused per stream; readiness gates the whole
+	// pod, and observed traffic must keep flowing. Fullness is on /stats
+	// (writer.full, LastResortDrops) for alerting.
 	mux.HandleFunc("/healthz/ready", func(w http.ResponseWriter, _ *http.Request) {
-		if unreadyWhenFull && writer != nil && writer.Full() {
-			http.Error(w, "spool full", http.StatusServiceUnavailable)
-			return
-		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})

@@ -189,9 +189,10 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 - **When the spool is full** (past 95% of `observer.spool.maxBytes`, until it
   falls under 80%): observed (async) traffic keeps flowing and new events are
   dropped as a counted last resort (`LastResortDrops` on `/stats`; alert on any
-  value above zero). Enforced calls are refused, so none goes through
-  unrecorded, and with enforcement on the pod reports not ready so new
-  connections go elsewhere. Size the spool for the longest object-store outage
+  value above zero). Enforced calls are refused per call, so none goes
+  through unrecorded. Readiness never depends on the spool: it gates the whole
+  pod, and observed traffic must keep flowing, so alert on `writer.full` and
+  `LastResortDrops` instead. Size the spool for the longest object-store outage
   you want to ride out: at peak, about the observer's write rate times the
   outage.
 - **What a hard kill can lose.** On SIGKILL (OOM, node failure, spot

@@ -24,11 +24,6 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     # ── The writer's spool (docs/STREAMING_PIPELINE.md, phase 1) ──
     - { name: OBSERVER_SPOOL_DIR, value: /spool }
     - { name: OBSERVER_SPOOL_MAX_BYTES, value: {{ include "aintercept.spoolMaxBytes" . | quote }} }
-    {{- if (.Values.interceptor | default dict).enforce }}
-    # Enforced calls are refused while the spool is full; take the pod out
-    # of rotation too, so new connections go to pods that can record them.
-    - { name: OBSERVER_UNREADY_WHEN_FULL, value: "true" }
-    {{- end }}
     - { name: OBSERVER_CLIENT_IP_HEADERS, value: {{ .Values.observer.clientIPHeaders | default list | join "," | quote }} }
     - name: OBSERVER_INSTANCE
       valueFrom:
