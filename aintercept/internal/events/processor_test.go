@@ -1,6 +1,7 @@
 package events
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,36 +24,106 @@ func (b *blockingSink) Emit(e Event) error {
 }
 func (b *blockingSink) Flush() error { return nil }
 
-func TestProcessorDropsWhenBufferFull(t *testing.T) {
+// A full buffer makes Offer wait for room instead of dropping: nothing is lost
+// while the spool has room.
+func TestProcessorBlocksWhenBufferFull(t *testing.T) {
 	sink := &blockingSink{release: make(chan struct{})}
-	p := NewProcessor(sink, ProcessorConfig{BufferSize: 4, AlarmEveryDrops: 1})
+	p := NewProcessor(sink, ProcessorConfig{BufferSize: 4})
+	offered := make(chan int, 1)
+	go func() {
+		n := 0
+		for i := 0; i < 20; i++ {
+			if p.Offer(Event{Seq: uint64(i)}) {
+				n++
+			}
+		}
+		offered <- n
+	}()
+	select {
+	case <-offered:
+		t.Fatal("Offer returned for all 20 events while the sink was stuck and the buffer held 4: it dropped instead of waiting")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(sink.release)
+	if n := <-offered; n != 20 {
+		t.Fatalf("accepted %d of 20", n)
+	}
+	p.Close()
+	if got := len(sink.got); got != 20 {
+		t.Fatalf("sink got %d of 20 events", got)
+	}
+	if s := p.Stats(); s.LastResortDrops != 0 {
+		t.Fatalf("LastResortDrops = %d with the spool not full", s.LastResortDrops)
+	}
+}
 
-	// The drain goroutine will pull one event and block in Emit. Fill the
-	// buffer (cap 4) plus extras that must be dropped.
-	accepted, dropped := 0, 0
-	for i := 0; i < 20; i++ {
-		if p.Offer(Event{Seq: uint64(i)}) {
-			accepted++
-		} else {
-			dropped++
+// Observe mode's last resort: only once the spool is full does Offer drop, and
+// every drop is counted.
+func TestProcessorLastResortDropOnlyWhenSpoolFull(t *testing.T) {
+	sink := &countingSink{}
+	full := false
+	var mu sync.Mutex
+	p := NewProcessor(sink, ProcessorConfig{BufferSize: 1024, Full: func() bool { mu.Lock(); defer mu.Unlock(); return full }})
+	for i := 0; i < 10; i++ {
+		if !p.Offer(Event{Seq: uint64(i)}) {
+			t.Fatalf("dropped event %d with the spool not full", i)
 		}
 	}
-
-	if dropped == 0 {
-		t.Fatalf("expected some drops when buffer is full, got 0 (accepted=%d)", accepted)
+	mu.Lock()
+	full = true
+	mu.Unlock()
+	for i := 10; i < 15; i++ {
+		if p.Offer(Event{Seq: uint64(i)}) {
+			t.Fatalf("accepted event %d with the spool full", i)
+		}
 	}
-	// We should accept no more than buffer + the one in-flight at the sink.
-	if accepted > 4+1 {
-		t.Fatalf("accepted=%d exceeds buffer(4)+inflight(1)", accepted)
-	}
-	s := p.Stats()
-	if s.Dropped == 0 {
-		t.Fatalf("stats dropped counter not incremented")
-	}
-
-	// Release the sink and shut down cleanly.
-	close(sink.release)
+	// Enforce-mode streams never drop: OfferMust waits even when full.
+	p.OfferMust(Event{Seq: 99})
 	p.Close()
+	if got := sink.count(); got != 11 {
+		t.Fatalf("sink got %d events, want 11 (10 before full + the enforce one)", got)
+	}
+	if s := p.Stats(); s.LastResortDrops != 5 {
+		t.Fatalf("LastResortDrops = %d, want 5", s.LastResortDrops)
+	}
+}
+
+// A panic while processing an event still records the event as it arrived.
+func TestProcessorPanicEmitsRawEvent(t *testing.T) {
+	sink := &orderSink{}
+	p := NewProcessor(sink, ProcessorConfig{OnComplete: func(*Event) { panic("poisoned transaction") }})
+	p.Offer(Event{CorrelationID: "boom", Phase: PhaseComplete, Host: "api.anthropic.com"})
+	p.Offer(Event{CorrelationID: "fine", Phase: PhaseRequestHeaders})
+	p.Close()
+	got := sink.ids()
+	if strings.Join(got, ",") != "boom,fine" {
+		t.Fatalf("emitted %v; want the panicking event recorded raw, then the next one", got)
+	}
+	if s := p.Stats(); s.Panics != 1 {
+		t.Fatalf("Panics = %d, want 1", s.Panics)
+	}
+}
+
+type orderSink struct {
+	mu  sync.Mutex
+	got []Event
+}
+
+func (r *orderSink) Emit(e Event) error {
+	r.mu.Lock()
+	r.got = append(r.got, e)
+	r.mu.Unlock()
+	return nil
+}
+func (r *orderSink) Flush() error { return nil }
+func (r *orderSink) ids() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []string
+	for _, e := range r.got {
+		out = append(out, e.CorrelationID)
+	}
+	return out
 }
 
 func TestProcessorEmitsAllWhenSinkFast(t *testing.T) {
@@ -64,7 +135,7 @@ func TestProcessorEmitsAllWhenSinkFast(t *testing.T) {
 	}
 	p.Close()
 	if got := sink.count(); got != n {
-		t.Fatalf("expected %d emitted, got %d (dropped=%d)", n, got, p.Stats().Dropped)
+		t.Fatalf("expected %d emitted, got %d", n, got)
 	}
 }
 

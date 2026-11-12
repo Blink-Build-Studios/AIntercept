@@ -126,6 +126,16 @@ func TestEnforceDenyAtCallStart(t *testing.T) {
 // wsDial opens a WebSocket to the fixture's /ws through Envoy.
 func wsDial(t *testing.T, host string) (net.Conn, *bufio.Reader) {
 	t.Helper()
+	return wsDialTagged(t, host, "")
+}
+
+// wsDialTagged is wsDial with an x-e2e-id header on the upgrade request.
+func wsDialTagged(t *testing.T, host, id string) (net.Conn, *bufio.Reader) {
+	t.Helper()
+	tag := ""
+	if id != "" {
+		tag = "x-e2e-id: " + id + "\r\n"
+	}
 	c, err := net.DialTimeout("tcp", envoyAddr, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +144,7 @@ func wsDial(t *testing.T, host string) (net.Conn, *bufio.Reader) {
 	var nonce [16]byte
 	_, _ = rand.Read(nonce[:])
 	_, _ = io.WriteString(c, "GET /ws HTTP/1.1\r\nHost: "+host+"\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+
-		"Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: "+base64.StdEncoding.EncodeToString(nonce[:])+"\r\n"+
+		tag+"Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: "+base64.StdEncoding.EncodeToString(nonce[:])+"\r\n"+
 		"Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n\r\n")
 	r := bufio.NewReader(c)
 	status, _ := r.ReadString('\n')

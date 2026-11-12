@@ -121,10 +121,12 @@ objectStore:
   # empty for native AWS S3.
   endpoint: ""            # e.g. https://nyc3.digitaloceanspaces.com
   forcePathStyle: false   # true for MinIO and some S3-compatible stores
-  # Flush thresholds (a batch flushes on whichever trips first).
+  # Flush thresholds (a batch is sealed on whichever trips first). The writer
+  # seals every batch at least every maxAgeSeconds: that's the most a hard kill
+  # of the observer can lose (sealed batches survive in its spool).
   maxBytes: 5242880       # 5 MiB
   maxEvents: 10000
-  maxAgeSeconds: 60
+  maxAgeSeconds: 10
   # Static credentials (DigitalOcean / MinIO only). On AWS leave blank and use
   # IRSA via serviceAccount.roleArn.
   #
@@ -244,22 +246,26 @@ api:
     allowUnauthenticated: false
 
 observer:
-  # Scheduling. All optional: unset leaves the pod spec as it was.
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  topologySpreadConstraints: []
-  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
-  # minAvailable if set.
-  podDisruptionBudget:
-    enabled: false
-    maxUnavailable: 1
+  # The observer runs in the envoy pods: scheduling, PodDisruptionBudget and
+  # autoscaling are envoy's (below).
   bufferSize: 16384
-  # On termination, keep serving this long while Envoy's DNS view drops the pod
-  # (headless Service, refreshed every 5 s), then drain in-flight streams. A call
-  # routed to an observer that already stopped passes through unrecorded.
-  shutdownDelaySeconds: 15
-  terminationGracePeriodSeconds: 200
+  # The observer runs in each Envoy pod (one ingest stack per pod, scaled with
+  # Envoy's autoscaling). On termination Envoy drains and exits first (its
+  # preStop hook); the observer's preStop waits for that, then it drains, flushes
+  # its writer and exits. The pod's grace period is Envoy's preStop sleep +
+  # drain time + flushSeconds, and never less than terminationGracePeriodSeconds.
+  flushSeconds: 100
+  terminationGracePeriodSeconds: 300
+  # The writer's on-disk spool (docs/STREAMING_PIPELINE.md, phase 1): sealed
+  # files wait here until the object store accepts them, so an outage or a
+  # restart loses nothing. An emptyDir, so it survives container restarts.
+  # Past 95% of maxBytes the spool is full: observed (async) traffic keeps
+  # flowing and new events are dropped as a counted last resort
+  # (last_resort_drops on /stats); enforced calls are refused until it drains.
+  # Keep maxBytes under sizeLimit (the kubelet evicts a pod past its sizeLimit).
+  spool:
+    sizeLimit: 10Gi
+    maxBytes: 9663676416   # 9 GiB
   # Operational log level: debug | info | warn | error. Logs are structured JSON
   # on stderr (telemetry events go to stdout).
   logLevel: info
@@ -298,23 +304,9 @@ observer:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "500m", memory: "256Mi" }
   # Memory budget: bytes in-flight traffic (buffered bodies, WebSocket state,
-  # bodies queued for extraction) may hold per pod. Utilization of it is what
-  # Envoy load-balances on (ORCA) and, with autoscaling.mode keda, what the
-  # observer scales on. Empty: half the memory limit. GOMEMLIMIT defaults to
-  # 90% of the memory limit.
+  # bodies queued for extraction) may hold per pod, reported on /stats. Empty:
+  # half the memory limit. GOMEMLIMIT defaults to 90% of the memory limit.
   memoryBudget: ""
-  autoscaling:
-    enabled: true
-    # cpu: an HPA on CPU only. keda: KEDA on CPU or memory-budget utilization,
-    # whichever is higher (needs KEDA installed).
-    mode: keda
-    minReplicas: 2
-    maxReplicas: 20
-    targetCPUUtilizationPercentage: 70
-    # Scale out when the fleet's average budget utilization passes this, well
-    # before pods are full: new pods take 30-90s, and open streams stay put.
-    targetMemoryBudgetPercent: 55
-    pollingInterval: 15
   # Interception-path health check, served on the observer's HTTP port as
   # GET /healthz/path: 200 when every allowlisted host passed its last probe,
   # 503 otherwise, with per-host JSON. Each probe does a TLS handshake through

@@ -20,6 +20,8 @@ import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	filterextprocv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
@@ -56,6 +58,9 @@ type Server struct {
 	// ic is the customer's Interceptor (nil: none). See intercept.go and
 	// enforce.go.
 	ic *interceptor.Client
+	// full reports the writer's spool full (nil: never). While it does,
+	// enforced streams are refused so no enforced call goes unrecorded.
+	full func() bool
 
 	streamCounter    atomic.Uint64
 	undecodableCount atomic.Uint64
@@ -78,6 +83,10 @@ type Config struct {
 	ProbeMarker       string
 	// Interceptor, when set, receives every call (docs/INTERCEPTOR.md).
 	Interceptor *interceptor.Client
+	// Full reports the writer's spool full. While it does, enforced streams
+	// are refused (Envoy's enforcing filter, failure_mode_allow: false, then
+	// rejects the call); observed streams carry on. nil: never full.
+	Full func() bool
 }
 
 // New builds a Server.
@@ -107,6 +116,7 @@ func New(cfg Config) *Server {
 		clientIPHeaders:   cfg.ClientIPHeaders,
 		probeMarker:       cfg.ProbeMarker,
 		ic:                cfg.Interceptor,
+		full:              cfg.Full,
 	}
 }
 
@@ -204,6 +214,9 @@ func (srv *Server) Process(stream extprocv3.ExternalProcessor_ProcessServer) err
 	for first := true; ; first = false {
 		req, err := stream.Recv()
 		if first && err == nil && req.GetProtocolConfig().GetRequestBodyMode() == extprocv3ProcessingModeFullDuplex {
+			if srv.full != nil && srv.full() {
+				return status.Error(codes.Unavailable, "aintercept: the observer's spool is full; enforced calls are refused until it drains")
+			}
 			return srv.processEnforce(stream, st, req)
 		}
 		if err == io.EOF {
@@ -535,8 +548,9 @@ func appendCapped(dst, src []byte, truncated bool, limit int) ([]byte, bool) {
 	return append(dst, add...), trunc
 }
 
-// offer stamps the shared fields and hands the event to the processor. Never
-// blocks.
+// offer stamps the shared fields and hands the event to the processor.
+// Enforced streams never drop (OfferMust); observed ones drop only as the
+// counted last resort while the spool is full.
 func (srv *Server) offer(st *streamState, e events.Event) {
 	e.CorrelationID = st.correlationID
 	e.Seq = st.next()
@@ -544,6 +558,10 @@ func (srv *Server) offer(st *streamState, e events.Event) {
 		e.TimestampNS = time.Now().UnixNano()
 	}
 	e.ObserverInstance = srv.instanceID
+	if st.enforce {
+		srv.proc.OfferMust(e)
+		return
+	}
 	srv.proc.Offer(e) // releases e's held bytes itself if it drops e
 }
 

@@ -314,43 +314,24 @@ static_resources:
                   address:
                     socket_address: { address: certsvc, port_value: 18000 }
 
-    # The Go observer (ext_proc gRPC, HTTP/2). observer-pods is a headless
-    # Service, so each observer pod is its own endpoint (re-resolved every 5s
-    # as pods come and go). Each ext_proc stream goes to a pod picked by
-    # client-side weighted round robin on the load each pod reports out of band
-    # (ORCA, every 30s): its memory-budget utilization, so new streams go to the
-    # pods with the most room. A pod without a report yet gets the median
-    # weight, so new pods take traffic right away.
+    # The Go observer (ext_proc gRPC, HTTP/2). In Kubernetes it's the other
+    # container of the Envoy pod, on localhost (deploy/helm/.../files/
+    # envoy.multi.yaml); in this compose stack it's the observer container.
     - name: observer
       type: STRICT_DNS
       connect_timeout: 2s
-      dns_refresh_rate: 5s
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config:
             http2_protocol_options: {}
-      load_balancing_policy:
-        policies:
-          - typed_extension_config:
-              name: envoy.load_balancing_policies.client_side_weighted_round_robin
-              typed_config:
-                "@type": type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin
-                enable_oob_load_report: true
-                oob_reporting_period: 30s
-                # Reports arrive every 30s: use a weight after the second, and
-                # keep it for a few missed reports.
-                blackout_period: 30s
-                weight_expiration_period: 120s
-                # Utilization is the reported application_utilization (the
-                # memory budget's), the policy's default source.
       load_assignment:
         cluster_name: observer
         endpoints:
           - lb_endpoints:
               - endpoint:
                   address:
-                    socket_address: { address: observer-pods, port_value: 9000 }
+                    socket_address: { address: observer, port_value: 9000 }
 
     # Authentic upstreams: the REAL provider APIs, one cluster each.
     #

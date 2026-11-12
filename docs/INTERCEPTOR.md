@@ -139,8 +139,9 @@ interceptor:
 
 **Running enforce:** an enforced call depends on the observer and on your
 Interceptor. Run both highly available:
-- at least 3 observer replicas. With enforce scopes set, the chart requires at
-  least 2 (`observer.autoscaling.minReplicas`) and adds a PodDisruptionBudget;
+- at least 3 ingest pods (each runs Envoy and an observer). With enforce
+  scopes set, the chart requires at least 2 (`envoy.autoscaling.minReplicas`)
+  and adds a PodDisruptionBudget;
 - your service on the same footing, close to the observer (same region, same
   cluster ideally);
 - latency in mind: each `OnMessage` on a streamed response is one round trip

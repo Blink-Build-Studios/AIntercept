@@ -7,8 +7,8 @@ metadata:
     {{- include "aintercept.labels" . | nindent 4 }}
 data:
   # The canonical multi-provider Envoy config, embedded from the chart's files/.
-  # Its upstream clusters reference the in-cluster Service names (certsvc:18000,
-  # observer:9000), which resolve via cluster DNS unchanged.
+  # Its upstream clusters reference certsvc:18000 (cluster DNS) and the
+  # observer on 127.0.0.1:9000, the other container in this pod.
   envoy.yaml: |
 {{ include "aintercept.envoyConfig" . | indent 4 }}
 ---
@@ -40,20 +40,26 @@ spec:
         # Roll pods when the embedded Envoy config changes.
         checksum/config: {{ include "aintercept.envoyConfig" . | sha256sum }}
     spec:
-      # Must exceed preStopSleep + drainTime so Kubernetes never SIGKILLs Envoy
-      # mid-drain. The drain itself runs in the preStop hook (below): Envoy
-      # closes its listeners immediately on SIGTERM, so SIGTERM must come last.
+      # The pod is the whole ingest stack: Envoy and the observer (its ext_proc
+      # server, over localhost). Shutdown is ordered by the two preStop hooks:
+      # Envoy drains and exits first, then the observer drains, flushes its
+      # writer and exits. The grace period covers Envoy's drain plus the
+      # observer's flush, and never less than observer.terminationGracePeriodSeconds.
       {{- $drain := .Values.envoy.drain | default dict }}
       {{- $preStop := $drain.preStopSleepSeconds | default 5 }}
       {{- $drainTime := $drain.drainTimeSeconds | default 180 }}
-      terminationGracePeriodSeconds: {{ add $preStop $drainTime 20 }}
+      {{- $flush := .Values.observer.flushSeconds | default 100 }}
+      terminationGracePeriodSeconds: {{ max (add $preStop $drainTime $flush) (.Values.observer.terminationGracePeriodSeconds | default 300) }}
+      serviceAccountName: {{ .Values.observer.serviceAccount.name }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
       securityContext:
-        # Run as the stock image's non-root `envoy` user (uid 101), not root.
-        # The internet-facing pod that sees all decrypted traffic + API keys must
-        # not run privileged. Binding :443 still works via NET_BIND_SERVICE below.
+        # Non-root, per container below: Envoy as the stock image's `envoy`
+        # user (uid 101), the observer as 65532. The internet-facing pod that
+        # sees all decrypted traffic + API keys must not run privileged.
         runAsNonRoot: true
-        runAsUser: 101
-        runAsGroup: 101
         seccompProfile: { type: RuntimeDefault }
       {{- with (include "aintercept.scheduling" .Values.envoy) }}{{ . | nindent 6 }}{{ end }}
       containers:
@@ -106,6 +112,11 @@ spec:
                       [ "$active" = "0" ] && break
                       sleep 2
                     done
+                    # 4. Exit now, closing whatever is still open: WebSockets never
+                    #    end on their own. Each closed stream's ext_proc stream
+                    #    ends, so the observer records its connection row, and the
+                    #    observer gets the rest of the grace period to flush.
+                    admin POST '/quitquitquit' >/dev/null 2>&1
           ports:
             - { name: https, containerPort: 443 }
             - { name: admin, containerPort: 9901 }
@@ -128,15 +139,19 @@ spec:
           resources:
             {{- toYaml .Values.envoy.resources | nindent 12 }}
           securityContext:
+            runAsUser: 101
+            runAsGroup: 101
             # Envoy binds the privileged port 443; it needs NET_BIND_SERVICE.
             # We drop everything else and forbid privilege escalation beyond that.
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
               add: ["NET_BIND_SERVICE"]
+        {{- include "aintercept.observerContainer" . | nindent 8 }}
       volumes:
         - name: config
           configMap: { name: envoy-config }
+        {{- include "aintercept.observerVolumes" . | nindent 8 }}
 ---
 apiVersion: v1
 kind: Service
