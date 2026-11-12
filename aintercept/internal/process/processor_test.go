@@ -322,6 +322,7 @@ func TestIncrementalMatchesRebuild(t *testing.T) {
 	files := c.sorted()
 	for seed := int64(1); seed <= 5; seed++ {
 		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
+			t.Parallel() // each seed is its own processor; every run derives every table, so they're slow
 			ctx := context.Background()
 			rng := rand.New(rand.NewSource(seed))
 			raw, out := newMem(), newMem()
