@@ -53,7 +53,7 @@ func ccEventWith(s, name string, t int64, md string, set func(*canon.Event)) rec
 	if set != nil {
 		set(e)
 	}
-	return rec(records.Record{Kind: records.KindClientEvent, EventKey: key, BatchID: b, BatchN: batchN[b], Event: e})
+	return rec(records.Record{Kind: records.KindClientEvent, EventKey: key, BatchID: b, BatchN: batchN[b], BatchCCN: batchN[b], Event: e})
 }
 
 // blur is an event ending a blur window of d ms at t.
