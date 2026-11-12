@@ -14,15 +14,16 @@ import (
 func simCfg(seed int64, n, r int) SimConfig {
 	return SimConfig{
 		Seed: seed, IngestPods: n, Processors: r, BucketBits: 3,
-		Records: 3000, Steps: 400, Checkpoints: 4,
+		Records: simRecords, Steps: simSteps, Checkpoints: 4,
 		Chaos: Chaos{
-			KillHard: 0.01, KillGraceful: 0.01, StealLease: 0.01, Pause: 0.01,
+			KillHard: 0.01, KillGraceful: 0.01, StealLease: 0.03, Pause: 0.03,
 			PutFailure: 0.05, DelayUpload: 0.05, AddRemove: 0.01,
 		},
 	}
 }
 
 func TestSimulateSmoke(t *testing.T) {
+	t.Parallel()
 	res, err := Simulate(context.Background(), simCfg(1, 3, 3))
 	if err != nil {
 		t.Fatal(err)
@@ -30,14 +31,17 @@ func TestSimulateSmoke(t *testing.T) {
 	if res.Checkpoints < 4 || res.Mismatches != 0 {
 		t.Fatalf("%+v", res)
 	}
-	if res.Kills == 0 || res.Steals == 0 || res.PutFailures == 0 {
+	if res.Kills == 0 || res.Steals == 0 || res.PutFailures == 0 || res.Fenced == 0 {
 		t.Fatalf("no chaos happened: %+v", res)
 	}
+	t.Logf("%+v", res)
 }
 
-// Without chaos, any N and R give the same tables (the plain path).
+// Without chaos, several ingest pods and replicas give the same tables (the
+// plain path; the full matrix of N and R is TestSimulateMatrix, -tags full).
 func TestSimulateNoChaos(t *testing.T) {
-	for _, nr := range [][2]int{{1, 1}, {3, 1}, {1, 3}} {
+	t.Parallel()
+	for _, nr := range [][2]int{{3, 3}} {
 		cfg := simCfg(2, nr[0], nr[1])
 		cfg.Chaos = Chaos{}
 		res, err := Simulate(context.Background(), cfg)
@@ -51,9 +55,11 @@ func TestSimulateNoChaos(t *testing.T) {
 // fixed batch of new records doesn't grow with how much history the bucket
 // already holds.
 func TestCycleCostIsFlatInHistory(t *testing.T) {
+	t.Parallel()
 	var base CycleCost
-	for i, hist := range []int{1, 2, 4, 8} {
+	for i, hist := range historySizes {
 		cost := measureCycle(t, hist)
+		t.Logf("history %dx: %d requests, %d bytes read for the same new batch", hist, cost.Requests, cost.BytesRead)
 		if i == 0 {
 			base = cost
 			continue
@@ -64,12 +70,21 @@ func TestCycleCostIsFlatInHistory(t *testing.T) {
 	}
 }
 
+// historySizes and burstSteps are small in make check; -tags full widens them.
+var (
+	historySizes = []int{1, 2, 4}
+	burstSteps   = 100
+	simRecords   = 800
+	simSteps     = 150
+)
+
 func measureCycle(t *testing.T, history int) CycleCost {
 	t.Helper()
 	h, ctx := setup(t, 1)
 	w := h.worker("a", 1)
 	w.CompactRuns = 16
-	for i := 0; i < 40*history; i++ { // history: settled sessions, then compacted
+	w.PartRows = 128                  // so history spreads over many base parts
+	for i := 0; i < 20*history; i++ { // history: settled sessions, then compacted
 		h.gen.sessions = 1000 + i // new sessions over time, as people come and go
 		h.upload(0, h.gen.batch(50))
 		h.clock.Advance(10 * time.Second)
@@ -81,8 +96,13 @@ func measureCycle(t *testing.T, history int) CycleCost {
 	if err := w.GC(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := w.Compact(ctx); err != nil { // the same shape at every history size
+		t.Fatal(err)
+	}
 	w.ResetCache() // a cold replica: worst case
-	h.gen.sessions = 12
+	// The measured batch is new sessions (a cold lookup misses every file but
+	// the one part whose key range covers it) plus the history's credentials.
+	h.gen.sessions, h.gen.prefix = 12, "a"
 	h.upload(0, h.gen.batch(100))
 	ms := h.s.(*MemStore)
 	ms.ResetCounters()
@@ -95,9 +115,10 @@ func measureCycle(t *testing.T, history int) CycleCost {
 // Lag: a 10× burst drives lag past the target with one replica; adding
 // replicas brings it back under; nothing is lost or applied twice.
 func TestLagBurstScalesOut(t *testing.T) {
+	t.Parallel()
 	res, err := SimulateBurst(context.Background(), BurstConfig{
-		Seed: 3, BucketBits: 3, BaseRate: 20, Burst: 10, FilesPerCycle: 4,
-		Target: 30 * time.Second, MaxReplicas: 8,
+		Seed: 3, BucketBits: 2, BaseRate: 20, Burst: 10, FilesPerCycle: 2,
+		Target: 30 * time.Second, MaxReplicas: 8, Steps: burstSteps, BurstFrom: 10, BurstTo: burstSteps / 4,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -108,4 +129,5 @@ func TestLagBurstScalesOut(t *testing.T) {
 	if res.Mismatches != 0 {
 		t.Fatalf("tables differ after the burst: %+v", res)
 	}
+	t.Logf("%+v", res)
 }

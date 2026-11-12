@@ -55,10 +55,3 @@ func TestStoreCheckAgainstS3(t *testing.T) {
 		t.Fatalf("%+v %v", rep, err)
 	}
 }
-
-func envOr(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return d
-}

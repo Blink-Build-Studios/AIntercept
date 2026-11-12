@@ -16,7 +16,7 @@ func TestChartRendersStreamWithLagScaling(t *testing.T) {
 	}
 	chart := filepath.Join("..", "..", "..", "deploy", "helm", "aintercept")
 	out, err := exec.Command(helm, "template", "t", chart,
-		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "observer.keyHashSalt=x",
+		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "objectStore.endpoint=https://e", "--set", "objectStore.existingSecret=s", "--set", "observer.keyHashSalt=x",
 		"--set", "stream.enabled=true", "--set", "stream.autoscaling.enabled=true").CombinedOutput()
 	if err != nil {
 		t.Fatalf("helm template: %v\n%s", err, out)
@@ -32,7 +32,7 @@ func TestChartRendersStreamWithLagScaling(t *testing.T) {
 		return ""
 	}
 	dep := find("Deployment", "stream")
-	for _, want := range []string{`args: ["stream"]`, "STREAM_BUCKET_BITS", "/healthz", "/lag"} {
+	for _, want := range []string{`args: ["stream"]`, "STREAM_BUCKET_BITS", "/healthz", "containerPort: 9003"} {
 		if !strings.Contains(dep, want) {
 			t.Errorf("stream Deployment lacks %q", want)
 		}
@@ -49,7 +49,8 @@ func TestChartRendersStreamWithLagScaling(t *testing.T) {
 	}
 	// Off by default: the default render has no stream.
 	def, err := exec.Command(helm, "template", "t", chart,
-		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "observer.keyHashSalt=x").CombinedOutput()
+		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "objectStore.endpoint=https://e",
+		"--set", "objectStore.existingSecret=s", "--set", "observer.keyHashSalt=x").CombinedOutput()
 	if err != nil {
 		t.Fatalf("%v\n%s", err, def)
 	}

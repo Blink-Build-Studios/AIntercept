@@ -1,0 +1,130 @@
+{{- if .Values.stream.enabled }}
+# The bucketed processor (docs/STREAMING_PIPELINE.md §4): `aintercept stream`.
+# Replicas own key buckets through leases in the bucket and read only the
+# record files new since each bucket's watermark, so any number can run; KEDA
+# scales them on lag (GET /lag: the age of the oldest unread record file).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream
+  labels:
+    app: stream
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.stream.autoscaling.enabled }}
+  replicas: {{ .Values.stream.replicas }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: stream }
+  template:
+    metadata:
+      labels: { app: stream }
+    spec:
+      serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.process "component" "process" "root" $) }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      # A replica that's stopped gives its leases back before it exits.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.stream) }}{{ . | nindent 6 }}{{ end }}
+      containers:
+        - name: stream
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["stream"]
+          env:
+            - { name: STREAM_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: STREAM_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            - { name: STREAM_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: STREAM_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if .Values.objectStore.forcePathStyle }}
+            - { name: STREAM_S3_FORCE_PATH_STYLE, value: "true" }
+            {{- end }}
+            - { name: STREAM_BUCKET_BITS, value: {{ .Values.stream.bucketBits | quote }} }
+            - { name: STREAM_CYCLE_SECONDS, value: {{ .Values.stream.cycleSeconds | quote }} }
+            - { name: STREAM_HTTP_LISTEN, value: "0.0.0.0:9003" }
+            - name: STREAM_REPLICA
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            {{- if eq .Values.cloud "digitalocean" }}
+            - name: STREAM_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: STREAM_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 9003 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9003 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9003 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.stream.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+# /lag for KEDA. Every replica computes the same answer from the bucket.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stream
+  labels:
+    app: stream
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  selector: { app: stream }
+  ports:
+    - { name: http, port: 9003, targetPort: 9003 }
+{{- if .Values.stream.autoscaling.enabled }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: stream
+  labels:
+    app: stream
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: stream
+  minReplicaCount: {{ .Values.stream.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.stream.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: stream
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 600
+  triggers:
+    - type: metrics-api
+      # Value: replicas = ceil(lag_seconds / targetValue), within min and max.
+      metricType: Value
+      metadata:
+        url: "http://stream.{{ .Release.Namespace }}.svc.cluster.local:9003/lag"
+        valueLocation: lag_seconds
+        targetValue: "{{ .Values.stream.autoscaling.lagTargetSeconds }}"
+{{- end }}
+{{- end }}

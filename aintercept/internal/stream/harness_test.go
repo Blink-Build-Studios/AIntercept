@@ -4,56 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math/bits"
-	"math/rand"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
-
-// gen makes synthetic records: calls and events across a set of sessions and
-// credentials, with times that wander backwards as well as forwards, as real
-// late data does.
-type gen struct {
-	rng      *rand.Rand
-	sessions int
-	n        int64
-	ts       int64
-}
-
-func newGen(seed int64, sessions int) *gen {
-	return &gen{rng: rand.New(rand.NewSource(seed)), sessions: sessions, ts: 1_800_000_000_000_000_000}
-}
-
-func (g *gen) one() records.Record {
-	g.n++
-	g.ts += int64(g.rng.Intn(2_000_000_000)) - 500_000_000 // ±, mostly forwards
-	id := fmt.Sprintf("pod-%d-%06d", g.rng.Intn(3), g.n)
-	var r records.Record
-	switch g.rng.Intn(4) {
-	case 0: // a call with no session: routed by credential and day
-		r = records.Record{Kind: records.KindCallEnd, Call: &canon.Request{CallID: id, KeyHash: fmt.Sprintf("k%d", g.rng.Intn(3)), EndNS: g.ts}}
-	case 1:
-		r = records.Record{Kind: records.KindClientEvent, Event: &canon.Event{SessionID: fmt.Sprintf("s%d", g.rng.Intn(g.sessions)), RowNS: g.ts, NS: g.ts}}
-	default:
-		r = records.Record{Kind: records.KindCallEnd, Call: &canon.Request{CallID: id, SessionID: fmt.Sprintf("s%d", g.rng.Intn(g.sessions)), EndNS: g.ts}}
-	}
-	r.Version, r.RecordID = records.Version, id
-	r.RoutingKey = records.RoutingKey(&r)
-	return r
-}
-
-func (g *gen) batch(n int) []records.Record {
-	out := make([]records.Record, n)
-	for i := range out {
-		out[i] = g.one()
-	}
-	return out
-}
 
 // harness uploads records the way ingest does (one file per bucket per upload,
 // under the upload minute) and checks tables against one pass.
@@ -91,7 +49,13 @@ func (h *harness) uploadAt(pod int, rs []records.Record, at time.Time) {
 		r.Bucket = int32(b)
 		by[b] = append(by[b], r)
 	}
-	for b, part := range by {
+	bs := make([]int, 0, len(by))
+	for b := range by {
+		bs = append(bs, b)
+	}
+	sort.Ints(bs) // deterministic file names (the golden layout depends on it)
+	for _, b := range bs {
+		part := by[b]
 		h.seq++
 		body, err := records.Encode(part)
 		if err != nil {
@@ -123,7 +87,7 @@ func (h *harness) checkAll(ctx context.Context) {
 	}
 	want := Reference(h.m, h.uploaded)
 	if !reflect.DeepEqual(canonical(got), canonical(want)) {
-		h.t.Fatalf("tables differ from one pass:\n got %s\nwant %s", summary(got), summary(want))
+		h.t.Fatalf("tables differ from one pass: %s", diffTables(got, want))
 	}
 }
 

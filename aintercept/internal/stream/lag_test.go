@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"

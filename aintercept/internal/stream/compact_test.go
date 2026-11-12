@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -29,9 +28,14 @@ func TestCompactionMergesRunsIntoABase(t *testing.T) {
 			t.Fatalf("%s has %d runs after compaction at 8", table, len(runs))
 		}
 	}
-	for table, base := range c.Base {
-		if base.MinKey == "" || base.MaxKey == "" || base.MinKey > base.MaxKey {
-			t.Fatalf("%s base has no key range: %+v", table, base)
+	for table, parts := range c.Base {
+		if len(parts) == 0 {
+			t.Fatalf("%s has an empty base", table)
+		}
+		for i, p := range parts { // key-ranged parts, in order, never overlapping
+			if p.MinKey == "" || p.MinKey > p.MaxKey || (i > 0 && parts[i-1].MaxKey >= p.MinKey) {
+				t.Fatalf("%s base part %d has a bad key range: %+v", table, i, parts)
+			}
 		}
 	}
 	h.checkAll(ctx)
