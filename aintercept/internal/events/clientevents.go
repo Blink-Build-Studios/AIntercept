@@ -104,6 +104,18 @@ func bodyOnly(f func(raw []byte) []ClientEvent) func(string, []byte) []ClientEve
 	return func(_ string, raw []byte) []ClientEvent { return f(raw) }
 }
 
+// IsAnalyticsRequest is true for a request whose body is an analytics batch we
+// parse into client events (ClientEventsFromRequest).
+func IsAnalyticsRequest(host, path string) bool {
+	path = strings.SplitN(path, "?", 2)[0]
+	for _, p := range clientEventParsers {
+		if p.match(host, path) {
+			return true
+		}
+	}
+	return false
+}
+
 // ClientEventsFromRequest parses the analytics events a client sent in a
 // request body, or nil when the request isn't an analytics batch we know.
 // encoding is the request's Content-Encoding. The first matching parser wins.

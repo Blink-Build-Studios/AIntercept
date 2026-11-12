@@ -353,6 +353,20 @@ func (s *S3Sink) uploadLoop() {
 	}
 }
 
+// Put uploads one object of another output (the canonical records) to the same
+// bucket, with the same client: key is the object's full key.
+func (s *S3Sink) Put(ctx context.Context, key string, body []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err := s.uploader.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(body),
+		ContentType: aws.String("application/vnd.apache.parquet"),
+	})
+	return err
+}
+
 // put gzips and uploads one sealed batch.
 func (s *S3Sink) put(sb sealedBatch) error {
 	var gzbuf bytes.Buffer

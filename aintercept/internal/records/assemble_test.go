@@ -1,8 +1,10 @@
 package records
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +104,21 @@ func line(e events.Event) []byte {
 	return b
 }
 
+// fullModeCall is a model call's rows with its bodies recorded (full interception).
+func fullModeCall() []events.Event {
+	resp := "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Running the tests.\"}}\n\n"
+	return bodiesOf("f1", `{"messages":[{"role":"user","content":"hi"}]}`, resp)
+}
+
+func bodiesOf(id, req, resp string) []events.Event {
+	q := reqChunk(id, len(req), true)
+	q.BodyB64 = base64.StdEncoding.EncodeToString([]byte(req))
+	r := respChunk(id, len(resp))
+	r.BodyB64 = base64.StdEncoding.EncodeToString([]byte(resp))
+	return []events.Event{hdr(id, false, ccHeaders), q, respHdr(id, "req_1"), r}
+}
+
 // --- atomic cases ---------------------------------------------------------------------
 
 // want is one expected record: its kind, call id and routing key, plus any
@@ -170,6 +187,12 @@ func atomicCases() []atomicCase {
 				}
 			}}}},
 		{label: CaseEndCompleteNoHeaders, row: row(complete("c1", ccClient)), want: []want{{KindCallEnd, "c1", "s:s1", nil}}},
+		{label: CaseStartWSUpgrade, row: row(func() events.Event { h := wsHdr("w3"); h.EndOfStream = false; return h }()),
+			want: []want{{KindCallStart, "w3", "c:" + kh + ":" + day, func(t *testing.T, r Record) {
+				if r.Call.Transport != events.TransportWebSocket {
+					t.Errorf("upgrade start: %+v", r.Call)
+				}
+			}}}},
 		{label: CaseStartWSTurn, prior: []events.Event{wsHdr("w1")}, row: row(wsTurnStart("w1", 1, "t1")),
 			want: []want{{KindCallStart, "w1#1", "s:t1", func(t *testing.T, r Record) {
 				if r.Call.WSTurn != 1 || r.Call.Transport != events.TransportWebSocket || r.Call.PromptID != "u1" {
@@ -224,11 +247,13 @@ func atomicCases() []atomicCase {
 		{label: CaseBatchSession, prior: append(append([]events.Event{}, ana...),
 			clientEvent("a1", "e1", "s2", 5*time.Second), clientEvent("a1", "e2", "s1", 3*time.Second)),
 			row: row(hdr("c2", false, ccHeaders)),
+			// Its start named no session (the batch hadn't been read): its end goes
+			// to the session and to the start's credential key, which closes it there.
 			want: []want{{KindCallEnd, "a1", "s:s1", func(t *testing.T, r Record) {
 				if r.BatchSession != "s1" || r.BatchID != "a1" {
 					t.Errorf("batch call: session %q id %q", r.BatchSession, r.BatchID)
 				}
-			}}}},
+			}}, {KindCallEnd, "a1", "c:" + kh + ":" + day, nil}}},
 		{label: CaseBatchNoSession, prior: append(append([]events.Event{}, ana...), clientEvent("a1", "e1", "", 0)),
 			want: []want{{KindCallEnd, "a1", "c:" + kh + ":" + day, nil}}},
 		{label: CaseAccountSighting, row: row(withAuth), want: []want{
@@ -239,6 +264,29 @@ func atomicCases() []atomicCase {
 			}},
 			{KindCallStart, "c1", "s:s1", nil},
 		}},
+		{label: CaseEndWSConnection + "/no headers seen", row: row(wsConn("w2")), want: []want{{KindWSConnection, "w2", "c:" + kh + ":" + day, nil}}},
+		{label: CaseEndWSTurn + "/after the connection closed", prior: []events.Event{wsHdr("w1"), wsConn("w1")}, row: row(wsTurn("w1", 2, "t1")),
+			want: []want{{KindCallEnd, "w1#2", "s:t1", nil}}},
+		{label: CaseEventWithID + "/no request seen", row: row(clientEvent("a9", "e9", "s1", 0)), want: []want{{KindClientEvent, "", "s:s1", nil}}},
+		{label: CaseEndComplete + "/recorded bodies", prior: fullModeCall(), row: row(complete("f1", ccClient)),
+			want: []want{{KindCallEnd, "f1", "s:s1", func(t *testing.T, r Record) {
+				if !strings.Contains(r.Call.DetailJSON, "Running the tests.") || r.Call.RequestBytes == 0 {
+					t.Errorf("detail from the recorded bodies: %q", r.Call.DetailJSON)
+				}
+			}}}},
+		{label: CaseEndComplete + "/bodies that show nothing", prior: bodiesOf("f2", `{}`, "x"), row: row(complete("f2", ccClient)),
+			want: []want{{KindCallEnd, "f2", "s:s1", func(t *testing.T, r Record) {
+				if r.Call.DetailJSON != "" {
+					t.Errorf("detail %q", r.Call.DetailJSON)
+				}
+			}}}},
+		{label: CasePendingRequestChunk + "/a body that isn't base64", prior: []events.Event{hdr("f3", false, ccHeaders)},
+			row: row(func() events.Event { e := reqChunk("f3", 3, false); e.BodyB64 = "%%%"; return e }())},
+		{label: CasePendingRequestChunk + "/a body that isn't a model call's", prior: []events.Event{func() events.Event {
+			h := hdr("f4", false, ccHeaders)
+			h.Path = "/api/oauth/profile"
+			return h
+		}()}, row: row(func() events.Event { e := reqChunk("f4", 3, false); e.BodyB64 = "YWJj"; return e }())},
 		{label: CaseVerdict, row: row(verdict)},
 		{label: CaseUnknownPhase, row: row(unknown)},
 	}
@@ -310,11 +358,28 @@ func TestEveryCaseHasAnAtomicTest(t *testing.T) {
 // Rows of one stream keep their order (one ext_proc stream, one goroutine), but
 // streams interleave arbitrarily. Every interleaving must give the same records.
 func TestInterleavingsGiveTheSameRecords(t *testing.T) {
-	streams := [][]events.Event{
-		{hdr("c1", false, ccHeaders), reqChunk("c1", 10, true), complete("c1", ccClient)},
-		{wsHdr("w1"), wsTurnStart("w1", 1, "t1"), wsTurn("w1", 1, "t1"), wsConn("w1")},
-		append(analytics("a1"), clientEvent("a1", "e1", "s1", 0)),
-		{hdr("c2", true, ccHeaders), disconnect("c2")},
+	one := func(rows ...events.Event) [][]events.Event {
+		var out [][]events.Event
+		for _, r := range rows {
+			out = append(out, []events.Event{r})
+		}
+		return out
+	}
+	ana := analytics("a1")
+	streams := [][][]events.Event{
+		one(hdr("c1", false, ccHeaders), reqChunk("c1", 10, true), complete("c1", ccClient)),
+		one(wsHdr("w1"), wsTurnStart("w1", 1, "t1"), wsTurn("w1", 1, "t1"), wsConn("w1")),
+		// A batch's events are emitted right after its request's row, by the
+		// same drain goroutine: nothing comes between them.
+		append(one(ana[0], ana[1]), []events.Event{ana[2], clientEvent("a1", "e1", "s1", 0), clientEvent("a1", "e2", "s2", 0)}),
+	}
+	lines := map[string][]byte{} // each row's line, marshalled once
+	for _, st := range streams {
+		for _, step := range st {
+			for _, r := range step {
+				lines[rowKey(r)] = line(r)
+			}
+		}
 	}
 	var want []string
 	n := 0
@@ -323,7 +388,8 @@ func TestInterleavingsGiveTheSameRecords(t *testing.T) {
 		a := NewAssembler("inc")
 		var got []Record
 		for i := range rows {
-			got = append(got, a.Apply(&rows[i], line(rows[i]), "f")...)
+			r := rows[i]
+			got = append(got, a.Apply(&r, lines[rowKey(r)], "f")...)
 		}
 		got = append(got, a.Flush()...)
 		s := canonicalSet(got)
@@ -335,21 +401,32 @@ func TestInterleavingsGiveTheSameRecords(t *testing.T) {
 			t.Fatalf("interleaving %d differs:\n%s\nwant\n%s", n, strings.Join(s, "\n"), strings.Join(want, "\n"))
 		}
 	})
-	if n < 1000 {
-		t.Fatalf("only %d interleavings", n)
+	if n != 4200 { // 10! / (3! 4! 3!)
+		t.Fatalf("%d interleavings", n)
 	}
 }
 
-func interleave(streams [][]events.Event, prefix []events.Event, f func([]events.Event)) {
+// rowKey names a test row (its stream, sequence, phase and event).
+func rowKey(r events.Event) string {
+	k := r.CorrelationID + "/" + strconv.FormatUint(r.Seq, 10) + "/" + string(r.Phase)
+	if r.ClientEvent != nil {
+		k += "/" + r.ClientEvent.ID
+	}
+	return k
+}
+
+// interleave calls f with every interleaving of the streams' steps (a step is
+// one row, or rows that are always emitted together), each stream in order.
+func interleave(streams [][][]events.Event, prefix []events.Event, f func([]events.Event)) {
 	done := true
 	for i, s := range streams {
 		if len(s) == 0 {
 			continue
 		}
 		done = false
-		rest := append([][]events.Event{}, streams...)
+		rest := append([][][]events.Event{}, streams...)
 		rest[i] = s[1:]
-		interleave(rest, append(append([]events.Event{}, prefix...), s[0]), f)
+		interleave(rest, append(append([]events.Event{}, prefix...), s[0]...), f)
 	}
 	if done {
 		f(prefix)
@@ -392,33 +469,93 @@ func TestSessionIsKnownAtTheStart(t *testing.T) {
 		"claude.ai chat": {chat, chatEnd},
 	} {
 		a := NewAssembler("inc")
-		keys := map[string]map[string]bool{}
+		var recs []Record
 		for i := range rows {
-			for _, r := range a.Apply(&rows[i], line(rows[i]), "f") {
-				if r.Kind == KindCallStart || r.Kind == KindCallEnd {
-					if keys[r.Kind] == nil {
-						keys[r.Kind] = map[string]bool{}
-					}
-					keys[r.Kind][r.RoutingKey] = true
-				}
+			recs = append(recs, a.Apply(&rows[i], line(rows[i]), "f")...)
+		}
+		recs = append(recs, a.Flush()...)
+		start, end := map[string]string{}, map[string][]string{}
+		for _, r := range recs {
+			switch r.Kind {
+			case KindCallStart:
+				start[r.CallID] = r.RoutingKey
+			case KindCallEnd:
+				end[r.CallID] = append(end[r.CallID], r.RoutingKey)
 			}
 		}
-		for _, r := range a.Flush() {
-			if r.Kind == KindCallEnd {
-				if keys[r.Kind] == nil {
-					keys[r.Kind] = map[string]bool{}
-				}
-				keys[r.Kind][r.RoutingKey] = true
+		checked := 0
+		for id, keys := range end {
+			k, ok := start[id]
+			if !ok {
+				t.Errorf("%s: %s ended without a start", name, id)
+				continue
+			}
+			checked++
+			if len(keys) != 1 || keys[0] != k {
+				t.Errorf("%s: %s started under %s, ended under %v", name, id, k, keys)
 			}
 		}
-		if len(keys[KindCallStart]) != 1 || len(keys[KindCallEnd]) != 1 {
-			t.Errorf("%s: start keys %v, end keys %v", name, keys[KindCallStart], keys[KindCallEnd])
-			continue
+		if checked == 0 {
+			t.Errorf("%s: no call checked", name)
 		}
-		for k := range keys[KindCallStart] {
-			if !keys[KindCallEnd][k] {
-				t.Errorf("%s: start key %s, end keys %v", name, k, keys[KindCallEnd])
-			}
+	}
+}
+
+// A body past the cap stops growing; the call's detail is from what came before.
+func TestBodiesStopAtTheCap(t *testing.T) {
+	a := NewAssembler("inc")
+	h := hdr("b1", false, ccHeaders)
+	a.Apply(&h, line(h), "f")
+	big := reqChunk("b1", 1, false)
+	big.BodyB64 = base64.StdEncoding.EncodeToString(make([]byte, maxCallBody))
+	a.Apply(&big, nil, "f")
+	more := reqChunk("b1", 1, true)
+	more.BodyB64 = base64.StdEncoding.EncodeToString([]byte("x"))
+	a.Apply(&more, nil, "f")
+	if n := len(a.calls["b1"].bodies.req); n != maxCallBody {
+		t.Fatalf("held %d bytes, want the cap %d", n, maxCallBody)
+	}
+}
+
+// Calls are forgotten once past their time, in data time: an ended call's
+// marker after doneTTL, an open HTTP call after pendingTTL, a WebSocket after
+// pendingTTLWS. Memory follows the calls in flight, not history.
+func TestSweepForgetsCallsPastTheirTime(t *testing.T) {
+	a := NewAssembler("inc")
+	open, ended, ws := hdr("open", false, ccHeaders), hdr("ended", true, ccHeaders), wsHdr("ws")
+	end := complete("ended", ccClient)
+	for _, e := range []events.Event{open, ended, end, ws} {
+		a.Apply(&e, line(e), "f")
+	}
+	tick := func(d time.Duration) {
+		for i := 0; i < sweepEvery; i++ {
+			e := events.Event{CorrelationID: "tick", Phase: events.PhaseVerdict, TimestampNS: at(d)}
+			a.Apply(&e, nil, "f")
 		}
+	}
+	tick(time.Hour)
+	if a.calls["ended"] != nil || a.calls["open"] == nil || a.calls["ws"] == nil {
+		t.Fatalf("after an hour: ended %v open %v ws %v", a.calls["ended"] != nil, a.calls["open"] != nil, a.calls["ws"] != nil)
+	}
+	tick(7 * time.Hour)
+	if a.calls["open"] != nil || a.calls["ws"] == nil {
+		t.Fatalf("after 7 hours: open %v ws %v", a.calls["open"] != nil, a.calls["ws"] != nil)
+	}
+	tick(8 * 24 * time.Hour)
+	if a.calls["ws"] != nil {
+		t.Fatal("a WebSocket past a week is forgotten")
+	}
+}
+
+// A held analytics request survives a sweep: it's released, not forgotten.
+func TestSweepKeepsTheHeldCall(t *testing.T) {
+	a := NewAssembler("inc")
+	for _, e := range analytics("a1") {
+		a.Apply(&e, line(e), "f")
+	}
+	a.newestNS = at(30 * 24 * time.Hour)
+	a.sweep()
+	if rs := a.Flush(); len(rs) != 1 || rs[0].CallID != "a1" {
+		t.Fatalf("held call lost: %s", summary(rs))
 	}
 }

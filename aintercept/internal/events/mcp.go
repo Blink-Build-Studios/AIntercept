@@ -80,6 +80,12 @@ func MCPFromBodies(req, resp []byte, respEncoding string) *MCPCall {
 	return m
 }
 
+// CodexTurnMetadata is codexTurnMetadata, for a turn's start: from the
+// x-codex-turn-metadata header or a response.create body's client_metadata.
+func CodexTurnMetadata(header string, reqBody []byte) map[string]any {
+	return codexTurnMetadata(header, reqBody)
+}
+
 // codexTurnMetadata returns Codex's per-turn metadata (installation, session,
 // thread and turn ids, sandbox mode, workspaces, trigger, model, …), from the
 // x-codex-turn-metadata header or, failing that, the request body's
