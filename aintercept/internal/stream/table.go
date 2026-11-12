@@ -34,7 +34,11 @@ var (
 // type whose columns would collide with key, id or tomb, or with each other.
 // Registering the same name with the same type again returns the first.
 func RegisterTable[T any](name string) *Table {
-	typ := reflect.TypeFor[T]()
+	return RegisterTableType(name, reflect.TypeFor[T]())
+}
+
+// RegisterTableType is RegisterTable with the row type as a value.
+func RegisterTableType(name string, typ reflect.Type) *Table {
 	tablesMu.Lock()
 	defer tablesMu.Unlock()
 	if t, ok := tables[name]; ok {
