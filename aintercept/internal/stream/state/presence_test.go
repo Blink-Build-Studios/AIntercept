@@ -208,7 +208,7 @@ func only(cases []string, set map[string]bool) []string {
 // Every case has an atomic test.
 func TestEveryCaseHasAnAtomicTest(t *testing.T) {
 	covered := map[string]bool{CaseDuplicate: true} // every atomic test applies its record twice
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases} {
+	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases, requestCases} {
 		for _, c := range cs {
 			for _, x := range c.cases {
 				covered[x] = true

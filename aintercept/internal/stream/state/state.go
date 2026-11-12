@@ -41,12 +41,13 @@ type KeyState struct {
 	ev   *eventsState
 	dm   *dimsState
 	pr   *promptsState
+	rq   *reqState
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -62,6 +63,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.events(r, &d)
 	s.dims(r, &d)
 	s.prompts(r, &d)
+	s.requests(r, &d)
 	d.Changes = lastChanges(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
@@ -144,6 +146,7 @@ type snapshot struct {
 	// Prompts is the records the prompt tables and marks hold: Decode applies
 	// them again to rebuild their indexes.
 	Prompts []records.Record
+	Request reqSnap
 }
 
 // dimsSnap is the dimension indexes, for Encode.
@@ -171,7 +174,8 @@ type LinkEntry struct {
 var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
-	PromptItem{}, StepRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{}}
+	PromptItem{}, StepRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
+	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}}
 
 func init() {
 	for _, v := range RowTypes {
@@ -182,7 +186,7 @@ func init() {
 // Encode is the state as bytes, for a checkpoint.
 func Encode(s *KeyState) ([]byte, error) {
 	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
-		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Prompts: s.pr.snap()}
+		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Prompts: s.pr.snap(), Request: s.rq.snap()}
 	byAt := map[string]string{}
 	for call, la := range s.ev.callLink {
 		byAt[la.rid+"\x00"+la.at.id] = call
@@ -242,6 +246,7 @@ func Decode(b []byte) (*KeyState, error) {
 	}
 	s.dm = dimsFrom(snap.Dims)
 	s.promptsFrom(snap.Prompts)
+	s.reqFrom(snap.Request)
 	return s, nil
 }
 
