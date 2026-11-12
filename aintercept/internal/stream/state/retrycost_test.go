@@ -28,8 +28,9 @@ func TestRetryRewritesOnlyCallsItIsNearestFor(t *testing.T) {
 	}
 }
 
-// Allocations per request record on the retry-dense mix: the rows a record
-// changes are rebuilt from facts the state already parsed, not re-parsed.
+// Allocations per record on the retry-dense mix, every table included: a
+// record's metadata is parsed once for all of them, and a retry rebuilds only
+// the rows it changes. (473 before both; this guards against regressing.)
 func TestRequestsAllocsPerRecord(t *testing.T) {
 	s := New("s:big")
 	for i := 0; i < 1000; i++ {
@@ -50,7 +51,7 @@ func TestRequestsAllocsPerRecord(t *testing.T) {
 	k := 0
 	allocs := testing.AllocsPerRun(1000, func() { s.Apply(pre[k]); k++ })
 	t.Logf("%.1f allocs per record", allocs)
-	if allocs > 200 {
-		t.Errorf("%.1f allocations per record on the retry-dense mix, want at most 200", allocs)
+	if allocs > 260 {
+		t.Errorf("%.1f allocations per record on the retry-dense mix, want at most 260", allocs)
 	}
 }

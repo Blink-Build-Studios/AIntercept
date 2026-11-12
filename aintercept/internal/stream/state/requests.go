@@ -119,8 +119,16 @@ type reqState struct {
 	byCRID   map[string]map[string]bool     // client request id → the same
 	maxSpan  int64                          // the longest failed call, start to end: how far before a retry its call can start
 	rebuilt  int                            // rows txRow has rebuilt (a test's measure of the work)
+	best     map[string]nearest             // failed call id → the retry its row shows (as txRow last chose); absent: not known
 	lastOK   bool                           // the session's newest time as last written
 	lastNS   int64
+}
+
+// nearest is the retry a failed call's row shows, or none.
+type nearest struct {
+	none     bool
+	ts, dist int64
+	key      string
 }
 
 type txEnt struct {
@@ -144,7 +152,7 @@ func newReqState() *reqState {
 	return &reqState{txs: map[string]*txEnt{}, groups: map[string]*omap[tsID, string]{},
 		failedAt: newOmap[tsID, string](lessTsID), retries: newOmap[tsID, process.Retry](lessTsID),
 		visReq: map[string]int{}, visCRID: map[string]int{}, reps: map[string]repEnt{},
-		byReq: map[string]map[string]bool{}, byCRID: map[string]map[string]bool{}}
+		byReq: map[string]map[string]bool{}, byCRID: map[string]map[string]bool{}, best: map[string]nearest{}}
 }
 
 // requests folds a record into the request log's tables.
@@ -191,7 +199,7 @@ func (s *KeyState) requests(r records.Record, d *Delta) {
 		if rt, ok := process.RetryOf(*e); ok {
 			d.Cases = append(d.Cases, CaseRetry)
 			x.retries.Set(tsID{rt.TS, rt.Key}, rt)
-			s.retryArrived(d, rt.TS)
+			s.retryArrived(d, rt)
 		}
 	}
 	if sid == "" {
@@ -351,20 +359,37 @@ func (x *reqState) count(t *process.Tx, n int, changed map[string]bool) {
 	}
 }
 
-// retryArrived redoes the rows of the failed calls whose window a retry at ts falls in.
-func (s *KeyState) retryArrived(d *Delta, ts int64) {
+// retryArrived redoes the rows of the failed calls a retry becomes the nearest
+// retry of (the reference's nearestRetry): the others' rows don't change, so it
+// costs a comparison per failed call in its window and a rebuild per row it
+// changes.
+func (s *KeyState) retryArrived(d *Delta, rt process.Retry) {
 	x := s.rq
 	var hit []string
-	x.failedAt.Ascend(tsID{ts - process.RetryAfterNS - x.maxSpan, ""}, func(k tsID, c string) bool {
-		if k.ts > ts {
+	x.failedAt.Ascend(tsID{rt.TS - process.RetryAfterNS - x.maxSpan, ""}, func(k tsID, c string) bool {
+		if k.ts > rt.TS {
 			return false
 		}
 		t := x.txs[c].tx
+		if !s.retried(t) {
+			return true
+		}
 		stop := t.End()
 		if stop == 0 {
 			stop = t.TS()
 		}
-		if ts <= stop+process.RetryAfterNS {
+		if rt.TS > stop+process.RetryAfterNS || rt.TS < t.TS() {
+			return true
+		}
+		if p := t.Prompt(); p != "" && rt.HasPromptID && rt.PromptID != p {
+			return true
+		}
+		dist := rt.TS - stop
+		if dist < 0 {
+			dist = -dist
+		}
+		b, known := x.best[c]
+		if !known || b.none || dist < b.dist || dist == b.dist && (rt.TS < b.ts || rt.TS == b.ts && rt.Key < b.key) {
 			hit = append(hit, c)
 		}
 		return true
@@ -381,6 +406,7 @@ func (s *KeyState) txRow(d *Delta, callID string) {
 	x.rebuilt++
 	e := x.txs[callID]
 	if e == nil {
+		delete(x.best, callID)
 		s.rows.drop(d, TableRequestTxs, "tx:"+callID)
 		return
 	}
@@ -400,8 +426,14 @@ func (s *KeyState) txRow(d *Delta, callID string) {
 			cands = append(cands, r)
 			return true
 		})
+		x.best[callID] = nearest{none: true}
 		if i := process.NearestRetry(cands, t.TS(), t.End(), t.Prompt()); i >= 0 {
 			retry = &cands[i]
+			dist := retry.TS - stop
+			if dist < 0 {
+				dist = -dist
+			}
+			x.best[callID] = nearest{ts: retry.TS, dist: dist, key: retry.Key}
 			if g := x.groups[groupKey(t)]; g != nil {
 				at := atOf(t)
 				g.Ascend(at, func(k tsID, c string) bool {

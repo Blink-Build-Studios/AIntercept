@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // The request_rows snapshot: every person's request log, as the query API
@@ -1404,10 +1405,31 @@ func pyInt(n int64) string {
 // jsonFields is the named top-level fields of a JSON object, the first of a
 // repeated key (as DuckDB's json_extract_string reads them).
 func jsonFields(s string, keys ...string) map[string]json.RawMessage {
-	out := map[string]json.RawMessage{}
 	if s == "" {
-		return out
+		return map[string]json.RawMessage{}
 	}
+	// One record's metadata is read by several tables in turn: parse it once.
+	// The map holds every top-level field (the first of a repeated key), and
+	// callers only look keys up in it, never change it.
+	if c := lastFields.Load(); c != nil && c.s == s {
+		return c.m
+	}
+	m := allFields(s)
+	lastFields.Store(&parsedFields{s: s, m: m})
+	return m
+}
+
+type parsedFields struct {
+	s string
+	m map[string]json.RawMessage
+}
+
+// lastFields is the most recently parsed object (shared by goroutines; each
+// entry is immutable once stored).
+var lastFields atomic.Pointer[parsedFields]
+
+func allFields(s string) map[string]json.RawMessage {
+	out := map[string]json.RawMessage{}
 	dec := json.NewDecoder(strings.NewReader(s))
 	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
 		return out
@@ -1423,11 +1445,7 @@ func jsonFields(s string, keys ...string) map[string]json.RawMessage {
 		}
 		k, _ := tok.(string)
 		if _, seen := out[k]; !seen {
-			for _, want := range keys {
-				if k == want {
-					out[k] = v
-				}
-			}
+			out[k] = v
 		}
 	}
 	return out
