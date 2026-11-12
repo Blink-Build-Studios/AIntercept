@@ -39,12 +39,13 @@ type KeyState struct {
 	segs *omap[int64, Presence] // the span's focused and away segments, by start
 	ev   *eventsState
 	dm   *dimsState
+	rq   *reqState
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), rq: newReqState(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -106,6 +107,7 @@ type snapshot struct {
 	Tools   map[string]int64
 	Turns   map[string]int64
 	Dims    dimsSnap
+	Request reqSnap
 }
 
 // dimsSnap is the dimension indexes, for Encode.
@@ -144,7 +146,7 @@ func init() {
 // Encode is the state as bytes, for a checkpoint.
 func Encode(s *KeyState) ([]byte, error) {
 	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
-		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap()}
+		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Request: s.rq.snap()}
 	byAt := map[string]string{}
 	for call, la := range s.ev.callLink {
 		byAt[la.rid+"\x00"+la.at.id] = call
@@ -203,6 +205,7 @@ func Decode(b []byte) (*KeyState, error) {
 		s.ev.turns = snap.Turns
 	}
 	s.dm = dimsFrom(snap.Dims)
+	s.reqFrom(snap.Request)
 	return s, nil
 }
 

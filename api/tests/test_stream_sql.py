@@ -34,7 +34,7 @@ def fixtures(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
 def _connect(scenario: pathlib.Path) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect()
     for f in scenario.glob("*.parquet"):
-        con.execute(f"CREATE VIEW {f.stem} AS SELECT * FROM read_parquet('{f}', file_row_number = true)")
+        con.execute(f"CREATE VIEW {f.stem} AS SELECT * FROM read_parquet('{f}', file_row_number = true)")  # noqa: S608 (a test fixture path)
     return con
 
 

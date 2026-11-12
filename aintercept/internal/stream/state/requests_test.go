@@ -213,7 +213,9 @@ func (v *rqView) scopeRows(sessions []string, only string) []process.RequestRow 
 	for _, s := range sessions {
 		reps = append(reps, v.reports[s]...)
 	}
-	sort.Slice(reps, func(i, j int) bool { return lessTsID(tsID{reps[i].TS, reps[i].EventKey}, tsID{reps[j].TS, reps[j].EventKey}) })
+	sort.Slice(reps, func(i, j int) bool {
+		return lessTsID(tsID{reps[i].TS, reps[i].EventKey}, tsID{reps[j].TS, reps[j].EventKey})
+	})
 	reports := map[string]rqRep{}
 	for _, e := range reps {
 		for _, k := range []string{e.ReqID, e.ClientReqID} {
@@ -575,7 +577,6 @@ func codexPoll(id, keyHash, client string, t int64) *canon.Request {
 		Method: "GET", Path: "/backend-api/wham/usage", Status: 200, Product: canon.ProductCodex, KeyHash: keyHash, Client: client}
 }
 
-
 func withPerson(c *canon.Request, p string) *canon.Request { c.PersonID = p; return c }
 
 // endCopy is a call's ending as ingest also writes it under its start's key.
@@ -861,35 +862,38 @@ func TestRequestsFlatCost(t *testing.T) {
 	}
 	measure := func(n int) (float64, time.Duration) {
 		s := New("s:big")
-		for i := 0; i < n; i++ {
+		for i := 0; i < n; i++ { // as real sessions are: mostly calls and reports, a failure and retry now and then
 			at := int64(i) * 1000
-			switch i % 5 {
-			case 0:
-				s.Apply(callEnd(rqCall(fmt.Sprintf("c%d", i), "big", at, fmt.Sprintf("p%d", i/50), fmt.Sprintf("r%d", i))))
-			case 1:
+			pid, rid := fmt.Sprintf("p%d", i/50), fmt.Sprintf("r%d", i)
+			switch {
+			case i%100 == 99:
+				s.Apply(retryEv("big", at, pid, 1))
+			case i%50 == 49:
+				s.Apply(callEnd(failed(rqCall(fmt.Sprintf("c%d", i), "big", at, pid, rid), 529)))
+			case i%3 == 0:
+				s.Apply(callEnd(rqCall(fmt.Sprintf("c%d", i), "big", at, pid, rid)))
+			case i%3 == 1:
 				s.Apply(reportEv("big", at, fmt.Sprintf("r%d", i-1)))
-			case 2:
-				s.Apply(reportEv("big", at, fmt.Sprintf("gone%d", i)))
-			case 3:
-				s.Apply(callEnd(failed(rqCall(fmt.Sprintf("c%d", i), "big", at, fmt.Sprintf("p%d", i/50), fmt.Sprintf("r%d", i)), 529)))
 			default:
-				s.Apply(retryEv("big", at, fmt.Sprintf("p%d", i/50), 1))
+				s.Apply(reportEv("big", at, fmt.Sprintf("gone%d", i)))
 			}
 		}
 		pre := make([]records.Record, 3000)
 		for k := range pre {
 			at := int64(n)*1000 + int64(k)*10
-			switch k % 5 {
+			switch k % 10 {
 			case 0:
 				pre[k] = callStart(rqCall(fmt.Sprintf("cx%d", k), "big", at, "px", fmt.Sprintf("rx%d", k)))
 			case 1:
 				pre[k] = callEnd(rqCall(fmt.Sprintf("cx%d", k-1), "big", at-10, "px", fmt.Sprintf("rx%d", k-1)))
-			case 2:
+			case 2, 3:
 				pre[k] = reportEv("big", at, fmt.Sprintf("rx%d", k-2))
-			case 3:
+			case 4:
 				pre[k] = callEnd(failed(rqCall(fmt.Sprintf("cx%d", k), "big", at, "px", fmt.Sprintf("rx%d", k)), 529))
-			default:
+			case 5:
 				pre[k] = retryEv("big", at, "px", 1)
+			default:
+				pre[k] = callEnd(rqCall(fmt.Sprintf("cx%d", k), "big", at, fmt.Sprintf("py%d", k), fmt.Sprintf("rx%d", k)))
 			}
 		}
 		k := 0
