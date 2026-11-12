@@ -99,6 +99,8 @@ type WriterConfig struct {
 	NewTicker func(time.Duration) (<-chan time.Time, func())
 	// SkipFsync skips fsync on spooled files (tests only).
 	SkipFsync bool
+	// Now is the clock upload-minute keys are named by (tests). Default time.Now.
+	Now func() time.Time
 }
 
 // StreamConfig configures one Stream: a sequence of NDJSON lines sealed into
@@ -139,9 +141,10 @@ type item struct {
 
 // bundled is one whole object waiting in an object stream's bundle.
 type bundled struct {
-	stream int
-	key    string
-	body   []byte
+	stream   int
+	key      string
+	body     []byte
+	atUpload bool // key is a template naming the upload minute (PutAtUpload)
 }
 
 // ObjectStreamConfig configures an ObjectStream: whole objects (each its own
@@ -200,8 +203,9 @@ type spoolHeader struct {
 
 // bundledEntry is one object of a bundle: its key and body length.
 type bundledEntry struct {
-	Key string `json:"key"`
-	Len int    `json:"len"`
+	Key      string `json:"key"`
+	Len      int    `json:"len"`
+	AtUpload bool   `json:"au,omitempty"`
 }
 
 // WriterStats is a snapshot of the writer's spool and uploads.
@@ -489,7 +493,7 @@ func (w *Writer) sealObjects(ob *objectBuf) {
 	hdr := spoolHeader{Target: ob.cfg.Target, ContentType: ob.cfg.ContentType, ContentEncoding: ob.cfg.ContentEncoding}
 	body := make([]byte, 0, ob.bytes)
 	for _, o := range ob.objs {
-		hdr.Bundle = append(hdr.Bundle, bundledEntry{Key: o.key, Len: len(o.body)})
+		hdr.Bundle = append(hdr.Bundle, bundledEntry{Key: o.key, Len: len(o.body), AtUpload: o.atUpload})
 		body = append(body, o.body...)
 	}
 	for attempt := 0; ; attempt++ {
@@ -616,9 +620,16 @@ func (w *Writer) recover() error {
 		return fmt.Errorf("writer: read spool: %w", err)
 	}
 	var names []string
+	spooled := map[string]bool{}
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".spool") {
 			names = append(names, e.Name())
+			spooled[e.Name()] = true
+		}
+	}
+	for _, e := range entries { // a file uploaded just before a crash leaves its attempts behind
+		if n := e.Name(); strings.HasSuffix(n, attemptsSuffix) && !spooled[strings.TrimSuffix(n, attemptsSuffix)] {
+			_ = os.Remove(filepath.Join(w.cfg.SpoolDir, "ready", n))
 		}
 	}
 	sort.Strings(names)
@@ -679,8 +690,9 @@ func (w *Writer) upload(path string) bool {
 		return true
 	}
 	objs := []Object{{Key: hdr.Key, Body: body, ContentType: hdr.ContentType, ContentEncoding: hdr.ContentEncoding}}
+	atUpload := []bool{false}
 	if len(hdr.Bundle) > 0 { // a bundle: each object at its own key
-		objs = objs[:0]
+		objs, atUpload = objs[:0], atUpload[:0]
 		off := 0
 		for _, e := range hdr.Bundle {
 			if off+e.Len > len(body) {
@@ -689,11 +701,30 @@ func (w *Writer) upload(path string) bool {
 				return true
 			}
 			objs = append(objs, Object{Key: e.Key, Body: body[off : off+e.Len], ContentType: hdr.ContentType, ContentEncoding: hdr.ContentEncoding})
+			atUpload = append(atUpload, e.AtUpload)
 			off += e.Len
 		}
 	}
-	for _, o := range objs {
-		if !w.putUntilAccepted(t, o) {
+	var att map[int]*attempts
+	for i, o := range objs {
+		if !atUpload[i] {
+			if !w.putUntilAccepted(t, o) {
+				return false
+			}
+			continue
+		}
+		if att == nil {
+			att = readAttempts(path + attemptsSuffix)
+		}
+		a := att[i]
+		if a == nil {
+			a = &attempts{}
+			att[i] = a
+		}
+		if a.done {
+			continue
+		}
+		if !w.putAtUpload(t, o, path, i, a) {
 			return false
 		}
 	}
@@ -701,6 +732,7 @@ func (w *Writer) upload(path string) bool {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		slog.Error("writer: uploaded but couldn't remove the spool file", "path", path, "err", err)
 	}
+	_ = os.Remove(path + attemptsSuffix)
 	w.oldest.Delete(path)
 	w.spoolFiles.Add(-1)
 	w.addSpoolBytes(-size)
@@ -718,22 +750,31 @@ func (w *Writer) putUntilAccepted(t Target, o Object) bool {
 		if err == nil {
 			break
 		}
-		if w.ctx.Err() != nil {
+		if !w.failed(o.Key, attempt, err, &backoff) {
 			return false
 		}
-		w.uploadFailures.Add(1)
-		if attempt == 1 || attempt%10 == 0 {
-			slog.Warn("ALARM writer: upload failed; retrying, the file stays in the spool", "key", o.Key, "attempt", attempt, "err", err)
-		}
-		sleep := backoff/2 + time.Duration(rand.Int63n(int64(backoff/2)+1))
-		select {
-		case <-time.After(sleep):
-		case <-w.ctx.Done():
-			return false
-		}
-		if backoff *= 2; backoff > w.cfg.RetryMax {
-			backoff = w.cfg.RetryMax
-		}
+	}
+	return true
+}
+
+// failed counts a failed attempt, logs it, and waits out the backoff. It
+// returns false when the writer is abandoned.
+func (w *Writer) failed(key string, attempt int, err error, backoff *time.Duration) bool {
+	if w.ctx.Err() != nil {
+		return false
+	}
+	w.uploadFailures.Add(1)
+	if attempt == 1 || attempt%10 == 0 {
+		slog.Warn("ALARM writer: upload failed; retrying, the file stays in the spool", "key", key, "attempt", attempt, "err", err)
+	}
+	sleep := *backoff/2 + time.Duration(rand.Int63n(int64(*backoff/2)+1))
+	select {
+	case <-time.After(sleep):
+	case <-w.ctx.Done():
+		return false
+	}
+	if *backoff *= 2; *backoff > w.cfg.RetryMax {
+		*backoff = w.cfg.RetryMax
 	}
 	return true
 }

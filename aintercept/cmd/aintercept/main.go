@@ -8,6 +8,8 @@
 //	aintercept replay     streams an existing capture through the processor and checks it (a tool; takes flags)
 //	aintercept derive     builds the derived tables from an existing shaped output (a tool; takes flags)
 //	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
+//	aintercept stream     the bucketed processor: replicas own key buckets, read only new records
+//	aintercept storecheck whether an object store has what the stream processor needs (a tool; takes flags)
 //
 // The services are configured through environment variables.
 package main
@@ -19,20 +21,23 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/certsvc"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/observer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 )
 
 var modes = map[string]func(){
-	"observer": observer.Run,
-	"certsvc":  certsvc.Run,
-	"process":  process.Run,
-	"mirror":   process.RunMirror,
-	"replay":   replay,
-	"derive":   derive,
-	"canon":    canonCmd,
+	"observer":   observer.Run,
+	"certsvc":    certsvc.Run,
+	"process":    process.Run,
+	"mirror":     process.RunMirror,
+	"replay":     replay,
+	"derive":     derive,
+	"canon":      canonCmd,
+	"stream":     stream.Run,
+	"storecheck": storecheck,
 }
 
 func main() {
-	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "replay" && os.Args[1] != "derive" && os.Args[1] != "canon") {
+	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "replay" && os.Args[1] != "derive" && os.Args[1] != "canon" && os.Args[1] != "storecheck") {
 		usage()
 	}
 	run, ok := modes[os.Args[1]]
@@ -43,6 +48,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|mirror, or aintercept replay|derive|canon -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|mirror|stream, or aintercept replay|derive|canon|storecheck -h")
 	os.Exit(2)
 }

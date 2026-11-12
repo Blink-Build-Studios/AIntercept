@@ -19,6 +19,14 @@ jobs:
     name: Go (gofmt, vet, tests with -race)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      # An S3 emulator with conditional writes: the stream processor's store
+      # check (internal/stream TestStoreCheckAgainstS3) runs against it.
+      moto:
+        image: motoserver/moto:5.1.14@sha256:800719627036dc38dc699e9f314f624f2c98ac3d8bb754db078cb2698f08ee77
+        ports: ["5055:5000"]
+    env:
+      STORECHECK_ENDPOINT: http://localhost:5055
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

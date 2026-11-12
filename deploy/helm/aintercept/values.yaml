@@ -172,6 +172,28 @@ process:
     requests: { cpu: "50m", memory: "512Mi" }
     limits: { cpu: "1", memory: "1Gi" }
 
+# The bucketed processor (docs/STREAMING_PIPELINE.md §4): replicas own key
+# buckets through leases and read only the record files new since each
+# bucket's watermark. Off until it replaces `process` (phase 6). It uses the
+# process ServiceAccount (the same reads and writes, under <prefix>/stream/).
+stream:
+  enabled: false
+  bucketBits: 6      # 64 buckets: the most replicas that can share the work
+  cycleSeconds: 5    # how often an owned bucket looks for new records
+  replicas: 1        # when autoscaling is off
+  autoscaling:
+    enabled: true    # KEDA, polling GET /lag (metrics-api)
+    minReplicas: 1
+    maxReplicas: 64  # at most one bucket each
+    lagTargetSeconds: 30
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits: { cpu: "1", memory: "1Gi" }
+
 # The query API (api/), inside the cluster: it reads the processor's tables
 # (mirrored into the pod by an `aintercept mirror` sidecar) and raw files through
 # the sidecar. ClusterIP only, with a NetworkPolicy admitting no pod: reach it

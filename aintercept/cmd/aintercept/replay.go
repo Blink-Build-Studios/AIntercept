@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 )
 
 // replay is `aintercept replay`: streams an existing raw capture through the
@@ -30,7 +32,15 @@ func replay() {
 	to := fs.String("to", "", "only raw files before this hour (2006-01-02T15)")
 	checkEvery := fs.Int64("checkpoint-every", 0, "run -checkpoint-cmd after this many polls, and at the end (0: never)")
 	checkCmd := fs.String("checkpoint-cmd", "", "a shell command run at each checkpoint, with SHAPED set to the replay's tables so far; failing stops the replay")
+	processors := fs.Int("processors", 0, "replay through the bucketed processor instead: this many replicas, with chaos, in memory (-src must be local)")
+	ingestPods := fs.Int("ingest-pods", 3, "with -processors: ingest pods uploading records")
+	steps := fs.Int("steps", 2000, "with -processors: simulation steps")
+	checkpoints := fs.Int("checkpoints", 10, "with -processors: drained checkpoints compared with one pass")
 	fs.Parse(os.Args[2:])
+	if *processors > 0 {
+		replayStream(*src, *seed, *ingestPods, *processors, *steps, *checkpoints)
+		return
+	}
 	if *src == "" || *work == "" {
 		fs.Usage()
 		os.Exit(2)
@@ -121,4 +131,48 @@ func replay() {
 func fatalf(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 	os.Exit(1)
+}
+
+// replayStream canonicalizes a local raw capture with the observer's code and
+// replays its records through the bucketed processor (internal/stream) with
+// chaos, comparing every checkpoint with one pass.
+func replayStream(src string, seed int64, pods, processors, steps, checkpoints int) {
+	if src == "" || strings.HasPrefix(src, "s3://") {
+		fatalf("-processors needs a local -src")
+	}
+	ctx := context.Background()
+	col := &recordCollector{}
+	st, err := records.CanonDir(ctx, src, col, "")
+	if err != nil {
+		fatalf("canon: %v", err)
+	}
+	fmt.Fprintf(os.Stderr, "replay: %d raw rows -> %d records\n", st.Rows, len(col.recs))
+	res, err := stream.Simulate(ctx, stream.SimConfig{Seed: seed, IngestPods: pods, Processors: processors,
+		BucketBits: records.DefaultBucketBits, Steps: steps, Checkpoints: checkpoints, Input: col.recs,
+		Chaos: stream.Chaos{KillHard: 0.005, KillGraceful: 0.005, StealLease: 0.01, Pause: 0.01,
+			PutFailure: 0.02, DelayUpload: 0.02, AddRemove: 0.005}})
+	fmt.Printf("records          %d in %d files\n", res.Records, res.Files)
+	fmt.Printf("chaos            %d kills, %d steals, %d pauses, %d adds, %d removes, %d failed puts; %d fenced cycles\n",
+		res.Kills, res.Steals, res.Pauses, res.Adds, res.Removes, res.PutFailures, res.Fenced)
+	fmt.Printf("checkpoints      %d, %d differing from one pass\n", res.Checkpoints, res.Mismatches)
+	if err != nil {
+		fatalf("replay: %v", err)
+	}
+	if res.Mismatches > 0 {
+		fatalf("first difference: %s", res.FirstMismatch)
+	}
+}
+
+type recordCollector struct{ recs []records.Record }
+
+func (c *recordCollector) Put(_ context.Context, key string, body []byte) error {
+	if !strings.HasSuffix(key, ".parquet") || !strings.Contains(key, "records/") {
+		return nil
+	}
+	rs, err := records.Decode(body)
+	if err != nil {
+		return err
+	}
+	c.recs = append(c.recs, rs...)
+	return nil
 }
