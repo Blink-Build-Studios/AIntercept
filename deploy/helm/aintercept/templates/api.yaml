@@ -1,9 +1,13 @@
 {{- if .Values.api.enabled }}
+{{- $stateless := .Values.api.stateless.enabled }}
 # The query API (api/) inside the cluster, as it runs in a client network: the
 # UI connects to it (today through `kubectl port-forward svc/api 8787`). The
 # `aintercept mirror` sidecar keeps the processor's tables on a shared volume, in
 # commit order, and serves raw files to the API over localhost on demand.
-# One replica: the tables are a small read-only copy, rebuilt at start.
+# One replica: the tables are a small read-only copy, rebuilt at start. With
+# api.stateless.enabled (docs/STREAMING_PIPELINE.md §5) it reads the stream
+# processor's bucketed tables from the object store itself: no sidecar, no
+# table volumes, only a cache, and an HPA on CPU sets the replica count.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,7 +16,9 @@ metadata:
     app: api
     {{- include "aintercept.labels" . | nindent 4 }}
 spec:
+  {{- if not $stateless }}
   replicas: 1
+  {{- end }}
   selector:
     matchLabels: { app: api }
   template:
@@ -33,26 +39,53 @@ spec:
         fsGroup: 65532
         seccompProfile: { type: RuntimeDefault }
       volumes:
+        {{- if $stateless }}
+        - name: cache
+          emptyDir: { sizeLimit: {{ .Values.api.stateless.cacheSizeLimit }} }
+        {{- else }}
         - name: shaped
           emptyDir: { sizeLimit: {{ .Values.api.shapedSizeLimit }} }
         - name: work
           emptyDir: {}
         - name: db
           emptyDir: { sizeLimit: {{ .Values.api.dbSizeLimit }} }
+        {{- end }}
       {{- with (include "aintercept.scheduling" .Values.api) }}{{ . | nindent 6 }}{{ end }}
       containers:
         - name: api
           image: {{ include "aintercept.apiImage" . }}
           imagePullPolicy: {{ .Values.images.api.pullPolicy }}
           env:
+            {{- if $stateless }}
+            - { name: AINTERCEPT_STORE, value: buckets }
+            - { name: AINTERCEPT_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: AINTERCEPT_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            - { name: AINTERCEPT_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: AINTERCEPT_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if eq .Values.cloud "digitalocean" }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+            - { name: AINTERCEPT_CACHE_DIR, value: /data/cache }
+            - { name: AINTERCEPT_CACHE_BYTES, value: {{ .Values.api.stateless.cacheBytes | quote }} }
+            {{- else }}
             - { name: AINTERCEPT_SHAPED_DIR, value: /data/shaped }
             - { name: AINTERCEPT_DATA_DIR, value: /data/raw-unused }
             - { name: AINTERCEPT_RAW_URL, value: "http://127.0.0.1:9003" }
+            {{- end }}
             - { name: AINTERCEPT_MEMORY_LIMIT, value: {{ .Values.api.memoryLimit | quote }} }
             - name: AINTERCEPT_CONTAINER_MEMORY
               valueFrom:
                 resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            {{- if not $stateless }}
             - { name: AINTERCEPT_DB_DIR, value: /data/db }
+            {{- end }}
             - { name: AINTERCEPT_THREADS, value: {{ .Values.api.threads | quote }} }
             {{- with .Values.api.auth }}
             {{- if .jwtHeader }}
@@ -77,15 +110,20 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
           volumeMounts:
+            {{- if $stateless }}
+            - { name: cache, mountPath: /data/cache }
+            {{- else }}
             - { name: shaped, mountPath: /data/shaped, readOnly: true }
             - { name: work, mountPath: /work }
             - { name: db, mountPath: /data/db }
+            {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
+        {{- if not $stateless }}
         - name: mirror
           image: {{ include "aintercept.ainterceptImage" . }}
           imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
@@ -124,6 +162,7 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -141,4 +180,23 @@ spec:
   selector: { app: api }
   ports:
     - { name: http, port: 8787, targetPort: 8787 }
+{{- if $stateless }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  labels:
+    app: api
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: api }
+  minReplicas: {{ .Values.api.stateless.minReplicas }}
+  maxReplicas: {{ .Values.api.stateless.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ .Values.api.stateless.targetCPUUtilization }} }
+{{- end }}
 {{- end }}

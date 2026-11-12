@@ -59,6 +59,31 @@ def duckdb_memory_limit(env: Mapping[str, str]) -> str | None:
     return f"{int(container * DUCKDB_MEMORY_SHARE) >> 20}MB" if container > 0 else None
 
 
+def bucket_store_from_env(env: Mapping[str, str]) -> Any:
+    """The stateless read path (buckets.py, docs/STREAMING_PIPELINE.md §5): the stream
+    processor's bucketed tables, from a local directory (AINTERCEPT_BUCKETS_DIR) or the object
+    store (AINTERCEPT_S3_BUCKET, _PREFIX, _REGION, _ENDPOINT; AWS_* credentials)."""
+    from aintercept_api.buckets import BucketStore, LocalSource, S3Source, Source
+
+    source: Source
+    if env.get("AINTERCEPT_BUCKETS_DIR"):
+        source = LocalSource(pathlib.Path(env["AINTERCEPT_BUCKETS_DIR"]))
+    else:
+        source = S3Source(
+            env["AINTERCEPT_S3_BUCKET"], env["AINTERCEPT_S3_REGION"], endpoint=env.get("AINTERCEPT_S3_ENDPOINT")
+        )
+    prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
+    cache = pathlib.Path(env.get("AINTERCEPT_CACHE_DIR") or "/data/cache")
+    return BucketStore(
+        source,
+        cache,
+        prefix=prefix + "/" if prefix else "",
+        cache_bytes=int(env.get("AINTERCEPT_CACHE_BYTES") or 2 << 30),
+        memory_limit=duckdb_memory_limit(env),
+        threads=int(env["AINTERCEPT_THREADS"]) if env.get("AINTERCEPT_THREADS") else None,
+    )
+
+
 def create_app(
     store: Store | None = None,
     clock: Callable[[], datetime] | None = None,
@@ -91,6 +116,8 @@ def create_app(
         openapi_url="/openapi.json" if explorer else None,
     )
     data_dir = pathlib.Path(os.environ.get("AINTERCEPT_DATA_DIR") or DEFAULT_DATA_DIR)
+    if store is None and os.environ.get("AINTERCEPT_STORE") == "buckets":
+        store = bucket_store_from_env(os.environ)
     if store is None:
         shaped = pathlib.Path(os.environ.get("AINTERCEPT_SHAPED_DIR") or DEFAULT_SHAPED_DIR)
         # In the cluster, raw files come from the mirror sidecar rather than a directory.
@@ -164,11 +191,19 @@ def create_app(
             await run_in_threadpool(request.app.state.store.maybe_ingest, request.app.state.ingest_interval_s)
         except Exception:
             log.exception("ingest failed", extra={"fields": {"queryId": qid}})
+        # A bucketed store (buckets.py) reads only the request's keys' buckets: fix them for it.
+        store = request.app.state.store
+        token = None
         try:
+            if hasattr(store, "load_for"):
+                token = store.enter(await run_in_threadpool(store.load_for, request.url.path))
             response = await call_next(request)
         except Exception:
             log.exception("query failed", extra={"fields": {"queryId": qid, "path": request.url.path}})
             response = error_response(500, "internal", "Query failed", qid)
+        finally:
+            if token is not None:
+                store.leave(token)
         fields = {
             "queryId": qid,
             "method": request.method,
