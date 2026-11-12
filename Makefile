@@ -162,6 +162,12 @@ check-go: ## Go: gofmt clean, go vet, go test (with -race) in every module
 	for m in $(GO_MODULES); do (cd $$m && go vet ./...) || exit 1; done
 	cd aintercept && go test -race -count=1 -timeout 10m ./...
 
+.PHONY: test-pipeline
+test-pipeline: ## Go: the end-to-end gate on a real capture's records (local only: AINTERCEPT_RECORDS=<aintercept canon -out dir>)
+	@test -n "$(AINTERCEPT_RECORDS)" || (echo "set AINTERCEPT_RECORDS to a records directory (aintercept canon -src <raw> -out <dir>)" && exit 1)
+	cd aintercept && AINTERCEPT_RECORDS=$(AINTERCEPT_RECORDS) go test -count=1 -timeout 120m -tags full \
+		-run 'TestPipelineRealCapture|TestRealData' -v ./internal/stream/...
+
 .PHONY: test-full
 test-full: ## Go: the exhaustive variants too (-tags full: more seeds, longer captures); nightly in CI
 	cd aintercept && go test -race -count=1 -timeout 45m -tags full ./...
