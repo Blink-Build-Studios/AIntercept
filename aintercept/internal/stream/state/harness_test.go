@@ -32,14 +32,28 @@ func rec(r records.Record) records.Record {
 	return r
 }
 
-// ccEvent is a Claude Code analytics event of session s at t milliseconds.
+var batchN = map[string]int64{}
+
+// ccEvent is a Claude Code analytics event of session s at t milliseconds, in
+// its session's batch (numbered in order: the reference ranks a batch's events
+// by seq, so seq is the number).
 func ccEvent(s, name string, t int64, md string) records.Record {
+	return ccEventWith(s, name, t, md, nil)
+}
+
+func ccEventWith(s, name string, t int64, md string, set func(*canon.Event)) records.Record {
 	recSeq++
 	key := fmt.Sprintf("ev-%06d", recSeq)
-	return rec(records.Record{Kind: records.KindClientEvent, EventKey: key, Event: &canon.Event{
-		EventKey: key, CorrelationID: "batch-" + s, RowNS: t * ms, NS: t * ms, Source: canon.ProductClaudeCode,
+	b := "batch-" + s
+	batchN[b]++
+	e := &canon.Event{
+		EventKey: key, CorrelationID: b, RowNS: t * ms, NS: t * ms, Seq: batchN[b], Source: canon.ProductClaudeCode,
 		Name: name, SessionID: s, MetadataJSON: md,
-	}})
+	}
+	if set != nil {
+		set(e)
+	}
+	return rec(records.Record{Kind: records.KindClientEvent, EventKey: key, BatchID: b, BatchN: batchN[b], Event: e})
 }
 
 // blur is an event ending a blur window of d ms at t.

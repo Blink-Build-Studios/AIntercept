@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/gob"
 	"sort"
+	"strings"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
@@ -35,12 +37,13 @@ type KeyState struct {
 	seen map[string]bool // record ids applied: a duplicate is a no-op
 	ses  *session
 	segs *omap[int64, Presence] // the span's focused and away segments, by start
+	ev   *eventsState
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -53,6 +56,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	var d Delta
 	ch := s.ses.apply(r, &d)
 	s.presence(&d, ch)
+	// s.events(r, &d): not built yet; the event tests define it
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
@@ -94,11 +98,40 @@ type snapshot struct {
 	Key     string
 	Seen    []string
 	Session sessionSnap
+	Rows    map[string]map[string]any
+	Links   map[string][]LinkEntry
+	Tools   map[string]int64
+	Turns   map[string]int64
+}
+
+// LinkEntry is one visible call under a request id, for Encode.
+type LinkEntry struct {
+	TS     int64
+	ID     string
+	CallID string // the call it's from (its start's id, or its ending's)
+	Link   RequestLink
+}
+
+func init() {
+	for _, v := range []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{}} {
+		gob.Register(v)
+	}
 }
 
 // Encode is the state as bytes, for a checkpoint.
 func Encode(s *KeyState) ([]byte, error) {
-	snap := snapshot{Key: s.Key, Session: s.ses.snap()}
+	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
+		Tools: s.ev.tools, Turns: s.ev.turns}
+	byAt := map[string]string{}
+	for call, la := range s.ev.callLink {
+		byAt[la.rid+"\x00"+la.at.id] = call
+	}
+	for rid, m := range s.ev.links {
+		m.All(func(k tsID, v RequestLink) bool {
+			snap.Links[rid] = append(snap.Links[rid], LinkEntry{k.ts, k.id, byAt[rid+"\x00"+k.id], v})
+			return true
+		})
+	}
 	for id := range s.seen {
 		snap.Seen = append(snap.Seen, id)
 	}
@@ -119,21 +152,32 @@ func Decode(b []byte) (*KeyState, error) {
 		s.seen[id] = true
 	}
 	s.ses = sessionFrom(snap.Session)
-	s.rebuild()
+	s.ses.before = s.ses.spanNow()
+	s.rows = snap.Rows
+	if s.rows == nil {
+		s.rows = rowSet{}
+	}
+	for id, row := range s.rows[TablePresence] {
+		if strings.HasPrefix(id, "f:") {
+			p := row.(Presence)
+			s.segs.Set(p.FromNS, p)
+		}
+	}
+	for rid, es := range snap.Links {
+		m := newOmap[tsID, RequestLink](lessTsID)
+		for _, e := range es {
+			m.Set(tsID{e.TS, e.ID}, e.Link)
+			if e.CallID != "" {
+				s.ev.callLink[e.CallID] = linkAt{rid, tsID{e.TS, e.ID}}
+			}
+		}
+		s.ev.links[rid] = m
+	}
+	if snap.Tools != nil {
+		s.ev.tools = snap.Tools
+	}
+	if snap.Turns != nil {
+		s.ev.turns = snap.Turns
+	}
 	return s, nil
-}
-
-// rebuild recomputes every row from the indexes, after Decode: the rows were
-// written before, so the changes are dropped.
-func (s *KeyState) rebuild() {
-	var d Delta
-	sid := sessionOf(s.Key)
-	for _, w := range s.ses.sleep.list() {
-		s.rows.put(&d, TablePresence, idOf("z:", w.A), Presence{sid, 1, w.A, w.B, "asleep"})
-	}
-	now := s.ses.spanNow()
-	s.ses.before = now
-	if now.ok {
-		s.recut(&d, sid, now.first, now.last, now)
-	}
 }

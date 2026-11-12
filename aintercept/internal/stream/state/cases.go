@@ -17,6 +17,11 @@ const (
 	CaseStartAfterEnd    = "start.after_end"    // a call's start applied after its ending
 	CasePresenceRecut    = "presence.recut"     // the span or its blur windows changed: a stretch cut again
 	CasePresenceSleepRow = "presence.sleep_row" // a sleep window made or grew
+	CaseEventRow         = "event.row"          // a Claude Code event's row, by its link: .request .prompt .tool .device .session
+	CasePromptIndex      = "event.prompt_index" // a prompt's number set or replaced by a later input prompt
+	CaseSessionTool      = "tool.first"         // a session tool seen, or seen earlier
+	CaseRequestLink      = "call.request_link"  // a visible call put under its request id
+	CaseCodexTurn        = "call.codex_turn"    // a Codex turn's first visible call, or an earlier one
 )
 
 // AllCases is every case, for the coverage test.
@@ -24,4 +29,6 @@ var AllCases = []string{
 	CaseDuplicate, CaseOtherRecord, CaseEventNotSession, CaseEventSpan, CaseEventBlur, CaseEventSleep,
 	CaseCallVisible, CaseCallNotVisible, CaseStartVisible, CaseStartNotVisible, CaseStartAfterEnd,
 	CasePresenceRecut, CasePresenceSleepRow,
+	CaseEventRow + ".request", CaseEventRow + ".prompt", CaseEventRow + ".tool", CaseEventRow + ".device", CaseEventRow + ".session",
+	CasePromptIndex, CaseSessionTool, CaseRequestLink, CaseCodexTurn,
 }

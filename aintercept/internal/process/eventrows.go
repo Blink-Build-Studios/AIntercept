@@ -651,3 +651,71 @@ func sortedKeyList[T any](m map[string]T) []string {
 	sort.Strings(out)
 	return out
 }
+
+// EventFacts is what one Claude Code event's row reads of the event itself:
+// everything but its place, its prompt's number and what its link resolves to.
+// The streaming processor builds its event rows from it (one parsing, so the
+// two can't drift). Row's Seq, PromptIndex, LinkKind, LinkID and LinkLabel are
+// unset; the link's inputs are ReqID, Tool, ToolName, Device and Prompt.
+type EventFacts struct {
+	Row                                  EventRow
+	ReqID, Tool, ToolName, Device, Prompt string
+	// UsedTool is the tool a tengu_tool_use_success names for the session's
+	// tools ("" for none), with its MCP server, or IsMCP with none.
+	UsedTool, UsedServer string
+	UsedIsMCP            bool
+}
+
+// EventFactsOf is an event's facts, as eventRows reads them.
+func EventFactsOf(e Event) EventFacts {
+	ce := newListedEvent(eventColsOf(e), "", 0, interner{})
+	r := EventRow{
+		SessionID: e.SessionID, TsNS: ce.ts, Name: ce.name, NameLower: pyLower(ce.name), Internal: isInternal(ce.name),
+		Summary: ce.summary, SummaryLower: pyLower(ce.summary), Marker: markerNames[ce.marker], HeadSHA: ce.head,
+		Unnamed: ce.unnamed,
+	}
+	f := EventFacts{ReqID: ce.reqID, Tool: ce.tool, ToolName: ce.toolName, Device: ce.device, Prompt: ce.prompt}
+	if st := ce.state; st != nil {
+		r.Hook, r.GitOp, r.PR, r.RecapKey, r.Recap, r.Count = st.hook, st.gitOp, st.pr, st.recapKey, st.recap, st.count
+		f.UsedTool, f.UsedServer, f.UsedIsMCP = st.used, st.server, st.isMCP
+	}
+	if x := ce.sums; x != nil {
+		r.ToolName, r.IsMCP, r.HookMS = x.tool, x.mcp, x.hookMS
+		r.Argv0, r.Category, r.OutsideCwd = x.argv0, x.category, x.outside
+		r.HookName, r.Operation, r.PRNumber = x.hook, x.gitOp, x.pr
+		r.Cache5m, r.Cache1h, r.CostUSD = x.cache5m, x.cache1h, x.costUSD
+	}
+	f.Row = r
+	return f
+}
+
+// CallLabel is a request link's label: the call's class, model family and stop
+// reason (session.py _link).
+func CallLabel(class, model, stop string) string {
+	return firstStr(class, "—") + " · " + modelFamily(model) + " · " + firstStr(stop, "—")
+}
+
+// ToolUses is a call's tool_uses_json as the session tools read it: kind,
+// server and tool of each.
+func ToolUses(toolUsesJSON string) [][3]string {
+	var out [][3]string
+	for _, u := range readToolUses(toolUsesJSON, interner{}) {
+		out = append(out, [3]string{u.kind, u.server, u.tool})
+	}
+	return out
+}
+
+// PromptIndexOf is a tengu_input_prompt's prompt id and number as the prompt
+// index reads them (cc_prompt_id, prompt_index), and whether it has both.
+func PromptIndexOf(e Event) (string, int64, bool) {
+	if e.Name != "tengu_input_prompt" {
+		return "", 0, false
+	}
+	md := jsonFields(e.MetadataJSON, "cc_prompt_id", "prompt_index")
+	pid, _ := jsonString(md["cc_prompt_id"])
+	n := jsonInt(md["prompt_index"], math.MinInt32, math.MaxInt32)
+	if pid == "" || n == nil {
+		return "", 0, false
+	}
+	return pid, *n, true
+}

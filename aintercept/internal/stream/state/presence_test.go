@@ -151,6 +151,7 @@ var presenceCases = []atomicCase{
 func TestPresenceAtomic(t *testing.T) {
 	for _, c := range presenceCases {
 		t.Run(c.name, func(t *testing.T) {
+			batchN = map[string]int64{} // a case's events are its batches' whole
 			var before []records.Record
 			if c.before != nil {
 				before = c.before()
@@ -159,8 +160,8 @@ func TestPresenceAtomic(t *testing.T) {
 			o := stream(before)
 			d := o.apply(r)
 			checkPresence(t, c.name, append(before, r), o)
-			if !reflect.DeepEqual(d.Cases, c.cases) {
-				t.Fatalf("cases %v, want %v", d.Cases, c.cases)
+			if got := only(d.Cases, presenceCaseSet); !reflect.DeepEqual(got, c.cases) {
+				t.Fatalf("cases %v, want %v", got, c.cases)
 			}
 			if d2 := o.apply(r); !reflect.DeepEqual(d2.Cases, []string{CaseDuplicate}) || len(d2.Changes) != 0 {
 				t.Fatalf("a duplicate changed something: %+v", d2)
@@ -169,12 +170,33 @@ func TestPresenceAtomic(t *testing.T) {
 	}
 }
 
+// presenceCaseSet is the cases the presence tests name: the session's inputs
+// and presence's own.
+var presenceCaseSet = map[string]bool{
+	CaseOtherRecord: true, CaseEventNotSession: true, CaseEventSpan: true, CaseEventBlur: true, CaseEventSleep: true,
+	CaseCallVisible: true, CaseCallNotVisible: true, CaseStartVisible: true, CaseStartNotVisible: true,
+	CaseStartAfterEnd: true, CasePresenceRecut: true, CasePresenceSleepRow: true,
+}
+
+// only is the cases in set, in order.
+func only(cases []string, set map[string]bool) []string {
+	var out []string
+	for _, c := range cases {
+		if set[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // Every case has an atomic test.
 func TestEveryCaseHasAnAtomicTest(t *testing.T) {
 	covered := map[string]bool{CaseDuplicate: true} // every atomic test applies its record twice
-	for _, c := range presenceCases {
-		for _, x := range c.cases {
-			covered[x] = true
+	for _, cs := range [][]atomicCase{presenceCases, eventCases} {
+		for _, c := range cs {
+			for _, x := range c.cases {
+				covered[x] = true
+			}
 		}
 	}
 	for _, c := range AllCases {
@@ -200,6 +222,7 @@ func TestPresenceShortSequencesEveryOrder(t *testing.T) {
 		},
 	}
 	for name, mk := range sets {
+		batchN = map[string]int64{}
 		rs := mk()
 		permute(len(rs), func(p []int) {
 			ordered := make([]records.Record, len(rs))
@@ -237,6 +260,7 @@ func permute(n int, fn func([]int)) {
 func TestPresenceGeneratedSequences(t *testing.T) {
 	for seed := int64(1); seed <= 20; seed++ {
 		rng := rand.New(rand.NewSource(seed))
+		batchN = map[string]int64{}
 		rs := generateSessions(rng, 4, 300)
 		in := shuffled(rng, rs, 40)
 		o := stream(in[:len(in)/2])
@@ -282,7 +306,7 @@ func generateSessions(rng *rand.Rand, n, per int) []records.Record {
 			case k < 7:
 				out = append(out, ccEvent(s, "tengu_other", t, `{"blurDurationMs":100}`))
 			default:
-				c := ccCall(fmt.Sprintf("c-%d-%d", i, j), s, t)
+				c := ccCall(fmt.Sprintf("gc-%d-%d", i, j), s, t)
 				if rng.Intn(5) == 0 {
 					c.HiddenKind = "prewarm"
 				}
