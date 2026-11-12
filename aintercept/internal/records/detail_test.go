@@ -164,3 +164,33 @@ func gunzip(t *testing.T, b []byte) []byte {
 	out, _ := io.ReadAll(zr)
 	return out
 }
+
+// A row after the call ended (a disconnect after its complete) isn't added to
+// the object already written.
+func TestLateRowsAreNotInTheDetail(t *testing.T) {
+	a := NewAssembler("inc")
+	a.KeepDetail = true
+	got := applyAll(a, []events.Event{hdr("c1", true, ccHeaders), complete("c1", ccClient), disconnect("c1")})
+	if len(got) != 1 || len(got[0].Lines) != 2 {
+		t.Fatalf("details: %+v", got)
+	}
+	if len(a.lines) != 0 {
+		t.Fatalf("late row held: %d", len(a.lines))
+	}
+}
+
+// Rows of a call with no state (a turn of a connection whose upgrade wasn't
+// seen) are forgotten by the sweep with everything else.
+func TestSweepForgetsOrphanRows(t *testing.T) {
+	a := NewAssembler("inc")
+	a.KeepDetail = true
+	turn := wsTurnStart("w9", 1, "t1")
+	a.Apply(&turn, line(turn), "f")
+	if a.lines["w9"] == nil {
+		t.Fatal("the turn's row wasn't kept")
+	}
+	a.sweep()
+	if a.lines["w9"] != nil {
+		t.Fatal("orphan rows survived a sweep")
+	}
+}

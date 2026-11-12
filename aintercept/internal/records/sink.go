@@ -1,6 +1,8 @@
 package records
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,6 +30,8 @@ type SinkConfig struct {
 	// unnumbered event's key hashes is then the row with its content, as the
 	// full raw log writes it.
 	Content bool
+	// Details writes each call's detail object (DetailKey) when it ends.
+	Details bool
 	Now     func() time.Time
 }
 
@@ -56,7 +60,9 @@ func NewSink(cfg SinkConfig) *Sink {
 	if cfg.MaxRecords <= 0 {
 		cfg.MaxRecords = 20000
 	}
-	return &Sink{cfg: cfg, asm: NewAssembler(cfg.Incarnation)}
+	s := &Sink{cfg: cfg, asm: NewAssembler(cfg.Incarnation)}
+	s.asm.KeepDetail = cfg.Details
+	return s
 }
 
 // Emit assembles one row.
@@ -77,6 +83,9 @@ func (s *Sink) Emit(e events.Event) error {
 }
 
 func (s *Sink) add(rs []Record) {
+	for _, d := range s.asm.TakeDetails() {
+		s.putDetail(d)
+	}
 	if len(rs) == 0 {
 		return
 	}
@@ -142,6 +151,28 @@ func (s *Sink) seal() {
 			}
 		}()
 	}
+}
+
+// putDetail writes one call's detail object, gzipped. Called with mu held.
+func (s *Sink) putDetail(d Detail) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	for _, l := range d.Lines {
+		zw.Write(l)
+		zw.Write([]byte{'\n'})
+	}
+	zw.Close()
+	key := DetailKey(s.cfg.Prefix, d.CorrelationID)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if err := s.cfg.Putter.Put(context.Background(), key, buf.Bytes()); err != nil {
+			s.mu.Lock()
+			s.errs = append(s.errs, err)
+			s.mu.Unlock()
+			slog.Error("ALARM call detail put failed", "key", key, "err", err)
+		}
+	}()
 }
 
 // Wait waits for the puts started so far.

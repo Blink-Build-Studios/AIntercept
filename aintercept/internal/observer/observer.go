@@ -201,7 +201,7 @@ func Run() {
 		}
 		if put != nil {
 			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix,
-				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies,
+				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies, Details: true,
 				MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
 			if captureFullBodies {
 				full = append(full, recordsSink)
