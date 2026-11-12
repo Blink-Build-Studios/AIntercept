@@ -87,6 +87,20 @@ func callStart(c *canon.Request) records.Record {
 // reference is the single-pass reference over a set of records: each call's
 // ending (or its start, for a call still in flight), every event and account.
 func reference(rs []records.Record) *process.Derived {
+	// One pass in capture order: a batch's events in the order ingest numbered
+	// them, so events tied on every ordering key take the ranks ingest gave them
+	// (records' batch_n), not whatever order a shuffled test fed them in.
+	rs = append([]records.Record(nil), rs...)
+	sort.SliceStable(rs, func(i, j int) bool {
+		a, b := rs[i], rs[j]
+		if (a.Kind == records.KindClientEvent) != (b.Kind == records.KindClientEvent) {
+			return a.Kind != records.KindClientEvent
+		}
+		if a.Kind != records.KindClientEvent {
+			return false
+		}
+		return a.BatchID < b.BatchID || a.BatchID == b.BatchID && a.BatchN < b.BatchN
+	})
 	ended := map[string]bool{}
 	for _, r := range rs {
 		if r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection {
@@ -126,8 +140,7 @@ func reference(rs []records.Record) *process.Derived {
 		in.Accounts = append(in.Accounts, *a)
 	}
 	sort.Slice(in.Accounts, func(i, j int) bool { return in.Accounts[i].AccountID < in.Accounts[j].AccountID })
-	// The reference reads events in their part's order: by batch, then place.
-	sort.SliceStable(in.Events, func(i, j int) bool { return in.Events[i].EventKey < in.Events[j].EventKey })
+	// in.Events is already in capture order (by batch, then place: the sort above).
 	return process.DeriveRows(in)
 }
 

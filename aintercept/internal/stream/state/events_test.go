@@ -75,6 +75,8 @@ func eventRowsOf(o *streamOut) []process.EventRow {
 				return a.Name < b.Name
 			case a.OrderMD != b.OrderMD:
 				return a.OrderMD < b.OrderMD
+			case a.N != b.N: // identical events: the rank ingest gave them
+				return a.N < b.N
 			}
 			return a.EventKey < b.EventKey
 		})
