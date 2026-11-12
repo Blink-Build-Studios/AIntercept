@@ -94,9 +94,9 @@ func (s *KeyState) events(r records.Record, d *Delta) {
 			return
 		}
 		f := process.EventFactsOf(*e)
-		row := Event{EventRow: f.Row, BatchID: e.CorrelationID, N: r.BatchN, PromptID: f.Prompt,
+		row := Event{EventRow: f.Row, BatchID: e.CorrelationID, N: r.BatchCCN, PromptID: f.Prompt,
 			EvSeq: e.Seq, RowNS: e.RowNS, OrderMD: e.MetadataJSON, EventKey: e.EventKey}
-		row.EventID = e.CorrelationID + ":" + strconv.FormatInt(r.BatchN, 10)
+		row.EventID = e.CorrelationID + ":" + strconv.FormatInt(r.BatchCCN, 10)
 		switch {
 		case f.Row.Name == "tengu_event_loop_stall" && f.Device != "":
 			row.LinkKind, row.LinkID, row.LinkLabel = "device", f.Device, "device"

@@ -302,7 +302,7 @@ func (s *KeyState) promptEvent(r records.Record, d *Delta, sid string) {
 	ps := s.pr
 	e := r.Event
 	if process.IsPromptEvent(e.Name) {
-		x := &pEv{ord: ordOf(e), pe: process.PromptEventOf(*e, r.BatchN)}
+		x := &pEv{ord: ordOf(e), pe: process.PromptEventOf(*e, r.BatchCCN)}
 		x.f = x.pe.Facts()
 		if !ps.hasPromptEv || e.NS > ps.lastPromptEv {
 			ps.lastPromptEv, ps.hasPromptEv = e.NS, true
