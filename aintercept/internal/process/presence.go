@@ -118,3 +118,23 @@ func (d *rowData) presenceSegments(rows []SessionRow) []PresenceSegment {
 	}
 	return out
 }
+
+// EventWindows is an event's blur and sleep windows as the presence rows read
+// them (addPresence), for the streaming processor: one parsing, so the two
+// can't drift. ok is false when the event has none.
+func EventWindows(name, metadataJSON string, ns int64) (blur, sleep [2]int64, blurOK, sleepOK bool) {
+	if !presenceEventNames[name] {
+		return
+	}
+	a := newEventAgg()
+	a.addPresence("s", eventCols{MetadataJSON: metadataJSON, NS: ns})
+	if x := a.presence["s"]; x != nil {
+		if len(x.blur) > 0 {
+			blur, blurOK = [2]int64{x.blur[0].a, x.blur[0].b}, true
+		}
+		if len(x.sleep) > 0 {
+			sleep, sleepOK = [2]int64{x.sleep[0].a, x.sleep[0].b}, true
+		}
+	}
+	return
+}
