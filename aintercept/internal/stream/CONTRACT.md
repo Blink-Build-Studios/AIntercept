@@ -45,17 +45,28 @@ are kept for a grace period and then deleted. Fields:
 | `seq` | int | this commit's sequence |
 | `epoch`, `replica`, `nonce`, `at` | int, string, string, RFC 3339 | who wrote it and when; ignore |
 | `watermark`, `processed` | string, string[] | the processor's input position; ignore |
-| `gen` | int | the newest base generation |
-| `base` | {table: FileRef[]} | each table's base, in key-ranged parts, in key order (may be absent: no rows) |
+| `gen` | int | the newest base segment number; ignore |
+| `base` | {table: FileRef[]} | each table's tiered base: its segments **oldest first**, each segment's parts in key order (may be absent: no rows) |
 | `runs` | {table: FileRef[]} | each table's run files since its base, **oldest first** |
 | `state_base`, `state` | FileRef[] | state checkpoints, in tiers (groups), oldest first; not for readers. A key's state is every checkpoint of it, oldest first |
 | `last_compact` | RFC 3339 | ignore |
 | `garbage` | [{key, after}] | files no longer current, deleted after `after`; **never read them** |
 
 A `FileRef` is `{"key": <object key>, "min_key": <first key>, "max_key": <last key>, "rows": <n>}`,
-plus `bytes` (its size) and, on state files only, `group` (the tier it belongs to). Readers may ignore both.
-A file holds only keys in `[min_key, max_key]`, so a reader looking for some
-keys opens only the files whose range covers them.
+plus `bytes` (its size), on state files only `group` (the tier it belongs to),
+and on table base parts `level` and `seg` (below; absent means 0). Readers may
+ignore `bytes`, `group`, `level` and `seg`. A file holds only keys in
+`[min_key, max_key]`, so a reader looking for some keys opens only the files
+whose range covers them.
+
+A table's base is **tiered**. Run files fold into a level-0 segment; once a
+level holds `fanout` segments they fold into one segment of the next level.
+A segment is the parts sharing a `seg`: their key ranges never overlap. Across
+segments they may. `base` lists segments oldest first (level descending, then
+`seg` ascending), so in list order a later file's row is newer. A segment
+other than the first (oldest) may hold tombstones that remove rows of older
+segments; the first never does. Each row is rewritten O(log N) times over its
+life, and a key is in at most one part per segment.
 
 ## A table file
 
@@ -70,8 +81,8 @@ mean nothing.
 
 For each bucket, take its newest commit, then:
 
-1. Read the files in `base[table]` (in any order: their keys don't overlap),
-   then the files in `runs[table]`, **in the listed order**.
+1. Read the files in `base[table]`, then the files in `runs[table]`, **all
+   in the listed order** (segments overlap, so order matters in the base too).
 2. Fold the rows: for each `(key, id)`, the row from the latest file wins.
    (Within one file a `(key, id)` appears once.)
 3. Drop rows whose winner is a tombstone.

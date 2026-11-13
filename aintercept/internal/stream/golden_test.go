@@ -54,10 +54,10 @@ func goldenLayout(t *testing.T) (map[string][]byte, map[string][]Row) {
 	ws := []*Bucket{}
 	for b := 0; b < 2; b++ {
 		w := h.worker("replica-a", 3)
-		w.B, w.CompactRuns, w.PartRows = b, 3, 4
+		w.B, w.CompactRuns, w.Fanout, w.PartRows = b, 2, 2, 4
 		ws = append(ws, w)
 	}
-	for i := 0; i < 5; i++ { // 5 commits per bucket; compaction after the 3rd run
+	for i := 0; i < 7; i++ { // 7 commits per bucket: runs fold every 2, levels every 2 segments, so a level-1 and a level-0 segment
 		h.upload(i%2, h.gen.batch(6))
 		clock.Advance(20 * time.Second)
 		for _, w := range ws {
@@ -65,6 +65,28 @@ func goldenLayout(t *testing.T) (map[string][]byte, map[string][]Row) {
 				t.Fatal(err)
 			}
 		}
+	}
+	// The golden must show what a reader has to handle: segments at more than
+	// one level whose key ranges overlap (newest wins across them).
+	tiered := false
+	for b := 0; b < 2; b++ {
+		c, err := LoadLatest(ctx, s, h.l, b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for table := range c.Base {
+			segs := segmentsOf(c, table)
+			for i := 1; i < len(segs); i++ {
+				p, q := segs[i-1], segs[i]
+				if p.level > q.level && p.parts[0].MinKey <= q.parts[len(q.parts)-1].MaxKey &&
+					q.parts[0].MinKey <= p.parts[len(p.parts)-1].MaxKey {
+					tiered = true
+				}
+			}
+		}
+	}
+	if !tiered {
+		t.Fatal("the golden has no overlapping segments at different levels: change its parameters")
 	}
 	tables, err := ReadAll(ctx, s, h.l, h.m, 2)
 	if err != nil {

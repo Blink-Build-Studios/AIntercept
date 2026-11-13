@@ -15,31 +15,14 @@ import (
 // rewritten once per level it climbs, O(log N) times over its life, never
 // the whole base per fold.
 
-type segment struct {
-	level int
-	seg   int64
-	parts []FileRef
-}
-
-// segmentsOf is a table's base as the commit lists it, grouped into segments
-// (consecutive parts sharing Seg), in the commit's order.
-func segmentsOf(c *Commit, table string) []segment {
-	var out []segment
-	for _, p := range c.Base[table] {
-		if n := len(out); n > 0 && out[n-1].seg == p.Seg {
-			out[n-1].parts = append(out[n-1].parts, p)
-			continue
-		}
-		out = append(out, segment{level: p.Level, seg: p.Seg, parts: []FileRef{p}})
-	}
-	return out
-}
-
 // checkShape: segments oldest first (level descending, then creation order),
 // fewer than fanout per level, each segment's parts in key order and never
 // overlapping.
 func checkShape(t *testing.T, c *Commit, table string, fanout int) []segment {
 	t.Helper()
+	if c == nil { // nothing committed yet
+		return nil
+	}
 	segs := segmentsOf(c, table)
 	perLevel := map[int]int{}
 	for i, s := range segs {
@@ -86,6 +69,7 @@ func partKeys(segs []segment) map[string]bool {
 // Atomic: runs fold into a new level-0 segment; an older segment is left as it
 // is (not rewritten) until its level fills.
 func TestTieredRunsFoldIntoLevelZero(t *testing.T) {
+	t.Parallel()
 	h, ctx := setup(t, 1)
 	w := h.worker("a", 1)
 	w.CompactRuns, w.Fanout, w.CompactEvery = 3, 4, time.Hour
@@ -127,6 +111,7 @@ func TestTieredRunsFoldIntoLevelZero(t *testing.T) {
 // the next, which goes after that level's older segments and before every
 // newer one.
 func TestTieredLevelsCascade(t *testing.T) {
+	t.Parallel()
 	h, ctx := setup(t, 1)
 	w := h.worker("a", 1)
 	w.CompactRuns, w.Fanout, w.CompactEvery = 2, 2, time.Hour
@@ -152,6 +137,7 @@ func TestTieredLevelsCascade(t *testing.T) {
 // Atomic: a tombstone survives a fold while older segments hold rows it must
 // remove, and is dropped only in the bottom (oldest) segment.
 func TestTieredTombstonesKeptUntilBottom(t *testing.T) {
+	t.Parallel()
 	h, ctx := setup(t, 1)
 	h.m = toggleModel{}
 	w := h.worker("a", 1)
@@ -195,6 +181,7 @@ func TestTieredTombstonesKeptUntilBottom(t *testing.T) {
 // Atomic: a fenced owner's fold neither commits nor overwrites the new
 // owner's files.
 func TestTieredFencedOwnerFold(t *testing.T) {
+	t.Parallel()
 	h, ctx := setup(t, 1)
 	a := h.worker("a", 1)
 	a.CompactRuns, a.Fanout, a.CompactEvery = 2, 2, time.Hour
@@ -239,9 +226,10 @@ func TestTieredFencedOwnerFold(t *testing.T) {
 // Sequences: folds (by run count, by time, and a full Compact) interleaved
 // with cycles in every order: the newest-wins view always equals one pass.
 func TestTieredFoldsInEveryOrder(t *testing.T) {
+	t.Parallel()
 	g := newGen(7, 6)
 	batches := [][]records.Record{g.batch(12), g.batch(12), g.batch(12), g.batch(12)}
-	ops := []string{"u0", "u1", "u2", "full", "time"}
+	ops := tieredOrderOps
 	permute(len(ops), func(order []int) {
 		h, ctx := setup(t, 1)
 		w := h.worker("a", 1)
@@ -291,6 +279,10 @@ func (rowModel) Apply(st any, r *records.Record) Delta {
 	return Delta{rowsTable: {{Key: s.Key, ID: r.RecordID, Value: rowVal{TS: RecordTS(r)}}}}
 }
 
+// tieredOrderOps are the operations TestTieredFoldsInEveryOrder permutes:
+// four (24 orders) in make check; -tags full adds a fifth (120 orders).
+var tieredOrderOps = []string{"u0", "u1", "full", "time"}
+
 // tieredSizes are the history sizes the cost test runs (rows in); -tags full
 // adds 100,000 and 1,000,000.
 var tieredSizes = []int{10, 1000}
@@ -298,6 +290,7 @@ var tieredSizes = []int{10, 1000}
 // Cost: rows rewritten by compaction per row in, and the segments a key
 // lookup opens, grow O(log N), not O(N).
 func TestTieredRewritesPerRowGrowLogarithmically(t *testing.T) {
+	t.Parallel()
 	const fanout, runs = 4, 4
 	for _, n := range tieredSizes {
 		h, ctx := setup(t, 1)
@@ -305,9 +298,9 @@ func TestTieredRewritesPerRowGrowLogarithmically(t *testing.T) {
 		h.gen = newGen(11, 50)
 		w := h.worker("a", 1)
 		w.CompactRuns, w.Fanout, w.CompactEvery, w.PartRows = runs, fanout, time.Hour, 4096
-		batch := n / 2000
-		if batch < 10 {
-			batch = 10
+		batch := 100 // a fixed fold size, so N grows the number of folds
+		if n < batch {
+			batch = n
 		}
 		in := 0
 		for in < n {
