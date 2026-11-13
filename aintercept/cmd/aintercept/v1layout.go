@@ -20,13 +20,16 @@ import (
 // (calls/<id>.ndjson.gz, what the drawer's raw view reads), each key's records
 // are applied in one pass (its calls still waiting expired by the newest data),
 // every key gets its first commit under v1/keys/, and one merge run writes
-// v1/merge/. The API's parity tests and local tools read
-// the result.
+// v1/merge/. With -v2 (the default) it also writes the v6 views beside v1
+// under v2/ (docs/PIPELINE.md §3, writeV2). The API's parity tests, the v6
+// oracle's table-level harness (api/tests/oracle/) and local tools read the
+// result.
 func v1layout() {
 	fs := flag.NewFlagSet("v1layout", flag.ExitOnError)
 	src := fs.String("src", "", "raw capture directory")
 	out := fs.String("out", "", "output directory (the bucket's root)")
 	prefix := fs.String("prefix", "", "key prefix inside the bucket")
+	v2 := fs.Bool("v2", true, "also write the v6 views under <prefix>v2/ (docs/PIPELINE.md §3)")
 	_ = fs.Parse(os.Args[2:])
 	if *src == "" || *out == "" {
 		fatalf("v1layout: -src and -out are required")
@@ -69,7 +72,22 @@ func v1layout() {
 	if err != nil {
 		fatalf("v1layout: merge: %v", err)
 	}
+	if *v2 {
+		if err := writeV2(ctx, s, *prefix, keys, byKey); err != nil {
+			fatalf("v1layout: v2: %v", err)
+		}
+	}
 	fmt.Printf("v1layout: %d records, %d keys, merge %d (%d partitions)\n", len(col.recs), len(keys), res.N, len(res.Rewritten))
+}
+
+// writeV2 writes the v6 views of a layout beside its v1 output
+// (docs/PIPELINE.md, Testing): every key's run, then the person loop until
+// idle, then the merge. The v1 keys and merge partitions stay: the oracle reads
+// them until build step 11. Empty for now: build steps 3 to 8 add each view
+// as it lands (the session views first), and the harness compares them with
+// the oracle's tables entity by entity.
+func writeV2(ctx context.Context, s stream.DirStore, prefix string, keys []string, byKey map[string]map[string][]stream.Row) error {
+	return nil
 }
 
 // detailsTo writes the calls' detail objects to the store and hands records to
