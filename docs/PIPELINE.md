@@ -1,50 +1,78 @@
-# Data pipeline (v6)
+# Data pipeline (v7)
 
-Status: **proposed, for the owner's sign-off.** §1 (ingest) and §2 (rollups) are
-v5, built and deployed. v6 keeps them, adds a step after §2's commit (§3.2) and
-drops the key's `out/` tables, and replaces v5's merge partitions and read path:
-the rollup writes **views**, the rows each page reads at fixed paths computed
-from the page's id, and the API only reads them.
+Status: **proposed, for the owner's sign-off; revised after the independent
+review.** This follows the owner's and co-founder's decision of 2026-11-13 to
+keep the queryable data in Postgres.
+
+Already built and kept:
+- §1 ingest, from v5, except how it announces new files;
+- the per-key state engine (#19) and its S3 checkpoint;
+- 6 h expiry (#39);
+- the Python oracle (#42);
+- the session render functions, `state.RenderSession` (#44).
+
+Postgres replaces the rest of v5 and v6:
+- the key commit objects and their create-only fencing;
+- each key's `out/` tables;
+- the merge;
+- Redis;
+- v6's view objects, person loop and dispatch (specified, never built).
+
 `docs/STREAMING_PIPELINE.md` is kept only as history.
 
 ## Goals
 
-- **Target 1,500 people; build for the week in front of us.** Keep the
-  mechanisms to a minimum. Complexity gets added only when real traffic needs
-  it.
-- **The rollup precomputes, the API reads.** Write time does everything that
-  depends only on the data. The API does only what depends on the request: the
-  range, filters, sort, page, bin, and values relative to now. It runs today's
-  endpoint code over the rows it reads, and never derives a table, except the
-  directory's request-time aggregation (the owner's call, §5).
-- **Fixed reads.** An API call GETs objects at paths computed from its URL (and
-  the time): at most 2 sequential rounds of parallel GETs, no LIST, no commit or
-  manifest file. The objects read are set by the range asked for. A cold page
-  loads in under ~300 ms.
-- **Recompute, don't delta.** Every view object is recomputed from absolute
-  inputs and overwritten whole, so writing it twice is harmless. A commit costs
-  the rows it changed plus the chunk they sit in (an hour of a session, a day of
-  a session or a person), never a whole session or a person's history.
-- **One writer per object.** Each object has one owning entity, and only a run
-  holding that entity's lock writes it.
+- **Solve today's problems.** Today that's a handful of people. 1,500 is the
+  design target, and the budget below is checked against it, but no mechanism
+  gets built for it before real traffic needs it. Keep the mechanisms to a
+  minimum.
+- **Raw data in S3, queryable rows in Postgres.**
+  - Ingest writes the per-key files, the calls' detail objects and a recent
+    index to S3. They never collide, and their layout isn't shaped by the
+    queries.
+  - Workers turn them into rows in Postgres.
+  - Request and response bodies stay in S3. Postgres holds the call id that
+    names them.
+- **Ingest never talks to Postgres.** It has no connection, DSN or login.
+  Workers discover new files by tailing the recent index (§2).
+- **The worker precomputes, the API reads.**
+  - Write time does everything that depends only on the data of one key.
+  - The API does what depends on the request: the range, filters, sort, page,
+    bin, and values relative to now.
+  - Values that need other keys' rows are joined at read time when the join is
+    bounded by the page's entity and indexed (§4).
+  - The API runs today's endpoint code over the rows it reads.
+- **Delta in, correct eventual state out.** A commit writes only the rows that
+  changed, never O(history). Rendering a session costs O(session) CPU, as
+  accepted in v6.
+- **One transaction per commit.** A key's rows and its next commit number land
+  together or not at all. The number orders a key's commits, so a stalled or
+  duplicate worker can't write. This replaces the create-only commit objects,
+  the ETag fencing and the Redis locks.
 - **Response bodies don't change.** Every endpoint returns byte-identical JSON,
   and the URLs stay the same. The exceptions are in "Decisions and quirks"; the
   only one the UI sees is the in-flight drawer (the owner's call).
-- **Every tier scales horizontally:** ingest on CPU, rollups on lag, the API
-  on CPU.
-- **Correct under any timing.** Retries, crashes, late data, a lock that runs
-  out while its holder is still working, or Redis losing its data must never
-  lose a record or count one twice.
-- **Infrastructure:** data lives in S3. Redis runs inside the cluster as one
-  StatefulSet with a small volume. It's used for coordination only, and
-  nothing that correctness depends on lives there.
-- **Cost:** S3 request charges grow with active users and are accepted. That's
-  about $45k/month at 21,000 people, and much less at 1,500.
+- **Every tier scales horizontally:** ingest on CPU, workers on lag, the API on
+  CPU. Postgres is the one component that scales vertically: one primary,
+  sized in the scaling budget.
+- **Correct under any timing.** None of these may ever lose a record or count
+  one twice:
+  - retries and crashes;
+  - late or duplicate data;
+  - a stalled worker;
+  - a dropped Postgres connection;
+  - Postgres being down. Ingest doesn't notice, and the workers catch up from
+    S3.
+- **Infrastructure:**
+  - S3 holds raw data, per-key files, state checkpoints, the recent index and
+    call bodies.
+  - Postgres runs on RDS in production, in the cluster on the DigitalOcean demo,
+    and in Docker Compose locally.
+  - Redis is gone.
 
 ## Keys
 
-Every record already carries a **routing key** (`records.RoutingKey`, built in
-#18):
+Unchanged. Every record carries a **routing key** (`records.RoutingKey`, #18):
 
 | Record | Key |
 |---|---|
@@ -54,674 +82,966 @@ Every record already carries a **routing key** (`records.RoutingKey`, built in
 | no session, no credential | `ip:<source ip>:<hour>` |
 | account sighting (name, email, org) | `a:<account id>` |
 
-A session is never split across keys.
+A session is never split across keys, so every row a session's tables hold is
+written by its own key.
 
-A **person** is an email group (today's `person_map`). Its stable id `<gid>` is
-`e-` and the hash of the lowercased email, or `a-<account id>` for an account
-with no email, or `unattributed` for the sessions no account appears on. The
-API's person id stays the group's leader account, as today.
+A **person** is an email group (today's `person_map`). The API's person id stays
+the group's leader account, as today.
+
+## Data flow
+
+```
+Envoy + observer (ingest) ── per-key files, call detail, recent index (5 s) ──▶ S3
+                                                                                 │
+   workers: the tail (one holder) ── LIST/GET v1/recent/ from its cursor ───────┤
+        │ flags + cursor, one transaction                                        │
+        ▼                                                                        │
+Postgres dirty_keys ◀── claim ── workers (`rollup`) ◀── LIST/GET in/, state chunks
+                                   │ one transaction: keys.n + 1, rows, flag
+                                   ▼
+                               Postgres ◀── API: one connection, one snapshot, a few indexed statements
+                                             → in-memory DuckDB → today's endpoint code
+                                             (+ calls/<id>.ndjson.gz from S3 for the drawer)
+```
 
 ## S3 layout
 
 ```
-raw/dt=…/hour=…/instance=…/…ndjson.gz         raw capture (unchanged)
-calls/<call id>.ndjson.gz                      per-call detail (unchanged): the drawer's raw view
-v1/keys/<key>/in/<s3-time>-<incarnation>-<seq>.parquet   ingest output, one file per key per flush
-v1/keys/<key>/state/<n>-<nonce>               the run's state checkpoint
-v1/keys/<key>/commit/<n, 12 digits>.json      create-only; names the state files and the input cursor, and
-                                               carries what the merge reads (§4)
-v1/recent/<s3 minute>/<incarnation>-<seq>.json   per pod per minute: the keys it flushed, or a rollup
-                                               replica's: the keys it committed
-v1/merge/index/<n>-<nonce>.parquet            the merge's state (§4); nothing else reads it
-v1/merge/commit/<n, 12 digits>.json           create-only; names the index; its newest_ns is the data clock
-v1/content_retained                            empty; ingest logged a row with a body (the retention mode /status shows)
-
-                                               written by (holding that entity's lock)
-v2/s/<sid>/head.parquet                        session key run: the session's whole-session rows
-v2/s/<sid>/h/<YYYYMMDDTHH>.parquet             session key run: its rows with event time in that hour
-v2/s/<sid>/pd/<YYYY-MM-DD>.parquet             session key run: its part of a person's day
-v2/s/<sid>/p/<prompt id>.parquet               session key run: a prompt's rows the drawer reads
-v2/s/<sid>/kids/<child sid>.json               the child's key run: its edge
-v2/s/<sid>/x.parquet                           merge: a Codex session's own title label
-v2/r/<request id>.parquet                      the call's home key run: the drawer's rows of the call
-v2/r/<request id>/<key>.parquet                that key's run: its events of an analytics batch homed elsewhere
-v2/c/<hash>/<YYYY-MM-DD>.parquet               c: key run: the credential's request rows that day
-v2/kd/<key>.parquet                            the key's run: its rows for the directory
-v2/pa/<account id>.parquet                     merge: the account's group (a copy per linked account)
-v2/g/<gid>/group.parquet                       merge: the group (the same content)
-v2/g/<gid>/head.parquet                        person run: the person's whole-history rows
-v2/g/<gid>/d/<YYYY-MM-DD>.parquet              person run: the person's day
-v2/g/<gid>/rq/<YYYY-MM-DD>.parquet             person run: the person's request log for a day
-v2/org/status.json                             merge: /status, and the directory's first day
-v2/org/days/<YYYY-MM-DD>.parquet               merge: the directory rows of every key last active that day
-v2/org/accounts.parquet                        merge: every account's own row (v5's index partition)
+raw/dt=…/hour=…/instance=…/…ndjson.gz          raw capture (unchanged; nothing reads it)
+calls/<call id>.ndjson.gz                       per-call detail (unchanged): the drawer's raw view
+v1/keys/<key>/in/<s3-time>-<incarnation>-<seq>.parquet   ingest output, one file per key per flush (unchanged)
+v1/keys/<key>/state/<n>-<nonce>                 the key's state checkpoint chunks (unchanged; keys.state names them)
+v1/recent/<s3-time>-<incarnation>-<seq>.json    per pod every 5 s: the keys whose files it uploaded, its newest upload time
 ```
 
-- `<key>`, `<sid>`, `<prompt id>`, `<request id>` and `<account id>` are
-  URL-escaped. Hours and days are UTC.
-- `<s3-time>` is S3's clock, to the second, taken at upload. The writer keeps
-  the offset between its own clock and the `Date` header of the last S3
-  response.
-- `<incarnation>` is the pod name, the process start time and random bytes
-  (`records.NewIncarnation`), so a restarted container never reuses a name.
-- Gone: `calls/<id>.keys/`, `v1/reported/`, the merge's day and index
-  partitions, and each key's `out/` tables (nothing reads them any more; §2
-  step 6 writes only `state/`, build step 11).
+- **The recent index changes in two ways.**
+  - Its objects are named by S3 time to the second, like `in/` files. They used
+    to sit in a folder per minute.
+  - A pod uploads one every 5 s instead of every minute.
+
+  The time-ordered names let one cursor tail them (§2).
+- **Gone:**
+  - each key's `commit/` and `out/`;
+  - `v1/merge/`, `v1/reported/` and `v1/content_retained`;
+  - `calls/<id>.keys/`;
+  - `v2/` (planned, never written).
+- **The state checkpoint stays in S3.** It's the key's journal of applied
+  records (`state.Encode`), compacted in tiers of 8 as built.
+  - Its size is the key's records, and only the worker loading the key reads it.
+  - Postgres holds the chunk names in the key's row.
+  - Moving it into Postgres would copy every record into the database for no
+    query.
 
 ## 1. Ingest: the Envoy + observer pod, scaled on CPU
 
-1. **Records.** The observer builds records exactly as today (#18), and computes
-   each record's routing key.
-2. **Buffers.** There's one buffer per key.
-   - A buffer flushes when it reaches **`OBSERVER_KEY_FLUSH_BYTES`** (default
-     1 MiB) or when its timer, **`OBSERVER_KEY_FLUSH_SECONDS`** (default 30 s,
-     max 60 s), runs out. The timer starts at the buffer's first record and has
-     ±10% jitter.
-   - A global memory cap (`OBSERVER_KEY_BUFFER_MAX_BYTES`) applies backpressure:
-     over the cap, the oldest buffers flush first.
-3. **Spool.** Every buffer is also a file in the disk spool, fsynced about once a
-   second.
-   - A flush seals the file, uploads it as
-     `v1/keys/<key>/in/<s3-time>-<incarnation>-<seq>.parquet`, then deletes it.
-   - Uploads retry until they succeed, and several run in parallel.
-   - On restart, every leftover spool file is uploaded.
-4. **After each upload:**
-   - `SADD dirty <key>`. This is fire-and-forget: if Redis is down, ingest carries
-     on.
-   - The pod also adds the key to its per-minute recent index. Once a minute it
-     uploads `v1/recent/<s3-minute>/<incarnation>-<seq>.json`.
-5. **Shutdown (SIGTERM).** Flush every buffer before Envoy's drain ends, and
-   upload the recent index. Anything that couldn't be uploaded is counted,
-   triggers an alarm, and stays in the spool for the next start.
-6. **Unchanged:** the raw ndjson log, the `calls/` detail objects, failing open in
-   observe mode and closed in enforce mode.
+Unchanged from v5, except step 4:
+- records and their routing keys;
+- per-key buffers (1 MiB or 30 s);
+- the spool;
+- uploads named by S3 time;
+- shutdown;
+- the raw ndjson and `calls/` objects;
+- failing open in observe mode and closed in enforce mode.
 
-## 2. Rollups: the `rollup` Deployment, scaled on lag, at least 2 replicas
+4. **After each upload, the key goes into the pod's recent index.**
+   - **The pod journals the key in its spool before the upload,** fsynced with
+     the spool. The key goes into the next index object once the upload has
+     completed.
+   - **It uploads the index every 5 s,** as
+     `v1/recent/<s3-time>-<incarnation>-<seq>.json`: the keys, plus the pod's
+     newest upload time for `/status`.
+     - It also uploads at shutdown.
+     - At start, it uploads whatever a crash left in the journal. A key named
+       for a file that never landed is harmless: its run finds nothing and
+       clears the flag (§2).
+   - **Ingest has no Postgres connection, DSN or login, and no Redis.** An
+     outage of either can't touch traffic or lose a flag.
+   - **The one gap:** losing the node, and with it the spool, within 5 s of an
+     upload. That key isn't flagged until its next file. The file isn't lost:
+     it's in S3, waiting (Not now: a periodic full listing).
 
-Each replica runs these loops.
+## 2. Workers: the `rollup` Deployment, scaled on lag, at least 2 replicas
 
-**The key loop.**
-1. Take a key from `dirty` (`SPOP`). Lock it with `SET lock:<key> <replica>
-   NX PX 60000`, renewed every 20 s. If the key is already locked, put it back
-   in `dirty` and move on.
-2. `SREM dirty <key>`. Removing it *before* listing means a new file that
-   arrives during the run re-flags the key.
-3. Read the key's newest commit, then load its state from the checkpoint the
-   commit names. The state stays in an in-memory LRU while this replica holds
-   the lock.
-4. LIST `in/` starting after (last applied name − 5 min grace). Skip any name
-   the commit recorded inside the grace window.
-5. Apply the new records with the per-key state engine (#19), which already
-   handles ordering, duplicates and late data.
-6. Write the run's output directory, `out/<n+1>-<nonce>/`, with one
-   `<table>.parquet` per table that changed, plus `state/<n+1>-<nonce>`.
-7. Create `commit/<n+1>.json` **only if it doesn't exist yet**. It names the full
-   set of current `out` and `state` files, the last applied input name and the
-   names inside the grace window.
-   - If the create fails, another worker got there first. Drop this run and its
-     in-memory state. That's the fencing, and it covers expired locks, GC pauses
-     and Redis restarts.
-8. `SADD committed <key>`, which the merge reads.
-9. Once a key has had no new input for 60 s, release its lock. Release all locks
-   on SIGTERM.
+The name stays: renaming gains nothing. Each replica holds:
+- one lock connection, which holds its advisory locks and its heartbeat;
+- at most two run connections, shared by its runs (`parallel`, default 8).
 
-**Calls that never end.** A call whose ending never comes is written without one,
-as the old processor did, once data time passes its start + 6 h (a WebSocket
-connection's: 7 d). Data time is global: the newest merge commit's `newest_ns`,
-which a run reads (listing only the merge commits after the last it saw). The
-written row is an ending built from the call's start record
-(`canon.RequestFromPending`), applied like any record, so it's in the checkpoint.
-An ending that arrives later replaces it, as if it had come first: a call has one
-row, and the tables stay order free. A run with no new input still commits when
-a call is due. Each commit records `expires_ns`, when its first waiting call
-expires (0: none).
+**A run holds a connection only for its key-row read and its commit,** never
+during S3 I/O or rendering.
 
-**Compaction.** Every run folds the newest 8 output directories (and state
-chunks) of one tier into one of the next tier, so each row is rewritten
-O(log N) times and a commit names O(8 · log N) of each. The folded files, and
-the previous commit, go on the commit's garbage list and are deleted 10 minutes
-later. A losing run's files are deleted at the next fold. The exact format is
-`aintercept/internal/rollup/layout.go`.
+**Claim.** A flag is *claimable* unless its key is quarantined:
+`failures < 5 OR failed_at < now() − 1 h`.
+1. **Run the keys it already holds that are flagged:** `SELECT key, seq FROM
+   dirty_keys WHERE key = ANY($held) AND <claimable>`.
+2. **Then take new keys,** at most ceil(dirty keys / live workers) per tick.
+   - The candidates: `(SELECT key FROM dirty_keys WHERE <claimable> ORDER BY
+     since LIMIT 4) UNION (SELECT key FROM dirty_keys WHERE <claimable> ORDER BY
+     hashtext(key || $worker) LIMIT 64)`, minus the keys it holds.
+   - It tries each with `pg_try_advisory_lock(<the key's 64-bit hash>)` on its
+     lock connection, one statement for the batch.
+   - The per-worker order spreads workers over different keys, so they don't
+     herd onto the same few. The oldest few keep the oldest key from starving.
+3. **Live workers come from heartbeats.** Each worker upserts its row in
+   `workers` every 10 s, and live means seen in the last 30 s. No `pg_locks` or
+   `pg_stat_activity` reads.
+4. **A held key stays warm,** its state kept in memory, until it has had no
+   input for 60 s, then it's unlocked. All keys are unlocked on SIGTERM.
+5. **If the lock connection drops, the worker forgets every key it holds,**
+   along with their warm states. Postgres has freed the locks, so another worker
+   may already hold them.
+6. **The lock is for affinity only.** It saves duplicate work and cold loads (a
+   cold load replays the key's journal). Correctness never depends on it: the
+   guarded commit (step 8) does.
 
-**Reclaiming a dead holder's keys.** A replica adds a key to the Redis `held` set when it takes the
-key's lock, and removes it before releasing the lock. Every tick, each replica re-flags any key in
-`held` whose lock has expired: a holder that was killed mid-run, after taking the key off `dirty`,
-would otherwise strand the key until new input arrived.
+**Run** (one key, `parallel` at once):
+1. **Read the key row and the flag in one round:** `SELECT … FROM keys WHERE key
+   = $1` and `seq0 = SELECT seq FROM dirty_keys WHERE key = $1`. With no row,
+   `n` is 0; with no flag, `seq0` is 0. The flag is read before the LIST, so a
+   file flagged after this point is seen either by this LIST or by the next run.
+2. **LIST** `in/` after (last applied − 5 min grace), skipping the grace-window
+   names the row records, and keep at most 500 files (v5 §2 step 4, unchanged).
+3. **Nothing new and no expiry due:** consume the flag with `DELETE FROM
+   dirty_keys WHERE key = $1 AND seq = $seq0`, its own statement, and stop. The
+   state isn't loaded. Data time for expiry is read once per tick, not per run.
+4. **Load the state.**
+   - A warm state at the same `n` is used as is.
+   - Otherwise, load cold: GET the chunks the row names and `state.Decode`
+     them.
+   - For a session key, a cold load also renders the state and hashes the rows:
+     the baseline. Those are the rows committed with that state, as long as
+     `keys.render_version` matches this worker's. Postgres is never read for a
+     baseline.
+5. **GET the files and apply them** with the state engine (#19), sorted by time
+   and record id. Expire due calls (below). Collect the run's state deltas,
+   keeping each (table, id)'s last change.
+6. **Render**, for a session key: `state.RenderSession` (#44), every table
+   whole.
+   - Hash each row (xxhash64 of its encoding) and compare with the baseline.
+     Changed and new rows become upserts, rows that are gone become deletes.
+   - If `keys.render_version` differs from this worker's, delete the session's
+     rendered rows and write them all.
+   - Every key also renders its directory folds and agent calls (§3.5), and its
+     batch parts (§3.4).
+   - The render's hashes become the next baseline. They're kept in memory only.
+7. **Write the state chunk** `state/<n+1>-<nonce>` and compact, as v5 (the
+   `out/` half is gone).
+8. **Commit in one transaction,** holding a run connection only now:
+   1. **The guard first:** `UPDATE keys SET n = n + 1, state = …, last_applied =
+      …, grace = …, garbage = …, expires_ns = …, newest_row_ns = …, day = …,
+      first_request_ns = …, earliest_ns = …, content_retained = …,
+      render_version = …, updated_ns = … WHERE key = $1 AND n = $2`. A new key's
+      first commit instead runs `INSERT … n = 1 ON CONFLICT DO NOTHING`.
+      - If no row matches, another worker committed. Roll back before writing
+        anything, drop the warm state and its baseline, and move on.
+      - The guard takes the key row's lock first, so concurrent commits
+        serialize there.
+   2. **The rows:** the stored-input deltas and the rendered diff. Each table
+      gets one `INSERT … SELECT * FROM unnest($1, $2, …) ON CONFLICT (primary
+      key) DO UPDATE` and one `DELETE … WHERE (primary key) IN (SELECT * FROM
+      unnest(…))`, pipelined as one pgx batch.
+   3. **The flag:**
+      - the LIST reached the end and `seq` hasn't moved: `DELETE FROM dirty_keys
+        WHERE key = $1 AND seq = $seq0`;
+      - the 500-file cap cut the run short: keep the flag, with `since` set to
+        the S3 time of the first file left;
+      - a flag came in during the run (`seq` moved): keep it, with `since` set to
+        the run's start.
+   4. **`COMMIT`,** and reset the key's failure count.
+9. **Delete due garbage** (superseded chunks, 10 minutes after they were
+   replaced), as v5. A worker deletes only names read from the key row.
 
-**The sweep.** Every replica runs it every 10 minutes, with no lock. It reads
-`v1/recent/` for the last 15 minutes and runs `SADD dirty` for every key listed.
-That covers lost SADDs, Redis restarts, and pods that crashed between upload
-and SADD. A second replica sweeping too does no harm.
+**Failures and quarantine.** A run that fails with an error records it in its
+own statement: `UPDATE dirty_keys SET failures = failures + 1, last_error = $e,
+failed_at = now()`. A lost guard isn't an error.
+- After 5 consecutive failures the key is **quarantined**:
+  - claims skip it;
+  - `/lag` ignores it;
+  - the `quarantined_keys` gauge alarms.
+- A quarantined key is retried once an hour, and a successful commit releases
+  it.
+- So one bad key can never hold up the rest or pin the lag.
 
-**Scaling.** Each replica exports `oldest_unapplied_seconds` on `/lag`. KEDA
-scales on it with the `metrics-api` trigger, and there are always at least 2
-replicas.
+**Timing.** Each case ends in the rows one pass would write.
+- **A crash before COMMIT.** Postgres aborts the transaction and frees the lock.
+  The flag is still there. Another worker loads the row's `n` cold and applies
+  the same files again. The orphaned chunk is deleted at the next compaction
+  (v5's orphans).
+- **A crash after COMMIT.** The rows and `n + 1` are in. The garbage waits for
+  the key's next run.
+- **A COMMIT whose result is unknown** (the connection dropped). The worker
+  drops the warm state and flags the key again. The next run reads whichever
+  `n` landed.
+- **A stalled worker** (a GC pause or a partition). Keepalives (§6) make
+  Postgres close its lock connection within about 30 s. Another worker takes the
+  key, and whichever commits second fails the guard.
+- **Postgres down.** Runs and the tail fail and retry with backoff. Nothing
+  commits and nothing is lost: the files and the recent index stay in S3, and
+  the tail's cursor resumes where it was.
+- **Late, duplicate or out-of-order files:** as v5 (the grace window and the
+  order-free state).
 
-## 3. Views: what the rollup writes for the API
+**Calls that never end** (#39, as built). A call with no ending is written
+without one once data time passes its start + 6 h (a WebSocket connection's:
+7 d).
+- Data time is `max(keys.newest_row_ns)`, read through an index once per tick.
+- The key row keeps `expires_ns`.
 
-### 3.1 Objects and fencing
+**Singletons.** Each runs on whichever worker holds its advisory lock (a fixed
+id). No new component.
+- **The tail, every 2 s:** the discovery. It replaces v5's 10-minute sweep and
+  ingest's flags.
+  - It LISTs `v1/recent/` after (its cursor − 5 min grace), skipping the names
+    its row records inside the grace window (the key cursor's rule), and GETs
+    each new index object.
+  - In one transaction it:
+    - upserts a flag for every key named (`INSERT … ON CONFLICT (key) DO UPDATE
+      SET seq = dirty_keys.seq + 1`);
+    - upserts each pod's newest upload time into `ingest_pods`;
+    - advances its cursor (the `tail` row: last name, grace names,
+      `checked_at`).
+  - The cursor advances only together with its flags, so an outage or a crash
+    makes it read again, never skip.
+- **Every 30 s, due calls:** `INSERT INTO dirty_keys SELECT key FROM keys WHERE
+  expires_ns > 0 AND expires_ns < <data time> ON CONFLICT … seq + 1`. It
+  replaces the merge's flagging.
+- **Every hour, retention** (§3.6).
 
-**Format.** A view object is one Parquet file (zstd) with one row. Each table is
-one column: a list of structs in the table's Go row type (`process/tables.go`,
-today's columns and types), its rows in today's table order. The API GETs an
-object whole and unnests each column into the table today's SQL reads: one GET
-per object, no footer reads, no row groups.
+**Scaling.** `/lag` is the larger of two ages:
+- `now() − min(since)` over the flags with `failures < 5` (an index);
+- `now() − tail.checked_at`, so a stuck tail shows as lag too.
 
-**Order keys, not dense numbers.** A chunked table stores, in its `seq` column,
-an int64 that sorts as today's order: (hour, rank within the hour). A late row
-renumbers only its own hour, so it changes no other hour's hash. No response
-carries `seq` (no model has the field;
-the SQL only sorts, joins `prompt_steps` to `prompt_rows` and numbers rows by
-it). Values a chunk would copy from the whole session (`session_last_ns` on
-prompt rows) are filled at read time from the head.
+It's the same number on every replica. KEDA's `metrics-api` trigger reads it,
+unchanged: target 30 s, at least 2 replicas. If Postgres is unreachable,
+`/lag` errors and KEDA holds the replica count.
 
-| Object | Tables (today's names and columns) |
-|---|---|
-| `s/head` | `session_rows` (one row, its own label), `presence_segments`, `session_tools`; the hours that hold rows; the commit `n` it reflects; each `pd/` day's hash; credentials and their days |
-| `s/h` | `event_rows`, `session_marks`, `prompt_rows`, `prompt_steps` (with their prompt's hour), `session_request_rows` (the session's own), `call_tool_uses` |
-| `s/pd` | the session's rows of that day for its person: `event_rows` narrowed to the columns the person summary and timeline read (`batch` for `event_id`); `session_marks` of kind call, reported, missed and friction; typed `prompt_rows`; `call_tool_uses`; its request rows before the person-wide values, with `prompt_index`, `codex_turns` (ranked), `request_reports` and `request_missed`; the carry: its newest `tengu_tool_search_mode_decision` and `tengu_skills_sync_success` before the day. A session has a part for every day from its first to its last active day; an idle day's holds only the carry |
-| `s/p` | the prompt's `requests`, `pending` and `analytics` rows the drawer reads (§3.3) |
-| `s/x` | `label_text_alone`, `label_source_alone` |
-| `r` | the call's own rows and its picks (§3.3), its session and prompt ids, the batch's other sessions |
-| `c` | the request rows of the key's transactions, before the person-wide values |
-| `pa`, `g/group` | the group: member accounts and their `person_map`, `accounts`, `account_facts`, `account_devices` rows; the leader; credentials; each member session's start, last, active days, accounts and Codex labels; the other sessions that used its credentials, with their active days |
-| `g/head` | `session_rows` and `presence_segments` of every session of the person (labels from the group); `person_sessions` and the identity tables; `person_last`; the `ru.rollups` row (`live` aside); the `dr.linked_accounts` rows; the `pd/` hash it folded per session and day |
-| `g/d` | the member sessions' `pd` parts of that day (their request rows aside), concatenated; `request_rows` narrowed to the day's account calls (the summary's count) |
-| `g/rq` | `request_rows` of that day: the request rows of the parts of members and of sessions that used the group's credentials, and of the `c:` views, with the person-wide values |
-| `kd` | the key's rows the directory reads: its finished `session_rows` row (labels aside), its rows of the 9 dimension tables, its `session_marks` of kind call and missed (narrowed to the columns the directory reads), its Claude Code and Codex call times (v5's `merge_agent_calls`) |
-| `org/days` | the `kd` rows of every key whose `DayOf` is that day, with the merge's labels: v5's day partition, cut to what `/people` and `/overview` read. A day with no object had no activity |
-| `org/accounts` | every account's `dim_account` row (v5's index partition) |
+## 3. Postgres schema
 
-A head names data at fixed paths (which hours hold rows), never a version of a
-file. Chunks are written before the head, so a head never names a chunk that
-isn't there.
+### 3.1 Conventions
 
-**Fencing.**
-- A run captures the ETag of every object it'll write: from its own last write
-  while it's warm, else a `HEAD` (absent: it'll write with `If-None-Match: *`).
-  It writes with `If-Match: <ETag>` (unquoted). Any 412: drop the run and its
-  cached state, and flag the entity dirty again.
-- **The capture comes before a newer holder can exist.** The session run and the
-  merge capture before their commit create, and the create orders runs: a newer
-  one commits only after the older one's commit exists. The person run has no
-  commit, so after capturing it reads its lock back (one Redis GET) and drops if
-  the lock isn't its own or the read fails.
-- **So the stale run loses.** The newer holder captures after the older one did.
-  If the older run writes second, it gets 412. If it writes first, the newer run
-  either captured after that write and overwrites it, or captured before it,
-  gets 412, and its retry overwrites it.
-- No version metadata, no manifests, no leases on objects.
+- **PostgreSQL 17, built-in `C.UTF-8` locale** (`LOCALE_PROVIDER builtin`).
+  - Text sorts in code-point order, which is UTF-8 byte order, as in Go and
+    DuckDB. So `min(name)` and `ORDER BY session_id` agree everywhere.
+  - `lower()` uses Unicode simple case mapping, as DuckDB's does, so an email
+    group found in Postgres is the group `person_sql` finds. A test checks
+    `lower()` against DuckDB on every assigned code point.
+- **Types:**
+  - Times stay `bigint` Unix ns, never timestamp types, so nothing converts
+    between Go, Postgres and DuckDB.
+  - Floats are `double precision`, exact through the binary protocol.
+  - Lists are arrays (`text[]`, `bigint[]`).
+  - Today's nested structs are flattened into columns (`row_<column>`,
+    `plan_v`, …) and rebuilt as structs when the API loads them:
+    `request_txs.row`, `request_missed.row`, and the dimension tables' picks
+    `STRUCT(v, ts, ok)`.
+- **No NUL and no oversized ids reach Postgres.** Postgres text can't hold NUL,
+  and a btree entry over about 2.7 KB fails the insert, so either would wedge a
+  key.
+  - The state's row ids are `bytea`. The state joins id parts with NUL, which
+    the values never contain after the next rule.
+  - Canon (records) replaces NUL in every string with U+FFFD.
+  - Canon also replaces any client-controlled id over 512 bytes with
+    `sha256:<hex>`: session, request, call, event and prompt ids.
+  - Both rules apply where records are built, so the state, the oracle and the
+    API all see the same values. Only pathological input changes.
+  - Quarantine (§2) is the backstop for anything else.
+- **Columns are today's names and types:**
+  - `process/tables.go` and `state.TableTypes`;
+  - the oracle's `_EMPTY` shapes.
 
-### 3.2 Session views: the key loop, around step 7
+  A few extra columns are never part of an API table: `key` (the owner), and
+  the per-table extras listed below.
+- **One owner per row.** Every row belongs to one routing key, and only that
+  key's commit writes it.
+  - Stored inputs are keyed by (key, the state's row id).
+  - A session's rendered rows are its own key's.
+  - Batch parts are keyed by (batch, key).
 
-1. **Render.** After applying the input, render every object of the session in
-   memory from the state: every hour's rows, every day's `pd/` part, every
-   prompt's `p/`, every call's `r/`, its `kd` part, the head. The functions are today's Go
-   mirrors of the SQL, moved from `state/*_test.go` into package code
-   (`eventRowsOf`, `promptViewOf`, `sessionRowsOf` without titles,
-   `rqView.sessionRows`, `callToolUsesOf`, `presenceRows`, `sessionToolsOf`).
-   They're whole-session functions, so every value that crosses hours (link
-   labels, prompt numbers and Codex turn ranks, permission and network `to_ns`,
-   `open_tail`, `events_pending_if_live`, a call's chain neighbours and sandbox)
-   is right with no dependency tracking. CPU is O(session) per run (accepted).
-2. **Diff.** Hash each object and compare with the last render's hashes, kept
-   in memory with the state. Only objects whose hash changed are written, so
-   writes stay O(changed). The head records only its commit `n` and each `pd/`
-   day's hash (the person loop reads those).
-3. **Capture** the ETags of those objects and the head.
-4. **Commit** (step 7). A lost create drops the run, as today.
-5. **Write** the changed objects, then the head (with its commit `n` and the
-   `pd/` hashes). Then `SADD committed <key>` (step 8, after the views) and add the
-   key to the replica's recent index, so recovery sees commits ingest didn't
-   cause.
+  No two keys ever write one row.
+- **No partitioning:** plain tables with indexes (Not now: partitions by day,
+  with the numbers that call for them).
+- **One embedded schema file,** `aintercept/internal/pg/schema.sql`.
+  - The workers apply it to an empty database, under an advisory lock, and
+    record its hash in `schema_version`.
+  - The workers and the API refuse to start on a mismatch.
+  - There are no migrations. A schema change means a fresh database, which the
+    owner accepts (Not now).
+- **Two logins:**
+  - `aintercept_worker` owns the schema;
+  - `aintercept_api` has `SELECT`.
 
-- **Children.** A child writes `s/<parent>/kids/<child>.json` (kind,
-  `child_first_ns`) with its other views: after its commit, so it's fenced, and
-  before `SADD committed`, so the merge only flags the parent once it's there.
-  The parent's run LISTs `kids/` (on the write path) for `children_json`.
-- A run flagged with no new input (a new child, a call due to expire) commits
-  `n+1` with no records and writes what changed.
-- **Cold load.** A run that loads a key cold reads its head and renders once.
-  If the head's `n` equals the commit's, every object matches that render (the
-  head is written last), so its hashes are the baseline. If the head is older (a
-  crash between commit and views), the baseline is empty: the run writes every
-  object of every kind and creates its own commit. This happens before §2's
-  no-input early return (`rollup.go:230`). A warm run whose write fails drops
-  its cached state, so its next run loads cold.
-- **The commit carries, absolute, what the merge reads:** every account and
-  credential the key has had, its dimension rows, its start, last and active
-  days, its last-active day (`DayOf`: the newest `last_ns`/`ts_ns` over all its
-  tables, `merge.go:492`), its parent edge, its Codex title inputs (product, own title,
-  model calls, call accounts; a title thread's title calls), its first-request,
-  earliest and content-retained values, `newest_row_ns`, `expires_ns`.
+### 3.2 Coordination
 
-**Cost:** CPU O(session) per run; writes the changed objects only. **State:**
-v5's, plus a hash per object in memory.
-
-### 3.3 Request objects: the drawer
-
-- **Home key.** A call's object is written by the key holding its ending under
-  the ending's own routing key. (Ingest also copies an ending to its start's key
-  when they differ, `records.Assembler.endKeys`; that copy's holder writes
-  nothing.) A reported call (`reported:<id>`): the key holding the report. `c:`
-  keys write their calls' objects too.
-- **When.** When its finished row appears or its rows change. An in-flight call
-  has none, and the drawer 404s until it ends (owner).
-- **`r/<id>`:** the call's own `requests`, `pending` and `analytics` rows; its
-  session and prompt ids; the calls its message ids chain to (prev and next);
-  the stall summary naming its request id; the session's last
-  `tengu_bash_tool_command_executed` at or before t + 1 s with a non-empty
-  `sandbox_enabled` (sandbox); an analytics batch's events in the home session.
-  Every `r/` of the session is re-rendered each run (§3.2), so a new call in the
-  chain or a late Bash event rewrites the calls it changes, and only those.
-- **`s/<sid>/p/<prompt>`:** the prompt's calls and its events of the names the
-  drawer reads (api query, success, retry, tool use, input prompt). Its calls
-  share it, so a new row changes one prompt object, never one object per call
-  of the prompt.
-- **A batch spanning sessions.** Ingest stamps on the batch call its event count,
-  its least non-empty event name (today's `min(name)`) and its other sessions
-  (`batch_events`, `batch_name`, `batch_other_sessions`); each of those writes
-  `r/<batch>/<key>` with its events of the batch.
-- The drawer reads `r/<id>`, then the prompt object and any parts, and
-  `request_detail.py` runs unchanged over their rows.
-
-### 3.4 `c:`, `ip:` and `a:` keys
-
-- A `c:` key writes `c/<hash>/<day>`, its transactions' request rows, and its
-  calls' request objects.
-- Every key writes its `kd` part. `ip:` and `a:` keys write no other view:
-  their probe times and dimension rows also reach the merge in the commit.
-
-### 3.5 Person views: the person loop
-
-Every replica runs it next to the key loop, and the oldest waiting person counts
-in `/lag`.
-
-1. **Take.** `SPOP pdirty` gives a `<gid>`; lock `lock:p:<gid>` as keys are
-   locked (renewed; `held` reclaims a dead holder's and flags it `all`). `SPOP`
-   every member of `pdirty:<gid>` **before reading anything**: session keys,
-   `c:` keys, or `all`. A source flagged during the run flags the person again.
-2. **Read** `g/<gid>/group` (the merge's), the old head, and each changed
-   session's head. A day is touched when one of its sessions' `pd/` hash differs
-   from the one the person head records as folded, or a `c:` source names it;
-   `all` touches every day. For each touched day, read the `pd/` parts of every
-   session the group lists for it (members, and others that used its
-   credentials) and its credentials' `c:` views for that day.
-3. **Capture** the ETags of what it'll write, then read its lock back. An error
-   reading it counts as not ours.
-4. **Write,** each recomputed whole: `d/<day>` and `rq/<day>` for each touched
-   day, then the head (with the hashes it folded). On any failure, it puts its
-   sources and the gid back.
-
-- **Person-wide values,** computed here and never at read time: request rows'
-  prompt numbers, first reports and step numbers across the person's sessions
-  (quirk 3), from the parts' `prompt_index`, `codex_turns` (ranked by the key
-  run), `request_reports` and `request_missed`; an analytics row's session,
-  count and name (stamped by ingest); the rows of the group's credentials' `c:`
-  keys. A prompt crossing midnight brings its other day's parts.
-- **The head** is rebuilt by replacing parts: the changed sessions' rows come
-  from their heads, the others are kept from the old head (re-reading every
-  session's head each run would cost the person's whole history), and sessions
-  the group no longer lists are dropped. Everything else in it is folded from
-  those rows.
-
-**Cost:** per touched day, the parts of the sessions active that day (the
-capture's busiest person-day: 12) and two objects written; the changed
-sessions' heads; the head. **State:** none between runs.
-
-### 3.6 Person ranges: narrow raw rows
-
-The open point. The person summary and timeline fold events over a range the UI
-sets to the millisecond (`from` = now − span, or the brush). Measured on the
-capture's busiest person (12 sessions) on its busiest UTC day, as Parquet, zstd,
-sorted by time:
-
-| One person-day | Rows | Bytes |
+| Table | Columns | Primary key; indexes |
 |---|---|---|
-| `event_rows`, today's columns | 111,747 | 6.9 MB |
-| `event_rows`, the 19 columns the person summary and timeline read | 111,747 | 430 KB |
-| marks: call, reported, missed, friction | 11,523 | 224 KB |
-| request rows | 6,934 | 292 KB |
+| `keys` | key, n, state `text[]`, state_levels `int[]`, last_applied, grace `text[]`, garbage `jsonb`, render_version, updated_ns, newest_row_ns, expires_ns, day, first_request_ns, earliest_ns, content_retained | key; (day); (newest_row_ns); partial (expires_ns) where > 0, (first_request_ns) and (earliest_ns) where > 0, (content_retained) where true |
+| `dirty_keys` | key, seq, since `timestamptz`, failures, last_error, failed_at `timestamptz` | key; (since) |
+| `workers` | worker, seen `timestamptz` | worker |
+| `tail` | one row: last_name, grace `text[]`, checked_at `timestamptz` | — |
+| `ingest_pods` | incarnation, last_ns, at (the index object's S3 time) | incarnation |
+| `schema_version` | hash | — |
 
-The person's day objects (`g/d`) hold the narrow rows. Folding them with today's SQL (DuckDB 2.0
-on a laptop, the objects already in memory), if every day were that busiest
-day:
+`keys` is v5's commit JSON (n, the state chunks and their levels, the cursor,
+the grace names, the garbage). It also holds what the merge used to fold, each
+computed by the key's run at commit:
+- `day`: `DayOf`, the day of the key's newest `last_ns`/`ts_ns` over its rows
+  (`merge.go:492`'s rule);
+- `first_request_ns`, `earliest_ns` and `content_retained`, for `/status`;
+- `newest_row_ns`: the newest raw row its files carried.
 
-| Window | Rows | Bytes | Load | Summary SQL (4 threads / 1) | Timeline lane | Cold, with 2 rounds |
-|---|---|---|---|---|---|---|
-| 7 d | 782k | 3 MB + 1.6 MB marks | 0.11 s | 0.06 s / 0.14 s | 0.01 s | ≈ 0.3 s |
-| 14 d | 1.56M | 6 MB + 3.1 MB marks | 0.22 s | 0.11 s / 0.28 s | 0.02 s | ≈ 0.45 s |
+### 3.3 Session tables: rendered
 
-- **Acceptable.** 7 d is on target. 14 d misses only if all 14 days are as busy
-  as this person's busiest: their real two days averaged 60k events a day,
-  which puts 14 d near 0.3 s. The final gate measures it.
-- **Exact by construction:** no cells, no edges; the one carried value is
-  `_LATEST`'s (below). The SQL runs
-  unchanged except one line: the distinct batch count reads a stored `batch`
-  column instead of a regex over `event_id`, which was most of the fold
-  (0.88 s → 0.28 s single-threaded at 14 d).
-- `_LATEST` has no lower bound: each part carries its session's newest value of
-  the two names before its day, and the API keeps the carry rows of the first
-  day it reads only.
-- If the gate misses, minute cells with raw edges are the next step (Not now).
+The session's key writes the rows of `state.RenderSession`: today's columns,
+order and seq. Two changes keep commits O(changed), and both are filled back
+when the API loads the rows, so the API sees today's rows:
+- **`prompt_rows.session_last_ns` is stored as 0.** It's kept once per session,
+  as `session_rows.prompt_last_ns`. The render copies it onto every prompt row,
+  so storing it there would rewrite them all on every run.
+- **`session_marks.seq` is re-keyed per block** as `block << 32 | rank in the
+  block`. The blocks follow the render: calls; reported and missed; friction;
+  compaction; permission; network.
+  - The render numbers marks across blocks, so each new call would renumber
+    every later block.
+  - The new key sorts as today. The API only orders by it, and only within a
+    kind.
 
-## 4. Merge: identity, dispatch and org views, every 30 s
+The other tables keep the render's dense seq. They're in time order, so new
+rows append. A late row renumbers the rows after it: normally the last few
+seconds (Not now: hour order keys).
 
-- **Who runs it:** any rollup replica that holds `lock:merge` (unchanged). Its
-  create-only commit fences it, and the commit's `newest_ns` is the data clock
-  expiry reads (§2, unchanged).
-- **What it does, each run:**
-  1. **Take** everything in `committed` (`SPOP` in batches), plus the keys the
-     newest merge commit lists if this replica loaded it cold (a merge that
-     died after its commit). For each key, GET its newest commit JSON and its
-     `kd` part, never its tables.
-  2. **Index** (`v1/merge/index/`): per account its email and so its `<gid>`,
-     its dimension rows folded newest-by-time; per credential its groups;
-     `merge_keys`, each key's day (as v5) and, for keys with a waiting call,
-     `expires_ns`.
-  3. **Compute** (in memory, from absolute inputs):
-     - for each group a committed key touches: its `group` object (read, then
-       that key's entry replaced);
-     - Codex labels, over the account-connected component of the sessions a
-       committed Codex thread or title thread touches (today's
-       `buckets._session_group` closure, followed through the group objects):
-       title calls matched in time order, `sql/session_rows.sql`'s assignment,
-       and `label_text_alone` per session. The merge is their one writer;
-     - the day objects, as v5's merge rewrites its day partitions: each
-       committed key's `kd` rows (with its labels) replace its old ones in the
-       object of its `DayOf`, and leave the day `merge_keys` had it in. That's
-       today's object, plus a day a resumed session moved out of.
-  4. **Capture** the ETags of the objects it'll write; **create the commit,**
-     listing the keys it took. A lost create puts the keys back and drops the
-     run.
-  5. **Write** the fixed-path objects, only now: `g/<gid>/group` and
-     `pa/<account id>` for each member account, `s/<sid>/x` where a session's own
-     label changed, the changed `org/days/<day>` objects, `org/accounts`,
-     `org/status.json`.
-  6. **Dispatch,** after the writes, so a person run reads the new group:
-     - a session's groups (its accounts' or `unattributed`, and its
-       credentials'): `SADD pdirty <gid>`, `SADD pdirty:<gid> s:<sid>`;
-     - a `c:` key: the groups of its credential, with `c:<hash>:<day>`;
-     - a credential newly linked to a group: that group, with each of the
-       credential's `c:` days (a LIST of `v2/c/<hash>/`, on this rare write) and
-       every other session that used it;
-     - any commit whose dimension rows change an account's name, email, org,
-       plan or devices (`a:`, `s:`, `c:` or `ip:`): the account's groups, `all`;
-     - an account that changed groups: both groups, `all`;
-     - a child's commit: `SADD dirty s:<parent>`;
-     - a key whose call is due: `SADD dirty <key>` (below).
-- **The directory is time buckets, not windows.** A day object holds every key
-  last active that day, so `/people` and `/overview` for any `from` read the
-  days from day(from) through today: exactly the partitions v5 loads, so
-  quirk 1 (the window's leader, `account_facts`, `unattributed()`, sessions by
-  product) holds by construction. No per-window objects, nothing written ahead.
-- **Calls that never end:** `merge_keys` (in the index) keeps each key's
-  `expires_ns`, as built. After each commit,
-  the merge runs `SADD dirty` for every key whose `expires_ns` is before its
-  `newest_ns`, so a key that gets no more data is revisited and its call
-  expires. The deadlines live in S3; a flag Redis loses is set again by the next
-  merge.
-- **Newest data:** each ingest file carries the newest raw row its pod had
-  seen (Parquet metadata), including rows that complete no record yet, such
-  as an in-flight stream's chunks. A key's commit keeps the maximum, and the
-  merge takes the maximum across commits into `status.json`: the API's
-  `lastDataAt`.
-- **The merge's sweep.** Every 10 minutes it also takes every key in
-  `v1/recent/` from the last 15 minutes as if committed. Everything it computes
-  is absolute, so redoing a key is harmless. That one pass covers a Redis wipe,
-  a merge that crashed after taking keys, and a lost `pdirty`.
-
-## 5. API: reads views, scaled on CPU
-
-A round is parallel whole-object GETs (`S3Source.get`). The tables go into the
-request's in-memory DuckDB, and today's endpoint code runs over them. A missing
-object is empty (404): an `x` for a session with no title thread, a day with
-nothing. The API never LISTs and never copies data to local disk.
-
-| Endpoint | Round 1 | Round 2 | What the API computes |
+| Table | Primary key | Rows/day at 1,500 people | Columns the API doesn't load |
 |---|---|---|---|
-| `/status` | `org/status.json`; Redis `ingest:last:*` | — | newest = the larger; `waitingSince` |
-| `/overview`, `/people` | `org/days/<day>` from day(from) through today (24 h: 2, 7 d: 8, 14 d: 15), `org/accounts`. No `from`: `org/status.json` first | no `from`: every day from the first | today's `person_sql`, `rollups.py` and `directory.py` SQL over the loaded rows, unchanged: the window, `live`, activity, filters, sort, page |
-| `/people/{id}` | `pa/<id>` | `g/<gid>/head` | `live`; today's header building, with this account's facts (quirk 6) |
-| `/people/{id}/sessions` | `pa/<id>` | `g/<gid>/head` | `SHOWN`, agent, nesting, paging by root |
-| `/people/{id}/summary`, `/timeline` | `pa/<id>` | `g/<gid>/head`; `g/<gid>/d/` for the days from day(lo) through day(hi) | range defaults (now); `SHOWN`; the first day's carry only; today's SQL; bins; `pack_rows`; in-flight and live values |
-| `/people/{id}/requests`, `/coverage` | `pa/<id>` | `g/<gid>/head`; `g/<gid>/rq/` for the range's active days (`/coverage`: and `d/`) | `request_filter`, counts, order, page |
-| `/sessions/{id}` | `s/<id>/head`, `s/<id>/x` | — | `live` |
-| `/sessions/{id}/timeline`, `/prompts`, `/events` | head, `x` | every hour chunk the head names | as today |
-| `/sessions/{id}/requests`, `/state` | head, `x` | the hour chunks; a Codex thread also `c/<hash>/<day>` for its credentials over [start, last + 60 s] | as today; Codex: today's filter on those rows (no thread, agent codex, not model, same client, in time) |
-| `/requests/{id}`, `/details`, `/raw` | `r/<id>`, `calls/<call id>.ndjson.gz`, `org/status.json` | `s/<sid>/p/<prompt>`; batch parts | `request_detail.py` over the rows |
-| `/events/{id}` | `r/<batch>`, `calls/<batch>.ndjson.gz` | batch parts | the event's rank and raw row |
+| `session_rows` | session_id | ~6k new; each active session's row updated on every run | own_title, prompt_last_ns, key_day (its key's `day`). Labels hold the session's own (`SessionRowsOf`); children_json is NULL (§4) |
+| `prompt_rows` | (session_id, seq) | ~0.2M | — |
+| `prompt_steps` | (session_id, seq, step) | ~1.5M | — |
+| `session_marks` | (session_id, seq) | ~3.5M | — |
+| `event_rows` | (session_id, seq) | ~75M | batch (the `event_id` prefix: the summary's count) |
+| `presence_segments` | (session_id, seq) | small | — |
+| `session_tools` | (session_id, kind, server, tool) | small | — |
+| `call_tool_uses` | (session_id, ts_ns, kind, server, tool) | ~3M | — |
+| `session_request_rows` | (scope_session_id, seq) | ~7.5M | The session's own rows; other keys' are joined at read time (§4) |
 
-- `x` replaces the head's `label_text_alone` and `label_source_alone`.
-- **Endpoint code that changes, and nothing else:** the summary's distinct
-  batch count reads `batch` (§3.6); `/people/{id}` reads the precomputed
-  `ru.rollups` and `dr.linked_accounts` rows; the drawer 404s for a call in
-  flight.
-- **The directory aggregates at request time** (the owner's call): `/people` and
-  `/overview` run today's person, rollup and directory SQL over the day
-  objects' finished rows. It's the one request-time aggregation left; any
-  `from` works.
-- `org_kind` still reads `CUSTOMER_ORG_IDS` at request time.
+- **Extra indexes:**
+  - `session_rows (key_day)`;
+  - partial `session_marks (session_id) WHERE kind = 'missed'`;
+  - partial `event_rows (session_id, name, ts_ns) WHERE name IN
+    ('tengu_tool_search_mode_decision', 'tengu_skills_sync_success')`, for the
+    summary's `_LATEST` carry.
+- **Every other read is by the session prefix of the primary key,** filtered by
+  time in Postgres.
 
-## Cross-key values and how a change reaches them
+### 3.4 Stored inputs: the state's own rows
 
-| Value | Depends on | Computed by | A change reaches it through |
+These are written straight from the run's state deltas: an upsert for a row, a
+delete for a tombstone.
+- **No diff.** The state already names only the rows that changed (its
+  `rowSet`), so this is O(changed).
+- **They're exactly the per-key rows the oracle reads today** (`st_*`), keyed
+  by (key, the state's row id). Read-time SQL over them sees today's inputs.
+
+| Table (state table) | Read by | Extra indexes |
+|---|---|---|
+| `dim_account`, `dim_session_account`, `dim_session_visible`, `dim_session_person`, `dim_person_device`, `dim_session_credential`, `dim_account_events`, `dim_account_device`, `dim_codex_plan` | person scope (§4) | (account_id) or (person_id); `dim_account (lower(email))`; (session_id) on `dim_session_account` and `dim_session_credential` |
+| `request_txs` | the request logs | (key_hash, row_ts_ns), (key_hash, prompt_id), (call_id) |
+| `prompt_index`, `codex_turns`, `session_last` | the request logs | (session_id, prompt_id) |
+| `request_reports` | the request logs | (req_id), (client_req_id) |
+| `request_missed` | the request logs, the reported drawer | (session_id), (row_request_id) |
+| `session_call_accounts` | labels | (account_id), (session_id) |
+| `session_edges` | children_json | (parent_session_id) |
+| `session_title_calls` | labels | (account_id, ts_ns) |
+| `requests` (`fact_requests`) | the drawer | (call_id) |
+| `analytics` (`fact_events`) | the drawer, `/events/{id}` | (correlation_id), (key, name), both for the drawer |
+
+- **Facts.**
+  - `fact_pending` isn't stored: the drawer 404s for a call in flight (owner).
+  - `analytics` keeps every event for now. Schema changes are wipes, and the
+    owner accepts discarding data, so narrowing it later costs nothing (Not
+    now).
+  - `analytics.env_json` isn't stored: no API code reads it (`store.py` exposes
+    it as `env`, which no query selects).
+  - `metadata_json` is most of an analytics row. It's compressed in line (lz4,
+    `toast_tuple_target = 128`).
+  - `fact_probes` folds into `keys.earliest_ns`.
+- **`batch_members` isn't stored:** it's a row per event.
+  - Instead each key writes its **batch parts**: `batch_parts (batch_id, key, n,
+    min_name, first_ns, first_session)` holds the key's events of that batch:
+    their count, their least non-empty name, and the earliest (ns, session)
+    that has a session.
+  - Primary key (batch_id, key); index (key).
+  - Read in §4. #43's stamps on the batch call stay, unused.
+
+### 3.5 Directory folds
+
+Every key writes these from its render or its facts:
+
+| Table | Primary key; index | What | Replaces |
 |---|---|---|---|
-| a person's views | its sessions' heads and `pd/` parts; the parts of other sessions that used its credentials; its credentials' `c:` views | person run | the merge: `pdirty:<gid>` |
-| who a person is (accounts, leader, credentials, account facts) | every commit's dimension rows | the merge | the merge: `all` to the groups, and their directory rows |
-| request rows' numbers and first reports across the person | the person's other sessions | person run | the same run |
-| a batch's count, name and other sessions | the batch body | ingest, stamped on the batch call | — |
-| Codex labels | the title threads and Codex sessions of the account-connected component | the merge | its own run |
-| `children_json` | the children's `kids/` objects | the parent's key run | the merge: `SADD dirty s:<parent>` |
-| a Codex thread's unthreaded requests | `c:<hash>:<day>` | the API, at read time | nothing: read, never copied |
-| a batch's events in other sessions | those sessions' keys | each key, its part | nothing: `r/` names the parts |
-| `/people`, `/overview` | every key's `kd` part; labels; accounts | the merge (day objects), then the API's SQL | commits |
-| `/status` | keys' first, earliest and newest times, retention | the merge | commits |
-| expiry | the merge's `newest_ns` | the key run (as built) | the merge: `SADD dirty` |
+| `session_call_days` | (session_id, day) | per session and UTC day: its call marks' count, first and last `t_ns`. The day is computed as `_ACTIVITY` computes it: floor(t_ns / 1e9 / 86400) in float64 | the directory's reads of every call mark |
+| `agent_calls` | (key, call_id); (ts_ns) | each Claude Code and Codex call's time, calls in flight included (v5's `merge_agent_calls` rows) | the merge's day partitions |
+| `agent_call_hours` | (hour, key) | the count per UTC hour | the whole hours of `/overview`'s count |
 
-Redis is never needed for correctness. Every flag is a hint: the key loop's
-input cursor, the merge's sweep over `v1/recent/` and `held` recover from losing
-any of them. Losing Redis costs freshness.
+### 3.6 Retention
 
-## Scaling budget
+The retention singleton runs every hour, by day: it works through the keys whose
+`day` is older than `retention.days` (default 15; the UI's widest preset is 14 d
+back from an hour). For each key:
+1. **Delete its rows in small batches:** ≤ 5k rows per statement, by the key or
+   session prefix of each table's primary key, with `lock_timeout` 1 s. A batch
+   that times out is retried on the next pass.
+2. **Delete its key row,** guarded on the `n` it read. A key that got new input
+   meanwhile keeps its row, so it's never forgotten mid-run.
+3. **Delete only what the deleted row named:** its state chunks, its garbage,
+   and its `in/` files at or before its `last_applied`.
 
-Ops are S3 requests, estimated per active session or person from the steps
-above.
+So a key never restarts from half its state, and "All" is the retained window.
 
-| Component | Work | State held | Sharded by | Waits on | S3 ops/s |
-|---|---|---|---|---|---|
-| Ingest | per record, as v5 | per-key buffers | pods, on CPU | S3 PUT | ~0.2 per active session (its files and call detail objects) |
-| Key run | per record: apply (v5). Per run: the whole session rendered in memory (O(session) CPU), the changed objects written | v5's, plus a hash per object in memory | key (`lock:<key>`) | S3 | ~0.7 per active session (~20 per run with its HEADs, a run per 30 s) |
-| Person run | per touched day: the day's session parts read, `d/` and `rq/` written; the changed sessions' heads; the head | none between runs | person (`lock:p:<gid>`) | the merge's dispatch (≤ 30 s, as v5's person pages) | ~1 per active person |
-| Merge | per committed key: its commit and `kd` GETs; per touched group: its group, `pa/` and labels; per touched day: its object (today's, mostly) | the index: accounts, credentials, `merge_keys` | none: one `lock:merge` holder | `lock:merge` | ~0.3 per active person, plus the sweep |
-| API | per request: ≤ 2 rounds, the rows of the range asked | none | pods, on CPU | S3 GET | ~3 per person page polled |
+**The local raw cap,** `retention.rawDays`: default 0 (off) in the chart, 3 in
+Compose. The same pass deletes:
+- raw day folders older than the cap;
+- `in/` files older than the cap whose names sort before their key's
+  `last_applied` − grace (already applied);
+- `v1/recent/` objects a day behind the tail's cursor;
+- on a local directory store, `calls/` objects older than the cap. The drawer
+  then shows its unavailable raw view, as it does today for a missing object.
 
-- About 3 ops/s per active person with two active sessions. A handful of
-  people: under 20 ops/s. DO Spaces' 800 ops/s per bucket is about 250 active
-  people; 1,500 is about 5,000 ops/s. Production is AWS S3, whose limits are per
-  prefix and far above this. Nothing is added for Spaces now.
-- The merge's 10-minute sweep redoes the last 15 minutes' keys: about half
-  again on the key-driven rows above, in bursts.
-- The merge is the one single point, and its run grows with what changed in
-  30 s, never with history.
+In the cloud, bucket lifecycle rules expire `raw/` and `calls/`
+(`docs/PRODUCTION.md`).
+
+## 4. Cross-key values
+
+**Joins move to read time.** Each key does its own work at write time. A value
+that needs other keys' rows is joined at read time when the join is bounded by
+the page's entity and indexed.
+- v6 precomputed these because S3 has no joins, which took the merge, the person
+  loop, `pdirty`, dispatch and group objects. The cold-load cost it fought was
+  S3 file reads and scans of every partition, not joins.
+- In Postgres these joins are a few index lookups.
+- Keeping them at write time would need dependency tracking and locks on groups
+  of keys.
+
+| Value | Where | Read, bounded by | Why |
+|---|---|---|---|
+| Person scope: `person_map`, `person_sessions`, `account_facts`, `account_devices` | read | The URL account's email group: the dimension rows whose account_id or person_id is in the group (the `lower(email)` index), and the group's accounts' `dim_session_account` rows. `unattributed`: visible sessions with no account row (an anti-join on the `session_id` index). `person_sql.py` runs unchanged over them | Its results for a group depend only on the group's rows: linked accounts, owned accounts, the leader and sessions per email; facts and devices per account. A group is tens to hundreds of rows. At write time, an account linking would rewrite its whole group |
+| Directory leaders (quirk 1) | read | The dimension rows of the keys whose `day` ≥ day(`from`), plus every `a:` key's | `person_sql` over exactly the rows v5's partitions held |
+| A person's request log: prompt numbers, first reports and step numbers across sessions (quirk 3); a batch's session and "N events"; `c:` transactions by credential | read | `stream_sql` (today's; its batch CTEs read batch parts) over: the scope credentials' transactions in the range, plus the transactions of the same prompts (the `(key_hash, prompt_id)` index); the reports of their ids; those prompts' `prompt_index`; the scope sessions' `codex_turns` and `session_last`; the scope's missed rows in the range; the batch parts of the batch calls among them | Every value depends on rows of the same prompt, request id, session or batch, so the range plus that context is exact. Tests prove it with ranges that cut through prompts and batches. A heavy person-day has ~5k transactions: 24 h takes ~60 ms, 7 d ~0.3 s. At write time this is v6's person loop |
+| A session's Requests tab: its own rows | write | `session_request_rows` (the render) | — |
+| … and other keys' rows: a Codex thread's unthreaded client calls; an analytics batch whose call is still in flight in its credential's `c:` key, with no session until it ends | read | `stream_sql`'s session builder (unchanged but for the batch CTEs) over just the candidates: the thread's credentials' transactions in [start, last + 60 s] (Codex); the transactions held by other keys of the batches this session has parts of; their batch parts. The rows it keeps join the stored ones, sorted as today (`ts_ns // 1000`, `request_id`, `seq`): the request ids differ, so `seq` never decides | The session's own key can't see them; tens to thousands of rows. Today's tab shows both |
+| Codex `label_text` over the account-connected component (quirk 2): the person sessions list and the person timeline's bands | read | The page's sessions' component, closed through `session_call_accounts` (a recursive CTE over its two indexes); the candidates' `session_rows`; the component accounts' `session_title_calls`. Today's title SQL (`session_rows.sql`'s `cand` … `titled`, moved to `sql/labels.sql`) runs once per component, as `buckets.py`'s title runs do | It's order dependent across the component, which holds tens of Codex sessions and title calls. The title thread is another key |
+| `label_text_alone` (the session header and the session timeline) | read | The title calls of the session's accounts in [start, start + 5 min] | one index range |
+| `children_json` | read | `session_edges` where `parent_session_id` is one of the page's sessions | Each edge is written by the child's key |
+| A batch spanning sessions | read | `batch_parts` by batch: the count is the sum, the name the least, the session the earliest (ns, session). The drawer and `/events` read `analytics` by `correlation_id` | Each key writes its own part |
+| `/people`, `/overview` | read | §5 | — |
+| `/status` | read | Aggregates over `keys`, through indexes; `ingest_pods` | — |
+| Expiry's data time | read | `max(keys.newest_row_ns)` | — |
+
+## 5. API: reads Postgres, runs today's code, scaled on CPU
+
+**Loading.** For each request, the API:
+1. **Takes one connection and opens one snapshot:** a READ ONLY, REPEATABLE
+   READ transaction. Every statement sees the same commits, so a page never
+   mixes two commits.
+2. **Runs the endpoint's statements in order,** one round trip each: at most
+   8, about 1 ms each in the cluster.
+   - Each statement is bounded by the entity, and the range when there is one,
+     through an index.
+   - Each resolves the entity itself (a CTE over the dimension rows or the
+     call).
+   - The range goes to Postgres as a time filter widened to whole
+     microseconds, a superset (for example, of `SHOWN`). Today's SQL applies
+     the exact filter.
+3. **Loads the rows into DuckDB.**
+   - Rows arrive as Arrow (`adbc-driver-postgresql`, binary COPY). DuckDB reads
+     ADBC's Arrow stream directly (`__arrow_c_stream__`); `pyarrow` comes in
+     only if that fails.
+   - They're registered in the request's in-memory DuckDB under today's table
+     names and columns.
+   - The flattened structs are rebuilt and `session_last_ns` is filled in.
+     Labels and children are applied (§4).
+   - A table a page doesn't read is today's empty shape.
+4. **Runs today's endpoint code unchanged.** There's no cache.
+
+**Columns.** Each statement selects the columns its endpoint reads, from a list
+per endpoint. A missing column is an SQL error the tests hit, and `SELECT *`
+sites get every column.
+
+| Endpoint | Statements (one snapshot, in order) | What the API computes |
+|---|---|---|
+| `/status` | `keys`: min `first_request_ns`, min `earliest_ns`, max `newest_row_ns`, any `content_retained` (index lookups); `ingest_pods`: max `last_ns` of objects from the last 10 minutes | as today: the newest is the larger; `waitingSince` |
+| `/overview`, `/people` | The dimension rows of keys with `day` ≥ day(`from`) and of every `a:` key (no `from`: all keys); those sessions' `session_rows` (the directory's columns), `session_call_days` and missed marks. `/overview`'s requests: the sum of `agent_call_hours` over the whole hours in [lo, hi], plus `count(*)` of `agent_calls` in the partial hours | `person_sql`, `rollups.py` and `directory.py` over the rows: the window, `live`, activity, filters, sort, page |
+| `/people/{id}` | the group's dimension rows; its sessions' `session_rows`, `session_call_days` and missed marks | today's header, rollups and linked accounts |
+| `/people/{id}/sessions` | as `/people/{id}`, plus the labels' component | `SHOWN`, nesting, paging by root |
+| `/people/{id}/summary`, `/timeline` | The group's dimension rows and `session_rows`; for the timeline, the labels' component. For the sessions a superset of `SHOWN` keeps: `event_rows` (the 19 columns the person pages read, plus `batch`), `session_marks`, typed `prompt_rows`, `call_tool_uses` and `presence_segments` in the range. Per session, its newest event of each `_LATEST` name before lo (the partial index). For the summary, the `account` transactions in the range | range defaults, `SHOWN`, today's SQL, bins, `pack_rows`, live values |
+| `/people/{id}/requests`, `/coverage` | the group's dimension rows; the request log's inputs for the range (§4); `session_last` | `stream_sql`, `request_filter`, counts, order, page |
+| `/sessions/{id}` | its `session_rows` row; its accounts' title calls (the alone label); its children's edges | `live` |
+| `/sessions/{id}/timeline`, `/prompts`, `/events`, `/state` | as `/sessions/{id}`, plus the session's `prompt_rows`, `prompt_steps`, `session_marks`, `event_rows`, `presence_segments` and `session_tools` (the range pushed down when the request has one) | as today |
+| `/sessions/{id}/requests` | `session_rows`, `session_request_rows`, its `dim_session_credential` rows, the other keys' candidates (§4) | `stream_sql` over the candidates; the union; as today |
+| `/requests/{id}`, `/details`, `/raw` | The call's own keys: the keys holding its fact rows, or for `reported:<id>`, the session whose `request_missed` row has that id. Their `requests` rows, and their `analytics` rows of the names the drawer's code matches (`(key, name)`) or about the call (its prompt, its request and tool-use ids). The batch's `analytics` by `correlation_id`. `/status`'s statement. Beside them: GET `calls/<id>.ndjson.gz` | `request_detail.py`, unchanged |
+| `/events/{id}` | the batch's `analytics` by `correlation_id`; beside it: GET `calls/<batch>.ndjson.gz` | the event's rank and raw row |
+
+- **Round trips:** one connection, one snapshot, the endpoint's statements in
+  order. The drawer's S3 GET runs beside them. No N+1: each statement is per
+  page, never per row.
+- **The drawer's scope is today's.** It reads its call's own keys, as `v1.py`
+  does with the `calls/<id>.keys/` markers today, without needing them.
+- **Endpoint code that changes, and nothing else** (each change proven side by
+  side):
+  - `_ACTIVITY` (`rollups.py`), `overview()`'s `sessions_by` and
+    `unattributed()` (`directory.py`) read `session_call_days` instead of every
+    call mark: `count(*)` becomes `sum(n)`, and min and max become min first
+    and max last;
+  - `stream_sql`'s `batch_session` and `batch` CTEs read `batch_parts`;
+  - the summary's distinct batch count reads `batch` instead of a regex over
+    `event_id`. Measured in v6, the regex was most of the fold: 0.88 s → 0.28 s
+    single-threaded at 14 d;
+  - the title and children CTEs move from `session_rows.sql` to load time
+    (`sql/labels.sql`);
+  - the drawer 404s for a call in flight (owner).
+
+  `agent_calls_in` stays a store method, now backed by Postgres. `org_kind`
+  still reads `CUSTOMER_ORG_IDS` at request time.
+- **Dependencies:** the API adds `adbc-driver-postgresql` (exact pin, 14 days
+  old) and drops `redis`. Go adds `pgx/v5` and drops `go-redis` and
+  `miniredis`.
+
+## 6. Deployment
+
+- **Production (AWS): RDS for PostgreSQL 17.** The operator creates it (support,
+  don't provision): gp3 with storage autoscaling, Multi-AZ as they choose.
+  - Today's load needs the smallest class. At 1,500 people, the scaling
+    budget's sizing applies.
+  - Every connection uses TLS (`sslmode=verify-full`, with the RDS CA bundle).
+- **The DigitalOcean demo: Postgres in the cluster.** A StatefulSet with a PVC,
+  as Redis is today:
+  - one replica, `postgres:17.x-alpine` pinned by digest;
+  - 20 Gi of do-block-storage;
+  - non-root, with a read-only root filesystem and emptyDirs for the socket and
+    tmp;
+  - an init script that creates the database (built-in `C.UTF-8`) and the two
+    logins.
+
+  Chosen over DO Managed Postgres: it needs no provisioning outside the chart
+  and no trusted-sources setup, and `helm upgrade` brings it up. Backups don't
+  matter for the demo: its data is discarded on deploy anyway.
+- **Server and connection settings,** the same on every target (the RDS
+  parameter group, or the in-cluster config):
+  - `max_locks_per_transaction = 256`. Each warm key holds an advisory lock,
+    and this gives 256 × `max_connections` slots;
+  - `max_connections` ≥ 200.
+
+  The logins:
+  - `aintercept_worker`: `idle_in_transaction_session_timeout = 30s`,
+    `lock_timeout = 5s`, `statement_timeout = 60s`;
+  - `aintercept_api`: `statement_timeout = 30s`, the same idle timeout.
+
+  Every DSN sets TCP keepalives (`keepalives_idle=10`, `keepalives_interval=5`,
+  `keepalives_count=3`) and `tcp_user_timeout=30000`, so a dead peer is noticed
+  in about 30 s, either way.
+- **Local:**
+  - a Compose `postgres` service replaces the `redis` one: the same image, a
+    named volume, a healthcheck;
+  - its port is published on 127.0.0.1:15432 only, as Redis's is today;
+  - its password is generated by `scripts/up.sh` into a gitignored `.env`;
+  - the API runs on the host and reads Postgres there.
+- **CI:** a Postgres service container (the same digest) in the Go, API and
+  generated-contract jobs, as moto is today.
+- **Helm values:**
+
+  ```yaml
+  postgres:
+    # A Secret with one DSN per component: worker-url, api-url. In the cluster it
+    # also carries the passwords its init script sets: postgres-password,
+    # worker-password, api-password.
+    existingSecret: aintercept-postgres
+    inCluster:
+      enabled: false            # true on the DigitalOcean demo: a StatefulSet with a PVC
+      persistence: { size: 20Gi, storageClass: "" }
+      resources:
+        requests: { cpu: "250m", memory: "1Gi" }
+        limits: { cpu: "2", memory: "2Gi" }
+  retention:
+    days: 15                    # keys whose day is older are forgotten
+    rawDays: 0                  # raw/, applied in/, a local store's calls/ (0: off; lifecycle rules in the cloud)
+  ```
+
+- **Secrets** are created out of band, as the key-hash salt's is:
+  `deploy/digitalocean-bootstrap.sh` generates the passwords with `openssl rand`
+  and creates the Secret. Credentials never go through `--set`. Each pod mounts
+  only its own component's DSN. The observers get none.
+- **Gone from the chart:**
+  - `redis.yaml`, `redis.*`, `images.redis`;
+  - `observer.redisAddr`, `api.redisAddr`.
+
+  A NetworkPolicy admits only the workers and the API to Postgres. KEDA is
+  unchanged.
+- **`helm upgrade`** removes the Redis StatefulSet and Service. Its PVC
+  (`data-redis-0`) stays and is deleted once by hand. Never `helm uninstall`.
 
 ## Rollout
 
 None. This is used internally and by one or two people outside the team. On
-deploy, everything under `v1/` (ingest files, key state, the merge) and the
-`calls/*.keys/` markers are deleted; ingest, the rollup and `v2/` start fresh
-from new traffic. No backfill, no side-by-side run, no migration.
+deploy:
+- everything under `v1/` and the `calls/*.keys/` markers are deleted;
+- Postgres starts empty;
+- ingest and the workers start from new traffic.
+
+No backfill, no side-by-side run, no migration.
+
+## Scaling budget
+
+**Today:** a handful of people, a few hundred thousand rows a day. One small
+Postgres and two workers carry it with room to spare. Every page reads tens of
+milliseconds of rows.
+
+**The design target, at 1,500 people.** These numbers check that nothing in the
+design breaks at the target. None of them is a reason to build anything now.
+Assumptions, at the capture's rates per person:
+- 75M analytics events a day (the meeting's figure);
+- ~1k model calls and ~5k requests per person-day;
+- a business-hours peak of about 3× the average;
+- ~50 ingest pods.
+
+| Component | Work | State held | Sharded by | Waits on | Postgres | S3 ops/s |
+|---|---|---|---|---|---|---|
+| Ingest | per record, as v5 | per-key buffers, the index journal | pods, on CPU | S3 PUT | none | ~350 PUTs/s at peak (key files ~100, call detail objects ~250), plus ~10 index objects |
+| The tail | per index object: GET; per pass: one transaction | its cursor row | one holder | S3, Postgres | ~1 transaction every 2 s, ~100 flags/s | 1 LIST every 2 s, ~10 GETs/s |
+| Worker run | per record: apply (#19). Per run: the whole session rendered and hashed (O(session) CPU, as v6), the changed rows written. A key with no input costs a key-row read, a LIST and a DELETE | the key's state and a hash per rendered row, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak, ~100 rows each: ~8k rows/s at peak, ~2k/s on average, ~180M rows/day | ~4 per run: ~400/s at peak |
+| Retention | per forgotten key: batched deletes | none | one holder | — | ~180M rows/day deleted at the target (Not now: partitions) | the forgotten keys' objects |
+| API | per request: a few statements, the rows of the entity and range | none | pods, on CPU | Postgres; S3 GET (drawer) | reads only | the drawer's GETs |
+| Postgres | — | the working set | one primary (vertical) | disk | ~110 GB/day; ~1.6 TB at 15 days | — |
+
+| Table | Rows/day | With indexes |
+|---|---|---|
+| `analytics` | 75M | ~55 GB (its (correlation_id) and (key, name) indexes for the drawer: ~10 GB of that) |
+| `event_rows` | 75M | ~28 GB |
+| `request_txs`, `requests`, `session_request_rows` | ~7.5M each | ~15 GB together |
+| `session_marks`, `prompt_steps`, `call_tool_uses`, `request_reports`, `agent_calls`, `batch_parts` | 1.5M to 4M each | ~8 GB together |
+| everything else | under 1M | under 1 GB |
+
+- **Postgres at the target.** One primary handles the writes: ~8k inserted
+  rows/s at peak. That takes an r6g.2xlarge class with 2 TB of gp3 at 12k IOPS.
+  - Retention's deletes match the inserts (~180M rows/day), and so does the
+    vacuum behind them. That's where day partitions start to pay (Not now,
+    with the numbers).
+  - The next steps for reads: a read replica for the API, and a narrower
+    `analytics` (Not now).
+- **Connections:** 3 per worker, and one per API request in flight (a pool of 8
+  per pod). That's ~140 at the maximum replica counts.
+- **Advisory locks:** one per warm key, ~5k at peak, well under
+  `max_locks_per_transaction` × `max_connections`.
+- **CPU:** the render is O(session) per run. At ~100 runs/s of sessions
+  averaging 20k rows, that's ~5 cores across the workers, and KEDA scales them
+  on lag.
+- **S3:** ~800 ops/s in all at peak. AWS S3's limits are far above that; DO
+  Spaces' 800/s per bucket fits the demo.
+
+**Expected latency** in the cluster, with the rows in Postgres's buffer cache:
+
+| Page | Rows read (the heaviest) | Expected |
+|---|---|---|
+| `/status` | 1 | ~5 ms |
+| a session page, the capture's busiest session (~100k events) | Events tab: 100k rows; the other tabs: thousands | ≤ 250 ms for the Events tab, ~50 ms for the rest |
+| person summary and timeline, 24 h and 7 d (the capture's heaviest person, ~60k events a day) | 60k and 420k narrow event rows | ~0.1 s and ~0.4 s |
+| person requests, 24 h and 7 d | ~5k and ~35k transactions | ~60 ms and ~0.3 s |
+| `/people`, `/overview` at 1,500 people, 24 h and 14 d | ~6k and ~90k sessions, with their dimension rows and day counts | ~0.1 s and ~1 s |
+| the drawer | the session's calls (thousands) and its drawer events (~15k) | 50 to 100 ms |
+
+**The cold-cache limit,** recorded honestly.
+- The person summary and timeline are read-time folds over raw event rows.
+- At 1,500 people the event rows (~30 GB a day) far exceed RAM. A person's
+  older days are then read from disk.
+- A session's rows are written a run at a time, ~25 to a page, so a heavy
+  person's 7 days are ~16k random page reads: about 1 to 2 s on gp3.
+- At today's scale everything fits in RAM.
+- The fix is per-(session, hour) folds or 60 s cells, so these pages read O(hours)
+  rows (Not now).
+
+The final gate measures cold p95 on the capture, with Postgres restarted and the
+OS cache dropped once.
 
 ## Testing: small tests, written first
 
-v5's tests (ingest buffers, the rollup loop, the chaos simulation) stay. Each
-v6 step writes its failing tests first.
+Each step writes its failing tests first. **The oracle is today's code, frozen**
+(`api/tests/oracle`, #42), and stays the reference through the final gate.
 
-**The oracle is today's code.** The Python derivation (`state_sql`,
-`stream_sql`, `sql/*.sql`, `buckets._session_rows`, `person_sql`, the aggregate
-SQL of `rollups.py` and `directory.py`) moves to `api/tests/oracle/` and runs
-over the v1 layout, merge partitions included, that `aintercept v1layout` keeps
-writing until the switch. `v1layout` also writes the v6 views: every key's run,
-then the person loop until idle, then the merge. Both sides run DuckDB with
-`threads=1`.
+- **Go layers, on a Postgres fake.** The writer's transaction interface (the
+  guarded key update, upserts, deletes, the flag) has an in-memory
+  implementation with Postgres's semantics: one transaction, and the guard
+  re-checked after a concurrent commit. The layers run on it:
+  - **Atomic:** one record per case (every `state.Cases` branch). The fake's
+    rows equal `RenderSession`'s and the folded deltas'.
+  - **Short sequences:** every order of up to 5 records, one run per record.
+    After each run the fake equals one pass, and each run wrote only the rows
+    whose hash changed (counted).
+  - **Generated sequences:** shuffled, duplicated, late across hours, and
+    reloaded cold halfway. The fake equals one pass, and a cold load with
+    nothing new writes nothing: the baseline is the render of the replayed
+    state. A changed `render_version` rewrites the session.
+  - **Named cases:**
+    - a call that lands an hour after the event linking it;
+    - a new call, which renumbers no later mark block;
+    - a late event, which rewrites only the rows after it.
+  - **Flags:**
+    - the tail flags idle keys, and every run consumes its flag: `dirty_keys`
+      ends empty and `/lag` at 0;
+    - a run capped at 500 files keeps its flag, with `since` set to the first
+      file left;
+    - a flag landing mid-run survives, and the next run applies the file.
+  - **Guard and timing:**
+    - two workers on one key, the old one committing before and after the new;
+    - a stale warm state;
+    - a crash at each step (v5's `Hook`);
+    - a COMMIT whose result is unknown;
+    - the lock connection lost mid-run: the worker forgets its keys.
+  - **Hostile input:** NUL in every string field, and 5 KB session, request,
+    call and event ids. Every commit succeeds, and the oracle and the API see
+    the same sanitized values. A key that fails 5 times is quarantined: it's
+    excluded from claims and `/lag`, retried hourly, and released by a commit.
+  - **The tail:**
+    - Postgres down: the cursor holds and nothing is skipped;
+    - an index object that becomes visible late, inside the grace window;
+    - a pod crash: the journal's leftovers are uploaded at start.
+  - **Chaos simulation** (v5's `sim`): workers crash, stall and race,
+    connections drop, and the tail's holder dies. The fake equals one pass.
+- **Postgres integration**, on CI's service container: a handful of tests, in
+  seconds.
+  - The schema applies once; a hash mismatch refuses to start.
+  - The guard, the upsert and delete SQL (with `unnest`), and two concurrent
+    guarded commits.
+  - `bytea` ids and sanitized text.
+  - Built-in `C.UTF-8`: the sort order matches Go's, and `lower()` matches
+    DuckDB's on every assigned code point.
+  - Every column type round-trips Postgres → Arrow → DuckDB equal to the
+    oracle's types: floats bit for bit, NULL apart from an empty list.
+  - Retention deletes only names read from the row it deletes.
+- **Table level, side by side, in `make check`.** `aintercept v1layout --pg`
+  runs every dataset's keys into a fresh database: `builders.py`, the demo
+  fixture, the SQL fixture seeds. For each entity, the tables the API loads
+  equal `oracle.tables(kind, id)` row for row (seq compared by order). The
+  entities:
+  - every session. `test_v6_session_rows.py` (#44) moves to the Postgres rows
+    and adds `children_json`, the labels, and the other keys' request rows;
+  - every person, for every range in the URL set, plus generated ranges that
+    cut through prompts and batches;
+  - every request id and event id;
+  - the directory from every day.
 
-- **Go unit tests, in the user's layers.** Through step 4 they call the view
-  functions directly, with no writer:
-  - **Atomic:** one record per case (every `state.Cases` branch); each table's
-    rows equal `process.Derived`'s.
-  - **Short sequences:** every order of up to 5 records; the views after each
-    prefix, and at the end, equal one pass.
-  - **Generated sequences:** shuffled, duplicated, late across hours, reloaded
-    from a checkpoint halfway; the views equal one pass, and only objects whose
-    rows changed are written. Named cases: a call that lands an hour after the
-    event linking it; a prompt's input event after its calls; a new call in a
-    message-id chain (the earlier call's `r/` gets its next); a late Bash event
-    (later calls' sandbox).
-  - **Fencing:** two holders race (old writes before and after new), a first
-    write, a person run whose lock lapsed before it captured, an error reading
-    the lock back. `MemStore` and `DirStore` get ETags and conditional PUTs.
-  - **Repair:** a crash between commit and views, then a run with no new input:
-    every object kind is rewritten and the views equal one pass.
-  - **Person loop:** sessions committed in any order, only changed days
-    refolded, an account changing groups, a crash at each step, Redis wiped:
-    equal one pass.
-  - **Merge:** dispatch per key kind, the sweep after a wipe and after a crash,
-    a session resumed on a later day (it leaves its old day object), labels.
-- **Table level, side by side, in `make check`:** for every API test dataset
-  (`builders.py`, the demo fixture, the SQL fixture seeds), each entity's v6
-  tables (each session's, person's, request's) equal the oracle's for that
-  entity, row for row (`seq` compared by order).
-- **Drawer:** for every request id of every dataset, the drawer over its keys'
-  whole facts (the oracle) and over `r/`, the prompt object and parts are
-  byte-identical.
-- **Response level:** `test_v1_pipeline.py` with "old" pinned to the oracle path
-  and "new" the v6 reader. In `make check`, the full URL set on the small
-  datasets for every endpoint that changes (person, directory, drawer), 3 per
-  group for the rest; everything with `-m full`. `endpoints.py` gains the UI's
-  real params (the UI's `from`s, an unaligned `from`, a brush, ladder bins) and
-  drops the bogus `binSeconds` and `sort`.
-- **Reads:** `test_flat_reads.py` counts rounds, objects and LISTs per endpoint:
-  at most 2 rounds, no LIST, the same objects under 8× more history outside the
-  range.
-- **The chaos simulation** (v5) checks the views too: after crashes, lock
-  expiry, Redis wipes and S3 failures they equal one pass.
-- **CI time:** all on the small datasets, in seconds; the SQL-fixture tests it
-  replaces go. Budget: under a minute added across the parallel jobs.
+  The cases include sessions with a batch still in flight and Codex threads.
+- **Response level:** `test_v1_pipeline.py`, with "old" pinned to the oracle
+  path and "new" the Postgres reader.
+  - In `make check`, on the small datasets: every URL of the endpoints with
+    read-time joins (the person pages, the directory, the drawer, a session's
+    Requests tab), and 3 per group for the rest. Everything runs with
+    `-m full`.
+  - `endpoints.py` gains the UI's real params (the presets' `from`s, an
+    unaligned `from`, a brush, ladder bins) and drops the bogus `binSeconds` and
+    `sort`.
+- **Reads:** `test_flat_reads.py` becomes a statements test, per endpoint:
+  - a fixed number of statements, on one connection;
+  - on the big tables, every statement's plan (EXPLAIN) uses an index;
+  - the rows read don't change under 8× more history outside the range.
+- **CI time.** The service container starts in seconds, each dataset is loaded
+  once per session, and the Go layers run on the fake. Budget: under a minute
+  added across the parallel jobs. Locally, `make check` starts the pinned image
+  in Docker when `AINTERCEPT_TEST_PG` isn't set.
 - **The real two-day capture runs once,** as the final gate
-  (`~/git/aintercept-parity`). It is never part of the development loop.
+  (`~/git/aintercept-parity`). It is never part of the development loop. There
+  is no synthetic scale gate.
 
 ## Build order
 
-v5's steps are built and deployed. Each v6 step is one PR.
+Each step is one PR, tests first.
 
 | Step | What | Gate |
 |---|---|---|
-| 1 | Store: ETags and conditional PUTs (S3, `MemStore`, `DirStore`); the fencing rule | Unit tests; the S3 emulator test; once, two concurrent `If-Match` PUTs raced against real DO Spaces on a scratch path |
-| 2 | Oracle to `api/tests/oracle/`; the table-level harness; `v1layout` writes `v2/` beside v1 | The API tests pass on the oracle path |
-| 3 | Session view functions: the mirrors into package code, hour chunks, order keys, `pd/` parts, object hashes | Go layers against `process.Derived`, called directly; side by side for every session table |
-| 4 | Session writer in the key loop: render, diff, capture, commit, write, `kids/`, repair, the commit's fields, recent entries | Chaos simulation: views equal one pass; fencing and repair tests |
-| 5 | `c:` views; request and prompt objects; ingest stamps batch count, name and sessions | Drawer side by side, every request id |
-| 6 | Merge v6: index, groups, labels, calls, `status.json`, dispatch, sweep; its partitions stay for `v1layout` only | Merge units; Redis wipe; `/status` side by side |
-| 7 | Person loop: `d/`, `rq/`, head | Person layers; side by side for person tables, request rows, labels |
-| 8 | Directory: `kd` parts and the merge's day objects | Day objects equal v5's day partitions' directory tables; `/people` and `/overview` side by side for any window (the existing tests included) and none |
-| 9 | API: the v6 reader and the endpoint changes | Every URL byte-identical; the reads test; `make regen` changes only the in-flight drawer sample |
-| 10 | Final gate on the real capture | Every endpoint byte-identical to the v5 baseline (4,248 URLs); cold p95 < 300 ms for the heaviest person (7 d and 14 d) and session |
-| 11 | Delete (below), the oracle and `v1layout`'s v1 output included: from here `process.Derived` and the UI samples are the oracles | `make check` |
-| 12 | Deploy to the DigitalOcean cluster: `helm upgrade` (never uninstall), the bucket cleared per Rollout | Pages load on the cluster's new traffic; `/lag` settles |
+| 1 | Postgres in dev and CI: the Compose service (`up.sh` writes its password), CI's service containers, `internal/pg` (pool, `schema.sql` and its hash, logins, settings), the Python test fixture. Canon sanitizes NUL and caps long ids | Integration tests: schema, `bytea` ids, collation and `lower()`, the Arrow round trip; the oracle's datasets unchanged |
+| 2 | The worker core on Postgres: the key row as the commit (the guard first), the flag rules, quarantine, the heartbeat claim, `/lag`, due calls, state deltas into the stored inputs and facts. Redis leaves the worker | v5's rollup tests ported; the flag, guard, timing and hostile-input tests; the chaos simulation; every dataset's stored inputs equal the oracle's `st_*` tables |
+| 3 | Rendered tables: `RenderSession` into rows, the marks' block keys, `prompt_last_ns`, hashes and the diff, the render baseline, `render_version`; the directory folds, agent calls and batch parts | The Go layers on the fake; side by side for every session's 9 tables |
+| 4 | Discovery: ingest's index journal and its 5 s uploads under time names; the tail singleton and `ingest_pods`. `keyflag`'s Redis goes, and ingest gets no Postgres | Tail tests (an outage, late objects, a pod crash); ingest's tests show it has no database path |
+| 5 | The API loader: one connection and snapshot, the statements, Arrow into DuckDB. `/status`, the session pages (labels, children, other keys' request rows), the drawer, `/events` | Table level for every session, request id and event id; response level for their URLs |
+| 6 | Person pages: scope, the request log (batch CTEs), summary and timeline (`batch`, the `_LATEST` carry, the labels' component), the header | Person tables side by side for every person and range (ranges cutting through prompts); response level |
+| 7 | The directory: loads by `keys.day`, the folds, the three SQL changes, `agent_calls_in` | `/people` and `/overview` side by side for every `from` (presets, unaligned, none), the existing directory tests included |
+| 8 | Switch and delete: the Postgres reader becomes the API's; "Deleted" below (the merge, `Commit` and `WriteOnePass` stay until after the gate); the chart and Compose (Postgres in, Redis out, retention); `SETUP.md`, `PRODUCTION.md`, `DEPLOY_DOKS.md` | `make check`; the chart tests; `make up && make verify` |
+| 9 | The final gate, on the real capture | Every endpoint byte-identical to the v5 baseline (4,248 URLs); cold p95 under 300 ms per page for the capture's heaviest person and session (the directory included), measured once with Postgres restarted and the OS cache dropped; Postgres rows and bytes per person-day measured against the budget |
+| 10 | Deploy to the DigitalOcean cluster: create the Postgres Secret (the bootstrap script), clear `v1/` and `calls/*.keys/`, `helm upgrade` (never uninstall), delete the Redis PVC | Pages load on the cluster's new traffic; `/lag` settles under 30 s; a request through the proxy shows up in the UI end to end |
+
+After step 10, these are deleted:
+- the oracle and `v1layout`'s v1 output;
+- `merge.go`, `mergeloop.go`, `Commit` and `WriteOnePass`.
+
+From then on, `process.Derived` and the UI samples are the oracles.
 
 ## Deleted
 
-- **API:** `buckets.py` (scopes, `resolve_person`, `_session_group`,
-  `_session_rows` and title runs, `read_newest`); `v1.py`'s scope, file plan,
-  merge and key-commit readers, `call_keys` and `request_keys`;
-  `state_sql.py` but its person tables; `stream_sql.py`; `sql/prompts.sql`;
-  `sql/session_rows.sql`; the `ru.rollups` and `dr.linked_accounts` queries
-  `/people/{id}` ran; the legacy empty tables; the dead code
-  (`cc.person_sessions`, `cc.linked_accounts`, `pp.retries`); their tests
-  (`test_session_sql`, `test_stream_sql`, `test_events_sql`,
-  `test_prompts_sql`, `test_buckets`, `test_stream_pipeline`). `person_sql.py`
-  and the directory's SQL stay: the directory runs them at request time.
-- **Go:** `rollup/reported.go`; `records/keymarks.go` and ingest's marker
-  writes; the merge's reading of keys' tables (`ReadKeyTables`: it reads `kd`
-  parts) and its index partition (`org/accounts` replaces it; `DayOf` moves to
-  the key run); each key's `out/` tables and their compaction (state
-  compaction stays); the SQL-fixture writers (`TestWriteRequestSQLFixtures`,
-  `TestWriteEventsSQLFixtures`, `TestPromptsSQLFixtures`, `TestSessionRowsSQL`).
-  The mirrors in `state/*_test.go` move into package code.
-- **S3:** `calls/<id>.keys/`, `v1/reported/`, the merge's v5 day and index
-  partitions (the day objects replace them), each key's `out/`.
+- **Go:**
+  - each key's `out/` tables and their compaction (state compaction stays);
+  - `rollup/reported.go`;
+  - `records/keymarks.go` and ingest's marker writes;
+  - every Redis path: `keyflag`'s SADD and `ingest:last`; the worker's
+    `dirty`, `committed`, `held`, locks and `replicas`; `miniredis` in tests;
+  - `stream.Fence` and `Store.ETag`/`PutIf` (#41): unused, since Postgres's
+    guard replaces conditional writes;
+  - `v1layout`'s `v2/test-sessions/` files: the harness reads Postgres.
+
+  After the gate: the merge (`merge.go`, `mergeloop.go`), the commit objects
+  (`Commit`, `ReadNewest`, `PutIfAbsent` fencing) and `WriteOnePass`. The
+  oracle's layout needs them until then.
+- **Never built:** the first draft's ingest-to-Postgres flags (a batcher,
+  `ingest_pods` writes, an ingest login). The tail replaces them.
+- **API:**
+  - `v1.py`;
+  - `buckets.py`: scopes, `resolve_person`, `_session_group`, the title runs,
+    `read_newest`;
+  - `state_sql.py`'s table build;
+  - `sql/prompts.sql`;
+  - `session_rows.sql`'s lists and windows. They're rendered now; its title and
+    children parts move to `sql/labels.sql`;
+  - the Redis client;
+  - the S3 table reads (`S3Source` keeps the `calls/` GETs);
+  - the legacy empty tables' fills;
+  - the dead code (`cc.person_sessions`, `cc.linked_accounts`, `pp.retries`);
+  - the tests whose SQL is gone (`test_buckets`, `test_stream_pipeline`,
+    `test_events_sql`, `test_prompts_sql`).
+
+  `person_sql.py`, `stream_sql.py`, `rollups.py` and `directory.py` stay: they
+  run at read time.
+- **S3:**
+  - `commit/` and `out/`;
+  - `v1/merge/`, `v1/reported/` and `v1/content_retained`;
+  - `calls/<id>.keys/`;
+  - the per-minute `v1/recent/<minute>/` folders, whose objects get time names.
+- **Chart and Compose:** Redis.
+
+## Deviations from the meeting and the accepted recommendations
+
+1. **Discovery (recommendation 2: "ingest inserts the key into `dirty_keys`
+   after each upload").** Ingest never talks to Postgres. A singleton tails
+   ingest's recent index, now uploaded every 5 s, into `dirty_keys`. Ingest
+   then can't block or fail on the database, and an outage can't lose a flag.
+2. **Claiming (recommendation 2: `FOR UPDATE SKIP LOCKED` "or an advisory
+   lock").**
+   - An advisory lock, held while the key is warm, for affinity: a cold load
+     replays the key's journal.
+   - Workers take keys in their own hash order, with heartbeats sharing them
+     out.
+   - The flag isn't deleted when a key is claimed. The run consumes it, guarded
+     by its counter, and only when the LIST reached the end. So a crash or a
+     capped run never strands a key.
+3. **Today's endpoint code unchanged (recommendation 3).** There are five small
+   exceptions, each proven side by side:
+   - the three directory statements read per-session call-day counts. At 1,500
+     people a 14-day window holds ~21M call marks;
+   - `stream_sql`'s batch CTEs read batch parts, since `batch_members` is a row
+     per event;
+   - the summary's batch count reads a stored column (v6);
+   - the labels and children SQL runs at load time;
+   - the in-flight drawer (the owner's call).
+4. **"Workers write what's needed for joins and queries" (the meeting).** These
+   are joined at read time, not written as v6 planned:
+   - person-wide request values;
+   - Codex labels;
+   - person scope;
+   - other keys' request rows.
+
+   Each join is bounded and indexed, and there's no cross-key write path.
+5. **"Write time does the data-only work" (the owner).** The person summary and
+   timeline are still read-time folds over raw event rows. That's exact and
+   fast at today's scale. At 1,500 people it hits the cold-cache limit above;
+   the fix is in Not now.
+6. **"The worker upserts exactly #44's rows" (the coordinator).** It does,
+   except for two re-encodings that are filled back at load:
+   - `prompt_rows.session_last_ns`, kept once per session;
+   - `session_marks.seq`, keyed per block.
+7. **The S3 layout (open in the meeting):**
+   - raw data stays in S3 (recommendation 1);
+   - so does the state checkpoint. Postgres holds its chunk names.
+   - the recent index gets time names and a 5 s cadence.
+8. **Bodies in S3, pointers in Postgres (the meeting).** Postgres also holds the
+   call fact rows the drawer reads (`requests`, `analytics`). Analytics
+   metadata isn't a body; `env_json` is dropped.
+9. **Size (recommendation 4: "partition by day + retention").** No partitions
+   yet. Retention forgets whole keys past the window with batched DELETEs.
+   Partitions pay only at volumes we don't have (Not now, with the numbers).
+10. **Retention (recommendation 5's "small retention job").** It's a worker
+    singleton, not a new component, and it also applies the local raw cap.
+11. **The DigitalOcean demo:** Postgres in the cluster, not DO Managed Postgres.
 
 ## Decisions and quirks
 
-- **Recompute, don't delta.** A key run renders its whole session each run and
-  writes the objects whose hash changed. Every object is recomputed whole from
-  absolute inputs. The person head is rebuilt by replacing a changed session's
-  rows, and the merge's group object by replacing a key's entry: both
-  idempotent, neither an increment.
-- **One writer per object,** under its entity's lock (table in §S3 layout).
-  Labels are the merge's, so `s/<sid>/x` has one writer.
-- **Accepted limit (owner: "I don't care about 200 days. We're working on 1
-  week right now"):** a person's head and group objects hold every session the
-  person ever had, so each person run and merge touch rewrites history. Per
-  session: about 1.1 KB in the head (its `session_rows` row, about 1 KB in the
-  capture, plus presence and folded hashes) and 0.2 KB in the group object. A
-  week of the capture's busiest person (about 40 sessions) is a 45 KB head; a
-  year at that pace (about 1,500 sessions) is about 1.6 MB, plus 0.3 MB of group
-  object per linked account. The merge's `merge_keys` holds every key, as in
-  v5. Month partitions are in Not now.
-- **Reads follow the range asked.** A session page reads one object per hour the
-  session has rows in; a person page one per active day in its range, and All
-  one per active day of the person's history (the owner's call).
-- **Person ranges read narrow raw rows** (§3.6): exact, one SQL line changes.
-- **The directory is day buckets** (owner): every key in the day object of its
-  `DayOf`, as v5's merge does; `/people` and `/overview` read day(from) through
-  today and aggregate with today's SQL. Any `from` and any `bin` work: no
-  contract change but the in-flight drawer.
-- **Drawer:** a call in flight 404s until it ends (owner); its sample changes.
-- **A Codex thread's unthreaded calls** are read from the `c:` view at request
-  time and filtered as today, never copied: no `c:` → session edge. `seq` only
-  breaks ties within one call, so the union sorts as today.
-- **Every cross-key flag goes through the merge,** so person pages lag a merge
-  period, as in v5.
-- **Reads aren't isolated across objects:** a read racing a rewrite can mix two
-  consecutive versions of one entity for one poll, and the next poll (≤ 15 s) is
-  whole. Tests compare at rest.
-- **Calls that never end:** as built (#39), `merge_keys` included.
+- **Delta in, eventual state out.**
+  - Stored inputs are the state's deltas.
+  - Rendered rows are recomputed whole and written where their hash changed.
+  - Everything is an upsert or a delete by primary key, so rewriting is
+    harmless.
+- **One owner per row.** The guarded `n` orders each key's commits.
+- **Accepted costs:**
+  - O(session) render CPU per run (v6);
+  - a late row renumbers the rows after it in the time-ordered tables.
+- **Reads see one snapshot:** v6's "reads aren't isolated" quirk is gone.
+- **"All" is the retained window** (`retention.days`).
+  - A key that is still active keeps its rows older than the window until it
+    goes quiet.
+  - `/status`'s first request is the first one retained.
+- **Sanitized input.** NUL becomes U+FFFD, and an id over 512 bytes becomes
+  `sha256:<hex>`. Only pathological input changes, and the oracle sees the same.
+- **Codex step numbers (#44).**
+  - A Codex thread's Requests tab counts the thread's own calls.
+  - Today's code, like the person log, which still runs today's SQL, counts
+    calls that share a credential and a turn id across threads.
+  - Real turn ids are UUIDs, and no dataset row differs.
+- **The drawer** 404s for a call in flight until it ends (owner); its sample
+  changes.
+- **A Codex thread's unthreaded calls and in-flight batch calls** are read from
+  the other keys' transactions at request time, never copied.
+- **Calls that never end:** as built (#39), with data time from `keys`.
+- **Discovery's one gap:** losing a node within 5 s of an upload delays that key
+  until its next file (Not now).
 
 The inventory's quirks, each reproduced:
-1. **Directory partitions from day(from):** by construction. The day objects
-   are v5's partitions, cut to what the directory reads, and the API loads the
-   same days.
-2. **Codex `label_text` in time order over the account group:** the merge runs
-   the same assignment over the same account-connected component;
-   `label_text_alone` per session.
-3. **Person and session request numbering differ:** person rows by the person
-   run across sessions, session rows by the key run within the session.
-4. **No final tiebreaker in the person requests sort:** `rq/` stores today's
-   order (`ts_ns`, `request_id`), loaded in that order with one thread, so ties
-   fall as today.
-5. **Session pages derived the whole account group:** not reproduced as a cost;
-   the group-dependent values (labels) arrive precomputed.
-6. **`/people/{id}` facts are the URL account's:** the head holds every linked
-   account's rows, and the endpoint picks the URL's, as today.
-7. **The drawer's `lastDataAt` is global:** `org/status.json` or Redis, in its
-   first round.
+1. **Directory partitions from day(`from`):**
+   - `keys.day` is the merge's `DayOf`. The directory loads the keys whose day
+     is ≥ day(`from`), plus every `a:` key, exactly as v5 loads partitions.
+   - `/overview`'s request count coincides: a call at t ≥ lo is in a key whose
+     day is ≥ day(lo).
+2. **Codex `label_text` in time order over the account group:** today's SQL,
+   over the same component, at read time.
+3. **Person and session request numbering differ:** the person log is today's
+   `stream_sql` over the person's scope; the session tab is the render's.
+4. **No final tiebreaker in the person requests sort:** `stream_sql`'s output
+   order, loaded with one thread, as today.
+5. **Session pages derived the whole account group:** not reproduced as a cost.
+   Only the labels' component is read, and only for person pages.
+6. **`/people/{id}` facts are the URL account's:** today's code over the
+   group's rows.
+7. **The drawer's `lastDataAt` is global:** `/status`'s statement, in the
+   drawer's snapshot.
 8. **`org_kind` reads the environment at request time:** unchanged.
 
 ## Not now: add when real traffic needs it
 
-- Smaller directory buckets (hours, or per-session call counts instead of call
-  marks) when a day object grows heavy: today's holds every call mark of the
-  day, about 10k rows in the capture.
-
-- Month partitions for a person's head and group objects (the accepted limit
-  above).
-- Minute cells with raw edges for person ranges, if the gate's 14 d p95 misses.
-- Day chunks for sessions that run for days (one object per active hour).
-- DO Spaces' 800 ops/s per bucket (about 250 active people at the rates above).
-  Production is AWS.
-- Fewer, larger S3 files to cut cost.
-- Hot keys: a shared API key used by thousands of people (dispatch fans out to
-  each), or many people behind one NAT IP.
-- Redis high availability. Losing Redis costs freshness, never correctness.
-- Changing response contracts.
+- **Day partitioning** of the big tables (`event_rows`, `analytics`,
+  `request_txs`, `requests`, `session_request_rows`, `session_marks`). Add it
+  when retention's DELETE and vacuum cost too much, or when a table's indexes
+  outgrow RAM.
+  - At 1,500 people that's ~180M rows and ~110 GB a day deleted again after 15
+    days: about 2k deletes/s around the clock, plus the vacuum behind them.
+  - At today's scale it's well under 1M rows a day.
+- **Per-(session, hour) folds or 60 s cells** for the person summary and
+  timeline, when the cold-cache limit shows: these pages would read O(hours)
+  rows instead of every event.
+- **A read replica for the API, or RDS Proxy.**
+- **Native Postgres SQL for the directory's folds,** when the gate or real
+  traffic shows the 14-day pages slow.
+- **An API-side cache** of past days' rows.
+- **Hour order keys** (v6) for the time-ordered tables, if late rows show up in
+  writes/s.
+- **A narrower `analytics`,** at about half the database at 1,500 people: read
+  event metadata from the batch's S3 detail object, or keep it only for the
+  names the drawer reads, and serve `/events/{id}` from `event_rows`.
+- **A periodic full listing of `v1/keys/`,** to flag keys a lost node never
+  indexed.
+- **The in-flight drawer** (a `pending` table), if the owner wants it back.
+- **An incremental render** (O(changed) CPU).
+- **Schema migrations.** Until then, each schema change is a fresh start.
+- **A size cap,** not just an age, for local raw data.
+- **Hot keys:** a shared API key used by thousands of people, or many people
+  behind one NAT IP.
+- **Changing response contracts.**
