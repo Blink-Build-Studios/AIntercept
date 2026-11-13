@@ -53,6 +53,9 @@ type MergeCommit struct {
 	UpdatedNS int64          `json:"updated_ns"`
 	// ContentRetained: some call's bodies were read (full interception).
 	ContentRetained bool `json:"content_retained"`
+	// FirstRequestNS and EarliestNS are /status's (stubbed).
+	FirstRequestNS int64 `json:"first_request_ns"`
+	EarliestNS     int64 `json:"earliest_ns"`
 }
 
 // MergeDir is <prefix>/v1/merge/.

@@ -90,3 +90,52 @@ func TestMergeSaysWhetherContentIsRetained(t *testing.T) {
 		t.Fatal("once retained, the deployment retains content")
 	}
 }
+
+// /status's first request and earliest row come from the merge commit, never
+// from reading the fact tables: the first is the earliest non-synthetic call
+// (its start, else its end), call in flight (its start) or event row; the
+// earliest counts synthetic rows too (the proxy's own probes).
+func TestMergeFirstRequestAndEarliest(t *testing.T) {
+	cases := []struct {
+		name          string
+		reqs          []canon.Request
+		pend          []canon.Pending
+		evs           []canon.Event
+		first, oldest int64
+	}{
+		{"a call's start", []canon.Request{{CallID: "c1", StartNS: day(0) + 10, EndNS: day(0) + 50}}, nil, nil, day(0) + 10, day(0) + 10},
+		{"a call with no start: its end", []canon.Request{{CallID: "c1", EndNS: day(0) + 40}}, nil, nil, day(0) + 40, day(0) + 40},
+		{"an event row", []canon.Request{{CallID: "c1", StartNS: day(0) + 10}}, nil, []canon.Event{{EventKey: "e1", RowNS: day(0) + 5}}, day(0) + 5, day(0) + 5},
+		{"a call in flight", nil, []canon.Pending{{CorrelationID: "p1", SeenNS: day(0) + 3, StartNS: day(0) + 3}}, nil, day(0) + 3, day(0) + 3},
+		{"a synthetic probe only counts as earliest", []canon.Request{{CallID: "c1", StartNS: day(0) + 10}},
+			[]canon.Pending{{CorrelationID: "p1", SeenNS: day(0) + 2, StartNS: day(0) + 2, Synthetic: true}}, nil, day(0) + 10, day(0) + 2},
+		{"a call in flight with no start yet isn't a call", nil, []canon.Pending{{CorrelationID: "p1", SeenNS: day(0) + 1}}, nil, 0, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := stream.NewMemStore(stream.RealClock{})
+			factKey(t, s, "s:a", c.reqs, c.pend, c.evs, day(0)+5000)
+			run(t, s, newQueue("s:a"))
+			m, err := ReadNewestMerge(context.Background(), s, "")
+			if err != nil || m == nil {
+				t.Fatalf("merge commit: %v %v", m, err)
+			}
+			if m.FirstRequestNS != c.first || m.EarliestNS != c.oldest {
+				t.Fatalf("first %d earliest %d, want %d %d", m.FirstRequestNS, m.EarliestNS, c.first, c.oldest)
+			}
+		})
+	}
+}
+
+// Both are the minimum over every run, not just the newest.
+func TestMergeKeepsTheFirstAcrossRuns(t *testing.T) {
+	s := stream.NewMemStore(stream.RealClock{})
+	factKey(t, s, "s:a", []canon.Request{{CallID: "c1", StartNS: day(0) + 10}}, nil, nil, day(0)+5000)
+	run(t, s, newQueue("s:a"))
+	factKey(t, s, "s:b", []canon.Request{{CallID: "c2", StartNS: day(1)}}, nil, nil, day(1)+5000)
+	run(t, s, newQueue("s:b"))
+	m, _ := ReadNewestMerge(context.Background(), s, "")
+	if m.FirstRequestNS != day(0)+10 || m.EarliestNS != day(0)+10 {
+		t.Fatalf("first %d earliest %d", m.FirstRequestNS, m.EarliestNS)
+	}
+}
