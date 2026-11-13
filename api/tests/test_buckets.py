@@ -514,6 +514,10 @@ def test_reader_matches_stream_golden():
             newest[c.parent.name] = c
     for c in newest.values():
         m = json.loads(c.read_text())
-        for refs in [*(m.get("base") or {}).values(), *(m.get("runs") or {}).values()]:
+        base = m.get("base")
+        if m.get("base_manifest"):  # the base's parts, written once per generation
+            current.add(m["base_manifest"])
+            base = json.loads((golden / m["base_manifest"]).read_text()).get("base")
+        for refs in [*(base or {}).values(), *(m.get("runs") or {}).values()]:
             current |= {r["key"] for r in refs or []}
     assert read <= current and not (read & (garbage - current)), "read only the newest commits' files"

@@ -455,7 +455,9 @@ class Commit:
         return [r.key for r in refs if keys is None or r.holds_any(keys)]
 
 
-def _parse_commit(key: str, body: bytes) -> Commit:
+def _parse_commit(key: str, body: bytes, get: Callable[[str], bytes] | None = None) -> Commit:
+    """A commit, its base read from its base manifest when it names one (the base's
+    parts grow with history, so they're written once per generation, not per commit)."""
     m = json.loads(body)
 
     def refs(by_table: dict[str, list[dict[str, Any]] | None] | None) -> dict[str, list[FileRef]]:
@@ -464,11 +466,16 @@ def _parse_commit(key: str, body: bytes) -> Commit:
             for t, rs in (by_table or {}).items()
         }
 
+    base = m.get("base")
+    if m.get("base_manifest"):
+        if get is None:
+            raise ValueError(f"commit {key} names a base manifest and nothing can read it")
+        base = json.loads(get(m["base_manifest"])).get("base")
     return Commit(
         bucket=int(m["bucket"]),
         seq=int(m["seq"]),
         key=key,
-        base=refs(m.get("base")),
+        base=refs(base),
         runs=refs(m.get("runs")),
         newest_ns=m.get("newest_ns"),
         content_retained=m.get("content_retained"),
@@ -513,7 +520,7 @@ class CommitLog:
                 newer = [k for k in self.source.list_after(self.prefix, after) if _COMMIT.search(k) and k > after]
                 if newer:
                     key = max(newer)
-                    self._latest = _parse_commit(key, self.source.get(key))
+                    self._latest = _parse_commit(key, self.source.get(key), self.source.get)
                 if self._latest is None:
                     return None
             while True:
@@ -521,7 +528,7 @@ class CommitLog:
                 body = _get_if_exists(self.source, key)
                 if body is None:
                     return self._latest
-                self._latest = _parse_commit(key, body)
+                self._latest = _parse_commit(key, body, self.source.get)
 
 
 def _get_if_exists(source: Source, key: str) -> bytes | None:

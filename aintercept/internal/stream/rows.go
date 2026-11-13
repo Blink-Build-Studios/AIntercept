@@ -2,10 +2,10 @@ package stream
 
 import (
 	"bytes"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
 	"sort"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/compress/zstd"
 )
 
 // Row is one row of a derived table: the key whose state produced it, its id
@@ -60,7 +60,7 @@ type StateRow struct {
 
 func EncodeState(rows []StateRow) ([]byte, error) {
 	var buf bytes.Buffer
-	w := parquet.NewGenericWriter[StateRow](&buf, parquet.Compression(&zstd.Codec{}))
+	w := parquet.NewGenericWriter[StateRow](&buf, parquet.Compression(zcodec.Shared))
 	if _, err := w.Write(rows); err != nil {
 		return nil, err
 	}

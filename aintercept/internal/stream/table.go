@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
 	"io"
 	"reflect"
 	"sort"
@@ -11,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/compress/zstd"
 )
 
 // Table is a derived table's file format: the columns key, id and tomb, then
@@ -118,7 +118,7 @@ func (t *Table) Encode(rows []Row) ([]byte, error) {
 		sort.Slice(rows, func(i, j int) bool { return rowLess(rows[i], rows[j]) })
 	}
 	var buf bytes.Buffer
-	w := parquet.NewWriter(&buf, t.sch, parquet.Compression(&zstd.Codec{}), parquet.MaxRowsPerRowGroup(int64(RowGroupRows)))
+	w := parquet.NewWriter(&buf, t.sch, parquet.Compression(zcodec.Shared), parquet.MaxRowsPerRowGroup(int64(RowGroupRows)))
 	v := reflect.New(t.flat).Elem()
 	for _, r := range rows {
 		v.SetZero()

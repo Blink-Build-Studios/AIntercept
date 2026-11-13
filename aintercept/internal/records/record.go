@@ -10,10 +10,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/compress/zstd"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 )
@@ -82,7 +82,7 @@ func NewIncarnation(pod string) string {
 // Encode is records as a Parquet file (zstd).
 func Encode(rs []Record) ([]byte, error) {
 	var buf bytes.Buffer
-	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(&zstd.Codec{}))
+	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(zcodec.Shared))
 	if _, err := w.Write(rs); err != nil {
 		return nil, err
 	}
