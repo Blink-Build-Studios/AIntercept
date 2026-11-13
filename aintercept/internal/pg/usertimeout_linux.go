@@ -3,6 +3,8 @@ package pg
 import (
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // userTimeout sets TCP_USER_TIMEOUT on a connection's socket: unacknowledged
@@ -14,7 +16,7 @@ func userTimeout(d time.Duration) func(network, address string, c syscall.RawCon
 	return func(_, _ string, c syscall.RawConn) error {
 		var serr error
 		if err := c.Control(func(fd uintptr) {
-			serr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_USER_TIMEOUT, int(d.Milliseconds()))
+			serr = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, int(d.Milliseconds()))
 		}); err != nil {
 			return err
 		}
