@@ -43,6 +43,9 @@ type Commit struct {
 	LastApplied string   `json:"last_applied"`           // the newest in/ name applied
 	Grace       []string `json:"grace"`                  // in/ names applied within the grace window
 	UpdatedNS   int64    `json:"updated_ns"`
+	// NewestRowNS is the newest raw row time of every ingest file applied (the
+	// pods' clock): today's "newest data", including rows that complete no record.
+	NewestRowNS int64 `json:"newest_row_ns,omitempty"`
 	// Garbage are files superseded by compaction, deleted once DeleteAfterNS passes.
 	Garbage []Garbage `json:"garbage,omitempty"`
 }

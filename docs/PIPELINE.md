@@ -125,6 +125,11 @@ the previous commit, go on the commit's garbage list and are deleted 10 minutes
 later. A losing run's files are deleted at the next fold. The exact format is
 `aintercept/internal/rollup/layout.go`.
 
+**Reclaiming a dead holder's keys.** A replica adds a key to the Redis `held` set when it takes the
+key's lock, and removes it before releasing the lock. Every tick, each replica re-flags any key in
+`held` whose lock has expired: a holder that was killed mid-run, after taking the key off `dirty`,
+would otherwise strand the key until new input arrived.
+
 **The sweep.** Every replica runs it every 10 minutes, with no lock. It reads
 `v1/recent/` for the last 15 minutes and runs `SADD dirty` for every key listed.
 That covers lost SADDs, Redis restarts, and pods that crashed between upload
@@ -145,6 +150,10 @@ replicas.
   4. Rewrite only the partitions that changed: today's and yesterday's
      per-session rows, and the people index.
   5. Create `merge/commit/<n+1>.json` only if it doesn't exist yet.
+- **Newest data:** each ingest file carries the newest raw row its pod had
+  seen (Parquet metadata), including rows that complete no record yet, such
+  as an in-flight stream's chunks. A key's commit keeps the maximum, and the
+  merge takes the maximum across commits: the API's `lastDataAt`.
 - **Fencing:** a concurrent merge loses the create and drops its run.
 - **If Redis loses `committed`:** the merge rebuilds from every key with a
   commit in the last 15 minutes, taken from `v1/recent/`.

@@ -201,7 +201,7 @@ func (s *Sink) putBuffer(key, path string) error {
 	if len(rs) == 0 {
 		return os.Remove(path)
 	}
-	body, err := Encode(rs)
+	body, err := EncodeWithNewest(rs, s.asm.newestNS)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -483,4 +484,77 @@ func TestFlatCostInHistory(t *testing.T) {
 		t.Fatalf("store requests per run grew with history: %.1f → %.1f", small, large)
 	}
 	_ = stream.Row{}
+}
+
+// A replica that dies mid-run (SIGKILL: no error path, no re-flag) after it
+// has taken a key off dirty must not strand the key once its lock expires,
+// even with no new input and nothing left in the recent index for the sweep.
+func TestHolderKilledMidRunKeyIsReclaimed(t *testing.T) {
+	for _, step := range []string{"listed", "read", "out", "state", "commit"} {
+		t.Run(step, func(t *testing.T) {
+			e := newEnv(t)
+			key := sessionKey("a")
+			e.ingest("a", 3)
+			c := e.cfg("w1")
+			c.Hook = func(s, _ string) error {
+				if s == step {
+					runtime.Goexit() // the process is gone: nothing after this runs for the key
+				}
+				return nil
+			}
+			dead := e.workerWith(c)
+			_ = dead.Tick(e.ctx)
+			if in, _ := e.rdb.SIsMember(e.ctx, "dirty", key).Result(); in {
+				t.Fatalf("precondition: the dead holder left %s flagged", key)
+			}
+			// Long after: the lock has expired and the recent index has aged out.
+			e.clock.Advance(20 * time.Minute)
+			e.mr.FastForward(20 * time.Minute)
+			w2 := e.worker("w2")
+			for i := 0; i < 5; i++ {
+				if err := w2.Tick(e.ctx); err != nil {
+					t.Fatal(err)
+				}
+				e.clock.Advance(time.Second)
+			}
+			e.check()
+		})
+	}
+}
+
+// A commit carries the newest raw row time of every ingest file it applied,
+// never moving back, through runs and compaction.
+func TestCommitCarriesNewestRawRow(t *testing.T) {
+	e := newEnv(t)
+	key := sessionKey("a")
+	e.ingestNewest("a", 2, 500)
+	w := e.worker("w1")
+	if _, _, err := w.RunKey(e.ctx, key); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := ReadNewest(e.ctx, e.store, prefix, key)
+	if c.NewestRowNS != 500 {
+		t.Fatalf("newest %d, want 500", c.NewestRowNS)
+	}
+	e.clock.Advance(time.Second)
+	e.ingestNewest("a", 1, 300) // an older pod's file: the newest stays
+	if _, _, err := w.RunKey(e.ctx, key); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = ReadNewest(e.ctx, e.store, prefix, key)
+	if c.NewestRowNS != 500 {
+		t.Fatalf("newest %d after an older file, want 500", c.NewestRowNS)
+	}
+	for i := 0; i < 40; i++ { // enough runs to compact
+		e.clock.Advance(time.Second)
+		e.ingest("a", 1)
+		if _, _, err := w.RunKey(e.ctx, key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, _ = ReadNewest(e.ctx, e.store, prefix, key)
+	if c.NewestRowNS != 500 {
+		t.Fatalf("newest %d after compaction, want 500", c.NewestRowNS)
+	}
+	e.check()
 }
