@@ -153,7 +153,7 @@ func (s *KeyState) requests(r records.Record, d *Delta) {
 	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
 		c := r.Call
 		switch {
-		case records.RoutingKey(&r) != s.Key: // its copy under its start's key: the start's row goes
+		case !s.own(&r): // its copy under its start's key: the start's row goes
 			d.Cases = append(d.Cases, CaseTxEndCopy)
 			s.setTx(d, c.CallID, nil)
 		case c.Synthetic:

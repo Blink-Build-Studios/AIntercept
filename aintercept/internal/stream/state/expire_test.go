@@ -129,8 +129,8 @@ func TestExpireAtomic(t *testing.T) {
 				if !ok {
 					t.Fatalf("%s has no request row", id)
 				}
-				if want := *starts[id]; !reflect.DeepEqual(got, want) {
-					t.Fatalf("%s: expired row\n got %+v\nwant %+v (its start)", id, got, want)
+				if want := todaysRow(starts[id]); !reflect.DeepEqual(got, want) {
+					t.Fatalf("%s: expired row\n got %+v\nwant %+v (today's, from its start)", id, got, want)
 				}
 			}
 			if n := len(o.rows[TableFactRequests]) + len(o.rows[TableFactProbes]); tc.expired == nil && n != countEnded(before) {
@@ -177,6 +177,10 @@ func TestExpiredRowIsTodaysRow(t *testing.T) {
 	cc := map[string]string{"x-claude-code-session-id": "s1", "x-claude-code-prompt-id": "p1",
 		"user-agent": "claude-cli/2.1.3 (external, cli)", "content-type": "application/json"}
 	codex := map[string]string{"originator": "codex_cli_rs", "user-agent": "codex_cli_rs/0.164.0"}
+	// A Codex model call: its start names its thread (ApplyCodex, from the turn
+	// metadata), so it's under the thread's key; today's row names no session.
+	codexTurn := map[string]string{"originator": "codex-tui", "user-agent": "codex-tui/0.166.0",
+		"x-client-request-id": "t1", "x-codex-turn-metadata": `{"thread_id":"t1","turn_id":"u1","installation_id":"i1"}`}
 	ws := map[string]string{"upgrade": "websocket", "originator": "codex_cli_rs", "user-agent": "codex_cli_rs/0.164.0"}
 	hdr := func(id, host, method, path string, h map[string]string, eos bool) events.Event {
 		return events.Event{CorrelationID: id, Seq: 1, TimestampNS: at(0), Phase: events.PhaseRequestHeaders, Direction: events.DirInbound,
@@ -193,6 +197,8 @@ func TestExpiredRowIsTodaysRow(t *testing.T) {
 	}{
 		{"a Claude Code model call: headers, then its body", []events.Event{
 			hdr("c1", "api.anthropic.com", "POST", "/v1/messages?beta=true", cc, false), body("c1", 2048)}, 6 * time.Hour},
+		{"a Codex model call, under its thread's key", []events.Event{
+			hdr("x1", "chatgpt.com", "POST", "/backend-api/codex/responses", codexTurn, false), body("x1", 4096)}, 6 * time.Hour},
 		{"a Codex analytics call", []events.Event{
 			hdr("a1", "chatgpt.com", "POST", "/backend-api/codex/analytics-events/events", codex, false), body("a1", 346)}, 6 * time.Hour},
 		{"a GET its headers end", []events.Event{
@@ -232,6 +238,17 @@ func TestExpiredRowIsTodaysRow(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("expired row differs from today's\n got %+v\nwant %+v", got, want)
+			}
+			if _, ok := s.Rows()[TableFactPending][h.CorrelationID]; ok {
+				t.Fatal("still pending")
+			}
+			// The key holds it as its own ending (not as a copy): its request row is today's.
+			tx, ok := s.Rows()[TableRequestTxs]["tx:"+h.CorrelationID]
+			if !ok {
+				t.Fatalf("no request row; rows %v", s.Rows()[TableRequestTxs])
+			}
+			if tx.(ReqTx).OwnSession != want.SessionID {
+				t.Fatalf("its request row's session %q, today's %q", tx.(ReqTx).OwnSession, want.SessionID)
 			}
 		})
 	}

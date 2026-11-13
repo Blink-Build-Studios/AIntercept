@@ -51,14 +51,14 @@ func (s *KeyState) facts(r records.Record, d *Delta) {
 			d.Cases = append(d.Cases, CaseFactPendingGone)
 			s.rows.drop(d, TableFactPending, c.CallID)
 		}
-		if records.RoutingKey(&r) != s.Key { // its copy: an expired row the call had here is replaced by its ending's
+		if !s.own(&r) { // its copy: an expired row the call had here is replaced by its ending's
 			s.rows.drop(d, TableFactRequests, c.CallID)
 		}
-		if records.RoutingKey(&r) == s.Key && !c.Synthetic {
+		if s.own(&r) && !c.Synthetic {
 			d.Cases = append(d.Cases, CaseFactRequest)
 			s.rows.put(d, TableFactRequests, c.CallID, *c)
 		}
-		if records.RoutingKey(&r) == s.Key && c.Synthetic {
+		if s.own(&r) && c.Synthetic {
 			d.Cases = append(d.Cases, CaseFactProbe)
 			s.probe(d, c)
 		}

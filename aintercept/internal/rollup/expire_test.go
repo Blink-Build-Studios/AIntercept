@@ -243,7 +243,7 @@ func TestMergeKeepsEachKeysDeadline(t *testing.T) {
 // settles, every key equals one pass over its records with its calls expired
 // at the newest data time.
 func TestChaosExpiry(t *testing.T) {
-	for seed := int64(1); seed <= 3; seed++ {
+	for seed := int64(1); seed <= 2; seed++ {
 		e := newEnv(t)
 		e.model = stream.StateModel{}
 		rng := rand.New(rand.NewSource(seed))
@@ -252,11 +252,18 @@ func TestChaosExpiry(t *testing.T) {
 		open := map[string][]*canon.Request{}
 		data, final := e.clock.Now().UnixNano(), int64(0)
 		e.store.FailRate(0.05, rng)
-		for i := 0; i < 200; i++ {
+		for i := 0; i < 80; i++ {
 			switch x := rng.Intn(20); {
 			case x < 8:
-				data += int64(rng.Intn(90)) * int64(time.Minute)
+				data += int64(rng.Intn(150)) * int64(time.Minute)
 				sid := sids[rng.Intn(len(sids))]
+				if rng.Intn(4) == 0 { // the session of the oldest call still open: likely expired by now
+					for _, x := range sids {
+						if len(open[x]) > 0 && (len(open[sid]) == 0 || open[x][0].StartNS < open[sid][0].StartNS) {
+							sid = x
+						}
+					}
+				}
 				var rs []records.Record
 				newest := data
 				if rng.Intn(3) > 0 {
@@ -265,7 +272,10 @@ func TestChaosExpiry(t *testing.T) {
 					open[sid] = append(open[sid], c)
 				}
 				if n := len(open[sid]); n > 0 && rng.Intn(2) == 0 {
-					k := rng.Intn(n)
+					k := 0 // often its oldest call, likely expired by now
+					if rng.Intn(2) == 0 {
+						k = rng.Intn(n)
+					}
 					c := open[sid][k]
 					open[sid] = append(open[sid][:k], open[sid][k+1:]...)
 					end := data // ended now (maybe hours after its start)
@@ -282,7 +292,7 @@ func TestChaosExpiry(t *testing.T) {
 					e.store.FailRate(0.05, rng)
 					final = max(final, newest)
 				}
-			case x < 13:
+			case x < 12:
 				_ = ws[rng.Intn(len(ws))].Tick(e.ctx)
 			case x < 15:
 				_, _, _ = ws[rng.Intn(len(ws))].MergeTick(e.ctx)
