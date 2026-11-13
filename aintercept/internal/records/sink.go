@@ -73,12 +73,16 @@ type SinkConfig struct {
 	Now    func() time.Time
 
 	// v5 per-key buffers (docs/PIPELINE.md §1).
-	KeySpoolDir    string                             // one buffer file per key, under its escaped key
-	KeyObject      func(key string, seq int64) string // an ingest file's key template (keyflag.InTemplate)
-	FlushBytes     int                                // a buffer flushes at this size; default 1 MiB
-	FlushAge       time.Duration                      // ... or this long after its first record; default 30 s, at most 60 s
-	MaxBufferBytes int64                              // over this in all buffers, the oldest flush first; default 64 MiB
-	Jitter         func(time.Duration) time.Duration  // a buffer's timer (default ±10%)
+	KeySpoolDir string                             // one buffer file per key, under its escaped key
+	KeyObject   func(key string, seq int64) string // an ingest file's key template (keyflag.InTemplate)
+	// Journal records an ingest file's key and template before the file is
+	// handed to the writer (the recent index's journal, keyflag); a file whose
+	// entry fails isn't handed over, and its buffer stays for the next start.
+	Journal        func(key, tmpl string) error
+	FlushBytes     int                               // a buffer flushes at this size; default 1 MiB
+	FlushAge       time.Duration                     // ... or this long after its first record; default 30 s, at most 60 s
+	MaxBufferBytes int64                             // over this in all buffers, the oldest flush first; default 64 MiB
+	Jitter         func(time.Duration) time.Duration // a buffer's timer (default ±10%)
 }
 
 // Sink is an events.Sink that assembles the rows it's given into records and

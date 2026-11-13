@@ -133,9 +133,9 @@ func TestIngestPodIsTheFullStack(t *testing.T) {
 	if envs["OBSERVER_SPOOL_DIR"] != "/spool" {
 		t.Errorf("OBSERVER_SPOOL_DIR = %v, want /spool", envs["OBSERVER_SPOOL_DIR"])
 	}
-	// v5 per-key ingest buffers (docs/PIPELINE.md §1), and Redis for dirty flags.
+	// Per-key ingest buffers (docs/PIPELINE.md §1).
 	for name, want := range map[string]string{"OBSERVER_KEY_FLUSH_BYTES": "1048576", "OBSERVER_KEY_FLUSH_SECONDS": "30",
-		"OBSERVER_KEY_BUFFER_MAX_BYTES": "67108864", "OBSERVER_REDIS_ADDR": "redis:6379"} {
+		"OBSERVER_KEY_BUFFER_MAX_BYTES": "67108864"} {
 		if v, ok := envs[name]; !ok || fmt.Sprint(v) != want {
 			t.Errorf("%s = %v (set %v), want %q", name, v, ok, want)
 		}

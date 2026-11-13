@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -106,7 +105,32 @@ func Run() {
 	localDir := os.Getenv("OBSERVER_LOCAL_DIR")
 	var writer *events.Writer
 	var targets []events.Target
-	var flagger atomic.Pointer[keyflag.Flagger]
+	// Per-key ingest files (below) go to the bucket, else the local directory.
+	recordsOn := os.Getenv("OBSERVER_RECORDS") != "false"
+	recordsTarget, recordsPrefix := "", ""
+	switch {
+	case bucket != "":
+		recordsTarget, recordsPrefix = "s3", os.Getenv("OBSERVER_S3_PREFIX")
+	case localDir != "":
+		recordsTarget = "local"
+	}
+	spoolDir := envDefault("OBSERVER_SPOOL_DIR", filepath.Join(os.TempDir(), "aintercept-spool"))
+	inc := records.NewIncarnation(instanceID)
+	// The recent index (keyflag, docs/PIPELINE.md §1 step 4): each ingest
+	// file's key is journaled in the spool before its upload and indexed once it
+	// lands; the index goes out every 5 s. Opened before the writer, so files a
+	// previous process left in the spool are indexed as they land, and its
+	// journal's leftovers go into the first index object.
+	var index *keyflag.Index
+	var recentStream *events.ObjectStream
+	if recordsOn && recordsTarget != "" {
+		x, err := keyflag.Open(keyflag.Config{Dir: filepath.Join(spoolDir, "recent"), Prefix: recordsPrefix, Incarnation: inc,
+			Put: func(tmpl string, body []byte) error { return recentStream.PutAtUploadDurable(tmpl, body, "") }})
+		if err != nil {
+			fatal("recent index journal open failed", "dir", filepath.Join(spoolDir, "recent"), "err", err)
+		}
+		index = x
+	}
 	if bucket != "" {
 		// On AWS, leave the keys unset to use IRSA or Pod Identity; on
 		// DigitalOcean Spaces (or MinIO), set OBSERVER_S3_ENDPOINT + static keys.
@@ -131,20 +155,17 @@ func Run() {
 		targets = append(targets, t)
 	}
 	if len(targets) > 0 {
-		spoolDir := envDefault("OBSERVER_SPOOL_DIR", filepath.Join(os.TempDir(), "aintercept-spool"))
+		var onUploaded func(target, key string)
+		if index != nil {
+			onUploaded = index.Landed // each landed ingest file's key goes into the next index object
+		}
 		w, err := events.NewWriter(events.WriterConfig{
 			SpoolDir:      spoolDir,
 			SpoolMaxBytes: int64(envInt("OBSERVER_SPOOL_MAX_BYTES", 0)),
 			FlushEvery:    time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
 			UploadTimeout: time.Duration(envInt("OBSERVER_UPLOAD_TIMEOUT_SECONDS", 0)) * time.Second,
 			Targets:       targets,
-			// Each landed ingest file flags its key (keyflag): set below, once
-			// the flagger exists; files a previous process left upload from now.
-			OnUploaded: func(target, key string) {
-				if f := flagger.Load(); f != nil {
-					f.Landed(target, key)
-				}
-			},
+			OnUploaded:    onUploaded,
 		})
 		if err != nil {
 			fatal("writer init failed", "spool", spoolDir, "err", err)
@@ -208,46 +229,36 @@ func Run() {
 	// Canonical records, per routing key (docs/PIPELINE.md §1): each key's
 	// records are buffered (a spool file per key) and written as ingest files
 	// under v1/keys/<key>/in/, beside the raw log, through the same bucket or
-	// directory; each landed file flags its key for the rollups (keyflag). From
+	// directory; each file's key goes into the recent index (keyflag). From
 	// the full rows when bodies are recorded (a call's detail is read from
 	// them), else from the body-stripped ones.
 	budget := setupMemory()
 	var recordsSink *records.Sink
-	if os.Getenv("OBSERVER_RECORDS") != "false" {
-		var put records.Putter
-		prefix, target := "", ""
-		switch {
-		case s3Sink != nil:
-			target, prefix = "s3", os.Getenv("OBSERVER_S3_PREFIX")
-		case localSink != nil:
-			target = "local"
+	if index != nil {
+		target, prefix := recordsTarget, recordsPrefix
+		put := records.WriterPutter(writer, target)
+		recentStream = writer.NewObjectStream(events.ObjectStreamConfig{Target: target, ContentType: "application/json"})
+		if err := index.Flush(); err != nil { // at start: whatever a crash left in the journal
+			slog.Error("recent index upload failed at start; retrying in 5 s", "err", err)
 		}
-		if target != "" {
-			put = records.WriterPutter(writer, target)
-			inc := records.NewIncarnation(instanceID)
-			recent := writer.NewObjectStream(events.ObjectStreamConfig{Target: target, ContentType: "application/json"})
-			f := keyflag.New(keyflag.Config{Redis: os.Getenv("OBSERVER_REDIS_ADDR"), Prefix: prefix, Incarnation: inc,
-				Put: recent.Put})
-			flagger.Store(f)
-			go f.Run(context.Background())
-			spoolDir := envDefault("OBSERVER_SPOOL_DIR", filepath.Join(os.TempDir(), "aintercept-spool"))
-			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
-				Incarnation: inc, Content: captureFullBodies, Details: true,
-				MaxAge:         time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
-				KeySpoolDir:    filepath.Join(spoolDir, "keys"),
-				KeyObject:      func(key string, seq int64) string { return keyflag.InTemplate(prefix, key, inc, seq) },
-				FlushBytes:     envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20),
-				FlushAge:       time.Duration(envInt("OBSERVER_KEY_FLUSH_SECONDS", 30)) * time.Second,
-				MaxBufferBytes: int64(envInt("OBSERVER_KEY_BUFFER_MAX_BYTES", 64<<20))})
-			if captureFullBodies {
-				full = append(full, recordsSink)
-			} else {
-				bodyStripped = append(bodyStripped, recordsSink)
-			}
-			go recordsSink.Run(context.Background())
-			slog.Info("per-key ingest files enabled", "prefix", prefix, "redis", os.Getenv("OBSERVER_REDIS_ADDR") != "",
-				"flush_bytes", envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20), "flush_seconds", envInt("OBSERVER_KEY_FLUSH_SECONDS", 30))
+		go index.Run()
+		recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
+			Incarnation: inc, Content: captureFullBodies, Details: true,
+			MaxAge:         time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
+			KeySpoolDir:    filepath.Join(spoolDir, "keys"),
+			KeyObject:      func(key string, seq int64) string { return keyflag.InTemplate(prefix, key, inc, seq) },
+			Journal:        index.Journal,
+			FlushBytes:     envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20),
+			FlushAge:       time.Duration(envInt("OBSERVER_KEY_FLUSH_SECONDS", 30)) * time.Second,
+			MaxBufferBytes: int64(envInt("OBSERVER_KEY_BUFFER_MAX_BYTES", 64<<20))})
+		if captureFullBodies {
+			full = append(full, recordsSink)
+		} else {
+			bodyStripped = append(bodyStripped, recordsSink)
 		}
+		go recordsSink.Run(context.Background())
+		slog.Info("per-key ingest files enabled", "prefix", prefix,
+			"flush_bytes", envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20), "flush_seconds", envInt("OBSERVER_KEY_FLUSH_SECONDS", 30))
 	}
 
 	if len(full) > 0 || len(bodyStripped) > 1 {
@@ -414,16 +425,15 @@ func Run() {
 			slog.Error("capture file close error", "err", err)
 		}
 	}
-	if f := flagger.Load(); f != nil && writer != nil {
+	if index != nil && writer != nil {
 		// Every key buffer is in the spool now (proc.Close flushed the records
 		// sink): upload it, then the recent index naming those files.
 		if err := writer.Flush(); err != nil {
 			slog.Error("writer flush error", "err", err)
 		}
-		if err := f.FlushRecent(); err != nil {
-			slog.Error("recent index upload failed at shutdown; the files are still flagged in Redis", "err", err)
+		if err := index.Close(); err != nil {
+			slog.Error("recent index upload failed at shutdown; the journal keeps the keys for the next start", "err", err)
 		}
-		f.Close()
 	}
 	if writer != nil {
 		// Seals what's buffered and waits until the spool is empty, so a graceful
