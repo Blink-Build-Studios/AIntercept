@@ -146,7 +146,12 @@ def _handler(fake: FakeS3) -> type[BaseHTTPRequestHandler]:
 @contextmanager
 def fake_s3(root: pathlib.Path) -> Iterator[FakeS3]:
     fake = FakeS3(pathlib.Path(root))
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler(fake))
+
+    class Server(ThreadingHTTPServer):
+        request_queue_size = 512  # many reads at once (DuckDB's ranges, parallel commits)
+        daemon_threads = True
+
+    server = Server(("127.0.0.1", 0), _handler(fake))
     fake.endpoint = f"http://127.0.0.1:{server.server_address[1]}"
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()

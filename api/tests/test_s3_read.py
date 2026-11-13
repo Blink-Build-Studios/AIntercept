@@ -18,8 +18,14 @@ from tests.test_bucket_parity import _urls
 from tests.test_stream_pipeline import layout  # noqa: F401 (the pipeline's committed layout, a fixture)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def httpfs_installed():
+    """Tests install httpfs once (the image has it built in; the API never downloads it)."""
+    duckdb.connect().execute("INSTALL httpfs")
+
+
 def s3_store(fake: FakeS3, cache: pathlib.Path, raw: pathlib.Path) -> BucketStore:
-    src = S3Source(BUCKET, "us-east-1", endpoint=fake.endpoint, access_key="test", secret_key="test")
+    src = S3Source(BUCKET, "us-east-1", endpoint=fake.endpoint, access_key="test", secret_key="test")  # noqa: S106 (the fake S3 ignores credentials)
     return BucketStore(src, cache, prefix="sim/", raw=LocalRaw(raw))
 
 
@@ -27,18 +33,21 @@ def s3_store(fake: FakeS3, cache: pathlib.Path, raw: pathlib.Path) -> BucketStor
 
 
 def test_a_key_lookup_reads_only_the_row_groups_that_hold_it(tmp_path):
+    """A 10 MB table file in 1,000 row groups: one key's lookup fetches the footer and its row
+    group, not the file. (DuckDB reads a file under ~1 MB whole: smaller ones aren't held to it.)"""
     root = tmp_path / "s3"
     (root / "t").mkdir(parents=True)
     path = root / "t" / "big.parquet"
-    duckdb.execute(
-        f"COPY (SELECT printf('s:%06d', i // 5) AS key, printf('r%06d', i) AS id, false AS tomb, i AS v "
-        f"FROM range(50000) t(i) ORDER BY key, id) TO '{path}' (FORMAT parquet, ROW_GROUP_SIZE 1000)"
+    sql = (
+        "COPY (SELECT printf('s:%07d', i // 5) AS key, printf('r%07d', i) AS id, false AS tomb, i AS v "
+        "FROM range(1000000) t(i) ORDER BY key, id) TO '" + str(path) + "' (FORMAT parquet, ROW_GROUP_SIZE 1000)"
     )
+    duckdb.execute(sql)
     size = path.stat().st_size
     with fake_s3(root) as fake:
-        src = S3Source(BUCKET, "us-east-1", endpoint=fake.endpoint, access_key="test", secret_key="test")
+        src = S3Source(BUCKET, "us-east-1", endpoint=fake.endpoint, access_key="test", secret_key="test")  # noqa: S106 (the fake S3 ignores credentials)
         con = buckets.connect(src)
-        rows = buckets.read_newest(con, [src.url("t/big.parquet")], keys=["s:004321"]).fetchall()
+        rows = buckets.read_newest(con, [src.url("t/big.parquet")], keys=["s:0004321"]).fetchall()
         assert sorted(r[-1] for r in rows) == list(range(4321 * 5, 4321 * 5 + 5))
         assert fake.bytes_read() < size // 10, (fake.bytes_read(), size)
 
@@ -105,7 +114,10 @@ def test_freshness_gets_the_next_commit_instead_of_listing(s3):
     url = next(u for u in _urls(local) if u.startswith("/api/v1/sessions/") and u.count("/") == 4)
     client.get(url)
     store = client.app.state.store
-    store.clock = lambda: 10_000.0  # every log's freshness window has passed
+    for log in store._logs.values():  # each log's one-second window has passed (not its relist)
+        if log._checked is not None:
+            log._checked -= 2
+    store._loaded.clear()
     fake.reset()
     client.get(url)
     assert fake.lists() == [], [h.query for h in fake.lists()]

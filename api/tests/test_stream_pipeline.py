@@ -82,7 +82,7 @@ def stream_layout(raw: pathlib.Path, out: pathlib.Path, *, seed: int = 1) -> Non
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")  # one pipeline run, shared with the S3 read tests
 def layout(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("pipeline")
     ds = Dataset(tmp / "data")
