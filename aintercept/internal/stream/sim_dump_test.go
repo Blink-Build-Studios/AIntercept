@@ -10,8 +10,8 @@ import (
 
 // A simulation's committed layout, written to a directory (SimConfig.OutDir), is
 // what the stateless API reads (api/tests/test_stream_pipeline.py): every object
-// under the layout's stream/v1/, at the same relative key, with the sim's own
-// prefix dropped; nothing outside stream/v1/ (records stay in the emulator).
+// under the layout's <SimPrefix>stream/v1/, at its own key (commits name files by
+// key); nothing outside it (records stay in the emulator).
 func TestSimulateWritesTheLayoutToOutDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -31,13 +31,16 @@ func TestSimulateWritesTheLayoutToOutDir(t *testing.T) {
 		}
 		rel, _ := filepath.Rel(dir, p)
 		rel = filepath.ToSlash(rel)
-		if !strings.HasPrefix(rel, "stream/v1/") {
+		if !strings.HasPrefix(rel, SimPrefix+"stream/v1/") {
 			t.Errorf("%s: outside stream/v1/", rel)
 		}
+		if strings.Contains(rel, "/state/") || strings.Contains(rel, "/leases/") || strings.Contains(rel, "/members/") {
+			t.Errorf("%s: not what readers read", rel)
+		}
 		switch {
-		case strings.HasPrefix(rel, "stream/v1/buckets/") && strings.HasSuffix(rel, ".json"):
+		case strings.HasPrefix(rel, SimPrefix+"stream/v1/buckets/") && strings.HasSuffix(rel, ".json"):
 			commits++
-		case strings.HasPrefix(rel, "stream/v1/tables/"):
+		case strings.HasPrefix(rel, SimPrefix+"stream/v1/tables/"):
 			tables++
 		}
 		return nil
@@ -51,7 +54,7 @@ func TestSimulateWritesTheLayoutToOutDir(t *testing.T) {
 	// The dumped layout is the emulator's: every committed table file named by a
 	// newest commit exists in the directory.
 	for _, b := range []int{0, 1, 2, 3, 4, 5, 6, 7} {
-		got, err := os.ReadDir(filepath.Join(dir, "stream/v1/buckets", twoDigits(b)))
+		got, err := os.ReadDir(filepath.Join(dir, SimPrefix+"stream/v1/buckets", twoDigits(b)))
 		if err != nil {
 			continue
 		}

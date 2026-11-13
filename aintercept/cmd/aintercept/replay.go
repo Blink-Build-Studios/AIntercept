@@ -36,9 +36,10 @@ func replay() {
 	ingestPods := fs.Int("ingest-pods", 3, "with -processors: ingest pods uploading records")
 	steps := fs.Int("steps", 2000, "with -processors: simulation steps")
 	checkpoints := fs.Int("checkpoints", 10, "with -processors: drained checkpoints compared with one pass")
+	out := fs.String("out", "", "with -processors: write the committed layout (stream/v1/…) here, for the stateless API")
 	fs.Parse(os.Args[2:])
 	if *processors > 0 {
-		replayStream(*src, *seed, *ingestPods, *processors, *steps, *checkpoints)
+		replayStream(*src, *seed, *ingestPods, *processors, *steps, *checkpoints, *out)
 		return
 	}
 	if *src == "" || *work == "" {
@@ -136,7 +137,7 @@ func fatalf(format string, a ...any) {
 // replayStream canonicalizes a local raw capture with the observer's code and
 // replays its records through the bucketed processor (internal/stream) with
 // chaos, comparing every checkpoint with one pass.
-func replayStream(src string, seed int64, pods, processors, steps, checkpoints int) {
+func replayStream(src string, seed int64, pods, processors, steps, checkpoints int, out string) {
 	if src == "" || strings.HasPrefix(src, "s3://") {
 		fatalf("-processors needs a local -src")
 	}
@@ -149,6 +150,7 @@ func replayStream(src string, seed int64, pods, processors, steps, checkpoints i
 	fmt.Fprintf(os.Stderr, "replay: %d raw rows -> %d records\n", st.Rows, len(col.recs))
 	res, err := stream.Simulate(ctx, stream.SimConfig{Seed: seed, IngestPods: pods, Processors: processors,
 		BucketBits: records.DefaultBucketBits, Steps: steps, Checkpoints: checkpoints, Input: col.recs,
+		Model: stream.StateModel{}, OutDir: out,
 		Chaos: stream.Chaos{KillHard: 0.005, KillGraceful: 0.005, StealLease: 0.01, Pause: 0.01,
 			PutFailure: 0.02, DelayUpload: 0.02, AddRemove: 0.005}})
 	fmt.Printf("records          %d in %d files\n", res.Records, res.Files)
