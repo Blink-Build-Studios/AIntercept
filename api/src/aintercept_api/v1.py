@@ -10,12 +10,15 @@ table codec, so a request reads them exactly as the tested stream-state SQL expe
 - a session's endpoints read the session's day partition, then its own key's newest commit
   on top (fresher than the merge by up to a merge period);
 - a person's read their sessions' day partitions;
-- the directory, /status and the drawer read every partition;
+- the directory, /status and the drawer read every partition (the fact tables, today's
+  requests, pending and analytics, are read only by them), and the drawer's raw view reads the
+  call's detail object (calls/<id>.ndjson.gz), written when the call ends;
 - tables that span keys (the dimensions, the transactions, the title calls, ...) are read from
   every partition.
 
-Nothing is copied but the immutable objects a request reads; freshness is the newest merge
-commit, looked for at most once a second.
+DuckDB reads the objects in place (a local path, or S3 through httpfs): nothing is copied to
+disk. Freshness is the newest merge commit, looked for at most once a second; /status's
+newest time and retention mode are the merge commit's.
 """
 
 import json
@@ -175,9 +178,9 @@ class V1Store(BucketStore):
         # are in key order, so only the row groups that can hold the keys are read).
         keys = {t: None if routing[t][0] == "*" else scope.keys(routing[t][0]) for t in names}
         for t in names:
-            every = routing[t][0] == "*" or wanted is None
+            want = None if routing[t][0] == "*" else wanted
             plan[t] = [
-                self._merge_file(out, t) for name, out in parts if t in out.tables and (every or name in wanted)
+                self._merge_file(out, t) for name, out in parts if t in out.tables and (want is None or name in want)
             ]
         overlay: list[str] = []
         if single and only is None and scope.sessions:
@@ -237,24 +240,3 @@ class V1Store(BucketStore):
 
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
         return legacy.event_row(self._detail(correlation_id), correlation_id, event_key)
-
-
-class SourceRaw:
-    """The raw capture read straight from the object store (the drawer's raw view)."""
-
-    def __init__(self, source: Source) -> None:
-        self.source = source
-
-    def folder(self, folder: str) -> list[str]:
-        names = [k[len(folder) :] for k in self.source.list_after(folder, "")]
-        return sorted(n for n in names if "/" not in n and n.endswith(".ndjson.gz"))
-
-    def read(self, key: str) -> bytes | None:
-        try:
-            return self.source.get(key)
-        except FileNotFoundError:
-            return None
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
-            raise

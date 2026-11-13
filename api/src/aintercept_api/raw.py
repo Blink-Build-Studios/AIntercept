@@ -1,14 +1,11 @@
-"""Where the raw partitions are read from (the drawer's raw view and request
-detail; queries never read them): a local directory (`make up`, tests), or the
-`aintercept mirror` sidecar in the cluster, which serves the bucket's objects over
-localhost HTTP. Keys are the processor's lineage keys (`<prefix>/dt=…/hour=…/<pod>/<file>`)."""
+"""Where today's store reads the raw partitions from (the drawer's raw view and request
+detail; queries never read them): a local directory (`make up`, tests). Keys are the
+processor's lineage keys (`<prefix>/dt=…/hour=…/<pod>/<file>`). In the cluster the API reads a
+call's rows from its detail object in the bucket instead (v1.V1Store)."""
 
 import gzip
 import pathlib
 import re
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta
 from typing import Protocol
 
@@ -46,33 +43,6 @@ class LocalRaw:
             return p.read_bytes() if p and p.is_file() else None
         except OSError:
             return None
-
-
-class HttpRaw:
-    """The bucket through the `aintercept mirror` sidecar (`/raw/list`, `/raw/get`)."""
-
-    def __init__(self, base_url: str, timeout_s: float = 10):
-        self.base = base_url.rstrip("/")
-        self.timeout = timeout_s
-
-    def _get(self, path: str, **q: str) -> bytes | None:
-        url = f"{self.base}{path}?{urllib.parse.urlencode(q)}"
-        try:
-            with urllib.request.urlopen(url, timeout=self.timeout) as r:  # noqa: S310 (a localhost sidecar)
-                body: bytes = r.read()
-                return body
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
-            raise
-
-    def folder(self, folder: str) -> list[str]:
-        body = self._get("/raw/list", prefix=folder)
-        names = [ln.rsplit("/", 1)[-1] for ln in (body or b"").decode().splitlines() if ln.endswith(".ndjson.gz")]
-        return sorted(names)
-
-    def read(self, key: str) -> bytes | None:
-        return self._get("/raw/get", key=key)
 
 
 def lines(gz: bytes | None) -> list[bytes]:

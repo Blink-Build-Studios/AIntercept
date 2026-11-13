@@ -4,7 +4,6 @@
 //	aintercept observer   Envoy ext_proc tee: observations to the sink
 //	aintercept certsvc    Envoy SDS server: mints leaf certificates on demand
 //	aintercept process    stage 2: raw partitions to shaped Parquet tables
-//	aintercept mirror     the query API's sidecar: mirrors the tables, serves raw files
 //	aintercept replay     streams an existing capture through the processor and checks it (a tool; takes flags)
 //	aintercept derive     builds the derived tables from an existing shaped output (a tool; takes flags)
 //	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
@@ -29,7 +28,6 @@ var modes = map[string]func(){
 	"observer":   observer.Run,
 	"certsvc":    certsvc.Run,
 	"process":    process.Run,
-	"mirror":     process.RunMirror,
 	"replay":     replay,
 	"derive":     derive,
 	"canon":      canonCmd,
@@ -50,6 +48,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|mirror|stream, or aintercept replay|derive|canon|storecheck -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|stream, or aintercept replay|derive|canon|storecheck -h")
 	os.Exit(2)
 }
