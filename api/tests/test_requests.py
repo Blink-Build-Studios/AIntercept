@@ -444,6 +444,27 @@ def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, client_for):
     assert len(ids) == 2
 
 
+def test_events_tied_on_every_order_key_number_by_event_key(dataset, client_for):
+    # A batch can carry events alike in sequence, times, name and metadata that differ
+    # only in their raw body (their id, process stats). Their numbers must not depend on
+    # the order the rows are read in: the event key breaks the tie.
+    cc = ClaudeCode(dataset, S1)
+    prompt(cc, f"{H}:00:05", "p1", 1)
+    cc.event(f"{H}:00:10", "tengu_feature_ok", batch="batch-tie", feature="x")
+    row = next(r for r in dataset.rows if r["correlation_id"] == "batch-tie" and r["phase"] == "client_event")
+    dataset.rows.remove(row)
+    for ev_id, uptime in (("ev-b", 2), ("ev-a", 1)):  # the larger key arrives first
+        ev = json.loads(json.dumps(row))
+        ev["seq"] = 1
+        ev["client_event"]["id"] = ev_id
+        ev["client_event"]["data"]["process"] = {"uptime": uptime}
+        dataset.add(ev)
+    client = client_for(dataset)
+    for n, ev_id in ((1, "ev-a"), (2, "ev-b")):
+        d = client.get(f"/api/v1/events/batch-tie:{n}").json()["data"]
+        assert d["raw"]["id"] == ev_id, (n, d["raw"])
+
+
 def test_event_unknown_is_a_typed_404(dataset, client_for):
     client = client_for(dataset)
     for eid in ("nope", "batch-x:1"):

@@ -1391,7 +1391,8 @@ def event(store: Store, event_id: str) -> EventDetail | None:
     found = store.query(
         """SELECT ts, name, session_id, event_key, source_file FROM (
              SELECT ts, coalesce(name, '(unnamed)') AS name, session_id, event_key, source_file,
-                    row_number() OVER (PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR) AS n
+                    row_number() OVER (
+                        PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR, event_key) AS n
              FROM cc_events WHERE correlation_id = ?)
            WHERE n = ?""",
         [cid, int(n)],

@@ -101,17 +101,18 @@ func TestIdenticalEventsRankInArrivalOrder(t *testing.T) {
 }
 
 // The order's every key, one at a time: sequence, row time, client time, name
-// (unnamed as "(unnamed)"), metadata.
+// (unnamed as "(unnamed)"), metadata, then the event key (events alike in all
+// of those but their raw body number the same in every reader).
 func TestRankOrderKeys(t *testing.T) {
 	ev := func(id string, seq, row, ns int64, name, md string) Record {
 		return Record{Event: &canon.Event{EventKey: id, Source: "claude_code", Seq: seq, RowNS: row, NS: ns, Name: name, MetadataJSON: md}}
 	}
 	rs := []Record{
 		ev("md-b", 1, 1, 1, "n", "b"), ev("seq2", 2, 0, 0, "", ""), ev("row2", 1, 2, 0, "", ""), ev("ns2", 1, 1, 2, "", ""),
-		ev("unnamed", 1, 1, 1, "", ""), ev("md-a", 1, 1, 1, "n", "a"),
+		ev("unnamed", 1, 1, 1, "", ""), ev("md-a", 1, 1, 1, "n", "a"), ev("key-b", 1, 1, 1, "n", "c"), ev("key-a", 1, 1, 1, "n", "c"),
 	}
 	rankClaudeCode(rs)
-	want := map[string]int64{"unnamed": 1, "md-a": 2, "md-b": 3, "ns2": 4, "row2": 5, "seq2": 6}
+	want := map[string]int64{"unnamed": 1, "md-a": 2, "md-b": 3, "key-a": 4, "key-b": 5, "ns2": 6, "row2": 7, "seq2": 8}
 	for _, r := range rs {
 		if r.BatchCCN != want[r.Event.EventKey] {
 			t.Errorf("%s: %d, want %d", r.Event.EventKey, r.BatchCCN, want[r.Event.EventKey])
