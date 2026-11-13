@@ -42,7 +42,21 @@ type MergeKey struct {
 	N   int64  `parquet:"n"`
 }
 
-func init() { stream.RegisterTable[MergeKey](TableMergeKeys) }
+// TableMergeAgentCalls is, in each day partition, its keys' Claude Code and
+// Codex calls' times: what /overview counts in its window, so the directory
+// never reads the fact tables.
+const TableMergeAgentCalls = "merge_agent_calls"
+
+// MergeAgentCall is a merge_agent_calls row: the row's key is the routing key,
+// its id the call's fact row's ("r:" a call's, "p:" a call in flight's).
+type MergeAgentCall struct {
+	TsNS int64 `parquet:"ts_ns,optional"` // 0 (NULL): neither a start nor an end
+}
+
+func init() {
+	stream.RegisterTable[MergeKey](TableMergeKeys)
+	stream.RegisterTable[MergeAgentCall](TableMergeAgentCalls)
+}
 
 // MergeCommit is merge/commit/<n>.json. Paths are relative to <prefix>/v1/merge/.
 type MergeCommit struct {
@@ -53,7 +67,10 @@ type MergeCommit struct {
 	UpdatedNS int64          `json:"updated_ns"`
 	// ContentRetained: some call's bodies were read (full interception).
 	ContentRetained bool `json:"content_retained"`
-	// FirstRequestNS and EarliestNS are /status's (stubbed).
+	// FirstRequestNS is /status's first request: the earliest non-synthetic
+	// call (its start, else its end), call in flight (its start) or event row.
+	// EarliestNS counts synthetic calls in flight too (the proxy's probes): the
+	// "waiting since" before any real request. 0 is none yet.
 	FirstRequestNS int64 `json:"first_request_ns"`
 	EarliestNS     int64 `json:"earliest_ns"`
 }
@@ -125,6 +142,7 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 	next := MergeCommit{N: 1, Days: map[string]Out{}}
 	if prev != nil {
 		next.N, next.NewestNS, next.ContentRetained = prev.N+1, prev.NewestNS, prev.ContentRetained
+		next.FirstRequestNS, next.EarliestNS = prev.FirstRequestNS, prev.EarliestNS
 		for d, o := range prev.Days {
 			next.Days[d] = o
 		}
@@ -166,11 +184,14 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 		for t, rows := range tables {
 			newRows[part][t] = append(newRows[part][t], rows...)
 		}
+		newRows[part][TableMergeAgentCalls] = append(newRows[part][TableMergeAgentCalls], agentCalls(key, tables)...)
 		mk = append(mk, stream.Row{Key: key, Value: MergeKey{Day: day, N: c.N}})
 		if n := rawNewest(tables); n > next.NewestNS {
 			next.NewestNS = n
 		}
 		next.ContentRetained = next.ContentRetained || retainsContent(tables)
+		first, earliest := rawFirst(tables)
+		next.FirstRequestNS, next.EarliestNS = minNZ(next.FirstRequestNS, first), minNZ(next.EarliestNS, earliest)
 	}
 	if len(changed) == 0 {
 		return res, nil
@@ -514,6 +535,100 @@ func rawNewest(tables map[string][]stream.Row) int64 {
 		}
 	}
 	return best
+}
+
+// rawFirst is a key's first non-synthetic row time and its earliest row time
+// (synthetic included), as /status counts them over today's calls (a call's
+// start, else its end; a call in flight's start) and analytics rows.
+func rawFirst(tables map[string][]stream.Row) (first, earliest int64) {
+	see := func(ns int64, synthetic bool) {
+		if ns == 0 {
+			return
+		}
+		earliest = minNZ(earliest, ns)
+		if !synthetic {
+			first = minNZ(first, ns)
+		}
+	}
+	for _, r := range tables[state.TableFactRequests] {
+		if c, ok := r.Value.(canon.Request); ok && !r.Tomb {
+			ns := c.StartNS
+			if ns == 0 {
+				ns = c.EndNS
+			}
+			see(ns, c.Synthetic)
+		}
+	}
+	for _, r := range tables[state.TableFactPending] {
+		if p, ok := r.Value.(canon.Pending); ok && !r.Tomb && !p.Done {
+			see(p.StartNS, p.Synthetic)
+		}
+	}
+	for _, r := range tables[state.TableFactEvents] {
+		if e, ok := r.Value.(canon.Event); ok && !r.Tomb {
+			see(e.RowNS, false)
+		}
+	}
+	return first, earliest
+}
+
+// agentCalls is a key's merge_agent_calls rows, as /overview counts requests
+// over today's calls: non-synthetic calls whose product is claude_code or codex
+// (a call to api.anthropic.com is Claude Code's when it has none), at their
+// start, else their end; calls in flight with a start, at it, by host (Claude
+// Code's) or originator (Codex's).
+func agentCalls(key string, tables map[string][]stream.Row) []stream.Row {
+	var out []stream.Row
+	for _, r := range tables[state.TableFactRequests] {
+		c, ok := r.Value.(canon.Request)
+		if !ok || r.Tomb || c.Synthetic {
+			continue
+		}
+		product := c.Product
+		if product == "" && c.Host == anthropicHost {
+			product = canon.ProductClaudeCode
+		}
+		if product != canon.ProductClaudeCode && product != canon.ProductCodex {
+			continue
+		}
+		ns := c.StartNS
+		if ns == 0 {
+			ns = c.EndNS
+		}
+		out = append(out, stream.Row{Key: key, ID: "r:" + r.ID, Value: MergeAgentCall{TsNS: ns}})
+	}
+	for _, r := range tables[state.TableFactPending] {
+		p, ok := r.Value.(canon.Pending)
+		if !ok || r.Tomb || p.Done || p.Synthetic || p.StartNS == 0 {
+			continue
+		}
+		if p.Host != anthropicHost && !strings.HasPrefix(originator(p.ClientJSON), "codex") {
+			continue
+		}
+		out = append(out, stream.Row{Key: key, ID: "p:" + r.ID, Value: MergeAgentCall{TsNS: p.StartNS}})
+	}
+	return out
+}
+
+const anthropicHost = "api.anthropic.com"
+
+// originator is a call's client headers' originator ("" for none).
+func originator(clientJSON string) string {
+	var h struct {
+		Originator string `json:"originator"`
+	}
+	if clientJSON == "" || json.Unmarshal([]byte(clientJSON), &h) != nil {
+		return ""
+	}
+	return h.Originator
+}
+
+// minNZ is the smaller of a and b, where 0 is none.
+func minNZ(a, b int64) int64 {
+	if a == 0 || (b != 0 && b < a) {
+		return b
+	}
+	return a
 }
 
 // retainsContent is whether a key's calls had their bodies read (a detail).

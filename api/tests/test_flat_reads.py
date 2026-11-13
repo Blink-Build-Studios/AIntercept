@@ -161,3 +161,13 @@ def test_status_survives_redis_down(stores, monkeypatch):
     monkeypatch.setattr(store, "redis", DownRedis())
     r = make_client(store).get("/api/v1/status")
     assert r.status_code == 200 and r.json()["data"]["lastIngestAt"]
+
+
+def test_directory_reads_no_fact_table(stores):
+    """The directory reads the merge's per-session rows and index, never the raw fact tables:
+    /overview counts requests from the merge's per-key call times (merge_agent_calls)."""
+    for path in ("/api/v1/people", "/api/v1/overview", "/api/v1/overview?from=2026-11-01T00:00:00Z"):
+        src, store = stores[8]()
+        make_client(store).get(path)
+        facts = [f for f in src.files if f.rsplit("/", 1)[-1].startswith("fact_")]
+        assert not facts, (path, facts[:3])

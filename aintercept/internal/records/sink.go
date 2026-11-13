@@ -127,6 +127,9 @@ func (s *Sink) Emit(e events.Event) error {
 }
 
 func (s *Sink) add(rs []Record) {
+	for _, m := range s.asm.TakeKeyMarks() {
+		s.putMark(m)
+	}
 	for _, d := range s.asm.TakeDetails() {
 		s.putDetail(d)
 	}
@@ -185,6 +188,25 @@ func (s *Sink) putDetail(d Detail) {
 			s.errs = append(s.errs, err)
 			s.mu.Unlock()
 			slog.Error("ALARM call detail put failed", "key", key, "err", err)
+		}
+	}()
+}
+
+// putMark writes one call's key mark (an empty object). Called with mu held.
+func (s *Sink) putMark(m KeyMark) {
+	key := CallKeyMark(s.cfg.Prefix, m.CorrelationID, m.Key)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		put := s.cfg.Putter.Put
+		if dp, ok := s.cfg.Putter.(DetailPutter); ok {
+			put = dp.PutDetail
+		}
+		if err := put(context.Background(), key, nil); err != nil {
+			s.mu.Lock()
+			s.errs = append(s.errs, err)
+			s.mu.Unlock()
+			slog.Error("ALARM call key mark put failed", "key", key, "err", err)
 		}
 	}()
 }

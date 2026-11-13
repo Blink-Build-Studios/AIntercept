@@ -20,6 +20,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
 // Redis keys. Redis only speeds things up: losing all of them loses no data
@@ -253,6 +254,9 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 	}
 	if out != nil {
 		next.Out = append(next.Out, *out)
+	}
+	if err := markReported(ctx, w.cfg.Store, w.cfg.Prefix, key, changed[state.TableRequestMissed]); err != nil {
+		return applied, false, err
 	}
 	if err := w.hook("out", key); err != nil {
 		return applied, false, err

@@ -10,11 +10,15 @@ router = APIRouter()
 @router.get("/status", response_model=StatusResponse)
 def get_status(request: Request) -> StatusResponse:
     store = request.app.state.store
-    first, earliest = store.query(
-        """SELECT min(ts) FILTER (WHERE NOT synthetic), min(ts)
-           FROM (SELECT ts, synthetic FROM calls UNION ALL SELECT row_ns, false FROM analytics
-                 UNION ALL SELECT first_ns, true FROM probes)"""
-    )[0]
+    stats = getattr(store, "status_stats", None)
+    if stats is not None:  # the v1 store: from the merge commit, no table read
+        first, earliest = stats()
+    else:
+        first, earliest = store.query(
+            """SELECT min(ts) FILTER (WHERE NOT synthetic), min(ts)
+               FROM (SELECT ts, synthetic FROM calls UNION ALL SELECT row_ns, false FROM analytics
+                     UNION ALL SELECT first_ns, true FROM probes)"""
+        )[0]
     last = store.newest_ns
     status = Status(
         proxy=None,

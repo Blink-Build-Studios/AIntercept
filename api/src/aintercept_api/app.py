@@ -75,9 +75,16 @@ def bucket_store_from_env(env: Mapping[str, str], *, v1: bool = False) -> Any:
         )
     prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
     cache = pathlib.Path(env.get("AINTERCEPT_CACHE_DIR") or "/data/cache")
+    extra: dict[str, Any] = {}
+    if v1 and env.get("AINTERCEPT_REDIS_ADDR"):
+        import redis
+
+        host, _, port = env["AINTERCEPT_REDIS_ADDR"].rpartition(":")
+        extra["redis"] = redis.Redis(host=host or "localhost", port=int(port or 6379), socket_timeout=0.5)
     return (V1Store if v1 else BucketStore)(
         source,
         cache,
+        **extra,
         prefix=prefix + "/" if prefix else "",
         cache_bytes=int(env.get("AINTERCEPT_CACHE_BYTES") or 2 << 30),
         memory_limit=duckdb_memory_limit(env),

@@ -50,9 +50,9 @@ func marksByCall(ms []KeyMark) map[string][]string {
 func TestKeyMarksNameEveryKeyOfACall(t *testing.T) {
 	two := append(analytics("a1"), clientEvent("a1", "e1", "s1", 0), clientEvent("a1", "e2", "s2", 1))
 	for name, rows := range map[string][]events.Event{
-		"a call":                     {hdr("c1", true, ccHeaders), complete("c1", ccClient)},
-		"a call still open":          {hdr("c1", true, ccHeaders)},
-		"a websocket's turns":        {wsHdr("w1"), wsTurnStart("w1", 1, "t1"), wsTurn("w1", 1, "t1"), wsConn("w1")},
+		"a call":                      {hdr("c1", true, ccHeaders), complete("c1", ccClient)},
+		"a call still open":           {hdr("c1", true, ccHeaders)},
+		"a websocket's turns":         {wsHdr("w1"), wsTurnStart("w1", 1, "t1"), wsTurn("w1", 1, "t1"), wsConn("w1")},
 		"a batch across two sessions": two,
 	} {
 		t.Run(name, func(t *testing.T) {
