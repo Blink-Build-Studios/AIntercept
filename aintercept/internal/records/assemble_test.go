@@ -337,6 +337,14 @@ func TestAtomicCases(t *testing.T) {
 					}
 				}
 				got = kept
+			} else { // locators have their own cases (locator_test.go)
+				var kept []Record
+				for _, r := range got {
+					if r.Kind != KindLocator {
+						kept = append(kept, r)
+					}
+				}
+				got = kept
 			}
 			label, _, _ := strings.Cut(c.label, "/")
 			if a.Cases()[label] <= before[label] {

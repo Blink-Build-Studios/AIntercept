@@ -208,6 +208,15 @@ func (s *Sink) putDetail(d Detail) {
 		zw.Write(l)
 		zw.Write([]byte{'\n'})
 	}
+	// The routing line: every key the call's records went to (the drawer
+	// loads only those).
+	routing, _ := json.Marshal(struct {
+		Phase         string   `json:"phase"`
+		CorrelationID string   `json:"correlation_id"`
+		RoutingKeys   []string `json:"routing_keys"`
+	}{"routing", d.CorrelationID, append([]string{}, d.RoutingKeys...)})
+	zw.Write(routing)
+	zw.Write([]byte{'\n'})
 	zw.Close()
 	key := DetailKey(s.cfg.Prefix, d.CorrelationID)
 	s.wg.Add(1)

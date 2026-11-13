@@ -135,7 +135,7 @@ func TestDetailNamesItsRoutingKeys(t *testing.T) {
 	}{
 		"session call":    {[]events.Event{hdr("c1", true, ccHeaders), complete("c1", ccClient)}, "c1", []string{"s:s1"}},
 		"split call":      {[]events.Event{split, splitEnd}, "c2", []string{"c:" + kh + ":" + day, "s:s1"}},
-		"analytics batch": {ana, "a1", []string{"s:s1", "s:s2"}},
+		"analytics batch": {ana, "a1", []string{"c:" + kh + ":" + day, "s:s1", "s:s2"}}, // its start went under its credential
 		"websocket":       {[]events.Event{wsHdr("w1"), wsTurnStart("w1", 1, "t1"), wsTurn("w1", 1, "t1"), wsConn("w1")}, "w1", []string{"c:" + kh + ":" + day, "s:t1"}},
 	} {
 		t.Run(name, func(t *testing.T) {

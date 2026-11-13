@@ -122,6 +122,9 @@ type Assembler struct {
 	Budget  *membudget.Budget
 	lines   map[string]*detailLines
 	details []Detail
+	// dkeys is, per call held for its detail object, the keys its records
+	// went to: the routing line its detail object ends with.
+	dkeys map[string]map[string]bool
 }
 
 // heldBatch is an analytics batch being read: its request's call_end (when
@@ -133,6 +136,7 @@ type heldBatch struct {
 	call   *Record
 	c      *call
 	events []Record
+	extra  []Record // the locators of its reported calls: not events, so not ranked
 }
 
 // Detail is one call's detail object: its rows, as the raw log has them, in order.
@@ -208,8 +212,15 @@ func (a *Assembler) dropLines(id string) *detailLines {
 
 // writeDetail completes a call's detail object.
 func (a *Assembler) writeDetail(id string) {
+	ks := a.dkeys[id]
+	delete(a.dkeys, id)
 	if d := a.dropLines(id); d != nil {
-		a.details = append(a.details, Detail{CorrelationID: id, Lines: d.lines})
+		keys := make([]string, 0, len(ks))
+		for k := range ks {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		a.details = append(a.details, Detail{CorrelationID: id, Lines: d.lines, RoutingKeys: keys})
 	}
 }
 
@@ -217,7 +228,7 @@ func (a *Assembler) writeDetail(id string) {
 func NewAssembler(incarnation string) *Assembler {
 	return &Assembler{inc: incarnation, calls: map[string]*call{}, turns: map[string]string{},
 		copies: map[string]map[string]int{}, cases: map[string]int64{}, accounts: map[string]Account{},
-		lines: map[string]*detailLines{}}
+		lines: map[string]*detailLines{}, dkeys: map[string]map[string]bool{}}
 }
 
 // Cases is how often each case was hit.
@@ -243,6 +254,20 @@ func (a *Assembler) record(r Record, instance string) Record {
 		r.RoutingKey = RoutingKey(&r)
 	}
 	r.Bucket = int32(BucketOf(r.RoutingKey, DefaultBucketBits))
+	if a.KeepDetail && r.Kind != KindLocator && r.Kind != KindAccount {
+		corr := r.BatchID
+		if corr == "" {
+			corr, _, _ = strings.Cut(r.CallID, "#")
+		}
+		if corr != "" {
+			ks := a.dkeys[corr]
+			if ks == nil {
+				ks = map[string]bool{}
+				a.dkeys[corr] = ks
+			}
+			ks[r.RoutingKey] = true
+		}
+	}
 	return r
 }
 
@@ -296,10 +321,10 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			out = append(out, a.end(c, canon.RequestFromPending(&c.p), e)...)
 		case e.EndOfStream:
 			a.hit(CaseStartHeadersEOS)
-			out = append(out, a.start(c, e))
+			out = append(out, a.start(c, e)...)
 		case c.p.WebSocket: // an upgrade's request stream stays open: it has started
 			a.hit(CaseStartWSUpgrade)
-			out = append(out, a.start(c, e))
+			out = append(out, a.start(c, e)...)
 		default:
 			a.hit(CasePendingHeaders)
 		}
@@ -322,7 +347,7 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 		a.body(c, e, false)
 		if e.EndOfStream && c.p.StartNS != 0 && c.startKey == "" {
 			a.hit(CaseStartBodyEOS)
-			out = append(out, a.start(c, e))
+			out = append(out, a.start(c, e)...)
 		} else {
 			a.hit(CasePendingRequestChunk)
 		}
@@ -385,8 +410,8 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			c = a.callFor(e, file)
 		}
 		c.done, c.p.SeenNS, c.bodies = true, e.TimestampNS, nil
-		a.writeDetail(e.CorrelationID)
 		out = append(out, a.record(Record{Kind: KindWSConnection, CallID: r.CallID, Call: &r}, e.ObserverInstance))
+		a.writeDetail(e.CorrelationID)
 	case events.PhaseDisconnect:
 		c := a.callFor(e, file)
 		c.p.EndNS, c.p.Error, c.p.EndFile = e.TimestampNS, e.Error, file
@@ -406,6 +431,9 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			a.held = &heldBatch{corr: e.CorrelationID}
 		}
 		a.held.events = append(a.held.events, rec)
+		if l := a.reportLocator(rec, e.ObserverInstance); l != nil {
+			a.held.extra = append(a.held.extra, *l)
+		}
 	case events.PhaseVerdict:
 		a.hit(CaseVerdict)
 	default:
@@ -415,7 +443,7 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 }
 
 // start is a call's call_start.
-func (a *Assembler) start(c *call, e *events.Event) Record {
+func (a *Assembler) start(c *call, e *events.Event) []Record {
 	r := canon.RequestFromPending(&c.p)
 	r.EndNS, r.Error = 0, ""
 	if r.Product == canon.ProductCodex { // its turn's identity is in its header
@@ -424,14 +452,19 @@ func (a *Assembler) start(c *call, e *events.Event) Record {
 	}
 	rec := a.record(Record{Kind: KindCallStart, CallID: r.CallID, Call: &r}, e.ObserverInstance)
 	c.startKey = rec.RoutingKey
-	return rec
+	// Its locator: the drawer opens a call by its id alone.
+	a.hit(CaseLocatorCall)
+	loc := r
+	l := a.record(Record{Kind: KindLocator, CallID: c.p.CorrelationID, RoutingKey: "l:" + c.p.CorrelationID, Call: &loc}, e.ObserverInstance)
+	return []Record{rec, l}
 }
 
 // end is a call's call_end, and marks it ended.
 func (a *Assembler) end(c *call, r canon.Request, e *events.Event) []Record {
 	c.done, c.p.SeenNS, c.bodies = true, e.TimestampNS, nil
+	out := a.endKeys(r, c.startKey, "", e.ObserverInstance)
 	a.writeDetail(c.p.CorrelationID)
-	return a.endKeys(r, c.startKey, "", e.ObserverInstance)
+	return out
 }
 
 // endKeys is a call_end under its own key, and under its start's too when that
@@ -464,14 +497,14 @@ func (a *Assembler) release() []Record {
 		} else {
 			a.hit(CaseBatchNoSession)
 		}
-		a.writeDetail(h.corr)
 		out = a.endKeys(*h.call.Call, c.startKey, c.session, h.call.Instance)
 		for i := range out {
 			out[i].BatchID = h.corr
 		}
+		a.writeDetail(h.corr)
 	}
 	rankClaudeCode(h.events)
-	return append(out, h.events...)
+	return append(append(out, h.events...), h.extra...)
 }
 
 // rankClaudeCode numbers a batch's Claude Code events as the event rows do:
@@ -544,6 +577,26 @@ func (a *Assembler) event(e *events.Event, line []byte, file string) Record {
 	}
 	return a.record(Record{Kind: KindClientEvent, BatchID: e.CorrelationID, BatchN: c.batchN, Event: &ev,
 		Call: &canon.Request{KeyHash: e.KeyHash}}, e.ObserverInstance)
+}
+
+// reportLocator is a session's tengu_api_success's locator: the drawer opens a
+// call only Claude Code reported as reported:<requestId | clientRequestId | ts>.
+func (a *Assembler) reportLocator(r Record, instance string) *Record {
+	ev := r.Event
+	if ev == nil || ev.Source != canon.ProductClaudeCode || ev.Name != "tengu_api_success" || ev.SessionID == "" {
+		return nil
+	}
+	id := ev.RequestID
+	if id == "" {
+		id = ev.ClientRequestID
+	}
+	if id == "" {
+		id = strconv.FormatInt(ev.NS, 10)
+	}
+	a.hit(CaseLocatorReport)
+	x := *ev
+	l := a.record(Record{Kind: KindLocator, RoutingKey: "l:reported:" + id, Event: &x}, instance)
+	return &l
 }
 
 func (a *Assembler) callFor(e *events.Event, file string) *call {

@@ -116,7 +116,7 @@ func TestSinkWritesDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw, _ := io.ReadAll(zr)
-	if n := strings.Count(string(raw), "\n"); n != 2 {
+	if n := strings.Count(string(raw), "\n"); n != 3 { // its two rows, then its routing line
 		t.Fatalf("%d lines", n)
 	}
 }
