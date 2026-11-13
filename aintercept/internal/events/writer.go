@@ -101,6 +101,9 @@ type WriterConfig struct {
 	SkipFsync bool
 	// Now is the clock upload-minute keys are named by (tests). Default time.Now.
 	Now func() time.Time
+	// OnUploaded is called once for every object that lands, with its target
+	// and the key it landed at.
+	OnUploaded func(target, key string)
 }
 
 // StreamConfig configures one Stream: a sequence of NDJSON lines sealed into
@@ -206,6 +209,8 @@ type bundledEntry struct {
 	Key      string `json:"key"`
 	Len      int    `json:"len"`
 	AtUpload bool   `json:"au,omitempty"`
+	// Src is a file the object was built from, removed once the spool holds it.
+	Src string `json:"src,omitempty"`
 }
 
 // WriterStats is a snapshot of the writer's spool and uploads.

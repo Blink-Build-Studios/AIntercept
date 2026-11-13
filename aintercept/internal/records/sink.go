@@ -70,6 +70,14 @@ type SinkConfig struct {
 	// Budget is charged for the rows held for detail objects.
 	Budget *membudget.Budget
 	Now    func() time.Time
+
+	// v5 per-key buffers (docs/PIPELINE.md §1).
+	KeySpoolDir    string                             // one buffer file per key, under its escaped key
+	KeyObject      func(key string, seq int64) string // an ingest file's key template (keyflag.InTemplate)
+	FlushBytes     int                                // a buffer flushes at this size; default 1 MiB
+	FlushAge       time.Duration                      // ... or this long after its first record; default 30 s, at most 60 s
+	MaxBufferBytes int64                              // over this in all buffers, the oldest flush first; default 64 MiB
+	Jitter         func(time.Duration) time.Duration  // a buffer's timer (default ±10%)
 }
 
 // Sink is an events.Sink that assembles the rows it's given into records and
@@ -253,3 +261,12 @@ func (s *Sink) Cases() map[string]int64 {
 	defer s.mu.Unlock()
 	return s.asm.Cases()
 }
+
+// AddRecords buffers records by key (TODO).
+func (s *Sink) AddRecords(rs ...Record) {}
+
+// Tick flushes the buffers whose timer has run out (TODO).
+func (s *Sink) Tick() {}
+
+// Sync fsyncs the buffer files (TODO).
+func (s *Sink) Sync() {}

@@ -189,3 +189,23 @@ func (w *Writer) now() time.Time {
 	}
 	return time.Now()
 }
+
+// UploadTime is the placeholder for the second an object is uploaded at, on
+// the store's clock (docs/PIPELINE.md §1), in UploadTimeFormat.
+const UploadTime = "{upload-time}"
+
+// UploadTimeFormat is how UploadTime is written (rollup.TimeFormat).
+const UploadTimeFormat = "20060102T150405Z"
+
+// ServerClock is a Target that knows how far the store's clock is from ours
+// (the Date header of its last response).
+type ServerClock interface {
+	ServerOffset() (time.Duration, bool)
+}
+
+// PutAtUploadDurable is PutAtUpload, spooled before it returns. src is the
+// buffer file the object was built from: it's removed once the spool holds the
+// object (TODO).
+func (o *ObjectStream) PutAtUploadDurable(tmpl string, body []byte, src string) error {
+	return o.PutAtUpload(tmpl, body)
+}
