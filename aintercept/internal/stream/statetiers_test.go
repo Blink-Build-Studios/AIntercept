@@ -79,6 +79,7 @@ func grow(t *testing.T, sizes []int) (reads []int, perRecord []float64) {
 // grows at most with log N of the key's records, and every record's state is
 // rewritten at most O(log N) times over the key's life: the folds are in tiers.
 func TestStateTiersBoundLoadsAndRewrites(t *testing.T) {
+	heavy(t)
 	sizes := tierSizes
 	reads, per := grow(t, sizes)
 	for i, n := range sizes {

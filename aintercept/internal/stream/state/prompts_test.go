@@ -444,6 +444,7 @@ func TestPromptsGeneratedSequences(t *testing.T) {
 // Flat cost: a record applied to a session holding 10, 1,000 or 100,000 records
 // costs the same.
 func TestPromptsFlatCost(t *testing.T) {
+	heavy(t)
 	if testing.Short() {
 		t.Skip("builds a 100,000-record session")
 	}

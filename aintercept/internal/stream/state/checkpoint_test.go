@@ -49,6 +49,7 @@ func mixed(sess, tag string, n int, base int64) []records.Record {
 // next 200 records' checkpoint is the same size, and takes the same time to
 // write, whether the key already holds 10, 1,000 or 100,000 records.
 func TestCheckpointCostIsFlat(t *testing.T) {
+	heavy(t)
 	const next = 200
 	measure := func(held int) (int, time.Duration) {
 		s := New("s:big")
@@ -84,6 +85,7 @@ func TestCheckpointCostIsFlat(t *testing.T) {
 // Loading a key back reads every checkpoint it wrote, and costs the same per
 // record held whether it holds 1,000 or 100,000.
 func TestLoadCostPerRecordIsFlat(t *testing.T) {
+	heavy(t)
 	measure := func(held int) time.Duration {
 		s := New("s:big")
 		var chunks [][]byte
@@ -124,6 +126,7 @@ func TestLoadCostPerRecordIsFlat(t *testing.T) {
 // written, or merged in any grouping) carries on exactly as the key that was
 // never checkpointed: the same rows, and the same changes for every record after.
 func TestCheckpointChainsResume(t *testing.T) {
+	heavy(t)
 	for seed := int64(1); seed <= 12; seed++ {
 		rng := rand.New(rand.NewSource(seed))
 		rs := mixed("s1", fmt.Sprintf("x%d", seed), 300, 0)
@@ -208,6 +211,7 @@ func TestMetadataParsedOnceUnderConcurrency(t *testing.T) {
 // One more tool or progress event on a request id costs the same whether 1, 100
 // or 2,000 steps carry that id: it changes the id's tools, not every step.
 func TestSharedRequestIDToolsFlatCost(t *testing.T) {
+	heavy(t)
 	measure := func(shared int) (float64, time.Duration) {
 		s := New("s:rid")
 		for i := 0; i < shared; i++ {

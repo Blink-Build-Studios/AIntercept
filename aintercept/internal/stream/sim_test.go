@@ -23,6 +23,7 @@ func simCfg(seed int64, n, r int) SimConfig {
 }
 
 func TestSimulateSmoke(t *testing.T) {
+	heavy(t)
 	t.Parallel()
 	res, err := Simulate(context.Background(), simCfg(1, 3, 3))
 	if err != nil {
@@ -40,6 +41,7 @@ func TestSimulateSmoke(t *testing.T) {
 // Without chaos, several ingest pods and replicas give the same tables (the
 // plain path; the full matrix of N and R is TestSimulateMatrix, -tags full).
 func TestSimulateNoChaos(t *testing.T) {
+	heavy(t)
 	t.Parallel()
 	for _, nr := range [][2]int{{3, 3}} {
 		cfg := simCfg(2, nr[0], nr[1])
@@ -55,6 +57,7 @@ func TestSimulateNoChaos(t *testing.T) {
 // fixed batch of new records doesn't grow with how much history the bucket
 // already holds.
 func TestCycleCostIsFlatInHistory(t *testing.T) {
+	heavy(t)
 	t.Parallel()
 	var base CycleCost
 	for i, hist := range historySizes {
@@ -115,6 +118,7 @@ func measureCycle(t *testing.T, history int) CycleCost {
 // Lag: a 10× burst drives lag past the target with one replica; adding
 // replicas brings it back under; nothing is lost or applied twice.
 func TestLagBurstScalesOut(t *testing.T) {
+	heavy(t)
 	t.Parallel()
 	res, err := SimulateBurst(context.Background(), BurstConfig{
 		Seed: 3, BucketBits: 2, BaseRate: 20, Burst: 10, FilesPerCycle: 2,

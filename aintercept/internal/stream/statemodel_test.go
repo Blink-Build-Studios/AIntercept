@@ -79,6 +79,7 @@ func TestStateModelIsOrderFreeAndResumes(t *testing.T) {
 // The distributed replay with the real tables: ingest pods, replicas, chaos;
 // every checkpoint and the end equal one pass over everything uploaded.
 func TestStateModelPipelineSmoke(t *testing.T) {
+	heavy(t)
 	cfg := simCfg(4, 3, 3)
 	cfg.Model = StateModel{}
 	res, err := Simulate(context.Background(), cfg)

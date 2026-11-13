@@ -379,6 +379,7 @@ func generateEvents(rng *rand.Rand, n, per int) []records.Record {
 }
 
 func TestEventsGeneratedSequences(t *testing.T) {
+	heavy(t)
 	for seed := int64(1); seed <= 20/seedFrac; seed++ {
 		rng := rand.New(rand.NewSource(seed))
 		batchN = map[string]int64{}

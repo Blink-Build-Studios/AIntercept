@@ -378,6 +378,7 @@ func TestEveryCaseHasAnAtomicTest(t *testing.T) {
 // Rows of one stream keep their order (one ext_proc stream, one goroutine), but
 // streams interleave arbitrarily. Every interleaving must give the same records.
 func TestInterleavingsGiveTheSameRecords(t *testing.T) {
+	heavy(t)
 	one := func(rows ...events.Event) [][]events.Event {
 		var out [][]events.Event
 		for _, r := range rows {

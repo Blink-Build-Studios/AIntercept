@@ -55,6 +55,7 @@ func (r *readLog) Get(ctx context.Context, key string) ([]byte, error) {
 // still equal to a full rebuild, settled into day files, and a restart reads
 // only the last week's request parts and the unsealed days' ledger.
 func TestStartupReadsOnlyRecentParts(t *testing.T) {
+	heavy(t)
 	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	n := 30
@@ -134,6 +135,7 @@ func TestStartupReadsOnlyRecentParts(t *testing.T) {
 // cluster's three weeks, docs/INTERCEPTION_ISSUES.md P5) still settles every
 // day into its file and matches a full rebuild.
 func TestCompactionAfterARebuild(t *testing.T) {
+	heavy(t)
 	ctx := context.Background()
 	c := longCapture(60) // one run: cheap at any size
 	want, _ := rebuild(t, c)
