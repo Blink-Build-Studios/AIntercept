@@ -45,6 +45,7 @@ type KeyState struct {
 	rq   *reqState
 	sr   *sesRows
 	rows rowSet
+	open *openCalls // calls waiting for their ending, by when they expire (expire.go)
 	// journal is the records applied since the last Encode: a checkpoint is
 	// them, so it holds what changed, never the key's history.
 	journal []records.Record
@@ -52,7 +53,7 @@ type KeyState struct {
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(),
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 

@@ -46,15 +46,19 @@ func (s *KeyState) facts(r records.Record, d *Delta) {
 	switch {
 	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
 		c := r.Call
+		s.open.drop(c.CallID)
 		if _, ok := s.rows[TableFactPending][c.CallID]; ok {
 			d.Cases = append(d.Cases, CaseFactPendingGone)
 			s.rows.drop(d, TableFactPending, c.CallID)
 		}
-		if records.RoutingKey(&r) == s.Key && !c.Synthetic {
+		if !s.own(&r) { // its copy: an expired row the call had here is replaced by its ending's
+			s.rows.drop(d, TableFactRequests, c.CallID)
+		}
+		if s.own(&r) && !c.Synthetic {
 			d.Cases = append(d.Cases, CaseFactRequest)
 			s.rows.put(d, TableFactRequests, c.CallID, *c)
 		}
-		if records.RoutingKey(&r) == s.Key && c.Synthetic {
+		if s.own(&r) && c.Synthetic {
 			d.Cases = append(d.Cases, CaseFactProbe)
 			s.probe(d, c)
 		}
@@ -65,6 +69,7 @@ func (s *KeyState) facts(r records.Record, d *Delta) {
 		}
 		d.Cases = append(d.Cases, CaseFactPending)
 		s.rows.put(d, TableFactPending, c.CallID, pendingOfStart(c))
+		s.open.set(c)
 	case r.Kind == records.KindClientEvent && r.Event != nil && records.RoutingKey(&r) == s.Key:
 		id := r.EventKey // its record id; a record from before event keys is its own
 		if id == "" {

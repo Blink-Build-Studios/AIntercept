@@ -46,6 +46,10 @@ type Commit struct {
 	// NewestRowNS is the newest raw row time of every ingest file applied (the
 	// pods' clock): today's "newest data", including rows that complete no record.
 	NewestRowNS int64 `json:"newest_row_ns,omitempty"`
+	// ExpiresNS is the data time the key's first call still waiting for its
+	// ending expires after (0: none waits). The merge keeps it in merge_keys and
+	// flags the key once its newest data passes it, so a quiet key's calls expire.
+	ExpiresNS int64 `json:"expires_ns,omitempty"`
 	// Garbage are files superseded by compaction, deleted once DeleteAfterNS passes.
 	Garbage []Garbage `json:"garbage,omitempty"`
 }

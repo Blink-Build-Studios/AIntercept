@@ -118,6 +118,17 @@ Each replica runs these loops.
 9. Once a key has had no new input for 60 s, release its lock. Release all locks
    on SIGTERM.
 
+**Calls that never end.** A call whose ending never comes is written without one,
+as the old processor did, once data time passes its start + 6 h (a WebSocket
+connection's: 7 d). Data time is global: the newest merge commit's `newest_ns`,
+which a run reads (listing only the merge commits after the last it saw). The
+written row is an ending built from the call's start record
+(`canon.RequestFromPending`), applied like any record, so it's in the checkpoint.
+An ending that arrives later replaces it, as if it had come first: a call has one
+row, and the tables stay order free. A run with no new input still commits when
+a call is due. Each commit records `expires_ns`, when its first waiting call
+expires (0: none).
+
 **Compaction.** Every run folds the newest 8 output directories (and state
 chunks) of one tier into one of the next tier, so each row is rewritten
 O(log N) times and a commit names O(8 · log N) of each. The folded files, and
@@ -150,6 +161,11 @@ replicas.
   4. Rewrite only the partitions that changed: today's and yesterday's
      per-session rows, and the people index.
   5. Create `merge/commit/<n+1>.json` only if it doesn't exist yet.
+- **Calls that never end:** `merge_keys` (in the index) keeps each key's
+  `expires_ns`. After each commit, the merge runs `SADD dirty` for every key whose
+  `expires_ns` is before its `newest_ns`, so a key that gets no more data is
+  revisited and its call expires. The deadlines live in S3; a flag Redis loses is
+  set again by the next merge.
 - **Newest data:** each ingest file carries the newest raw row its pod had
   seen (Parquet metadata), including rows that complete no record yet, such
   as an in-flight stream's chunks. A key's commit keeps the maximum, and the

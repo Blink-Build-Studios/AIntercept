@@ -18,8 +18,9 @@ import (
 // v1layout lays out a raw capture as the v5 pipeline would (docs/PIPELINE.md):
 // the observer's code turns it into records and each call's detail object
 // (calls/<id>.ndjson.gz, what the drawer's raw view reads), each key's records
-// are applied in one pass, every key gets its first commit under v1/keys/, and
-// one merge run writes v1/merge/. The API's parity tests and local tools read
+// are applied in one pass (its calls still waiting expired by the newest data),
+// every key gets its first commit under v1/keys/, and one merge run writes
+// v1/merge/. The API's parity tests and local tools read
 // the result.
 func v1layout() {
 	fs := flag.NewFlagSet("v1layout", flag.ExitOnError)
@@ -37,8 +38,14 @@ func v1layout() {
 	if _, err := records.CanonDirWith(ctx, *src, put, *prefix, records.CanonOptions{Details: true}); err != nil {
 		fatalf("canon: %v", err)
 	}
+	// The calls still waiting at the end expire by the newest data, as the
+	// rollup's would once the merge has seen it all.
+	clock := col.newest
+	for i := range col.recs {
+		clock = max(clock, stream.RecordTS(&col.recs[i]))
+	}
 	byKey := map[string]map[string][]stream.Row{}
-	for table, rows := range stream.Reference(stream.StateModel{}, col.recs) {
+	for table, rows := range stream.ReferenceAt(stream.StateModel{}, col.recs, clock) {
 		for _, r := range rows {
 			if byKey[r.Key] == nil {
 				byKey[r.Key] = map[string][]stream.Row{}

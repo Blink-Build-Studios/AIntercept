@@ -63,19 +63,39 @@ func sortRecords(rs []*records.Record) {
 	})
 }
 
+// Expirer is a model whose state holds calls waiting for their ending (the
+// rollup expires them, docs/PIPELINE.md §2): Expire ends those whose wait
+// passed clockNS (data time) and says which rows changed; Deadline is the data
+// time the first of the rest expires after (0: none waits).
+type Expirer interface {
+	Expire(st any, clockNS int64) Delta
+	Deadline(st any) int64
+}
+
 // Reference is the tables one pass over rs produces: grouped by key, each
 // key's records applied in (ts, record id) order. The pipeline must equal it.
-func Reference(m Model, rs []records.Record) map[string][]Row {
+func Reference(m Model, rs []records.Record) map[string][]Row { return ReferenceAt(m, rs, 0) }
+
+// ReferenceAt is Reference with each key's calls still waiting at the end
+// expired at clockNS (data time: the newest row of all; 0: none), as the
+// rollup ends with them.
+func ReferenceAt(m Model, rs []records.Record, clockNS int64) map[string][]Row {
 	by := map[string][]*records.Record{}
 	for i := range rs {
 		by[rs[i].RoutingKey] = append(by[rs[i].RoutingKey], &rs[i])
 	}
 	out := map[string][]Row{}
+	ex, _ := m.(Expirer)
 	for key, krs := range by {
 		sortRecords(krs)
 		st := m.New(key)
 		for _, r := range krs {
 			for table, rows := range m.Apply(st, r) {
+				out[table] = append(out[table], rows...)
+			}
+		}
+		if ex != nil && clockNS != 0 {
+			for table, rows := range ex.Expire(st, clockNS) {
 				out[table] = append(out[table], rows...)
 			}
 		}
