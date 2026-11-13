@@ -118,6 +118,21 @@ func TestObserverPointsAtRedis(t *testing.T) {
 	}
 }
 
+// The API reads the pods' newest ingest times (/status) from the in-cluster
+// Redis, or api.redisAddr.
+func TestAPIPointsAtRedis(t *testing.T) {
+	for set, want := range map[string]string{"": "redis:6379", "api.redisAddr=r:1": "r:1"} {
+		args := []string{"api.enabled=true"}
+		if set != "" {
+			args = append(args, set)
+		}
+		api := byName(get(find(render(t, args...), "Deployment", "api"), "spec", "template", "spec", "containers"))["api"]
+		if v := envOf(api)["AINTERCEPT_REDIS_ADDR"]; v != want {
+			t.Errorf("%q: AINTERCEPT_REDIS_ADDR = %v, want %s", set, v, want)
+		}
+	}
+}
+
 // The old path is gone: no single processor, no bucketed processor, and the API
 // never copies data to local disk (no mirror sidecar, no table volumes).
 func TestOldPathIsGone(t *testing.T) {
@@ -155,8 +170,8 @@ func TestRedisNetworkPolicy(t *testing.T) {
 	for _, f := range get(np, "spec", "ingress", "0", "from").([]any) {
 		apps[get(f, "podSelector", "matchLabels", "app")] = true
 	}
-	if !apps["envoy"] || !apps["rollup"] || len(apps) != 2 {
-		t.Errorf("redis admits %v, want exactly envoy and rollup", apps)
+	if !apps["envoy"] || !apps["rollup"] || !apps["api"] || len(apps) != 3 {
+		t.Errorf("redis admits %v, want exactly envoy, rollup and api", apps)
 	}
 	if p := get(np, "spec", "ingress", "0", "ports", "0", "port"); p != 6379 {
 		t.Errorf("redis port %v, want 6379", p)

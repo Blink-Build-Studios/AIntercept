@@ -63,6 +63,7 @@ spec:
               valueFrom:
                 resourceFieldRef: { resource: limits.memory, divisor: "1" }
             - { name: AINTERCEPT_THREADS, value: {{ .Values.api.threads | quote }} }
+            - { name: AINTERCEPT_REDIS_ADDR, value: {{ .Values.api.redisAddr | default (include "aintercept.redisAddr" .) | quote }} }
             {{- with .Values.api.auth }}
             {{- if .jwtHeader }}
             # Verify the identity-aware proxy's signed assertion on every request

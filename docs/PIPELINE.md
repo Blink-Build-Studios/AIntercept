@@ -42,12 +42,15 @@ A session is never split across keys.
 ```
 raw/dt=…/hour=…/instance=…/…ndjson.gz         raw capture (unchanged)
 calls/<call id>.ndjson.gz                      per-call detail (unchanged)
+calls/<call id>.keys/<key>                     empty; a key the call's records went to (ingest writes it at the first)
 v1/keys/<key>/in/<s3-time>-<incarnation>-<seq>.parquet   ingest output, one file per key per flush
 v1/keys/<key>/out/<n>-<nonce>/<table>.parquet a rollup run's output: one file per table that changed
 v1/keys/<key>/state/<n>-<nonce>               the run's state checkpoint
 v1/keys/<key>/commit/<n, 12 digits>.json      create-only; names the current out/state files + the input cursor
 v1/recent/<s3 minute>/<incarnation>-<seq>.json   per pod per minute: which keys it flushed
 v1/merge/out/<n>-<nonce>/…parquet             org-level rows (people index, per-session rows by day)
+v1/reported/<request id>/<key>                 empty; the key holding a reported call nothing captured
+v1/content_retained                            empty; ingest logged a row with a body (the retention mode /status shows)
 v1/merge/commit/<n, 12 digits>.json           create-only
 ```
 
@@ -153,10 +156,10 @@ The API runs one DuckDB query over S3 (`httpfs`), using the files a commit names
 | Endpoint | How it reads |
 |---|---|
 | `/sessions/{id}`, `/timeline`, `/state`, `/prompts`, `/requests`, `/events` | key `s:<id>`: that key's newest commit, then its `out` files |
-| `/requests/{id}`, `/raw`, `/details`, `/events/{id}` | the call's `calls/<id>` object, already needed for raw headers and bodies, gives its key; then that key's rows. The raw view reads S3 directly. |
+| `/requests/{id}`, `/raw`, `/details`, `/events/{id}` | LIST `calls/<id>.keys/` (a WebSocket turn: its connection's; a reported call: `v1/reported/<id>/`) gives the call's keys; then only those keys' newest commits and `out` files, the fact tables included. The raw view reads the `calls/<id>` object directly. |
 | `/people/{id}`, `/summary`, `/sessions`, `/timeline`, `/requests`, `/coverage` | the people index in the merge gives the person's session keys and `c:` keys for the window; then each key's rows, or the merge's per-session rows for summaries. The same SQL as today, over these rows. |
-| `/people`, `/overview` | the merge's per-session rows and people index |
-| `/status` | the merge, plus the newest ingest time each pod writes to Redis |
+| `/people`, `/overview` | the merge's day partitions from the window's first day on, plus the people index; never the fact tables. `/overview`'s request count reads `merge_agent_calls`, each key's Claude Code and Codex call times, which the merge computes. |
+| `/status` | the merge commit (`first_request_ns`, `earliest_ns`, `newest_ns`, `content_retained`: from the keys' fact rows and probe times, `fact_probes`, and the content mark), plus the newest `ingest:last:*` in Redis (`AINTERCEPT_REDIS_ADDR`); the merge alone when Redis is down. No table. |
 
 - Values relative to now (live, in flight, activity) are computed at query time
   from stored timestamps, as today.

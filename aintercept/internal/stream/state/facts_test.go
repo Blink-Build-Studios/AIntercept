@@ -76,13 +76,13 @@ var factCases = []atomicCase{
 	{"an ended call", nil,
 		func() records.Record { return callEnd(ccCall("c1", "s1", 1000)) },
 		[]string{CaseFactRequest}},
-	{"a synthetic call: no row", nil,
+	{"a synthetic call: no row, its key's probe times", nil,
 		func() records.Record {
 			c := ccCall("c1", "s1", 1000)
 			c.Synthetic = true
 			return callEnd(c)
 		},
-		nil},
+		[]string{CaseFactProbe}},
 	{"a call in flight", nil,
 		func() records.Record { return callStart(ccCall("c1", "s1", 1000)) },
 		[]string{CaseFactPending}},
@@ -115,7 +115,7 @@ var factCases = []atomicCase{
 		[]string{CaseFactEvent}},
 }
 
-var factCaseSet = map[string]bool{CaseFactRequest: true, CaseFactPending: true, CaseFactPendingGone: true, CaseFactEvent: true}
+var factCaseSet = map[string]bool{CaseFactProbe: true, CaseFactRequest: true, CaseFactPending: true, CaseFactPendingGone: true, CaseFactEvent: true}
 
 func TestFactsAtomic(t *testing.T) {
 	for _, c := range factCases {
@@ -219,5 +219,28 @@ func TestFactsGeneratedSequences(t *testing.T) {
 			o.apply(r)
 		}
 		checkFacts(t, fmt.Sprintf("seed %d", seed), rs, o)
+	}
+}
+
+// A key's probe calls (synthetic: never shown) are one row, their first time
+// (a call's start, else its end) and newest (its end, else its start): what
+// /status counts of them, as today's store reads its probes.
+func TestFactProbesFoldAKeysProbes(t *testing.T) {
+	probe := func(id string, start, end int64) records.Record {
+		c := &canon.Request{CallID: id, CorrelationID: id, StartNS: start, EndNS: end, Host: "h", Method: "GET", Path: "/", Synthetic: true}
+		return callEnd(c)
+	}
+	o := stream([]records.Record{probe("p2", 5000, 5002), probe("p1", 1000, 1002), probe("p3", 0, 3000)})
+	got := o.rows[TableFactProbes]
+	if len(got) != 1 {
+		t.Fatalf("probe rows %v, want one", got)
+	}
+	for _, r := range got {
+		if p := r.(Probes); p != (Probes{FirstNS: 1000, NewestNS: 5002}) {
+			t.Fatalf("probes %+v, want first 1000, newest 5002", p)
+		}
+	}
+	if d := o.apply(probe("p1", 1000, 1002)); len(d.Changes) != 0 {
+		t.Fatalf("an old probe changed something: %+v", d)
 	}
 }

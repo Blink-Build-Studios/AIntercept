@@ -116,6 +116,7 @@ func canonPod(ctx context.Context, pod string, files []string, put Putter, prefi
 				opt.Observe(pod, e, line)
 			}
 			s.mu.Lock()
+			s.sawRow(e)
 			s.add(s.asm.Apply(e, line, ""))
 			s.mu.Unlock()
 		})

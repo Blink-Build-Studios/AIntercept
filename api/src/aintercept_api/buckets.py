@@ -555,6 +555,12 @@ class Scope:
     # Tables the endpoint never reads (left empty): the ones read from every bucket, when an
     # endpoint doesn't need them.
     skip: frozenset[str] = frozenset()
+    # v1 only: exactly these keys' own tables, the fact tables included (the request drawer:
+    # its call's keys, from the call's marks), and nothing merged.
+    own: frozenset[str] | None = None
+    # v1 only: the merge's day partitions from this day (YYYY-MM-DD) on, and its index (the
+    # directory over a window: whatever overlaps it was last active in it or after).
+    days_from: str | None = None
 
     @classmethod
     def everything(cls) -> "Scope":
@@ -563,7 +569,11 @@ class Scope:
     def reads(self, prefix: str) -> bool:
         """Whether a table routed by prefix is read at all: "f:" tables (the raw facts) only by a
         scope of everything."""
-        return prefix != "f:" or (self.sessions is None and self.people is None and self.accounts is None)
+        return (
+            prefix != "f:"
+            or self.own is not None
+            or (self.sessions is None and self.people is None and self.accounts is None)
+        )
 
     def buckets(self, prefix: str) -> frozenset[int] | None:
         """The buckets a table routed by prefix comes from (None: all of them)."""
@@ -579,7 +589,14 @@ class Scope:
         def f(x: Any) -> Any:
             return None if x is None else tuple(sorted(x))
 
-        return (f(self.sessions), f(self.people), f(self.accounts), tuple(sorted(self.skip)))
+        return (
+            f(self.sessions),
+            f(self.people),
+            f(self.accounts),
+            tuple(sorted(self.skip)),
+            f(self.own),
+            self.days_from,
+        )
 
 
 _SESSION_PATH = re.compile(r"^/api/v1/sessions/([^/]+)")

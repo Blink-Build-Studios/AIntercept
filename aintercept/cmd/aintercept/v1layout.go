@@ -73,7 +73,7 @@ type detailsTo struct {
 }
 
 func (d detailsTo) Put(ctx context.Context, key string, body []byte) error {
-	if strings.Contains(key, "calls/") {
+	if strings.Contains(key, "calls/") || strings.HasSuffix(key, records.ContentMark("")) {
 		return d.s.Put(ctx, key, body)
 	}
 	return d.records.Put(ctx, key, body)
