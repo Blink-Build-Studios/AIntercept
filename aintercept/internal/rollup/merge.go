@@ -51,6 +51,8 @@ type MergeCommit struct {
 	Index     Out            `json:"index"` // the account keys' rows, and merge_keys
 	NewestNS  int64          `json:"newest_ns"`
 	UpdatedNS int64          `json:"updated_ns"`
+	// ContentRetained: some call's bodies were read (full interception).
+	ContentRetained bool `json:"content_retained"`
 }
 
 // MergeDir is <prefix>/v1/merge/.

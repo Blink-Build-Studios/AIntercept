@@ -1,7 +1,8 @@
 package state
 
 import (
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"strings"
+
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
@@ -30,5 +31,30 @@ func init() {
 
 // facts folds a record into the fact tables.
 func (s *KeyState) facts(r records.Record, d *Delta) {
-	_, _ = canon.Request{}, r
+	switch {
+	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
+		c := r.Call
+		if _, ok := s.rows[TableFactPending][c.CallID]; ok {
+			d.Cases = append(d.Cases, CaseFactPendingGone)
+			s.rows.drop(d, TableFactPending, c.CallID)
+		}
+		if records.RoutingKey(&r) == s.Key && !c.Synthetic {
+			d.Cases = append(d.Cases, CaseFactRequest)
+			s.rows.put(d, TableFactRequests, c.CallID, *c)
+		}
+	case r.Kind == records.KindCallStart:
+		c := r.Call
+		if s.ses.ended[c.CallID] || strings.Contains(c.CallID, "#") {
+			return
+		}
+		d.Cases = append(d.Cases, CaseFactPending)
+		s.rows.put(d, TableFactPending, c.CallID, pendingOfStart(c))
+	case r.Kind == records.KindClientEvent && r.Event != nil && records.RoutingKey(&r) == s.Key:
+		id := r.EventKey // its record id; a record from before event keys is its own
+		if id == "" {
+			id = r.RecordID
+		}
+		d.Cases = append(d.Cases, CaseFactEvent)
+		s.rows.put(d, TableFactEvents, id, *r.Event)
+	}
 }

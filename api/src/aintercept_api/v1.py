@@ -27,8 +27,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from aintercept_api import state_sql
-from aintercept_api.buckets import BucketStore, Commit, Scope, Source, _Loaded
+from aintercept_api import raw, state_sql
+from aintercept_api import store as legacy
+from aintercept_api.buckets import BucketStore, Commit, Scope, Source, _get_if_exists, _Loaded
 from aintercept_api.raw import RawSource
 
 V1 = "v1/"
@@ -148,7 +149,11 @@ class V1Store(BucketStore):
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
         routing = state_sql.STATE_ROUTING
-        names = [t for t in (list(only) if only is not None else list(routing)) if t not in scope.skip]
+        names = [
+            t
+            for t in (list(only) if only is not None else list(routing))
+            if t not in scope.skip and scope.reads(routing[t][0])
+        ]
         single = scope.sessions is not None and len(scope.sessions) == 1 and scope.people is None
         if scope.sessions is not None and only is None:
             scope = Scope(
@@ -207,6 +212,19 @@ class V1Store(BucketStore):
                 _, old = self._loaded.popitem(last=False)
                 old.con.close()
         return loaded
+
+    # --- the raw view --------------------------------------------------------------------------
+
+    def _detail(self, correlation_id: str) -> list[bytes]:
+        """A call's rows as the observer wrote them: its detail object (calls/<id>.ndjson.gz),
+        read from the bucket when the drawer opens."""
+        return raw.lines(_get_if_exists(self.source, f"{self.prefix}calls/{correlation_id}.ndjson.gz"))
+
+    def raw_rows(self, correlation_id: str) -> list[dict[str, Any]]:
+        return legacy.rows_of(self._detail(correlation_id), correlation_id)
+
+    def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
+        return legacy.event_row(self._detail(correlation_id), correlation_id, event_key)
 
 
 class SourceRaw:

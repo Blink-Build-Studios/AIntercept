@@ -99,8 +99,10 @@ var factCases = []atomicCase{
 	},
 		func() records.Record { return callStart(ccCall("c1", "s1", 1000)) },
 		nil},
-	{"an ending's copy under its start's key ends the pending row, and writes no request", func() []records.Record {
-		return []records.Record{callStart(keyedCall("c1", 1000))}
+	{"an ending's copy under its start's key ends the pending row, and writes no request (the ending did)", func() []records.Record {
+		c := keyedCall("c1", 1000)
+		c.SessionID = "s1"
+		return []records.Record{callStart(keyedCall("c1", 1000)), callEnd(c)}
 	},
 		func() records.Record {
 			c := keyedCall("c1", 1000)

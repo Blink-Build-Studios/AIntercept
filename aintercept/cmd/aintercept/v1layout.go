@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
@@ -15,9 +16,11 @@ import (
 )
 
 // v1layout lays out a raw capture as the v5 pipeline would (docs/PIPELINE.md):
-// the observer's code turns it into records, each key's records are applied in
-// one pass, every key gets its first commit under v1/keys/, and one merge run
-// writes v1/merge/. The API's parity tests and local tools read the result.
+// the observer's code turns it into records and each call's detail object
+// (calls/<id>.ndjson.gz, what the drawer's raw view reads), each key's records
+// are applied in one pass, every key gets its first commit under v1/keys/, and
+// one merge run writes v1/merge/. The API's parity tests and local tools read
+// the result.
 func v1layout() {
 	fs := flag.NewFlagSet("v1layout", flag.ExitOnError)
 	src := fs.String("src", "", "raw capture directory")
@@ -28,8 +31,10 @@ func v1layout() {
 		fatalf("v1layout: -src and -out are required")
 	}
 	ctx := context.Background()
+	s := stream.DirStore{DirStore: process.DirStore{Root: *out}}
 	col := &recordCollector{}
-	if _, err := records.CanonDir(ctx, *src, col, ""); err != nil {
+	put := detailsTo{s: s, records: col}
+	if _, err := records.CanonDirWith(ctx, *src, put, *prefix, records.CanonOptions{Details: true}); err != nil {
 		fatalf("canon: %v", err)
 	}
 	byKey := map[string]map[string][]stream.Row{}
@@ -41,7 +46,6 @@ func v1layout() {
 			byKey[r.Key][table] = append(byKey[r.Key][table], r)
 		}
 	}
-	s := stream.DirStore{DirStore: process.DirStore{Root: *out}}
 	keys := make([]string, 0, len(byKey))
 	for k := range byKey {
 		keys = append(keys, k)
@@ -59,4 +63,18 @@ func v1layout() {
 		fatalf("v1layout: merge: %v", err)
 	}
 	fmt.Printf("v1layout: %d records, %d keys, merge %d (%d partitions)\n", len(col.recs), len(keys), res.N, len(res.Rewritten))
+}
+
+// detailsTo writes the calls' detail objects to the store and hands records to
+// the collector.
+type detailsTo struct {
+	s       stream.DirStore
+	records *recordCollector
+}
+
+func (d detailsTo) Put(ctx context.Context, key string, body []byte) error {
+	if strings.Contains(key, "calls/") {
+		return d.s.Put(ctx, key, body)
+	}
+	return d.records.Put(ctx, key, body)
 }

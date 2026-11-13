@@ -601,33 +601,45 @@ class Store:
 
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
         """The raw client_event row an analytics event came from."""
-        want = event_key.split("/", 1)[1] if "/" in event_key else ""
-        # A repeat of an identical row is keyed <hash>-2, -3 (the processor's eventCopies):
-        # any of the identical rows is it.
-        want = _COPY.sub(r"\1", want)
-        for line in raw.lines(self.raw.read(source_file)):
-            try:
-                r = json.loads(line)
-            except ValueError:
-                continue
-            if r.get("correlation_id") != correlation_id or r.get("phase") != "client_event":
-                continue
-            ce = r.get("client_event") or {}
-            ident = ce.get("id") or ("h" + hashlib.sha256(line).hexdigest()[:16])
-            if ident == want and isinstance(r, dict):
-                return r
-        return None
+        return event_row(raw.lines(self.raw.read(source_file)), correlation_id, event_key)
 
     def _read(self, keys: list[str], correlation_id: str) -> list[dict[str, Any]]:
         out = []
         for k in keys:
-            for line in raw.lines(self.raw.read(k)):
-                if correlation_id.encode() not in line:
-                    continue
-                try:
-                    r = json.loads(line)
-                except ValueError:
-                    continue
-                if r.get("correlation_id") == correlation_id:
-                    out.append(r)
+            out += rows_of(raw.lines(self.raw.read(k)), correlation_id)
         return out
+
+
+def rows_of(lines: list[bytes], correlation_id: str) -> list[dict[str, Any]]:
+    """The raw rows among lines that are the transaction's."""
+    out = []
+    for line in lines:
+        if correlation_id.encode() not in line:
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if r.get("correlation_id") == correlation_id:
+            out.append(r)
+    return out
+
+
+def event_row(lines: list[bytes], correlation_id: str, event_key: str) -> dict[str, Any] | None:
+    """The client_event row among lines that event_key names."""
+    want = event_key.split("/", 1)[1] if "/" in event_key else ""
+    # A repeat of an identical row is keyed <hash>-2, -3 (the processor's eventCopies):
+    # any of the identical rows is it.
+    want = _COPY.sub(r"\1", want)
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if r.get("correlation_id") != correlation_id or r.get("phase") != "client_event":
+            continue
+        ce = r.get("client_event") or {}
+        ident = ce.get("id") or ("h" + hashlib.sha256(line).hexdigest()[:16])
+        if ident == want and isinstance(r, dict):
+            return r
+    return None
