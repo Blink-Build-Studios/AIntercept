@@ -4,16 +4,16 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["StatusResponse"] = {
   "data": {
     "certIssued": null,
-    "contentRetained": false,
+    "contentRetained": null,
     "firstRequestAt": null,
-    "lastIngestAt": "2026-11-04T18:00:00.002000Z",
+    "lastIngestAt": null,
     "proxy": null,
-    "waitingSince": "2026-11-04T17:40:00Z"
+    "waitingSince": null
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:00:00.002000Z",
+    "lastDataAt": null,
     "page": null,
     "pageSize": null,
     "to": null,

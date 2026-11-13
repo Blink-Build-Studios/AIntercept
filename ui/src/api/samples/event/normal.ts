@@ -5,27 +5,7 @@ const sample: components["schemas"]["EventResponse"] = {
   "data": {
     "eventId": "batch-11111111-2026-11-04T09:00:10:2",
     "name": "tengu_paste_text",
-    "raw": {
-      "account_uuid": "00000000-0000-4000-8000-00000000acc1",
-      "data": {
-        "additional_metadata": {
-          "note": "[redacted]",
-          "pastedTextBytes": 2048
-        },
-        "env": {
-          "platform": "darwin",
-          "shell": "zsh",
-          "terminal": "iTerm.app"
-        }
-      },
-      "device_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "name": "tengu_paste_text",
-      "organization_uuid": "00000000-0000-4000-8000-0000000000a9",
-      "session_id": "11111111-1111-4111-8111-111111111111",
-      "source": "claude_code",
-      "timestamp": "2026-11-04T09:00:10Z",
-      "type": "ClaudeCodeInternalEvent"
-    },
+    "raw": {},
     "sessionId": "11111111-1111-4111-8111-111111111111",
     "t": "2026-11-04T09:00:10Z"
   },

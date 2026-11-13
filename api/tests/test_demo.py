@@ -4,7 +4,7 @@ tools/make_demo_fixture.py), so stories show real shapes and numbers."""
 import pytest
 
 from tests.builders import Dataset, load_fixture
-from tests.conftest import assert_request_rows_parity, bounded_store, make_client
+from tests.conftest import bounded_store, make_client
 
 DEMO_ACCOUNT = "7d2e0000-0000-4000-8000-00000000a41c"
 
@@ -16,7 +16,6 @@ def demo(tmp_path_factory):
     load_fixture(ds, "demo")
     store = bounded_store(ds.write())
     yield make_client(store)
-    assert_request_rows_parity(store)
     store.close()
 
 

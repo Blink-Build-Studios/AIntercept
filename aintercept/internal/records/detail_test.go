@@ -194,3 +194,23 @@ func TestSweepForgetsOrphanRows(t *testing.T) {
 		t.Fatal("orphan rows survived a sweep")
 	}
 }
+
+// At the end of a replayed capture (canon), a call still in flight has its rows
+// so far written as its detail object, so the drawer's raw view shows what the
+// raw log has for it. The live observer never does this: a call in flight has
+// no detail object until it ends.
+func TestEndOfInputWritesInFlightDetails(t *testing.T) {
+	a := NewAssembler("inc")
+	a.KeepDetail = true
+	rows := append(analytics("a1"), clientEvent("a1", "e1", "s1", 0))
+	if got := applyAll(a, rows); len(got) != 0 {
+		t.Fatalf("a call in flight wrote a detail: %+v", got)
+	}
+	got := a.FlushDetails()
+	if len(got) != 1 || got[0].CorrelationID != "a1" || len(got[0].Lines) != len(rows) {
+		t.Fatalf("in-flight details: %+v", got)
+	}
+	if again := a.FlushDetails(); len(again) != 0 {
+		t.Fatalf("written twice: %+v", again)
+	}
+}

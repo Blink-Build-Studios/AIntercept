@@ -280,7 +280,9 @@ class Codex:
         self.ds, self.thread, self.account, self.email, self.originator = ds, thread, account, email, originator
         self.lineage = lineage or {}
         self.key_hash = f"kh-{account[-4:]}"
-        self.conn = f"{INSTANCE}-ws-{thread[:8]}"
+        # One WebSocket connection per thread, as the observer names every ext_proc stream: the
+        # root, its subagent, its review and its fork share the thread id's first 8 characters.
+        self.conn = f"{INSTANCE}-ws-{thread[:8]}-{thread[-6:]}"
         self._turn = itertools.count(1)
         self._seq = itertools.count(1)
 
