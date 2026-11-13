@@ -40,7 +40,7 @@ func TestRecordsUploadOnlyThroughTheWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewSink(SinkConfig{Putter: WriterPutter(w, "store"), Prefix: "p", Incarnation: "i", Details: true,
-		MaxAge: time.Hour, MaxRecords: 1000})
+		MaxAge: time.Hour})
 	for _, e := range sampleRows() {
 		if err := s.Emit(e); err != nil {
 			t.Fatal(err)
@@ -55,7 +55,7 @@ func TestRecordsUploadOnlyThroughTheWriter(t *testing.T) {
 	var recs, details int
 	for k, o := range tgt.objs {
 		switch {
-		case strings.HasPrefix(k, "p/records/v1/bucket="):
+		case strings.HasPrefix(k, "p/v1/keys/"):
 			recs++
 			if o.ContentType != "application/vnd.apache.parquet" {
 				t.Errorf("%s content type %q", k, o.ContentType)

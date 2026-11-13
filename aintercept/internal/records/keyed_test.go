@@ -2,6 +2,7 @@ package records_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -180,9 +181,19 @@ func rec(key string) records.Record {
 	return r
 }
 
+// size is one test record's size in a buffer (a JSON line).
+func size(t *testing.T) int {
+	b, err := json.Marshal(rec("s:x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(b) + 1
+}
+
 // Atomic: a buffer flushes once it reaches its byte size; other keys don't.
 func TestKeyedFlushesOnSize(t *testing.T) {
-	r := newRig(t, records.SinkConfig{FlushBytes: 600, FlushAge: 30 * time.Second})
+	sz := size(t)
+	r := newRig(t, records.SinkConfig{FlushBytes: 2*sz + sz/2, FlushAge: 30 * time.Second})
 	for i := 0; i < 3; i++ {
 		r.s.AddRecords(rec("s:big"))
 	}
@@ -229,7 +240,8 @@ func TestKeyedTimerIsCappedAt60s(t *testing.T) {
 
 // Atomic: over the memory cap, the oldest buffers flush first.
 func TestKeyedMemoryCapFlushesOldestFirst(t *testing.T) {
-	r := newRig(t, records.SinkConfig{FlushBytes: 1 << 20, FlushAge: 60 * time.Second, MaxBufferBytes: 900})
+	sz := size(t)
+	r := newRig(t, records.SinkConfig{FlushBytes: 1 << 20, FlushAge: 60 * time.Second, MaxBufferBytes: int64(3*sz + sz/2)})
 	r.s.AddRecords(rec("s:old"))
 	r.clock.add(time.Second)
 	r.s.AddRecords(rec("s:mid"))
@@ -272,7 +284,7 @@ func TestKeyedCrashRecoveryUploadsEachRecordOnce(t *testing.T) {
 			r.s.AddRecords(x)
 		}
 	}
-	r.s.Sync()   // the buffers reach the disk (the once-a-second fsync)
+	r.s.Sync()    // the buffers reach the disk (the once-a-second fsync)
 	r.w.Abandon() // crash: nothing flushed, nothing uploaded
 	r.open(t, records.SinkConfig{FlushBytes: 1 << 20, FlushAge: 60 * time.Second})
 	_ = r.s.Flush()
@@ -300,10 +312,11 @@ func TestKeyedChaosEveryRecordExactlyOnce(t *testing.T) {
 			st := newStore()
 			st.rng, st.failPct = rand.New(rand.NewSource(seed*7)), 20
 			keys := []string{"s:a", "s:b", "s:c", "s:d", "s:e"}
+			sz := size(t)
 			var want []string
 			for pod := 0; pod < 3; pod++ {
 				r := &rig{st: st, clock: &clock{t: start}, spool: t.TempDir(), keys: t.TempDir()}
-				cfg := records.SinkConfig{FlushBytes: 400 + rng.Intn(800), FlushAge: 30 * time.Second, MaxBufferBytes: 3000}
+				cfg := records.SinkConfig{FlushBytes: sz * (1 + rng.Intn(4)), FlushAge: 30 * time.Second, MaxBufferBytes: int64(6 * sz)}
 				r.open(t, cfg)
 				for i := 0; i < 120; i++ {
 					x := rec(keys[rng.Intn(len(keys))])

@@ -640,6 +640,15 @@ func (w *Writer) recover() error {
 	sort.Strings(names)
 	for _, n := range names {
 		p := filepath.Join(w.cfg.SpoolDir, "ready", n)
+		// A buffer spooled just before a crash may still be beside it: it's in
+		// the spool now, so it goes.
+		if hdr, _, _, err := readSpooled(p); err == nil {
+			for _, e := range hdr.Bundle {
+				if e.Src != "" {
+					_ = os.Remove(e.Src)
+				}
+			}
+		}
 		info, err := os.Stat(p)
 		if err != nil {
 			continue
@@ -716,6 +725,7 @@ func (w *Writer) upload(path string) bool {
 			if !w.putUntilAccepted(t, o) {
 				return false
 			}
+			w.landed(t, o.Key)
 			continue
 		}
 		if att == nil {

@@ -20,7 +20,8 @@ const UploadMinute = "{upload-minute}"
 
 // ResolveUploadKey fills a key template's UploadMinute with t's UTC minute.
 func ResolveUploadKey(tmpl string, t time.Time) string {
-	return strings.ReplaceAll(tmpl, UploadMinute, t.UTC().Format("2006-01-02T15:04"))
+	k := strings.ReplaceAll(tmpl, UploadMinute, t.UTC().Format("2006-01-02T15:04"))
+	return strings.ReplaceAll(k, UploadTime, t.UTC().Format(UploadTimeFormat))
 }
 
 // Exister is a Target that can say whether an object exists (S3 HEAD). The
@@ -120,7 +121,7 @@ func (w *Writer) putAtUpload(t Target, o Object, path string, i int, a *attempts
 	ex, canCheck := t.(Exister)
 	backoff := w.cfg.RetryMin
 	for attempt := 1; ; attempt++ {
-		key := ResolveUploadKey(o.Key, w.now())
+		key := ResolveUploadKey(o.Key, w.uploadNow(t))
 		if n := len(a.keys); n > 0 && key != a.keys[n-1] {
 			if !canCheck {
 				key = a.keys[n-1] // can't tell whether it landed: keep its name rather than risk two
@@ -132,8 +133,9 @@ func (w *Writer) putAtUpload(t Target, o Object, path string, i int, a *attempts
 					}
 					continue
 				}
-				if landed {
+				if landed != "" {
 					w.markDone(path, i, a)
+					w.landed(t, landed)
 					return true
 				}
 			}
@@ -153,6 +155,7 @@ func (w *Writer) putAtUpload(t Target, o Object, path string, i int, a *attempts
 		cancel()
 		if err == nil {
 			w.markDone(path, i, a)
+			w.landed(t, key)
 			return true
 		}
 		if !w.failed(key, attempt, err, &backoff) {
@@ -168,19 +171,39 @@ func (w *Writer) markDone(path string, i int, a *attempts) {
 	_ = w.logAttempt(path, attemptLine{I: i, Done: true})
 }
 
-func (w *Writer) anyExists(ex Exister, keys []string) (bool, error) {
+// anyExists returns the first of keys that's in the store ("" for none).
+func (w *Writer) anyExists(ex Exister, keys []string) (string, error) {
 	for _, k := range keys {
 		ctx, cancel := context.WithTimeout(w.ctx, w.cfg.UploadTimeout)
 		ok, err := ex.Exists(ctx, k)
 		cancel()
 		if err != nil {
-			return false, err
+			return "", err
 		}
 		if ok {
-			return true, nil
+			return k, nil
 		}
 	}
-	return false, nil
+	return "", nil
+}
+
+// uploadNow is the time an object uploaded to t now is named by: the store's
+// clock when the target knows it, else ours.
+func (w *Writer) uploadNow(t Target) time.Time {
+	now := w.now()
+	if sc, ok := t.(ServerClock); ok {
+		if off, known := sc.ServerOffset(); known {
+			return now.Add(off)
+		}
+	}
+	return now
+}
+
+// landed reports an object that landed (OnUploaded).
+func (w *Writer) landed(t Target, key string) {
+	if w.cfg.OnUploaded != nil {
+		w.cfg.OnUploaded(t.Name(), key)
+	}
 }
 
 func (w *Writer) now() time.Time {
@@ -203,9 +226,33 @@ type ServerClock interface {
 	ServerOffset() (time.Duration, bool)
 }
 
-// PutAtUploadDurable is PutAtUpload, spooled before it returns. src is the
-// buffer file the object was built from: it's removed once the spool holds the
-// object (TODO).
+// PutAtUploadDurable is PutAtUpload, spooled before it returns: the object is
+// in its own spool file (fsynced) when the call returns, not held until the
+// next tick. src is the buffer file the object was built from; it's removed once
+// the spool holds the object, and a restart removes it too if a crash came in
+// between (recover), so the buffer is never uploaded twice.
 func (o *ObjectStream) PutAtUploadDurable(tmpl string, body []byte, src string) error {
-	return o.PutAtUpload(tmpl, body)
+	w := o.w
+	w.mu.RLock()
+	closed := w.closed
+	w.mu.RUnlock()
+	if closed {
+		return errors.New("writer: write after close")
+	}
+	w.smu.Lock()
+	cfg := w.objStreams[o.id].cfg
+	w.smu.Unlock()
+	hdr := spoolHeader{Target: cfg.Target, ContentType: cfg.ContentType, ContentEncoding: cfg.ContentEncoding,
+		Bundle: []bundledEntry{{Key: tmpl, Len: len(body), AtUpload: true, Src: src}}}
+	path, size, err := w.spool(hdr, body)
+	if err != nil {
+		return err
+	}
+	if src != "" {
+		if err := os.Remove(src); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Error("writer: spooled a buffer but couldn't remove it; a restart removes it", "src", src, "err", err)
+		}
+	}
+	w.enqueue(path, size)
+	return nil
 }
