@@ -45,7 +45,7 @@ import threading
 import time
 import weakref
 from collections import OrderedDict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any, TypeVar, cast
 
 import duckdb
@@ -355,6 +355,27 @@ FROM analytics WHERE source = 'codex';
 _COPY = re.compile(r"^(h[0-9a-f]{16})-\d+$")
 
 
+def client_event_in(lines: Iterable[bytes], correlation_id: str, event_key: str) -> dict[str, Any] | None:
+    """The raw client_event row with this event key among lines (a raw file's, or a call's
+    detail object's): by the client's id, else the hash of its row."""
+    want = event_key.split("/", 1)[1] if "/" in event_key else ""
+    # A repeat of an identical row is keyed <hash>-2, -3 (the processor's eventCopies):
+    # any of the identical rows is it.
+    want = _COPY.sub(r"\1", want)
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(r, dict) or r.get("correlation_id") != correlation_id or r.get("phase") != "client_event":
+            continue
+        ce = r.get("client_event") or {}
+        ident = ce.get("id") or ("h" + hashlib.sha256(line).hexdigest()[:16])
+        if ident == want:
+            return r
+    return None
+
+
 def _remove(con: duckdb.DuckDBPyConnection, db_dir: str) -> None:
     con.close()
     shutil.rmtree(db_dir, ignore_errors=True)
@@ -601,22 +622,7 @@ class Store:
 
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
         """The raw client_event row an analytics event came from."""
-        want = event_key.split("/", 1)[1] if "/" in event_key else ""
-        # A repeat of an identical row is keyed <hash>-2, -3 (the processor's eventCopies):
-        # any of the identical rows is it.
-        want = _COPY.sub(r"\1", want)
-        for line in raw.lines(self.raw.read(source_file)):
-            try:
-                r = json.loads(line)
-            except ValueError:
-                continue
-            if r.get("correlation_id") != correlation_id or r.get("phase") != "client_event":
-                continue
-            ce = r.get("client_event") or {}
-            ident = ce.get("id") or ("h" + hashlib.sha256(line).hexdigest()[:16])
-            if ident == want and isinstance(r, dict):
-                return r
-        return None
+        return client_event_in(raw.lines(self.raw.read(source_file)), correlation_id, event_key)
 
     def _read(self, keys: list[str], correlation_id: str) -> list[dict[str, Any]]:
         out = []

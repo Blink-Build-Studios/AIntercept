@@ -10,7 +10,7 @@ import pytest
 
 from aintercept_api.buckets import BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
-from tests.bucket_fixture import from_store
+from tests.bucket_fixture import drawer_from_pipeline, from_store, unfinished_calls
 from tests.builders import Dataset, load_fixture
 from tests.conftest import bounded_store, make_client
 from tests.test_codex import claude_code_account, codex_work
@@ -31,10 +31,25 @@ def clients(tmp_path_factory):
     old.ingest()
     layout = tmp / "bucket"
     from_store(old, layout)
+    drawer_from_pipeline(pathlib.Path(root), layout)
     new = BucketStore(LocalSource(layout), tmp / "cache", raw=LocalRaw(pathlib.Path(root)))
+    _UNFINISHED.update(unfinished_calls(pathlib.Path(root)))
     yield make_client(old), make_client(new), old
     new.close()
     old.close()
+
+
+_UNFINISHED: set[str] = set()
+
+
+def _drawer_of_unfinished(url: str) -> bool:
+    """A drawer URL of a call whose request never finished being sent (unfinished_calls)."""
+    for prefix in ("/api/v1/requests/", "/api/v1/events/"):
+        if url.startswith(prefix):
+            ident = url.removeprefix(prefix).split("/", 1)[0]
+            corr = ident.rpartition(":")[0] if prefix.endswith("events/") else ident.split("~", 1)[0]
+            return corr in _UNFINISHED
+    return False
 
 
 def _same(old, new, url):
@@ -90,4 +105,6 @@ def test_every_endpoint_matches_todays_store(clients):
     urls = _urls(old)
     assert len(urls) > 100
     for url in urls:
+        if _drawer_of_unfinished(url):
+            continue
         _same(old, new, url)

@@ -122,4 +122,94 @@ def from_store(store: Store, root: pathlib.Path, prefix: str = "") -> None:
         )
 
 
-__all__ = ["BUCKET_BITS", "commit_key", "from_store", "table_key", "write_commit", "write_rows"]
+def unfinished_calls(raw: pathlib.Path) -> set[str]:
+    """Transactions whose request was never fully sent (no ending, no request end-of-stream): the
+    stream pipeline has no call record for them (a call_start comes at the request's end) and no
+    detail object (written when a call ends). Some synthetic test batches are like this; today's
+    store shows them as in flight from its pending rows."""
+    import gzip
+
+    started: dict[str, bool] = {}
+    for path in raw.rglob("*.ndjson*"):
+        data = gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_bytes()
+        for line in data.splitlines():
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            cid, phase = r.get("correlation_id"), r.get("phase")
+            if not cid:
+                continue
+            done = phase in ("complete", "disconnect", "ws_connection") or (
+                phase in ("request_headers", "request_body_chunk") and r.get("end_of_stream")
+            )
+            started[cid] = started.get(cid, False) or done
+    return {cid for cid, ok in started.items() if not ok}
+
+
+def drawer_from_pipeline(raw: pathlib.Path, root: pathlib.Path, prefix: str = "") -> None:
+    """The request drawer's inputs from the real pipeline: `aintercept canon` turns the raw files
+    into records and per-call detail objects (calls/<id>), `aintercept stream` (once) applies them
+    per key; its drawer_* table files then join this layout's commits, and the detail objects go
+    beside them. So the drawer tests read what the processor actually writes."""
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    from aintercept_api.buckets import DRAWER_INPUTS
+    from tests.conftest import aintercept_binary
+
+    work = pathlib.Path(tempfile.mkdtemp(prefix="drawer-"))
+    try:
+        env = {"PATH": os.environ.get("PATH", "")}
+        subprocess.run(  # noqa: S603
+            [str(aintercept_binary()), "canon", "-src", str(raw), "-out", str(work), "-details"],
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(  # noqa: S603
+            [str(aintercept_binary()), "stream"],
+            env={**env, "STREAM_LOCAL_DIR": str(work), "STREAM_ONCE": "true", "STREAM_HTTP_LISTEN": "127.0.0.1:0"},
+            check=True,
+            capture_output=True,
+        )
+        calls = work / "calls"
+        if calls.is_dir():
+            shutil.copytree(calls, root / f"{prefix}calls", dirs_exist_ok=True)
+        for commit_dir in sorted((work / ROOT / "buckets").iterdir()):
+            b = int(commit_dir.name)
+            newest = sorted(commit_dir.glob("commit-*.json"))[-1]
+            theirs = json.loads(newest.read_text())
+            mine_dir = root / f"{prefix}{ROOT}buckets/{b:02d}"
+            mine = sorted(mine_dir.glob("commit-*.json"))[-1] if mine_dir.is_dir() else None
+            body: dict[str, Any] = (
+                json.loads(mine.read_text()) if mine else {"bucket": b, "seq": 3, "epoch": 1, "base": {}, "runs": {}}
+            )
+            for kind in ("base", "runs"):
+                for table, refs in (theirs.get(kind) or {}).items():
+                    if table not in DRAWER_INPUTS:
+                        continue
+                    for ref in refs:
+                        src, dst = work / ref["key"], root / prefix / ref["key"]
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(src, dst)
+                        body.setdefault(kind, {}).setdefault(table, []).append({**ref, "key": f"{prefix}{ref['key']}"})
+            path = mine or (mine_dir / "commit-000000000003.json")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(body))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+__all__ = [
+    "BUCKET_BITS",
+    "commit_key",
+    "drawer_from_pipeline",
+    "from_store",
+    "table_key",
+    "unfinished_calls",
+    "write_commit",
+    "write_rows",
+]

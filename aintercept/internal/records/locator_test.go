@@ -58,14 +58,40 @@ func TestEveryCallStartWritesALocator(t *testing.T) {
 	}
 }
 
-// A WebSocket connection has one locator (its id), however many turns it has.
-func TestOneLocatorPerConnection(t *testing.T) {
+// A WebSocket connection's locators are all l:<connection>: one for the
+// connection (its upgrade's key) and one per turn (the turn's thread key), so a
+// turn opens by connection~turn.
+func TestConnectionLocators(t *testing.T) {
 	a := NewAssembler("inc")
 	rs := applyRecords(a, []events.Event{wsHdr("w1"), wsTurnStart("w1", 1, "t1"), wsTurn("w1", 1, "t1"),
-		wsTurnStart("w1", 2, "t1"), wsTurn("w1", 2, "t1"), wsConn("w1")})
-	ls := locators(rs)
-	if len(ls) != 1 || ls[0].RoutingKey != "l:w1" {
-		t.Fatalf("locators: %s", summary(ls))
+		wsTurnStart("w1", 2, "t2"), wsTurn("w1", 2, "t2"), wsConn("w1")})
+	targets := map[string]bool{}
+	for _, l := range locators(rs) {
+		if l.RoutingKey != "l:w1" {
+			t.Fatalf("locator key %q", l.RoutingKey)
+		}
+		targets[LocatorTarget(&l)] = true
+	}
+	day := time.Unix(0, at(0)).UTC().Format("2006-01-02")
+	if !reflect.DeepEqual(targets, map[string]bool{"c:" + kh + ":" + day: true, "s:t1": true, "s:t2": true}) {
+		t.Fatalf("targets %v", targets)
+	}
+}
+
+// An analytics batch's locators name every session its events went to, so an
+// event opens by <batch>:<n> even when the batch's request never ended.
+func TestBatchLocatorsNameItsSessions(t *testing.T) {
+	h := analytics("a2")[0] // its headers only: the request never ends
+	rows := []events.Event{h, clientEvent("a2", "e1", "s1", 0), clientEvent("a2", "e2", "s2", time.Second), clientEvent("a2", "e3", "s1", 2*time.Second)}
+	a := NewAssembler("inc")
+	got := map[string]bool{}
+	for _, l := range locators(applyRecords(a, rows)) {
+		if l.CallID == "a2" {
+			got[l.RoutingKey+"→"+LocatorTarget(&l)] = true
+		}
+	}
+	if !reflect.DeepEqual(got, map[string]bool{"l:a2→s:s1": true, "l:a2→s:s2": true}) {
+		t.Fatalf("batch locators %v", got)
 	}
 }
 

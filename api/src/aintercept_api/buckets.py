@@ -21,6 +21,7 @@ Routing is the processor's: a key's bucket is the top bits of its FNV-1a 64 hash
 import contextlib
 import contextvars
 import datetime as dt
+import gzip
 import hashlib
 import hmac
 import importlib.resources
@@ -61,6 +62,51 @@ def bucket_of(key: str, bits: int = BUCKET_BITS) -> int:
         h = ((h ^ b) * _FNV_PRIME) & _MASK
     return h >> (64 - bits)
 
+
+# The request drawer's per-key tables (internal/stream/state drawer.go): a call's own rows. Only
+# a drawer request loads them, and only for its call's keys (§4.9).
+DRAWER_TABLES = frozenset(
+    {
+        "drawer_locator",
+        "drawer_calls",
+        "drawer_steps",
+        "drawer_facts",
+        "drawer_sandbox",
+        "drawer_reports",
+        "drawer_events",
+    }
+)
+# What a drawer request loads: its tables, and the prompt numbers (the stream state's lookup).
+DRAWER_INPUTS = DRAWER_TABLES | {"prompt_index"}
+DRAWER_EVENT = frozenset({"drawer_events"})
+DRAWER_CALL = DRAWER_INPUTS - {"drawer_events", "drawer_locator"}
+# Each, empty, when the call's keys have none (the columns the drawer reads).
+_EV = (
+    "event_id VARCHAR, batch_id VARCHAR, ts BIGINT, row_ts BIGINT, seq BIGINT, name VARCHAR, session_id VARCHAR, "
+    "prompt_id VARCHAR, device_id VARCHAR, head_sha VARCHAR, md VARCHAR, event_key VARCHAR, request_id VARCHAR, "
+    "client_request_id VARCHAR"
+)
+DRAWER_EMPTY = {
+    "drawer_locator": "key VARCHAR, target VARCHAR",
+    "drawer_calls": (
+        "key VARCHAR, call_id VARCHAR, start_ns BIGINT, end_ns BIGINT, method VARCHAR, path VARCHAR, ip VARCHAR, "
+        "key_hash VARCHAR, status BIGINT, response_start_ns BIGINT, client_json VARCHAR, provider_json VARCHAR, "
+        "model VARCHAR, stop_reason VARCHAR, message_id VARCHAR, input_tokens BIGINT, output_tokens BIGINT, "
+        "cache_read_tokens BIGINT, cache_write_tokens BIGINT, request_bytes BIGINT, response_bytes BIGINT, "
+        "error VARCHAR, session_id VARCHAR, device_id VARCHAR, ext_json VARCHAR, in_flight BOOLEAN, "
+        "batch_session VARCHAR"
+    ),
+    "drawer_steps": (
+        "key VARCHAR, call_id VARCHAR, prompt_id VARCHAR, request_class VARCHAR, ts BIGINT, end_ts BIGINT, "
+        "status BIGINT, request_id VARCHAR, model VARCHAR, stop_reason VARCHAR, message_id VARCHAR, "
+        "prev_message_id VARCHAR, prev_call VARCHAR, next_call VARCHAR"
+    ),
+    "drawer_facts": f"key VARCHAR, lookup VARCHAR, role VARCHAR, {_EV}",
+    "drawer_sandbox": "key VARCHAR, ts BIGINT, event_id VARCHAR, value VARCHAR",
+    "drawer_reports": f"key VARCHAR, report_id VARCHAR, {_EV}",
+    "drawer_events": f"key VARCHAR, {_EV}",
+    "prompt_index": "key VARCHAR, session_id VARCHAR, prompt_id VARCHAR, prompt_index BIGINT",
+}
 
 # Each table's routing: the key prefix and the column whose value follows it. "s:" tables are a
 # session's, "p:" a person's, "a:" an account's; "*" tables are read whole, from every bucket
@@ -105,6 +151,8 @@ ROUTING: dict[str, tuple[str, str]] = {
     "session_call_accounts": ("*", ""),
     "session_title_calls": ("*", ""),
     "session_edges": ("*", ""),
+    # The drawer's: read only by a drawer request, only its keys' rows (Scope.keys).
+    **{t: ("k:", "key") for t in DRAWER_INPUTS},
 }
 
 # The raw fact tables and the snapshots built from all of history: no endpoint reads them
@@ -113,11 +161,6 @@ RAW_TABLES = frozenset(
     {"requests", "analytics", "ledger", "probes", "pending", "sessions", "prompts", "people", "person_devices"}
 )
 
-# The request drawer's per-key tables (internal/stream/state drawer.go): a call's own rows. Only
-# a drawer request loads them, and only for its call's keys (§4.9).
-DRAWER_TABLES = frozenset(
-    {"drawer_locator", "drawer_calls", "drawer_steps", "drawer_facts", "drawer_sandbox", "drawer_reports", "drawer_events"}
-)
 
 # The processor's per-session tables session_rows is rebuilt from: when they're in the layout,
 # they're loaded as _s_<table> and the API's session_rows is the SQL over them.
@@ -178,6 +221,13 @@ _PERSON_RESOLUTION = ("person_sessions", "person_map")
 _NEWEST_KEYED = """SELECT * EXCLUDE (tomb, _file, _r) FROM (
     SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
     FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
+) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
+# A drawer request's: only its keys' rows, filtered in the scan (files are sorted by key, so
+# the row groups of other keys are skipped by their statistics).
+_NEWEST_OF_KEYS = """SELECT * EXCLUDE (tomb, _file, _r) FROM (
+    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
+    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
+    WHERE key IN (SELECT unnest(?::VARCHAR[]))
 ) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
 _NEWEST = """SELECT * EXCLUDE (key, id, tomb, _file, _r) FROM (
     SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
@@ -440,6 +490,8 @@ class Scope:
     accounts: frozenset[str] | set[str] | None = None
     tables: frozenset[str] | None = None
     raw: bool = False
+    # A drawer request: the routing keys its call's rows are under.
+    keys: frozenset[str] | None = None
 
     @classmethod
     def everything(cls) -> "Scope":
@@ -447,12 +499,16 @@ class Scope:
 
     def names(self, routed: dict[str, tuple[str, str]]) -> list[str]:
         """The tables this scope loads, of those the layout routes."""
+        if self.keys is not None:
+            return [t for t in routed if t in (self.tables if self.tables is not None else DRAWER_INPUTS)]
         if self.tables is not None:
             return [t for t in routed if t in self.tables]
-        return [t for t in routed if self.raw or t not in RAW_TABLES]
+        return [t for t in routed if (self.raw or t not in RAW_TABLES) and t not in DRAWER_INPUTS]
 
     def buckets(self, prefix: str) -> frozenset[int] | None:
         """The buckets a table routed by prefix comes from (None: all of them)."""
+        if prefix == "k:":
+            return frozenset(bucket_of(k) for k in self.keys or ())
         keys = {"s:": self.sessions, "p:": self.people, "a:": self.accounts}.get(prefix)
         return None if keys is None else frozenset(bucket_of(prefix + k) for k in keys)
 
@@ -460,12 +516,12 @@ class Scope:
         def f(x: Any) -> Any:
             return None if x is None else tuple(sorted(x))
 
-        return (f(self.sessions), f(self.people), f(self.accounts), f(self.tables), self.raw)
+        return (f(self.sessions), f(self.people), f(self.accounts), f(self.tables), self.raw, f(self.keys))
 
 
 _SESSION_PATH = re.compile(r"^/api/v1/sessions/([^/]+)")
 _PERSON_PATH = re.compile(r"^/api/v1/people/([^/]+)")
-_DRAWER_PATH = re.compile(r"^/api/v1/(requests|events)/")
+_DRAWER_ID = re.compile(r"^/api/v1/(requests|events)/([^/]+)")
 
 # What the directory (/people, /overview) reads: the person and dimension tables and the
 # per-session summary rows (and the calls' times, for /overview's request count), never the
@@ -510,7 +566,7 @@ class BucketStore:
         empty: dict[str, str] | None = None,
         views: str | None = None,
         raw: RawSource | None = None,
-        drawer_raw: bool = True,
+        drawer_raw: bool = False,
         keep_keys: bool = False,
         clock: Callable[[], float] = time.monotonic,
         cache_bytes: int = 2 << 30,
@@ -523,9 +579,11 @@ class BucketStore:
         self.empty = empty if empty is not None else (legacy._EMPTY if tables is None else {})
         self.views = views if views is not None else (legacy.VIEWS if tables is None else "")
         self.raw = raw
-        # The drawer's raw fallback: until it reads the per-call detail objects and per-key
-        # outputs (§4.9), its scope loads the raw tables, the one scope that does.
+        # The drawer reads its call's detail object and its keys' drawer rows (§4.9). Calls from
+        # before the detail objects have neither: with drawer_raw, those fall back to the raw
+        # tables and files, the one scope that reads them. Off by default.
         self.drawer_raw = drawer_raw
+        self._details: OrderedDict[str, list[bytes] | None] = OrderedDict()
         self.cache = ObjectCache(source, pathlib.Path(cache_dir), cache_bytes)
         self.clock, self.keep_keys = clock, keep_keys
         self._logs: dict[int, CommitLog] = {}
@@ -562,9 +620,83 @@ class BucketStore:
             return self.resolve_person(pid[0])
         if path in ("/api/v1/people", "/api/v1/overview"):
             return Scope(tables=DIRECTORY_TABLES)
-        if _DRAWER_PATH.match(path):
-            return Scope(raw=self.drawer_raw)
+        if m := _DRAWER_ID.match(path):
+            return self._drawer_scope(m.group(1), urllib.parse.unquote(m.group(2)))
         return Scope.everything()
+
+    # --- the drawer ----------------------------------------------------------------------------
+
+    def _drawer_scope(self, kind: str, ident: str) -> Scope:
+        """A drawer request's keys: from its call's detail object (its routing line), else its
+        locator (l:<call> or l:reported:<id>, routed by the id itself)."""
+        if kind == "events":
+            corr = ident.rpartition(":")[0]
+            keys = self.detail_keys(corr)
+            if keys is None:
+                keys = self.locate("l:" + corr)
+        elif ident.startswith("reported:"):
+            keys = self.locate("l:" + ident)
+        else:
+            corr = ident.split("~", 1)[0]
+            keys = self.detail_keys(corr)
+            if keys is None:
+                keys = self.locate("l:" + corr)
+        if not keys:
+            return Scope(raw=True) if self.drawer_raw else Scope(keys=frozenset())
+        # An event reads its event row; a call, its own rows (never its session's events).
+        tables = DRAWER_EVENT if kind == "events" else DRAWER_CALL
+        return Scope(keys=frozenset(keys), tables=tables)
+
+    def detail(self, corr: str) -> list[bytes] | None:
+        """A call's detail object's rows (calls/<id>, written when it ended), routing line included."""
+        with self._lock:
+            if corr in self._details:
+                self._details.move_to_end(corr)
+                return self._details[corr]
+        key = f"{self.prefix}calls/{corr}.ndjson.gz"
+        try:
+            body = self.cache.path(key).read_bytes()
+        except Exception:  # noqa: BLE001 (no such object: not ended, or from before the detail objects)
+            lines = None
+        else:
+            self.reads.append(key)
+            lines = [ln for ln in gzip.decompress(body).splitlines() if ln.strip()]
+        with self._lock:
+            self._details[corr] = lines
+            while len(self._details) > 64:
+                self._details.popitem(last=False)
+        return lines
+
+    def detail_keys(self, corr: str) -> list[str] | None:
+        """The keys a call's records went to: its detail object's routing line."""
+        lines = self.detail(corr)
+        if not lines:
+            return None
+        try:
+            last = json.loads(lines[-1])
+        except ValueError:
+            return None
+        if last.get("phase") != "routing":
+            return None
+        return [str(k) for k in last.get("routing_keys") or []]
+
+    def locate(self, key: str) -> list[str]:
+        """A locator's targets: the keys its call (or reported call) is under."""
+        loaded = self._load(Scope(keys=frozenset({key})), only=("drawer_locator",))
+        if not self.has_in(loaded, "drawer_locator"):
+            return []
+        rows = loaded.con.execute("SELECT DISTINCT target FROM drawer_locator WHERE key = ? ORDER BY target", [key])
+        return [r[0] for r in rows.fetchall()]
+
+    @staticmethod
+    def has_in(loaded: "_Loaded", table: str) -> bool:
+        found = loaded.con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = ?", [table])
+        return bool(found.fetchall()[0][0])
+
+    @property
+    def drawer(self) -> bool:
+        """Whether the current request is a drawer request over the drawer's tables."""
+        return self.has("drawer_calls") or self.has("drawer_facts") or self.has("drawer_events")
 
     def resolve_person(self, person_id: str) -> Scope:
         """A person's sessions and accounts, from the dimension tables (every bucket's)."""
@@ -644,7 +776,10 @@ class BucketStore:
             paths = [str(self.cache.path(k)) for k in keys]
             name = "_s_" + table if sessions_shape and table in SESSION_INPUTS else table
             if paths:
-                con.sql(_NEWEST_KEYED if self.keep_keys else _NEWEST, params=[paths, paths]).create(name)
+                if scope is not None and scope.keys is not None:
+                    con.sql(_NEWEST_OF_KEYS, params=[paths, paths, sorted(scope.keys)]).create(name)
+                else:
+                    con.sql(_NEWEST_KEYED if self.keep_keys else _NEWEST, params=[paths, paths]).create(name)
             elif sessions_shape and table in _SESSION_EMPTY:
                 con.execute(_SESSION_EMPTY[table])
             elif table in self.empty:
@@ -660,6 +795,10 @@ class BucketStore:
                 con.execute(sql)
         if plan.get("dim_account") and not plan.get("accounts"):
             con.execute("CREATE OR REPLACE VIEW accounts AS SELECT account_id, email, name FROM dim_account")
+        if scope is not None and scope.keys is not None:  # a drawer request: only its keys' rows
+            for table in DRAWER_INPUTS:
+                if table not in plan or not plan[table]:
+                    con.execute(f"CREATE TABLE IF NOT EXISTS {table} ({DRAWER_EMPTY[table]})")
         if self.views and all(t in plan for t in self.tables):
             con.execute(self.views)
         return con
@@ -839,12 +978,26 @@ class BucketStore:
     # The drawer's raw view reads the raw log as the old store does (the spec's §4.9 moves it
     # onto per-call detail objects).
     def raw_rows(self, correlation_id: str) -> list[dict[str, Any]]:
-        if self.raw is None:
+        lines = self.detail(correlation_id)
+        if lines is not None:
+            out = []
+            for ln in lines:
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    continue
+                if r.get("phase") != "routing" and r.get("correlation_id") == correlation_id:
+                    out.append(r)
+            return out
+        if self.raw is None or not self.drawer_raw:
             return []
         return legacy.Store.raw_rows(cast(legacy.Store, self), correlation_id)
 
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
-        if self.raw is None:
+        lines = self.detail(correlation_id)
+        if lines is not None:
+            return legacy.client_event_in(lines, correlation_id, event_key)
+        if self.raw is None or not self.drawer_raw:
             return None
         return legacy.Store.raw_event(cast(legacy.Store, self), correlation_id, event_key, source_file)
 

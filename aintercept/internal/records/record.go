@@ -36,7 +36,8 @@ const (
 )
 
 // LocatorTarget is the key a locator points at: the routing key its call's
-// start went to, or its report's session.
+// (or turn's) start went to, or its event's session (a reported call's, or one
+// of a batch's sessions).
 func LocatorTarget(r *Record) string {
 	switch {
 	case r.Kind != KindLocator:
@@ -44,7 +45,7 @@ func LocatorTarget(r *Record) string {
 	case r.Event != nil:
 		return "s:" + r.Event.SessionID
 	case r.Call != nil:
-		return RoutingKey(&Record{Kind: KindCallStart, CallID: r.CallID, Call: r.Call})
+		return RoutingKey(&Record{Kind: KindCallStart, CallID: r.CallID, Call: r.Call, BatchSession: r.BatchSession})
 	}
 	return ""
 }

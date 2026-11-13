@@ -23,11 +23,11 @@ const DefaultBucketBits = 6
 // its own session.
 func RoutingKey(r *Record) string {
 	switch {
-	case r.Kind == KindLocator && r.Event != nil:
-		return "l:reported:" + ReportID(r.Event)
-	case r.Kind == KindLocator:
+	case r.Kind == KindLocator && r.CallID != "": // a call's, a turn's or a batch's: by its connection
 		corr, _, _ := strings.Cut(r.CallID, "#")
 		return "l:" + corr
+	case r.Kind == KindLocator && r.Event != nil: // a reported call's
+		return "l:reported:" + ReportID(r.Event)
 	case r.Kind == KindAccount && r.Account != nil:
 		return "a:" + r.Account.AccountID
 	case r.Kind == KindClientEvent && r.Event != nil:

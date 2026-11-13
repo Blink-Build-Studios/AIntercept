@@ -364,7 +364,8 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 		r.StartNS = e.TimestampNS
 		rec := a.record(Record{Kind: KindCallStart, CallID: r.CallID, Call: &r}, e.ObserverInstance)
 		a.turns[r.CallID] = rec.RoutingKey
-		out = append(out, rec)
+		loc := r
+		out = append(out, rec, a.record(Record{Kind: KindLocator, CallID: r.CallID, Call: &loc}, e.ObserverInstance))
 	case events.PhaseComplete:
 		if e.Transport == events.TransportWebSocket { // a model turn; the connection stays open
 			a.hit(CaseEndWSTurn)
@@ -473,6 +474,10 @@ func (a *Assembler) end(c *call, r canon.Request, e *events.Event) []Record {
 func (a *Assembler) endKeys(r canon.Request, startKey, batchSession, instance string) []Record {
 	rec := a.record(Record{Kind: KindCallEnd, CallID: r.CallID, Call: &r, BatchSession: batchSession}, instance)
 	out := []Record{rec}
+	if startKey == "" { // no start, so no locator yet: the drawer finds it by its ending's key
+		loc := r
+		out = append(out, a.record(Record{Kind: KindLocator, CallID: r.CallID, Call: &loc, BatchSession: batchSession}, instance))
+	}
 	if startKey != "" && startKey != rec.RoutingKey {
 		a.hit(CaseEndSplitKey)
 		out = append(out, a.record(Record{Kind: KindCallEnd, CallID: r.CallID, Call: &r, BatchSession: batchSession, RoutingKey: startKey}, instance))
@@ -504,6 +509,17 @@ func (a *Assembler) release() []Record {
 		a.writeDetail(h.corr)
 	}
 	rankClaudeCode(h.events)
+	// The batch's locators: each session its events went to, so an event opens by its id
+	// (<batch>:<n>) even when its request never ended.
+	seen := map[string]bool{}
+	for _, ev := range h.events {
+		if ev.Event == nil || ev.Event.SessionID == "" || seen[ev.Event.SessionID] {
+			continue
+		}
+		seen[ev.Event.SessionID] = true
+		x := *ev.Event
+		h.extra = append(h.extra, a.record(Record{Kind: KindLocator, CallID: h.corr, Event: &x}, ev.Instance))
+	}
 	return append(append(out, h.events...), h.extra...)
 }
 

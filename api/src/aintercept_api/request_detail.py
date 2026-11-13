@@ -197,16 +197,41 @@ class Wire:
 WS_TURN = "~"  # a WebSocket turn's id is <connection>~<turn> (its call_id, <connection>#<turn>, URL-safe)
 
 
+def _has(store: Store, table: str) -> bool:
+    has = getattr(store, "has", None)
+    return bool(has(table)) if has is not None else False
+
+
+def _drawer(store: Store) -> bool:
+    """Whether this request reads the processor's per-call drawer rows (docs/STREAMING_PIPELINE.md
+    §4.9): its call's own facts, step and chain, never its session's rows."""
+    return bool(getattr(store, "drawer", False))
+
+
+# The processor's optional columns read as NULL when zero (as its fact tables were written).
+_DRAWER_CALL = """SELECT coalesce(nullif(start_ns, 0), end_ns) AS ts, method, path, ip, key_hash, nullif(status, 0),
+       nullif(response_start_ns, 0), CASE WHEN in_flight THEN NULL ELSE end_ns END, client_json, provider_json,
+       model, stop_reason, message_id, nullif(input_tokens, 0), nullif(output_tokens, 0),
+       nullif(cache_read_tokens, 0), nullif(cache_write_tokens, 0),
+       nullif(request_bytes, 0), nullif(response_bytes, 0), error, session_id, device_id, ext_json
+FROM drawer_calls WHERE call_id = replace(?, '~', '#') ORDER BY ts, in_flight LIMIT 1"""
+
+
 def _wire_from_tables(store: Store, cid: str) -> Wire | None:
     """The transaction from its request row, when its raw files can't be read
     (not synced, or the object store unreachable): what the drawer can still say."""
-    found = store.query(
-        """SELECT ts, method, path, ip, key_hash, status, response_start_ns, end_ts, client_json, provider_json,
+    if _drawer(store):
+        found: list[tuple[Any, ...]] = [
+            tuple(None if v == "" else v for v in r) for r in store.query(_DRAWER_CALL, [cid])
+        ]
+    else:
+        found = store.query(
+            """SELECT ts, method, path, ip, key_hash, status, response_start_ns, end_ts, client_json, provider_json,
                   model, stop_reason, message_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
                   request_bytes, response_bytes, error, session_id, device_id, ext_json
            FROM calls WHERE call_id = replace(?, '~', '#') ORDER BY ts LIMIT 1""",
-        [cid],
-    )
+            [cid],
+        )
     if not found:
         return None
     (ts, method, path, ip, kh, status, resp_ts, end_ts, client, provider, model, stop, msg,
@@ -246,8 +271,7 @@ def _wire_from_tables(store: Store, cid: str) -> Wire | None:
         from_tables=True,
     )
     if w.kind == "analytics":
-        found = store.query("SELECT any_value(session_id) FROM cc_events WHERE correlation_id = ?", [cid])
-        w.batch_session = found[0][0] if found else None
+        w.batch_session = _batch_session(store, cid)
     return w
 
 
@@ -332,9 +356,18 @@ def _load_wire(store: Store, cid: str) -> Wire | None:
                 (int(r.get("timestamp_ns") or 0), chunk)
             )
     if w.kind == "analytics":
-        sid = store.query("SELECT any_value(session_id) FROM cc_events WHERE correlation_id = ?", [cid])
-        w.batch_session = sid[0][0] if sid else None
+        w.batch_session = _batch_session(store, cid)
     return w
+
+
+def _batch_session(store: Store, cid: str) -> str | None:
+    """An analytics request's session: the one its batch's events name (the processor's pick: its
+    earliest event's)."""
+    if _drawer(store):
+        found = store.query("SELECT nullif(batch_session, '') FROM drawer_calls WHERE call_id = ? LIMIT 1", [cid])
+    else:
+        found = store.query("SELECT any_value(session_id) FROM cc_events WHERE correlation_id = ?", [cid])
+    return found[0][0] if found else None
 
 
 def _decode(raw: bytes, encoding: str | None) -> str | None:
@@ -495,9 +528,67 @@ def _near_query(evs: list[ss.Event], prompt: str | None, ts: int) -> ss.Event | 
     return best
 
 
+_FACT_COLS = (
+    "event_id, ts, coalesce(name, '(unnamed)'), nullif(device_id, ''), nullif(head_sha, ''), md, nullif(prompt_id, '')"
+)
+
+
+def _fact_events(store: Store, sid: str, where: str, params: list[Any]) -> list[ss.Event]:
+    """The call's session's facts (the drawer loads every key its call's records went to)."""
+    where, params = f"key = ? AND {where}", ["s:" + sid, *params]
+    rows = store.query(
+        f"SELECT DISTINCT {_FACT_COLS}, batch_id, CAST(split_part(event_id, ':', -1) AS BIGINT) AS n "  # noqa: S608
+        f"FROM drawer_facts WHERE {where} ORDER BY ts, batch_id, n",
+        params,
+    )
+    return [ss.Event(eid, ts, name, dev, head, md or None, pid) for eid, ts, name, dev, head, md, pid, _, _ in rows]
+
+
+def _drawer_facts(store: Store, sid: str, rid: str | None, crid: str | None, w: Wire | None) -> Facts:
+    """facts() from the processor's per-call rows: success and stall by the request id, tool uses
+    by it and their Bash commands by tool use id, the query and a failed call's retry by the call."""
+    cid = w.cid if w else ""
+    succ = None
+    for x in (rid, crid):
+        if x and succ is None:
+            hit = _fact_events(store, sid, "role = 'success' AND lookup = ?", [x])
+            succ = hit[0] if hit else None
+    stall = _fact_events(store, sid, "role = 'stall' AND lookup = ?", [rid]) if rid else []
+    tools = _fact_events(store, sid, "role = 'tool' AND lookup = ?", [rid]) if rid else []
+    tool_ids = [t for e in tools if (t := _str_id(e.md.get("toolUseID")))]
+    bash = (
+        _fact_events(store, sid, "role = 'bash' AND lookup IN (SELECT unnest(?::VARCHAR[]))", [tool_ids])
+        if tool_ids
+        else []
+    )
+    query = _fact_events(store, sid, "role = 'query' AND lookup = ?", [cid]) if cid else []
+    retry = _fact_events(store, sid, "role = 'retry' AND lookup = ?", [cid]) if w is not None and w.failed else []
+    evs = sorted(
+        {e.id: e for e in [*([succ] if succ else []), *stall, *tools, *bash, *query, *retry]}.values(),
+        key=lambda e: (e.ts, e.id),
+    )
+    j = ss._joins(evs)
+    mine = [
+        e
+        for e in (query[0] if query else None, succ, retry[0] if retry else None, stall[0] if stall else None)
+        if e is not None
+    ] + tools
+    return Facts(
+        succ,
+        query[0] if query else None,
+        stall[0] if stall else None,
+        tools,
+        retry[0] if retry else None,
+        j,
+        sorted(mine, key=lambda e: (e.ts, e.id)),
+    )
+
+
 def facts(store: Store, sid: str | None, rid: str | None, crid: str | None, w: Wire | None) -> Facts:
     if not sid:
         return Facts(None, None, None, [], None, None, [])
+    if _drawer(store):
+        return _drawer_facts(store, sid, rid, crid, w)
     # Only this call's events: its prompt's (the query and retries carry no request
     # id), those naming its ids, then the Bash events its tool uses point at.
     prompt_id = w.prompt_id if w else None
@@ -598,11 +689,100 @@ class Position:
     prev_message: str | None = None
     next_message: str | None = None
     calls: list[ss.Step] = field(default_factory=list)
+    # The next step's place among the session's steps (1-based), when calls holds only its prompt's.
+    next_ordinal: int | None = None
+
+
+_STEP = """SELECT call_id, ts, end_ts, status, nullif(prompt_id, ''), nullif(request_class, ''),
+       nullif(request_id, ''), nullif(model, ''), nullif(stop_reason, ''), nullif(message_id, ''),
+       nullif(prev_message_id, ''), nullif(prev_call, ''), nullif(next_call, '')
+FROM drawer_steps"""
+
+
+def _step(r: tuple[Any, ...]) -> ss.Step:
+    cid, ts, end, status, pid, cls, rid, model, stop = r[:9]
+    return ss.Step(
+        cid,
+        ts,
+        end,
+        status,
+        pid,
+        cls,
+        None,
+        rid,
+        None,
+        model,
+        None,
+        None,
+        None,
+        None,
+        stop,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+
+def prompt_number(store: Store, sid: str | None, prompt_id: str | None) -> int | None:
+    """A prompt's number in its session (the stream state's prompt_index)."""
+    if not sid or not prompt_id or not _has(store, "prompt_index"):
+        return None
+    found = store.query(
+        "SELECT prompt_index FROM prompt_index WHERE session_id = ? AND prompt_id = ? LIMIT 1", [sid, prompt_id]
+    )
+    return int(found[0][0]) if found else None
+
+
+def _drawer_position(store: Store, w: Wire) -> Position:
+    """position() from the processor's steps: the call's prompt's steps, and its chain neighbours."""
+    key = "s:" + (w.session_id or "")
+    me = store.query(_STEP + " WHERE key = ? AND call_id = ?", [key, w.cid])  # noqa: S608
+    if not me:
+        return Position()
+    _, _, _, _, _, _, _, _, _, _, prev_mid, prev_call, next_call = me[0]
+    same_rows = (
+        store.query(_STEP + " WHERE key = ? AND prompt_id = ? ORDER BY ts, call_id", [key, w.prompt_id])
+        if w.prompt_id
+        else []
+    )  # noqa: S608
+    same = [_step(r) for r in same_rows]
+    lane = [x for x in same if x.request_class == w.request_class]
+    at = next((i for i, x in enumerate(lane) if x.correlation_id == w.cid), None)
+    prev = prev_call or (lane[at - 1].correlation_id if at else None)
+    nxt = next_call
+    if nxt is None and at is not None and at + 1 < len(lane):
+        nxt = lane[at + 1].correlation_id
+    next_message, ordinal = None, None
+    if nxt:
+        found = store.query(
+            "SELECT nullif(message_id, ''), "
+            "(SELECT count(*) FROM drawer_steps t WHERE t.key = n.key AND (t.ts, t.call_id) < (n.ts, n.call_id)) "
+            "FROM drawer_steps n WHERE n.key = ? AND n.call_id = ?",
+            [key, nxt],
+        )
+        if found:
+            next_message, ordinal = found[0][0], int(found[0][1]) + 1
+    step = next((i + 1 for i, x in enumerate(same) if x.correlation_id == w.cid), None)
+    return Position(
+        prompt_index=prompt_number(store, w.session_id, w.prompt_id),
+        step_index=step,
+        step_count=len(same) or None,
+        prev=prev,
+        next=nxt,
+        prev_message=prev_mid,
+        next_message=next_message,
+        calls=same,
+        next_ordinal=ordinal,
+    )
 
 
 def position(store: Store, s: cc.Session | None, w: Wire) -> Position:
     """The call's place in its prompt and thread: steps by prompt; prev/next by the message-id chain, else
     the neighbouring call of the same prompt and request class."""
+    if _drawer(store):
+        return _drawer_position(store, w) if w.session_id and w.kind == "model" else Position()
     if s is None or w.kind != "model":
         return Position()
     steps = ss.steps(store, s.id)
@@ -808,7 +988,7 @@ def detail(store: Store, cid: str) -> RequestDetail | None:
     if w is None:
         return None
     sid = w.session_id
-    s = cc.load_session(store, sid) if sid else None
+    s = cc.load_session(store, sid) if sid and not _drawer(store) else None
     f = facts(store, sid, w.request_id, w.client_request_id, w)
     pos = position(store, s, w)
     md = f.success.md if f.success else {}
@@ -881,6 +1061,15 @@ def detail(store: Store, cid: str) -> RequestDetail | None:
 def find_report(store: Store, cid: str) -> tuple[str, ss.Event] | None:
     """A `reported:<requestId | clientRequestId | ts>` id -> (session id, its tengu_api_success)."""
     key = cid.removeprefix(REPORTED)
+    if _drawer(store):
+        if not _has(store, "drawer_reports"):
+            return None
+        sql = f"SELECT nullif(session_id, ''), {_FACT_COLS} FROM drawer_reports WHERE report_id = ? LIMIT 1"  # noqa: S608
+        rows = store.query(sql, [key])
+        if not rows or not rows[0][0]:
+            return None
+        sid, eid, ts, name, dev, head, md, pid = rows[0]
+        return sid, ss.Event(eid, ts, name, dev, head, md or None, pid)
     found = store.query(
         """SELECT session_id FROM cc_events WHERE name = 'tengu_api_success'
              AND (json_extract_string(md, '$.requestId') = ? OR json_extract_string(md, '$.clientRequestId') = ?
@@ -903,10 +1092,14 @@ def reported_detail(store: Store, cid: str) -> RequestDetail | None:
     if hit is None:
         return None
     sid, e = hit
-    s = cc.load_session(store, sid)
+    if _drawer(store):
+        n = prompt_number(store, sid, e.prompt_id)
+        index = {e.prompt_id: n} if e.prompt_id and n is not None else {}
+    else:
+        s = cc.load_session(store, sid)
+        index = cc.prompt_index(s) if s else {}
     md = e.md
     tokens = _tokens(None, md)
-    index = cc.prompt_index(s) if s else {}
     inp, out = ss._int(md.get("inputTokens")), ss._int(md.get("outputTokens"))
     cached = ss._int(md.get("cachedInputTokens"))
     usage = (
@@ -1084,8 +1277,26 @@ def _pct(v: str | None) -> float | None:
 def _event_rows(store: Store, sid: str | None, evs: list[ss.Event]) -> list[EventRow]:
     if not sid:
         return []
-    steps = {x.request_id: x for x in ss.steps(store, sid) if x.request_id}
-    index = pp.prompt_indexes(store, [sid])
+    if _drawer(store):
+        rids = sorted({r for e in evs if (r := ss._str(e.md.get("requestId")))})
+        found = store.query(
+            _STEP + " WHERE key = ? AND request_id IN (SELECT unnest(?::VARCHAR[])) ORDER BY ts, call_id",  # noqa: S608
+            ["s:" + sid, rids],
+        )
+        steps = {x.request_id: x for x in map(_step, found) if x.request_id}
+        pids = sorted({e.prompt_id for e in evs if e.prompt_id})
+        index = {}
+        if pids and _has(store, "prompt_index"):
+            index = dict(
+                store.query(
+                    "SELECT prompt_id, prompt_index FROM prompt_index WHERE session_id = ? "
+                    "AND prompt_id IN (SELECT unnest(?::VARCHAR[]))",
+                    [sid, pids],
+                )
+            )
+    else:
+        steps = {x.request_id: x for x in ss.steps(store, sid) if x.request_id}
+        index = pp.prompt_indexes(store, [sid])
     return [
         EventRow(
             eventId=e.id,
@@ -1130,7 +1341,11 @@ def _fields(w: Wire | None, md: dict[str, Any]) -> list[FieldEntry]:
 
 def _tool_details(w: Wire | None, f: Facts, pos: Position) -> list[ToolCallDetail]:
     inputs = {b.id: b for b in response_blocks(w) if b.type == "tool_use"} if w and w.retained else {}
-    nxt = next((i for i, x in enumerate(pos.calls) if x.correlation_id == pos.next), None)
+    nxt = (
+        (pos.next_ordinal - 1 if pos.next_ordinal else None)
+        if pos.next_ordinal is not None or _drawer_pos(pos)
+        else next((i for i, x in enumerate(pos.calls) if x.correlation_id == pos.next), None)
+    )
     out = []
     for e in f.tools:
         tool = ss._tool(e, f.joins)
@@ -1163,6 +1378,10 @@ def _tool_details(w: Wire | None, f: Facts, pos: Position) -> list[ToolCallDetai
     return out
 
 
+def _drawer_pos(pos: Position) -> bool:
+    return pos.next is not None and pos.next_ordinal is None and not pos.calls
+
+
 def _input_row(k: str, v: Any) -> DetailRow:
     text = v if isinstance(v, str) else json.dumps(_scrub(v))
     text = redact(text)
@@ -1189,13 +1408,20 @@ def details(store: Store, cid: str) -> RequestDetails | None:
         sid = w.session_id
         f = facts(store, sid, w.request_id, w.client_request_id, w)
         md = f.success.md if f.success else {}
-        pos = position(store, cc.load_session(store, sid) if sid else None, w)
+        pos = position(store, cc.load_session(store, sid) if sid and not _drawer(store) else None, w)
     k = d.keyStrip
     rh = w.resp_headers if w else None
     t = k.tokens
     stalls = ss._int(f.stall.md.get("stall_count")) if f.stall else (0 if f.success else None)
     sandbox = None
-    if sid:
+    if sid and _drawer(store):
+        if _has(store, "drawer_sandbox"):
+            found = store.query(
+                "SELECT value FROM drawer_sandbox WHERE key = ? AND ts <= ? ORDER BY ts DESC, event_id DESC LIMIT 1",
+                ["s:" + sid, cc.to_ns(d.t) + cc.NS],
+            )
+            sandbox = found[0][0] if found else None
+    elif sid:
         for e in ss.events(store, sid, ["tengu_bash_tool_command_executed"]):
             if e.ts <= cc.to_ns(d.t) + cc.NS:
                 sandbox = ss._str(e.md.get("sandbox_enabled")) or sandbox
@@ -1388,14 +1614,25 @@ def event(store: Store, event_id: str) -> EventDetail | None:
     cid, _, n = event_id.rpartition(":")
     if not cid or not n.isdigit():
         return None
-    found = store.query(
-        """SELECT ts, name, session_id, event_key, source_file FROM (
+    if _drawer(store):
+        found = (
+            store.query(
+                "SELECT ts, coalesce(name, '(unnamed)'), nullif(session_id, ''), event_key, '' FROM drawer_events "
+                "WHERE event_id = ? LIMIT 1",
+                [event_id],
+            )
+            if _has(store, "drawer_events")
+            else []
+        )
+    else:
+        found = store.query(
+            """SELECT ts, name, session_id, event_key, source_file FROM (
              SELECT ts, coalesce(name, '(unnamed)') AS name, session_id, event_key, source_file,
                     row_number() OVER (PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR) AS n
              FROM cc_events WHERE correlation_id = ?)
            WHERE n = ?""",
-        [cid, int(n)],
-    )
+            [cid, int(n)],
+        )
     if not found:
         return None
     ts, name, sid, key, source = found[0]

@@ -21,6 +21,7 @@ import (
 //	STREAM_CYCLE_SECONDS                  how often an owned bucket looks for new records (default 5)
 //	STREAM_REPLICA                        this replica's name (the pod's; default the hostname)
 //	STREAM_HTTP_LISTEN                    /healthz and /lag (default 0.0.0.0:9003)
+//	STREAM_ONCE                           "true": apply every record there is, bucket by bucket, then exit
 //
 // It runs the derived tables' per-key state (StateModel, §4.5).
 func Run() {
@@ -35,6 +36,22 @@ func Run() {
 	cfg := Config{Store: s, Layout: Layout{Prefix: prefix}, Model: StateModel{},
 		Replica: envOr("STREAM_REPLICA", host), BucketBits: envInt("STREAM_BUCKET_BITS", 6),
 		Cycle: time.Duration(envInt("STREAM_CYCLE_SECONDS", 5)) * time.Second}
+	if os.Getenv("STREAM_ONCE") == "true" { // every record there is, then exit (tests, one-off backfills)
+		for b := 0; b < 1<<cfg.BucketBits; b++ {
+			w := &Bucket{S: s, L: cfg.Layout, M: cfg.Model, B: b, Bits: cfg.BucketBits, Epoch: 1, Replica: cfg.Replica, Clock: RealClock{}}
+			for {
+				st, err := w.Cycle(ctx)
+				if err != nil {
+					slog.Error("stream: once", "bucket", b, "err", err)
+					os.Exit(1)
+				}
+				if st.Files == 0 {
+					break
+				}
+			}
+		}
+		return
+	}
 	p := New(cfg)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })

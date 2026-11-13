@@ -177,6 +177,10 @@ func atomicCases() []atomicCase {
 				if LocatorTarget(&r) != "s:s1" {
 					t.Fatalf("target %q", LocatorTarget(&r))
 				}
+			}}, {kind: KindLocator, callID: "a1", key: "l:a1", check: func(t *testing.T, r Record) {
+				if LocatorTarget(&r) != "s:s1" { // the batch's: each session its events went to
+					t.Fatalf("target %q", LocatorTarget(&r))
+				}
 			}}}},
 		{label: CasePendingHeaders, row: row(hdr("c1", false, ccHeaders))},
 		{label: CaseStartHeadersEOS, row: row(hdr("c1", true, ccHeaders)), want: []want{{KindCallStart, "c1", "s:s1", func(t *testing.T, r Record) {

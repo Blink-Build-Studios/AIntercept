@@ -472,7 +472,7 @@ func (s *KeyState) dindexEvent(d *Delta, ev *dEvent) {
 		tid := dmd(md, "tool_use_id")
 		dindex(x.bash, tid, ev.ord, id)
 		s.putFact(d, RoleBash, tid, ev)
-		if v := dmd(md, "sandbox_enabled"); v != "" {
+		if v := pyStr(ev.ev.MD, "sandbox_enabled"); v != "" {
 			x.sandbox.Set(ev.ord, id)
 			if d != nil {
 				s.dresandbox(d, ev.ord)
@@ -513,7 +513,7 @@ func (s *KeyState) dresandbox(d *Delta, o dOrd) {
 	x := s.dr
 	var prev string
 	if _, id, ok := x.sandbox.Lower(o); ok {
-		prev = dmd(x.events[id].md, "sandbox_enabled")
+		prev = pyStr(x.events[id].ev.MD, "sandbox_enabled")
 	}
 	// o itself, and the command after it.
 	var ids []string
@@ -523,7 +523,7 @@ func (s *KeyState) dresandbox(d *Delta, o dOrd) {
 	})
 	for _, id := range ids {
 		ev := x.events[id]
-		v := dmd(ev.md, "sandbox_enabled")
+		v := pyStr(ev.ev.MD, "sandbox_enabled")
 		if v != prev {
 			d.Cases = append(d.Cases, CaseDrawerSandbox)
 			s.rows.put(d, TableDrawerSandbox, id, DrawerSandbox{TS: ev.ev.TS, EventID: id, Value: v})
@@ -552,6 +552,29 @@ func (s *KeyState) deventCalls(ev *dEvent) dset {
 		add(x.byCRID[ev.ev.ClientRequestID])
 	}
 	return out
+}
+
+// pyStr is a metadata value as the API's drawer prints it (Python's str(): a
+// bool is True or False, a number as sent; a dict or list, or none, is "").
+func pyStr(js, k string) string {
+	dec := json.NewDecoder(strings.NewReader(js))
+	dec.UseNumber()
+	m := map[string]any{}
+	if dec.Decode(&m) != nil {
+		return ""
+	}
+	switch v := m[k].(type) {
+	case string:
+		return v
+	case bool:
+		if v {
+			return "True"
+		}
+		return "False"
+	case json.Number:
+		return v.String()
+	}
+	return ""
 }
 
 func dmd(m map[string]any, k string) string {

@@ -155,7 +155,7 @@ func refDrawer(rs []records.Record) map[string]map[string]any {
 			if ev.e.Name != "tengu_bash_tool_command_executed" {
 				continue
 			}
-			v := mdStr(ev.md, "sandbox_enabled")
+			v := pyStr(ev.e.MetadataJSON, "sandbox_enabled")
 			if v == "" || v == last {
 				continue
 			}

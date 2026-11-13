@@ -16,9 +16,9 @@ import pathlib
 
 import pytest
 
-from aintercept_api.buckets import DRAWER_TABLES, RAW_TABLES, BucketStore, LocalSource
+from aintercept_api.buckets import DRAWER_INPUTS, RAW_TABLES, BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
-from tests.bucket_fixture import from_store
+from tests.bucket_fixture import drawer_from_pipeline, from_store
 from tests.builders import Dataset, load_fixture
 from tests.conftest import bounded_store, make_client
 from tests.test_codex import claude_code_account, codex_work
@@ -39,6 +39,7 @@ def _layout(tmp: pathlib.Path, calls: int) -> tuple[pathlib.Path, pathlib.Path, 
     old.ingest()
     layout = tmp / "bucket"
     from_store(old, layout)
+    drawer_from_pipeline(pathlib.Path(root), layout)
     return pathlib.Path(root), layout, old
 
 
@@ -109,7 +110,7 @@ def test_drawer_reads_no_raw_table(stores):
     for url in _drawer_urls(old):
         r = _get(new, store, url)
         assert not (store.tables_read & RAW_TABLES), (url, sorted(store.tables_read & RAW_TABLES))
-        assert store.tables_read <= DRAWER_TABLES, (url, sorted(store.tables_read - DRAWER_TABLES))
+        assert store.tables_read <= DRAWER_INPUTS, (url, sorted(store.tables_read - DRAWER_INPUTS))
         assert json.dumps(r.json(), sort_keys=True) == json.dumps(old.get(url).json(), sort_keys=True), url
 
 
