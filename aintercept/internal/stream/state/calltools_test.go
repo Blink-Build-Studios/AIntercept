@@ -62,7 +62,9 @@ func withTools(c *canon.Request, js string) *canon.Request { c.ToolUsesJSON = js
 
 var callToolCases = []atomicCase{
 	{"a builtin tool", nil,
-		func() records.Record { return callEnd(withTools(ccCall("c1", "s1", 1000), `[{"kind":"builtin","tool":"Edit"}]`)) },
+		func() records.Record {
+			return callEnd(withTools(ccCall("c1", "s1", 1000), `[{"kind":"builtin","tool":"Edit"}]`))
+		},
 		[]string{CaseCallToolUse}},
 	{"an MCP tool with its server, and one without (builtin)", nil,
 		func() records.Record {
@@ -80,7 +82,9 @@ var callToolCases = []atomicCase{
 		},
 		[]string{CaseCallToolUse}},
 	{"a call in flight: none yet", nil,
-		func() records.Record { return callStart(withTools(ccCall("c1", "s1", 1000), `[{"kind":"builtin","tool":"Bash"}]`)) },
+		func() records.Record {
+			return callStart(withTools(ccCall("c1", "s1", 1000), `[{"kind":"builtin","tool":"Bash"}]`))
+		},
 		nil},
 	{"no tools", nil,
 		func() records.Record { return callEnd(ccCall("c1", "s1", 1000)) },
@@ -88,7 +92,9 @@ var callToolCases = []atomicCase{
 	{"the same tool at the same time in two calls: one row in the query", func() []records.Record {
 		return []records.Record{callEnd(withTools(ccCall("c1", "s1", 1000), `[{"kind":"builtin","tool":"Edit"}]`))}
 	},
-		func() records.Record { return callEnd(withTools(ccCall("c2", "s1", 1000), `[{"kind":"builtin","tool":"Edit"}]`)) },
+		func() records.Record {
+			return callEnd(withTools(ccCall("c2", "s1", 1000), `[{"kind":"builtin","tool":"Edit"}]`))
+		},
 		[]string{CaseCallToolUse}},
 }
 

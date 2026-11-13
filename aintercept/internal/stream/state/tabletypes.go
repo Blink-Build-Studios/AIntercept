@@ -37,4 +37,5 @@ var TableTypes = map[string]any{
 	TableSessionMissed:       SessionMissed{},
 	TableSessionEdges:        SessionEdge{},
 	TableSessionTitleCalls:   SessionTitleCall{},
+	TableCallToolUses:        CallToolUse{},
 }

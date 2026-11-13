@@ -66,6 +66,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.prompts(r, &d)
 	s.requests(r, &d)
 	s.sessionRows(r, &d)
+	s.callTools(r, &d)
 	d.Changes = lastChanges(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
@@ -178,7 +179,7 @@ var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTur
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
 	PromptItem{}, StepRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
-	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}}
+	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}, CallToolUse{}}
 
 func init() {
 	for _, v := range RowTypes {
