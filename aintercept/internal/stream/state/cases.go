@@ -92,3 +92,6 @@ var PromptCases = []string{
 }
 
 func init() { AllCases = append(AllCases, PromptCases...) }
+
+// CaseCallToolUse: an ended call's response invoked tools (call_tool_uses).
+const CaseCallToolUse = "call.tool_use"

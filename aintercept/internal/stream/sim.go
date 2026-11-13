@@ -39,6 +39,10 @@ type SimConfig struct {
 	Chaos                              Chaos
 	Input                              []records.Record // a real capture's records; else generated
 	Model                              Model            // default CountModel
+	// OutDir, when set, receives the committed layout at the end (every object
+	// under stream/v1/, keyed as in the store, without the sim's prefix): what
+	// the stateless API reads.
+	OutDir string
 }
 
 // SimResult is what happened.

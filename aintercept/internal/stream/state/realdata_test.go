@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
@@ -50,7 +51,7 @@ func TestRealData(t *testing.T) {
 	}
 	sort.Strings(names)
 	covered := map[string]bool{CaseDuplicate: true}
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases, requestCases, sessionCases} {
+	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases} {
 		for _, c := range cs {
 			for _, x := range c.cases {
 				covered[x] = true
@@ -107,6 +108,11 @@ func TestRealData(t *testing.T) {
 	sortTools(wantTools)
 	if got := sessionToolsOf(o); !reflect.DeepEqual(got, wantTools) {
 		t.Errorf("session tools: %d, want %d", len(got), len(wantTools))
+	}
+	wantCallTools := append([]process.CallToolUse(nil), ref.CallTools...)
+	sortCallTools(wantCallTools)
+	if got := callToolUsesOf(o); !reflect.DeepEqual(got, wantCallTools) {
+		t.Errorf("call tool uses: %d, want %d", len(got), len(wantCallTools))
 	}
 	pm, ps, af, ad := personTables(o)
 	for _, c := range []struct {
