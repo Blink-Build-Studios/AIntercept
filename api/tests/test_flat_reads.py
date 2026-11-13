@@ -7,6 +7,7 @@ same request against 8x the history reads the same objects."""
 
 import pathlib
 from collections import Counter
+from typing import Any
 
 import pytest
 
@@ -63,7 +64,7 @@ def _layout(tmp: pathlib.Path, history: int) -> tuple[pathlib.Path, pathlib.Path
 @pytest.fixture(scope="module")
 def stores(tmp_path_factory):
     out = {}
-    made = []
+    made: list[V1Store] = []
     for x in (1, 8):
         tmp = tmp_path_factory.mktemp(f"flat{x}")
         root, layout = _layout(tmp, x)
@@ -81,7 +82,7 @@ def stores(tmp_path_factory):
         store.close()
 
 
-def _reads(stores, x: int, url: str) -> tuple[Counter[str], int, object]:
+def _reads(stores, x: int, url: str) -> tuple[Counter[str], int, Any]:
     src, store = stores[x]()
     client = make_client(store)
     src.reset()
@@ -97,7 +98,7 @@ def _a_request_id(stores) -> str:
     for p in people:
         for q in client.get(f"/api/v1/people/{p['personId']}/requests?pageSize=5").json()["data"]:
             if not q["requestId"].startswith("reported:"):
-                return q["requestId"]
+                return str(q["requestId"])
     raise AssertionError("no captured request in the demo dataset")
 
 

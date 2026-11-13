@@ -219,6 +219,10 @@ api:
   # Python and the responses being built); or a size like "900MB".
   memoryLimit: ""
   threads: 2             # DuckDB's threads (its default is the node's cores, not the CPU limit)
+  # Redis (host:port) for the pods' newest ingest times (/status). Empty: the
+  # observer's (observer.redisAddr, else the in-cluster Redis). With none, /status
+  # takes the merge's newest row alone.
+  redisAddr: ""
   resources:
     # Memory request = limit: the scheduler reserves all of it, and the pod is the
     # last evicted when a node runs short (docs/INTERCEPTION_ISSUES.md P5).
