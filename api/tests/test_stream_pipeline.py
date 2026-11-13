@@ -19,7 +19,7 @@ from aintercept_api import state_sql
 from aintercept_api.buckets import BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
 from tests.builders import Dataset, load_fixture
-from tests.conftest import aintercept_binary, bounded_store, make_client
+from tests.conftest import FULL, aintercept_binary, bounded_store, few_per_group, make_client
 from tests.test_bucket_parity import _urls
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
@@ -69,7 +69,7 @@ def stream_layout(raw: pathlib.Path, out: pathlib.Path, *, seed: int = 1) -> Non
             "-ingest-pods",
             "3",
             "-steps",
-            "60",
+            "60" if FULL else "8",
             "-checkpoints",
             "3",
             "-seed",
@@ -133,10 +133,20 @@ def test_the_stored_tables_columns_are_the_ones_the_api_makes_empty_tables_with(
     assert seen >= len(state_sql.STATE_TABLES) - 2  # a dataset may never write a rare table
 
 
+@pytest.mark.full
 def test_every_endpoint_matches_todays_store(clients):
     old, new = clients
     urls = _urls(old)
     assert len(urls) > 100
+    _hold(old, new, urls)
+
+
+def test_each_endpoint_group_matches_todays_store(clients):
+    old, new = clients
+    _hold(old, new, few_per_group(_urls(old), group))
+
+
+def _hold(old, new, urls: list[str]) -> None:
     held: Counter[str] = Counter()
     differing: dict[str, list[str]] = {}
     reported: Counter[str] = Counter()

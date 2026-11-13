@@ -14,7 +14,7 @@ from aintercept_api.buckets import LocalSource
 from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
 from tests.builders import Dataset, load_fixture
-from tests.conftest import aintercept_binary, bounded_store, make_client
+from tests.conftest import aintercept_binary, bounded_store, few_per_group, make_client
 from tests.test_bucket_parity import _urls
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
@@ -57,10 +57,22 @@ def test_the_layout_has_a_merge_and_key_commits(clients):
     assert merge.index.tables and merge.days
 
 
+@pytest.mark.full
 def test_every_endpoint_matches_todays_store(clients):
     old, new = clients
     urls = _urls(old)
     assert len(urls) > 100
+    _hold(old, new, urls)
+
+
+def test_each_endpoint_group_matches_todays_store(clients):
+    old, new = clients
+    urls = _urls(old)
+    # The sample, and every in-flight event drawer (the one documented difference).
+    _hold(old, new, few_per_group(urls, group) + [u for u in urls if u.startswith("/api/v1/events/batch-")][:2])
+
+
+def _hold(old, new, urls: list[str]) -> None:
     held: Counter[str] = Counter()
     differing: dict[str, list[str]] = {}
     for url in urls:

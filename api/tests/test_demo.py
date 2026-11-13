@@ -1,14 +1,27 @@
 """`demo` scenarios: one person's real Claude Code traffic (sanitized; see
 tools/make_demo_fixture.py), so stories show real shapes and numbers."""
 
-from tests.builders import load_fixture
+import pytest
+
+from tests.builders import Dataset, load_fixture
+from tests.conftest import assert_request_rows_parity, bounded_store, make_client
 
 DEMO_ACCOUNT = "7d2e0000-0000-4000-8000-00000000a41c"
 
 
-def test_person_sessions_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+@pytest.fixture(scope="module")
+def demo(tmp_path_factory):
+    """One client over the demo fixture, shared: these tests only read it."""
+    ds = Dataset(tmp_path_factory.mktemp("demo") / "data")
+    load_fixture(ds, "demo")
+    store = bounded_store(ds.write())
+    yield make_client(store)
+    assert_request_rows_parity(store)
+    store.close()
+
+
+def test_person_sessions_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/sessions")
     write_sample(client, r, "demo")
     (s,) = r.json()["data"]
@@ -21,9 +34,8 @@ def test_person_sessions_demo(dataset, client_for, write_sample):
     assert [w["count"] for w in cov["windows"]] == [37, 4, 3, 50, 1]
 
 
-def test_person_timeline_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_person_timeline_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/timeline")
     write_sample(client, r, "demo")
     d = r.json()["data"]
@@ -33,35 +45,31 @@ def test_person_timeline_demo(dataset, client_for, write_sample):
     assert {p["state"] for p in d["presence"]} == {"focused", "away", "asleep"}
 
 
-def test_person_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_person_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}")
     write_sample(client, r, "demo")
     p = r.json()["data"]
     assert p["live"] is True and p["posture"]["bypassPct"] == 99.7
 
 
-def test_person_summary_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_person_summary_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/summary")
     write_sample(client, r, "demo")
     rb = r.json()["data"]["ribbon"]
     assert rb["modelCalls"] == 640 and rb["sessions"] == 1
 
 
-def test_person_requests_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_person_requests_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/requests", params={"pageSize": 50})
     write_sample(client, r, "demo")
     assert r.json()["meta"]["total"] > 640
 
 
-def test_coverage_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_coverage_demo(demo, write_sample):
+    client = demo
     r = client.get("/api/v1/coverage", params={"personId": DEMO_ACCOUNT})
     write_sample(client, r, "demo")
     assert r.json()["data"]["notCaptured"] == 95
@@ -75,9 +83,8 @@ SESSION = f"/api/v1/sessions/{DEMO_SESSION}"
 BRIEF_WINDOW = {"from": "2026-11-03T14:20:00Z", "to": "2026-11-03T22:40:00Z"}
 
 
-def test_session_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_session_demo(demo, write_sample):
+    client = demo
     r = client.get(SESSION)
     write_sample(client, r, "demo")
     h = r.json()["data"]
@@ -86,9 +93,8 @@ def test_session_demo(dataset, client_for, write_sample):
     assert h["networks"] == 3  # client IPs, faked one-for-one by the fixture
 
 
-def test_session_timeline_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_session_timeline_demo(demo, write_sample):
+    client = demo
     r = client.get(f"{SESSION}/timeline")
     write_sample(client, r, "demo")
     d = r.json()["data"]
@@ -103,9 +109,8 @@ def test_session_timeline_demo(dataset, client_for, write_sample):
     assert max(c["tokens"] for c in d["context"]) == first["from"]
 
 
-def test_session_state_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_session_state_demo(demo, write_sample):
+    client = demo
     r = client.get(f"{SESSION}/state")
     write_sample(client, r, "demo")
     c = r.json()["data"]["counts"]
@@ -113,9 +118,8 @@ def test_session_state_demo(dataset, client_for, write_sample):
     assert c["requests"] == client.get(f"{SESSION}/requests").json()["meta"]["total"]
 
 
-def test_session_prompts_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_session_prompts_demo(demo, write_sample):
+    client = demo
     r = client.get(f"{SESSION}/prompts", params={**BRIEF_WINDOW, "pageSize": 10})
     write_sample(client, r, "demo")
     assert r.json()["meta"]["total"] == 30  # prompts and between rows, recaps included
@@ -126,9 +130,8 @@ def test_session_prompts_demo(dataset, client_for, write_sample):
     assert steps + len(outside) == 640  # every captured call is a step or a between row, exactly once
 
 
-def test_session_requests_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_session_requests_demo(demo, write_sample):
+    client = demo
     r = client.get(f"{SESSION}/requests")
     write_sample(client, r, "demo")
     assert r.json()["meta"]["total"] > 640 + 95
@@ -136,9 +139,8 @@ def test_session_requests_demo(dataset, client_for, write_sample):
     assert missed == 95
 
 
-def test_session_events_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_session_events_demo(demo, write_sample):
+    client = demo
     r = client.get(f"{SESSION}/events")
     write_sample(client, r, "demo")
     meta = r.json()["meta"]
@@ -155,9 +157,8 @@ def _demo_call(client) -> str:
     return str(main[0])
 
 
-def test_request_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_request_demo(demo, write_sample):
+    client = demo
     cid = _demo_call(client)
     r = client.get(f"/api/v1/requests/{cid}")
     write_sample(client, r, "demo")
@@ -169,27 +170,24 @@ def test_request_demo(dataset, client_for, write_sample):
     assert client.get(f"/api/v1/requests/{missed['requestId']}").json()["data"]["kind"] == "notCaptured"
 
 
-def test_request_raw_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_request_raw_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/requests/{_demo_call(client)}/raw")
     write_sample(client, r, "demo")
     d = r.json()["data"]
     assert d["unavailable"] is None and d["contentRetained"] is False and d["responseLine"].startswith("200")
 
 
-def test_request_details_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_request_details_demo(demo, write_sample):
+    client = demo
     r = client.get(f"/api/v1/requests/{_demo_call(client)}/details")
     write_sample(client, r, "demo")
     d = r.json()["data"]
     assert len(d["sections"]) == 8 and any(e["name"] == "tengu_api_success" for e in d["events"])
 
 
-def test_event_demo(dataset, client_for, write_sample):
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+def test_event_demo(demo, write_sample):
+    client = demo
     first = client.get(f"{SESSION}/events", params={"pageSize": 1}).json()["data"][0]
     r = client.get(f"/api/v1/events/{first['eventId']}")
     write_sample(client, r, "demo")
@@ -197,10 +195,9 @@ def test_event_demo(dataset, client_for, write_sample):
     assert d["name"] == first["name"] and d["sessionId"] == DEMO_SESSION and d["raw"]["name"] == first["name"]
 
 
-def test_prompt_counts_agree(dataset, client_for):
+def test_prompt_counts_agree(demo):
     """The session's prompt count (its row, its header) is the Prompts tab's: every typed prompt."""
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+    client = demo
     (row,) = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/sessions").json()["data"]
     header = client.get(SESSION).json()["data"]
     tab, page = 0, 1
@@ -213,10 +210,9 @@ def test_prompt_counts_agree(dataset, client_for):
     assert row["prompts"] == header["prompts"] == tab == 43
 
 
-def test_kind_counts_follow_the_other_filters(dataset, client_for):
+def test_kind_counts_follow_the_other_filters(demo):
     """The kind chips' counts: every filter but kind applies (handoff §11E.2: MODEL 94, the others 0)."""
-    load_fixture(dataset, "demo")
-    client = client_for(dataset)
+    client = demo
     base = f"/api/v1/people/{DEMO_ACCOUNT}/requests"
     everything = client.get(base).json()
     assert sum(everything["kindCounts"].values()) == everything["meta"]["total"]

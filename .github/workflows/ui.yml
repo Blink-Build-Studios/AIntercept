@@ -49,6 +49,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      # The tests run the Go pipeline (the processor, the replay): go.mod's toolchain, with
+      # its build cache, rather than the runner's.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: aintercept/go.mod
+          cache-dependency-path: |
+            aintercept/go.sum
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.9"
@@ -95,6 +102,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: aintercept/go.mod
+          cache-dependency-path: |
+            aintercept/go.sum
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.9"
