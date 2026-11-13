@@ -142,20 +142,24 @@ def _laid_out_root() -> pathlib.Path:
     return _laid_out_dir[0]
 
 
-def lay_out(raw: pathlib.Path) -> pathlib.Path:
+def lay_out(raw: pathlib.Path, pg: str | None = None) -> pathlib.Path:
     """The v5 pipeline over raw (docs/PIPELINE.md): `aintercept v1layout` runs the observer's own
     code to records and calls/ detail objects, applies each key's records and commits it under
     v1/keys/, and runs one merge into v1/merge/. Deterministic, so a dataset another test already
-    laid out is reused."""
+    laid out is reused. With pg (a DSN), every key's rendered rows are also written into that
+    Postgres (v1layout -pg): in the same run when the dataset isn't laid out yet."""
     digest = raw_digest(raw)
-    if digest not in _laid_out:
-        out = _laid_out_root() / digest
+    if digest not in _laid_out or pg is not None:
+        fresh = digest not in _laid_out
+        out = _laid_out_root() / digest if fresh else pathlib.Path(tempfile.mkdtemp(dir=_laid_out_root()))
         subprocess.run(  # noqa: S603
-            [str(aintercept_binary()), "v1layout", "-src", str(raw), "-out", str(out), "-prefix", "sim"],
+            [str(aintercept_binary()), "v1layout", "-src", str(raw), "-out", str(out), "-prefix", "sim"]
+            + (["-pg", pg] if pg is not None else []),
             check=True,
             capture_output=True,
         )
-        _laid_out[digest] = out
+        if fresh:
+            _laid_out[digest] = out
     return _laid_out[digest]
 
 

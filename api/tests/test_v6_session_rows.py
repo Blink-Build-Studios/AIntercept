@@ -1,13 +1,16 @@
-"""The session render side by side with the oracle (docs/PIPELINE.md build step 3, its
-format-agnostic part).
+"""The rendered session tables side by side with the oracle (docs/PIPELINE.md v7 build step 3).
 
-`aintercept v1layout` writes each session key's finished tables (state.RenderSession, from the
-key's own rows) under v2/test-sessions/<sid>/<table>.parquet: TEST-ONLY, one Parquet file per
-session per table, not the v6 storage format (under review). For every session of the API test
-datasets, those tables equal the oracle's for that session, row for row, seq included.
+`aintercept v1layout -pg <dsn>` writes every key's rendered rows into a fresh Postgres
+(internal/render: state.RenderSession re-encoded, the folds); this reads each session's 9 tables
+back as the API will load them, and compares them with the oracle's for that session, row for row,
+seq by order. The load fills back the two re-encodings (prompt_rows.session_last_ns from
+session_rows.prompt_last_ns; session_marks.seq keyed per block, compared by order) and drops the
+columns the API doesn't load (own_title, prompt_last_ns, key_day, event_rows.batch). The folds are
+checked against the oracle's tables too: session_call_days, agent_calls (and their hours) and
+batch_parts.
 
 What the session's own key can't know isn't rendered, so it isn't compared:
-- children_json (the children's keys);
+- children_json (the children's keys): NULL in Postgres, joined at read time;
 - a Codex thread's label from a title thread, another key. The datasets' Codex threads have none,
   so every label is compared;
 - a Codex thread's Requests tab rows that no thread names (the credential's c: key);
@@ -16,17 +19,19 @@ What the session's own key can't know isn't rendered, so it isn't compared:
   The builders' batches never end, so their rows are left out here; an ended batch's are compared.
 """
 
+import contextlib
 import pathlib
-import urllib.parse
 from collections.abc import Iterator
 from typing import Any
 
 import duckdb
 import pytest
 
+from tests import pgdb
 from tests.builders import ClaudeCode, Dataset, load_fixture
 from tests.conftest import lay_out
 from tests.oracle.harness import SESSION_TABLES, Layout, Oracle, Table, Tables, assert_same
+from tests.oracle.store import Scope
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_session import H, prompt
@@ -49,31 +54,38 @@ _UNORDERED = ("session_tools", "call_tool_uses")
 _CROSS_SESSION = ("children_json",)
 
 
-def rendered_tables(layout: Layout, sid: str) -> Tables:
-    """A session's rendered tables, as v1layout wrote them (test-only files)."""
-    d = layout.v2 / "test-sessions" / urllib.parse.quote(sid, safe="$&+:=@")
+# The columns a table holds that the API doesn't load (docs/PIPELINE.md §3.3).
+_EXTRAS = {"session_rows": ("own_title", "prompt_last_ns", "key_day"), "event_rows": ("batch",)}
+
+
+def _quoted(s: str) -> str:
+    return "'" + s.replace("'", "''") + "'"
+
+
+def rendered_tables(dsn: str, sid: str) -> Tables:
+    """A session's rendered tables read back from Postgres as the API loads them: the extras dropped,
+    prompt_rows.session_last_ns from its session row (a session with no row keeps its own)."""
     out: Tables = {}
-    con = duckdb.connect()
+    con, pg = duckdb.connect(), pgdb.connect(dsn)
     try:
         con.execute("SET threads = 1")
         for name in SESSION_TABLES:
-            path = d / f"{name}.parquet"
-            if path.exists():
-                cur = con.execute("SELECT * FROM read_parquet(?)", [str(path)])
-                out[name] = _flatten(Table(tuple(c[0] for c in cur.description or []), cur.fetchall()))
+            owner = "scope_session_id" if name == "session_request_rows" else "session_id"
+            pgdb.load(con, pg, name, f"SELECT * FROM {name} WHERE {owner} = {_quoted(sid)}")  # noqa: S608
+        con.execute(
+            """UPDATE prompt_rows p SET session_last_ns = s.prompt_last_ns FROM session_rows s
+               WHERE s.session_id = p.session_id AND s.prompt_last_ns IS NOT NULL"""
+        )
+        for name in SESSION_TABLES:
+            cols = f"* EXCLUDE ({', '.join(_EXTRAS[name])})" if name in _EXTRAS else "*"
+            cur = con.execute(f"SELECT {cols} FROM {name}")  # noqa: S608 (our table and column names)
+            t = Table(tuple(c[0] for c in cur.description or []), cur.fetchall())
+            if t.rows:
+                out[name] = t
     finally:
         con.close()
+        pg.close()
     return out
-
-
-def _flatten(t: Table) -> Table:
-    """session_request_rows' Go row nests the request row under `row`: as the API's table, flat."""
-    if "row" not in t.columns or not t.rows:
-        return t
-    i = t.columns.index("row")
-    inner = tuple(t.rows[0][i].keys())
-    rows = [r[:i] + tuple(r[i][k] for k in inner) + r[i + 1 :] for r in t.rows]
-    return Table(t.columns[:i] + inner + t.columns[i + 1 :], rows)
 
 
 def _shaped(want: Table, got: Table | None, name: str) -> Table:
@@ -143,21 +155,31 @@ def _datasets(tmp: pathlib.Path) -> Iterator[tuple[str, pathlib.Path]]:
 
 
 @pytest.fixture(scope="module")
-def layouts(tmp_path_factory) -> list[tuple[str, pathlib.Path]]:
-    tmp = tmp_path_factory.mktemp("v6s")
-    return [(name, lay_out(raw)) for name, raw in _datasets(tmp)]
+def layouts(tmp_path_factory) -> Iterator[list[tuple[str, pathlib.Path, str]]]:
+    """Each dataset's v1 layout (the oracle's) and a fresh Postgres holding its rendered rows."""
+    admin = pgdb.admin_dsn()
+    if admin is None:
+        if pgdb.required():
+            pytest.fail("AINTERCEPT_TEST_PG isn't set (CI's service container should set it)")
+        pytest.skip("no test Postgres: set AINTERCEPT_TEST_PG (make check starts one: scripts/test-pg.sh)")
+    tmp = tmp_path_factory.mktemp("v7s")
+    with contextlib.ExitStack() as stack:
+        out = []
+        for name, raw in _datasets(tmp):
+            dsn = stack.enter_context(pgdb.fresh_database(admin))
+            out.append((name, lay_out(raw, pg=dsn), dsn))
+        yield out
 
 
-def test_every_sessions_render_equals_the_oracles_tables(layouts):
+def test_every_sessions_rendered_rows_equal_the_oracles_tables(layouts):
     compared: dict[str, int] = {}
     rows: dict[str, int] = {}
-    for name, root in layouts:
-        lay = Layout(root)
-        with Oracle(lay) as oracle:
+    for name, root, dsn in layouts:
+        with Oracle(Layout(root)) as oracle:
             sids = oracle.session_ids()
             assert sids, name
             for sid in sids:
-                w, g = comparable(oracle.session(sid), rendered_tables(lay, sid), sid)
+                w, g = comparable(oracle.session(sid), rendered_tables(dsn, sid), sid)
                 assert_same(w, g, entity=f"{name}: session {sid}", unordered=_UNORDERED)
                 compared[name] = compared.get(name, 0) + 1
                 for t, v in w.items():
@@ -166,3 +188,62 @@ def test_every_sessions_render_equals_the_oracles_tables(layouts):
     assert compared["demo and builders"] >= 5 and compared["spanning batch"] == 2, compared
     # Not vacuous: every session table holds rows somewhere.
     assert all(rows[t] for t in SESSION_TABLES), rows
+
+
+def _pg_rows(dsn: str, sql: str) -> list[tuple[Any, ...]]:
+    con, pg = duckdb.connect(), pgdb.connect(dsn)
+    try:
+        return pgdb.load(con, pg, "t", sql).fetchall()
+    finally:
+        con.close()
+        pg.close()
+
+
+def test_the_folds_equal_the_oracles(layouts):
+    """session_call_days are the oracle's call marks per session and day (_ACTIVITY's); agent_calls
+    are the merge's (/overview's count) and agent_call_hours their hours; batch_parts folded per
+    batch are the request log's batch CTEs over batch_members; event_rows.batch is the summary's
+    regexp over event_id."""
+    for name, root, dsn in layouts:
+        with Oracle(Layout(root)) as oracle:
+            con = oracle.store._load(Scope.everything()).con
+            want = sorted(
+                con.execute(
+                    """SELECT session_id, CAST(floor(t_ns / 1e9 / 86400) AS BIGINT), count(*), min(t_ns), max(t_ns)
+                       FROM session_marks WHERE kind = 'call' GROUP BY 1, 2"""
+                ).fetchall()
+            )
+            assert want, name
+            assert sorted(_pg_rows(dsn, "SELECT session_id, day, n, first_ns, last_ns FROM session_call_days")) == want
+            (n,) = _pg_rows(dsn, "SELECT count(*) FROM agent_calls")[0]
+            assert n and n == oracle.store.agent_calls_in(None, None), name
+            hours = _pg_rows(
+                dsn,
+                """SELECT count(*) FROM (SELECT key, ts_ns / 3600000000000 * 3600000000000 AS hour, count(*) AS n
+                   FROM agent_calls WHERE ts_ns IS NOT NULL GROUP BY 1, 2) a
+                   FULL JOIN agent_call_hours h USING (key, hour) WHERE a.n IS DISTINCT FROM h.n""",
+            )
+            assert hours == [(0,)], name
+            want_batches = sorted(
+                con.execute(
+                    """SELECT batch_id, count(*), min(name) FILTER (WHERE name <> ''),
+                         arg_min(session_id, (ns, session_id)) FILTER (WHERE session_id <> '')
+                       FROM batch_members GROUP BY 1"""
+                ).fetchall()
+            )
+            got_batches = sorted(
+                _pg_rows(
+                    dsn,
+                    """SELECT batch_id, sum(n)::bigint, min(min_name),
+                         (array_agg(first_session ORDER BY first_ns, first_session)
+                           FILTER (WHERE first_session IS NOT NULL))[1]
+                       FROM batch_parts GROUP BY 1""",
+                )
+            )
+            assert want_batches and got_batches == want_batches, name
+            bad = _pg_rows(
+                dsn,
+                """SELECT count(*) FROM event_rows
+                   WHERE batch IS DISTINCT FROM coalesce(substring(event_id FROM '^(.*):[0-9]+$'), '')""",
+            )
+            assert bad == [(0,)], name
