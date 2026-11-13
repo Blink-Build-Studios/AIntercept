@@ -52,7 +52,8 @@ kubectl get nodes   # confirm Ready
 ```bash
 doctl registry login
 REG=registry.digitalocean.com/<your-registry>
-# One image; the observer and certsvc Deployments run it in their own mode.
+# One image; the Envoy pod's observer, certsvc and the rollup Deployment run it in their own mode.
+# Redis is the stock upstream image (images.redis), pulled from Docker Hub.
 docker buildx build --platform linux/amd64 -t $REG/aintercept:dev --push ./aintercept
 # Let the cluster pull from the DO registry:
 doctl registry kubernetes-manifest | kubectl apply -f -   # creates the pull secret

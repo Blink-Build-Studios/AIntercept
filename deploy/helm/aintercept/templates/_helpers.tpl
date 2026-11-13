@@ -68,7 +68,12 @@ topologySpreadConstraints:
 {{- end }}
 {{- end -}}
 
-{{/* ServiceAccount name for process or api: serviceAccount.name, else aintercept-<component>. */}}
+{{/* host:port of the in-cluster Redis (redis.enabled), unless observer.redisAddr overrides it. */}}
+{{- define "aintercept.redisAddr" -}}
+{{- if .Values.observer.redisAddr -}}{{ .Values.observer.redisAddr }}{{- else if .Values.redis.enabled -}}redis:6379{{- end -}}
+{{- end -}}
+
+{{/* ServiceAccount name for rollup or api: serviceAccount.name, else aintercept-<component>. */}}
 {{- define "aintercept.readerServiceAccountName" -}}
 {{- $sa := .c.serviceAccount | default dict -}}
 {{ $sa.name | default (printf "aintercept-%s" .component) }}
