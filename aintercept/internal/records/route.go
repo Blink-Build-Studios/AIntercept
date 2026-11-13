@@ -1,6 +1,9 @@
 package records
 
 import (
+	"strconv"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 
 	"fmt"
@@ -20,6 +23,11 @@ const DefaultBucketBits = 6
 // its own session.
 func RoutingKey(r *Record) string {
 	switch {
+	case r.Kind == KindLocator && r.Event != nil:
+		return "l:reported:" + ReportID(r.Event)
+	case r.Kind == KindLocator:
+		corr, _, _ := strings.Cut(r.CallID, "#")
+		return "l:" + corr
 	case r.Kind == KindAccount && r.Account != nil:
 		return "a:" + r.Account.AccountID
 	case r.Kind == KindClientEvent && r.Event != nil:
@@ -45,6 +53,18 @@ func RoutingKey(r *Record) string {
 		return credentialKey(r.Call.KeyHash, at)
 	}
 	return ""
+}
+
+// ReportID is the id a reported call opens with: reported:<requestId |
+// clientRequestId | ts> (the request log's not-captured row).
+func ReportID(e *canon.Event) string {
+	switch {
+	case e.RequestID != "":
+		return e.RequestID
+	case e.ClientRequestID != "":
+		return e.ClientRequestID
+	}
+	return strconv.FormatInt(e.NS, 10)
 }
 
 func credentialKey(keyHash string, ns int64) string {

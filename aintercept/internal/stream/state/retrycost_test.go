@@ -51,7 +51,9 @@ func TestRequestsAllocsPerRecord(t *testing.T) {
 	k := 0
 	allocs := testing.AllocsPerRun(1000, func() { s.Apply(pre[k]); k++ })
 	t.Logf("%.1f allocs per record", allocs)
-	if allocs > 260 {
-		t.Errorf("%.1f allocations per record on the retry-dense mix, want at most 260", allocs)
+	// 260 for the request tables, plus the drawer's rows (a call's row, its
+	// step, a report's facts) since the drawer moved onto the state.
+	if allocs > 275 {
+		t.Errorf("%.1f allocations per record on the retry-dense mix, want at most 275", allocs)
 	}
 }

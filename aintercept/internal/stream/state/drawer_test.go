@@ -31,8 +31,6 @@ import (
 // refDrawer is the single pass the per-record updates must equal: today's
 // request_detail.py semantics, over every record at once.
 
-const secNS = int64(1_000_000_000)
-
 func drawerTables() map[string]bool {
 	return map[string]bool{TableDrawerLocator: true, TableDrawerCalls: true, TableDrawerSteps: true, TableDrawerFacts: true,
 		TableDrawerSandbox: true, TableDrawerReports: true, TableDrawerEvents: true}
@@ -147,7 +145,7 @@ func refDrawer(rs []records.Record) map[string]map[string]any {
 					rid = fmt.Sprint(ev.e.NS)
 				}
 				if _, ok := out[TableDrawerReports][key+"/"+rid]; !ok {
-					put(TableDrawerReports, key, rid, DrawerReport{ReportID: rid, Event: drawerEventOf(ev.id, ev.e)})
+					put(TableDrawerReports, key, rid, DrawerReport{ReportID: rid, DrawerEvent: drawerEventOf(ev.id, ev.e)})
 				}
 			}
 		}
@@ -194,9 +192,34 @@ func refDrawer(rs []records.Record) map[string]map[string]any {
 		if sid == "" {
 			continue
 		}
+		for _, ev := range evs {
+			fact := func(role, k string, first bool) {
+				if k == "" {
+					return
+				}
+				id := role + "/" + k
+				if !first {
+					id += "/" + ev.id
+				} else if _, ok := out[TableDrawerFacts][key+"/"+id]; ok {
+					return
+				}
+				put(TableDrawerFacts, key, id, DrawerFact{Lookup: k, Role: role, DrawerEvent: drawerEventOf(ev.id, ev.e)})
+			}
+			switch ev.e.Name {
+			case "tengu_api_success":
+				fact(RoleSuccess, mdStr(ev.md, "requestId"), true)
+				fact(RoleSuccess, mdStr(ev.md, "clientRequestId"), true)
+			case "tengu_streaming_stall_summary":
+				fact(RoleStall, mdStr(ev.md, "request_id"), true)
+			case "tengu_tool_use_success", "tengu_tool_use_error":
+				fact(RoleTool, mdStr(ev.md, "requestId"), false)
+			case "tengu_bash_tool_command_executed":
+				fact(RoleBash, mdStr(ev.md, "tool_use_id"), false)
+			}
+		}
 		for id, c := range calls {
 			for _, f := range refFacts(id, c, evs) {
-				put(TableDrawerFacts, key, f.CallID+"/"+f.Role+"/"+f.Event.EventID, f)
+				put(TableDrawerFacts, key, f.Role+"/"+f.Lookup, f)
 			}
 		}
 	}
@@ -212,51 +235,7 @@ func refFacts(id string, c DrawerCall, evs []refEv) []DrawerFact {
 	cid := strings.ReplaceAll(id, "#", "~")
 	var out []DrawerFact
 	add := func(role string, ev refEv) {
-		out = append(out, DrawerFact{CallID: cid, Role: role, Event: drawerEventOf(ev.id, ev.e)})
-	}
-	first := func(match func(refEv) bool) *refEv {
-		for i := range evs {
-			if match(evs[i]) {
-				return &evs[i]
-			}
-		}
-		return nil
-	}
-	succ := func(x string) func(refEv) bool {
-		return func(ev refEv) bool {
-			return ev.e.Name == "tengu_api_success" && (mdStr(ev.md, "requestId") == x || mdStr(ev.md, "clientRequestId") == x)
-		}
-	}
-	var s *refEv
-	if rid != "" {
-		s = first(succ(rid))
-	}
-	if s == nil && crid != "" {
-		s = first(succ(crid))
-	}
-	if s != nil {
-		add(RoleSuccess, *s)
-	}
-	if rid != "" {
-		if st := first(func(ev refEv) bool {
-			return ev.e.Name == "tengu_streaming_stall_summary" && mdStr(ev.md, "request_id") == rid
-		}); st != nil {
-			add(RoleStall, *st)
-		}
-		tools := map[string]bool{}
-		for _, ev := range evs {
-			if (ev.e.Name == "tengu_tool_use_success" || ev.e.Name == "tengu_tool_use_error") && mdStr(ev.md, "requestId") == rid {
-				add(RoleTool, ev)
-				if t := mdStr(ev.md, "toolUseID"); t != "" {
-					tools[t] = true
-				}
-			}
-		}
-		for _, ev := range evs {
-			if ev.e.Name == "tengu_bash_tool_command_executed" && tools[mdStr(ev.md, "tool_use_id")] {
-				add(RoleBash, ev)
-			}
-		}
+		out = append(out, DrawerFact{Lookup: cid, Role: role, DrawerEvent: drawerEventOf(ev.id, ev.e)})
 	}
 	if prompt != "" {
 		var q *refEv
@@ -355,17 +334,17 @@ func TestDrawerAtomic(t *testing.T) {
 		{"call end ends it", []records.Record{callStart(c1)}, callEnd(c1), []string{CaseDrawerCallEnd}},
 		{"start after its end: ignored", []records.Record{callEnd(c1)}, callStart(c1), nil},
 		{"step links its previous", []records.Record{callEnd(c1)}, callEnd(c2), []string{CaseDrawerCallEnd, CaseDrawerChain}},
-		{"success: by request id", []records.Record{callEnd(c1)}, succ, []string{CaseDrawerEvent, CaseDrawerFact}},
-		{"success before its call", []records.Record{succ}, callEnd(c1), []string{CaseDrawerCallEnd, CaseDrawerFact}},
-		{"success: by client request id", []records.Record{callEnd(drawerCall("c1", "s1", 1000, func(c *canon.Request) { c.RequestID, c.ClientRequestID = "", "cr_1" }))}, succCR, []string{CaseDrawerEvent, CaseDrawerFact}},
+		{"success: by request id", []records.Record{callEnd(c1)}, succ, []string{CaseDrawerEvent, CaseDrawerReport, CaseDrawerFact}},
+		{"success before its call: found by its id", []records.Record{succ}, callEnd(c1), []string{CaseDrawerCallEnd}},
+		{"success: by client request id", []records.Record{callEnd(drawerCall("c1", "s1", 1000, func(c *canon.Request) { c.RequestID, c.ClientRequestID = "", "cr_1" }))}, succCR, []string{CaseDrawerEvent, CaseDrawerReport, CaseDrawerFact}},
 		{"stall summary", []records.Record{callEnd(c1)}, stall, []string{CaseDrawerEvent, CaseDrawerFact}},
 		{"tool use", []records.Record{callEnd(c1)}, tool, []string{CaseDrawerEvent, CaseDrawerFact}},
 		{"bash of a tool use", []records.Record{callEnd(c1), tool}, bash, []string{CaseDrawerEvent, CaseDrawerFact, CaseDrawerSandbox}},
 		{"query before the call", []records.Record{callEnd(c1)}, query, []string{CaseDrawerEvent, CaseDrawerFact}},
 		{"query too early: none", []records.Record{callEnd(c1)}, oldQuery, []string{CaseDrawerEvent}},
 		{"retry of a failed call", []records.Record{callEnd(failed)}, retry, []string{CaseDrawerEvent, CaseDrawerFact}},
-		{"sandbox unchanged: no row", []records.Record{bash}, sand2, []string{CaseDrawerEvent}},
-		{"report", nil, succ, []string{CaseDrawerEvent, CaseDrawerReport}},
+		{"sandbox unchanged: no row", []records.Record{bash}, sand2, []string{CaseDrawerEvent, CaseDrawerFact}},
+		{"report", nil, succ, []string{CaseDrawerEvent, CaseDrawerReport, CaseDrawerFact}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			all := append(append([]records.Record(nil), c.prior...), c.rec)
@@ -374,7 +353,7 @@ func TestDrawerAtomic(t *testing.T) {
 			got := drawerRows(o)
 			want := refDrawer(all)
 			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("rows\n got %s\nwant %s", ddump(got), ddump(want))
+				t.Fatalf("rows:\n%s", ddiff(got, want))
 			}
 			if cs := only(d.Cases, drawerCaseSet()); !sameSet(cs, c.cases) {
 				t.Fatalf("cases %v, want %v", cs, c.cases)
@@ -410,6 +389,33 @@ func ddump(m map[string]map[string]any) string {
 	return string(b)
 }
 
+// ddiff names the rows that differ.
+func ddiff(got, want map[string]map[string]any) string {
+	var out []string
+	for t := range drawerTables() {
+		for k, v := range want[t] {
+			if g, ok := got[t][k]; !ok {
+				out = append(out, "missing "+t+" "+k)
+			} else if !reflect.DeepEqual(g, v) {
+				gb, _ := json.Marshal(g)
+				wb, _ := json.Marshal(v)
+				out = append(out, "differs "+t+" "+k+"\n  got  "+string(gb)+"\n  want "+string(wb))
+			}
+		}
+		for k := range got[t] {
+			if _, ok := want[t][k]; !ok {
+				gb, _ := json.Marshal(got[t][k])
+				out = append(out, "extra "+t+" "+k+" "+string(gb))
+			}
+		}
+	}
+	sort.Strings(out)
+	if len(out) > 12 {
+		out = append(out[:12], fmt.Sprintf("… %d more", len(out)-12))
+	}
+	return strings.Join(out, "\n")
+}
+
 // --- every order ----------------------------------------------------------------
 
 func TestDrawerEveryOrder(t *testing.T) {
@@ -430,7 +436,7 @@ func TestDrawerEveryOrder(t *testing.T) {
 			in = append(in, rs[i])
 		}
 		if got := drawerRows(stream(in)); !reflect.DeepEqual(got, want) {
-			t.Fatalf("order %v:\n got %s\nwant %s", order, ddump(got), ddump(want))
+			t.Fatalf("order %v:\n%s", order, ddiff(got, want))
 		}
 	})
 }
@@ -493,7 +499,7 @@ func TestDrawerGeneratedSequences(t *testing.T) {
 			o.apply(r)
 		}
 		if got := drawerRows(o); !reflect.DeepEqual(got, want) {
-			t.Fatalf("seed %d: drawer rows differ\n got %s\nwant %s", seed, ddump(got), ddump(want))
+			t.Fatalf("seed %d: drawer rows differ:\n%s", seed, ddiff(got, want))
 		}
 	}
 }
@@ -513,7 +519,7 @@ func TestDrawerRowsPerCallStayFlat(t *testing.T) {
 		}
 		got := 0
 		for k, row := range stream(rs).rows[TableDrawerFacts] {
-			if f := row.(DrawerFact); f.CallID == "c1" && strings.HasPrefix(k, "s:s1/") {
+			if f := row.(DrawerFact); (f.Lookup == "c1" || f.Lookup == "req_c1") && strings.HasPrefix(k, "s:s1/") {
 				got++
 			}
 		}

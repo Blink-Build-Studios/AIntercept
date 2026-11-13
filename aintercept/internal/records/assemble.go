@@ -455,7 +455,7 @@ func (a *Assembler) start(c *call, e *events.Event) []Record {
 	// Its locator: the drawer opens a call by its id alone.
 	a.hit(CaseLocatorCall)
 	loc := r
-	l := a.record(Record{Kind: KindLocator, CallID: c.p.CorrelationID, RoutingKey: "l:" + c.p.CorrelationID, Call: &loc}, e.ObserverInstance)
+	l := a.record(Record{Kind: KindLocator, CallID: c.p.CorrelationID, Call: &loc}, e.ObserverInstance)
 	return []Record{rec, l}
 }
 
@@ -586,16 +586,9 @@ func (a *Assembler) reportLocator(r Record, instance string) *Record {
 	if ev == nil || ev.Source != canon.ProductClaudeCode || ev.Name != "tengu_api_success" || ev.SessionID == "" {
 		return nil
 	}
-	id := ev.RequestID
-	if id == "" {
-		id = ev.ClientRequestID
-	}
-	if id == "" {
-		id = strconv.FormatInt(ev.NS, 10)
-	}
 	a.hit(CaseLocatorReport)
 	x := *ev
-	l := a.record(Record{Kind: KindLocator, RoutingKey: "l:reported:" + id, Event: &x}, instance)
+	l := a.record(Record{Kind: KindLocator, Event: &x}, instance)
 	return &l
 }
 

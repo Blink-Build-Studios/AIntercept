@@ -37,4 +37,11 @@ var TableTypes = map[string]any{
 	TableSessionMissed:       SessionMissed{},
 	TableSessionEdges:        SessionEdge{},
 	TableSessionTitleCalls:   SessionTitleCall{},
+	TableDrawerLocator:       DrawerLocator{},
+	TableDrawerCalls:         DrawerCall{},
+	TableDrawerSteps:         DrawerStep{},
+	TableDrawerFacts:         DrawerFact{},
+	TableDrawerSandbox:       DrawerSandbox{},
+	TableDrawerReports:       DrawerReport{},
+	TableDrawerEvents:        DrawerEvent{},
 }

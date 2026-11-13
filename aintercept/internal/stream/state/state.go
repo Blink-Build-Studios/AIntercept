@@ -43,12 +43,13 @@ type KeyState struct {
 	pr   *promptsState
 	rq   *reqState
 	sr   *sesRows
+	dr   *drawerState
 	rows rowSet
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{},
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), dr: newDrawerState(), rows: rowSet{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -59,6 +60,10 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	}
 	s.seen[r.RecordID] = true
 	var d Delta
+	if r.Kind == records.KindLocator { // the drawer's only: not a call or an event
+		s.drawer(r, &d)
+		return d
+	}
 	ch := s.ses.apply(r, &d)
 	s.presence(&d, ch)
 	s.events(r, &d)
@@ -66,6 +71,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.prompts(r, &d)
 	s.requests(r, &d)
 	s.sessionRows(r, &d)
+	s.drawer(r, &d)
 	d.Changes = lastChanges(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
@@ -178,7 +184,8 @@ var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTur
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
 	PromptItem{}, StepRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
-	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}}
+	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{},
+	DrawerLocator{}, DrawerCall{}, DrawerStep{}, DrawerEvent{}, DrawerFact{}, DrawerSandbox{}, DrawerReport{}}
 
 func init() {
 	for _, v := range RowTypes {
@@ -251,6 +258,7 @@ func Decode(b []byte) (*KeyState, error) {
 	s.promptsFrom(snap.Prompts)
 	s.reqFrom(snap.Request)
 	s.sr = sesRowsFrom(snap.Ses)
+	s.rebuildDrawer()
 	s.restoreSessionRow()
 	return s, nil
 }
