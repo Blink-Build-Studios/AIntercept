@@ -374,6 +374,16 @@ without a change to the contract or its semantics.
 | X5 | **An email change re-homes the account's history** onto the new person key | O(the account's history), once per change; changes are rare | Accept it (recommended), or key person lists by account and merge at read time (needs dedup) |
 | X6 | **Deep `page=N`** | O(N × pageSize) rows skipped from the stored edge | Cursor tokens instead of page numbers |
 
+**Decided by the user, 2026-11-12:**
+
+- **X1:** Custom windows stay supported.
+  - **`/people`:** filters the per-person summary rows by last-seen. That's a ~21k-row scan, which is fine. Window numbers are computed only for the page's people, from their bins.
+  - **`/overview`:** each partition contributes its bins to one small org-level key (`@00:org`, 64 contributions per cycle, constant), so any range reads about 67 rows.
+- **X2:** Accepted. Exact substring search scans its scope.
+- **X3 and X6:** No change. Long lists and `page=N` paging stay exactly as today. We'll revisit only if a real deployment shows a problem; correctness of what's built comes first.
+- **X4:** Presence comes off the person timeline. It stays on the session timeline only, and the redesign goes to Claude Design. Until that lands, the person timeline keeps today's union over the window's sessions.
+- **X5:** Accepted. An email change re-homes the account's history (rare).
+
 ### The rules
 
 1. **Start from what the caller holds.** Every id carries its routing key, so
