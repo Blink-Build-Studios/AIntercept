@@ -12,8 +12,10 @@ import pathlib
 import subprocess
 from collections import Counter
 
+import duckdb
 import pytest
 
+from aintercept_api import state_sql
 from aintercept_api.buckets import BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
 from tests.builders import Dataset, load_fixture
@@ -44,19 +46,36 @@ def group(url: str) -> str:
     return "person/" + parts[5]
 
 
+def one_stream_one_id(ds: Dataset) -> None:
+    """The observer gives every ext_proc stream its own correlation id; the Codex builder names a
+    WebSocket connection by its thread id's first 8 characters, which the root, its subagent, its
+    review and its fork share. Today's processor keeps one of the clashing turns and the stream
+    keeps each thread's: make the ids what the observer writes (the samples keep theirs)."""
+    for r in ds.rows:
+        if "-ws-" in r["correlation_id"] and r.get("session_id"):
+            r["correlation_id"] += "-" + r["session_id"][-6:]
+
+
 def stream_layout(raw: pathlib.Path, out: pathlib.Path, *, seed: int = 1) -> None:
-    """Raw observer files → canonical records → 3 ingest pods and 3 replicas with chaos → out/stream/v1/."""
+    """Raw observer files → canonical records → 3 ingest pods and 3 replicas with chaos → out/sim/stream/v1/."""
     subprocess.run(  # noqa: S603
         [
             str(aintercept_binary()),
             "replay",
-            "-src", str(raw),
-            "-processors", "3",
-            "-ingest-pods", "3",
-            "-steps", "60",
-            "-checkpoints", "3",
-            "-seed", str(seed),
-            "-out", str(out),
+            "-src",
+            str(raw),
+            "-processors",
+            "3",
+            "-ingest-pods",
+            "3",
+            "-steps",
+            "60",
+            "-checkpoints",
+            "3",
+            "-seed",
+            str(seed),
+            "-out",
+            str(out),
         ],  # fmt: skip
         check=True,
         capture_output=True,
@@ -64,7 +83,7 @@ def stream_layout(raw: pathlib.Path, out: pathlib.Path, *, seed: int = 1) -> Non
 
 
 @pytest.fixture(scope="module")
-def clients(tmp_path_factory):
+def layout(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("pipeline")
     ds = Dataset(tmp / "data")
     load_fixture(ds, "demo")
@@ -72,21 +91,46 @@ def clients(tmp_path_factory):
     codex_work(ds)
     person(ds, S1, account=OTHER, hour=11, calls=3)
     unattributed(ds)
-    root = ds.write()
+    one_stream_one_id(ds)
+    root = pathlib.Path(ds.write())
+    stream_layout(root, tmp / "layout")
+    return tmp, root
+
+
+@pytest.fixture(scope="module")
+def clients(layout):
+    tmp, root = layout
     old = bounded_store(root)
     old.ingest()
-    layout = tmp / "layout"
-    stream_layout(pathlib.Path(root), layout)
-    new = BucketStore(LocalSource(layout), tmp / "cache", raw=LocalRaw(pathlib.Path(root)))
+    new = BucketStore(LocalSource(tmp / "layout"), tmp / "cache", prefix="sim/", raw=LocalRaw(root))
     yield make_client(old), make_client(new)
     new.close()
     old.close()
 
 
-def test_the_stream_layout_holds_the_states_tables(clients, tmp_path_factory):
+def test_the_stream_layout_holds_the_states_tables(clients):
     _, new = clients
     store = new.app.state.store
     assert store.stream_state, "the layout is the stream state's (request_txs, prompt_items, …)"
+
+
+def test_the_stored_tables_columns_are_the_ones_the_api_makes_empty_tables_with(layout):
+    tmp, _ = layout
+    tables = tmp / "layout" / "sim" / "stream" / "v1" / "tables"
+    con = duckdb.connect()
+    seen = 0
+    for d in sorted(p for p in tables.iterdir() if p.is_dir()):
+        files = sorted(str(f) for f in d.rglob("*.parquet"))
+        got = con.execute(
+            "SELECT column_name, column_type FROM (DESCRIBE SELECT * EXCLUDE (key, id, tomb) "
+            "FROM read_parquet(?::VARCHAR[], union_by_name = true, hive_partitioning = false))",
+            [files],
+        ).fetchall()
+        con.execute(f"CREATE OR REPLACE TABLE want ({state_sql.STATE_SCHEMA[d.name]})")
+        want = con.execute("SELECT column_name, column_type FROM (DESCRIBE want)").fetchall()
+        assert got == want, d.name
+        seen += 1
+    assert seen >= len(state_sql.STATE_TABLES) - 2  # a dataset may never write a rare table
 
 
 def test_every_endpoint_matches_todays_store(clients):

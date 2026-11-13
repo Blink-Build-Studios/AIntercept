@@ -41,6 +41,7 @@ from typing import Any, Protocol, TypeVar, cast
 
 import duckdb
 
+from aintercept_api import state_sql
 from aintercept_api import store as legacy
 from aintercept_api.person_sql import DIMENSIONS, PERSON_TABLES
 from aintercept_api.raw import RawSource
@@ -167,6 +168,11 @@ _NEWEST_KEYED = """SELECT * EXCLUDE (tomb, _file, _r) FROM (
 _NEWEST = """SELECT * EXCLUDE (key, id, tomb, _file, _r) FROM (
     SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
     FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
+) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
+# The stream state's tables: the same fold, without the path's bucket=NN read as a column.
+_STATE_NEWEST = """SELECT * EXCLUDE (key, id, tomb, _file, _r) FROM (
+    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
+    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true, hive_partitioning = false)
 ) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
 _PERSON_SESSIONS = "SELECT DISTINCT session_id FROM person_sessions WHERE person_id = ? AND session_id IS NOT NULL"
 _PERSON_ACCOUNTS = "SELECT DISTINCT account_id FROM person_map WHERE person_id = ? AND account_id IS NOT NULL"
@@ -487,14 +493,22 @@ class BucketStore:
         self._loaded: OrderedDict[tuple[Any, ...], _Loaded] = OrderedDict()
         self._loaded_max = loaded_max
         self._lock = threading.Lock()
+        self._state: bool | None = None
+        self._state_listed: float | None = None
         self.title_runs: list[TitleRun] = []  # the newest table build's session_rows runs (for tests)
         self.title_all_sessions: frozenset[str] = frozenset()
 
     # --- scopes --------------------------------------------------------------------------------
 
     def scope_for_path(self, path: str) -> Scope:
-        """A request path's scope: a session's endpoints read its bucket, a person's their
-        sessions' and accounts'; everything else (the directory, /status, the drawer) all."""
+        """A request path's scope: a session's endpoints read its bucket, a person's (and
+        /coverage's, for its personId) their sessions' and accounts'; everything else (the
+        directory, /status, the drawer) all."""
+        path, _, query = path.partition("?")
+        if path == "/api/v1/coverage":
+            person = urllib.parse.parse_qs(query).get("personId")
+            if person:
+                return self.resolve_person(person[0])
         if m := _SESSION_PATH.match(path):
             return Scope(sessions={urllib.parse.unquote(m.group(1))})
         if m := _PERSON_PATH.match(path):
@@ -503,8 +517,11 @@ class BucketStore:
 
     def resolve_person(self, person_id: str) -> Scope:
         """A person's sessions and accounts, from the dimension tables (every bucket's)."""
-        need = [*_PERSON_RESOLUTION, *(DIMENSIONS if self._has_dimensions() else ())]
-        loaded = self._load(Scope.everything(), only=tuple(t for t in need if t in self.tables))
+        if self.stream_state:
+            need: list[str] = list(DIMENSIONS)
+        else:
+            need = [*_PERSON_RESOLUTION, *(DIMENSIONS if self._has_dimensions() else ())]
+        loaded = self._load(Scope.everything(), only=tuple(t for t in need if t in self._routing()))
         cur = loaded.con.cursor()
         try:
             sessions = {r[0] for r in cur.execute(_PERSON_SESSIONS, [person_id]).fetchall()}
@@ -536,10 +553,11 @@ class BucketStore:
     # --- loading -------------------------------------------------------------------------------
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
-        names = list(only) if only is not None else list(self.tables)
+        routing = self._routing()
+        names = list(only) if only is not None else list(routing)
         if scope.sessions is not None and self._has_session_inputs() and only is None:
             scope = Scope(sessions=self._session_group(scope.sessions), people=scope.people, accounts=scope.accounts)
-        wants = {t: None if self.tables[t][0] == "*" else scope.buckets(self.tables[t][0]) for t in names}
+        wants = {t: None if routing[t][0] == "*" else scope.buckets(routing[t][0]) for t in names}
         needed: set[int] = set()
         for want in wants.values():
             needed |= set(range(1 << 16)) if want is None else want
@@ -552,7 +570,8 @@ class BucketStore:
             if sig in self._loaded:
                 self._loaded.move_to_end(sig)
                 return self._loaded[sig]
-        loaded = _Loaded(self._build(plan, scope), commits)
+        build = self._build_state if self.stream_state else self._build
+        loaded = _Loaded(build(plan, scope, partial=only is not None), commits)
         with self._lock:
             self.loads += 1
             self._loaded[sig] = loaded
@@ -561,7 +580,7 @@ class BucketStore:
                 old.con.close()
         return loaded
 
-    def _build(self, plan: dict[str, list[str]], scope: Scope | None = None) -> duckdb.DuckDBPyConnection:
+    def _connect(self) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect()
         con.execute("SET TimeZone='UTC'")
         if self.memory_limit:
@@ -570,6 +589,46 @@ class BucketStore:
             con.execute(f"SET memory_limit = '{self.memory_limit}'")
         if self.threads:
             con.execute(f"SET threads = {int(self.threads)}")
+        return con
+
+    def _build_state(
+        self, plan: dict[str, list[str]], scope: Scope | None = None, *, partial: bool = False
+    ) -> duckdb.DuckDBPyConnection:
+        """The API's tables from the stream state's (state_sql): each stored table folded as
+        st_<table> (empty when the scope has none of its files), then rebuilt into today's."""
+        con = self._connect()
+        for table in state_sql.STATE_TABLES:
+            paths = [str(self.cache.path(k)) for k in plan.get(table, [])]
+            if paths:
+                con.sql(_STATE_NEWEST, params=[paths, paths]).create("st_" + table)
+            else:
+                con.execute(f"CREATE TABLE st_{table} ({state_sql.STATE_SCHEMA[table]})")
+        state_sql.stored_views(con)
+        for sql in PERSON_TABLES.values():
+            con.execute(sql)
+        if partial:  # a resolution's load: the dimensions and the person tables are enough
+            return con
+        sessions = None if scope is None else scope.sessions
+        self._session_rows(con, sessions)
+        state_sql.session_tables(con)
+        state_sql.event_tables(con)
+        state_sql.accounts(con)
+        state_sql.request_tables(con, None if scope is None else scope.people, sessions)
+        # What the drawer, /status and the directory still read of the raw history: not in the
+        # stream's layout (another change moves them onto it), so empty here.
+        have = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables()").fetchall()}
+        for table, ddl in legacy._EMPTY.items():
+            if table not in have:
+                con.execute(ddl)
+        if "probes" not in have:
+            con.execute(legacy._PROBES_EMPTY)
+        con.execute(legacy.VIEWS)
+        return con
+
+    def _build(
+        self, plan: dict[str, list[str]], scope: Scope | None = None, *, partial: bool = False
+    ) -> duckdb.DuckDBPyConnection:
+        con = self._connect()
         sessions_shape = self._has_session_inputs() and self._stored_sessions(plan.get("session_rows") or [])
         for table, keys in plan.items():
             paths = [str(self.cache.path(k)) for k in keys]
@@ -592,6 +651,22 @@ class BucketStore:
         if self.views and all(t in plan for t in self.tables):
             con.execute(self.views)
         return con
+
+    @property
+    def stream_state(self) -> bool:
+        """Whether the layout is the stream state's tables (request_txs, prompt_items, …) rather
+        than finished API-shaped tables: the tables/ folders, listed at most every 30 seconds."""
+        with self._lock:
+            now = self.clock()
+            if self._state is not None and self._state_listed is not None and now - self._state_listed < 30.0:
+                return self._state
+        found = "request_txs" in self.source.folders(f"{self.prefix}{ROOT}tables/")
+        with self._lock:
+            self._state, self._state_listed = found, now
+        return found
+
+    def _routing(self) -> dict[str, tuple[str, str]]:
+        return state_sql.STATE_ROUTING if self.stream_state else self.tables
 
     def _discover(self) -> frozenset[int]:
         """The buckets that have a commit log: the folders under stream/v1/buckets/, listed at most
@@ -625,13 +700,15 @@ class BucketStore:
         return "own_title" in [d[0] for d in cur.description or []]
 
     def _has_session_inputs(self) -> bool:
-        return all(t in self.tables for t in SESSION_INPUTS)
+        return all(t in self._routing() for t in SESSION_INPUTS)
 
     def _session_group(self, sessions: frozenset[str] | set[str]) -> frozenset[str]:
         """The sessions linked to these through their calls' accounts (transitively): the ones
         whose Codex titles can affect theirs."""
         loaded = self._load(Scope.everything(), only=("session_call_accounts",))
-        found = loaded.con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'session_call_accounts'")
+        found = loaded.con.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'session_call_accounts'"
+        )
         if not found.fetchall()[0][0]:  # a layout without the per-session tables
             return frozenset(sessions)
         rows = loaded.con.execute("SELECT session_id, account_id FROM session_call_accounts").fetchall()
@@ -698,7 +775,7 @@ class BucketStore:
         self.title_runs, self.title_all_sessions = runs, frozenset(have)
 
     def _has_dimensions(self) -> bool:
-        return all(t in self.tables for t in DIMENSIONS)
+        return all(t in self._routing() for t in DIMENSIONS)
 
     def _tables(self) -> _Loaded:
         loaded = _current.get()

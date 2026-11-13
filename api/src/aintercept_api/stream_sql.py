@@ -143,11 +143,17 @@ def _dicts(cur: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
-def person_request_rows(con: duckdb.DuckDBPyConnection, person: str) -> list[dict[str, Any]]:
-    """A person's request log (request_rows, person_id = person), by time then id."""
+def person_request_rows_sql(person: str) -> tuple[str, dict[str, object]]:
+    """A person's request log's query and parameters (request_rows, person_id = person)."""
     scope = _UNATTRIBUTED_SCOPE if person == "unattributed" else _PERSON_SCOPE
     sql = f"WITH {scope}, {_ROWS} SELECT {_select('$person')} FROM all_rows ORDER BY {_ORDER}"  # noqa: S608
-    return _dicts(con.execute(sql, {"person": person, "only": None}))
+    return sql, {"person": person, "only": None}
+
+
+def person_request_rows(con: duckdb.DuckDBPyConnection, person: str) -> list[dict[str, Any]]:
+    """A person's request log (request_rows, person_id = person), by time then id."""
+    sql, params = person_request_rows_sql(person)
+    return _dicts(con.execute(sql, params))
 
 
 def person_last(con: duckdb.DuckDBPyConnection, person: str) -> int | None:
@@ -159,10 +165,10 @@ def person_last(con: duckdb.DuckDBPyConnection, person: str) -> int | None:
     return None if row is None else row[0]
 
 
-def session_request_rows(con: duckdb.DuckDBPyConnection, session: str) -> list[dict[str, Any]]:
-    """A session's Requests tab (session_request_rows): its own rows, and for a Codex thread
-    its client's calls no thread names, from its start to a minute after its last activity.
-    Each row with its place (seq) and an empty person_id."""
+def session_request_rows_sql(con: duckdb.DuckDBPyConnection, session: str) -> tuple[str, dict[str, object]]:
+    """A session's Requests tab's query and parameters (session_request_rows): its own rows,
+    and for a Codex thread its client's calls no thread names, from its start to a minute after
+    its last activity. Each row with its place (seq) and an empty person_id."""
     sr = con.execute(
         "SELECT product, coalesce(client, ''), start_ns // 1000, (last_ns + 60000000000) // 1000"
         " FROM session_rows WHERE session_id = $session",
@@ -183,4 +189,10 @@ def session_request_rows(con: duckdb.DuckDBPyConnection, session: str) -> list[d
     params: dict[str, object] = {"session": session, "only": None if codex else session}
     if codex:
         params.update(client=client, lo=lo, hi=hi)
+    return sql, params
+
+
+def session_request_rows(con: duckdb.DuckDBPyConnection, session: str) -> list[dict[str, Any]]:
+    """A session's Requests tab (session_request_rows_sql's rows)."""
+    sql, params = session_request_rows_sql(con, session)
     return _dicts(con.execute(sql, params))
