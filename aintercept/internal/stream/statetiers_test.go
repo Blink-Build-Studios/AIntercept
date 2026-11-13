@@ -98,5 +98,5 @@ func TestStateTiersBoundLoadsAndRewrites(t *testing.T) {
 	}
 }
 
-// tierSizes is small in make check; -tags full grows the key to 100,000.
+// tierSizes is small in make check; -tags full grows the key to 30,000.
 var tierSizes = []int{10, 100, 1_000, 3_000}
