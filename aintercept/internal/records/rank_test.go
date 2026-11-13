@@ -35,6 +35,9 @@ func ranks(t *testing.T, rows []events.Event) map[string]int64 {
 	for _, r := range got {
 		if r.Kind == KindClientEvent {
 			out[r.Event.EventKey] = r.BatchCCN
+			if r.Event.BatchN != r.BatchCCN {
+				t.Errorf("%s: its event row carries rank %d, its record %d", r.Event.EventKey, r.Event.BatchN, r.BatchCCN)
+			}
 		}
 	}
 	return out
