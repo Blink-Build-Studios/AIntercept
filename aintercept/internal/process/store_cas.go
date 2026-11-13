@@ -115,9 +115,7 @@ func (s *S3Store) PutIfAbsent(ctx context.Context, key string, b []byte) (bool, 
 func (s *S3Store) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	h, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: &s.bucket, Key: &key})
 	if err != nil {
-		var nf *s3types.NotFound
-		var ae smithy.APIError
-		if errors.As(err, &nf) || (errors.As(err, &ae) && (ae.ErrorCode() == "NotFound" || ae.ErrorCode() == "NoSuchKey")) {
+		if isNotFound(err) {
 			return ObjectInfo{}, ErrNotFound
 		}
 		return ObjectInfo{}, err
