@@ -99,8 +99,9 @@ attempt HTTP/3 (QUIC), which the proxy does not intercept.
 
 - Deploy every image by digest: `images.<name>.digest` renders
   `repository@digest`. Envoy ships pinned (`v1.39.6` by digest).
-- Build the `aintercept` image (observer, certsvc and processor) with the stock
+- Build the `aintercept` image (observer, certsvc and rollup) with the stock
   Dockerfile. One image serves both interception modes.
+- Redis is the stock upstream image, pinned by digest (`images.redis`).
 
 ## 4b. Interception mode: what is recorded
 
@@ -220,6 +221,21 @@ pod's disk, so its memory doesn't grow with the data:
   use more than it has, and the kubelet then evicts whichever pod is furthest
   over its request. See `docs/INTERCEPTION_ISSUES.md` P5.
 
+## 5b2. Rollups and Redis (docs/PIPELINE.md)
+
+- **Rollups** (`rollup.*`): the `rollup` Deployment turns each key's ingest
+  files under `<prefix>/v1/keys/<key>/in/` into that key's tables, runs the
+  30 s merge and the sweep. KEDA scales it on `GET /lag` (the oldest unapplied
+  ingest file, target `rollup.autoscaling.lagTargetSeconds`); with
+  `rollup.autoscaling.keda: false` a CPU HPA does. Never fewer than two
+  replicas, so the sweep and the merge always run.
+- **Redis** (`redis.*`): one replica in the cluster, with a small persistent
+  volume (`redis.persistence.size`, 1 Gi) and append-only persistence. It holds
+  only the dirty-key set and the rollups' locks: correctness never depends on
+  it. If it's lost, the tables stay correct, the rollups pause until it's back,
+  and the sweep re-flags every recent key. Only the observer and the rollups may
+  connect (NetworkPolicy `redis-restrict`).
+
 ## 5c. Rollouts, disruption and placement
 
 - **Envoy drains in its preStop hook.** On SIGTERM Envoy closes its listeners
@@ -337,11 +353,11 @@ Nothing in the chart provisions AWS resources; it consumes them.
 |---|---|---|
 | observer | `s3:PutObject` on the telemetry prefix (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
 | certsvc | `kms:GetPublicKey`, `kms:Sign` on the intermediate's key | `certsvc.serviceAccount`, `certsvc.kms.keyId` |
-| process | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/shaped/*` | `process.serviceAccount` |
-| api (the `mirror` sidecar) | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*` | `api.serviceAccount` |
+| rollup | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/v1/*` | `rollup.serviceAccount` |
+| api | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*` | `api.serviceAccount` |
 
 - **EKS Pod Identity:** associate each role with its ServiceAccount
-  (`aintercept-observer`, `aintercept-certsvc`, `aintercept-process`,
+  (`aintercept-observer`, `aintercept-certsvc`, `aintercept-rollup`,
   `aintercept-api` in the release namespace) and leave
   `roleArn` empty. **IRSA:** set `serviceAccount.roleArn` instead. Both use the
   standard AWS credential chain; no static keys.

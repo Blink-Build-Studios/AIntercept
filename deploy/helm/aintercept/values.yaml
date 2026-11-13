@@ -77,6 +77,11 @@ images:
     tag: dev
     digest: ""
     pullPolicy: IfNotPresent
+  # In-cluster Redis (redis.enabled): coordination only.
+  redis:
+    repository: redis
+    tag: 7.4.6-alpine
+    digest: sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98
   # The query API (api/Dockerfile), when `api.enabled`.
   api:
     repository: aintercept/api
@@ -141,58 +146,51 @@ objectStore:
   accessKeyId: ""
   secretAccessKey: ""
 
-# ── Observer ──────────────────────────────────────────────────────────────────
-# Stage 2 of the data pipeline: raw partitions -> shaped Parquet tables under
-# <objectStore.prefix>/shaped/ (docs/ui/BUILD_PLAN.md §7.5). One replica.
-process:
+# ── Rollups (docs/PIPELINE.md §2) ─────────────────────────────────────────────
+# `aintercept rollup`: takes dirty keys from Redis, applies each key's new
+# ingest files under <prefix>/v1/keys/<key>/in/ and commits that key's tables;
+# also runs the 30 s merge and the sweep. Scaled on lag; never below two.
+rollup:
   enabled: true
-  # process's own ServiceAccount (never the observer's). On AWS its role needs
-  # list + get on the raw prefix and put + delete under <prefix>/shaped/ (docs/PRODUCTION.md §7). create: false uses an existing one named
-  # name. roleArn is IRSA only (empty for Pod Identity).
+  # rollup's own ServiceAccount (never the observer's). On AWS its role needs
+  # list + get + put + delete under <prefix>/v1/ (docs/PRODUCTION.md §7).
+  # create: false uses an existing one named name. roleArn is IRSA only.
   serviceAccount:
     create: true
-    name: aintercept-process
+    name: aintercept-rollup
     roleArn: ""
-  # Scheduling. All optional: unset leaves the pod spec as it was.
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  topologySpreadConstraints: []
-  # Optional PodDisruptionBudget (off by default). maxUnavailable, or
-  # minAvailable if set.
-  podDisruptionBudget:
-    enabled: false
-    maxUnavailable: 1
-  pollSeconds: 10   # between polls (each lists only new files)
-  fullMinutes: 60   # between full listings (one also runs at start)
-  resources:
-    # The first start processes the whole bucket, 500 files a run. The request is
-    # its working size (about 450 MB on a few weeks of data), so the node has room
-    # for it: a pod over its request is the first evicted when a node runs short.
-    requests: { cpu: "50m", memory: "512Mi" }
-    limits: { cpu: "1", memory: "1Gi" }
-
-# The bucketed processor (docs/STREAMING_PIPELINE.md §4): replicas own key
-# buckets through leases and read only the record files new since each
-# bucket's watermark. Off until it replaces `process` (phase 6). It uses the
-# process ServiceAccount (the same reads and writes, under <prefix>/stream/).
-stream:
-  enabled: false
-  bucketBits: 6      # 64 buckets: the most replicas that can share the work
-  cycleSeconds: 5    # how often an owned bucket looks for new records
-  replicas: 1        # when autoscaling is off
+  parallel: 8          # keys one replica runs at once
   autoscaling:
-    enabled: true    # KEDA, polling GET /lag (metrics-api)
-    minReplicas: 1
-    maxReplicas: 64  # at most one bucket each
+    keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
+    minReplicas: 2     # never fewer: the sweep and the merge always run
+    maxReplicas: 20
     lagTargetSeconds: 30
   nodeSelector: {}
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
     limits: { cpu: "1", memory: "1Gi" }
+
+# ── Redis (docs/PIPELINE.md) ──────────────────────────────────────────────────
+# In the cluster, one replica: the dirty-key set and the rollups' locks only.
+# Losing it costs freshness, never data. Image under images.redis.
+redis:
+  enabled: true
+  persistence:
+    size: 1Gi
+    storageClass: ""   # empty: the cluster's default
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "500m", memory: "256Mi" }
 
 # The query API (api/), inside the cluster: it reads the processor's tables
 # (mirrored into the pod by an `aintercept mirror` sidecar) and raw files through
@@ -277,6 +275,7 @@ api:
     # only if something else in front verifies identity and nothing can bypass it.
     allowUnauthenticated: false
 
+# ── Observer ──────────────────────────────────────────────────────────────────
 observer:
   # The observer runs in the envoy pods: scheduling, PodDisruptionBudget and
   # autoscaling are envoy's (below).
@@ -306,8 +305,8 @@ observer:
     flushBytes: 1048576     # 1 MiB
     flushSeconds: 30
     maxBytes: 67108864      # 64 MiB
-  # Redis (host:port) for dirty-key flags; empty disables them (the rollups'
-  # sweep still finds every key). Set by the Redis StatefulSet (step 5).
+  # Redis (host:port) for dirty-key flags. Empty: the in-cluster Redis
+  # (redis.enabled), else none (the rollups' sweep still finds every key).
   redisAddr: ""
   # Operational log level: debug | info | warn | error. Logs are structured JSON
   # on stderr (telemetry events go to stdout).
