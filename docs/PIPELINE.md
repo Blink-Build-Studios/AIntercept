@@ -122,6 +122,11 @@ the previous commit, go on the commit's garbage list and are deleted 10 minutes
 later. A losing run's files are deleted at the next fold. The exact format is
 `aintercept/internal/rollup/layout.go`.
 
+**Reclaiming a dead holder's keys.** A replica adds a key to the Redis `held` set when it takes the
+key's lock, and removes it before releasing the lock. Every tick, each replica re-flags any key in
+`held` whose lock has expired: a holder that was killed mid-run, after taking the key off `dirty`,
+would otherwise strand the key until new input arrived.
+
 **The sweep.** Every replica runs it every 10 minutes, with no lock. It reads
 `v1/recent/` for the last 15 minutes and runs `SADD dirty` for every key listed.
 That covers lost SADDs, Redis restarts, and pods that crashed between upload

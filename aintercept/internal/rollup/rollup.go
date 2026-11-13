@@ -29,6 +29,7 @@ const (
 	committedSet = "committed"   // keys committed since the merge last ran
 	dirtySince   = "dirty_since" // when each dirty key was first noticed: the lag
 	replicasZSet = "replicas"    // live replicas, scored by heartbeat time
+	heldSet      = "held"        // keys some replica has claimed (lock:<key>); a dead holder's are reclaimed
 	lockPrefix   = "lock:"
 )
 
@@ -596,6 +597,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 	now := w.now()
 	rdb := w.cfg.Redis
 	_ = rdb.ZAdd(ctx, replicasZSet, redis.Z{Score: float64(now.Unix()), Member: w.cfg.Replica}).Err()
+	w.reclaim(ctx)
 
 	sample, err := rdb.SRandMemberN(ctx, dirtySet, 256).Result()
 	if err != nil {
@@ -637,6 +639,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 			return err
 		}
 		if ok {
+			_ = rdb.SAdd(ctx, heldSet, k).Err()
 			w.markLocked(k, now)
 			todo = append(todo, k)
 		}
@@ -787,6 +790,7 @@ func (w *Worker) releaseIdle(ctx context.Context, dirty map[string]bool) {
 		if in, _ := w.cfg.Redis.SIsMember(ctx, dirtySet, k).Result(); in {
 			continue
 		}
+		_ = w.cfg.Redis.SRem(ctx, heldSet, k).Err()
 		_ = releaseScript.Run(ctx, w.cfg.Redis, []string{lockPrefix + k}, w.cfg.Replica).Err()
 		w.drop(k)
 	}
@@ -795,8 +799,32 @@ func (w *Worker) releaseIdle(ctx context.Context, dirty map[string]bool) {
 // Release drops every lock this replica holds (on SIGTERM).
 func (w *Worker) Release(ctx context.Context) {
 	for _, k := range w.lockedKeys() {
+		_ = w.cfg.Redis.SRem(ctx, heldSet, k).Err()
 		_ = releaseScript.Run(ctx, w.cfg.Redis, []string{lockPrefix + k}, w.cfg.Replica).Err()
 		w.drop(k)
+	}
+}
+
+// reclaim re-flags the keys a replica claimed whose lock has since expired: a
+// holder that died mid-run (after taking the key off dirty) leaves its key in
+// held with no lock. Removing from held before a lock is released, and adding
+// after it's taken, means a live holder's key is never reclaimed early; one
+// whose lock merely lapsed (a long pause) is re-flagged and the commit fences
+// the two runs. held holds only claimed keys, so this is cheap.
+func (w *Worker) reclaim(ctx context.Context) {
+	rdb := w.cfg.Redis
+	keys, err := rdb.SMembers(ctx, heldSet).Result()
+	if err != nil || len(keys) == 0 {
+		return
+	}
+	for _, k := range keys {
+		n, err := rdb.Exists(ctx, lockPrefix+k).Result()
+		if err != nil || n > 0 {
+			continue
+		}
+		_ = rdb.SAdd(ctx, dirtySet, k).Err()
+		_ = rdb.ZAddNX(ctx, dirtySince, redis.Z{Score: float64(w.now().UnixNano()) / 1e9, Member: k}).Err()
+		_ = rdb.SRem(ctx, heldSet, k).Err()
 	}
 }
 
