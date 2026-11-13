@@ -421,17 +421,13 @@ func (s *KeyState) promptRowEvent(d *Delta, sid string, x *pEv) {
 		if tid := x.pe.ToolUseID(); tid != "" {
 			addSet(ps.useReqs, tid, f.ReqID)
 		}
-		s.restep(d, sid, ps.byReq[f.ReqID])
+		s.writeStepTools(d, sid, f.ReqID)
 	case f.IsBash && f.BashToolUseID != nil:
 		d.Cases = append(d.Cases, CaseStepBash)
 		evIndex(ps.bash, *f.BashToolUseID, x)
-		touched := map[string]bool{}
 		for rid := range ps.useReqs[*f.BashToolUseID] {
-			for id := range ps.byReq[rid] {
-				touched[id] = true
-			}
+			s.writeStepTools(d, sid, rid)
 		}
-		s.restep(d, sid, touched)
 	}
 }
 
@@ -694,9 +690,7 @@ func (s *KeyState) writeStep(d *Delta, sid string, c *pCall) {
 	if byClient != nil {
 		j.SuccessByClient = &byClient.pe
 	}
-	if sc.ReqID() != "" {
-		j.Tools, j.Ticks = evList(ps.tools[sc.ReqID()]), evList(ps.ticks[sc.ReqID()])
-	}
+	// Its tools are its request id's (prompt_step_tools), joined by the query.
 	st := process.BuildStep(sc, sid, j)
 	end := sc.TS()
 	if sc.End() != 0 {
@@ -704,7 +698,26 @@ func (s *KeyState) writeStep(d *Delta, sid string, c *pCall) {
 	}
 	st.EventsPendingIfLive = false
 	s.rows.put(d, TablePromptSteps, "s:"+c.key.id, StepRow{Step: st, PromptID: sc.Prompt(),
-		HasSuccess: byReq != nil || byClient != nil, PendEnd: end})
+		HasSuccess: byReq != nil || byClient != nil, PendEnd: end, ToolsRID: sc.ReqID(), DetailCalls: sc.HasDetailCalls()})
+}
+
+// writeStepTools writes a request id's tools: one row, whatever number of steps
+// show them.
+func (s *KeyState) writeStepTools(d *Delta, sid, rid string) {
+	ps := s.pr
+	bash := func(tid string) *process.PromptEvent {
+		m := ps.bash[tid]
+		if m == nil {
+			return nil
+		}
+		_, v, ok := m.Last()
+		if !ok {
+			return nil
+		}
+		return &v.pe
+	}
+	t := process.BuildStepTools(rid, evList(ps.tools[rid]), evList(ps.ticks[rid]), bash)
+	s.rows.put(d, TablePromptStepTools, "t:"+rid, StepToolsRow{SessionID: sid, RequestID: rid, Tools: t})
 }
 
 func (s *KeyState) writeBetweenCall(d *Delta, sid string, c *pCall) {

@@ -4,13 +4,17 @@
 -- mark_prompt_index. The views have today's prompt_rows, prompt_steps and
 -- session_marks columns, so the endpoints' SQL reads them unchanged.
 --
--- Stored tables: prompt_items, prompt_steps, prompt_session, session_marks,
--- mark_prompt_index. Views: v_prompt_rows, v_prompt_steps, v_session_marks.
+-- Stored tables: prompt_items, prompt_steps, prompt_step_tools, prompt_session,
+-- session_marks, mark_prompt_index. A step's tools are its request id's
+-- (prompt_step_tools, joined on tools_rid), stored once however many steps share
+-- the id; so are its commands and exit codes when its recorded bodies name none. Views: v_prompt_rows, v_prompt_steps, v_session_marks.
 
 -- The stored rows keep today's row as a nested group (row, step, mark) beside
 -- their ordering and lookup columns; these views flatten them.
 CREATE OR REPLACE VIEW f_prompt_items AS SELECT unnest("row"), * EXCLUDE ("row") FROM prompt_items;
 CREATE OR REPLACE VIEW f_prompt_steps AS SELECT unnest(step), * EXCLUDE (step) FROM prompt_steps;
+CREATE OR REPLACE VIEW f_prompt_step_tools AS
+SELECT session_id, tools_request_id, unnest(tools) FROM prompt_step_tools;
 CREATE OR REPLACE VIEW f_session_marks AS SELECT unnest(mark), * EXCLUDE (mark) FROM session_marks;
 
 CREATE OR REPLACE VIEW v_prompt_items AS
@@ -63,11 +67,21 @@ SELECT st.session_id,
        st.tokens_output, st.tokens_accuracy, st.duration_ms, st.ttft_ms, st.stop_reason, st.cost_usd, st.failed,
        NOT st.has_success
            AND (NOT coalesce(s.has_prompt_event, false) OR s.last_prompt_event_ns <= st.pend_end) AS events_pending_if_live,
-       st.agent_type, st.tools_json, st.tools_live_json, st.does, st.commands, st.exit_codes, st.content_live,
-       st.commands_live, st.exit_codes_live, st.patches_json, st.text, st.usage_missing
+       st.agent_type,
+       coalesce(t.tools_json, st.tools_json) AS tools_json,
+       CASE WHEN t.tools_request_id IS NULL THEN st.tools_live_json ELSE t.tools_live_json END AS tools_live_json,
+       st.does,
+       CASE WHEN t.tools_request_id IS NULL OR st.detail_calls THEN st.commands ELSE t.commands END AS commands,
+       CASE WHEN t.tools_request_id IS NULL OR st.detail_calls THEN st.exit_codes ELSE t.exit_codes END AS exit_codes,
+       CASE WHEN t.tools_request_id IS NULL OR st.detail_calls THEN st.content_live ELSE t.content_live END AS content_live,
+       CASE WHEN t.tools_request_id IS NULL OR st.detail_calls THEN st.commands_live ELSE t.commands_live END AS commands_live,
+       CASE WHEN t.tools_request_id IS NULL OR st.detail_calls THEN st.exit_codes_live ELSE t.exit_codes_live END AS exit_codes_live,
+       st.patches_json, st.text, st.usage_missing
 FROM f_prompt_steps st
 JOIN v_prompt_items it ON it.session_id = st.session_id AND it.type = 'prompt' AND it.prompt_id = st.prompt_id
-LEFT JOIN prompt_session s ON s.session_id = st.session_id;
+LEFT JOIN prompt_session s ON s.session_id = st.session_id
+LEFT JOIN f_prompt_step_tools t
+       ON st.tools_rid <> '' AND t.session_id = st.session_id AND t.tools_request_id = st.tools_rid;
 
 -- The marks: calls, reports, friction and compactions in their stored order,
 -- then a permission segment per run of one mode, then a network segment per run

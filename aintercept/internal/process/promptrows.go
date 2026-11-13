@@ -747,34 +747,7 @@ func (s *promptSession) step(x *rowCall, j *joins, n int64) PromptStep {
 	if succ == nil {
 		succ = j.success[x.clientReqID]
 	}
-	finished := j.tools[x.reqID]
-	tools := make([]toolJSON, 0, len(finished))
-	for _, e := range finished {
-		tools = append(tools, j.tool(e))
-	}
-	// Progress ticks with no success or error yet are tools still running (shown while live).
-	live := append([]toolJSON(nil), tools...)
-	key := func(e *promptEvent) string { // _str(toolUseID) or _str(toolName)
-		if v := deref(e.toolUseID); v != "" {
-			return "s" + v
-		}
-		if e.toolName != nil {
-			return "s" + *e.toolName
-		}
-		return "n" // None
-	}
-	done := map[string]bool{}
-	for _, e := range finished {
-		done[key(e)] = true
-	}
-	for _, e := range j.ticks[x.reqID] {
-		if k := key(e); !done[k] {
-			done[k] = true
-			t := j.tool(e)
-			t.Status = "running"
-			live = append(live, t)
-		}
-	}
+	tools, live := j.toolsOf(x.reqID)
 	st := PromptStep{
 		SessionID: s.id, Step: n, RequestID: x.id, TNS: x.ts, Kind: "model",
 		Model: nz(x.model), StopReason: nz(x.stop), AgentType: nz(x.agentType),
@@ -819,13 +792,7 @@ func (s *promptSession) step(x *rowCall, j *joins, n int64) PromptStep {
 	}
 	patches := []events.PatchFile{}
 	if len(calls) == 0 {
-		st.Commands, st.ExitCodes = bashContent(tools)
-		if len(live) > len(tools) {
-			cmds, codes := bashContent(live)
-			if len(cmds) != len(st.Commands) || len(codes) != len(st.ExitCodes) {
-				st.ContentLive, st.CommandsLive, st.ExitCodesLive = true, cmds, codes
-			}
-		}
+		st.Commands, st.ExitCodes, st.ContentLive, st.CommandsLive, st.ExitCodesLive = toolContent(tools, live)
 	} else {
 		st.Commands, st.ExitCodes = []string{}, []int64{}
 		for _, c := range calls {
@@ -843,6 +810,53 @@ func (s *promptSession) step(x *rowCall, j *joins, n int64) PromptStep {
 	}
 	st.PatchesJSON = marshalJSON(patches)
 	return st
+}
+
+// toolsOf is a request id's finished tools, and those plus the tools its
+// progress ticks show still running (shown while live).
+func (j *joins) toolsOf(reqID string) (tools, live []toolJSON) {
+	finished := j.tools[reqID]
+	tools = make([]toolJSON, 0, len(finished))
+	for _, e := range finished {
+		tools = append(tools, j.tool(e))
+	}
+	live = append([]toolJSON(nil), tools...)
+	key := func(e *promptEvent) string { // _str(toolUseID) or _str(toolName)
+		if v := deref(e.toolUseID); v != "" {
+			return "s" + v
+		}
+		if e.toolName != nil {
+			return "s" + *e.toolName
+		}
+		return "n" // None
+	}
+	done := map[string]bool{}
+	for _, e := range finished {
+		done[key(e)] = true
+	}
+	for _, e := range j.ticks[reqID] {
+		if k := key(e); !done[k] {
+			done[k] = true
+			t := j.tool(e)
+			t.Status = "running"
+			live = append(live, t)
+		}
+	}
+	return tools, live
+}
+
+// toolContent is what Claude Code's Bash events report of a step's tools: their
+// commands and exit codes, and, when the running ones add to them, the live
+// version (a step with no recorded bodies shows these).
+func toolContent(tools, live []toolJSON) (cmds []string, codes []int64, contentLive bool, cmdsLive []string, codesLive []int64) {
+	cmds, codes = bashContent(tools)
+	if len(live) > len(tools) {
+		c, x := bashContent(live)
+		if len(c) != len(cmds) || len(x) != len(codes) {
+			return cmds, codes, true, c, x
+		}
+	}
+	return cmds, codes, false, nil, nil
 }
 
 // bashContent is the commands and exit codes of the tools Claude Code's Bash events name.

@@ -23,6 +23,7 @@ var TableTypes = map[string]any{
 	TablePromptItems:         PromptItem{},
 	TablePromptSteps:         StepRow{},
 	TablePromptSession:       PromptSession{},
+	TablePromptStepTools:     StepToolsRow{},
 	TableMarks:               MarkRow{},
 	TableMarkPromptIndex:     MarkPromptIndex{},
 	TableRequestTxs:          ReqTx{},

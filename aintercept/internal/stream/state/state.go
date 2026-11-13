@@ -155,7 +155,7 @@ func (s *KeyState) Rows() map[string]map[string]any { return s.rows }
 var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
-	PromptItem{}, StepRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
+	PromptItem{}, StepRow{}, StepToolsRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
 	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}}
 
 func init() {

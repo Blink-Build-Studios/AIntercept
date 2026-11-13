@@ -35,6 +35,7 @@ func TestPromptsSQLFixtures(t *testing.T) {
 		}
 		put(TablePromptItems, process.EncodeParquet(stored[PromptItem](o, TablePromptItems)))
 		put(TablePromptSteps, process.EncodeParquet(stored[StepRow](o, TablePromptSteps)))
+		put(TablePromptStepTools, process.EncodeParquet(stored[StepToolsRow](o, TablePromptStepTools)))
 		put(TablePromptSession, process.EncodeParquet(stored[PromptSession](o, TablePromptSession)))
 		put(TableMarks, process.EncodeParquet(stored[MarkRow](o, TableMarks)))
 		put(TableMarkPromptIndex, process.EncodeParquet(stored[MarkPromptIndex](o, TableMarkPromptIndex)))
