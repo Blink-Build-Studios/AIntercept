@@ -48,11 +48,12 @@ are kept for a grace period and then deleted. Fields:
 | `gen` | int | the newest base generation |
 | `base` | {table: FileRef[]} | each table's base, in key-ranged parts, in key order (may be absent: no rows) |
 | `runs` | {table: FileRef[]} | each table's run files since its base, **oldest first** |
-| `state_base`, `state` | FileRef[] | state checkpoints; not for readers |
+| `state_base`, `state` | FileRef[] | state checkpoints, in tiers (groups), oldest first; not for readers. A key's state is every checkpoint of it, oldest first |
 | `last_compact` | RFC 3339 | ignore |
 | `garbage` | [{key, after}] | files no longer current, deleted after `after`; **never read them** |
 
-A `FileRef` is `{"key": <object key>, "min_key": <first key>, "max_key": <last key>, "rows": <n>}`.
+A `FileRef` is `{"key": <object key>, "min_key": <first key>, "max_key": <last key>, "rows": <n>}`,
+plus `bytes` (its size) and, on state files only, `group` (the tier it belongs to). Readers may ignore both.
 A file holds only keys in `[min_key, max_key]`, so a reader looking for some
 keys opens only the files whose range covers them.
 

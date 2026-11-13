@@ -196,6 +196,7 @@ func (w *Bucket) Cycle(ctx context.Context) (CycleStats, error) {
 	if err != nil {
 		return st, err
 	}
+	ref.Group = c.Seq << groupBits
 	c.State = append(c.State, ref)
 	w.advance(c, files)
 	if err := w.maybeCompact(ctx, c, now); err != nil {
@@ -333,7 +334,7 @@ func (w *Bucket) writeRows(ctx context.Context, cd codec, key string, rows []Row
 	if err := w.S.Put(ctx, key, b); err != nil {
 		return FileRef{}, err
 	}
-	ref := FileRef{Key: key, Rows: len(rows)}
+	ref := FileRef{Key: key, Rows: len(rows), Bytes: int64(len(b))}
 	if len(rows) > 0 {
 		ref.MinKey, ref.MaxKey = rows[0].Key, rows[len(rows)-1].Key
 	}
@@ -453,15 +454,9 @@ func (w *Bucket) compact(ctx context.Context, c *Commit, now time.Time, force bo
 		}
 		c.Base[t], c.Runs[t] = parts, nil
 	}
-	parts, err := w.mergeState(ctx, append(append([]FileRef(nil), c.StateBase...), c.State...),
-		func(p int) string { return w.L.StateBaseKey(w.B, gen, w.Epoch, c.Seq, p) })
-	if err != nil {
+	if err := w.foldState(ctx, c, gen, after); err != nil {
 		return err
 	}
-	for _, f := range append(c.StateBase, c.State...) {
-		c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
-	}
-	c.StateBase, c.State = parts, nil
 	c.Gen, c.LastCompact = gen, now
 	return nil
 }
@@ -513,47 +508,186 @@ func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func
 	return out, nil
 }
 
-// mergeState folds state files, oldest first, into key-ranged parts holding one
-// checkpoint per key: the model's merge of every checkpoint the files hold for it.
-func (w *Bucket) mergeState(ctx context.Context, files []FileRef, name func(int) string) ([]FileRef, error) {
-	chunks := map[string][][]byte{}
+// State is folded in tiers, so a key's checkpoints never pile up and none is
+// rewritten often: the state files are groups (a cycle's run, or a fold of
+// several), oldest first; when the newest tierFanout groups are of one size
+// class (bytes, in powers of tierFanout), or a group is smaller than the one
+// after it, they're folded into one. A key's state is then spread over
+// O(log N) groups (a cold load reads one part of each), and each checkpoint is
+// rewritten O(log N) times over its life.
+const (
+	tierFanout = 4
+	tierUnit   = 4 << 10 // bytes: class 0 is anything smaller
+	groupBits  = 20      // a group id is the commit's seq, then which fold of it
+)
+
+type stateGroup struct {
+	id    int64
+	parts []FileRef
+	bytes int64
+}
+
+func tierClass(b int64) int {
+	c := 0
+	for b >= tierUnit {
+		b /= tierFanout
+		c++
+	}
+	return c
+}
+
+// stateGroups is the state files as groups, oldest first.
+func stateGroups(files []FileRef) []stateGroup {
+	var out []stateGroup
 	for _, f := range files {
-		raw, err := w.S.Get(ctx, f.Key)
-		if err != nil {
-			return nil, fmt.Errorf("compact %s: %w", f.Key, err)
+		b := f.Bytes
+		if b == 0 {
+			b = int64(f.Rows) * 1024 // written before sizes were recorded
 		}
-		rows, err := (stateCodec{}).Decode(raw)
-		if err != nil {
-			return nil, err
+		if n := len(out); n > 0 && out[n-1].id == f.Group {
+			out[n-1].parts = append(out[n-1].parts, f)
+			out[n-1].bytes += b
+			continue
 		}
-		for _, r := range rows {
-			chunks[r.Key] = append(chunks[r.Key], r.Value.([]byte))
-		}
+		out = append(out, stateGroup{id: f.Group, parts: []FileRef{f}, bytes: b})
 	}
-	keys := make([]string, 0, len(chunks))
-	for k := range chunks {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var out []FileRef
-	for start, part := 0, 0; start < len(keys); part++ {
-		end := min(start+w.PartRows, len(keys))
-		rows := make([]Row, 0, end-start)
-		for _, k := range keys[start:end] {
-			b, err := w.M.Merge(k, chunks[k])
-			if err != nil {
-				return nil, err
+	return out
+}
+
+// foldState folds the state groups in tiers (base groups, then this
+// compaction's cycle runs) and leaves the result as the commit's state base.
+func (w *Bucket) foldState(ctx context.Context, c *Commit, gen int64, after time.Time) error {
+	var stack []stateGroup
+	fold, part := int64(0), 0
+	for _, g := range stateGroups(append(append([]FileRef(nil), c.StateBase...), c.State...)) {
+		stack = append(stack, g)
+		for {
+			n, k := len(stack), 0
+			switch {
+			case n >= tierFanout && sameClass(stack[n-tierFanout:]):
+				k = tierFanout
+			case n >= 2 && tierClass(stack[n-2].bytes) < tierClass(stack[n-1].bytes):
+				k = 2
 			}
-			rows = append(rows, Row{Key: k, ID: k, Value: b})
+			if k == 0 {
+				break
+			}
+			fold++
+			merged, err := w.mergeGroups(ctx, stack[n-k:], (c.Seq<<groupBits)|fold,
+				func() string { p := part; part++; return w.L.StateBaseKey(w.B, gen, w.Epoch, c.Seq, p) })
+			if err != nil {
+				return err
+			}
+			for _, old := range stack[n-k:] {
+				for _, f := range old.parts {
+					c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
+				}
+			}
+			stack = append(stack[:n-k], merged)
 		}
-		ref, err := w.writeRows(ctx, stateCodec{}, name(part), rows)
+	}
+	c.StateBase, c.State = nil, nil
+	for _, g := range stack {
+		c.StateBase = append(c.StateBase, g.parts...)
+	}
+	return nil
+}
+
+func sameClass(gs []stateGroup) bool {
+	for _, g := range gs[1:] {
+		if tierClass(g.bytes) != tierClass(gs[0].bytes) {
+			return false
+		}
+	}
+	return true
+}
+
+// mergeGroups folds groups (oldest first) into one: per key, the model's merge
+// of its checkpoints in order, written in key-ranged parts. It reads one part
+// of each group at a time, so its memory is a few parts, not the groups.
+func (w *Bucket) mergeGroups(ctx context.Context, gs []stateGroup, id int64, name func() string) (stateGroup, error) {
+	its := make([]*partIter, len(gs))
+	for i, g := range gs {
+		its[i] = &partIter{w: w, ctx: ctx, refs: g.parts}
+	}
+	out := stateGroup{id: id}
+	var buf []Row
+	flush := func() error {
+		if len(buf) == 0 {
+			return nil
+		}
+		ref, err := w.writeRows(ctx, stateCodec{}, name(), buf)
 		if err != nil {
+			return err
+		}
+		ref.Group = id
+		out.parts = append(out.parts, ref)
+		out.bytes += ref.Bytes
+		buf = nil
+		return nil
+	}
+	for {
+		key, found := "", false
+		for _, it := range its {
+			r, err := it.peek()
+			if err != nil {
+				return out, err
+			}
+			if r != nil && (!found || r.Key < key) {
+				key, found = r.Key, true
+			}
+		}
+		if !found {
+			break
+		}
+		var chunks [][]byte
+		for _, it := range its {
+			if r, _ := it.peek(); r != nil && r.Key == key {
+				chunks = append(chunks, r.Value.([]byte))
+				it.i++
+			}
+		}
+		b := chunks[0]
+		if len(chunks) > 1 {
+			var err error
+			if b, err = w.M.Merge(key, chunks); err != nil {
+				return out, err
+			}
+		}
+		buf = append(buf, Row{Key: key, ID: key, Value: b})
+		if len(buf) >= w.PartRows {
+			if err := flush(); err != nil {
+				return out, err
+			}
+		}
+	}
+	return out, flush()
+}
+
+// partIter reads a group's rows in key order, one part at a time.
+type partIter struct {
+	w    *Bucket
+	ctx  context.Context
+	refs []FileRef
+	rows []Row
+	i    int
+}
+
+func (it *partIter) peek() (*Row, error) {
+	for it.i >= len(it.rows) {
+		if len(it.refs) == 0 {
+			return nil, nil
+		}
+		raw, err := it.w.S.Get(it.ctx, it.refs[0].Key)
+		if err != nil {
+			return nil, fmt.Errorf("compact %s: %w", it.refs[0].Key, err)
+		}
+		if it.rows, err = (stateCodec{}).Decode(raw); err != nil {
 			return nil, err
 		}
-		out = append(out, ref)
-		start = end
+		it.refs, it.i = it.refs[1:], 0
 	}
-	return out, nil
+	return &it.rows[it.i], nil
 }
 
 func pruneGarbage(gs, deleted []Garbage) []Garbage {
