@@ -66,20 +66,22 @@ func replayStream(src string, seed int64, pods, processors, steps, checkpoints i
 // recordCollector keeps every record file's records. The records sink puts on
 // its own goroutines, so Put locks.
 type recordCollector struct {
-	mu   sync.Mutex
-	recs []records.Record
+	mu     sync.Mutex
+	recs   []records.Record
+	newest int64 // the newest raw row any file carried (data time)
 }
 
 func (c *recordCollector) Put(_ context.Context, key string, body []byte) error {
 	if !strings.HasSuffix(key, ".parquet") || !strings.Contains(key, "v1/keys/") || !strings.Contains(key, "/in/") {
 		return nil
 	}
-	rs, err := records.Decode(body)
+	rs, newest, err := records.DecodeWithNewest(body)
 	if err != nil {
 		return err
 	}
 	c.mu.Lock()
 	c.recs = append(c.recs, rs...)
+	c.newest = max(c.newest, newest)
 	c.mu.Unlock()
 	return nil
 }

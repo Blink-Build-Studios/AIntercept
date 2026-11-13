@@ -172,6 +172,12 @@ func (o *streamOut) apply(r records.Record) Delta {
 		o.states[r.RoutingKey] = s
 	}
 	d := s.Apply(r)
+	o.fold(r.RoutingKey, d)
+	return d
+}
+
+// fold adds a key's delta to the stream's rows and cases.
+func (o *streamOut) fold(key string, d Delta) {
 	for _, c := range d.Cases {
 		o.cases[c]++
 	}
@@ -182,12 +188,11 @@ func (o *streamOut) apply(r records.Record) Delta {
 			o.rows[c.Table] = t
 		}
 		if c.Row == nil {
-			delete(t, r.RoutingKey+"/"+c.ID)
+			delete(t, key+"/"+c.ID)
 		} else {
-			t[r.RoutingKey+"/"+c.ID] = c.Row
+			t[key+"/"+c.ID] = c.Row
 		}
 	}
-	return d
 }
 
 // presenceRows is the stream's presence rows in stored order: session, group, start.

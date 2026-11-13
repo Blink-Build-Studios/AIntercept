@@ -29,16 +29,29 @@ func (StateModel) New(key string) any { return state.New(key) }
 
 func (StateModel) Apply(st any, r *records.Record) Delta {
 	s := st.(*state.KeyState)
-	d := s.Apply(*r)
+	return deltaOf(s.Key, s.Apply(*r))
+}
+
+// deltaOf is a state delta as table rows: upserts, and tombstones for rows gone.
+func deltaOf(key string, d state.Delta) Delta {
 	if len(d.Changes) == 0 {
 		return nil
 	}
 	out := Delta{}
 	for _, c := range d.Changes {
-		out[c.Table] = append(out[c.Table], Row{Key: s.Key, ID: c.ID, Tomb: c.Row == nil, Value: c.Row})
+		out[c.Table] = append(out[c.Table], Row{Key: key, ID: c.ID, Tomb: c.Row == nil, Value: c.Row})
 	}
 	return out
 }
+
+// Expire ends the key's calls whose wait for their ending passed clockNS.
+func (StateModel) Expire(st any, clockNS int64) Delta {
+	s := st.(*state.KeyState)
+	return deltaOf(s.Key, s.Expire(clockNS))
+}
+
+// Deadline is when the key's first call still waiting expires (0: none).
+func (StateModel) Deadline(st any) int64 { return st.(*state.KeyState).Deadline() }
 
 func (StateModel) Encode(st any) ([]byte, error) { return state.Encode(st.(*state.KeyState)) }
 

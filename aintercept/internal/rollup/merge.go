@@ -42,6 +42,10 @@ const TableMergeKeys = "merge_keys"
 type MergeKey struct {
 	Day string `parquet:"day"`
 	N   int64  `parquet:"n"`
+	// ExpiresNS is the key's commit's expires_ns: when its first call waiting
+	// for its ending expires (0: none). The merge flags the key once its newest
+	// data passes it.
+	ExpiresNS int64 `parquet:"expires_ns,optional"`
 }
 
 // TableMergeAgentCalls is, in each day partition, its keys' Claude Code and
@@ -108,6 +112,11 @@ type Merger struct {
 	Batch int
 	// Recent is how far back a Redis wipe is recovered from the recent index (15 min).
 	Recent time.Duration
+	// Flag, if set, marks keys dirty (SADD dirty): after each commit, every key
+	// whose first call waiting for its ending is due by the newest data, so its
+	// rollup writes it even when the key gets no more input. Best effort: the
+	// deadlines are in merge_keys, and the next run flags them again.
+	Flag func(ctx context.Context, keys []string) error
 }
 
 // MergeResult is what a run did.
@@ -116,6 +125,7 @@ type MergeResult struct {
 	Keys      int      // keys merged
 	Rewritten []string // partitions rewritten ("index" or a day)
 	Recovered bool     // keys came from the recent index (Redis lost them)
+	Flagged   int      // keys flagged for calls due to expire
 }
 
 // RunOnce merges the keys committed since the last run. A run that loses its
@@ -153,6 +163,7 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 
 	// Where each key's rows were, and are now.
 	oldDay := map[string]string{}
+	expires := map[string]int64{} // each key's first deadline
 	if prev != nil {
 		rows, err := m.readOut(ctx, prev.Index, TableMergeKeys)
 		if err != nil {
@@ -160,6 +171,7 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 		}
 		for _, r := range rows {
 			oldDay[r.Key] = r.Value.(MergeKey).Day
+			expires[r.Key] = r.Value.(MergeKey).ExpiresNS
 		}
 	}
 	changed := map[string]bool{}
@@ -187,7 +199,8 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 			newRows[part][t] = append(newRows[part][t], rows...)
 		}
 		newRows[part][TableMergeAgentCalls] = append(newRows[part][TableMergeAgentCalls], agentCalls(key, tables)...)
-		mk = append(mk, stream.Row{Key: key, Value: MergeKey{Day: day, N: c.N}})
+		mk = append(mk, stream.Row{Key: key, Value: MergeKey{Day: day, N: c.N, ExpiresNS: c.ExpiresNS}})
+		expires[key] = c.ExpiresNS
 		if n := rawNewest(tables); n > next.NewestNS {
 			next.NewestNS = n
 		}
@@ -264,6 +277,18 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 		return res, ErrMergeFenced
 	}
 	res.N = next.N
+	if m.Flag != nil {
+		var due []string
+		for k, at := range expires {
+			if at != 0 && at < next.NewestNS {
+				due = append(due, k)
+			}
+		}
+		sort.Strings(due)
+		if len(due) > 0 && m.Flag(ctx, due) == nil {
+			res.Flagged = len(due)
+		}
+	}
 	return res, nil
 }
 

@@ -94,6 +94,9 @@ type Worker struct {
 	cfg  Config
 	mu   sync.Mutex
 	keys map[string]*held
+	// The newest merge commit seen and its newest_ns: the clock calls waiting
+	// for their ending expire by (dataClock).
+	mergeN, mergeNS int64
 }
 
 // held is a key this replica has state for: its newest commit and the state
@@ -192,9 +195,15 @@ func (w *Worker) load(ctx context.Context, key string) (*held, error) {
 // returns how many files it applied and whether it committed. A run that
 // loses the commit race (another holder committed first) returns false and a
 // nil error; its files are never named, so readers never see them.
+//
+// A run also writes the key's calls whose wait for their ending passed the
+// newest data time the merge has seen (stream.Expirer): a run with no new
+// input commits when one is due, which is how the merge's flag revisits a
+// quiet key.
 func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed bool, err error) {
+	changed := false // the in-memory state moved past its commit
 	defer func() {
-		if err != nil || !committed && applied > 0 {
+		if err != nil || !committed && changed {
 			w.forget(key)
 		}
 	}()
@@ -211,7 +220,14 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 	if err := w.hook("listed", key); err != nil {
 		return 0, false, err
 	}
-	if len(names) == 0 {
+	ex, _ := w.cfg.Model.(stream.Expirer)
+	var clock int64
+	if ex != nil && ex.Deadline(h.st) != 0 {
+		if clock, err = w.dataClock(ctx); err != nil {
+			return 0, false, err
+		}
+	}
+	if len(names) == 0 && !(ex != nil && due(ex.Deadline(h.st), clock)) {
 		w.put(key, h)
 		return 0, false, nil
 	}
@@ -240,10 +256,23 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 		}
 		return rs[i].RecordID < rs[j].RecordID
 	})
-	changed := map[string][]stream.Row{}
+	tables := map[string][]stream.Row{}
+	changed = true
 	for i := range rs {
 		for table, rows := range w.cfg.Model.Apply(h.st, &rs[i]) {
-			changed[table] = append(changed[table], rows...)
+			tables[table] = append(tables[table], rows...)
+		}
+	}
+	if ex != nil && ex.Deadline(h.st) != 0 {
+		if clock == 0 { // the first call waiting came in this run
+			if clock, err = w.dataClock(ctx); err != nil {
+				return applied, false, err
+			}
+		}
+		if due(ex.Deadline(h.st), clock) {
+			for table, rows := range ex.Expire(h.st, clock) {
+				tables[table] = append(tables[table], rows...)
+			}
 		}
 	}
 
@@ -251,14 +280,17 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 	dir := KeyDir(w.cfg.Prefix, key)
 	next := &Commit{N: n, Key: key, Out: append([]Out(nil), h.c.Out...), State: append([]string(nil), h.c.State...),
 		StateLevels: padLevels(h.c.StateLevels, len(h.c.State)), UpdatedNS: w.now().UnixNano(), NewestRowNS: newestRow}
-	out, err := w.writeTables(ctx, dir, OutDir(n, nonce), 0, changed, false)
+	if ex != nil {
+		next.ExpiresNS = ex.Deadline(h.st)
+	}
+	out, err := w.writeTables(ctx, dir, OutDir(n, nonce), 0, tables, false)
 	if err != nil {
 		return applied, false, err
 	}
 	if out != nil {
 		next.Out = append(next.Out, *out)
 	}
-	if err := markReported(ctx, w.cfg.Store, w.cfg.Prefix, key, changed[state.TableRequestMissed]); err != nil {
+	if err := markReported(ctx, w.cfg.Store, w.cfg.Prefix, key, tables[state.TableRequestMissed]); err != nil {
 		return applied, false, err
 	}
 	if err := w.hook("out", key); err != nil {
@@ -342,6 +374,50 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 	}
 	_ = w.cfg.Redis.SAdd(ctx, committedSet, key).Err()
 	return applied, true, nil
+}
+
+// due is whether a key's first deadline (0: none) is before clock.
+func due(deadline, clock int64) bool { return deadline != 0 && deadline < clock }
+
+// dataClock is the newest data time the merge has seen (its newest commit's
+// newest_ns): the clock calls waiting for their ending expire by. The worker
+// keeps the newest merge commit it read, so each read lists only the commits
+// after it.
+func (w *Worker) dataClock(ctx context.Context) (int64, error) {
+	w.mu.Lock()
+	n, ns := w.mergeN, w.mergeNS
+	w.mu.Unlock()
+	after := ""
+	if n > 0 {
+		after = MergeCommitKey(w.cfg.Prefix, n)
+	}
+	objs, err := w.cfg.Store.ListAfter(ctx, MergeDir(w.cfg.Prefix)+"commit/", after)
+	if err != nil {
+		return 0, err
+	}
+	best := n
+	for _, o := range objs {
+		if m, ok := CommitN(o.Key); ok && m > best {
+			best = m
+		}
+	}
+	if best == n {
+		return ns, nil
+	}
+	b, err := w.cfg.Store.Get(ctx, MergeCommitKey(w.cfg.Prefix, best))
+	if err != nil {
+		return 0, err
+	}
+	var c MergeCommit
+	if err := json.Unmarshal(b, &c); err != nil {
+		return 0, fmt.Errorf("rollup: merge commit %d: %w", best, err)
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if best > w.mergeN {
+		w.mergeN, w.mergeNS = best, c.NewestNS
+	}
+	return w.mergeNS, nil
 }
 
 // newInput is key's in/ files not yet applied: from (last applied − grace) on,

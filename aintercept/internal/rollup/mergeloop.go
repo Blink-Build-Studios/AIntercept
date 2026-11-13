@@ -59,7 +59,9 @@ func (w *Worker) MergeTick(ctx context.Context) (res MergeResult, ran bool, err 
 		}
 	}
 	m := &Merger{Store: w.cfg.Store, Prefix: w.cfg.Prefix, Queue: redisMergeQueue{w.cfg.Redis}, Clock: w.cfg.Clock,
-		Recent: w.cfg.SweepSpan}
+		Recent: w.cfg.SweepSpan, Flag: func(ctx context.Context, keys []string) error {
+			return w.cfg.Redis.SAdd(ctx, dirtySet, toAny(keys)...).Err()
+		}}
 	res, err = m.RunOnce(ctx)
 	return res, true, err
 }
@@ -78,7 +80,8 @@ func (w *Worker) MergeLoop(ctx context.Context) {
 		if res, ran, err := w.MergeTick(ctx); err != nil && !errors.Is(err, ErrMergeFenced) {
 			slog.Warn("rollup: merge failed; its keys wait for the next run", "err", err)
 		} else if ran && res.N > 0 {
-			slog.Info("rollup: merged", "n", res.N, "keys", res.Keys, "partitions", len(res.Rewritten), "recovered", res.Recovered)
+			slog.Info("rollup: merged", "n", res.N, "keys", res.Keys, "partitions", len(res.Rewritten), "recovered", res.Recovered,
+				"flagged", res.Flagged)
 		}
 		select {
 		case <-ctx.Done():
