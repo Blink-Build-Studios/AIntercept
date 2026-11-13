@@ -54,6 +54,7 @@ class Merge:
     days: dict[str, Out]
     index: Out
     newest_ns: int | None
+    content_retained: bool | None = None
 
     def parts(self) -> list[tuple[str, Out]]:
         out = [("index", self.index)] if self.index.dir else []
@@ -115,6 +116,7 @@ class V1Store(BucketStore):
             days={d: _out(o) for d, o in (m.get("days") or {}).items()},
             index=_out(m.get("index")),
             newest_ns=m.get("newest_ns") or None,
+            content_retained=m.get("content_retained"),
         )
 
     def _key_commit(self, key: str) -> dict[str, Any] | None:
@@ -200,7 +202,17 @@ class V1Store(BucketStore):
                 self._loaded.move_to_end(sig)
                 return self._loaded[sig]
         commits = (
-            {0: Commit(bucket=0, seq=merge.n, key=merge.key, base={}, runs={}, newest_ns=merge.newest_ns)}
+            {
+                0: Commit(
+                    bucket=0,
+                    seq=merge.n,
+                    key=merge.key,
+                    base={},
+                    runs={},
+                    newest_ns=merge.newest_ns,
+                    content_retained=merge.content_retained,
+                )
+            }
             if merge
             else {}
         )

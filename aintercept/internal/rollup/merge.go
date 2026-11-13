@@ -29,7 +29,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
 // TableMergeKeys is the index's table of every merged key's partition (Day,
@@ -121,7 +123,7 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 	}
 	next := MergeCommit{N: 1, Days: map[string]Out{}}
 	if prev != nil {
-		next.N, next.NewestNS = prev.N+1, prev.NewestNS
+		next.N, next.NewestNS, next.ContentRetained = prev.N+1, prev.NewestNS, prev.ContentRetained
 		for d, o := range prev.Days {
 			next.Days[d] = o
 		}
@@ -164,9 +166,10 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 			newRows[part][t] = append(newRows[part][t], rows...)
 		}
 		mk = append(mk, stream.Row{Key: key, Value: MergeKey{Day: day, N: c.N}})
-		if n := newestOf(tables); n > next.NewestNS {
+		if n := rawNewest(tables); n > next.NewestNS {
 			next.NewestNS = n
 		}
+		next.ContentRetained = next.ContentRetained || retainsContent(tables)
 	}
 	if len(changed) == 0 {
 		return res, nil
@@ -497,6 +500,45 @@ func newestOf(tables map[string][]stream.Row) int64 {
 		}
 	}
 	return best
+}
+
+// rawTimes are the fact tables' raw row times (the proxy's clock): a call's
+// start and end, a call in flight's first row, an event's row. The newest is
+// what today's processor reports as its newest row.
+var rawTimes = []struct{ table, col string }{
+	{state.TableFactRequests, "start_ns"}, {state.TableFactRequests, "end_ns"},
+	{state.TableFactPending, "seen_ns"}, {state.TableFactEvents, "row_ns"},
+}
+
+// rawNewest is the newest raw row time among a key's fact rows.
+func rawNewest(tables map[string][]stream.Row) int64 {
+	var best int64
+	for _, rt := range rawTimes {
+		rows := tables[rt.table]
+		if len(rows) == 0 {
+			continue
+		}
+		tab, err := stream.TableFor(rt.table)
+		if err != nil {
+			continue
+		}
+		for _, r := range rows {
+			if v, ok := tab.ValueMap(r.Value)[rt.col].(int64); ok && v > best {
+				best = v
+			}
+		}
+	}
+	return best
+}
+
+// retainsContent is whether a key's calls had their bodies read (a detail).
+func retainsContent(tables map[string][]stream.Row) bool {
+	for _, r := range tables[state.TableFactRequests] {
+		if c, ok := r.Value.(canon.Request); ok && c.DetailJSON != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func partName(day string) string {

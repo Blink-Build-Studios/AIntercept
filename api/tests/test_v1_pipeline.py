@@ -73,4 +73,14 @@ def test_every_endpoint_matches_todays_store(clients):
         if not same:
             differing.setdefault(g, []).append(url)
     print("held:", dict(held))  # noqa: T201 (the gate's counts, in -s output)
+    # The one difference docs/PIPELINE.md §4 makes: the raw view reads a call's detail object,
+    # written when the call ends, so an event of a call still in flight (the builders' analytics
+    # batches never end) has its fields but not yet its raw row. Nothing else may differ.
+    store = new.app.state.store
+    for url in differing.pop("drawer", []):
+        corr = url.removeprefix("/api/v1/events/").rpartition(":")[0]
+        assert url.startswith("/api/v1/events/") and not store._detail(corr), url
+        a, b = old.get(url).json(), new.get(url).json()
+        assert a["data"].pop("raw") and b["data"].pop("raw") == {} and a == b, url
+        held["drawer (in flight: no raw row yet)"] += 1
     assert not differing, {g: (len(u), u[:3]) for g, u in differing.items()}
