@@ -3,6 +3,7 @@ module github.com/Blink-Build-Studios/aintercept/aintercept
 go 1.26.0
 
 require (
+	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/andybalholm/brotli v1.2.6
 	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.9
@@ -15,6 +16,7 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/klauspost/compress v1.20.3
 	github.com/parquet-go/parquet-go v0.32.0
+	github.com/redis/go-redis/v9 v9.23.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
@@ -22,7 +24,6 @@ require (
 
 require (
 	cel.dev/expr v0.25.2 // indirect
-	github.com/alicebob/miniredis/v2 v2.40.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.23 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.6 // indirect
@@ -46,7 +47,6 @@ require (
 	github.com/parquet-go/jsonlite v1.0.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/redis/go-redis/v9 v9.23.0 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
