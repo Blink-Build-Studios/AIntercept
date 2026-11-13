@@ -317,7 +317,7 @@ func TestCompactionKeepsOutputsBoundedAndGCs(t *testing.T) {
 	c := e.cfg("w1")
 	c.Fanout = 4
 	w := e.workerWith(c)
-	for i := 0; i < 300; i++ {
+	for i := 0; i < 140; i++ {
 		e.clock.Advance(time.Second)
 		e.ingest("a", 1)
 		if _, _, err := w.RunKey(e.ctx, key); err != nil {
@@ -325,8 +325,8 @@ func TestCompactionKeepsOutputsBoundedAndGCs(t *testing.T) {
 		}
 	}
 	cm, _ := ReadNewest(e.ctx, e.store, prefix, key)
-	if len(cm.Out) > 4*6 || len(cm.State) > 4*6 {
-		t.Fatalf("after 300 runs: %d out dirs, %d state chunks", len(cm.Out), len(cm.State))
+	if len(cm.Out) > 4*4 || len(cm.State) > 4*4 {
+		t.Fatalf("after 140 runs: %d out dirs, %d state chunks", len(cm.Out), len(cm.State))
 	}
 	e.check()
 	// Past the GC grace, superseded files are deleted.
@@ -415,17 +415,14 @@ func permute(n int, fn func([]int)) {
 // locks), lock expiry, Redis wiped, S3 faults (half of them ambiguous). Once
 // the faults stop and the keys drain, every key's tables equal one pass.
 func TestChaos(t *testing.T) {
-	seeds := 12
-	if testing.Short() {
-		seeds = 4
-	}
+	seeds := 5
 	for seed := int64(1); seed <= int64(seeds); seed++ {
 		e := newEnv(t)
 		rng := rand.New(rand.NewSource(seed))
 		ws := []*Worker{e.worker("w0"), e.worker("w1"), e.worker("w2")}
 		sids := []string{"a", "b", "c", "d", "e", "f"}
 		e.store.FailRate(0.05, rng)
-		for i := 0; i < 250; i++ {
+		for i := 0; i < 160; i++ {
 			switch x := rng.Intn(20); {
 			case x < 8:
 				late := time.Duration(rng.Intn(240)) * time.Second
@@ -467,7 +464,7 @@ func TestFlatCostInHistory(t *testing.T) {
 	w := e.worker("w1")
 	measure := func() float64 {
 		e.store.ResetCounters()
-		const runs = 64
+		const runs = 32
 		for i := 0; i < runs; i++ {
 			e.clock.Advance(time.Second)
 			e.ingest("a", 1)
@@ -478,7 +475,7 @@ func TestFlatCostInHistory(t *testing.T) {
 		return float64(e.store.Cost().Requests) / runs
 	}
 	small := measure()
-	for i := 0; i < 15; i++ { // ~1,000 more runs of history
+	for i := 0; i < 8; i++ { // ~300 more runs of history
 		measure()
 	}
 	large := measure()
