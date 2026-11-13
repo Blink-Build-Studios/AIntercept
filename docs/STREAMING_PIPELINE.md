@@ -1,5 +1,7 @@
 # Data pipeline: canonicalize fast, process only what changed
 
+> **Superseded by `docs/PIPELINE.md` (v5).** Kept for history only.
+
 Status: **proposed, for review.** It replaces two things:
 - the single batch processor (`aintercept process`), which reads everything new
   each run, rebuilds and commits one global manifest;
