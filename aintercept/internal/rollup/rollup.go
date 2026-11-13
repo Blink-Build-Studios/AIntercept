@@ -868,17 +868,38 @@ func (w *Worker) Sweep(ctx context.Context) error {
 	return nil
 }
 
-// Lag is how long the oldest flagged key has waited (0: none waiting).
+// Lag is how long the oldest flagged key still waiting has waited (0: none).
+// A key is still waiting while it's dirty or locked. A note for a key that is
+// neither (a replica noted it just after another ran it and cleared the note)
+// is dropped here, so the lag never counts a settled key.
 func (w *Worker) Lag(ctx context.Context) (time.Duration, error) {
-	zs, err := w.cfg.Redis.ZRangeWithScores(ctx, dirtySince, 0, 0).Result()
-	if err != nil || len(zs) == 0 {
-		return 0, err
+	rdb := w.cfg.Redis
+	for range 64 {
+		zs, err := rdb.ZRangeWithScores(ctx, dirtySince, 0, 0).Result()
+		if err != nil || len(zs) == 0 {
+			return 0, err
+		}
+		k, _ := zs[0].Member.(string)
+		dirty, err := rdb.SIsMember(ctx, dirtySet, k).Result()
+		if err != nil {
+			return 0, err
+		}
+		locked, err := rdb.Exists(ctx, lockPrefix+k).Result()
+		if err != nil {
+			return 0, err
+		}
+		if dirty || locked > 0 {
+			lag := w.now().Sub(time.Unix(0, int64(zs[0].Score*1e9)))
+			if lag < 0 {
+				lag = 0
+			}
+			return lag, nil
+		}
+		if err := rdb.ZRem(ctx, dirtySince, k).Err(); err != nil {
+			return 0, err
+		}
 	}
-	lag := w.now().Sub(time.Unix(0, int64(zs[0].Score*1e9)))
-	if lag < 0 {
-		lag = 0
-	}
-	return lag, nil
+	return 0, nil
 }
 
 // Handler serves /healthz and /lag ({"oldest_unapplied_seconds": s}).

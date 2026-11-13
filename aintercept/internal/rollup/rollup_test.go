@@ -1,6 +1,8 @@
 package rollup
 
 import (
+	"github.com/redis/go-redis/v9"
+
 	"encoding/json"
 	"errors"
 	"io"
@@ -285,6 +287,36 @@ func TestCommittedSetAndLag(t *testing.T) {
 	}
 	if lag, err := w.Lag(e.ctx); err != nil || lag != 0 {
 		t.Fatalf("lag %v err %v after the run, want 0", lag, err)
+	}
+}
+
+// TestLagIgnoresSettledKeys: a replica can note a key's wait (dirty_since)
+// just after another replica ran it and cleared its note, so a key that is
+// neither dirty nor locked can be left in dirty_since. Found by the real-capture
+// gate: /lag then grew forever with nothing to do, and KEDA would scale the
+// rollups out to their maximum. Lag counts only keys still waiting.
+func TestLagIgnoresSettledKeys(t *testing.T) {
+	e := newEnv(t)
+	e.ingest("a", 1)
+	w := e.worker("w1")
+	e.drain(w)
+	w.Release(e.ctx) // idle: its lock released
+	// The race's leftover: noted, but neither dirty nor locked.
+	e.rdb.ZAdd(e.ctx, "dirty_since", redis.Z{Score: float64(e.clock.Now().Unix()), Member: sessionKey("a")})
+	e.clock.Advance(5 * time.Minute)
+	if lag, err := w.Lag(e.ctx); err != nil || lag != 0 {
+		t.Fatalf("lag %v err %v for a settled key, want 0", lag, err)
+	}
+	if n, _ := e.rdb.ZCard(e.ctx, "dirty_since").Result(); n != 0 {
+		t.Fatalf("dirty_since kept %d settled keys", n)
+	}
+	// A key still waiting behind a settled one counts.
+	e.rdb.ZAdd(e.ctx, "dirty_since", redis.Z{Score: float64(e.clock.Now().Unix()), Member: sessionKey("a")})
+	e.ingest("b", 1)
+	e.rdb.ZAdd(e.ctx, "dirty_since", redis.Z{Score: float64(e.clock.Now().Add(time.Second).Unix()), Member: sessionKey("b")})
+	e.clock.Advance(time.Minute)
+	if lag, err := w.Lag(e.ctx); err != nil || lag < 50*time.Second {
+		t.Fatalf("lag %v err %v, want about a minute for the waiting key", lag, err)
 	}
 }
 
