@@ -3,9 +3,9 @@ package state
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
@@ -44,6 +44,9 @@ type KeyState struct {
 	rq   *reqState
 	sr   *sesRows
 	rows rowSet
+	// journal is the records applied since the last Encode: a checkpoint is
+	// them, so it holds what changed, never the key's history.
+	journal []records.Record
 }
 
 // New is an empty state for key.
@@ -58,6 +61,8 @@ func (s *KeyState) Apply(r records.Record) Delta {
 		return Delta{Cases: []string{CaseDuplicate}}
 	}
 	s.seen[r.RecordID] = true
+	s.journal = append(s.journal, r)
+	defer process.HoldFields(jsonOf(&r)...)()
 	var d Delta
 	ch := s.ses.apply(r, &d)
 	s.presence(&d, ch)
@@ -72,6 +77,17 @@ func (s *KeyState) Apply(r records.Record) Delta {
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
 	})
 	return d
+}
+
+// jsonOf is the record's JSON objects the tables read fields of.
+func jsonOf(r *records.Record) []string {
+	switch {
+	case r.Event != nil:
+		return []string{r.Event.MetadataJSON, r.Event.EnvJSON}
+	case r.Call != nil:
+		return []string{r.Call.ProviderJSON, r.Call.ExtJSON}
+	}
+	return nil
 }
 
 // lastChanges keeps each row's last change: one record can write a row more than
@@ -134,44 +150,6 @@ func (rs rowSet) drop(d *Delta, table, id string) {
 // Rows is every row the key has written, by table and id.
 func (s *KeyState) Rows() map[string]map[string]any { return s.rows }
 
-// snapshot is what Encode writes: the records' projections. Decode rebuilds the
-// indexes and rows from them.
-type snapshot struct {
-	Key     string
-	Seen    []string
-	Session sessionSnap
-	Rows    map[string]map[string]any
-	Links   map[string][]LinkEntry
-	Tools   map[string]int64
-	Turns   map[string]int64
-	Dims    dimsSnap
-	// Prompts is the records the prompt tables and marks hold: Decode applies
-	// them again to rebuild their indexes.
-	Prompts []records.Record
-	Request reqSnap
-	Ses     sesSnap
-}
-
-// dimsSnap is the dimension indexes, for Encode.
-type dimsSnap struct {
-	Account *process.Account
-	Visible bool
-	Person  string
-	Creds   map[string][]string
-	CredOf  map[string]string
-	AcctEv  []AccountEvents
-	AcctDev []AccountDevice
-	Codex   []CodexPlan
-}
-
-// LinkEntry is one visible call under a request id, for Encode.
-type LinkEntry struct {
-	TS     int64
-	ID     string
-	CallID string // the call it's from (its start's id, or its ending's)
-	Link   RequestLink
-}
-
 // RowTypes is every stored row type: each field has a snake_case parquet tag
 // (rowtypes_test.go), so table files name their columns.
 var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
@@ -186,117 +164,67 @@ func init() {
 	}
 }
 
-// Encode is the state as bytes, for a checkpoint.
+// A checkpoint is a chunk of the key's journal: the records it applied since
+// the last one, in the order it applied them. A key is loaded back by applying
+// its chunks' records again, oldest chunk first: Apply is deterministic, so the
+// state, its indexes and its rows come back exactly. A checkpoint's size is
+// what changed, however long the key's history; loading costs the same per
+// record held.
+type journalChunk struct {
+	Key     string
+	Records []records.Record
+}
+
+// Encode is the key's checkpoint: the records applied since the last Encode.
 func Encode(s *KeyState) ([]byte, error) {
-	snap := snapshot{Key: s.Key, Session: s.ses.snap(), Rows: s.rows, Links: map[string][]LinkEntry{},
-		Tools: s.ev.tools, Turns: s.ev.turns, Dims: s.dm.snap(), Prompts: s.pr.snap(), Request: s.rq.snap(), Ses: s.sr.snap()}
-	byAt := map[string]string{}
-	for call, la := range s.ev.callLink {
-		byAt[la.rid+"\x00"+la.at.id] = call
-	}
-	for rid, m := range s.ev.links {
-		m.All(func(k tsID, v RequestLink) bool {
-			snap.Links[rid] = append(snap.Links[rid], LinkEntry{k.ts, k.id, byAt[rid+"\x00"+k.id], v})
-			return true
-		})
-	}
-	for id := range s.seen {
-		snap.Seen = append(snap.Seen, id)
-	}
-	sort.Strings(snap.Seen)
 	var b bytes.Buffer
-	err := gob.NewEncoder(&b).Encode(snap)
+	err := gob.NewEncoder(&b).Encode(journalChunk{Key: s.Key, Records: s.journal})
+	if err == nil {
+		s.journal = nil
+	}
 	return b.Bytes(), err
 }
 
-// Decode is a state from Encode's bytes.
-func Decode(b []byte) (*KeyState, error) {
-	var snap snapshot
-	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&snap); err != nil {
-		return nil, err
+// Decode is a key's state from its checkpoints, oldest first.
+func Decode(chunks ...[]byte) (*KeyState, error) {
+	if len(chunks) == 0 {
+		return nil, errors.New("state: no checkpoint to load")
 	}
-	s := New(snap.Key)
-	for _, id := range snap.Seen {
-		s.seen[id] = true
-	}
-	s.ses = sessionFrom(snap.Session)
-	s.ses.before = s.ses.spanNow()
-	s.rows = snap.Rows
-	if s.rows == nil {
-		s.rows = rowSet{}
-	}
-	for id, row := range s.rows[TablePresence] {
-		if strings.HasPrefix(id, "f:") {
-			p := row.(Presence)
-			s.segs.Set(p.FromNS, p)
+	var s *KeyState
+	for _, b := range chunks {
+		var c journalChunk
+		if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&c); err != nil {
+			return nil, err
+		}
+		if s == nil {
+			s = New(c.Key)
+		}
+		for _, r := range c.Records {
+			s.Apply(r)
 		}
 	}
-	for rid, es := range snap.Links {
-		m := newOmap[tsID, RequestLink](lessTsID)
-		for _, e := range es {
-			m.Set(tsID{e.TS, e.ID}, e.Link)
-			if e.CallID != "" {
-				s.ev.callLink[e.CallID] = linkAt{rid, tsID{e.TS, e.ID}}
-			}
-		}
-		s.ev.links[rid] = m
-	}
-	if snap.Tools != nil {
-		s.ev.tools = snap.Tools
-	}
-	if snap.Turns != nil {
-		s.ev.turns = snap.Turns
-	}
-	s.dm = dimsFrom(snap.Dims)
-	s.promptsFrom(snap.Prompts)
-	s.reqFrom(snap.Request)
-	s.sr = sesRowsFrom(snap.Ses)
-	s.restoreSessionRow()
+	s.journal = nil
 	return s, nil
 }
 
-func (x *dimsState) snap() dimsSnap {
-	y := dimsSnap{Account: x.account, Visible: x.visible, Person: x.person, Creds: map[string][]string{}, CredOf: x.credOf}
-	for h, set := range x.creds {
-		for src := range set {
-			y.Creds[h] = append(y.Creds[h], src)
+// Merge is one checkpoint holding the given ones' records, in order: what
+// compaction keeps for a key.
+func Merge(chunks ...[]byte) ([]byte, error) {
+	var out journalChunk
+	for _, b := range chunks {
+		var c journalChunk
+		if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&c); err != nil {
+			return nil, err
 		}
+		if out.Key == "" {
+			out.Key = c.Key
+		}
+		out.Records = append(out.Records, c.Records...)
 	}
-	for _, v := range x.acctEv {
-		y.AcctEv = append(y.AcctEv, *v)
-	}
-	for _, v := range x.acctDev {
-		y.AcctDev = append(y.AcctDev, *v)
-	}
-	for _, v := range x.codex {
-		y.Codex = append(y.Codex, *v)
-	}
-	return y
+	var b bytes.Buffer
+	err := gob.NewEncoder(&b).Encode(out)
+	return b.Bytes(), err
 }
 
-func dimsFrom(y dimsSnap) *dimsState {
-	x := newDimsState()
-	x.account, x.visible, x.person = y.Account, y.Visible, y.Person
-	for h, srcs := range y.Creds {
-		x.creds[h] = map[string]bool{}
-		for _, src := range srcs {
-			x.creds[h][src] = true
-		}
-	}
-	for k, v := range y.CredOf {
-		x.credOf[k] = v
-	}
-	for _, v := range y.AcctEv {
-		v := v
-		x.acctEv[v.AccountID] = &v
-	}
-	for _, v := range y.AcctDev {
-		v := v
-		x.acctDev[[2]string{v.AccountID, v.DeviceID}] = &v
-	}
-	for _, v := range y.Codex {
-		v := v
-		x.codex[v.AccountID] = &v
-	}
-	return x
-}
+// Held is how many records the key holds in its journal (not yet checkpointed).
+func (s *KeyState) Held() int { return len(s.journal) }

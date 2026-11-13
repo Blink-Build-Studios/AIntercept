@@ -42,14 +42,16 @@ func (StateModel) Apply(st any, r *records.Record) Delta {
 
 func (StateModel) Encode(st any) ([]byte, error) { return state.Encode(st.(*state.KeyState)) }
 
-func (StateModel) Decode(key string, b []byte) (any, error) {
-	s, err := state.Decode(b)
+func (StateModel) Decode(key string, chunks [][]byte) (any, error) {
+	s, err := state.Decode(chunks...)
 	if err != nil {
 		return nil, err
 	}
 	s.Key = key
 	return s, nil
 }
+
+func (StateModel) Merge(_ string, chunks [][]byte) ([]byte, error) { return state.Merge(chunks...) }
 
 // Size estimates a key's state in memory from its rows (the indexes it keeps
 // are of the same order).
@@ -58,5 +60,5 @@ func (StateModel) Size(st any) int {
 	for _, rows := range st.(*state.KeyState).Rows() {
 		n += len(rows)
 	}
-	return 512 + 1024*n
+	return 512 + 1024*n + 1024*st.(*state.KeyState).Held()
 }

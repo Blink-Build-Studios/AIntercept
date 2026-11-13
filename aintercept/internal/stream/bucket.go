@@ -340,18 +340,16 @@ func (w *Bucket) writeRows(ctx context.Context, cd codec, key string, rows []Row
 	return ref, nil
 }
 
-// state is key's state: cached, else read back from the newest state file
-// that holds it, else new.
+// state is key's state: cached, else loaded from every state file that holds a
+// checkpoint of it (the base, then each cycle's run since), else new.
 func (w *Bucket) state(ctx context.Context, c *Commit, key string, read map[string][]Row) (any, error) {
 	if s, ok := w.cache.get(key); ok {
 		return s, nil
 	}
-	candidates := make([]FileRef, 0, len(c.State)+len(c.StateBase))
-	for i := len(c.State) - 1; i >= 0; i-- {
-		candidates = append(candidates, c.State[i])
-	}
-	candidates = append(candidates, c.StateBase...)
-	for _, f := range candidates {
+	files := make([]FileRef, 0, len(c.StateBase)+len(c.State))
+	files = append(append(files, c.StateBase...), c.State...)
+	var chunks [][]byte
+	for _, f := range files {
 		if !f.has(key) {
 			continue
 		}
@@ -368,11 +366,14 @@ func (w *Bucket) state(ctx context.Context, c *Commit, key string, read map[stri
 		}
 		i := sort.Search(len(rows), func(i int) bool { return rows[i].Key >= key })
 		if i < len(rows) && rows[i].Key == key {
-			w.loads++
-			return w.M.Decode(key, rows[i].Value.([]byte))
+			chunks = append(chunks, rows[i].Value.([]byte))
 		}
 	}
-	return w.M.New(key), nil
+	if len(chunks) == 0 {
+		return w.M.New(key), nil
+	}
+	w.loads++
+	return w.M.Decode(key, chunks)
 }
 
 func sortedTables(d map[string][]Row) []string {
@@ -452,7 +453,7 @@ func (w *Bucket) compact(ctx context.Context, c *Commit, now time.Time, force bo
 		}
 		c.Base[t], c.Runs[t] = parts, nil
 	}
-	parts, err := w.merge(ctx, stateCodec{}, append(append([]FileRef(nil), c.StateBase...), c.State...),
+	parts, err := w.mergeState(ctx, append(append([]FileRef(nil), c.StateBase...), c.State...),
 		func(p int) string { return w.L.StateBaseKey(w.B, gen, w.Epoch, c.Seq, p) })
 	if err != nil {
 		return err
@@ -503,6 +504,49 @@ func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func
 			end++
 		}
 		ref, err := w.writeRows(ctx, cd, name(part), rows[start:end])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ref)
+		start = end
+	}
+	return out, nil
+}
+
+// mergeState folds state files, oldest first, into key-ranged parts holding one
+// checkpoint per key: the model's merge of every checkpoint the files hold for it.
+func (w *Bucket) mergeState(ctx context.Context, files []FileRef, name func(int) string) ([]FileRef, error) {
+	chunks := map[string][][]byte{}
+	for _, f := range files {
+		raw, err := w.S.Get(ctx, f.Key)
+		if err != nil {
+			return nil, fmt.Errorf("compact %s: %w", f.Key, err)
+		}
+		rows, err := (stateCodec{}).Decode(raw)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			chunks[r.Key] = append(chunks[r.Key], r.Value.([]byte))
+		}
+	}
+	keys := make([]string, 0, len(chunks))
+	for k := range chunks {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []FileRef
+	for start, part := 0, 0; start < len(keys); part++ {
+		end := min(start+w.PartRows, len(keys))
+		rows := make([]Row, 0, end-start)
+		for _, k := range keys[start:end] {
+			b, err := w.M.Merge(k, chunks[k])
+			if err != nil {
+				return nil, err
+			}
+			rows = append(rows, Row{Key: k, ID: k, Value: b})
+		}
+		ref, err := w.writeRows(ctx, stateCodec{}, name(part), rows)
 		if err != nil {
 			return nil, err
 		}

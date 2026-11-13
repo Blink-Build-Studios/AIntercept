@@ -2,7 +2,6 @@ package state
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -117,11 +116,10 @@ type pReport struct {
 
 // promptsState is the key's indexes for the prompt tables and marks.
 type promptsState struct {
-	recs  map[string]records.Record // what it holds, by event key or call id: replayed on Decode
-	calls map[string]*pCall         // steps by call id
-	byKey map[string]*pCall         // steps by request id (the call id as rows name it)
-	hid   map[string]*pCall         // hidden calls by call id
-	steps *omap[tsID, *pCall]       // every step, in order
+	calls map[string]*pCall   // steps by call id
+	byKey map[string]*pCall   // steps by request id (the call id as rows name it)
+	hid   map[string]*pCall   // hidden calls by call id
+	steps *omap[tsID, *pCall] // every step, in order
 
 	prompts map[string]*pPrompt
 	starts  *omap[tsID, *pPrompt] // existing prompts by (start, id)
@@ -160,7 +158,7 @@ type promptsState struct {
 }
 
 func newPromptsState() *promptsState {
-	return &promptsState{recs: map[string]records.Record{}, calls: map[string]*pCall{}, byKey: map[string]*pCall{}, hid: map[string]*pCall{},
+	return &promptsState{calls: map[string]*pCall{}, byKey: map[string]*pCall{}, hid: map[string]*pCall{},
 		steps: newOmap[tsID, *pCall](lessTsID), prompts: map[string]*pPrompt{},
 		starts: newOmap[tsID, *pPrompt](lessTsID), typed: newOmap[tsID, *pPrompt](lessTsID),
 		hidden: newOmap[tsID, string](lessTsID), hidAt: map[string]string{}, pastes: newOmap[tsID, *pEv](lessTsID),
@@ -248,16 +246,13 @@ func (s *KeyState) prompts(r records.Record, d *Delta) {
 	if sid == "" {
 		return
 	}
-	ps := s.pr
 	switch {
 	case r.Kind == records.KindClientEvent && r.Event != nil:
 		e := r.Event
 		switch {
 		case e.Source == canon.ProductClaudeCode && e.SessionID == sid:
-			ps.recs["e:"+e.EventKey] = r
 			s.promptEvent(r, d, sid)
 		case e.Source == canon.ProductCodex && e.Name == "codex_turn_event" && e.SessionID == sid && e.PromptID != "":
-			ps.recs["e:"+e.EventKey] = r
 			s.codexReport(e, d, sid)
 		}
 	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
@@ -266,7 +261,6 @@ func (s *KeyState) prompts(r records.Record, d *Delta) {
 			s.dropCall(d, sid, c.CallID)
 			return
 		}
-		ps.recs["c:"+c.CallID] = r
 		s.setCall(d, sid, c.CallID, process.StepCallOfRequest(*c), true)
 	case r.Kind == records.KindCallStart:
 		c := r.Call
@@ -277,7 +271,6 @@ func (s *KeyState) prompts(r records.Record, d *Delta) {
 		if !sc.Visible() {
 			return
 		}
-		ps.recs["c:"+c.CallID] = r
 		d.Cases = append(d.Cases, CaseStepPending)
 		s.setCall(d, sid, c.CallID, sc, false)
 	}
@@ -480,7 +473,6 @@ func (s *KeyState) setCall(d *Delta, sid, raw string, sc process.StepCall, ended
 		if wasStep {
 			d.Cases = append(d.Cases, CaseStepGone)
 		}
-		delete(ps.recs, "c:"+raw)
 	}
 }
 
@@ -489,7 +481,6 @@ func (s *KeyState) dropCall(d *Delta, sid, raw string) {
 		d.Cases = append(d.Cases, CaseStepGone)
 	}
 	s.removeCall(d, sid, raw)
-	delete(s.pr.recs, "c:"+raw)
 }
 
 // removeCall takes a call's previous version out of every index and row.
@@ -1244,27 +1235,4 @@ func nzI(n int64) *int64 {
 		return nil
 	}
 	return &n
-}
-
-// snap is the records the prompt tables hold, in a fixed order.
-func (ps *promptsState) snap() []records.Record {
-	keys := make([]string, 0, len(ps.recs))
-	for k := range ps.recs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([]records.Record, len(keys))
-	for i, k := range keys {
-		out[i] = ps.recs[k]
-	}
-	return out
-}
-
-// promptsFrom rebuilds the prompt indexes by applying their records again (the
-// rows are already Decode's; writing them again changes nothing).
-func (s *KeyState) promptsFrom(rs []records.Record) {
-	var d Delta
-	for _, r := range rs {
-		s.prompts(r, &d)
-	}
 }

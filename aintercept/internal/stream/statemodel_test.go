@@ -55,7 +55,7 @@ func TestStateModelIsOrderFreeAndResumes(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if states[k], err = m.Decode(k, b); err != nil {
+				if states[k], err = m.Decode(k, [][]byte{b}); err != nil {
 					t.Fatal(err)
 				}
 			}

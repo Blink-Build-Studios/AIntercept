@@ -132,15 +132,7 @@ type nearest struct {
 }
 
 type txEnt struct {
-	tx  *process.Tx
-	src TxSource
-}
-
-// TxSource is what a call's row was built from, for Encode: its ending, or its start.
-type TxSource struct {
-	Ended bool
-	Req   *canon.Request
-	Pend  *canon.Pending
+	tx *process.Tx
 }
 
 type repEnt struct {
@@ -170,7 +162,7 @@ func (s *KeyState) requests(r records.Record, d *Delta) {
 			s.setTx(d, c.CallID, nil)
 		default:
 			d.Cases = append(d.Cases, CaseTxEnd)
-			s.setTx(d, c.CallID, &txEnt{process.TxOfRequest(*c), TxSource{Ended: true, Req: c}})
+			s.setTx(d, c.CallID, &txEnt{tx: process.TxOfRequest(*c)})
 		}
 	case r.Kind == records.KindCallStart:
 		c := r.Call
@@ -180,7 +172,7 @@ func (s *KeyState) requests(r records.Record, d *Delta) {
 		}
 		p := pendingOfStart(c)
 		d.Cases = append(d.Cases, CaseTxStart)
-		s.setTx(d, c.CallID, &txEnt{process.TxOfPending(p), TxSource{Pend: &p}})
+		s.setTx(d, c.CallID, &txEnt{tx: process.TxOfPending(p)})
 	case r.Kind == records.KindClientEvent && r.Event != nil:
 		e := r.Event
 		if process.IsAnalyticsEvent(*e) {
@@ -483,70 +475,4 @@ func pendingOfStart(c *canon.Request) canon.Pending {
 	return canon.Pending{CorrelationID: c.CallID, SeenNS: c.StartNS, StartNS: c.StartNS, Host: c.Host,
 		Method: c.Method, Path: c.Path, Synthetic: c.Synthetic, KeyHash: c.KeyHash, RequestID: c.RequestID,
 		ClientJSON: string(cj), ResponseStartNS: c.ResponseStartNS}
-}
-
-// reqSnap is the request log's state for Encode: each call's source, the
-// retries and reports, and the newest time last written.
-type reqSnap struct {
-	Txs     map[string]TxSource
-	Retries []process.Retry
-	Reports map[string]RepSnap
-	LastOK  bool
-	LastNS  int64
-}
-
-// RepSnap is a report's place, for Encode.
-type RepSnap struct {
-	Session, ReqID, CRID string
-	TS                   int64
-}
-
-func (x *reqState) snap() reqSnap {
-	y := reqSnap{Txs: map[string]TxSource{}, Reports: map[string]RepSnap{}, LastOK: x.lastOK, LastNS: x.lastNS}
-	for c, e := range x.txs {
-		y.Txs[c] = e.src
-	}
-	x.retries.All(func(_ tsID, r process.Retry) bool { y.Retries = append(y.Retries, r); return true })
-	for k, e := range x.reps {
-		y.Reports[k] = RepSnap{e.session, e.reqID, e.crid, e.ts}
-	}
-	return y
-}
-
-// reqFrom rebuilds the indexes from a snapshot (the rows come back with it).
-func (s *KeyState) reqFrom(y reqSnap) {
-	x := newReqState()
-	s.rq = x
-	sid := sessionOf(s.Key)
-	for c, src := range y.Txs {
-		var t *process.Tx
-		if src.Ended {
-			t = process.TxOfRequest(*src.Req)
-		} else {
-			t = process.TxOfPending(*src.Pend)
-		}
-		x.txs[c] = &txEnt{t, src}
-		if s.grouped(t) {
-			g := x.groups[groupKey(t)]
-			if g == nil {
-				g = newOmap[tsID, string](lessTsID)
-				x.groups[groupKey(t)] = g
-			}
-			g.Set(atOf(t), c)
-		}
-		if s.retried(t) {
-			x.failedAt.Set(atOf(t), c)
-			x.maxSpan = max(x.maxSpan, t.End()-t.TS())
-		}
-		if t.Visible() && t.Session() == sid {
-			x.count(t, 1, map[string]bool{})
-		}
-	}
-	for _, r := range y.Retries {
-		x.retries.Set(tsID{r.TS, r.Key}, r)
-	}
-	for k, e := range y.Reports {
-		x.addReport(k, repEnt{e.Session, e.ReqID, e.CRID, e.TS})
-	}
-	x.lastOK, x.lastNS = y.LastOK, y.LastNS
 }
