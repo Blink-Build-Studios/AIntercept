@@ -150,28 +150,21 @@ The API runs one DuckDB query over S3 (`httpfs`), using the files a commit names
 | Endpoint | How it reads |
 |---|---|
 | `/sessions/{id}`, `/timeline`, `/state`, `/prompts`, `/requests`, `/events` | key `s:<id>`: that key's newest commit, then its `out` files |
-| `/requests/{id}`, `/raw`, `/details`, `/events/{id}` | the call's `calls/<id>` object, already needed for raw headers and bodies, gives its key; then that key's rows. The raw view reads S3 directly, which replaces the mirror sidecar. |
+| `/requests/{id}`, `/raw`, `/details`, `/events/{id}` | the call's `calls/<id>` object, already needed for raw headers and bodies, gives its key; then that key's rows. The raw view reads S3 directly. |
 | `/people/{id}`, `/summary`, `/sessions`, `/timeline`, `/requests`, `/coverage` | the people index in the merge gives the person's session keys and `c:` keys for the window; then each key's rows, or the merge's per-session rows for summaries. The same SQL as today, over these rows. |
 | `/people`, `/overview` | the merge's per-session rows and people index |
 | `/status` | the merge, plus the newest ingest time each pod writes to Redis |
 
 - Values relative to now (live, in flight, activity) are computed at query time
   from stored timestamps, as today.
-- The API pod drops the mirror sidecar and its local volumes.
+- The API never copies data to local disk. The mirror sidecar is deleted.
 
 ## Rollout
 
-1. Ship the new ingest and rollup code. Ingest writes `v1/` alongside today's
-   `raw/`.
-2. Today's `process` keeps running, and the current API keeps serving.
-3. Backfill history into `v1/` by running today's raw log through the same
-   ingest code path (`aintercept canon`) offline.
-4. A second API, `api-v1`, reads `v1/`. A parity job compares its responses with
-   the current API's at a fixed now, every 15 min.
-5. Once parity holds for a day, point the UI Service at `api-v1`. Rollback means
-   pointing it back.
-6. After a week, remove `process`, the mirror sidecar and the old processed
-   tables.
+None. This is used internally and by one or two people outside the team. On deploy, today's processed data is
+discarded and the new pipeline starts fresh from new traffic. The old `process` Deployment,
+the mirror sidecar and the old processed tables are deleted in the same change. No backfill, no
+side-by-side run, no migration.
 
 ## Testing: small tests, written first
 
@@ -206,7 +199,7 @@ The API runs one DuckDB query over S3 (`httpfs`), using the files a commit names
 | 2 | Rollup loop, commit, compaction, sweep, lag | Unit tests, plus the chaos simulation equal to a single pass |
 | 3 | Merge | Unit tests, plus the people index and per-session rows equal to the reference |
 | 4 | API over v1, S3 raw reader | Endpoint parity on the test datasets |
-| 5 | Helm: rollup Deployment, Redis StatefulSet, KEDA, `api-v1` | Chart tests |
+| 5 | Helm: rollup Deployment, Redis StatefulSet, KEDA; delete `process` and the mirror | Chart tests |
 | 6 | Final gate on the real capture | Every endpoint byte-identical |
 
 ## Not now: add when real traffic needs it
