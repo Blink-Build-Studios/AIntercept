@@ -1,7 +1,14 @@
-"""The rendered session tables side by side with the oracle (docs/PIPELINE.md v7 build step 3).
+"""The worker's Postgres rows side by side with the oracle (docs/PIPELINE.md v7 build steps 2 and 3).
 
-`aintercept v1layout -pg <dsn>` writes every key's rendered rows into a fresh Postgres
-(internal/render: state.RenderSession re-encoded, the folds); this reads each session's 9 tables
+`aintercept v1layout -pg <dsn>` runs the v7 worker (internal/worker) over the dataset's ingest files
+into a fresh Postgres: every key flagged and drained, the due calls run until nothing is flagged.
+
+Stored inputs (step 2): each §3.4 table equals the oracle's st_<state table> over every key, row for
+row, keyed by (key, the state's row id): the oracle's nested structs flattened as the schema flattens
+them (row_<column>, plan_v), its id as bytes, analytics without env_json. (The SQL fixture seeds
+aren't here: they're stored inputs already, with no capture for a worker to apply.)
+
+Rendered rows (step 3: internal/render, state.RenderSession re-encoded, the folds): this reads each session's 9 tables
 back as the API will load them, and compares them with the oracle's for that session, row for row,
 seq by order. The load fills back the two re-encodings (prompt_rows.session_last_ns from
 session_rows.prompt_last_ns; session_marks.seq keyed per block, compared by order) and drops the
@@ -21,6 +28,7 @@ What the session's own key can't know isn't rendered, so it isn't compared:
 
 import contextlib
 import pathlib
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -31,7 +39,7 @@ from tests import pgdb
 from tests.builders import ClaudeCode, Dataset, load_fixture
 from tests.conftest import lay_out
 from tests.oracle.harness import SESSION_TABLES, Layout, Oracle, Table, Tables, assert_same
-from tests.oracle.store import Scope
+from tests.oracle.store import LocalSource, OracleStore, Scope, read_newest
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_session import H, prompt
@@ -247,3 +255,69 @@ def test_the_folds_equal_the_oracles(layouts):
                    WHERE batch IS DISTINCT FROM coalesce(substring(event_id FROM '^(.*):[0-9]+$'), '')""",
             )
             assert bad == [(0,)], name
+
+
+# --- stored inputs (step 2) -------------------------------------------------------------------
+
+# The stored tables whose state table is named otherwise (§3.4); the rest share their names.
+_STATE_OF = {"requests": "fact_requests", "analytics": "fact_events"}
+_NOT_STORED = {"analytics": ("env_json",)}
+
+
+def stored_tables() -> list[str]:
+    """The §3.4 tables: schema.sql's tables keyed by (key, id bytea)."""
+    return re.findall(r"CREATE TABLE (\w+) \(\n    key text NOT NULL,\n    id bytea NOT NULL,", pgdb.SCHEMA.read_text())
+
+
+def _flattened(rel: duckdb.DuckDBPyRelation, drop: tuple[str, ...]) -> str:
+    """A select list flattening rel's structs as the schema does (c_f), with its id as bytes."""
+    out = []
+    for name, typ in zip(rel.columns, rel.types, strict=True):
+        if name in drop:
+            continue
+        if name == "id":
+            out.append("encode(id) AS id")
+        elif typ.id == "struct":
+            out += [f'"{name}"."{f}" AS "{name}_{f}"' for f, _ in typ.children]
+        else:
+            out.append(f'"{name}"')
+    return ", ".join(out)
+
+
+def test_every_datasets_stored_inputs_equal_the_oracles(layouts):
+    tables = stored_tables()
+    assert len(tables) == 20, tables  # nine dimensions, six request-log inputs, three labels and edges, two facts
+    rows: dict[str, int] = {}
+    for name, root, dsn in layouts:
+        oracle = OracleStore(LocalSource(root), prefix="sim/")
+        merge = oracle.merge()
+        assert merge is not None, name
+        con, pg = duckdb.connect(), pgdb.connect(dsn)
+        try:
+            for table in tables:
+                state = _STATE_OF.get(table, table)
+                got = pgdb.load(con, pg, "pg_" + table, f"SELECT * FROM {table}")  # noqa: S608 (schema names)
+                urls = [oracle.source.url(oracle._merge_file(o, state)) for _, o in merge.parts() if state in o.tables]
+                if urls:
+                    st = read_newest(con, urls, keep_keys=True)
+                    want = con.sql(f"SELECT {_flattened(st, ('tomb', *_NOT_STORED.get(table, ())))} FROM st")  # noqa: S608
+                else:  # the oracle has none
+                    want = con.sql(f"SELECT * FROM pg_{table} WHERE false")  # noqa: S608
+                assert sorted(want.columns) == sorted(got.columns), (name, table, set(want.columns) ^ set(got.columns))
+                want.create("want_" + table)
+                cols = ", ".join(f'"{c}"' for c in got.columns)
+                diff = con.sql(
+                    f"(SELECT 'oracle only', {cols} FROM want_{table}"  # noqa: S608 (schema names)
+                    f" EXCEPT ALL SELECT 'oracle only', {cols} FROM pg_{table})"
+                    f" UNION ALL (SELECT 'stored only', {cols} FROM pg_{table}"
+                    f" EXCEPT ALL SELECT 'stored only', {cols} FROM want_{table})"
+                ).fetchall()
+                assert not diff, f"{name}: {table}: {len(diff)} rows differ, e.g. {diff[:4]}"
+                rows[table] = rows.get(table, 0) + con.sql(f"SELECT count(*) FROM pg_{table}").fetchall()[0][0]  # noqa: S608
+        finally:
+            pg.close()
+            con.close()
+    print("stored rows compared:", rows)  # noqa: T201 (the gate's coverage, in -s output)
+    # Not vacuous: the tables the datasets feed hold rows.
+    empty = sorted(t for t in tables if not rows[t])
+    assert len(empty) <= 4, empty

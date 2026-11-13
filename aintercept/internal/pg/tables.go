@@ -38,6 +38,9 @@ type Column struct {
 	// Field is the row type's field it's read from (nil: an extra column the
 	// writer fills itself).
 	Field []int
+	// Optional is a field tagged `optional`: its zero value is NULL, as the
+	// table codec writes it (and the oracle reads it).
+	Optional bool
 }
 
 // Table is one table of the schema.
@@ -237,7 +240,7 @@ func rowColumns(t reflect.Type, o rowOpts) []Column {
 			if !f.IsExported() {
 				continue
 			}
-			name, _, _ := strings.Cut(f.Tag.Get("parquet"), ",")
+			name, opts, _ := strings.Cut(f.Tag.Get("parquet"), ",")
 			at := append(append([]int(nil), path...), i)
 			ft := f.Type
 			if ft.Kind() == reflect.Pointer {
@@ -263,7 +266,8 @@ func rowColumns(t reflect.Type, o rowOpts) []Column {
 				walk(ft, p, at)
 				continue
 			}
-			out = append(out, Column{Name: prefix + name, Type: sqlType(ft), Field: at})
+			out = append(out, Column{Name: prefix + name, Type: sqlType(ft), Field: at,
+				Optional: strings.Contains(","+opts+",", ",optional,")})
 		}
 	}
 	walk(t, "", nil)

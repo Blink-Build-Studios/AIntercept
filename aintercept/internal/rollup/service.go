@@ -26,7 +26,9 @@ import (
 //	ROLLUP_REPLICA                        this replica's name (default the hostname)
 //	ROLLUP_PARALLEL                       keys run at once (default 8)
 //	ROLLUP_HTTP_LISTEN                    /healthz and /lag (default 0.0.0.0:9004)
-//	ROLLUP_POSTGRES_URL                   the workers' Postgres DSN: runs the tail (tailwire.go)
+//
+// With ROLLUP_POSTGRES_URL set, `aintercept rollup` is the v7 worker instead
+// (internal/worker.Run), which has no Redis; this v5 path goes in build step 8.
 func Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -49,17 +51,17 @@ func Run() {
 	slog.Info("rollup: running", "replica", w.cfg.Replica)
 	merged := make(chan struct{})
 	go func() { defer close(merged); w.MergeLoop(ctx) }()
-	tailed := make(chan struct{})
-	go func() { defer close(tailed); startTail(ctx, s, prefix) }() // TODO(v7 step 2): the singleton hook
 	if err := w.Run(ctx); err != nil {
 		slog.Error("rollup: run", "err", err)
 	}
 	<-merged
-	<-tailed
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(sctx)
 }
+
+// StoreFromEnv is the store and prefix the ROLLUP_* environment names.
+func StoreFromEnv(ctx context.Context) (stream.Store, string, error) { return storeFromEnv(ctx) }
 
 func storeFromEnv(ctx context.Context) (stream.Store, string, error) {
 	if dir := os.Getenv("ROLLUP_LOCAL_DIR"); dir != "" {

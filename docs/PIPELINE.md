@@ -314,6 +314,11 @@ It's the same number on every replica. KEDA's `metrics-api` trigger reads it,
 unchanged: target 30 s, at least 2 replicas. If Postgres is unreachable,
 `/lag` errors and KEDA holds the replica count.
 
+*As built (step 2):* `/lag` also reports `quarantined_keys`, and `/metrics`
+serves both as gauges. Until step 8 switches Compose and the chart,
+`aintercept rollup` is this worker when `ROLLUP_POSTGRES_URL` names its
+Postgres, and v5's Redis rollup otherwise.
+
 ## 3. Postgres schema
 
 ### 3.1 Conventions
@@ -343,7 +348,9 @@ unchanged: target 30 s, at least 2 replicas. If Postgres is unreachable,
     `sha256:<hex>`: session, request, call, event and prompt ids.
   - Both rules apply where records are built, so the state, the oracle and the
     API all see the same values. Only pathological input changes.
-  - Quarantine (§2) is the backstop for anything else.
+  - Quarantine (§2) is the backstop for anything else: for example an account
+    id, which canon doesn't cap (it comes from the provider, not the client),
+    over ~2.7 KB would fail its key row's insert, and only its key would stop.
 - **Columns are today's names and types:**
   - `process/tables.go` and `state.TableTypes`;
   - the oracle's `_EMPTY` shapes.
@@ -768,6 +775,13 @@ Each step writes its failing tests first. **The oracle is today's code, frozen**
   guarded key update, upserts, deletes, the flag) has an in-memory
   implementation with Postgres's semantics: one transaction, and the guard
   re-checked after a concurrent commit. The layers run on it:
+  - *As built (step 2):* the worker's layers (`internal/worker`) run on a real
+    Postgres, a fresh database per test (`pgtest.Fresh`), which is stronger
+    than a fake and as fast: the whole package takes ~15 s (~45 s under
+    `-race`). Their check writes the one pass with the commit's own writer
+    into a `ref` schema and compares every stored and rendered table with it
+    in SQL (`EXCEPT ALL` both ways). `render/rendertest.Fake` covers the
+    render's layers.
   - **Atomic:** one record per case (every `state.Cases` branch). The fake's
     rows equal `RenderSession`'s and the folded deltas'.
   - **Short sequences:** every order of up to 5 records, one run per record.
