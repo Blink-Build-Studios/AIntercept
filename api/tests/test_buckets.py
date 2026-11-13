@@ -233,7 +233,7 @@ def _tiered(root, bucket, base, runs):
     """base, runs: [(name, [(key, id, tomb, v)])], each in commit order (the base's segments
     oldest first, possibly overlapping)."""
     con = duckdb.connect()
-    names = {"base": [], "runs": []}
+    names: dict[str, list[str]] = {"base": [], "runs": []}
     for part, files in (("base", base), ("runs", runs)):
         for name, rows in files:
             k = table_key("", "t", bucket, name)
