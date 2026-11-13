@@ -36,11 +36,12 @@ const (
 // Commit is keys/<key>/commit/<n>.json. Paths are relative to keys/<esc key>/.
 type Commit struct {
 	N           int64    `json:"n"`
-	Key         string   `json:"key"`          // the routing key (unescaped)
-	Out         []Out    `json:"out"`          // every current output directory, oldest first
-	State       []string `json:"state"`        // "state/<n>-<nonce>", oldest first
-	LastApplied string   `json:"last_applied"` // the newest in/ name applied
-	Grace       []string `json:"grace"`        // in/ names applied within the grace window
+	Key         string   `json:"key"`                    // the routing key (unescaped)
+	Out         []Out    `json:"out"`                    // every current output directory, oldest first
+	State       []string `json:"state"`                  // "state/<n>-<nonce>", oldest first
+	StateLevels []int    `json:"state_levels,omitempty"` // each State entry's compaction tier
+	LastApplied string   `json:"last_applied"`           // the newest in/ name applied
+	Grace       []string `json:"grace"`                  // in/ names applied within the grace window
 	UpdatedNS   int64    `json:"updated_ns"`
 	// Garbage are files superseded by compaction, deleted once DeleteAfterNS passes.
 	Garbage []Garbage `json:"garbage,omitempty"`

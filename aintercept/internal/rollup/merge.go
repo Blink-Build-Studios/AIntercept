@@ -20,8 +20,6 @@ package rollup
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -348,36 +346,6 @@ func ReadNewestMerge(ctx context.Context, s stream.Store, prefix string) (*Merge
 	return &c, nil
 }
 
-// ReadNewest is a key's newest commit (nil when it has none).
-func ReadNewest(ctx context.Context, s stream.Store, prefix, key string) (*Commit, error) {
-	objs, err := s.List(ctx, KeyDir(prefix, key)+"commit/")
-	if err != nil {
-		return nil, err
-	}
-	var best string
-	var bestN int64 = -1
-	for _, o := range objs {
-		if n, ok := CommitN(o.Key); ok && n > bestN {
-			best, bestN = o.Key, n
-		}
-	}
-	if best == "" {
-		return nil, nil
-	}
-	b, err := s.Get(ctx, best)
-	if err != nil {
-		return nil, err
-	}
-	var c Commit
-	if err := json.Unmarshal(b, &c); err != nil {
-		return nil, fmt.Errorf("rollup: commit %s: %w", best, err)
-	}
-	if c.Key == "" {
-		c.Key = key
-	}
-	return &c, nil
-}
-
 // ReadKeyTables is a key's current rows by table: its output directories
 // folded oldest first, the newest row per (key, id) winning, tombstones gone.
 func ReadKeyTables(ctx context.Context, s stream.Store, prefix string, c *Commit) (map[string][]stream.Row, error) {
@@ -562,10 +530,4 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
-}
-
-func newNonce() string {
-	var b [6]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
 }
