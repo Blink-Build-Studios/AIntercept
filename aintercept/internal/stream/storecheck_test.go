@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -61,4 +62,22 @@ func envOr(k, d string) string {
 		return v
 	}
 	return d
+}
+
+// The conditional-write cases against the S3 emulator (STORECHECK_ENDPOINT).
+func TestConditionalPutAgainstS3(t *testing.T) {
+	ep := os.Getenv("STORECHECK_ENDPOINT")
+	if ep == "" {
+		t.Skip("STORECHECK_ENDPOINT not set")
+	}
+	ctx := context.Background()
+	s, err := process.NewS3Store(ctx, process.S3Config{Bucket: envOr("STORECHECK_BUCKET", "storecheck"), Region: "us-east-1",
+		Endpoint: ep, AccessKeyID: "test", SecretAccessKey: "test", ForcePathStyle: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateBucketIfMissing(ctx); err != nil {
+		t.Fatal(err)
+	}
+	conditionalPutCases(t, S3Store{s}, fmt.Sprintf("cond-%d/", time.Now().UnixNano()))
 }
