@@ -2,7 +2,8 @@
 #
 # up.sh — the whole local stack, one command (`make up`; docs/SETUP.md):
 #   Docker:        Envoy (TLS interception, real api.anthropic.com upstream),
-#                  certsvc, the observer, Redis and the rollups (docs/PIPELINE.md)
+#                  certsvc, the observer, Redis, Postgres (its passwords generated into
+#                  the gitignored .env) and the rollups (docs/PIPELINE.md)
 #   this machine:  the query API (:8787) and the UI (:5173), in the background,
 #                  logs and pids in .cache/run/
 # Safe to re-run: whatever is already up stays up.
@@ -39,10 +40,11 @@ if [[ -n "$others" ]]; then
 fi
 
 # --- the proxy, observer, Redis and rollups (Docker) -----------------------------------------
-bold "1/3  Proxy, observer, Redis and rollups (Docker; the first build takes a few minutes)"
+bold "1/3  Proxy, observer, Redis, Postgres and rollups (Docker; the first build takes a few minutes)"
 make -s -C "$ROOT" ca >/dev/null
+bash "${ROOT}/scripts/pg-env.sh" # Postgres's passwords, once, into the gitignored .env
 (cd "$ROOT" && COMPOSE_FILE=docker-compose.yml:docker-compose.m2.yml docker compose up -d --build --quiet-pull \
-  certsvc observer redis rollup envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
+  certsvc observer redis postgres rollup envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
 
 # --- the API and UI (this machine) -----------------------------------------------------------
 alive() { [[ -f "${RUN}/$1.pid" ]] && kill -0 "$(cat "${RUN}/$1.pid")" 2>/dev/null; }
@@ -76,6 +78,12 @@ wait_for() { # name url log
   tail -20 "${RUN}/$3" >&2
   fail "$1 didn't come up at $2 (log: .cache/run/$3)"
 }
+for _ in $(seq 90); do
+  (cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null && break
+  sleep 1
+done
+(cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null \
+  || fail "Postgres didn't come up (docker compose logs postgres)"
 wait_for "the observer" http://127.0.0.1:9001/healthz compose.log
 wait_for "the rollups" http://127.0.0.1:9004/healthz compose.log
 wait_for "the API" http://127.0.0.1:8787/api/v1/status api.log

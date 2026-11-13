@@ -10,6 +10,7 @@ What runs where:
 | certsvc | Docker | — | Mints those certificates (`aintercept certsvc`) |
 | observer | Docker | 9001 | Records each request and response, body-stripped, to `data/telemetry/`: the raw log, and each routing key's ingest files under `v1/keys/<key>/in/` (`aintercept observer`) |
 | Redis | Docker | 16379 | Coordination only: which keys have new files, and the locks ([PIPELINE.md](PIPELINE.md)) |
+| Postgres | Docker | 15432 (this machine only) | The queryable data, as the v7 pipeline is built ([PIPELINE.md](PIPELINE.md)): nothing reads or writes it yet. `make up` generates its passwords into the gitignored `.env` |
 | rollups | Docker | 9004 | Apply each key's new files and commit its rows, and run the 30-second merge, under `data/telemetry/v1/` (`aintercept rollup`) |
 | API | this machine | 8787 | Serves the rollups' commits and merge (`api/`, `AINTERCEPT_STORE=v1`) |
 | UI | this machine | 5173 | The app (`ui/`) |

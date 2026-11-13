@@ -28,7 +28,7 @@ build: ## Build all container images
 	$(COMPOSE) build
 
 .PHONY: up
-up: ## Everything, locally, one command: proxy (real upstream), observer, Redis and rollups in Docker; the API and UI here (docs/SETUP.md)
+up: ## Everything, locally, one command: proxy (real upstream), observer, Redis, Postgres and rollups in Docker; the API and UI here (docs/SETUP.md)
 	@bash scripts/up.sh
 
 .PHONY: verify
@@ -45,6 +45,7 @@ down: ## Stop what `make up` or `make remote` started (data in data/ stays)
 
 .PHONY: run
 run: ca build ## Generate CAs, build, start the full local stack, and print connection info
+	@bash scripts/pg-env.sh
 	$(COMPOSE) up -d
 	@echo "Waiting for services to become healthy..."
 	@sleep 3
@@ -144,6 +145,12 @@ check-generated: regen ## Fail if generated contract files differ from HEAD or d
 		|| { echo "Generated files are stale: run 'make regen' and commit."; exit 1; }
 	cd ui && pnpm typecheck
 
+# The tests' Postgres (docs/PIPELINE.md v7, Testing): CI's service container (AINTERCEPT_TEST_PG), or
+# here the pinned image in a container scripts/test-pg.sh starts or reuses. Needs Docker; the tests
+# that use it fail rather than skip, as in CI.
+TEST_PG = AINTERCEPT_TEST_PG="$${AINTERCEPT_TEST_PG:-$$(bash $(CURDIR)/scripts/test-pg.sh)}" || exit 1; \
+	export AINTERCEPT_TEST_PG AINTERCEPT_TEST_PG_REQUIRED=1;
+
 # Everything CI requires (.github/workflows/ui.yml). Green here = green there.
 .PHONY: check
 check: check-go check-api check-ui check-repo check-generated ## All required checks: run before every commit
@@ -154,7 +161,7 @@ GO_MODULES := aintercept fixture
 check-go: ## Go: gofmt clean, go vet, go test (with -race) in every module
 	@unformatted="$$(gofmt -l $(GO_MODULES))"; test -z "$$unformatted" || { echo "gofmt needed:"; echo "$$unformatted"; exit 1; }
 	for m in $(GO_MODULES); do (cd $$m && go vet ./...) || exit 1; done
-	cd aintercept && go test -race -count=1 -timeout 10m ./...
+	$(TEST_PG) cd aintercept && go test -race -count=1 -timeout 10m ./...
 	@# The slow one-goroutine tests skip under -race (heavy(t)): run them here.
 	cd aintercept && go test -count=1 -timeout 10m ./internal/records/ ./internal/stream/...
 
@@ -170,7 +177,7 @@ test-full: ## Go: the exhaustive variants too (-tags full: more seeds, longer ca
 
 .PHONY: check-api
 check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with a 90% coverage floor, requirements.json
-	cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q --cov -n auto --dist loadfile
+	$(TEST_PG) cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q --cov -n auto --dist loadfile
 
 .PHONY: test-api-full
 test-api-full: ## API: the full run too (every URL of the parity gates, the pipeline at full length, the memory churn); nightly in CI
