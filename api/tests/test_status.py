@@ -52,7 +52,8 @@ def test_query_failure_returns_typed_error(dataset, client_for, write_sample, mo
     def boom(*a, **k):
         raise RuntimeError("disk on fire")
 
-    monkeypatch.setattr(client.app.state.store, "query", boom)
+    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
+        monkeypatch.setattr(client.app.state.store, name, boom, raising=False)
     r = client.get("/api/v1/status")
     write_sample(client, r, "error", status=500)
     assert r.json() == {"error": {"code": "internal", "message": "Query failed", "queryId": "q_sample"}}
