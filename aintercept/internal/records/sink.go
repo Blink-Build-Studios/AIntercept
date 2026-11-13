@@ -140,7 +140,9 @@ func (s *Sink) add(rs []Record) {
 func (s *Sink) SealIfOld() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.buf) > 0 && s.cfg.Now().Sub(s.born) >= s.cfg.MaxAge {
+	now := s.cfg.Now()
+	s.add(s.asm.StartUploading(now.Add(-s.cfg.MaxAge).UnixNano()))
+	if len(s.buf) > 0 && now.Sub(s.born) >= s.cfg.MaxAge {
 		s.seal()
 	}
 }

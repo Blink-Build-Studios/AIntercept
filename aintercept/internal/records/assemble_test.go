@@ -181,6 +181,21 @@ func atomicCases() []atomicCase {
 				}
 			}}}},
 		{label: CasePendingResponseHeaders, prior: []events.Event{hdr("c1", true, ccHeaders)}, row: row(respHdr("c1", "req_1"))},
+		// A request still uploading when the stream is flushed (or for longer than the
+		// sink's age) has started: its start carries the bytes so far.
+		{label: CaseStartUploading, prior: []events.Event{hdr("c1", false, ccHeaders), reqChunk("c1", 40, false)},
+			want: []want{{KindCallStart, "c1", "s:s1", func(t *testing.T, r Record) {
+				if r.Call.RequestBytes != 40 || r.Call.EndNS != 0 {
+					t.Errorf("start %+v", r.Call)
+				}
+			}}}},
+		// A response means the request was sent, even when its end of stream was never seen.
+		{label: CaseStartResponse, prior: []events.Event{hdr("c1", false, ccHeaders), reqChunk("c1", 40, false)}, row: row(respHdr("c1", "req_1")),
+			want: []want{{KindCallStart, "c1", "s:s1", func(t *testing.T, r Record) {
+				if r.Call.RequestID != "req_1" || r.Call.Status != 200 || r.Call.RequestBytes != 40 {
+					t.Errorf("start %+v", r.Call)
+				}
+			}}}},
 		{label: CasePendingResponseChunk, prior: []events.Event{hdr("c1", true, ccHeaders), respHdr("c1", "req_1")}, row: row(respChunk("c1", 50))},
 		{label: CaseEndComplete, prior: []events.Event{hdr("c1", true, ccHeaders), respHdr("c1", "req_1"), respChunk("c1", 50)},
 			row: row(complete("c1", ccClient)), want: []want{{KindCallEnd, "c1", "s:s1", func(t *testing.T, r Record) {
@@ -252,6 +267,15 @@ func atomicCases() []atomicCase {
 				}
 			}}}},
 		{label: CaseEventNoPayload, prior: ana, row: row(noPayload)},
+		// An event row without the batch's credential takes it from the batch's request
+		// (the processor joins them by correlation id).
+		{flush: true, only: KindClientEvent, label: CaseEventWithID + "/credential from its batch", prior: ana,
+			row: row(func() events.Event { e := clientEvent("a1", "e1", "s1", 0); e.KeyHash = ""; return e }()),
+			want: []want{{KindClientEvent, "", "s:s1", func(t *testing.T, r Record) {
+				if r.Call == nil || r.Call.KeyHash != kh {
+					t.Errorf("event's credential: %+v", r.Call)
+				}
+			}}}},
 		{only: KindCallEnd, label: CaseBatchSession, prior: append(append([]events.Event{}, ana...),
 			clientEvent("a1", "e1", "s2", 5*time.Second), clientEvent("a1", "e2", "s1", 3*time.Second)),
 			row: row(hdr("c2", false, ccHeaders)),
