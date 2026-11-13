@@ -89,7 +89,13 @@ type call struct {
 	batchN    int64
 	session   string
 	sessionNS int64
+	// members is its batch's Claude Code and Codex events as the processor's
+	// batch_members holds them: by routing key and event key, the last one's
+	// name and session. Dropped once its call record is written.
+	members map[string]batchMember
 }
+
+type batchMember struct{ name, session string }
 
 type bodies struct {
 	req, resp       []byte
@@ -488,8 +494,10 @@ func (a *Assembler) release() []Record {
 			a.hit(CaseBatchNoSession)
 		}
 		out = a.endKeys(*h.call.Call, c.startKey, c.session, h.call.Instance)
+		n, name, others := c.batchStamp()
 		for i := range out {
 			out[i].BatchID = h.corr
+			out[i].BatchEvents, out[i].BatchName, out[i].BatchOtherSessions = n, name, others
 		}
 		a.writeDetail(h.corr)
 	}
@@ -509,6 +517,29 @@ func (a *Assembler) release() []Record {
 	}
 	rankClaudeCode(h.events)
 	return append(out, h.events...)
+}
+
+// batchStamp is the batch as the request log's SQL reads its members (api
+// stream_sql.py, batch): their count, their least non-empty name, and the
+// sessions they name other than the batch's home one, sorted. Its members are
+// then dropped: an event arriving after its call record isn't counted.
+func (c *call) batchStamp() (int64, string, []string) {
+	var name string
+	var others []string
+	seen := map[string]bool{}
+	for _, m := range c.members {
+		if m.name != "" && (name == "" || m.name < name) {
+			name = m.name
+		}
+		if m.session != "" && m.session != c.session && !seen[m.session] {
+			seen[m.session] = true
+			others = append(others, m.session)
+		}
+	}
+	sort.Strings(others)
+	n := int64(len(c.members))
+	c.members = nil
+	return n, name, others
 }
 
 // rankClaudeCode numbers a batch's Claude Code events as the event rows do:
@@ -604,8 +635,15 @@ func (a *Assembler) event(e *events.Event, line []byte, file string) Record {
 		(c.session == "" || ev.NS < c.sessionNS || ev.NS == c.sessionNS && ev.SessionID < c.session) {
 		c.session, c.sessionNS = ev.SessionID, ev.NS
 	}
-	return a.record(Record{Kind: KindClientEvent, BatchID: e.CorrelationID, BatchN: c.batchN, Event: &ev,
+	rec := a.record(Record{Kind: KindClientEvent, BatchID: e.CorrelationID, BatchN: c.batchN, Event: &ev,
 		Call: &canon.Request{KeyHash: e.KeyHash}}, e.ObserverInstance)
+	if ev.Source == canon.ProductClaudeCode || ev.Source == canon.ProductCodex {
+		if c.members == nil {
+			c.members = map[string]batchMember{}
+		}
+		c.members[rec.RoutingKey+"\x00"+ev.EventKey] = batchMember{ev.Name, ev.SessionID}
+	}
+	return rec
 }
 
 func (a *Assembler) callFor(e *events.Event, file string) *call {

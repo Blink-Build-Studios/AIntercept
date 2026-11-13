@@ -53,6 +53,15 @@ type Record struct {
 	// events, as the event rows number them (their event id); 0 for others.
 	BatchCCN     int64  `parquet:"batch_cc_n,optional"`
 	BatchSession string `parquet:"batch_session,optional"`
+	// On an analytics batch's own call record, the whole batch as the request
+	// log reads it (its batch_members, across every session): its Claude Code
+	// and Codex events' count (BatchEvents), their least non-empty name
+	// (BatchName) and the sessions they name other than BatchSession
+	// (BatchOtherSessions, sorted). Records written before these columns read
+	// them as none.
+	BatchEvents        int64    `parquet:"batch_events,optional"`
+	BatchName          string   `parquet:"batch_name,optional"`
+	BatchOtherSessions []string `parquet:"batch_other_sessions"`
 	// EventKey is a client event's key: its record id.
 	EventKey string `parquet:"event_key,optional"`
 

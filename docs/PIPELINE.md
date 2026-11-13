@@ -319,7 +319,8 @@ v5's, plus a hash per object in memory.
   share it, so a new row changes one prompt object, never one object per call
   of the prompt.
 - **A batch spanning sessions.** Ingest stamps on the batch call its event count,
-  its first event's name and its other sessions; each of those writes
+  its least non-empty event name (today's `min(name)`) and its other sessions
+  (`batch_events`, `batch_name`, `batch_other_sessions`); each of those writes
   `r/<batch>/<key>` with its events of the batch.
 - The drawer reads `r/<id>`, then the prompt object and any parts, and
   `request_detail.py` runs unchanged over their rows.
