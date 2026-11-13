@@ -230,7 +230,7 @@ func (a *Assembler) dropLines(id string) *detailLines {
 // writeDetail completes a call's detail object.
 func (a *Assembler) writeDetail(id string) {
 	if d := a.dropLines(id); d != nil {
-		a.details = append(a.details, Detail{CorrelationID: id, Lines: d.lines})
+		a.details = append(a.details, Detail{CorrelationID: canon.CleanID(id), Lines: d.lines}) // named as the drawer reads it
 	}
 }
 
@@ -254,6 +254,7 @@ func (a *Assembler) hit(c string) { a.cases[c]++ }
 
 // record finishes a record: its id, routing key and bucket.
 func (a *Assembler) record(r Record, instance string) Record {
+	Clean(&r) // before its routing key: a session id is cleaned first
 	a.seq++
 	r.Version, r.Instance = Version, instance
 	r.RecordID = fmt.Sprintf("%s-%020d", a.inc, a.seq)
@@ -365,8 +366,9 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 		r.CallID = e.CorrelationID + "#" + strconv.Itoa(e.WSTurn)
 		r.EndNS, r.SourceFile = 0, file
 		r.StartNS = e.TimestampNS
+		id := r.CallID // as its end looks it up, before cleaning
 		rec := a.record(Record{Kind: KindCallStart, CallID: r.CallID, Call: &r}, e.ObserverInstance)
-		a.turns[r.CallID] = rec.RoutingKey
+		a.turns[id] = rec.RoutingKey
 		out = append(out, rec)
 	case events.PhaseComplete:
 		if e.Transport == events.TransportWebSocket { // a model turn; the connection stays open
@@ -498,6 +500,7 @@ func (a *Assembler) release() []Record {
 		for i := range out {
 			out[i].BatchID = h.corr
 			out[i].BatchEvents, out[i].BatchName, out[i].BatchOtherSessions = n, name, others
+			Clean(&out[i])
 		}
 		a.writeDetail(h.corr)
 	}
@@ -610,6 +613,7 @@ func (a *Assembler) StartUploading(before int64) []Record {
 // event is one analytics event's record.
 func (a *Assembler) event(e *events.Event, line []byte, file string) Record {
 	ev := canon.EventFrom(e, line, file)
+	Clean(&Record{Event: &ev}) // its session and name are compared with its batch's below
 	if ev.ClientEventID == "" {
 		copies := a.copies[e.CorrelationID]
 		if copies == nil {

@@ -28,6 +28,7 @@ from aintercept_api.app import create_app
 from aintercept_api.buckets import LocalSource
 from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
+from tests import pgdb
 from tests.builders import Dataset
 from tests.oracle.store import OracleStore
 
@@ -84,6 +85,20 @@ def make_client(store, **kwargs) -> TestClient:
     """Ingests on every request (interval 0), so a test sees exactly the files it wrote."""
     app = create_app(store=store, clock=lambda: FROZEN_NOW, query_id=lambda: FROZEN_QUERY_ID, ingest_interval_s=0)
     return TestClient(app, **kwargs)
+
+
+@pytest.fixture(scope="session")
+def pg_dsn():
+    """A fresh Postgres database with the schema applied, for this test session (each xdist worker
+    its own; tests/pgdb.py). Skipped without AINTERCEPT_TEST_PG (`make check` starts a server), failed
+    when AINTERCEPT_TEST_PG_REQUIRED=1 (CI)."""
+    admin = pgdb.admin_dsn()
+    if admin is None:
+        if pgdb.required():
+            pytest.fail("AINTERCEPT_TEST_PG isn't set (CI's service container should set it)")
+        pytest.skip("no test Postgres: set AINTERCEPT_TEST_PG (make check starts one: scripts/test-pg.sh)")
+    with pgdb.fresh_database(admin) as dsn:
+        yield dsn
 
 
 @pytest.fixture

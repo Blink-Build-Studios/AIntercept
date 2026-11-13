@@ -7,6 +7,8 @@ is configured (docs/ui/BUILD_PLAN.md §11).
   refuses to install anything released in the last two weeks.
 - api/pyproject.toml: every runtime and dev dependency is `name==x.y.z`, and
   [tool.uv] exclude-newer is at least 14 days in the past, so uv resolves nothing newer.
+- The Postgres image (docs/PIPELINE.md v7): docker-compose.yml pins it by digest, and every CI
+  service container runs that same image (scripts/test-pg.sh reads it from docker-compose.yml).
 Lockfile freshness is checked by CI's `pnpm install --frozen-lockfile` and `uv sync --locked`.
 """
 
@@ -50,6 +52,16 @@ def main() -> int:
         errors.append("api/pyproject.toml [tool.uv] exclude-newer is missing")
     elif datetime.now(UTC) - datetime.fromisoformat(cutoff.replace("Z", "+00:00")) < MIN_AGE:
         errors.append(f"api/pyproject.toml exclude-newer {cutoff} is less than 14 days ago")
+
+    postgres = re.compile(r"^\s*image:\s*(postgres:\S+)", re.M)
+    pinned = postgres.findall((REPO / "docker-compose.yml").read_text())
+    if len(pinned) != 1 or not re.fullmatch(r"postgres:[\w.-]+@sha256:[0-9a-f]{64}", pinned[0]):
+        errors.append(f"docker-compose.yml: one postgres image, pinned by digest (found {pinned})")
+    else:
+        for wf in sorted((REPO / ".github" / "workflows").glob("*.yml")):
+            for image in postgres.findall(wf.read_text()):
+                if image != pinned[0]:
+                    errors.append(f"{wf.relative_to(REPO)}: {image} isn't docker-compose.yml's {pinned[0]}")
 
     for e in errors:
         print(e, file=sys.stderr)

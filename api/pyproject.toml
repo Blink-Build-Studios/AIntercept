@@ -14,6 +14,7 @@ dependencies = [
     "cryptography==50.0.2",
     "uvicorn==0.54.0",
     "redis==8.1.0",
+    "adbc-driver-postgresql==1.12.0",
 ]
 
 [build-system]
@@ -54,6 +55,10 @@ strict = true
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["adbc_driver_postgresql.*"]  # ships no type information
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]

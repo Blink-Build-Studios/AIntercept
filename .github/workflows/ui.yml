@@ -25,8 +25,20 @@ jobs:
       moto:
         image: motoserver/moto:5.1.14@sha256:800719627036dc38dc699e9f314f624f2c98ac3d8bb754db078cb2698f08ee77
         ports: ["5055:5000"]
+      # The tests' Postgres (docs/PIPELINE.md v7, Testing): the image docker-compose.yml pins
+      # (scripts/check-pins.py holds the two equal), trust auth, the built-in C.UTF-8 locale.
+      postgres:
+        image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        ports: ["15433:5432"]
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       STORECHECK_ENDPOINT: http://localhost:5055
+      AINTERCEPT_TEST_PG: postgres://postgres@localhost:15433/postgres?sslmode=disable
+      AINTERCEPT_TEST_PG_REQUIRED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -47,6 +59,20 @@ jobs:
     name: API (ruff, format, mypy strict, tests, coverage >= 90%)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      # The tests' Postgres (docs/PIPELINE.md v7, Testing): the image docker-compose.yml pins
+      # (scripts/check-pins.py holds the two equal), trust auth, the built-in C.UTF-8 locale.
+      postgres:
+        image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        ports: ["15433:5432"]
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      AINTERCEPT_TEST_PG: postgres://postgres@localhost:15433/postgres?sslmode=disable
+      AINTERCEPT_TEST_PG_REQUIRED: "1"
     steps:
       - uses: actions/checkout@v4
       # The tests run the Go pipeline (the processor, the replay): go.mod's toolchain, with
@@ -100,6 +126,20 @@ jobs:
     name: Generated contract is current (spec.ts and samples match the API)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      # The tests' Postgres (docs/PIPELINE.md v7, Testing): the image docker-compose.yml pins
+      # (scripts/check-pins.py holds the two equal), trust auth, the built-in C.UTF-8 locale.
+      postgres:
+        image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        ports: ["15433:5432"]
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      AINTERCEPT_TEST_PG: postgres://postgres@localhost:15433/postgres?sslmode=disable
+      AINTERCEPT_TEST_PG_REQUIRED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
