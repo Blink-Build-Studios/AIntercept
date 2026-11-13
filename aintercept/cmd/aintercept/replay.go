@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
@@ -165,7 +166,12 @@ func replayStream(src string, seed int64, pods, processors, steps, checkpoints i
 	}
 }
 
-type recordCollector struct{ recs []records.Record }
+// recordCollector keeps every record file's records. The records sink puts on
+// its own goroutines, so Put locks.
+type recordCollector struct {
+	mu   sync.Mutex
+	recs []records.Record
+}
 
 func (c *recordCollector) Put(_ context.Context, key string, body []byte) error {
 	if !strings.HasSuffix(key, ".parquet") || !strings.Contains(key, "records/") {
@@ -175,6 +181,8 @@ func (c *recordCollector) Put(_ context.Context, key string, body []byte) error 
 	if err != nil {
 		return err
 	}
+	c.mu.Lock()
 	c.recs = append(c.recs, rs...)
+	c.mu.Unlock()
 	return nil
 }
