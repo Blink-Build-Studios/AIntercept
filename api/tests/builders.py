@@ -108,7 +108,6 @@ class ClaudeCode:
         self.ds, self.session, self.account, self.device = ds, session, account, device
         self.key_hash = f"kh-{(account or 'anon')[-4:]}"
         self._n = itertools.count(1)
-        self._batches: set[str] = set()
         self._seq = itertools.count(1)  # events keep their order within a batch
 
     def call(
@@ -197,17 +196,28 @@ class ClaudeCode:
         return rid
 
     def event(
-        self, when: str, name: str, *, env: dict | None = None, head: str | None = None, batch: str | None = None, **md
+        self,
+        when: str,
+        name: str,
+        *,
+        env: dict | None = None,
+        head: str | None = None,
+        batch: str | None = None,
+        arrive: str | None = None,
+        **md,
     ) -> None:
-        """One analytics event, in a batch transaction (one batch per timestamp, or `batch`)."""
+        """One analytics event, in a batch transaction (one batch per timestamp, or `batch`). A
+        batch's rows arrive together (the observer emits them from one request): `arrive` is the
+        batch's own time when its events carry different ones."""
         batch = batch or f"batch-{self.session[:8]}-{when}"
-        if batch not in self._batches:
-            self._batches.add(batch)
+        seen = self.ds.__dict__.setdefault("_batches", set())  # one batch request, whichever session's builder
+        if batch not in seen:
+            seen.add(batch)
             self.ds.add(
                 {
                     "correlation_id": batch,
                     "seq": 0,
-                    "timestamp_ns": ns(when) + 29_000_000_000,
+                    "timestamp_ns": ns(arrive or when) + 29_000_000_000,
                     "phase": "request_headers",
                     "host": "api.anthropic.com",
                     "method": "POST",
@@ -227,7 +237,7 @@ class ClaudeCode:
             {
                 "correlation_id": batch,
                 "seq": next(self._seq),
-                "timestamp_ns": ns(when) + 30_000_000_000,  # batches arrive after the client's own timestamp
+                "timestamp_ns": ns(arrive or when) + 30_000_000_000,  # batches arrive after the client's own timestamp
                 "phase": "client_event",
                 "host": "api.anthropic.com",
                 "method": "POST",

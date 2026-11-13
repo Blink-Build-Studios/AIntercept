@@ -19,6 +19,7 @@ import tempfile
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -182,9 +183,9 @@ class LaidOutStore:
         return getattr(self._current(), name)
 
 
-def bounded_store(root, **kwargs) -> LaidOutStore:
-    """The v5 store over a dataset, bounded like a small machine, so a memory regression fails
-    here, not in CI's runner."""
+def bounded_store(root, **kwargs) -> Any:
+    """The v5 store over a dataset (the endpoints' Store interface), bounded like a small
+    machine, so a memory regression fails here, not in CI's runner."""
     return LaidOutStore(pathlib.Path(root), memory_limit="512MB", threads=2, **kwargs)
 
 

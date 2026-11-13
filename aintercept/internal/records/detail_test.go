@@ -202,7 +202,12 @@ func TestSweepForgetsOrphanRows(t *testing.T) {
 func TestEndOfInputWritesInFlightDetails(t *testing.T) {
 	a := NewAssembler("inc")
 	a.KeepDetail = true
-	rows := append(analytics("a1"), clientEvent("a1", "e1", "s1", 0))
+	var rows []events.Event
+	for _, e := range append(analytics("a1"), clientEvent("a1", "e1", "s1", 0)) {
+		if e.Phase != events.PhaseComplete { // the batch never ends
+			rows = append(rows, e)
+		}
+	}
 	if got := applyAll(a, rows); len(got) != 0 {
 		t.Fatalf("a call in flight wrote a detail: %+v", got)
 	}
