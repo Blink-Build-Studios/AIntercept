@@ -220,11 +220,15 @@ def _headline(agent: str, rows: list[PersonSummaryRow]) -> dict[str, float | int
 
 def overview(store: Store, rows: list[PersonSummaryRow], lo: int | None = None, hi: int | None = None) -> Overview:
     """Totals over the same window as `rows`: requests in it, and each agent's sessions overlapping it."""
-    (requests,) = store.query(
-        """SELECT count(*) FROM calls WHERE product IN ('claude_code', 'codex') AND NOT synthetic
-           AND (?::BIGINT IS NULL OR ts >= ?) AND (?::BIGINT IS NULL OR ts <= ?)""",
-        [lo, lo, hi, hi],
-    )[0]
+    calls_in = getattr(store, "agent_calls_in", None)
+    if calls_in is not None:  # the v1 store: the merge's per-key call times, not the fact tables
+        requests = calls_in(lo, hi)
+    else:
+        (requests,) = store.query(
+            """SELECT count(*) FROM calls WHERE product IN ('claude_code', 'codex') AND NOT synthetic
+               AND (?::BIGINT IS NULL OR ts >= ?) AND (?::BIGINT IS NULL OR ts <= ?)""",
+            [lo, lo, hi, hi],
+        )[0]
     sessions_by = dict(
         store.query(
             """SELECT s.product, count(*) FROM (

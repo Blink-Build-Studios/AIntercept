@@ -160,7 +160,7 @@ var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTur
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
 	PromptItem{}, StepRow{}, StepToolsRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
 	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}, CallToolUse{},
-	canon.Request{}, canon.Pending{}, canon.Event{}}
+	canon.Request{}, canon.Pending{}, canon.Event{}, Probes{}}
 
 func init() {
 	for _, v := range RowTypes {

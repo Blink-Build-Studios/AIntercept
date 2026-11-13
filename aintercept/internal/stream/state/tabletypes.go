@@ -45,4 +45,5 @@ var TableTypes = map[string]any{
 	TableFactRequests:        canon.Request{},
 	TableFactPending:         canon.Pending{},
 	TableFactEvents:          canon.Event{},
+	TableFactProbes:          Probes{},
 }

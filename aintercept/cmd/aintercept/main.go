@@ -7,7 +7,6 @@
 //	aintercept replay     streams an existing capture through the processor and checks it (a tool; takes flags)
 //	aintercept derive     builds the derived tables from an existing shaped output (a tool; takes flags)
 //	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
-//	aintercept stream     the bucketed processor: replicas own key buckets, read only new records
 //	aintercept rollup     v5 per-key rollups: claim dirty keys (Redis locks), apply new ingest files, commit; the merge
 //	aintercept v1layout   lays out a raw capture as the v5 pipeline would (keys and merge; a tool; takes flags)
 //	aintercept storecheck whether an object store has what the stream processor needs (a tool; takes flags)
@@ -23,7 +22,6 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/observer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/rollup"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 )
 
 var modes = map[string]func(){
@@ -33,7 +31,6 @@ var modes = map[string]func(){
 	"replay":     replay,
 	"derive":     derive,
 	"canon":      canonCmd,
-	"stream":     stream.Run,
 	"storecheck": storecheck,
 	"v1layout":   v1layout,
 	"rollup":     rollup.Run,
@@ -51,6 +48,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|stream|rollup, or aintercept replay|derive|canon|storecheck|v1layout -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|process|rollup, or aintercept replay|derive|canon|storecheck|v1layout -h")
 	os.Exit(2)
 }

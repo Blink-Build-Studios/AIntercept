@@ -122,6 +122,8 @@ type Assembler struct {
 	Budget  *membudget.Budget
 	lines   map[string]*detailLines
 	details []Detail
+	marked  map[string]map[string]bool // each call's keys marked so far (KeepDetail)
+	marks   []KeyMark
 }
 
 // heldBatch is an analytics batch being read: its request's call_end (when
@@ -194,6 +196,7 @@ func (a *Assembler) charge(n int64) {
 
 // dropLines forgets a call's held rows and releases their budget.
 func (a *Assembler) dropLines(id string) *detailLines {
+	delete(a.marked, id)
 	d := a.lines[id]
 	if d != nil {
 		delete(a.lines, id)
@@ -239,6 +242,7 @@ func (a *Assembler) record(r Record, instance string) Record {
 		r.RoutingKey = RoutingKey(&r)
 	}
 	r.Bucket = int32(BucketOf(r.RoutingKey, DefaultBucketBits))
+	a.mark(&r)
 	return r
 }
 
@@ -387,8 +391,8 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			c = a.callFor(e, file)
 		}
 		c.done, c.p.SeenNS, c.bodies = true, e.TimestampNS, nil
-		a.writeDetail(e.CorrelationID)
 		out = append(out, a.record(Record{Kind: KindWSConnection, CallID: r.CallID, Call: &r}, e.ObserverInstance))
+		a.writeDetail(e.CorrelationID)
 	case events.PhaseDisconnect:
 		c := a.callFor(e, file)
 		c.p.EndNS, c.p.Error, c.p.EndFile = e.TimestampNS, e.Error, file
@@ -432,8 +436,9 @@ func (a *Assembler) start(c *call, e *events.Event) Record {
 // end is a call's call_end, and marks it ended.
 func (a *Assembler) end(c *call, r canon.Request, e *events.Event) []Record {
 	c.done, c.p.SeenNS, c.bodies = true, e.TimestampNS, nil
+	out := a.endKeys(r, c.startKey, "", e.ObserverInstance)
 	a.writeDetail(c.p.CorrelationID)
-	return a.endKeys(r, c.startKey, "", e.ObserverInstance)
+	return out
 }
 
 // endKeys is a call_end under its own key, and under its start's too when that
@@ -466,11 +471,11 @@ func (a *Assembler) release() []Record {
 		} else {
 			a.hit(CaseBatchNoSession)
 		}
-		a.writeDetail(h.corr)
 		out = a.endKeys(*h.call.Call, c.startKey, c.session, h.call.Instance)
 		for i := range out {
 			out[i].BatchID = h.corr
 		}
+		a.writeDetail(h.corr)
 	}
 	// An event row without its batch's credential takes the batch request's (the
 	// processor joins them by correlation id).

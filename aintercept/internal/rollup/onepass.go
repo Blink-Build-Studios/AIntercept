@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
 // WriteOnePass writes a key's tables as its first commit: one output directory
@@ -34,6 +35,9 @@ func WriteOnePass(ctx context.Context, s stream.Store, prefix, key string, table
 			return err
 		}
 		out.Tables = append(out.Tables, t)
+	}
+	if err := markReported(ctx, s, prefix, key, tables[state.TableRequestMissed]); err != nil {
+		return err
 	}
 	body, err := json.Marshal(Commit{N: 1, Key: key, Out: []Out{out}, UpdatedNS: updatedNS})
 	if err != nil {

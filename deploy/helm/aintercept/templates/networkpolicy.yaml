@@ -53,6 +53,33 @@ spec:
             matchLabels: { app: envoy }
       ports:
         - { protocol: TCP, port: 18000 }
+{{- if .Values.redis.enabled }}
+---
+# Redis holds the dirty-key set, the rollups' locks and each pod's newest ingest
+# time: only the observer (in the Envoy pod), the rollups and the API (/status)
+# may connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-restrict
+  labels:
+    app: redis
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: redis }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: envoy }
+        - podSelector:
+            matchLabels: { app: rollup }
+        - podSelector:
+            matchLabels: { app: api }
+      ports:
+        - { protocol: TCP, port: 6379 }
+{{- end }}
 {{- if .Values.api.enabled }}
 ---
 # The query API (and the UI it serves) shows everything captured. By default no
