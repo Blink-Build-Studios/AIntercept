@@ -43,7 +43,7 @@ A session is never split across keys.
 raw/dt=…/hour=…/instance=…/…ndjson.gz         raw capture (unchanged)
 calls/<call id>.ndjson.gz                      per-call detail (unchanged)
 v1/keys/<key>/in/<s3-time>-<incarnation>-<seq>.parquet   ingest output, one file per key per flush
-v1/keys/<key>/out/<n>-<nonce>.parquet         a rollup run's output (rows for every table, by table)
+v1/keys/<key>/out/<n>-<nonce>/<table>.parquet a rollup run's output: one file per table that changed
 v1/keys/<key>/state/<n>-<nonce>               the run's state checkpoint
 v1/keys/<key>/commit/<n, 12 digits>.json      create-only; names the current out/state files + the input cursor
 v1/recent/<s3 minute>/<incarnation>-<seq>.json   per pod per minute: which keys it flushed
@@ -103,8 +103,8 @@ Each replica runs these loops.
    the commit recorded inside the grace window.
 5. Apply the new records with the per-key state engine (#19), which already
    handles ordering, duplicates and late data.
-6. Write one `out/<n+1>-<nonce>.parquet` holding the rows that changed in every
-   table, plus `state/<n+1>-<nonce>`.
+6. Write the run's output directory, `out/<n+1>-<nonce>/`, with one
+   `<table>.parquet` per table that changed, plus `state/<n+1>-<nonce>`.
 7. Create `commit/<n+1>.json` **only if it doesn't exist yet**. It names the full
    set of current `out` and `state` files, the last applied input name and the
    names inside the grace window.
@@ -115,9 +115,12 @@ Each replica runs these loops.
 9. Once a key has had no new input for 60 s, release its lock. Release all locks
    on SIGTERM.
 
-**Compaction.** When a key's commit lists more than 32 `out` files, merge them
-in tiers (the tiered compaction from #25). A file is deleted only when no
-commit in the last 10 minutes names it.
+**Compaction.** Every run folds the newest 8 output directories (and state
+chunks) of one tier into one of the next tier, so each row is rewritten
+O(log N) times and a commit names O(8 · log N) of each. The folded files, and
+the previous commit, go on the commit's garbage list and are deleted 10 minutes
+later. A losing run's files are deleted at the next fold. The exact format is
+`aintercept/internal/rollup/layout.go`.
 
 **The sweep.** Every replica runs it every 10 minutes, with no lock. It reads
 `v1/recent/` for the last 15 minutes and runs `SADD dirty` for every key listed.

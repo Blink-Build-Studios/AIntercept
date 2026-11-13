@@ -73,3 +73,7 @@ func EncodeState(rows []StateRow) ([]byte, error) {
 func DecodeState(b []byte) ([]StateRow, error) {
 	return parquet.Read[StateRow](bytes.NewReader(b), int64(len(b)))
 }
+
+// CollapseRows is MergeRows keeping tombstones: a newer file's tombstone must
+// still remove a row an older file holds.
+func CollapseRows(sets ...[]Row) []Row { return collapse(sets, true) }
