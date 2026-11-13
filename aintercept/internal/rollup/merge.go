@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
@@ -195,6 +197,13 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 	}
 	if len(changed) == 0 {
 		return res, nil
+	}
+	if !next.ContentRetained {
+		if _, err := m.Store.Get(ctx, records.ContentMark(m.Prefix)); err == nil {
+			next.ContentRetained = true
+		} else if !errors.Is(err, process.ErrNotFound) {
+			return res, err
+		}
 	}
 	touched := map[string]bool{"index": true} // merge_keys changes every run
 	for key := range changed {
@@ -514,6 +523,7 @@ func newestOf(tables map[string][]stream.Row) int64 {
 var rawTimes = []struct{ table, col string }{
 	{state.TableFactRequests, "start_ns"}, {state.TableFactRequests, "end_ns"},
 	{state.TableFactPending, "seen_ns"}, {state.TableFactEvents, "row_ns"},
+	{state.TableFactProbes, "newest_ns"},
 }
 
 // rawNewest is the newest raw row time among a key's fact rows.
@@ -567,6 +577,11 @@ func rawFirst(tables map[string][]stream.Row) (first, earliest int64) {
 	for _, r := range tables[state.TableFactEvents] {
 		if e, ok := r.Value.(canon.Event); ok && !r.Tomb {
 			see(e.RowNS, false)
+		}
+	}
+	for _, r := range tables[state.TableFactProbes] {
+		if p, ok := r.Value.(state.Probes); ok && !r.Tomb {
+			see(p.FirstNS, true)
 		}
 	}
 	return first, earliest

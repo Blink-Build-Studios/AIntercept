@@ -1,6 +1,12 @@
 package records
 
-import "net/url"
+import (
+	"context"
+	"log/slog"
+	"net/url"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+)
 
 // KeyMark says a call's records went to Key: the sink writes it as an empty
 // object, calls/<id>.keys/<escaped key> (CallKeyMark), so the request drawer
@@ -57,4 +63,30 @@ func (a *Assembler) TakeKeyMarks() []KeyMark {
 	m := a.marks
 	a.marks = nil
 	return m
+}
+
+// ContentMark is an empty object ingest writes the first time a row it logs
+// carries a body's content (full interception): the merge reads it as the
+// deployment's retention mode, as today's processor read it from the raw rows.
+func ContentMark(prefix string) string { return withSlash(prefix) + "v1/content_retained" }
+
+// sawRow notes a row as logged (body-stripped unless Content): its first with
+// a body writes the content mark. Called with mu held.
+func (s *Sink) sawRow(e *events.Event) {
+	if e.BodyB64 == "" || s.content {
+		return
+	}
+	s.content = true
+	key := ContentMark(s.cfg.Prefix)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if err := s.cfg.Putter.Put(context.Background(), key, nil); err != nil {
+			s.mu.Lock()
+			s.content = false // the next row with a body tries again
+			s.errs = append(s.errs, err)
+			s.mu.Unlock()
+			slog.Error("ALARM content mark put failed", "key", key, "err", err)
+		}
+	}()
 }

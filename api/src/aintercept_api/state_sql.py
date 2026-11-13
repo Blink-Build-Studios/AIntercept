@@ -57,6 +57,7 @@ STATE_TABLES = (
     "fact_requests",
     "fact_pending",
     "fact_events",
+    "fact_probes",
 )
 
 # Each stored table's columns (key, id and tomb aside), as the processor's table codec writes
@@ -64,6 +65,7 @@ STATE_TABLES = (
 # against a layout the processor wrote).
 STATE_SCHEMA: dict[str, str] = {
     "fact_events": "event_key VARCHAR, correlation_id VARCHAR, source_file VARCHAR, row_ns BIGINT, ns BIGINT, seq BIGINT, source VARCHAR, name VARCHAR, type VARCHAR, client_event_id VARCHAR, session_id VARCHAR, prompt_id VARCHAR, person_id VARCHAR, org_id VARCHAR, device_id VARCHAR, agent_id VARCHAR, agent_type VARCHAR, model VARCHAR, request_id VARCHAR, client_request_id VARCHAR, tool_use_id VARCHAR, prompt_index BIGINT, permission_mode VARCHAR, head_sha VARCHAR, metadata_json VARCHAR, env_json VARCHAR",  # noqa: E501
+    "fact_probes": "first_ns BIGINT, newest_ns BIGINT",
     "fact_pending": "correlation_id VARCHAR, source_file VARCHAR, seen_ns BIGINT, done BOOLEAN, expired BOOLEAN, end_ns BIGINT, error VARCHAR, end_file VARCHAR, start_ns BIGINT, response_start_ns BIGINT, host VARCHAR, method VARCHAR, path VARCHAR, status BIGINT, synthetic BOOLEAN, ip VARCHAR, key_hash VARCHAR, key_hint VARCHAR, request_bytes BIGINT, response_bytes BIGINT, websocket BOOLEAN, client_json VARCHAR, request_id VARCHAR, content_encoding VARCHAR, provider_json VARCHAR",  # noqa: E501
     "fact_requests": "call_id VARCHAR, correlation_id VARCHAR, source_file VARCHAR, first_file VARCHAR, ws_turn BIGINT, transport VARCHAR, start_ns BIGINT, response_start_ns BIGINT, end_ns BIGINT, host VARCHAR, method VARCHAR, path VARCHAR, status BIGINT, synthetic BOOLEAN, ip VARCHAR, key_hash VARCHAR, key_hint VARCHAR, error VARCHAR, session_id VARCHAR, prompt_id VARCHAR, person_id VARCHAR, device_id VARCHAR, org_id VARCHAR, request_class VARCHAR, client_request_id VARCHAR, request_id VARCHAR, agent_id VARCHAR, agent_type VARCHAR, user_agent VARCHAR, model VARCHAR, stop_reason VARCHAR, message_id VARCHAR, previous_message_id VARCHAR, thread_type VARCHAR, stream BOOLEAN, service_tier VARCHAR, input_tokens BIGINT, output_tokens BIGINT, cache_read_tokens BIGINT, cache_write_tokens BIGINT, reasoning_tokens BIGINT, effort VARCHAR, detail_json VARCHAR, request_bytes BIGINT, response_bytes BIGINT, content_encoding VARCHAR, client_json VARCHAR, provider_json VARCHAR, tool_uses_json VARCHAR, product VARCHAR, client VARCHAR, client_version VARCHAR, hidden_kind VARCHAR, ext_json VARCHAR",  # noqa: E501
     "batch_members": "batch_id VARCHAR, event_key VARCHAR, ns BIGINT, session_id VARCHAR, name VARCHAR",
@@ -103,19 +105,23 @@ STATE_SCHEMA: dict[str, str] = {
 }  # fmt: skip
 
 # The fact tables (state/facts.go): today's raw fact tables, stored with today's columns (canon's
-# types), which the drawer, /status and the directory's counts read.
+# types), which only the request drawer reads (its call's keys').
 FACT_TABLES = {"fact_requests": "requests", "fact_pending": "pending", "fact_events": "analytics"}
+# What only the drawer reads: the fact tables and a key's probe times (fact_probes, which /status
+# reads through the merge commit). The directory never does.
+RAW_ONLY = frozenset(FACT_TABLES) | {"fact_probes"}
 
 
 # Which keys each stored table is read from: "s:" a session's (its bucket), "*" every bucket,
-# "f:" every bucket but only for the endpoints that read everything (the fact tables).
+# "f:" every bucket but only for the endpoints that read everything, or the drawer's own keys
+# (RAW_ONLY).
 # The "*" ones are small dimensions, or rows a person's view needs from keys no session names:
 # the credential-and-day keys' transactions (request_txs) and analytics batches spanning
 # sessions (batch_members).
 STATE_ROUTING: dict[str, tuple[str, str]] = {
     t: (
         "f:"
-        if t in FACT_TABLES
+        if t in RAW_ONLY
         else "*"
         if t.startswith("dim_")
         or t in ("request_txs", "batch_members", "session_call_accounts", "session_edges", "session_title_calls")

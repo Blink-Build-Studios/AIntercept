@@ -133,7 +133,7 @@ class V1Store(BucketStore):
             return Scope(own=frozenset(self.call_keys(eid.rpartition(":")[0])))
         if bare in ("/api/v1/people", "/api/v1/overview"):
             day = _day_of(urllib.parse.parse_qs(query).get("from", [None])[0])
-            return Scope(days_from=day, skip=frozenset(state_sql.FACT_TABLES))
+            return Scope(days_from=day, skip=state_sql.RAW_ONLY)
         return super().scope_for_path(path)
 
     def call_keys(self, correlation_id: str) -> list[str]:

@@ -50,6 +50,7 @@ v1/keys/<key>/commit/<n, 12 digits>.json      create-only; names the current out
 v1/recent/<s3 minute>/<incarnation>-<seq>.json   per pod per minute: which keys it flushed
 v1/merge/out/<n>-<nonce>/…parquet             org-level rows (people index, per-session rows by day)
 v1/reported/<request id>/<key>                 empty; the key holding a reported call nothing captured
+v1/content_retained                            empty; ingest logged a row with a body (the retention mode /status shows)
 v1/merge/commit/<n, 12 digits>.json           create-only
 ```
 
@@ -158,7 +159,7 @@ The API runs one DuckDB query over S3 (`httpfs`), using the files a commit names
 | `/requests/{id}`, `/raw`, `/details`, `/events/{id}` | LIST `calls/<id>.keys/` (a WebSocket turn: its connection's; a reported call: `v1/reported/<id>/`) gives the call's keys; then only those keys' newest commits and `out` files, the fact tables included. The raw view reads the `calls/<id>` object directly. |
 | `/people/{id}`, `/summary`, `/sessions`, `/timeline`, `/requests`, `/coverage` | the people index in the merge gives the person's session keys and `c:` keys for the window; then each key's rows, or the merge's per-session rows for summaries. The same SQL as today, over these rows. |
 | `/people`, `/overview` | the merge's day partitions from the window's first day on, plus the people index; never the fact tables. `/overview`'s request count reads `merge_agent_calls`, each key's Claude Code and Codex call times, which the merge computes. |
-| `/status` | the merge commit (`first_request_ns`, `earliest_ns`, `newest_ns`, `content_retained`), plus the newest `ingest:last:*` in Redis (`AINTERCEPT_REDIS_ADDR`); the merge alone when Redis is down. No table. |
+| `/status` | the merge commit (`first_request_ns`, `earliest_ns`, `newest_ns`, `content_retained`: from the keys' fact rows and probe times, `fact_probes`, and the content mark), plus the newest `ingest:last:*` in Redis (`AINTERCEPT_REDIS_ADDR`); the merge alone when Redis is down. No table. |
 
 - Values relative to now (live, in flight, activity) are computed at query time
   from stored timestamps, as today.

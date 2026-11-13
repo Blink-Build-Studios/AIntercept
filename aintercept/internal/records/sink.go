@@ -93,6 +93,8 @@ type Sink struct {
 	kseq  int64
 	wg    sync.WaitGroup
 	errs  []error
+	// content: the content mark is written (or being written).
+	content bool
 }
 
 // NewSink starts a records sink.
@@ -121,6 +123,7 @@ func (s *Sink) Emit(e events.Event) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.sawRow(&row)
 	rs := s.asm.Apply(&e, line, "")
 	s.add(rs)
 	return nil
