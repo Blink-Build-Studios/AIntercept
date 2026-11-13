@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
@@ -137,5 +138,37 @@ func TestMergeKeepsTheFirstAcrossRuns(t *testing.T) {
 	m, _ := ReadNewestMerge(context.Background(), s, "")
 	if m.FirstRequestNS != day(0)+10 || m.EarliestNS != day(0)+10 {
 		t.Fatalf("first %d earliest %d", m.FirstRequestNS, m.EarliestNS)
+	}
+}
+
+// A key's probe calls count for /status as today's store counts its probes:
+// the earliest row (waiting since) and the newest, never the first request.
+func TestMergeCountsProbes(t *testing.T) {
+	s := stream.NewMemStore(stream.RealClock{})
+	tables := map[string][]stream.Row{
+		mtTable:               {{Key: "ip:a", ID: "1", Value: mtRow{LastNS: day(0), V: "x"}}},
+		state.TableFactProbes: {{Key: "ip:a", ID: "", Value: state.Probes{FirstNS: day(0) + 10, NewestNS: day(0) + 90}}},
+	}
+	if err := WriteOnePass(context.Background(), s, "", "ip:a", tables, day(0)); err != nil {
+		t.Fatal(err)
+	}
+	factKey(t, s, "s:b", []canon.Request{{CallID: "c1", StartNS: day(0) + 50, EndNS: day(0) + 60}}, nil, nil, 0)
+	run(t, s, newQueue("ip:a", "s:b"))
+	m, _ := ReadNewestMerge(context.Background(), s, "")
+	if m.FirstRequestNS != day(0)+50 || m.EarliestNS != day(0)+10 || m.NewestNS != day(0)+90 {
+		t.Fatalf("first %d earliest %d newest %d, want %d %d %d", m.FirstRequestNS, m.EarliestNS, m.NewestNS, day(0)+50, day(0)+10, day(0)+90)
+	}
+}
+
+// Content is retained once ingest has written the content mark.
+func TestMergeReadsTheContentMark(t *testing.T) {
+	s := stream.NewMemStore(stream.RealClock{})
+	factKey(t, s, "s:a", []canon.Request{{CallID: "c1", EndNS: day(0)}}, nil, nil, 0)
+	if err := s.Put(context.Background(), records.ContentMark(""), nil); err != nil {
+		t.Fatal(err)
+	}
+	run(t, s, newQueue("s:a"))
+	if m, _ := ReadNewestMerge(context.Background(), s, ""); !m.ContentRetained {
+		t.Fatal("the content mark is there: retained")
 	}
 }

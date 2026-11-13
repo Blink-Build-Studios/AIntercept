@@ -129,3 +129,30 @@ func TestSinkWritesKeyMarks(t *testing.T) {
 		t.Fatalf("escaped mark %q", got)
 	}
 }
+
+// The first row ingest logs with a body's content (full interception) writes
+// the content mark, once: the deployment's retention mode, as today's
+// processor reads it from the raw rows. Body-stripped rows never do.
+func TestSinkMarksContentOnce(t *testing.T) {
+	for _, content := range []bool{true, false} {
+		put := &memPut{}
+		s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", Content: content, MaxAge: time.Hour,
+			Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
+		chunk := events.Event{CorrelationID: "c1", Seq: 10, Phase: events.PhaseRequestBodyChunk, Host: "api.anthropic.com",
+			Path: "/v1/messages", BodyB64: "eyJtb2RlbCI6IngifQ=="}
+		for _, e := range []events.Event{hdr("c1", true, ccHeaders), chunk, chunk, complete("c1", ccClient)} {
+			if err := s.Emit(e); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := put.objs[ContentMark("p")]; ok != content {
+			t.Fatalf("content %v: mark written %v", content, ok)
+		}
+	}
+	if ContentMark("p") != "p/v1/content_retained" {
+		t.Fatalf("content mark %q", ContentMark("p"))
+	}
+}
