@@ -5,11 +5,11 @@ disruptions (node drains, cluster-autoscaler / Karpenter consolidation) honor
 them, so a node replacement never takes a component to zero replicas. Envoy's
 in-flight streams are drained by its own preStop hook either way.
 */ -}}
-{{- range $name := list "envoy" "certsvc" "process" "api" }}
+{{- range $name := list "envoy" "certsvc" "rollup" "api" }}
 {{- $component := index $.Values $name | default dict }}
 {{- $pdb := $component.podDisruptionBudget | default dict }}
 {{- $enabled := $pdb.enabled }}
-{{- if and $enabled (has $name (list "process" "api")) }}
+{{- if and $enabled (has $name (list "rollup" "api")) }}
 {{- $enabled = (index $.Values $name).enabled }}
 {{- end }}
 {{- /* Enforced calls depend on the observer (in the envoy pod): with any enforce scope, its PDB is on. */ -}}

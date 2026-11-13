@@ -1,0 +1,151 @@
+{{- if .Values.rollup.enabled }}
+# The rollups (docs/PIPELINE.md §2): `aintercept rollup`. Each replica takes
+# dirty keys from Redis, locks one at a time, applies its new ingest files and
+# commits with a create-only write; it also runs the 30 s merge (under a Redis
+# lock) and the sweep. Any number can run; KEDA scales them on lag (GET /lag:
+# the age of the oldest unapplied ingest file). At least two, so the sweep
+# never stops.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollup
+  labels:
+    app: rollup
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: rollup }
+  template:
+    metadata:
+      labels: { app: rollup }
+    spec:
+      serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.rollup "component" "rollup" "root" $) }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      # A stopped replica releases its key locks before it exits (SIGTERM).
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.rollup) }}{{ . | nindent 6 }}{{ end }}
+      containers:
+        - name: rollup
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["rollup"]
+          env:
+            - { name: ROLLUP_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: ROLLUP_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            - { name: ROLLUP_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: ROLLUP_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if .Values.objectStore.forcePathStyle }}
+            - { name: ROLLUP_S3_FORCE_PATH_STYLE, value: "true" }
+            {{- end }}
+            - { name: ROLLUP_REDIS_ADDR, value: {{ include "aintercept.redisAddr" . | quote }} }
+            - { name: ROLLUP_PARALLEL, value: {{ .Values.rollup.parallel | quote }} }
+            - { name: ROLLUP_HTTP_LISTEN, value: "0.0.0.0:9004" }
+            - name: ROLLUP_REPLICA
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            {{- if eq .Values.cloud "digitalocean" }}
+            - name: ROLLUP_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: ROLLUP_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 9004 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9004 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9004 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.rollup.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+# /lag for KEDA.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollup
+  labels:
+    app: rollup
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  selector: { app: rollup }
+  ports:
+    - { name: http, port: 9004, targetPort: 9004 }
+{{- if .Values.rollup.autoscaling.keda }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rollup
+  labels:
+    app: rollup
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: rollup
+  minReplicaCount: {{ .Values.rollup.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.rollup.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: rollup
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 600
+  triggers:
+    - type: metrics-api
+      # Value: replicas = ceil(oldest_unapplied_seconds / targetValue), within min and max.
+      metricType: Value
+      metadata:
+        url: "http://rollup.{{ .Release.Namespace }}.svc.cluster.local:9004/lag"
+        valueLocation: oldest_unapplied_seconds
+        targetValue: "{{ .Values.rollup.autoscaling.lagTargetSeconds }}"
+{{- else }}
+---
+# KEDA off: a plain HPA on CPU, never below two replicas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rollup
+  labels:
+    app: rollup
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rollup
+  minReplicas: {{ .Values.rollup.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.rollup.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+{{- end }}
+{{- end }}
