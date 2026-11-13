@@ -278,3 +278,36 @@ func TestGeneratedRanksMatchTheEventRows(t *testing.T) {
 		}
 	}
 }
+
+// Every generated batch's call carries its count, name and other sessions
+// exactly as the request log's SQL computes them over its members.
+func TestGeneratedBatchStampsMatchTheSQL(t *testing.T) {
+	batches, spanning := 0, 0
+	for seed := int64(1); seed <= 25; seed++ {
+		rows := generate(rand.New(rand.NewSource(seed)))
+		a := records.NewAssembler("inc")
+		var got []records.Record
+		for i := range rows {
+			l, _ := json.Marshal(rows[i])
+			got = append(got, a.Apply(&rows[i], l, "f")...)
+		}
+		got = append(got, a.Flush()...)
+		ref := records.BatchStampReference(got)
+		for _, r := range got {
+			if r.Kind != records.KindCallEnd || r.BatchID == "" {
+				continue
+			}
+			batches++
+			if len(r.BatchOtherSessions) > 0 {
+				spanning++
+			}
+			g := records.BatchStamp{N: r.BatchEvents, Name: r.BatchName, Others: r.BatchOtherSessions}
+			if !reflect.DeepEqual(g, ref[r.BatchID]) {
+				t.Errorf("seed %d batch %s: stamped %+v, the SQL gives %+v", seed, r.BatchID, g, ref[r.BatchID])
+			}
+		}
+	}
+	if batches == 0 || spanning == 0 {
+		t.Errorf("%d batches, %d spanning sessions: nothing to compare", batches, spanning)
+	}
+}

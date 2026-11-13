@@ -1,6 +1,7 @@
 package records
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 func TestColumnsPinned(t *testing.T) {
 	want := []string{
 		"record_version", "record_id", "kind", "instance", "call_id", "routing_key", "bucket",
-		"batch_id", "batch_n", "batch_cc_n", "batch_session", "event_key",
+		"batch_id", "batch_n", "batch_cc_n", "batch_session", "batch_events", "batch_name", "batch_other_sessions", "event_key",
 		"call.call_id", "call.correlation_id", "call.source_file", "call.first_file", "call.ws_turn", "call.transport",
 		"call.start_ns", "call.response_start_ns", "call.end_ns", "call.host", "call.method", "call.path", "call.status",
 		"call.synthetic", "call.ip", "call.key_hash", "call.key_hint", "call.error",
@@ -57,6 +58,58 @@ func TestEncodeDecodeRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(out) != 2 || out[0].CallID != "c1" || out[1].BatchN != 1 || out[1].EventKey != in[1].EventKey {
+		t.Fatalf("round trip: %+v", out)
+	}
+}
+
+// A records file written before the batch's count, name and other sessions
+// were columns still decodes: they read as none.
+func TestDecodesRecordsWithoutTheBatchStamp(t *testing.T) {
+	type before struct { // the record schema's batch columns before them
+		Version      int32  `parquet:"record_version"`
+		RecordID     string `parquet:"record_id"`
+		Kind         string `parquet:"kind"`
+		Instance     string `parquet:"instance"`
+		CallID       string `parquet:"call_id,optional"`
+		RoutingKey   string `parquet:"routing_key"`
+		Bucket       int32  `parquet:"bucket"`
+		BatchID      string `parquet:"batch_id,optional"`
+		BatchN       int64  `parquet:"batch_n,optional"`
+		BatchCCN     int64  `parquet:"batch_cc_n,optional"`
+		BatchSession string `parquet:"batch_session,optional"`
+		EventKey     string `parquet:"event_key,optional"`
+	}
+	var buf bytes.Buffer
+	if err := parquet.Write(&buf, []before{{Version: 1, RecordID: "r1", Kind: KindCallEnd, CallID: "a1", RoutingKey: "s:s1",
+		BatchID: "a1", BatchSession: "s1"}}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := Decode(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || out[0].BatchID != "a1" || out[0].BatchSession != "s1" ||
+		out[0].BatchEvents != 0 || out[0].BatchName != "" || len(out[0].BatchOtherSessions) != 0 {
+		t.Fatalf("decoded %+v", out)
+	}
+}
+
+func TestEncodeDecodeKeepsTheBatchStamp(t *testing.T) {
+	in := []Record{
+		{Version: Version, RecordID: "r1", Kind: KindCallEnd, CallID: "a1", RoutingKey: "s:s1", BatchID: "a1", BatchSession: "s1",
+			BatchEvents: 3, BatchName: "tengu_a", BatchOtherSessions: []string{"s2", "s3"}},
+		{Version: Version, RecordID: "r2", Kind: KindCallEnd, CallID: "c1", RoutingKey: "s:s1"},
+	}
+	b, err := Encode(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 || out[0].BatchEvents != 3 || out[0].BatchName != "tengu_a" ||
+		strings.Join(out[0].BatchOtherSessions, ",") != "s2,s3" || len(out[1].BatchOtherSessions) != 0 {
 		t.Fatalf("round trip: %+v", out)
 	}
 }
