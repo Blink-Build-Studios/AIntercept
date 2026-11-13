@@ -171,30 +171,6 @@ def person_sessions(store: Store, accounts: list[str]) -> list[str]:
     ]
 
 
-def load_person(store: Store, person_id: str) -> dict[str, Session]:
-    """Every session attributed to the person (all their linked accounts), with its calls and the
-    events rollups need. `UNATTRIBUTED` loads the sessions no account id appears on, as one person-like page."""
-    if person_id == UNATTRIBUTED:
-        return load_sessions(store, unattributed_sessions(store))
-    return load_sessions(store, person_sessions(store, linked_accounts(store, person_id)))
-
-
-def unattributed_sessions(store: Store) -> list[str]:
-    """Sessions with no account id on any call or event."""
-    return [
-        r[0]
-        for r in store.query(
-            """WITH known AS (
-                 SELECT session_id FROM cc_calls WHERE account_uuid IS NOT NULL
-                 UNION SELECT session_id FROM cc_events WHERE account_uuid IS NOT NULL AND session_id IS NOT NULL
-               )
-               SELECT DISTINCT session_id FROM cc_calls
-               WHERE session_id IS NOT NULL AND session_id NOT IN (SELECT session_id FROM known)
-               ORDER BY 1"""
-        )
-    ]
-
-
 def load_session(store: Store, session_id: str) -> Session | None:
     """One session by id, whoever it belongs to; None when nothing carries the id.
     Once per commit (every session endpoint starts here)."""
@@ -318,19 +294,6 @@ def _attach_titles(store: Store, sessions: dict[str, Session]) -> None:
 
 
 # --- coverage ---------------------------------------------------------------------------------
-
-
-def missed_calls(s: Session) -> list[Ev] | None:
-    """Reported-but-not-captured calls (their tengu_api_success events); None when the session has no analytics."""
-    if s.event_count == 0:
-        return None
-    rids = {c.request_id for c in s.calls if c.request_id}
-    crids = {c.client_request_id for c in s.calls if c.client_request_id}
-    return [
-        e
-        for e in s.events
-        if e.name == "tengu_api_success" and e.request_id not in rids and e.client_request_id not in crids
-    ]
 
 
 # --- per-session facts ------------------------------------------------------------------------
