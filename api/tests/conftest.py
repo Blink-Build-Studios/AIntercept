@@ -97,7 +97,10 @@ _binary: list[pathlib.Path] = []
 def aintercept_binary() -> pathlib.Path:
     """The `aintercept` binary, built once per test session."""
     if not _binary:
-        out = pathlib.Path(os.environ.get("AINTERCEPT_TEST_BIN") or REPO / ".cache" / "test-bin" / "aintercept")
+        # One output per xdist worker: workers build at once, and must not write the same file.
+        worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+        default = REPO / ".cache" / "test-bin" / worker / "aintercept"
+        out = pathlib.Path(os.environ.get("AINTERCEPT_TEST_BIN") or default)
         out.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["go", "build", "-o", str(out), "./cmd/aintercept"], cwd=REPO / "aintercept", check=True)  # noqa: S603, S607
         _binary.append(out)
