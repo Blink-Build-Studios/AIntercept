@@ -28,11 +28,11 @@ build: ## Build all container images
 	$(COMPOSE) build
 
 .PHONY: up
-up: ## Everything, locally, one command: proxy (real upstream), observer and processor in Docker; the API and UI here (docs/SETUP.md)
+up: ## Everything, locally, one command: proxy (real upstream), observer, Redis and rollups in Docker; the API and UI here (docs/SETUP.md)
 	@bash scripts/up.sh
 
 .PHONY: verify
-verify: ## Prove the local stack end to end: one request through the proxy, seen by the observer, processor and API
+verify: ## Prove the local stack end to end: one request through the proxy, seen by the observer, rollups and API
 	@bash scripts/verify.sh
 
 .PHONY: remote
@@ -106,16 +106,10 @@ client-event-registry: ## Merge client_event shapes from the object store into t
 AINTERCEPT_DATA_DIR ?= $(CURDIR)/data/telemetry
 export AINTERCEPT_DATA_DIR
 
-AINTERCEPT_SHAPED_DIR ?= $(CURDIR)/data/shaped
-export AINTERCEPT_SHAPED_DIR
-
-.PHONY: process
-process: ## Run the processor: $AINTERCEPT_DATA_DIR's raw partitions -> Parquet tables in $AINTERCEPT_SHAPED_DIR (compose runs it too)
-	cd aintercept && PROCESS_LOCAL_DIR="$(AINTERCEPT_DATA_DIR)" PROCESS_OUT_DIR="$(AINTERCEPT_SHAPED_DIR)" PROCESS_POLL_SECONDS=2 go run ./cmd/aintercept process
-
 .PHONY: api
-api: ## Run the query API on :8787 over the processor's tables in $AINTERCEPT_SHAPED_DIR (JSON logs on stdout)
-	cd api && uv run python -m aintercept_api.serve --port 8787 --reload
+api: ## Run the query API on :8787 over the v5 layout in $AINTERCEPT_DATA_DIR (the rollups' commits and merge; JSON logs on stdout)
+	cd api && AINTERCEPT_STORE=v1 AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" AINTERCEPT_CACHE_DIR="$(CURDIR)/.cache/api" AINTERCEPT_REDIS_ADDR=127.0.0.1:16379 \
+		uv run python -m aintercept_api.serve --port 8787 --reload
 
 .PHONY: ui
 ui: ## Run the UI dev server on :5173 (proxies /api to :8787)
@@ -162,7 +156,7 @@ check-go: ## Go: gofmt clean, go vet, go test (with -race) in every module
 	for m in $(GO_MODULES); do (cd $$m && go vet ./...) || exit 1; done
 	cd aintercept && go test -race -count=1 -timeout 10m ./...
 	@# The slow one-goroutine tests skip under -race (heavy(t)): run them here.
-	cd aintercept && go test -count=1 -timeout 10m ./internal/process/ ./internal/records/ ./internal/stream/...
+	cd aintercept && go test -count=1 -timeout 10m ./internal/records/ ./internal/stream/...
 
 .PHONY: test-pipeline
 test-pipeline: ## Go: the end-to-end gate on a real capture's records (local only: AINTERCEPT_RECORDS=<aintercept canon -out dir>)

@@ -259,13 +259,11 @@ func TestPromptRowsParquet(t *testing.T) {
 	rows := []PromptRow{{SessionID: "s", Seq: 1, Type: "prompt", PromptID: ptr("p"), ToolCountsJSON: "{}", HiddenJSON: "{}"}}
 	steps := []PromptStep{{SessionID: "s", Seq: 1, Step: 1, Commands: []string{"rm"}, ExitCodes: []int64{0},
 		CommandsLive: []string{}, ExitCodesLive: []int64{}, CostUSD: ptr(0.0)}}
-	s := newMem()
-	s.objs["r"], s.objs["s"] = encodeParquet(rows), encodeParquet(steps)
-	gr, err := readParquet[PromptRow](t.Context(), s, "r")
+	gr, err := readBack[PromptRow](EncodeParquet(rows))
 	if err != nil {
 		t.Fatal(err)
 	}
-	gs, err := readParquet[PromptStep](t.Context(), s, "s")
+	gs, err := readBack[PromptStep](EncodeParquet(steps))
 	if err != nil {
 		t.Fatal(err)
 	}

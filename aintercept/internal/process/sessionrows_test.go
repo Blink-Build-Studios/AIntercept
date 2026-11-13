@@ -209,9 +209,7 @@ func TestSessionRowsParquet(t *testing.T) {
 		LabelSourceAlone: "none", TokensAccuracy: "missing", CovWindowFrom: []int64{1}, CovWindowTo: []int64{2},
 		CovWindowCount: []int64{1}, BypassPct: ptr(0.0), Prompts: ptr(int64(0)),
 		PromptIDs: []string{}, Devices: []string{}, CallAccounts: []string{}}}
-	s := newMem()
-	s.objs["r"] = encodeParquet(rows)
-	got, err := readParquet[SessionRow](t.Context(), s, "r")
+	got, err := readBack[SessionRow](EncodeParquet(rows))
 	if err != nil {
 		t.Fatal(err)
 	}

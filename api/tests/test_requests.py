@@ -430,8 +430,8 @@ def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, client_for):
     a, b = ClaudeCode(dataset, first), ClaudeCode(dataset, second)
     prompt(a, f"{H}:00:05", "pa", 1)
     prompt(b, f"{H}:00:06", "pb", 1)
-    a.event(f"{H}:00:10", "tengu_paste_text", env=ENV, batch="batch-shared", pastedTextBytes=1)
-    b.event(f"{H}:00:11", "tengu_paste_text", env=ENV, batch="batch-shared", pastedTextBytes=2)
+    a.event(f"{H}:00:10", "tengu_paste_text", env=ENV, batch="batch-shared", arrive=f"{H}:00:11", pastedTextBytes=1)
+    b.event(f"{H}:00:11", "tengu_paste_text", env=ENV, batch="batch-shared", arrive=f"{H}:00:11", pastedTextBytes=2)
     client = client_for(dataset)
     ids = set()
     for sid, size in ((first, 1), (second, 2)):

@@ -1,5 +1,6 @@
-# M1 local stack: Envoy (TLS MITM on :443) + Go cert service (SDS) + Go observer
-# (ext_proc) + fixture HTTPS origin.
+# Local stack: Envoy (TLS MITM on :443) + Go cert service (SDS) + Go observer
+# (ext_proc) + the v5 pipeline (Redis, rollups; docs/PIPELINE.md) + fixture
+# HTTPS origin. ./data/telemetry stands in for the bucket.
 #
 # Secret handling:
 #   * The interception ROOT private key is NEVER mounted here — it stays on the
@@ -56,29 +57,43 @@ services:
       OBSERVER_LOCAL_DIR: "${OBSERVER_LOCAL_DIR:-/data/telemetry}"
       # Flush every 15 s locally so the UI is close to live (object storage: 60 s).
       OBSERVER_S3_MAX_AGE_SECONDS: "${OBSERVER_S3_MAX_AGE_SECONDS:-15}"
+      # Per-key ingest files (v1/keys/<key>/in/), each flagging its key in Redis
+      # for the rollups. A key's buffer flushes after 5 s locally (default 30 s).
+      OBSERVER_REDIS_ADDR: "redis:6379"
+      OBSERVER_KEY_FLUSH_SECONDS: "${OBSERVER_KEY_FLUSH_SECONDS:-5}"
     ports:
       - "9001:9001" # /healthz + /stats for the smoke test and operators
     volumes:
       # Host-visible capture directory. Files here are gitignored.
       - ./data:/data
+    depends_on:
+      - redis
     restart: unless-stopped
 
-  # Stage 2 (docs/ui/BUILD_PLAN.md §7.5): the observer's partitions in
-  # ./data/telemetry become shaped Parquet tables in ./data/shaped.
-  process:
+  # Coordination only (docs/PIPELINE.md): the dirty and committed sets and the
+  # locks. Nothing correctness depends on lives here.
+  redis:
+    image: redis:7.4.6-alpine@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98  # same pin as the Helm chart
+    ports:
+      - "127.0.0.1:16379:6379" # for the API on this machine (/status: the newest ingest)
+    restart: unless-stopped
+
+  # The rollups and the 30 s merge (docs/PIPELINE.md §2-3): per-key commits and
+  # the merge under ./data/telemetry/v1/, which the query API reads.
+  rollup:
     build: *aintercept-build
     image: aintercept/aintercept:dev
-    command: ["process"]
+    command: ["rollup"]
     environment:
-      PROCESS_LOCAL_DIR: "/data/telemetry"
-      PROCESS_OUT_DIR: "/data/shaped"
-      PROCESS_POLL_SECONDS: "${PROCESS_POLL_SECONDS:-5}"
+      ROLLUP_LOCAL_DIR: "/data/telemetry"
+      ROLLUP_REDIS_ADDR: "redis:6379"
+      ROLLUP_HTTP_LISTEN: "0.0.0.0:9004"
     ports:
-      - "9002:9002" # /healthz + /stats
+      - "9004:9004" # /healthz + /lag
     volumes:
       - ./data:/data
     depends_on:
-      - observer
+      - redis
     restart: unless-stopped
 
   fixture:

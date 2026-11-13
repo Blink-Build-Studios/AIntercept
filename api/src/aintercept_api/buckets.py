@@ -1041,17 +1041,13 @@ class BucketStore:
     # The drawer's raw view reads the raw log as the old store does (the spec's §4.9 moves it
     # onto per-call detail objects).
     def raw_rows(self, correlation_id: str) -> list[dict[str, Any]]:
-        if self.raw is None:
-            return []
-        return legacy.Store.raw_rows(cast(legacy.Store, self), correlation_id)
+        return legacy.raw_rows(self, correlation_id)
 
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
-        if self.raw is None:
-            return None
-        return legacy.Store.raw_event(cast(legacy.Store, self), correlation_id, event_key, source_file)
+        return legacy.raw_event(self.raw, correlation_id, event_key, source_file)
 
     def _read(self, keys: list[str], correlation_id: str) -> list[dict[str, Any]]:
-        return legacy.Store._read(cast(legacy.Store, self), keys, correlation_id)
+        return legacy.read_rows(self.raw, keys, correlation_id) if self.raw is not None else []
 
     def close(self) -> None:
         with self._lock:

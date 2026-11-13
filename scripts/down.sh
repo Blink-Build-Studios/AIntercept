@@ -18,7 +18,7 @@ for name in ui api tunnel preview; do
 done
 rm -f "${RUN}/api.mode"
 (cd "$ROOT" && COMPOSE_FILE=docker-compose.yml:docker-compose.m2.yml docker compose down >/dev/null 2>&1)
-echo "Stopped. Captured data stays in data/ (delete data/telemetry and data/shaped to start over)."
+echo "Stopped. Captured data stays in data/ (delete data/telemetry to start over)."
 if grep "# aintercept-interception" /etc/hosts 2>/dev/null | grep -q "127\.0\.0\.1"; then
   echo "WARNING: this machine still routes Anthropic traffic to the local proxy, which is now stopped."
   echo "Claude Code can't reach Anthropic until you run: sudo scripts/route-claude-through-proxy.sh revert"

@@ -20,7 +20,7 @@ from aintercept_api.buckets import BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
 from tests.builders import Dataset, load_fixture
 from tests.conftest import FULL, aintercept_binary, bounded_store, few_per_group, make_client
-from tests.test_bucket_parity import _urls
+from tests.endpoints import endpoint_urls as _urls
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 
