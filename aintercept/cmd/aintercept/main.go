@@ -9,6 +9,7 @@
 //	aintercept derive     builds the derived tables from an existing shaped output (a tool; takes flags)
 //	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
 //	aintercept stream     the bucketed processor: replicas own key buckets, read only new records
+//	aintercept v1layout   lays out a raw capture as the v5 pipeline would (keys and merge; a tool; takes flags)
 //	aintercept storecheck whether an object store has what the stream processor needs (a tool; takes flags)
 //
 // The services are configured through environment variables.
@@ -34,10 +35,11 @@ var modes = map[string]func(){
 	"canon":      canonCmd,
 	"stream":     stream.Run,
 	"storecheck": storecheck,
+	"v1layout":   v1layout,
 }
 
 func main() {
-	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "replay" && os.Args[1] != "derive" && os.Args[1] != "canon" && os.Args[1] != "storecheck") {
+	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "replay" && os.Args[1] != "derive" && os.Args[1] != "canon" && os.Args[1] != "storecheck" && os.Args[1] != "v1layout") {
 		usage()
 	}
 	run, ok := modes[os.Args[1]]

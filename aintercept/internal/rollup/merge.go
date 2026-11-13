@@ -94,9 +94,138 @@ type MergeResult struct {
 	Recovered bool     // keys came from the recent index (Redis lost them)
 }
 
-// RunOnce merges the keys committed since the last run (not built yet).
+// RunOnce merges the keys committed since the last run. A run that loses its
+// commit, or fails, puts its keys back.
 func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
-	return res, errors.New("rollup: merge not built yet")
+	clock := m.Clock
+	if clock == nil {
+		clock = stream.RealClock{}
+	}
+	keys, recovered, err := m.take(ctx, clock.Now())
+	if err != nil || len(keys) == 0 {
+		return res, err
+	}
+	res.Keys, res.Recovered = len(keys), recovered
+	defer func() {
+		if err != nil {
+			if qerr := m.Queue.Requeue(context.WithoutCancel(ctx), keys); qerr != nil {
+				err = errors.Join(err, qerr)
+			}
+		}
+	}()
+	prev, err := ReadNewestMerge(ctx, m.Store, m.Prefix)
+	if err != nil {
+		return res, err
+	}
+	next := MergeCommit{N: 1, Days: map[string]Out{}}
+	if prev != nil {
+		next.N, next.NewestNS = prev.N+1, prev.NewestNS
+		for d, o := range prev.Days {
+			next.Days[d] = o
+		}
+		next.Index = prev.Index
+	}
+
+	// Where each key's rows were, and are now.
+	oldDay := map[string]string{}
+	if prev != nil {
+		rows, err := m.readOut(ctx, prev.Index, TableMergeKeys)
+		if err != nil {
+			return res, err
+		}
+		for _, r := range rows {
+			oldDay[r.Key] = r.Value.(MergeKey).Day
+		}
+	}
+	changed := map[string]bool{}
+	newRows := map[string]map[string][]stream.Row{} // partition -> table -> rows
+	var mk []stream.Row
+	for _, key := range keys {
+		c, err := ReadNewest(ctx, m.Store, m.Prefix, key)
+		if err != nil {
+			return res, err
+		}
+		if c == nil {
+			continue // not committed yet (a stale entry): nothing to merge
+		}
+		tables, err := ReadKeyTables(ctx, m.Store, m.Prefix, c)
+		if err != nil {
+			return res, err
+		}
+		changed[key] = true
+		day := DayOf(key, tables, c.UpdatedNS)
+		part := partName(day)
+		if newRows[part] == nil {
+			newRows[part] = map[string][]stream.Row{}
+		}
+		for t, rows := range tables {
+			newRows[part][t] = append(newRows[part][t], rows...)
+		}
+		mk = append(mk, stream.Row{Key: key, Value: MergeKey{Day: day, N: c.N}})
+		if n := newestOf(tables); n > next.NewestNS {
+			next.NewestNS = n
+		}
+	}
+	if len(changed) == 0 {
+		return res, nil
+	}
+	touched := map[string]bool{"index": true} // merge_keys changes every run
+	for key := range changed {
+		if d, ok := oldDay[key]; ok {
+			touched[partName(d)] = true
+		}
+	}
+	for part := range newRows {
+		touched[part] = true
+	}
+	parts := make([]string, 0, len(touched))
+	for p := range touched {
+		parts = append(parts, p)
+	}
+	sort.Strings(parts)
+	nonce := newNonce()
+	for _, part := range parts {
+		var prevOut Out
+		if part == "index" {
+			prevOut = next.Index
+		} else {
+			prevOut = next.Days[strings.TrimPrefix(part, "day=")]
+		}
+		add := newRows[part]
+		if part == "index" {
+			if add == nil {
+				add = map[string][]stream.Row{}
+			}
+			add[TableMergeKeys] = mk
+		}
+		dir := fmt.Sprintf("%s/%012d-%s/", partDir(part), next.N, nonce)
+		out, err := m.rewrite(ctx, prevOut, dir, changed, add)
+		if err != nil {
+			return res, err
+		}
+		if part == "index" {
+			next.Index = out
+		} else if len(out.Tables) == 0 {
+			delete(next.Days, strings.TrimPrefix(part, "day="))
+		} else {
+			next.Days[strings.TrimPrefix(part, "day=")] = out
+		}
+		res.Rewritten = append(res.Rewritten, strings.TrimPrefix(part, "day="))
+	}
+	next.UpdatedNS = clock.Now().UnixNano()
+	body, err := json.Marshal(next)
+	if err != nil {
+		return res, err
+	}
+	ok, err := m.Store.PutIfAbsent(ctx, MergeCommitKey(m.Prefix, next.N), body)
+	if err != nil {
+		return res, err
+	}
+	if !ok {
+		return res, ErrMergeFenced
+	}
+	res.N = next.N
+	return res, nil
 }
 
 // take is this run's keys: what Redis holds, or after a wipe (the marker is

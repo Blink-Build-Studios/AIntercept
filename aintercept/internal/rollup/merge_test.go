@@ -63,7 +63,7 @@ func (q *memQueue) Requeue(_ context.Context, keys []string) error {
 	return nil
 }
 func (q *memQueue) Alive(context.Context) (bool, error) { return q.alive, nil }
-func (q *memQueue) MarkAlive(context.Context) error    { q.alive = true; return nil }
+func (q *memQueue) MarkAlive(context.Context) error     { q.alive = true; return nil }
 
 // commitKey writes a key's commit n whose single new output holds rows (an id
 // with an empty value is a tombstone), on top of commit n-1's outputs.
