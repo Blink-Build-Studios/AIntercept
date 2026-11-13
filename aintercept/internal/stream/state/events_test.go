@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -13,123 +12,6 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
-
-// The event rows and session tools, rebuilt the way the query does: the stored
-// rows numbered by (time, batch, number), joined to the request links, prompt
-// numbers and Codex turns (the SQL in the API does the same).
-func eventRowsOf(o *streamOut) []process.EventRow {
-	bySess := map[string][]Event{}
-	for _, r := range o.rows[TableEvents] {
-		e := r.(Event)
-		bySess[e.SessionID] = append(bySess[e.SessionID], e)
-	}
-	links := map[[2]string]RequestLink{}
-	for _, r := range o.rows[TableRequestLinks] {
-		l := r.(RequestLink)
-		links[[2]string{l.SessionID, l.RequestID}] = l
-	}
-	index := map[string]map[string]int64{}
-	for _, r := range o.rows[TablePromptIndex] {
-		p := r.(PromptIndex)
-		if index[p.SessionID] == nil {
-			index[p.SessionID] = map[string]int64{}
-		}
-		index[p.SessionID][p.PromptID] = p.Index
-	}
-	turns := map[string][]CodexTurn{}
-	for _, r := range o.rows[TableCodexTurns] {
-		c := r.(CodexTurn)
-		turns[c.SessionID] = append(turns[c.SessionID], c)
-	}
-	for s, ts := range turns { // dense_rank over (first call, prompt): the Codex number wins
-		sort.Slice(ts, func(i, j int) bool {
-			return ts[i].FirstNS < ts[j].FirstNS || ts[i].FirstNS == ts[j].FirstNS && ts[i].PromptID < ts[j].PromptID
-		})
-		if index[s] == nil {
-			index[s] = map[string]int64{}
-		}
-		for n, c := range ts {
-			index[s][c.PromptID] = int64(n + 1)
-		}
-	}
-	var out []process.EventRow
-	var sids []string
-	for s := range bySess {
-		sids = append(sids, s)
-	}
-	sort.Strings(sids)
-	for _, s := range sids {
-		evs := bySess[s]
-		sort.Slice(evs, func(i, j int) bool {
-			a, b := evs[i], evs[j]
-			switch {
-			case a.TsNS != b.TsNS:
-				return a.TsNS < b.TsNS
-			case a.BatchID != b.BatchID:
-				return a.BatchID < b.BatchID
-			case a.EvSeq != b.EvSeq:
-				return a.EvSeq < b.EvSeq
-			case a.RowNS != b.RowNS:
-				return a.RowNS < b.RowNS
-			case a.Name != b.Name:
-				return a.Name < b.Name
-			case a.OrderMD != b.OrderMD:
-				return a.OrderMD < b.OrderMD
-			case a.N != b.N: // identical events: the rank ingest gave them
-				return a.N < b.N
-			}
-			return a.EventKey < b.EventKey
-		})
-		for i, e := range evs {
-			r := e.EventRow
-			r.Seq = int64(i)
-			if n, ok := index[s][e.PromptID]; ok && e.PromptID != "" {
-				r.PromptIndex = &n
-			}
-			switch r.LinkKind {
-			case "request":
-				if l, ok := links[[2]string{s, r.LinkID}]; ok {
-					r.LinkID, r.LinkLabel = l.CallID, l.Label
-				} else {
-					r.LinkID, r.LinkLabel = "reported:"+r.LinkID, "not captured"
-				}
-			case "prompt":
-				if n, ok := index[s][r.LinkID]; ok {
-					r.LinkLabel = "#" + strconv.FormatInt(n, 10)
-				} else {
-					r.LinkLabel = "prompt"
-				}
-			}
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-func sessionToolsOf(o *streamOut) []process.SessionTool {
-	var out []process.SessionTool
-	for _, r := range o.rows[TableSessionTools] {
-		out = append(out, r.(process.SessionTool))
-	}
-	sortTools(out)
-	return out
-}
-
-func sortTools(out []process.SessionTool) {
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.SessionID != b.SessionID {
-			return a.SessionID < b.SessionID
-		}
-		if a.Kind != b.Kind {
-			return a.Kind < b.Kind
-		}
-		if a.Server != b.Server {
-			return a.Server < b.Server
-		}
-		return a.Tool < b.Tool
-	})
-}
 
 func checkEvents(t *testing.T, label string, rs []records.Record, o *streamOut) {
 	t.Helper()

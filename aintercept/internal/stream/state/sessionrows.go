@@ -19,8 +19,8 @@ import (
 //   - session_edges: a subagent or review thread's edge to its parent, with its
 //     first time (the parent's children_json);
 //   - session_title_calls: a title thread's title calls (another thread's title,
-//     assigned per account in time order by the query: §4.5, sessionrows_test.go
-//     sessionRowsOf and api/src/aintercept_api/sql/session_rows.sql).
+//     assigned per account in time order by the query: §4.5, TitledSessionRows
+//     in query.go and api/src/aintercept_api/sql/session_rows.sql).
 const (
 	TableSessionRows         = "session_rows"
 	TableSessionPromptIDs    = "session_prompt_ids"

@@ -195,29 +195,6 @@ func (o *streamOut) fold(key string, d Delta) {
 	}
 }
 
-// presenceRows is the stream's presence rows in stored order: session, group, start.
-func (o *streamOut) presenceRows() []Presence {
-	var out []Presence
-	for _, r := range o.rows[TablePresence] {
-		out = append(out, r.(Presence))
-	}
-	sortPresence(out)
-	return out
-}
-
-func sortPresence(p []Presence) {
-	sort.Slice(p, func(i, j int) bool {
-		a, b := p[i], p[j]
-		if a.SessionID != b.SessionID {
-			return a.SessionID < b.SessionID
-		}
-		if a.Group != b.Group {
-			return a.Group < b.Group
-		}
-		return a.FromNS < b.FromNS
-	})
-}
-
 // refPresence is the reference's presence rows in the stored shape. It checks
 // that the reference's seq is the (group, start) order the query numbers by.
 func refPresence(d *process.Derived) ([]Presence, error) {
@@ -248,3 +225,13 @@ func shuffled(rng *rand.Rand, rs []records.Record, dupes int) []records.Record {
 	rng.Shuffle(len(out), func(i, j int) { out[i], out[j] = out[j], out[i] })
 	return out
 }
+
+// The query side over the stream's rows (every key's, folded): query.go.
+func eventRowsOf(o *streamOut) []process.EventRow       { return EventRowsOf(o.rows) }
+func sessionToolsOf(o *streamOut) []process.SessionTool { return SessionToolsOf(o.rows) }
+func callToolUsesOf(o *streamOut) []process.CallToolUse { return CallToolUsesOf(o.rows) }
+func sessionRowsOf(o *streamOut) []process.SessionRow   { return TitledSessionRows(o.rows) }
+func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []process.SessionMark) {
+	return PromptViewOf(o.rows)
+}
+func (o *streamOut) presenceRows() []Presence { return PresenceOf(o.rows) }

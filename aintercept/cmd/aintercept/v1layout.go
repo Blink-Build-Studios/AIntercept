@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/rollup"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
 // v1layout lays out a raw capture as the v5 pipeline would (docs/PIPELINE.md):
@@ -80,14 +82,58 @@ func v1layout() {
 	fmt.Printf("v1layout: %d records, %d keys, merge %d (%d partitions)\n", len(col.recs), len(keys), res.N, len(res.Rewritten))
 }
 
-// writeV2 writes the v6 views of a layout beside its v1 output
-// (docs/PIPELINE.md, Testing): every key's run, then the person loop until
-// idle, then the merge. The v1 keys and merge partitions stay: the oracle reads
-// them until build step 11. Empty for now: build steps 3 to 8 add each view
-// as it lands (the session views first), and the harness compares them with
-// the oracle's tables entity by entity.
+// writeV2 writes the v6 side of a layout beside its v1 output
+// (docs/PIPELINE.md, Testing), for the oracle's side-by-side harness
+// (api/tests/oracle/). The v1 keys and merge partitions stay: the oracle reads
+// them until build step 11. So far, TEST-ONLY and not the v6 storage format
+// (still under review): each session key's finished tables (state.RenderSession),
+// one Parquet file per session per table, v2/test-sessions/<sid>/<table>.parquet
+// (an empty table has no file).
 func writeV2(ctx context.Context, s stream.DirStore, prefix string, keys []string, byKey map[string]map[string][]stream.Row) error {
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	for _, k := range keys {
+		sid, ok := strings.CutPrefix(k, "s:")
+		if !ok {
+			continue
+		}
+		rows := state.Rows{}
+		for table, rs := range byKey[k] {
+			t := make(map[string]any, len(rs))
+			for _, r := range rs {
+				t[r.ID] = r.Value
+			}
+			rows[table] = t
+		}
+		dir := prefix + "v2/test-sessions/" + url.PathEscape(sid) + "/"
+		for name, body := range sessionFiles(state.RenderSession(sid, rows)) {
+			if err := s.Put(ctx, dir+name+".parquet", body); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
+}
+
+// sessionFiles is each non-empty table of a session as a Parquet file.
+func sessionFiles(t *state.SessionTables) map[string][]byte {
+	out := map[string][]byte{}
+	add := func(name string, n int, enc func() []byte) {
+		if n > 0 {
+			out[name] = enc()
+		}
+	}
+	add("session_rows", len(t.SessionRows), func() []byte { return process.EncodeParquet(t.SessionRows) })
+	add("presence_segments", len(t.PresenceSegments), func() []byte { return process.EncodeParquet(t.PresenceSegments) })
+	add("session_tools", len(t.SessionTools), func() []byte { return process.EncodeParquet(t.SessionTools) })
+	add("event_rows", len(t.EventRows), func() []byte { return process.EncodeParquet(t.EventRows) })
+	add("session_marks", len(t.SessionMarks), func() []byte { return process.EncodeParquet(t.SessionMarks) })
+	add("prompt_rows", len(t.PromptRows), func() []byte { return process.EncodeParquet(t.PromptRows) })
+	add("prompt_steps", len(t.PromptSteps), func() []byte { return process.EncodeParquet(t.PromptSteps) })
+	add("session_request_rows", len(t.SessionRequestRows), func() []byte { return process.EncodeParquet(t.SessionRequestRows) })
+	add("call_tool_uses", len(t.CallToolUses), func() []byte { return process.EncodeParquet(t.CallToolUses) })
+	return out
 }
 
 // detailsTo writes the calls' detail objects to the store and hands records to

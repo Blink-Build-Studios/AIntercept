@@ -23,90 +23,6 @@ import (
 // API's SQL (api/src/aintercept_api/stream_sql.py) step for step; both are held
 // to the reference.
 
-// rqView is the stored tables a query reads, folded across keys.
-type rqView struct {
-	txs      []ReqTx
-	reports  map[string][]ReportRow // session → its reports
-	missed   map[string][]MissedRow // session → its not-captured rows
-	batches  map[string]*rqBatch
-	last     map[string]int64
-	creds    map[string][]string // session → its credentials
-	email    map[string]string   // account → lower(email)
-	sessOf   map[string]map[string]bool
-	known    map[string]bool
-	visible  []string
-	index    map[string][]PromptIndex // session → its prompts' numbers
-	turns    map[string][]CodexTurn   // session → its Codex turns' first calls
-	sessRows map[string]process.SessionRow
-}
-
-type rqBatch struct {
-	n                int64
-	name             string
-	session          string
-	sessionNS        int64
-	hasSess, hasName bool
-}
-
-func viewOf(o *streamOut, sessions []process.SessionRow) *rqView {
-	v := &rqView{reports: map[string][]ReportRow{}, missed: map[string][]MissedRow{}, batches: map[string]*rqBatch{},
-		last: map[string]int64{}, creds: map[string][]string{}, email: map[string]string{},
-		sessOf: map[string]map[string]bool{}, known: map[string]bool{}, index: map[string][]PromptIndex{},
-		turns: map[string][]CodexTurn{}, sessRows: map[string]process.SessionRow{}}
-	v.txs = rowsOf[ReqTx](o, TableRequestTxs)
-	for _, r := range rowsOf[ReportRow](o, TableRequestReports) {
-		v.reports[r.SessionID] = append(v.reports[r.SessionID], r)
-	}
-	for _, m := range rowsOf[MissedRow](o, TableRequestMissed) {
-		v.missed[m.SessionID] = append(v.missed[m.SessionID], m)
-	}
-	for _, m := range rowsOf[BatchMember](o, TableBatchMembers) {
-		b := v.batches[m.BatchID]
-		if b == nil {
-			b = &rqBatch{}
-			v.batches[m.BatchID] = b
-		}
-		b.n++
-		if m.Name != "" && (!b.hasName || m.Name < b.name) {
-			b.name, b.hasName = m.Name, true
-		}
-		if m.SessionID != "" && (!b.hasSess || m.NS < b.sessionNS || m.NS == b.sessionNS && m.SessionID < b.session) {
-			b.session, b.sessionNS, b.hasSess = m.SessionID, m.NS, true
-		}
-	}
-	for _, l := range rowsOf[SessionLast](o, TableSessionLast) {
-		v.last[l.SessionID] = l.LastNS
-	}
-	for _, c := range rowsOf[SessionCredential](o, TableSessionCredential) {
-		v.creds[c.SessionID] = append(v.creds[c.SessionID], c.KeyHash)
-	}
-	for _, a := range rowsOf[process.Account](o, TableAccounts) {
-		if a.Email != "" {
-			v.email[a.AccountID] = strings.ToLower(a.Email)
-		}
-	}
-	for _, sa := range rowsOf[SessionAccount](o, TableSessionAccounts) {
-		if v.sessOf[sa.AccountID] == nil {
-			v.sessOf[sa.AccountID] = map[string]bool{}
-		}
-		v.sessOf[sa.AccountID][sa.SessionID] = true
-		v.known[sa.SessionID] = true
-	}
-	for _, sv := range rowsOf[SessionVisible](o, TableSessionVisible) {
-		v.visible = append(v.visible, sv.SessionID)
-	}
-	for _, p := range rowsOf[PromptIndex](o, TablePromptIndex) {
-		v.index[p.SessionID] = append(v.index[p.SessionID], p)
-	}
-	for _, c := range rowsOf[CodexTurn](o, TableCodexTurns) {
-		v.turns[c.SessionID] = append(v.turns[c.SessionID], c)
-	}
-	for _, r := range sessions {
-		v.sessRows[r.SessionID] = r
-	}
-	return v
-}
-
 // personSessions is the person's sessions: their email group's, or for
 // "unattributed" the visible sessions no account names.
 func (v *rqView) personSessions(person string) []string {
@@ -140,175 +56,6 @@ func (v *rqView) personSessions(person string) []string {
 	return out
 }
 
-type rqRep struct {
-	ttft             *float64
-	cache5m, cache1h *int64
-}
-
-// scopeRows is the rows of the transactions made with the sessions' credentials
-// (with only, just that session's), and the sessions' not-captured calls.
-func (v *rqView) scopeRows(sessions []string, only string) []process.RequestRow {
-	in := map[string]bool{}
-	for _, s := range sessions {
-		in[s] = true
-	}
-	hashes := map[string]bool{}
-	for _, s := range sessions {
-		for _, h := range v.creds[s] {
-			hashes[h] = true
-		}
-	}
-	txSession := func(t ReqTx) string {
-		if t.OwnSession != "" {
-			return t.OwnSession
-		}
-		if b := v.batches[t.CallID]; b != nil && b.hasSess {
-			return b.session
-		}
-		return ""
-	}
-	type tx struct {
-		ReqTx
-		session string
-	}
-	var txs []tx
-	for _, t := range v.txs {
-		if t.IsTx && t.KeyHash != "" && hashes[t.KeyHash] {
-			s := txSession(t)
-			if only == "" || s == only {
-				txs = append(txs, tx{t, s})
-			}
-		}
-	}
-	// Prompt numbers: Claude Code's latest input prompt (time, key) across the
-	// sessions; a Codex turn's place in its thread wins, the last session's.
-	type pick struct {
-		n   int64
-		ts  int64
-		key string
-	}
-	cc := map[string]pick{}
-	for _, s := range sessions {
-		for _, p := range v.index[s] {
-			if cur, ok := cc[p.PromptID]; !ok || lessTsID(tsID{cur.ts, cur.key}, tsID{p.TS, p.Key}) {
-				cc[p.PromptID] = pick{p.Index, p.TS, p.Key}
-			}
-		}
-	}
-	index := map[string]int64{}
-	for pid, p := range cc {
-		index[pid] = p.n
-	}
-	for _, s := range sessions {
-		ts := append([]CodexTurn(nil), v.turns[s]...)
-		sort.Slice(ts, func(i, j int) bool {
-			return ts[i].FirstNS < ts[j].FirstNS || ts[i].FirstNS == ts[j].FirstNS && ts[i].PromptID < ts[j].PromptID
-		})
-		for n, c := range ts {
-			index[c.PromptID] = int64(n + 1)
-		}
-	}
-	// Each request id's first report.
-	var reps []ReportRow
-	for _, s := range sessions {
-		reps = append(reps, v.reports[s]...)
-	}
-	sort.Slice(reps, func(i, j int) bool {
-		return lessTsID(tsID{reps[i].TS, reps[i].EventKey}, tsID{reps[j].TS, reps[j].EventKey})
-	})
-	reports := map[string]rqRep{}
-	for _, e := range reps {
-		for _, k := range []string{e.ReqID, e.ClientReqID} {
-			if _, ok := reports[k]; k != "" && !ok {
-				reports[k] = rqRep{e.TTFT, e.Cache5m, e.Cache1h}
-			}
-		}
-	}
-	repOf := func(rid, crid string) *rqRep {
-		if r, ok := reports[rid]; ok && rid != "" {
-			return &r
-		}
-		if r, ok := reports[crid]; ok && crid != "" {
-			return &r
-		}
-		return nil
-	}
-	sort.Slice(txs, func(i, j int) bool {
-		a, b := txs[i].Row, txs[j].Row
-		return a.TsNS < b.TsNS || a.TsNS == b.TsNS && a.RequestID < b.RequestID
-	})
-	steps, seen := map[string]int64{}, map[string]int64{}
-	for _, t := range txs {
-		if t.Kind == "model" && t.PromptID != "" && t.Hidden == "" {
-			seen[t.PromptID]++
-			steps[t.Row.RequestID] = seen[t.PromptID]
-		}
-	}
-	var rows []process.RequestRow
-	for _, t := range txs {
-		r := t.Row
-		r.ToolCalls = append([]string{}, r.ToolCalls...)
-		r.SessionID = nzStr(t.session)
-		if t.PromptID != "" {
-			if n, ok := index[t.PromptID]; ok {
-				r.PromptIndex = &n
-			}
-		}
-		if t.Kind == "model" {
-			if rep := repOf(t.ReqID, t.ClientReqID); rep != nil {
-				r.TTFTMS, r.TokensCacheWrite5m, r.TokensCacheWrite1h = rep.ttft, rep.cache5m, rep.cache1h
-			}
-		}
-		if n, ok := steps[r.RequestID]; ok {
-			r.StepIndex = &n
-		}
-		if t.Kind == "analytics" {
-			var n int64
-			name := ""
-			if b := v.batches[t.CallID]; b != nil {
-				n, name = b.n, b.name
-			}
-			r.Detail = strconv.FormatInt(n, 10) + " events"
-			if t.Product == canon.ProductCodex && name != "" {
-				r.Detail = name
-				if n != 1 {
-					r.Detail = name + " · " + strconv.FormatInt(n, 10) + " events"
-				}
-			}
-		}
-		rows = append(rows, r)
-	}
-	for _, s := range sessions {
-		ms := append([]MissedRow(nil), v.missed[s]...)
-		sort.Slice(ms, func(i, j int) bool {
-			return lessTsID(tsID{ms[i].Row.TsNS, ms[i].EventKey}, tsID{ms[j].Row.TsNS, ms[j].EventKey})
-		})
-		for _, m := range ms {
-			r := m.Row
-			r.ToolCalls = []string{}
-			if rep := repOf(m.ReqID, m.ClientReqID); rep != nil {
-				r.TTFTMS, r.TokensCacheWrite5m, r.TokensCacheWrite1h = rep.ttft, rep.cache5m, rep.cache1h
-			}
-			rows = append(rows, r)
-		}
-	}
-	return rows
-}
-
-func nzStr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-func sortRows(rows []process.RequestRow) {
-	sort.SliceStable(rows, func(i, j int) bool {
-		a, b := rows[i], rows[j]
-		return a.TsNS < b.TsNS || a.TsNS == b.TsNS && a.RequestID < b.RequestID
-	})
-}
-
 // personRows is a person's request log.
 func (v *rqView) personRows(person string) []process.RequestRow {
 	rows := v.scopeRows(v.personSessions(person), "")
@@ -330,40 +77,6 @@ func (v *rqView) personLast(person string) *int64 {
 	return last
 }
 
-// sessionRows is a session's Requests tab: its own rows, and for a Codex thread
-// its client's calls no thread names, from its start to a minute after its last.
-func (v *rqView) sessionRows(sr process.SessionRow) []process.SessionRequestRow {
-	s := sr.SessionID
-	codex := sr.Product == canon.ProductCodex
-	only := s
-	if codex {
-		only = ""
-	}
-	lo, hi := sr.StartNS/1000, (sr.LastNS+60*1_000_000_000)/1000
-	client := ""
-	if sr.Client != nil {
-		client = *sr.Client
-	}
-	var kept []process.RequestRow
-	for _, x := range v.scopeRows([]string{s}, only) {
-		xc := ""
-		if x.Client != nil {
-			xc = *x.Client
-		}
-		if x.SessionID != nil && *x.SessionID == s ||
-			codex && x.SessionID == nil && x.Agent != nil && *x.Agent == "codex" && x.Kind != "model" &&
-				xc == client && lo <= x.TsNS/1000 && x.TsNS/1000 <= hi {
-			kept = append(kept, x)
-		}
-	}
-	sortRows(kept)
-	out := make([]process.SessionRequestRow, len(kept))
-	for i, x := range kept {
-		out[i] = process.SessionRequestRow{Scope: s, Seq: int64(i), Row: x}
-	}
-	return out
-}
-
 // checkRequests holds the stream's request log to the reference's: every
 // person's rows and newest time, and every session's Requests tab.
 func checkRequests(t *testing.T, label string, rs []records.Record, o *streamOut) {
@@ -380,7 +93,7 @@ func checkRequests(t *testing.T, label string, rs []records.Record, o *streamOut
 
 // requestDiffs is up to max differences between the stream's request log and the reference's.
 func requestDiffs(ref *process.Derived, o *streamOut, max int) []string {
-	v := viewOf(o, ref.SessionRows)
+	v := viewOf(o.rows, ref.SessionRows)
 	var out []string
 	add := func(s string) bool {
 		out = append(out, s)
@@ -540,6 +253,7 @@ func batchCall(id, keyHash string, t int64, evs ...*canon.Event) []records.Recor
 		Method: "POST", Path: "/api/event_logging/batch", Status: 200, Product: canon.ProductClaudeCode, KeyHash: keyHash}
 	var out []records.Record
 	sess, sessNS := "", int64(0)
+	ccn := int64(0) // a Claude Code event's rank among the batch's (records.Assembler.release)
 	for i, e := range evs {
 		e.CorrelationID = id
 		if e.EventKey == "" {
@@ -554,8 +268,13 @@ func batchCall(id, keyHash string, t int64, evs ...*canon.Event) []records.Recor
 		if e.SessionID != "" && (sess == "" || e.NS < sessNS || e.NS == sessNS && e.SessionID < sess) {
 			sess, sessNS = e.SessionID, e.NS
 		}
-		out = append(out, rec(records.Record{Kind: records.KindClientEvent, EventKey: e.EventKey, BatchID: id,
-			BatchN: int64(i + 1), Event: e, Call: &canon.Request{KeyHash: keyHash}}))
+		r := records.Record{Kind: records.KindClientEvent, EventKey: e.EventKey, BatchID: id,
+			BatchN: int64(i + 1), Event: e, Call: &canon.Request{KeyHash: keyHash}}
+		if e.Source == canon.ProductClaudeCode {
+			ccn++
+			r.BatchCCN = ccn
+		}
+		out = append(out, rec(r))
 	}
 	out = append(out, rec(records.Record{Kind: records.KindCallEnd, CallID: id, Call: c, BatchSession: sess, BatchID: id}))
 	return out
