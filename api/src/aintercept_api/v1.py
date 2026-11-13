@@ -27,8 +27,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-import duckdb
-
 from aintercept_api import state_sql
 from aintercept_api.buckets import BucketStore, Commit, Scope, Source, _Loaded
 from aintercept_api.raw import RawSource
@@ -133,11 +131,12 @@ class V1Store(BucketStore):
                 return self._days[1]
         days: dict[str, str] = {}
         if "merge_keys" in merge.index.tables:
-            path = str(self.cache.path(self._merge_file(merge.index, "merge_keys")))
-            rows = duckdb.execute(
-                "SELECT key, day FROM read_parquet(?) WHERE NOT tomb", [path]
-            ).fetchall()
-            days = {k: d for k, d in rows}
+            con = self._connect()
+            try:
+                url = self.source.url(self._merge_file(merge.index, "merge_keys"))
+                days = dict(con.execute("SELECT key, day FROM read_parquet(?) WHERE NOT tomb", [url]).fetchall())
+            finally:
+                con.close()
         with self._lock:
             self._days = (merge.n, days)
         return days
@@ -149,10 +148,15 @@ class V1Store(BucketStore):
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
         routing = state_sql.STATE_ROUTING
-        names = list(only) if only is not None else list(routing)
+        names = [t for t in (list(only) if only is not None else list(routing)) if t not in scope.skip]
         single = scope.sessions is not None and len(scope.sessions) == 1 and scope.people is None
         if scope.sessions is not None and only is None:
-            scope = Scope(sessions=self._session_group(scope.sessions), people=scope.people, accounts=scope.accounts)
+            scope = Scope(
+                sessions=self._session_group(scope.sessions),
+                people=scope.people,
+                accounts=scope.accounts,
+                skip=scope.skip,
+            )
         merge = self.merge()
         parts = merge.parts() if merge else []
         days = self._key_days(merge) if merge else {}
@@ -160,6 +164,9 @@ class V1Store(BucketStore):
         if scope.sessions is not None:
             wanted = {"index"} | {days[k] for s in scope.sessions if (k := "s:" + s) in days}
         plan: dict[str, list[str]] = {}
+        # Within a partition, a session table's rows are filtered on key in the scan (the files
+        # are in key order, so only the row groups that can hold the keys are read).
+        keys = {t: None if routing[t][0] == "*" else scope.keys(routing[t][0]) for t in names}
         for t in names:
             every = routing[t][0] == "*" or wanted is None
             plan[t] = [
@@ -192,7 +199,7 @@ class V1Store(BucketStore):
             if merge
             else {}
         )
-        loaded = _Loaded(self._build_state(plan, scope, partial=only is not None), commits)
+        loaded = _Loaded(self._build_state(plan, scope, partial=only is not None, keys=keys), commits)
         with self._lock:
             self.loads += 1
             self._loaded[sig] = loaded
