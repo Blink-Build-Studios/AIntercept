@@ -1,7 +1,8 @@
 """The v5 pipeline end to end (docs/PIPELINE.md): a dataset's raw observer files go through the
 observer's own code to records, each key's records are applied in one pass and committed under
 v1/keys/, one merge run writes v1/merge/, and the API (v1.V1Store) serves every endpoint from
-those folders. Every response must be byte-identical to today's store over today's processor."""
+those folders. Every response must be byte-identical to the v6 oracle's (tests/oracle/: today's
+derivation, frozen) over the same layout, and so must every entity's API-shaped tables."""
 
 import json
 import pathlib
@@ -14,8 +15,10 @@ from aintercept_api.buckets import LocalSource
 from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
 from tests.builders import ClaudeCode, Dataset, cid_of, load_fixture
-from tests.conftest import aintercept_binary, bounded_store, few_per_group, make_client
+from tests.conftest import aintercept_binary, few_per_group, lay_out, make_client
 from tests.endpoints import endpoint_urls as _urls
+from tests.oracle.harness import KINDS, Layout, Oracle, assert_same, entity_tables
+from tests.oracle.store import OracleStore
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_session import H, prompt
@@ -32,8 +35,16 @@ def v1_layout(raw: pathlib.Path, out: pathlib.Path) -> None:
     )
 
 
+def _stores(root: pathlib.Path, layout: pathlib.Path, cache: pathlib.Path):
+    """The oracle's store and today's (V1Store) over one layout, both on one DuckDB thread."""
+    raw = LocalRaw(root)
+    old = OracleStore(layout, prefix="sim/", raw=raw)
+    new = V1Store(LocalSource(layout), cache, prefix="sim/", raw=raw, threads=1)
+    return old, new
+
+
 @pytest.fixture(scope="module")
-def clients(tmp_path_factory):
+def laid_out(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("v1")
     ds = Dataset(tmp / "data")
     load_fixture(ds, "demo")
@@ -43,10 +54,13 @@ def clients(tmp_path_factory):
     unattributed(ds)
     one_stream_one_id(ds)
     root = pathlib.Path(ds.write())
-    v1_layout(root, tmp / "layout")
-    old = bounded_store(root)
-    old.ingest()
-    new = V1Store(LocalSource(tmp / "layout"), tmp / "cache", prefix="sim/", raw=LocalRaw(root))
+    return root, lay_out(root), tmp
+
+
+@pytest.fixture(scope="module")
+def clients(laid_out):
+    root, layout, tmp = laid_out
+    old, new = _stores(root, layout, tmp / "cache")
     yield make_client(old), make_client(new)
     new.close()
     old.close()
@@ -73,6 +87,50 @@ def test_each_endpoint_group_matches_todays_store(clients):
     urls = _urls(old)
     # The sample, and every in-flight event drawer (the one documented difference).
     _hold(old, new, few_per_group(urls, group) + [u for u in urls if u.startswith("/api/v1/events/batch-")][:2])
+
+
+def _tables_agree(layout: pathlib.Path, today: V1Store, *, every_request: bool = True) -> Counter[str]:
+    """The oracle's tables equal today's for every entity of the layout: each session, person and
+    directory day, and a request id per key set (every key set, or enough to hold every key)."""
+    seen: Counter[str] = Counter()
+    rows: Counter[str] = Counter()
+    with Oracle(Layout(layout)) as oracle:
+        entities = list(oracle.entities(requests=False))
+        drawers = [rids[0] for rids in oracle.request_groups().values()] if every_request else oracle.request_cover()
+        entities += [("request", rid) for rid in drawers]
+        for kind, ident in entities:
+            want = oracle.tables(kind, ident)
+            assert_same(want, entity_tables(today, kind, ident), entity=f"{kind} {ident}")
+            seen[kind] += 1
+            rows.update({f"{kind}.{t}": len(v.rows) for t, v in want.items()})
+    print("entities:", dict(seen))  # noqa: T201 (the harness's coverage, in -s output)
+    seen.update({k: 1 for k, n in rows.items() if n})
+    return seen
+
+
+def test_the_oracle_derives_todays_tables_for_every_entity(laid_out):
+    # The oracle is a faithful copy of today's derivation: on every entity its tables are V1Store's.
+    root, layout, tmp = laid_out
+    _, today = _stores(root, layout, tmp / "cache-tables")
+    try:
+        seen = _tables_agree(layout, today, every_request=False)
+    finally:
+        today.close()
+    assert seen["session"] >= 5 and seen["person"] >= 4 and seen["directory"] >= 2 and seen["request"] >= 4, seen
+    # Not vacuous: every table holds rows for some entity (but pending: a layout's calls have all ended).
+    empty = [f"{k}.{t}" for k, spec in KINDS.items() for t in spec if not seen[f"{k}.{t}"]]
+    assert empty == ["request.pending"], empty
+
+
+@pytest.mark.full
+def test_the_oracle_derives_todays_drawer_tables_for_every_key_set(laid_out):
+    root, layout, tmp = laid_out
+    _, today = _stores(root, layout, tmp / "cache-drawers")
+    try:
+        seen = _tables_agree(layout, today, every_request=True)
+    finally:
+        today.close()
+    assert seen["request"] >= 20, seen
 
 
 def _hold(old, new, urls: list[str]) -> None:
@@ -117,10 +175,8 @@ def spanning(tmp_path):
     for i in range(3):
         a.event(f"{H}:00:1{i}", "tengu_feature_ok", batch="batch-span", n=i)
     root = pathlib.Path(ds.write())
-    v1_layout(root, tmp_path / "layout")
-    old = bounded_store(root)
-    old.ingest()
-    new = V1Store(LocalSource(tmp_path / "layout"), tmp_path / "cache", prefix="sim/", raw=LocalRaw(root))
+    layout = lay_out(root)
+    old, new = _stores(root, layout, tmp_path / "cache")
     yield make_client(old), make_client(new), cid_of(ds, rid)
     new.close()
     old.close()
@@ -137,6 +193,12 @@ def test_a_drawers_events_number_across_the_whole_batch(spanning):
         assert len(shown) == 1 and shown <= listed, (shown, listed)
         assert want is None or shown == want, (shown, want)
         want = shown
+
+
+def test_the_oracle_derives_todays_tables_for_a_spanning_batch(spanning):
+    old, new, _ = spanning
+    seen = _tables_agree(old.app.state.store.source.root, new.app.state.store)
+    assert seen["session"] == 2 and seen["request"] >= 2, seen
 
 
 def test_an_analytics_calls_session_is_its_batchs_earliest(spanning):

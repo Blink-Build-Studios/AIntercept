@@ -29,6 +29,7 @@ from aintercept_api.buckets import LocalSource
 from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
 from tests.builders import Dataset
+from tests.oracle.store import OracleStore
 
 SAMPLES_DIR = pathlib.Path(__file__).resolve().parents[2] / "ui" / "src" / "api" / "samples"
 
@@ -143,26 +144,34 @@ def lay_out(raw: pathlib.Path) -> pathlib.Path:
     return _laid_out[digest]
 
 
+# AINTERCEPT_TEST_STORE=oracle runs every API test on the v6 oracle's read path (tests/oracle/):
+# today's derivation, frozen, over the same layout (docs/PIPELINE.md build step 2's gate).
+ORACLE = os.environ.get("AINTERCEPT_TEST_STORE") == "oracle"
+
+
 class LaidOutStore:
     """The API's v1 store over a test's dataset: whenever the test has written more raw files, the
-    dataset is laid out again by the v5 pipeline, so a test sees exactly the files it wrote."""
+    dataset is laid out again by the v5 pipeline, so a test sees exactly the files it wrote. With
+    oracle, the oracle's store over the same layout."""
 
-    def __init__(self, root: pathlib.Path, **kwargs):
-        self.root, self.kwargs = root, kwargs
+    def __init__(self, root: pathlib.Path, *, oracle: bool = ORACLE, **kwargs):
+        self.root, self.kwargs, self.oracle = root, kwargs, oracle
         self._listing: list[tuple[str, int]] | None = None
         self._lock = threading.Lock()
-        self._store: V1Store | None = None
+        self._store: Any = None
         self._cache = pathlib.Path(tempfile.mkdtemp(prefix="aintercept-cache-"))
 
-    def _current(self) -> V1Store:
+    def _current(self) -> Any:
         with self._lock:
             listing = sorted((str(p), p.stat().st_size) for p in self.root.glob("dt=*/hour=*/instance=*/*.ndjson.gz"))
             if self._store is None or listing != self._listing:
                 if self._store is not None:
                     self._store.close()
-                self._store = V1Store(
-                    LocalSource(lay_out(self.root)), self._cache, prefix="sim/", raw=LocalRaw(self.root), **self.kwargs
-                )
+                layout, raw = lay_out(self.root), LocalRaw(self.root)
+                if self.oracle:
+                    self._store = OracleStore(layout, prefix="sim/", raw=raw, **self.kwargs)
+                else:
+                    self._store = V1Store(LocalSource(layout), self._cache, prefix="sim/", raw=raw, **self.kwargs)
                 self._listing = listing
             return self._store
 
@@ -189,7 +198,8 @@ class LaidOutStore:
 def bounded_store(root, **kwargs) -> Any:
     """The v5 store over a dataset (the endpoints' Store interface), bounded like a small
     machine, so a memory regression fails here, not in CI's runner."""
-    return LaidOutStore(pathlib.Path(root), memory_limit="512MB", threads=2, **kwargs)
+    kwargs.setdefault("threads", 2)
+    return LaidOutStore(pathlib.Path(root), memory_limit="512MB", **kwargs)
 
 
 @pytest.fixture

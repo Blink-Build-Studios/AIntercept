@@ -1,7 +1,7 @@
 # The exhaustive tests: Go's (`make test-full`: -tags full, more seeds and longer
 # captures than `make check` runs) and the API's (`make test-api-full`: every URL of
-# the parity gates, the pipeline at full length). Too slow for every PR, so nightly
-# and on demand.
+# the parity gates, the pipeline at full length; `make test-api-oracle`: every API test
+# on the v6 oracle's read path). Too slow for every PR, so nightly and on demand.
 name: full
 on:
   schedule:
@@ -42,3 +42,4 @@ jobs:
       - name: Install (lockfile must be current)
         run: cd api && uv sync --locked
       - run: make test-api-full
+      - run: make test-api-oracle
