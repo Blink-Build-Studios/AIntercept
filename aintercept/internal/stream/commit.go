@@ -26,6 +26,14 @@ type FileRef struct {
 	MinKey string `json:"min_key"`
 	MaxKey string `json:"max_key"`
 	Rows   int    `json:"rows"`
+	// Bytes is the file's size. Group (state files only) is the tier the file
+	// is a key-ranged part of: a cycle's checkpoint run, or a fold of several.
+	Bytes int64 `json:"bytes,omitempty"`
+	Group int64 `json:"group,omitempty"`
+	// Level and Seg place a base part in its tiered table base: parts of one
+	// segment share Seg and never overlap; segments are ordered oldest first.
+	Level int   `json:"level,omitempty"`
+	Seg   int64 `json:"seg,omitempty"`
 }
 
 func (f FileRef) has(key string) bool { return f.MinKey <= key && key <= f.MaxKey }

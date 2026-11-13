@@ -2,7 +2,6 @@ package state
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -117,11 +116,10 @@ type pReport struct {
 
 // promptsState is the key's indexes for the prompt tables and marks.
 type promptsState struct {
-	recs  map[string]records.Record // what it holds, by event key or call id: replayed on Decode
-	calls map[string]*pCall         // steps by call id
-	byKey map[string]*pCall         // steps by request id (the call id as rows name it)
-	hid   map[string]*pCall         // hidden calls by call id
-	steps *omap[tsID, *pCall]       // every step, in order
+	calls map[string]*pCall   // steps by call id
+	byKey map[string]*pCall   // steps by request id (the call id as rows name it)
+	hid   map[string]*pCall   // hidden calls by call id
+	steps *omap[tsID, *pCall] // every step, in order
 
 	prompts map[string]*pPrompt
 	starts  *omap[tsID, *pPrompt] // existing prompts by (start, id)
@@ -160,7 +158,7 @@ type promptsState struct {
 }
 
 func newPromptsState() *promptsState {
-	return &promptsState{recs: map[string]records.Record{}, calls: map[string]*pCall{}, byKey: map[string]*pCall{}, hid: map[string]*pCall{},
+	return &promptsState{calls: map[string]*pCall{}, byKey: map[string]*pCall{}, hid: map[string]*pCall{},
 		steps: newOmap[tsID, *pCall](lessTsID), prompts: map[string]*pPrompt{},
 		starts: newOmap[tsID, *pPrompt](lessTsID), typed: newOmap[tsID, *pPrompt](lessTsID),
 		hidden: newOmap[tsID, string](lessTsID), hidAt: map[string]string{}, pastes: newOmap[tsID, *pEv](lessTsID),
@@ -248,16 +246,13 @@ func (s *KeyState) prompts(r records.Record, d *Delta) {
 	if sid == "" {
 		return
 	}
-	ps := s.pr
 	switch {
 	case r.Kind == records.KindClientEvent && r.Event != nil:
 		e := r.Event
 		switch {
 		case e.Source == canon.ProductClaudeCode && e.SessionID == sid:
-			ps.recs["e:"+e.EventKey] = r
 			s.promptEvent(r, d, sid)
 		case e.Source == canon.ProductCodex && e.Name == "codex_turn_event" && e.SessionID == sid && e.PromptID != "":
-			ps.recs["e:"+e.EventKey] = r
 			s.codexReport(e, d, sid)
 		}
 	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
@@ -266,7 +261,6 @@ func (s *KeyState) prompts(r records.Record, d *Delta) {
 			s.dropCall(d, sid, c.CallID)
 			return
 		}
-		ps.recs["c:"+c.CallID] = r
 		s.setCall(d, sid, c.CallID, process.StepCallOfRequest(*c), true)
 	case r.Kind == records.KindCallStart:
 		c := r.Call
@@ -277,7 +271,6 @@ func (s *KeyState) prompts(r records.Record, d *Delta) {
 		if !sc.Visible() {
 			return
 		}
-		ps.recs["c:"+c.CallID] = r
 		d.Cases = append(d.Cases, CaseStepPending)
 		s.setCall(d, sid, c.CallID, sc, false)
 	}
@@ -428,17 +421,13 @@ func (s *KeyState) promptRowEvent(d *Delta, sid string, x *pEv) {
 		if tid := x.pe.ToolUseID(); tid != "" {
 			addSet(ps.useReqs, tid, f.ReqID)
 		}
-		s.restep(d, sid, ps.byReq[f.ReqID])
+		s.writeStepTools(d, sid, f.ReqID)
 	case f.IsBash && f.BashToolUseID != nil:
 		d.Cases = append(d.Cases, CaseStepBash)
 		evIndex(ps.bash, *f.BashToolUseID, x)
-		touched := map[string]bool{}
 		for rid := range ps.useReqs[*f.BashToolUseID] {
-			for id := range ps.byReq[rid] {
-				touched[id] = true
-			}
+			s.writeStepTools(d, sid, rid)
 		}
-		s.restep(d, sid, touched)
 	}
 }
 
@@ -480,7 +469,6 @@ func (s *KeyState) setCall(d *Delta, sid, raw string, sc process.StepCall, ended
 		if wasStep {
 			d.Cases = append(d.Cases, CaseStepGone)
 		}
-		delete(ps.recs, "c:"+raw)
 	}
 }
 
@@ -489,7 +477,6 @@ func (s *KeyState) dropCall(d *Delta, sid, raw string) {
 		d.Cases = append(d.Cases, CaseStepGone)
 	}
 	s.removeCall(d, sid, raw)
-	delete(s.pr.recs, "c:"+raw)
 }
 
 // removeCall takes a call's previous version out of every index and row.
@@ -703,9 +690,7 @@ func (s *KeyState) writeStep(d *Delta, sid string, c *pCall) {
 	if byClient != nil {
 		j.SuccessByClient = &byClient.pe
 	}
-	if sc.ReqID() != "" {
-		j.Tools, j.Ticks = evList(ps.tools[sc.ReqID()]), evList(ps.ticks[sc.ReqID()])
-	}
+	// Its tools are its request id's (prompt_step_tools), joined by the query.
 	st := process.BuildStep(sc, sid, j)
 	end := sc.TS()
 	if sc.End() != 0 {
@@ -713,7 +698,26 @@ func (s *KeyState) writeStep(d *Delta, sid string, c *pCall) {
 	}
 	st.EventsPendingIfLive = false
 	s.rows.put(d, TablePromptSteps, "s:"+c.key.id, StepRow{Step: st, PromptID: sc.Prompt(),
-		HasSuccess: byReq != nil || byClient != nil, PendEnd: end})
+		HasSuccess: byReq != nil || byClient != nil, PendEnd: end, ToolsRID: sc.ReqID(), DetailCalls: sc.HasDetailCalls()})
+}
+
+// writeStepTools writes a request id's tools: one row, whatever number of steps
+// show them.
+func (s *KeyState) writeStepTools(d *Delta, sid, rid string) {
+	ps := s.pr
+	bash := func(tid string) *process.PromptEvent {
+		m := ps.bash[tid]
+		if m == nil {
+			return nil
+		}
+		_, v, ok := m.Last()
+		if !ok {
+			return nil
+		}
+		return &v.pe
+	}
+	t := process.BuildStepTools(rid, evList(ps.tools[rid]), evList(ps.ticks[rid]), bash)
+	s.rows.put(d, TablePromptStepTools, "t:"+rid, StepToolsRow{SessionID: sid, RequestID: rid, Tools: t})
 }
 
 func (s *KeyState) writeBetweenCall(d *Delta, sid string, c *pCall) {
@@ -1244,27 +1248,4 @@ func nzI(n int64) *int64 {
 		return nil
 	}
 	return &n
-}
-
-// snap is the records the prompt tables hold, in a fixed order.
-func (ps *promptsState) snap() []records.Record {
-	keys := make([]string, 0, len(ps.recs))
-	for k := range ps.recs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([]records.Record, len(keys))
-	for i, k := range keys {
-		out[i] = ps.recs[k]
-	}
-	return out
-}
-
-// promptsFrom rebuilds the prompt indexes by applying their records again (the
-// rows are already Decode's; writing them again changes nothing).
-func (s *KeyState) promptsFrom(rs []records.Record) {
-	var d Delta
-	for _, r := range rs {
-		s.prompts(r, &d)
-	}
 }

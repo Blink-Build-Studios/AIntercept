@@ -17,7 +17,7 @@ import pytest
 
 FIXTURES = os.environ.get("PROMPTS_SQL_FIXTURES", "")
 SQL = Path(__file__).resolve().parents[1] / "src" / "aintercept_api" / "sql" / "prompts.sql"
-STORED = ("prompt_items", "prompt_steps", "prompt_session", "session_marks", "mark_prompt_index")
+STORED = ("prompt_items", "prompt_steps", "prompt_step_tools", "prompt_session", "session_marks", "mark_prompt_index")
 VIEWS = {
     "v_prompt_rows": ("ref_prompt_rows", "session_id, seq"),
     "v_prompt_steps": ("ref_prompt_steps", "session_id, seq, step"),

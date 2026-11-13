@@ -56,6 +56,11 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 		s := r.(StepRow)
 		steps[s.Step.SessionID] = append(steps[s.Step.SessionID], &s)
 	}
+	tools := map[[2]string]process.StepTools{}
+	for _, r := range o.rows[TablePromptStepTools] {
+		t := r.(StepToolsRow)
+		tools[[2]string{t.SessionID, t.RequestID}] = t.Tools
+	}
 	marks := map[string][]*MarkRow{}
 	for _, r := range o.rows[TableMarks] {
 		m := r.(MarkRow)
@@ -143,6 +148,15 @@ func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []pr
 			st := s.Step
 			st.Seq, st.Step = seqOf[s.PromptID], n
 			st.EventsPendingIfLive = !s.HasSuccess && (!ps.HasPromptEvent || ps.LastPromptEventNS <= s.PendEnd)
+			// Its request id's tools; its commands and exit codes too, unless its
+			// recorded bodies name its tool calls.
+			if t, ok := tools[[2]string{sid, s.ToolsRID}]; ok && s.ToolsRID != "" {
+				st.ToolsJSON, st.ToolsLiveJSON = t.ToolsJSON, t.ToolsLiveJSON
+				if !s.DetailCalls {
+					st.Commands, st.ExitCodes = t.Commands, t.ExitCodes
+					st.ContentLive, st.CommandsLive, st.ExitCodesLive = t.ContentLive, t.CommandsLive, t.ExitCodesLive
+				}
+			}
 			stepRows = append(stepRows, st)
 		}
 

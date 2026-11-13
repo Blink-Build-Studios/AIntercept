@@ -6,8 +6,9 @@
 //
 //	s := state.New(key)
 //	d := s.Apply(rec)        // upserts and tombstones, by table and row id
-//	b, _ := state.Encode(s)  // checkpoint
-//	s2, _ := state.Decode(b) // resume: s2.Apply continues exactly where s left off
+//	b, _ := state.Encode(s)            // checkpoint: the records applied since the last one
+//	s2, _ := state.Decode(b1, b2, b)   // resume from every checkpoint, oldest first
+//	m, _ := state.Merge(b1, b2)        // compaction: one checkpoint for several
 //
 // The rules every table keeps:
 //
@@ -17,6 +18,8 @@
 //   - Flat cost. A record touches only the rows it affects, found through the
 //     state's ordered indexes; nothing walks the whole key. Its work doesn't grow
 //     with how many records the key already holds.
+//   - Flat checkpoints. A checkpoint is what changed since the last one (its
+//     records), never the key's history; loading costs the same per record held.
 //   - Exact. Folding every Delta gives the rows the single-pass reference builds
 //     (process.DeriveRows) from the same records, in each table's stored shape:
 //     positions are sort keys (the query numbers them), and values that span a

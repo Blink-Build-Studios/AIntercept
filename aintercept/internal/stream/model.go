@@ -20,8 +20,14 @@ type Model interface {
 	// Apply folds one record into st (mutating it) and returns the rows that
 	// changed: upserts, and tombstones for rows that no longer exist.
 	Apply(st any, r *records.Record) Delta
+	// Encode is st's checkpoint for this cycle. Decode is a key's state from
+	// every checkpoint it has, oldest first; Merge is one checkpoint standing
+	// for several (compaction). A model whose checkpoint is its whole state
+	// keeps the last; one whose checkpoint is what changed (StateModel) keeps
+	// them all, so a cycle writes what changed, never the key's history.
 	Encode(st any) ([]byte, error)
-	Decode(key string, b []byte) (any, error)
+	Decode(key string, chunks [][]byte) (any, error)
+	Merge(key string, chunks [][]byte) ([]byte, error)
 	// Size estimates st's memory, for the state cache's byte cap.
 	Size(st any) int
 }
@@ -121,9 +127,11 @@ func (CountModel) Apply(st any, r *records.Record) Delta {
 
 func (CountModel) Encode(st any) ([]byte, error) { return json.Marshal(st) }
 
-func (CountModel) Decode(key string, b []byte) (any, error) {
+func (CountModel) Decode(key string, chunks [][]byte) (any, error) {
 	s := &countState{Key: key}
-	return s, json.Unmarshal(b, s)
+	return s, json.Unmarshal(chunks[len(chunks)-1], s)
 }
+
+func (CountModel) Merge(_ string, chunks [][]byte) ([]byte, error) { return chunks[len(chunks)-1], nil }
 
 func (CountModel) Size(any) int { return 64 }

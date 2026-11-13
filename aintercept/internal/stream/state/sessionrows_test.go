@@ -498,6 +498,7 @@ func TestSessionRowsGeneratedSequences(t *testing.T) {
 }
 
 func TestSessionRowsFlatCost(t *testing.T) {
+	heavy(t)
 	if testing.Short() {
 		t.Skip("builds a 100,000-record session")
 	}

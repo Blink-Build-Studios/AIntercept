@@ -23,6 +23,9 @@ const (
 	TablePromptItems   = "prompt_items"
 	TablePromptSteps   = "prompt_steps"
 	TablePromptSession = "prompt_session"
+	// prompt_step_tools: a request id's tools, which every step with that id
+	// shows (joined on tools_rid): a tool or progress event changes this one row.
+	TablePromptStepTools = "prompt_step_tools"
 )
 
 // PromptItem is a prompt or between row (process.PromptRow) as stored: Seq,
@@ -59,6 +62,18 @@ type StepRow struct {
 	PromptID   string             `parquet:"prompt_id"`
 	HasSuccess bool               `parquet:"has_success"`
 	PendEnd    int64              `parquet:"pend_end"`
+	// ToolsRID is the request id whose tools (prompt_step_tools) it shows; its
+	// own tools_json and tool content are empty. DetailCalls: its recorded
+	// bodies name tool calls, so its commands and exit codes are its own.
+	ToolsRID    string `parquet:"tools_rid"`
+	DetailCalls bool   `parquet:"detail_calls"`
+}
+
+// StepToolsRow is a request id's tools as its steps show them.
+type StepToolsRow struct {
+	SessionID string            `parquet:"session_id"`
+	RequestID string            `parquet:"tools_request_id"`
+	Tools     process.StepTools `parquet:"tools"`
 }
 
 // PromptSession is a session's values the prompt rows and marks join.

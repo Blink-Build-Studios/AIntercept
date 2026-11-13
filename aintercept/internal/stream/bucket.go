@@ -20,6 +20,7 @@ const (
 	DefaultCompactRuns  = 64               // run files per table before compacting
 	DefaultCompactEvery = 10 * time.Minute // compact at least this often when there are runs
 	DefaultPartRows     = 4096             // rows per base part
+	DefaultFanout       = 8                // segments per level before they fold into the next
 	GCGrace             = 10 * time.Minute // a dropped file outlives the commit that dropped it by this
 	gcEvery             = time.Minute
 	minuteLayout        = "2006-01-02T15:04"
@@ -42,6 +43,12 @@ type Bucket struct {
 	CompactRuns  int
 	CompactEvery time.Duration
 	PartRows     int
+	// Fanout is how many segments of one level fold into one of the next
+	// (tiered table bases; 0: DefaultFanout).
+	Fanout int
+	// BaseRowsWritten counts the table rows compaction has written, for cost
+	// tests: each row should be rewritten O(log N) times over its life.
+	BaseRowsWritten int64
 	// MaxFiles caps the record files one cycle reads (0: no cap), oldest first.
 	MaxFiles int
 
@@ -71,6 +78,9 @@ func (w *Bucket) defaults() {
 	}
 	if w.CompactEvery == 0 {
 		w.CompactEvery = DefaultCompactEvery
+	}
+	if w.Fanout < 2 {
+		w.Fanout = DefaultFanout
 	}
 	if w.PartRows == 0 {
 		w.PartRows = DefaultPartRows
@@ -196,6 +206,7 @@ func (w *Bucket) Cycle(ctx context.Context) (CycleStats, error) {
 	if err != nil {
 		return st, err
 	}
+	ref.Group = c.Seq << groupBits
 	c.State = append(c.State, ref)
 	w.advance(c, files)
 	if err := w.maybeCompact(ctx, c, now); err != nil {
@@ -333,25 +344,23 @@ func (w *Bucket) writeRows(ctx context.Context, cd codec, key string, rows []Row
 	if err := w.S.Put(ctx, key, b); err != nil {
 		return FileRef{}, err
 	}
-	ref := FileRef{Key: key, Rows: len(rows)}
+	ref := FileRef{Key: key, Rows: len(rows), Bytes: int64(len(b))}
 	if len(rows) > 0 {
 		ref.MinKey, ref.MaxKey = rows[0].Key, rows[len(rows)-1].Key
 	}
 	return ref, nil
 }
 
-// state is key's state: cached, else read back from the newest state file
-// that holds it, else new.
+// state is key's state: cached, else loaded from every state file that holds a
+// checkpoint of it (the base, then each cycle's run since), else new.
 func (w *Bucket) state(ctx context.Context, c *Commit, key string, read map[string][]Row) (any, error) {
 	if s, ok := w.cache.get(key); ok {
 		return s, nil
 	}
-	candidates := make([]FileRef, 0, len(c.State)+len(c.StateBase))
-	for i := len(c.State) - 1; i >= 0; i-- {
-		candidates = append(candidates, c.State[i])
-	}
-	candidates = append(candidates, c.StateBase...)
-	for _, f := range candidates {
+	files := make([]FileRef, 0, len(c.StateBase)+len(c.State))
+	files = append(append(files, c.StateBase...), c.State...)
+	var chunks [][]byte
+	for _, f := range files {
 		if !f.has(key) {
 			continue
 		}
@@ -368,11 +377,14 @@ func (w *Bucket) state(ctx context.Context, c *Commit, key string, read map[stri
 		}
 		i := sort.Search(len(rows), func(i int) bool { return rows[i].Key >= key })
 		if i < len(rows) && rows[i].Key == key {
-			w.loads++
-			return w.M.Decode(key, rows[i].Value.([]byte))
+			chunks = append(chunks, rows[i].Value.([]byte))
 		}
 	}
-	return w.M.New(key), nil
+	if len(chunks) == 0 {
+		return w.M.New(key), nil
+	}
+	w.loads++
+	return w.M.Decode(key, chunks)
 }
 
 func sortedTables(d map[string][]Row) []string {
@@ -384,14 +396,15 @@ func sortedTables(d map[string][]Row) []string {
 	return out
 }
 
-// maybeCompact folds a table's runs into a new base generation once there are
+// maybeCompact folds each table's runs into its tiered base once there are
 // CompactRuns of them (or CompactEvery has passed), and the state runs into a
 // state base the same way. Replaced files become garbage.
 func (w *Bucket) maybeCompact(ctx context.Context, c *Commit, now time.Time) error {
 	return w.compact(ctx, c, now, false)
 }
 
-// Compact folds everything into a new base generation now, as its own commit.
+// Compact folds everything into one base segment now, as its own commit: an
+// explicit maintenance step (it rewrites the whole base), never the cycle's.
 func (w *Bucket) Compact(ctx context.Context) error {
 	w.defaults()
 	if !w.loaded {
@@ -423,46 +436,181 @@ func (w *Bucket) Compact(ctx context.Context) error {
 }
 
 func (w *Bucket) compact(ctx context.Context, c *Commit, now time.Time, force bool) error {
-	due := force || (now.Sub(c.LastCompact) >= w.CompactEvery && len(c.State) > 1)
+	timeDue := now.Sub(c.LastCompact) >= w.CompactEvery && len(c.State) > 1
+	stateDue := force || timeDue || len(c.State) >= w.CompactRuns
 	for _, runs := range c.Runs {
 		if len(runs) >= w.CompactRuns {
-			due = true
+			stateDue = true
 		}
 	}
-	if len(c.State) >= w.CompactRuns {
-		due = true
+	after := now.Add(GCGrace)
+	for _, t := range sortedTables(refMap(c)) {
+		var err error
+		if force {
+			err = w.foldAll(ctx, c, t, after)
+		} else {
+			err = w.foldTable(ctx, c, t, timeDue, after)
+		}
+		if err != nil {
+			return err
+		}
 	}
-	if !due {
+	if !stateDue {
 		return nil
 	}
 	gen := c.Gen + 1
-	after := now.Add(GCGrace)
-	for _, t := range sortedTables(refMap(c)) {
-		tb, err := TableFor(t)
-		if err != nil {
-			return err
-		}
-		parts, err := w.merge(ctx, tb, append(append([]FileRef(nil), c.Base[t]...), c.Runs[t]...),
-			func(p int) string { return w.L.BaseKey(t, w.B, gen, w.Epoch, c.Seq, p) })
-		if err != nil {
-			return err
-		}
-		for _, f := range append(c.Base[t], c.Runs[t]...) {
-			c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
-		}
-		c.Base[t], c.Runs[t] = parts, nil
+	if err := w.foldState(ctx, c, gen, after); err != nil {
+		return err
 	}
-	parts, err := w.merge(ctx, stateCodec{}, append(append([]FileRef(nil), c.StateBase...), c.State...),
-		func(p int) string { return w.L.StateBaseKey(w.B, gen, w.Epoch, c.Seq, p) })
+	c.Gen, c.LastCompact = gen, now
+	return nil
+}
+
+// segment is one fold's output in a tiered table base: key-ranged parts that
+// never overlap. A base is its segments oldest first: level descending, then
+// creation order, so reading them in order (newest wins) is the table.
+type segment struct {
+	level int
+	seg   int64
+	parts []FileRef
+}
+
+func segmentsOf(c *Commit, table string) []segment {
+	var out []segment
+	for _, p := range c.Base[table] {
+		if n := len(out); n > 0 && out[n-1].seg == p.Seg && out[n-1].level == p.Level {
+			out[n-1].parts = append(out[n-1].parts, p)
+			continue
+		}
+		out = append(out, segment{level: p.Level, seg: p.Seg, parts: []FileRef{p}})
+	}
+	return out
+}
+
+func flatten(segs []segment) []FileRef {
+	var out []FileRef
+	for _, s := range segs {
+		out = append(out, s.parts...)
+	}
+	return out
+}
+
+// foldTable folds a table's runs into a new level-0 segment once there are
+// CompactRuns of them (or the time is due), then, while a level holds Fanout
+// segments, folds that level into one segment of the next. A row is rewritten
+// once per level it climbs: O(log N) times over its life. Tombstones are kept
+// unless the fold's output is the bottom segment (nothing older remains for
+// them to remove).
+func (w *Bucket) foldTable(ctx context.Context, c *Commit, t string, timeDue bool, after time.Time) error {
+	runs := c.Runs[t]
+	if len(runs) == 0 || (len(runs) < w.CompactRuns && !timeDue) {
+		return nil
+	}
+	tb, err := TableFor(t)
 	if err != nil {
 		return err
 	}
-	for _, f := range append(c.StateBase, c.State...) {
+	segs := segmentsOf(c, t)
+	s, err := w.writeSegment(ctx, c, tb, t, runs, 0, len(segs) > 0)
+	if err != nil {
+		return err
+	}
+	for _, f := range runs {
 		c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
 	}
-	c.StateBase, c.State = parts, nil
-	c.Gen, c.LastCompact = gen, now
+	if len(s.parts) > 0 {
+		segs = append(segs, s)
+	}
+	c.Runs[t] = nil
+	for level := 0; ; level++ {
+		lo, hi, older := -1, -1, false
+		for i, s := range segs {
+			switch {
+			case s.level == level && lo < 0:
+				lo, hi = i, i+1
+			case s.level == level:
+				hi = i + 1
+			case s.level > level:
+				older = true
+			}
+		}
+		if lo < 0 {
+			if !older {
+				break
+			}
+			continue
+		}
+		if hi-lo < w.Fanout {
+			continue
+		}
+		var files []FileRef
+		for _, s := range segs[lo:hi] {
+			files = append(files, s.parts...)
+		}
+		merged, err := w.writeSegment(ctx, c, tb, t, files, level+1, older)
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
+		}
+		next := append([]segment(nil), segs[:lo]...)
+		if len(merged.parts) > 0 {
+			next = append(next, merged)
+		}
+		segs = append(next, segs[hi:]...)
+	}
+	c.Base[t] = flatten(segs)
+	if len(c.Base[t]) == 0 {
+		delete(c.Base, t)
+	}
 	return nil
+}
+
+// foldAll folds a table's whole base and runs into one bottom segment.
+func (w *Bucket) foldAll(ctx context.Context, c *Commit, t string, after time.Time) error {
+	files := append(append([]FileRef(nil), c.Base[t]...), c.Runs[t]...)
+	if len(files) == 0 {
+		return nil
+	}
+	tb, err := TableFor(t)
+	if err != nil {
+		return err
+	}
+	level := 0
+	for _, s := range segmentsOf(c, t) {
+		if s.level > level {
+			level = s.level
+		}
+	}
+	s, err := w.writeSegment(ctx, c, tb, t, files, level, false)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
+	}
+	c.Base[t], c.Runs[t] = flatten([]segment{s}), nil
+	if len(c.Base[t]) == 0 {
+		delete(c.Base, t)
+	}
+	return nil
+}
+
+// writeSegment merges files (oldest first) into a new segment at level, under
+// the commit's next generation number (so every file name is the writer's own).
+func (w *Bucket) writeSegment(ctx context.Context, c *Commit, tb *Table, t string, files []FileRef, level int, keepTombs bool) (segment, error) {
+	c.Gen++
+	gen := c.Gen
+	parts, err := w.merge(ctx, tb, files, func(p int) string { return w.L.BaseKey(t, w.B, gen, w.Epoch, c.Seq, p) }, keepTombs)
+	if err != nil {
+		return segment{}, err
+	}
+	for i := range parts {
+		parts[i].Level, parts[i].Seg = level, gen
+		w.BaseRowsWritten += int64(parts[i].Rows)
+	}
+	return segment{level: level, seg: gen, parts: parts}, nil
 }
 
 func refMap(c *Commit) map[string][]Row {
@@ -476,10 +624,10 @@ func refMap(c *Commit) map[string][]Row {
 	return m
 }
 
-// merge reads files oldest first, folds them (newest wins, tombstones drop)
-// and writes the result in key-ranged parts of at most PartRows rows. A key's
-// rows never straddle two parts.
-func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func(int) string) ([]FileRef, error) {
+// merge reads files oldest first, folds them (newest wins; tombstones drop
+// unless keepTombs) and writes the result in key-ranged parts of at most
+// PartRows rows. A key's rows never straddle two parts.
+func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func(int) string, keepTombs bool) ([]FileRef, error) {
 	sets := make([][]Row, 0, len(files))
 	for _, f := range files {
 		raw, err := w.S.Get(ctx, f.Key)
@@ -492,7 +640,7 @@ func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func
 		}
 		sets = append(sets, rows)
 	}
-	rows := MergeRows(sets...)
+	rows := collapse(sets, keepTombs)
 	var out []FileRef
 	for start, part := 0, 0; start < len(rows); part++ {
 		end := start + w.PartRows
@@ -510,6 +658,188 @@ func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func
 		start = end
 	}
 	return out, nil
+}
+
+// State is folded in tiers, so a key's checkpoints never pile up and none is
+// rewritten often: the state files are groups (a cycle's run, or a fold of
+// several), oldest first; when the newest tierFanout groups are of one size
+// class (bytes, in powers of tierFanout), or a group is smaller than the one
+// after it, they're folded into one. A key's state is then spread over
+// O(log N) groups (a cold load reads one part of each), and each checkpoint is
+// rewritten O(log N) times over its life.
+const (
+	tierFanout = 4
+	tierUnit   = 4 << 10 // bytes: class 0 is anything smaller
+	groupBits  = 20      // a group id is the commit's seq, then which fold of it
+)
+
+type stateGroup struct {
+	id    int64
+	parts []FileRef
+	bytes int64
+}
+
+func tierClass(b int64) int {
+	c := 0
+	for b >= tierUnit {
+		b /= tierFanout
+		c++
+	}
+	return c
+}
+
+// stateGroups is the state files as groups, oldest first.
+func stateGroups(files []FileRef) []stateGroup {
+	var out []stateGroup
+	for _, f := range files {
+		b := f.Bytes
+		if b == 0 {
+			b = int64(f.Rows) * 1024 // written before sizes were recorded
+		}
+		if n := len(out); n > 0 && out[n-1].id == f.Group {
+			out[n-1].parts = append(out[n-1].parts, f)
+			out[n-1].bytes += b
+			continue
+		}
+		out = append(out, stateGroup{id: f.Group, parts: []FileRef{f}, bytes: b})
+	}
+	return out
+}
+
+// foldState folds the state groups in tiers (base groups, then this
+// compaction's cycle runs) and leaves the result as the commit's state base.
+func (w *Bucket) foldState(ctx context.Context, c *Commit, gen int64, after time.Time) error {
+	var stack []stateGroup
+	fold, part := int64(0), 0
+	for _, g := range stateGroups(append(append([]FileRef(nil), c.StateBase...), c.State...)) {
+		stack = append(stack, g)
+		for {
+			n, k := len(stack), 0
+			switch {
+			case n >= tierFanout && sameClass(stack[n-tierFanout:]):
+				k = tierFanout
+			case n >= 2 && tierClass(stack[n-2].bytes) < tierClass(stack[n-1].bytes):
+				k = 2
+			}
+			if k == 0 {
+				break
+			}
+			fold++
+			merged, err := w.mergeGroups(ctx, stack[n-k:], (c.Seq<<groupBits)|fold,
+				func() string { p := part; part++; return w.L.StateBaseKey(w.B, gen, w.Epoch, c.Seq, p) })
+			if err != nil {
+				return err
+			}
+			for _, old := range stack[n-k:] {
+				for _, f := range old.parts {
+					c.Garbage = append(c.Garbage, Garbage{Key: f.Key, After: after})
+				}
+			}
+			stack = append(stack[:n-k], merged)
+		}
+	}
+	c.StateBase, c.State = nil, nil
+	for _, g := range stack {
+		c.StateBase = append(c.StateBase, g.parts...)
+	}
+	return nil
+}
+
+func sameClass(gs []stateGroup) bool {
+	for _, g := range gs[1:] {
+		if tierClass(g.bytes) != tierClass(gs[0].bytes) {
+			return false
+		}
+	}
+	return true
+}
+
+// mergeGroups folds groups (oldest first) into one: per key, the model's merge
+// of its checkpoints in order, written in key-ranged parts. It reads one part
+// of each group at a time, so its memory is a few parts, not the groups.
+func (w *Bucket) mergeGroups(ctx context.Context, gs []stateGroup, id int64, name func() string) (stateGroup, error) {
+	its := make([]*partIter, len(gs))
+	for i, g := range gs {
+		its[i] = &partIter{w: w, ctx: ctx, refs: g.parts}
+	}
+	out := stateGroup{id: id}
+	var buf []Row
+	flush := func() error {
+		if len(buf) == 0 {
+			return nil
+		}
+		ref, err := w.writeRows(ctx, stateCodec{}, name(), buf)
+		if err != nil {
+			return err
+		}
+		ref.Group = id
+		out.parts = append(out.parts, ref)
+		out.bytes += ref.Bytes
+		buf = nil
+		return nil
+	}
+	for {
+		key, found := "", false
+		for _, it := range its {
+			r, err := it.peek()
+			if err != nil {
+				return out, err
+			}
+			if r != nil && (!found || r.Key < key) {
+				key, found = r.Key, true
+			}
+		}
+		if !found {
+			break
+		}
+		var chunks [][]byte
+		for _, it := range its {
+			if r, _ := it.peek(); r != nil && r.Key == key {
+				chunks = append(chunks, r.Value.([]byte))
+				it.i++
+			}
+		}
+		b := chunks[0]
+		if len(chunks) > 1 {
+			var err error
+			if b, err = w.M.Merge(key, chunks); err != nil {
+				return out, err
+			}
+		}
+		buf = append(buf, Row{Key: key, ID: key, Value: b})
+		if len(buf) >= w.PartRows {
+			if err := flush(); err != nil {
+				return out, err
+			}
+		}
+	}
+	return out, flush()
+}
+
+// partIter reads a group's rows in key order, one part at a time.
+type partIter struct {
+	w    *Bucket
+	ctx  context.Context
+	refs []FileRef
+	rows []Row
+	i    int
+}
+
+func (it *partIter) peek() (*Row, error) {
+	for it.i >= len(it.rows) {
+		if len(it.refs) == 0 {
+			return nil, nil
+		}
+		raw, err := it.w.S.Get(it.ctx, it.refs[0].Key)
+		if err != nil {
+			return nil, fmt.Errorf("compact %s: %w", it.refs[0].Key, err)
+		}
+		if it.rows, err = (stateCodec{}).Decode(raw); err != nil {
+			return nil, err
+		}
+		it.refs, it.i = it.refs[1:], 0
+	}
+	return &it.rows[it.i], nil
 }
 
 func pruneGarbage(gs, deleted []Garbage) []Garbage {

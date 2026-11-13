@@ -715,6 +715,7 @@ func TestRequestsAtomic(t *testing.T) {
 
 // Every order of a few records ends in the reference's request log.
 func TestRequestsShortSequencesEveryOrder(t *testing.T) {
+	heavy(t)
 	sets := map[string]func() []records.Record{
 		"start, end, report, a second report": func() []records.Record {
 			c := rqCall("c1", "s1", 1000, "p1", "r1")
@@ -833,6 +834,7 @@ func generateRequests(rng *rand.Rand, n, per int) []records.Record {
 }
 
 func TestRequestsGeneratedSequences(t *testing.T) {
+	heavy(t)
 	for seed := int64(1); seed <= 20/seedFrac; seed++ {
 		rng := rand.New(rand.NewSource(seed))
 		batchN = map[string]int64{}
@@ -857,6 +859,7 @@ func TestRequestsGeneratedSequences(t *testing.T) {
 
 // A record's work doesn't grow with how many the session already holds.
 func TestRequestsFlatCost(t *testing.T) {
+	heavy(t)
 	if testing.Short() {
 		t.Skip("builds a 100,000-record session")
 	}

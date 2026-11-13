@@ -37,6 +37,7 @@ STATE_TABLES = (
     "dim_codex_plan",
     "prompt_items",
     "prompt_steps",
+    "prompt_step_tools",
     "prompt_session",
     "session_marks",
     "mark_prompt_index",
@@ -77,7 +78,8 @@ STATE_SCHEMA: dict[str, str] = {
     "prompt_index": "session_id VARCHAR, prompt_id VARCHAR, prompt_index BIGINT, ts_ns BIGINT, event_key VARCHAR",
     "prompt_items": "\"row\" STRUCT(session_id VARCHAR, seq BIGINT, t_ns BIGINT, \"type\" VARCHAR, typed BOOLEAN, session_last_ns BIGINT, prompt_id VARCHAR, prompt_index BIGINT, duration_turn_ms DOUBLE, duration_report_ms DOUBLE, open_tail BOOLEAN, unfinished_max_ns BIGINT, text_retained BOOLEAN, \"text\" VARCHAR, text_chars BIGINT, pasted_bytes BIGINT, images BIGINT, steps BIGINT, tokens_in BIGINT, tokens_out BIGINT, tool_counts_json VARCHAR, frustrated BOOLEAN, interrupted BOOLEAN, destructive BIGINT, turn_report_json VARCHAR, hidden_json VARCHAR, between_kind VARCHAR, detail VARCHAR, request_id VARCHAR, tokens_from BIGINT, tokens_to BIGINT, wait_ms DOUBLE), \"group\" INTEGER, ord_corr VARCHAR, ord_seq BIGINT, ord_row_ns BIGINT, ord_name VARCHAR, ord_md VARCHAR, ord_key VARCHAR, has_input BOOLEAN, has_turn_end BOOLEAN, report_status BOOLEAN",  # noqa: E501
     "prompt_session": "session_id VARCHAR, product VARCHAR, last_ns BIGINT, has_prompt_event BOOLEAN, last_prompt_event_ns BIGINT",  # noqa: E501
-    "prompt_steps": "step STRUCT(session_id VARCHAR, seq BIGINT, step BIGINT, request_id VARCHAR, t_ns BIGINT, end_ns BIGINT, kind VARCHAR, model VARCHAR, request_class VARCHAR, tokens_input BIGINT, tokens_cache_read BIGINT, tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT, tokens_cache_write_1h BIGINT, tokens_output BIGINT, tokens_accuracy VARCHAR, duration_ms DOUBLE, ttft_ms DOUBLE, stop_reason VARCHAR, cost_usd DOUBLE, failed BOOLEAN, events_pending_if_live BOOLEAN, agent_type VARCHAR, tools_json VARCHAR, tools_live_json VARCHAR, does VARCHAR, commands VARCHAR[], exit_codes BIGINT[], content_live BOOLEAN, commands_live VARCHAR[], exit_codes_live BIGINT[], patches_json VARCHAR, \"text\" VARCHAR, usage_missing VARCHAR), prompt_id VARCHAR, has_success BOOLEAN, pend_end BIGINT",  # noqa: E501
+    "prompt_step_tools": "session_id VARCHAR, tools_request_id VARCHAR, tools STRUCT(tools_json VARCHAR, tools_live_json VARCHAR, commands VARCHAR[], exit_codes BIGINT[], content_live BOOLEAN, commands_live VARCHAR[], exit_codes_live BIGINT[])",  # noqa: E501
+    "prompt_steps": "step STRUCT(session_id VARCHAR, seq BIGINT, step BIGINT, request_id VARCHAR, t_ns BIGINT, end_ns BIGINT, kind VARCHAR, model VARCHAR, request_class VARCHAR, tokens_input BIGINT, tokens_cache_read BIGINT, tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT, tokens_cache_write_1h BIGINT, tokens_output BIGINT, tokens_accuracy VARCHAR, duration_ms DOUBLE, ttft_ms DOUBLE, stop_reason VARCHAR, cost_usd DOUBLE, failed BOOLEAN, events_pending_if_live BOOLEAN, agent_type VARCHAR, tools_json VARCHAR, tools_live_json VARCHAR, does VARCHAR, commands VARCHAR[], exit_codes BIGINT[], content_live BOOLEAN, commands_live VARCHAR[], exit_codes_live BIGINT[], patches_json VARCHAR, \"text\" VARCHAR, usage_missing VARCHAR), prompt_id VARCHAR, has_success BOOLEAN, pend_end BIGINT, tools_rid VARCHAR, detail_calls BOOLEAN",  # noqa: E501
     "request_missed": "session_id VARCHAR, event_key VARCHAR, req_id VARCHAR, client_req_id VARCHAR, \"row\" STRUCT(person_id VARCHAR, request_id VARCHAR, ts_ns BIGINT, kind VARCHAR, agent VARCHAR, client VARCHAR, hidden_kind VARCHAR, session_id VARCHAR, session_label VARCHAR, prompt_index BIGINT, \"method\" VARCHAR, path VARCHAR, detail VARCHAR, status BIGINT, status_err BOOLEAN, duration_ms DOUBLE, retries BIGINT, bytes_up BIGINT, bytes_down BIGINT, background BOOLEAN, captured BOOLEAN, status_text VARCHAR, stop_reason VARCHAR, ttft_ms DOUBLE, tokens_input BIGINT, tokens_cache_read BIGINT, tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT, tokens_cache_write_1h BIGINT, tokens_output BIGINT, tokens_accuracy VARCHAR, content_encoding VARCHAR, error_message VARCHAR, error_after_ms DOUBLE, error_bytes_received BIGINT, error_retries BIGINT, error_retry_succeeded_ns BIGINT, model VARCHAR, effort VARCHAR, step_index BIGINT, tool_calls VARCHAR[], usage_missing VARCHAR, \"text\" VARCHAR)",  # noqa: E501
     "request_reports": "session_id VARCHAR, ts_ns BIGINT, event_key VARCHAR, req_id VARCHAR, client_req_id VARCHAR, ttft_ms DOUBLE, cache_write_5m BIGINT, cache_write_1h BIGINT",  # noqa: E501
     "request_txs": "call_id VARCHAR, correlation_id VARCHAR, key_hash VARCHAR, own_session VARCHAR, prompt_id VARCHAR, req_id VARCHAR, client_req_id VARCHAR, kind VARCHAR, hidden_kind VARCHAR, product VARCHAR, is_tx BOOLEAN, \"row\" STRUCT(person_id VARCHAR, request_id VARCHAR, ts_ns BIGINT, kind VARCHAR, agent VARCHAR, client VARCHAR, hidden_kind VARCHAR, session_id VARCHAR, session_label VARCHAR, prompt_index BIGINT, \"method\" VARCHAR, path VARCHAR, detail VARCHAR, status BIGINT, status_err BOOLEAN, duration_ms DOUBLE, retries BIGINT, bytes_up BIGINT, bytes_down BIGINT, background BOOLEAN, captured BOOLEAN, status_text VARCHAR, stop_reason VARCHAR, ttft_ms DOUBLE, tokens_input BIGINT, tokens_cache_read BIGINT, tokens_cache_write BIGINT, tokens_cache_write_5m BIGINT, tokens_cache_write_1h BIGINT, tokens_output BIGINT, tokens_accuracy VARCHAR, content_encoding VARCHAR, error_message VARCHAR, error_after_ms DOUBLE, error_bytes_received BIGINT, error_retries BIGINT, error_retry_succeeded_ns BIGINT, model VARCHAR, effort VARCHAR, step_index BIGINT, tool_calls VARCHAR[], usage_missing VARCHAR, \"text\" VARCHAR)",  # noqa: E501
@@ -129,7 +131,14 @@ SESSION_INPUTS = (
     "session_edges",
     "session_title_calls",
 )
-_PROMPT_INPUTS = ("prompt_items", "prompt_steps", "prompt_session", "session_marks", "mark_prompt_index")
+_PROMPT_INPUTS = (
+    "prompt_items",
+    "prompt_steps",
+    "prompt_step_tools",
+    "prompt_session",
+    "session_marks",
+    "mark_prompt_index",
+)
 _PROMPTS_SQL = importlib.resources.files("aintercept_api").joinpath("sql/prompts.sql").read_text()
 _PROMPTS_ON_STORED = re.sub(r"\b(" + "|".join(_PROMPT_INPUTS) + r")\b", r"st_\1", _PROMPTS_SQL)
 

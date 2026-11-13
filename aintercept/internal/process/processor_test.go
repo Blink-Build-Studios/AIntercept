@@ -371,6 +371,7 @@ func TestIncrementalMatchesRebuild(t *testing.T) {
 // here, with fewer, bigger runs; the five-seed, smallest-runs version runs with
 // -tags full.
 func TestIncrementalDerivingEveryRun(t *testing.T) {
+	heavy(t)
 	t.Parallel() // slow under -race: let it overlap the others
 	c := newCapture()
 	want, _ := rebuildDeriving(t, c)
@@ -621,6 +622,7 @@ func TestKeysResolve(t *testing.T) {
 // A session grows as its files arrive: each poll's tables are what the files
 // so far say, and the session's row is rewritten, not duplicated.
 func TestSessionsGrowAsDataArrives(t *testing.T) {
+	heavy(t)
 	ctx := context.Background()
 	c := newCapture()
 	raw, out := newMem(), newMem()
@@ -678,6 +680,7 @@ func TestSessionsGrowAsDataArrives(t *testing.T) {
 // A run that dies before its commit leaves nothing readers see; the next
 // start removes its files and does the work again.
 func TestCrashBeforeCommitIsRedone(t *testing.T) {
+	heavy(t)
 	ctx := context.Background()
 	c := newCapture()
 	want, _ := rebuild(t, c)
@@ -730,6 +733,7 @@ func TestCrashBeforeCommitIsRedone(t *testing.T) {
 // reapply the failed run's rows on top of the state they already changed: that
 // lost the run's requests (their end markers were set) and counted twice.
 func TestFailedWriteIsRetriedInPlace(t *testing.T) {
+	heavy(t)
 	ctx := context.Background()
 	c := newCapture()
 	want, _ := rebuild(t, c)
@@ -860,6 +864,7 @@ func TestOlderRowsTakeTimingFromHeaders(t *testing.T) {
 // A call's header rows arriving after its complete row (a later file, a later
 // run) don't open a transaction that later expires into a second row.
 func TestLateHeaderRowsAreNotWrittenTwice(t *testing.T) {
+	heavy(t)
 	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	c := newCapture()
@@ -922,6 +927,7 @@ func TestLateHeaderRowsAreNotWrittenTwice(t *testing.T) {
 
 // Replaced files stay readable for the grace period, then go.
 func TestReplacedFilesAreCollectedAfterGrace(t *testing.T) {
+	heavy(t)
 	t.Parallel() // slow under -race: let it overlap the others
 	ctx := context.Background()
 	c := newCapture()

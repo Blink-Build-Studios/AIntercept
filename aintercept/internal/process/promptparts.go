@@ -158,6 +158,49 @@ type StepJoins struct {
 	Results                       func(callID string) ([]int64, bool)
 }
 
+// StepTools is a request id's tools as its steps show them: every step with
+// that request id shows the same, so they're stored once, by request id, and
+// joined (a tool or progress event then changes one row, however many steps
+// share the id). The commands and exit codes are the steps' with no recorded
+// bodies.
+type StepTools struct {
+	ToolsJSON     string   `parquet:"tools_json"`
+	ToolsLiveJSON *string  `parquet:"tools_live_json,optional"`
+	Commands      []string `parquet:"commands,list"`
+	ExitCodes     []int64  `parquet:"exit_codes,list"`
+	ContentLive   bool     `parquet:"content_live"`
+	CommandsLive  []string `parquet:"commands_live,list"`
+	ExitCodesLive []int64  `parquet:"exit_codes_live,list"`
+}
+
+// BuildStepTools is a request id's tools: its finished tools and progress ticks
+// (in the session's event order), and its Bash events by tool use id.
+func BuildStepTools(reqID string, tools, ticks []PromptEvent, bash func(toolUseID string) *PromptEvent) StepTools {
+	jj := &joins{tools: map[string][]*promptEvent{}, ticks: map[string][]*promptEvent{}, bash: map[string]*promptEvent{}}
+	for _, e := range tools {
+		jj.tools[reqID] = append(jj.tools[reqID], e.e)
+		addBash(jj, e, bash)
+	}
+	for _, e := range ticks {
+		jj.ticks[reqID] = append(jj.ticks[reqID], e.e)
+		addBash(jj, e, bash)
+	}
+	t, live := jj.toolsOf(reqID)
+	out := StepTools{ToolsJSON: marshalJSON(t)}
+	if len(live) > len(t) {
+		out.ToolsLiveJSON = ptr(marshalJSON(live))
+	}
+	out.Commands, out.ExitCodes, out.ContentLive, out.CommandsLive, out.ExitCodesLive = toolContent(t, live)
+	if !out.ContentLive {
+		out.CommandsLive, out.ExitCodesLive = []string{}, []int64{}
+	}
+	return out
+}
+
+// HasDetailCalls says whether its recorded bodies name tool calls: its
+// commands and exit codes are then its own, not its request id's tools'.
+func (s StepCall) HasDetailCalls() bool { return s.c.detail != nil && len(s.c.detail.calls) > 0 }
+
 // BuildStep is a step's row (session.py _step), its number and prompt's seq left
 // zero (the query numbers them) and events_pending_if_live as if no event
 // followed it (the query applies the session's last prompt-row event).
