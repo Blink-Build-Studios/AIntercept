@@ -73,7 +73,13 @@ def from_store(store: Store, root: pathlib.Path, prefix: str = "") -> None:
     store.ingest()
     con = duckdb.connect()
     files: dict[int, tuple[dict[str, list[str]], dict[str, list[str]]]] = {}
-    for table in (*FACTS, *SNAPSHOTS, "probes"):
+    # request_txs as the processor writes it (every non-synthetic call: its product, and its
+    # request-log row's time), the directory's source for /overview's request count.
+    store._con.execute(
+        "CREATE OR REPLACE TEMP TABLE request_txs AS SELECT call_id, product, {'ts_ns': ts} AS row "
+        "FROM calls WHERE NOT synthetic"
+    )
+    for table in (*FACTS, *SNAPSHOTS, "probes", "request_txs"):
         how, col = ROUTING[table]
         stage = root / ".stage" / f"{table}.parquet"
         stage.parent.mkdir(parents=True, exist_ok=True)
@@ -94,9 +100,26 @@ def from_store(store: Store, root: pathlib.Path, prefix: str = "") -> None:
             write_rows(root, k2, con, _GHOST, [b])  # which this run tombstones
             base[table] = [k0]
             runs[table] = [k1, k2]
+    # /status's stats, as the processor's commits carry them (every bucket's the same here: the
+    # reader takes the newest, earliest and any across them).
+    first, earliest = store._con.execute(
+        """SELECT min(ts) FILTER (WHERE NOT synthetic), min(ts)
+           FROM (SELECT ts, synthetic FROM calls UNION ALL SELECT row_ns, false FROM analytics
+                 UNION ALL SELECT first_ns, true FROM probes)"""
+    ).fetchall()[0]
     for b, (base, runs) in files.items():
-        # The newest data time and the retention mode, as the processor's commits carry them.
-        write_commit(root, prefix, b, 3, base, runs, newest_ns=store.newest_ns, content_retained=store.content_retained)
+        write_commit(
+            root,
+            prefix,
+            b,
+            3,
+            base,
+            runs,
+            newest_ns=store.newest_ns,
+            content_retained=store.content_retained,
+            first_call_ns=first or 0,
+            earliest_ns=earliest or 0,
+        )
 
 
 __all__ = ["BUCKET_BITS", "commit_key", "from_store", "table_key", "write_commit", "write_rows"]

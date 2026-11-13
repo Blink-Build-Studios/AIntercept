@@ -92,6 +92,9 @@ ROUTING: dict[str, tuple[str, str]] = {
     "people": ("*", ""),
     "pending": ("*", ""),
     "accounts": ("*", ""),
+    # Every non-synthetic call a key holds (the stream state's request_txs): read whole by the
+    # directory, for /overview's request count.
+    "request_txs": ("*", ""),
     # The dimension tables (§4.6): small, read whole; the person tables are built from them.
     **{t: ("*", "") for t in DIMENSIONS},
     # session_rows' inputs (sql/session_rows.sql): a session's own rows, and the small tables
@@ -358,6 +361,8 @@ class Commit:
     runs: dict[str, list[str]]
     newest_ns: int | None = None
     content_retained: bool | None = None
+    first_call_ns: int | None = None
+    earliest_ns: int | None = None
 
     def files(self, table: str) -> list[str]:
         """The table's files, oldest first: the base, then the runs since."""
@@ -376,8 +381,10 @@ def _parse_commit(key: str, body: bytes) -> Commit:
         key=key,
         base=keys(m.get("base")),
         runs=keys(m.get("runs")),
-        newest_ns=m.get("newest_ns"),
+        newest_ns=m.get("newest_ns") or None,
         content_retained=m.get("content_retained"),
+        first_call_ns=m.get("first_call_ns") or None,
+        earliest_ns=m.get("earliest_ns") or None,
     )
 
 
@@ -419,15 +426,24 @@ class CommitLog:
 
 @dataclass(frozen=True)
 class Scope:
-    """Which keys a request reads, per kind: None is every bucket."""
+    """Which keys a request reads, per kind (None: every bucket), and which tables (None: every
+    one but the raw tables; raw: those too, the drawer's fallback)."""
 
     sessions: frozenset[str] | set[str] | None = None
     people: frozenset[str] | set[str] | None = None
     accounts: frozenset[str] | set[str] | None = None
+    tables: frozenset[str] | None = None
+    raw: bool = False
 
     @classmethod
     def everything(cls) -> "Scope":
         return cls()
+
+    def names(self, routed: dict[str, tuple[str, str]]) -> list[str]:
+        """The tables this scope loads, of those the layout routes."""
+        if self.tables is not None:
+            return [t for t in routed if t in self.tables]
+        return [t for t in routed if self.raw or t not in RAW_TABLES]
 
     def buckets(self, prefix: str) -> frozenset[int] | None:
         """The buckets a table routed by prefix comes from (None: all of them)."""
@@ -438,11 +454,31 @@ class Scope:
         def f(x: Any) -> Any:
             return None if x is None else tuple(sorted(x))
 
-        return (f(self.sessions), f(self.people), f(self.accounts))
+        return (f(self.sessions), f(self.people), f(self.accounts), f(self.tables), self.raw)
 
 
 _SESSION_PATH = re.compile(r"^/api/v1/sessions/([^/]+)")
 _PERSON_PATH = re.compile(r"^/api/v1/people/([^/]+)")
+_DRAWER_PATH = re.compile(r"^/api/v1/(requests|events)/")
+
+# What the directory (/people, /overview) reads: the person and dimension tables and the
+# per-session summary rows (and the calls' times, for /overview's request count), never the
+# raw tables. /status reads no table: the commits carry its stats.
+DIRECTORY_TABLES = frozenset(
+    {
+        "person_sessions",
+        "person_map",
+        "account_facts",
+        "account_devices",
+        "accounts",
+        "session_rows",
+        "session_marks",
+        "call_tool_uses",
+        "request_txs",
+        *DIMENSIONS,
+        *SESSION_INPUTS,
+    }
+)
 
 
 @dataclass
@@ -468,6 +504,7 @@ class BucketStore:
         empty: dict[str, str] | None = None,
         views: str | None = None,
         raw: RawSource | None = None,
+        drawer_raw: bool = True,
         keep_keys: bool = False,
         clock: Callable[[], float] = time.monotonic,
         cache_bytes: int = 2 << 30,
@@ -480,6 +517,9 @@ class BucketStore:
         self.empty = empty if empty is not None else (legacy._EMPTY if tables is None else {})
         self.views = views if views is not None else (legacy.VIEWS if tables is None else "")
         self.raw = raw
+        # The drawer's raw fallback: until it reads the per-call detail objects and per-key
+        # outputs (§4.9), its scope loads the raw tables, the one scope that does.
+        self.drawer_raw = drawer_raw
         self.cache = ObjectCache(source, pathlib.Path(cache_dir), cache_bytes)
         self.clock, self.keep_keys = clock, keep_keys
         self._logs: dict[int, CommitLog] = {}
@@ -502,13 +542,22 @@ class BucketStore:
 
     # --- scopes --------------------------------------------------------------------------------
 
-    def scope_for_path(self, path: str) -> Scope:
-        """A request path's scope: a session's endpoints read its bucket, a person's their
-        sessions' and accounts'; everything else (the directory, /status, the drawer) all."""
+    def scope_for_path(self, path: str, query: str = "") -> Scope:
+        """A request's scope: a session's endpoints read its bucket, a person's (and /coverage)
+        their sessions' and accounts'; the directory every bucket's summary rows; /status only
+        the commits. None reads the raw tables but the drawer, behind drawer_raw (§4.9)."""
+        if path == "/api/v1/status":
+            return Scope(tables=frozenset())
         if m := _SESSION_PATH.match(path):
             return Scope(sessions={urllib.parse.unquote(m.group(1))})
         if m := _PERSON_PATH.match(path):
             return self.resolve_person(urllib.parse.unquote(m.group(1)))
+        if path == "/api/v1/coverage" and (pid := urllib.parse.parse_qs(query).get("personId")):
+            return self.resolve_person(pid[0])
+        if path in ("/api/v1/people", "/api/v1/overview"):
+            return Scope(tables=DIRECTORY_TABLES)
+        if _DRAWER_PATH.match(path):
+            return Scope(raw=self.drawer_raw)
         return Scope.everything()
 
     def resolve_person(self, person_id: str) -> Scope:
@@ -534,8 +583,8 @@ class BucketStore:
 
     # For the app's middleware: `load_for` (blocking: run it off the event loop) finds and
     # loads the request's tables; `enter`, in the request's own context, makes them current.
-    def load_for(self, path: str) -> object:
-        return self._load(self.scope_for_path(path))
+    def load_for(self, path: str, query: str = "") -> object:
+        return self._load(self.scope_for_path(path, query))
 
     def enter(self, loaded: object) -> contextvars.Token[_Loaded | None]:
         return _current.set(cast(_Loaded, loaded))
@@ -546,11 +595,13 @@ class BucketStore:
     # --- loading -------------------------------------------------------------------------------
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
-        names = list(only) if only is not None else list(self.tables)
+        names = list(only) if only is not None else scope.names(self.tables)
         if scope.sessions is not None and self._has_session_inputs() and only is None:
             scope = Scope(sessions=self._session_group(scope.sessions), people=scope.people, accounts=scope.accounts)
         wants = {t: None if self.tables[t][0] == "*" else scope.buckets(self.tables[t][0]) for t in names}
         needed: set[int] = set()
+        if not names:  # /status: every bucket's commit, no table
+            needed = set(range(1 << 16))
         for want in wants.values():
             needed |= set(range(1 << 16)) if want is None else want
         commits = {b: c for b in sorted(needed & self._discover()) if (c := self._log(b).latest()) is not None}
@@ -601,6 +652,8 @@ class BucketStore:
         if all(plan.get(t) for t in DIMENSIONS):
             for sql in PERSON_TABLES.values():
                 con.execute(sql)
+        if plan.get("dim_account") and not plan.get("accounts"):
+            con.execute("CREATE OR REPLACE VIEW accounts AS SELECT account_id, email, name FROM dim_account")
         if self.views and all(t in plan for t in self.tables):
             con.execute(self.views)
         return con
@@ -729,6 +782,18 @@ class BucketStore:
     def newest_ns(self) -> int | None:
         found = [c.newest_ns for c in self._tables().commits.values() if c.newest_ns]
         return max(found) if found else None
+
+    def status_stats(self) -> tuple[int | None, int | None]:
+        """/status's first captured call and earliest record, from every bucket's newest commit."""
+        commits = self._tables().commits.values()
+        firsts = [c.first_call_ns for c in commits if c.first_call_ns]
+        earliest = [c.earliest_ns for c in commits if c.earliest_ns]
+        return (min(firsts) if firsts else None, min(earliest) if earliest else None)
+
+    def has(self, table: str) -> bool:
+        """Whether the current scope loaded the table (some layouts don't have it)."""
+        con = self._tables().con
+        return bool(con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = ?", [table]).fetchall()[0][0])
 
     @property
     def content_retained(self) -> bool | None:

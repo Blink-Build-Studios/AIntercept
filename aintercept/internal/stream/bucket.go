@@ -172,6 +172,11 @@ func (w *Bucket) Cycle(ctx context.Context) (CycleStats, error) {
 
 	// Write runs and state, then commit.
 	c := prev.next(w.Epoch, w.Replica, now)
+	for _, k := range keys {
+		for _, r := range byKey[k] {
+			c.stat(r)
+		}
+	}
 	for _, t := range sortedTables(deltas) {
 		tb, err := TableFor(t)
 		if err != nil {

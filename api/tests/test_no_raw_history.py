@@ -66,7 +66,9 @@ def test_status_reads_no_table(stores):
     r = _get(new, store, "/api/v1/status")
     assert not store.tables_read, store.tables_read
     assert not [k for k in store.reads if "/tables/" in k], store.reads
-    assert json.dumps(r.json()["data"], sort_keys=True) == json.dumps(old.get("/api/v1/status").json()["data"], sort_keys=True)
+    assert json.dumps(r.json()["data"], sort_keys=True) == json.dumps(
+        old.get("/api/v1/status").json()["data"], sort_keys=True
+    )
 
 
 @pytest.mark.parametrize("url", _DIRECTORY)
@@ -115,3 +117,17 @@ def test_objects_read_stay_flat_as_history_grows(tmp_path, url):
     one = _reads(tmp_path / "x1", 3, url)
     eight = _reads(tmp_path / "x8", 24, url)
     assert eight <= one, (url, one, eight)
+
+
+# --- the gate: every endpoint but the drawer -------------------------------------------------------
+
+
+def test_no_endpoint_but_the_drawer_reads_a_raw_table(stores):
+    from tests.test_bucket_parity import _urls
+
+    old, new, store, _ = stores
+    urls = [u for u in _urls(old) if not u.startswith(("/api/v1/requests/", "/api/v1/events/"))]
+    assert len(urls) > 80
+    for url in urls:
+        _get(new, store, url)
+        assert not (store.tables_read & RAW_TABLES), (url, sorted(store.tables_read & RAW_TABLES))

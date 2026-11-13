@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
 // ErrFenced: another owner committed this bucket's next sequence first. The
@@ -101,7 +102,8 @@ func (c *Commit) next(epoch int64, replica string, at time.Time) *Commit {
 		Watermark: c.Watermark, Processed: append([]string(nil), c.Processed...), Gen: c.Gen,
 		Base: map[string][]FileRef{}, Runs: map[string][]FileRef{},
 		StateBase: append([]FileRef(nil), c.StateBase...), State: append([]FileRef(nil), c.State...),
-		LastCompact: c.LastCompact, Garbage: append([]Garbage(nil), c.Garbage...)}
+		LastCompact: c.LastCompact, Garbage: append([]Garbage(nil), c.Garbage...),
+		NewestNS: c.NewestNS, FirstCallNS: c.FirstCallNS, EarliestNS: c.EarliestNS, ContentRetained: c.ContentRetained}
 	for t, refs := range c.Base {
 		n.Base[t] = append([]FileRef(nil), refs...)
 	}
@@ -200,4 +202,35 @@ func commitSeq(key string) (int64, bool) {
 	}
 	n, err := strconv.ParseInt(strings.TrimSuffix(name, ".json"), 10, 64)
 	return n, err == nil
+}
+
+// stat folds one record into the commit's /status stats: a call's time is its
+// start (its end when it has none), an event's its row time; the newest is the
+// latest time any record carries.
+func (c *Commit) stat(r *records.Record) {
+	var at, newest int64
+	switch {
+	case r.Call != nil:
+		at, newest = r.Call.StartNS, max(r.Call.StartNS, r.Call.EndNS)
+		if at == 0 {
+			at = r.Call.EndNS
+		}
+		if at != 0 && !r.Call.Synthetic {
+			c.FirstCallNS = minNonZero(c.FirstCallNS, at)
+		}
+		c.ContentRetained = c.ContentRetained || r.Call.DetailJSON != ""
+	case r.Event != nil:
+		at, newest = r.Event.RowNS, r.Event.RowNS
+	default:
+		return
+	}
+	c.EarliestNS = minNonZero(c.EarliestNS, at)
+	c.NewestNS = max(c.NewestNS, newest)
+}
+
+func minNonZero(a, b int64) int64 {
+	if a == 0 || (b != 0 && b < a) {
+		return b
+	}
+	return a
 }

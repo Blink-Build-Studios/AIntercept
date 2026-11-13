@@ -122,7 +122,7 @@ RANGE_SLACK_NS = 24 * 3600 * cc.NS
 _DIRECTORY = """SELECT p.person_id AS row_id, p.session_id FROM person_sessions p
 WHERE p.person_id IN (SELECT person_id FROM person_map WHERE directory)
   AND NOT (? AND p.session_id IN (
-    SELECT session_id FROM sessions WHERE first_ns > ? OR (last_ns < ? AND last_ns < ?)))"""
+    SELECT session_id FROM session_rows WHERE start_ns > ? OR (last_ns < ? AND last_ns < ?)))"""
 
 # Each row's members: how many, and the first name, email and org among them.
 _MEMBERS = """SELECT m.person_id, count(DISTINCT m.account_id),
@@ -220,9 +220,17 @@ def _headline(agent: str, rows: list[PersonSummaryRow]) -> dict[str, float | int
 
 def overview(store: Store, rows: list[PersonSummaryRow], lo: int | None = None, hi: int | None = None) -> Overview:
     """Totals over the same window as `rows`: requests in it, and each agent's sessions overlapping it."""
+    # The calls' times: the bucketed store's per-key request_txs (every non-synthetic call),
+    # never the raw calls; today's store counts its calls view.
+    has = getattr(store, "has", None)
+    calls = (
+        "SELECT product, row.ts_ns AS ts FROM request_txs"
+        if has and has("request_txs")
+        else "SELECT product, ts FROM calls WHERE NOT synthetic"
+    )
     (requests,) = store.query(
-        """SELECT count(*) FROM calls WHERE product IN ('claude_code', 'codex') AND NOT synthetic
-           AND (?::BIGINT IS NULL OR ts >= ?) AND (?::BIGINT IS NULL OR ts <= ?)""",
+        f"""SELECT count(*) FROM ({calls}) WHERE product IN ('claude_code', 'codex')
+           AND (?::BIGINT IS NULL OR ts >= ?) AND (?::BIGINT IS NULL OR ts <= ?)""",  # noqa: S608 (fixed text)
         [lo, lo, hi, hi],
     )[0]
     sessions_by = dict(

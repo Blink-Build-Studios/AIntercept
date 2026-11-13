@@ -51,6 +51,10 @@ are kept for a grace period and then deleted. Fields:
 | `state_base`, `state` | FileRef[] | state checkpoints; not for readers |
 | `last_compact` | RFC 3339 | ignore |
 | `garbage` | [{key, after}] | files no longer current, deleted after `after`; **never read them** |
+| `newest_ns` | int (ns) | the newest data time of any record the bucket applied: `/status`'s last ingest is the max across buckets |
+| `first_call_ns` | int (ns), 0 none | the earliest non-synthetic call (its start, else its end): `/status`'s first request is the min across buckets |
+| `earliest_ns` | int (ns), 0 none | the earliest record of any kind (probes and analytics events included): `/status`'s waiting-since |
+| `content_retained` | bool | some call's recorded content was kept: true if any bucket's is |
 
 A `FileRef` is `{"key": <object key>, "min_key": <first key>, "max_key": <last key>, "rows": <n>}`.
 A file holds only keys in `[min_key, max_key]`, so a reader looking for some
