@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
 	"io"
 	"reflect"
 	"strings"
 	"sync"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/compress/zstd"
 )
 
 // Table is a derived table's file format: the columns key, id and tomb, then
@@ -111,7 +111,7 @@ func columnName(f reflect.StructField) string {
 // Encode is rows as a Parquet file of this table (zstd).
 func (t *Table) Encode(rows []Row) ([]byte, error) {
 	var buf bytes.Buffer
-	w := parquet.NewWriter(&buf, t.sch, parquet.Compression(&zstd.Codec{}))
+	w := parquet.NewWriter(&buf, t.sch, parquet.Compression(zcodec.Shared))
 	v := reflect.New(t.flat).Elem()
 	for _, r := range rows {
 		v.SetZero()

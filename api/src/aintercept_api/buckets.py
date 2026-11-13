@@ -358,17 +358,24 @@ class Commit:
         return [*self.base.get(table, []), *self.runs.get(table, [])]
 
 
-def _parse_commit(key: str, body: bytes) -> Commit:
+def _parse_commit(key: str, body: bytes, get: Callable[[str], bytes] | None = None) -> Commit:
+    """A commit, its base read from its base manifest when it names one (the base's
+    parts grow with history, so they're written once per generation, not per commit)."""
     m = json.loads(body)
 
     def keys(refs: dict[str, list[dict[str, Any]] | None] | None) -> dict[str, list[str]]:
         return {t: [r["key"] for r in rs or []] for t, rs in (refs or {}).items()}
 
+    base = m.get("base")
+    if m.get("base_manifest"):
+        if get is None:
+            raise ValueError(f"commit {key} names a base manifest and nothing can read it")
+        base = json.loads(get(m["base_manifest"])).get("base")
     return Commit(
         bucket=int(m["bucket"]),
         seq=int(m["seq"]),
         key=key,
-        base=keys(m.get("base")),
+        base=keys(base),
         runs=keys(m.get("runs")),
         newest_ns=m.get("newest_ns"),
         content_retained=m.get("content_retained"),
@@ -404,7 +411,7 @@ class CommitLog:
             newer = [k for k in self.source.list_after(self.prefix, after) if _COMMIT.search(k) and k > after]
             if newer:
                 key = max(newer)
-                self._latest = _parse_commit(key, self.source.get(key))
+                self._latest = _parse_commit(key, self.source.get(key), self.source.get)
             return self._latest
 
 

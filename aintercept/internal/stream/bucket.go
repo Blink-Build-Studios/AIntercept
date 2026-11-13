@@ -342,8 +342,16 @@ func (w *Bucket) writeRows(ctx context.Context, cd codec, key string, rows []Row
 }
 
 // state is key's state: cached, else loaded from every state file that holds a
-// checkpoint of it (the base, then each cycle's run since), else new.
+// checkpoint of it (the base, then each cycle's run since), else new. A cycle
+// asks for its keys in order, so a file read for one key is kept for the next
+// only until the keys pass its last one: the cycle holds a part per tier, not
+// every part its keys touched.
 func (w *Bucket) state(ctx context.Context, c *Commit, key string, read map[string][]Row) (any, error) {
+	for k, rows := range read {
+		if len(rows) == 0 || rows[len(rows)-1].Key < key {
+			delete(read, k)
+		}
+	}
 	if s, ok := w.cache.get(key); ok {
 		return s, nil
 	}
@@ -444,7 +452,7 @@ func (w *Bucket) compact(ctx context.Context, c *Commit, now time.Time, force bo
 		if err != nil {
 			return err
 		}
-		parts, err := w.merge(ctx, tb, append(append([]FileRef(nil), c.Base[t]...), c.Runs[t]...),
+		parts, err := w.merge(ctx, tb, c.Base[t], c.Runs[t],
 			func(p int) string { return w.L.BaseKey(t, w.B, gen, w.Epoch, c.Seq, p) })
 		if err != nil {
 			return err
@@ -456,6 +464,10 @@ func (w *Bucket) compact(ctx context.Context, c *Commit, now time.Time, force bo
 	}
 	if err := w.foldState(ctx, c, gen, after); err != nil {
 		return err
+	}
+	if c.BaseManifest != "" { // a new generation: its manifest is written with the commit
+		c.Garbage = append(c.Garbage, Garbage{Key: c.BaseManifest, After: after})
+		c.BaseManifest = ""
 	}
 	c.Gen, c.LastCompact = gen, now
 	return nil
@@ -472,40 +484,65 @@ func refMap(c *Commit) map[string][]Row {
 	return m
 }
 
-// merge reads files oldest first, folds them (newest wins, tombstones drop)
-// and writes the result in key-ranged parts of at most PartRows rows. A key's
-// rows never straddle two parts.
-func (w *Bucket) merge(ctx context.Context, cd codec, files []FileRef, name func(int) string) ([]FileRef, error) {
-	sets := make([][]Row, 0, len(files))
-	for _, f := range files {
-		raw, err := w.S.Get(ctx, f.Key)
-		if err != nil {
-			return nil, fmt.Errorf("compact %s: %w", f.Key, err)
-		}
-		rows, err := cd.Decode(raw)
-		if err != nil {
-			return nil, err
-		}
-		sets = append(sets, rows)
+// merge folds a table's base (key-ranged parts, in key order) and its runs
+// (oldest first) into new key-ranged parts of about PartRows rows: for each
+// (key, id) the newest file's row wins and tombstones drop. It streams every
+// source in (key, id) order, a part at a time, so its memory is a few parts and
+// the runs, never the base. A key's rows never straddle two parts.
+func (w *Bucket) merge(ctx context.Context, cd codec, base, runs []FileRef, name func(int) string) ([]FileRef, error) {
+	its := []*partIter{{w: w, ctx: ctx, cd: cd, refs: base}}
+	for _, r := range runs {
+		its = append(its, &partIter{w: w, ctx: ctx, cd: cd, refs: []FileRef{r}})
 	}
-	rows := MergeRows(sets...)
 	var out []FileRef
-	for start, part := 0, 0; start < len(rows); part++ {
-		end := start + w.PartRows
-		if end > len(rows) {
-			end = len(rows)
+	var buf []Row
+	part := 0
+	flush := func() error {
+		if len(buf) == 0 {
+			return nil
 		}
-		for end < len(rows) && rows[end].Key == rows[end-1].Key {
-			end++
-		}
-		ref, err := w.writeRows(ctx, cd, name(part), rows[start:end])
+		ref, err := w.writeRows(ctx, cd, name(part), buf)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		part++
 		out = append(out, ref)
-		start = end
+		buf = nil
+		return nil
 	}
-	return out, nil
+	for {
+		var min *Row
+		for _, it := range its {
+			r, err := it.peek()
+			if err != nil {
+				return nil, err
+			}
+			if r != nil && (min == nil || r.Key < min.Key || r.Key == min.Key && r.ID < min.ID) {
+				min = r
+			}
+		}
+		if min == nil {
+			break
+		}
+		key, id := min.Key, min.ID
+		var win Row
+		for _, it := range its { // oldest first: the last match is the newest
+			if r, _ := it.peek(); r != nil && r.Key == key && r.ID == id {
+				win = *r
+				it.i++
+			}
+		}
+		if win.Tomb {
+			continue
+		}
+		if len(buf) >= w.PartRows && buf[len(buf)-1].Key != key {
+			if err := flush(); err != nil {
+				return nil, err
+			}
+		}
+		buf = append(buf, win)
+	}
+	return out, flush()
 }
 
 // State is folded in tiers, so a key's checkpoints never pile up and none is
@@ -664,10 +701,12 @@ func (w *Bucket) mergeGroups(ctx context.Context, gs []stateGroup, id int64, nam
 	return out, flush()
 }
 
-// partIter reads a group's rows in key order, one part at a time.
+// partIter reads files' rows in (key, id) order, one file at a time: a group's
+// key-ranged parts, or a single run.
 type partIter struct {
 	w    *Bucket
 	ctx  context.Context
+	cd   codec // default: state files
 	refs []FileRef
 	rows []Row
 	i    int
@@ -682,7 +721,11 @@ func (it *partIter) peek() (*Row, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compact %s: %w", it.refs[0].Key, err)
 		}
-		if it.rows, err = (stateCodec{}).Decode(raw); err != nil {
+		cd := it.cd
+		if cd == nil {
+			cd = stateCodec{}
+		}
+		if it.rows, err = cd.Decode(raw); err != nil {
 			return nil, err
 		}
 		it.refs, it.i = it.refs[1:], 0
@@ -744,7 +787,7 @@ func (w *Bucket) GC(ctx context.Context) error {
 	for _, t := range w.M.Tables() {
 		prefixes = append(prefixes, w.L.tablePrefix(t, w.B))
 	}
-	prefixes = append(prefixes, w.L.statePrefix(w.B))
+	prefixes = append(prefixes, w.L.statePrefix(w.B), w.L.manifestPrefix(w.B))
 	for _, p := range prefixes {
 		objs, err := w.S.ListInfo(ctx, p)
 		if err != nil {

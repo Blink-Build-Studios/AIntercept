@@ -55,19 +55,33 @@ type Commit struct {
 	Watermark string   `json:"watermark"`
 	Processed []string `json:"processed"`
 	// Each table's newest base generation (in key-ranged parts) and the run
-	// files written since, oldest first.
-	Gen         int64                `json:"gen"`
-	Base        map[string][]FileRef `json:"base"`
-	Runs        map[string][]FileRef `json:"runs"`
-	StateBase   []FileRef            `json:"state_base"`
-	State       []FileRef            `json:"state"`
-	LastCompact time.Time            `json:"last_compact"`
-	Garbage     []Garbage            `json:"garbage"`
+	// files written since, oldest first. The base (Base and StateBase, which
+	// grow with history) is written once per generation, to BaseManifest; a
+	// commit names the manifest, not the base's parts, so every cycle writes a
+	// commit the size of its runs. In memory, Base and StateBase are loaded.
+	Gen          int64                `json:"gen"`
+	BaseManifest string               `json:"base_manifest,omitempty"`
+	Base         map[string][]FileRef `json:"base,omitempty"`
+	Runs         map[string][]FileRef `json:"runs"`
+	StateBase    []FileRef            `json:"state_base,omitempty"`
+	State        []FileRef            `json:"state"`
+	LastCompact  time.Time            `json:"last_compact"`
+	Garbage      []Garbage            `json:"garbage"`
+}
+
+// BaseManifest is a base generation's parts: every table's, and the state's.
+type BaseManifest struct {
+	Gen       int64                `json:"gen"`
+	Base      map[string][]FileRef `json:"base"`
+	StateBase []FileRef            `json:"state_base"`
 }
 
 // Files are every file the commit names, garbage pending deletion included.
 func (c *Commit) Files() []string {
 	var out []string
+	if c.BaseManifest != "" {
+		out = append(out, c.BaseManifest)
+	}
 	for _, refs := range c.Base {
 		for _, r := range refs {
 			out = append(out, r.Key)
@@ -93,7 +107,7 @@ func (c *Commit) Files() []string {
 // next is a copy of c as the start of its successor.
 func (c *Commit) next(epoch int64, replica string, at time.Time) *Commit {
 	n := &Commit{Bucket: c.Bucket, Seq: c.Seq + 1, Epoch: epoch, Replica: replica, Nonce: nonce(), At: at,
-		Watermark: c.Watermark, Processed: append([]string(nil), c.Processed...), Gen: c.Gen,
+		Watermark: c.Watermark, Processed: append([]string(nil), c.Processed...), Gen: c.Gen, BaseManifest: c.BaseManifest,
 		Base: map[string][]FileRef{}, Runs: map[string][]FileRef{},
 		StateBase: append([]FileRef(nil), c.StateBase...), State: append([]FileRef(nil), c.State...),
 		LastCompact: c.LastCompact, Garbage: append([]Garbage(nil), c.Garbage...)}
@@ -121,7 +135,24 @@ func TryCommit(ctx context.Context, s Store, l Layout, c *Commit) (bool, error) 
 	if c.Nonce == "" {
 		c.Nonce = nonce()
 	}
-	b, err := json.Marshal(c)
+	if c.BaseManifest == "" && (len(c.Base) > 0 || len(c.StateBase) > 0) {
+		// A new base generation: its parts go to a manifest of their own (a
+		// name only this writer makes; a fenced writer's is collected).
+		key := l.BaseManifestKey(c.Bucket, c.Gen, c.Epoch, c.Seq)
+		mb, err := json.Marshal(BaseManifest{Gen: c.Gen, Base: c.Base, StateBase: c.StateBase})
+		if err != nil {
+			return false, err
+		}
+		if err := s.Put(ctx, key, mb); err != nil {
+			return false, err
+		}
+		c.BaseManifest = key
+	}
+	wire := *c
+	if wire.BaseManifest != "" {
+		wire.Base, wire.StateBase = nil, nil
+	}
+	b, err := json.Marshal(wire)
 	if err != nil {
 		return false, err
 	}
@@ -174,7 +205,7 @@ func LoadLatestAfter(ctx context.Context, s Store, l Layout, b int, seq int64) (
 		if err := json.Unmarshal(raw, &c); err != nil {
 			return nil, fmt.Errorf("commit %s: %w", objs[i].Key, err)
 		}
-		return &c, nil
+		return &c, loadBase(ctx, s, &c)
 	}
 	if seq > 0 { // nothing newer: the known one is still the latest
 		raw, err := s.Get(ctx, l.CommitKey(b, seq))
@@ -182,9 +213,38 @@ func LoadLatestAfter(ctx context.Context, s Store, l Layout, b int, seq int64) (
 			return nil, err
 		}
 		var c Commit
-		return &c, json.Unmarshal(raw, &c)
+		if err := json.Unmarshal(raw, &c); err != nil {
+			return nil, err
+		}
+		return &c, loadBase(ctx, s, &c)
 	}
 	return nil, nil
+}
+
+// loadBase reads the commit's base generation from its manifest.
+func loadBase(ctx context.Context, s Store, c *Commit) error {
+	if c.Runs == nil {
+		c.Runs = map[string][]FileRef{}
+	}
+	if c.BaseManifest == "" {
+		if c.Base == nil {
+			c.Base = map[string][]FileRef{}
+		}
+		return nil
+	}
+	raw, err := s.Get(ctx, c.BaseManifest)
+	if err != nil {
+		return fmt.Errorf("base manifest %s: %w", c.BaseManifest, err)
+	}
+	var m BaseManifest
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return fmt.Errorf("base manifest %s: %w", c.BaseManifest, err)
+	}
+	c.Base, c.StateBase = m.Base, m.StateBase
+	if c.Base == nil {
+		c.Base = map[string][]FileRef{}
+	}
+	return nil
 }
 
 func commitSeq(key string) (int64, bool) {
