@@ -25,6 +25,10 @@
 //     positions are sort keys (the query numbers them), and values that span a
 //     session are lookups the query joins, not copies.
 //
+// The query side (query.go) rebuilds today's API tables from stored rows, as
+// the API's SQL does; RenderSession (render.go) is a session's finished
+// tables from its own key's rows through it.
+//
 // Delta.Cases names the branches a record took (see cases.go): the tests require
 // an atomic test for every case, and the real capture's records for a histogram
 // of the ones that occur.

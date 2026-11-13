@@ -19,13 +19,7 @@ import (
 // rebuild here is the API's SQL, step for step; both are checked against the
 // reference.
 
-func rowsOf[T any](o *streamOut, table string) []T {
-	var out []T
-	for _, r := range o.rows[table] {
-		out = append(out, r.(T))
-	}
-	return out
-}
+func rowsOf[T any](o *streamOut, table string) []T { return tableRows[T](o.rows, table) }
 
 // personTables rebuilds the person tables from the dimensions.
 func personTables(o *streamOut) ([]process.PersonMapRow, []process.PersonSession, []process.AccountFact, []process.AccountDevice) {

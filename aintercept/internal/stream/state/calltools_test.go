@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
@@ -16,38 +15,6 @@ import (
 // personmap.go), kind "mcp" with its server or "builtin". The stream stores
 // one row per call and tool; the query takes the distinct (session, time,
 // kind, server, tool), which is the reference's set.
-
-// callToolUsesOf is the stored rows as the query reads them: distinct, ordered.
-func callToolUsesOf(o *streamOut) []process.CallToolUse {
-	seen := map[process.CallToolUse]bool{}
-	var out []process.CallToolUse
-	for _, r := range o.rows[TableCallToolUses] {
-		x := r.(CallToolUse).CallToolUse
-		if !seen[x] {
-			seen[x] = true
-			out = append(out, x)
-		}
-	}
-	sortCallTools(out)
-	return out
-}
-
-func sortCallTools(out []process.CallToolUse) {
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		switch {
-		case a.SessionID != b.SessionID:
-			return a.SessionID < b.SessionID
-		case a.TsNS != b.TsNS:
-			return a.TsNS < b.TsNS
-		case a.Kind != b.Kind:
-			return a.Kind < b.Kind
-		case a.Server != b.Server:
-			return a.Server < b.Server
-		}
-		return a.Tool < b.Tool
-	})
-}
 
 func checkCallTools(t *testing.T, label string, rs []records.Record, o *streamOut) {
 	t.Helper()
