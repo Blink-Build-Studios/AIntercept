@@ -108,7 +108,7 @@ def test_a_stale_listing_never_goes_backwards(tmp_path):
     assert _seq(log) == 2
 
 
-def test_lists_at_most_once_a_second_per_bucket(tmp_path):
+def test_looks_at_most_once_a_second_and_gets_the_next_commit_instead_of_listing(tmp_path):
     _commit(tmp_path, 1)
     src, clock = CountingSource(tmp_path), Clock()
     log = CommitLog(src, "", 7, clock=clock)
@@ -116,29 +116,25 @@ def test_lists_at_most_once_a_second_per_bucket(tmp_path):
     log.latest()
     assert src.lists == 1
     _commit(tmp_path, 2)
+    _commit(tmp_path, 3)
     clock.t += 0.5
     assert _seq(log) == 1  # not looked for yet
     clock.t += 0.6
-    assert _seq(log) == 2 and src.lists == 2
+    gets = src.gets
+    assert _seq(log) == 3 and src.lists == 1  # commit-2, commit-3, then commit-4 isn't there
+    assert src.gets - gets == 3
 
 
-def test_lists_only_after_the_newest_known(tmp_path):
-    for s in range(1, 6):
-        _commit(tmp_path, s)
+def test_a_gap_after_the_newest_known_is_found_by_the_periodic_listing(tmp_path):
+    _commit(tmp_path, 1)
     src, clock = CountingSource(tmp_path), Clock()
     log = CommitLog(src, "", 7, clock=clock)
-    log.latest()
-    seen: list[str] = []
-    orig = src.list_after
-
-    def spy(prefix: str, start_after: str) -> list[str]:
-        seen.append(start_after)
-        return orig(prefix, start_after)
-
-    src.list_after = spy  # type: ignore[method-assign]
+    assert _seq(log) == 1
+    _commit(tmp_path, 3)  # 2 never written (or already collected)
     clock.t += 2
-    log.latest()
-    assert seen == [commit_key("", 7, 5)]
+    assert _seq(log) == 1
+    clock.t += 60
+    assert _seq(log) == 3
 
 
 # --- the object cache ------------------------------------------------------------------------
@@ -307,8 +303,11 @@ def test_a_session_scope_reads_only_its_bucket(tmp_path):
     src.get = get  # type: ignore[method-assign]
     with store.scope(Scope(sessions={"one"})):
         assert store.query("SELECT v FROM t") == [(1,)]
-    # its bucket's commit and table file, nothing of the other session's bucket
-    assert fetched == [commit_key("", bucket_of("s:one"), 1), table_key("", "t", bucket_of("s:one"), "base-1")]
+    # its bucket's commit (and a look for the next), its table file read in place (DuckDB),
+    # nothing of the other session's bucket
+    one = bucket_of("s:one")
+    assert fetched == [commit_key("", one, 1), commit_key("", one, 2)]
+    assert store.cache_keys() == [table_key("", "t", one, "base-1")]
 
 
 def test_everything_reads_every_bucket(tmp_path):
@@ -412,7 +411,9 @@ def test_requests_between_commits_reuse_the_loaded_tables(tmp_path):
         clock.t += 2
         with store.scope(Scope.everything()):
             assert store.query("SELECT v FROM t") == [(1,)]
-    assert src.gets == 2  # the commit and the one table file, fetched once
+    # the commit once, then at each look a GET for the next commit (no listing); the table file
+    # is read in place by DuckDB, once, when the tables were built
+    assert src.gets == 6 and src.lists == 1
     assert store.loads == 1  # the tables were built once for this commit
 
 

@@ -367,15 +367,15 @@ func Simulate(ctx context.Context, cfg SimConfig) (SimResult, error) {
 	return x.res, nil
 }
 
-// dump writes what readers read of the committed layout (the commit logs and the
-// table files; never state/, leases or members) to dir, keyed exactly as in the
+// dump writes what readers read of the committed layout (the commit logs, base
+// manifests and table files; never state/, leases or members) to dir, keyed exactly as in the
 // store: commits name their files by those keys.
 func (x *sim) dump(dir string) error {
 	x.s.mu.Lock()
 	defer x.s.mu.Unlock()
 	root := x.l.root()
 	for _, k := range x.s.keys(root) {
-		if rel := strings.TrimPrefix(k, root); !strings.HasPrefix(rel, "buckets/") && !strings.HasPrefix(rel, "tables/") {
+		if rel := strings.TrimPrefix(k, root); !strings.HasPrefix(rel, "buckets/") && !strings.HasPrefix(rel, "tables/") && !strings.HasPrefix(rel, "manifests/") {
 			continue
 		}
 		p := filepath.Join(dir, filepath.FromSlash(k))

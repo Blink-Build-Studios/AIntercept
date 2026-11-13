@@ -843,20 +843,5 @@ func sessionOfKey(key string) string {
 	return ""
 }
 
-// pendingFor is a call in flight as the processor held it: what its headers say.
-func pendingFor(c *canon.Request) canon.Pending {
-	h := map[string]string{}
-	for k, v := range map[string]string{
-		"x-claude-code-session-id": c.SessionID, "x-claude-code-prompt-id": c.PromptID,
-		"x-claude-code-request-class": c.RequestClass, "x-client-request-id": c.ClientRequestID,
-		"x-claude-code-agent-type": c.AgentType,
-	} {
-		if v != "" {
-			h[k] = v
-		}
-	}
-	cj, _ := json.Marshal(h)
-	return canon.Pending{CorrelationID: c.CallID, SeenNS: c.StartNS, StartNS: c.StartNS, Host: c.Host,
-		Method: c.Method, Path: c.Path, Synthetic: c.Synthetic, KeyHash: c.KeyHash, RequestID: c.RequestID,
-		ClientJSON: string(cj), ResponseStartNS: c.ResponseStartNS}
-}
+// pendingFor is a call in flight as the processor held it (canon.PendingOfStart).
+func pendingFor(c *canon.Request) canon.Pending { return canon.PendingOfStart(c) }
