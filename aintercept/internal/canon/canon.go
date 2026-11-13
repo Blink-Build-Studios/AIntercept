@@ -471,3 +471,29 @@ func firstStr(a, b string) string {
 	}
 	return b
 }
+
+// PendingOfStart is a call's start record as the processor held the call in
+// flight (RequestFromPending's inverse): its own fields, every client header,
+// what it had of the response.
+func PendingOfStart(c *Request) Pending {
+	cj := c.ClientJSON
+	if cj == "" {
+		h := map[string]string{}
+		for k, v := range map[string]string{
+			"x-claude-code-session-id": c.SessionID, "x-claude-code-prompt-id": c.PromptID,
+			"x-claude-code-request-class": c.RequestClass, "x-client-request-id": c.ClientRequestID,
+			"x-claude-code-agent-type": c.AgentType,
+		} {
+			if v != "" {
+				h[k] = v
+			}
+		}
+		b, _ := json.Marshal(h)
+		cj = string(b)
+	}
+	return Pending{CorrelationID: c.CallID, SeenNS: c.StartNS, StartNS: c.StartNS, ResponseStartNS: c.ResponseStartNS,
+		Host: c.Host, Method: c.Method, Path: c.Path, Status: c.Status, Synthetic: c.Synthetic,
+		KeyHash: c.KeyHash, KeyHint: c.KeyHint, IP: c.IP, RequestID: c.RequestID,
+		RequestBytes: c.RequestBytes, ResponseBytes: c.ResponseBytes, ContentEncoding: c.ContentEncoding,
+		ProviderJSON: c.ProviderJSON, ClientJSON: cj}
+}

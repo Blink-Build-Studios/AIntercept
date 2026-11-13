@@ -32,11 +32,13 @@ import re
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET  # noqa: S405 (S3's own listing responses, over TLS)
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar, cast
 
@@ -62,6 +64,52 @@ def bucket_of(key: str, bits: int = BUCKET_BITS) -> int:
     for b in key.encode():
         h = ((h ^ b) * _FNV_PRIME) & _MASK
     return h >> (64 - bits)
+
+
+def connect(
+    source: "Source", *, memory_limit: str | None = None, threads: int | None = None
+) -> duckdb.DuckDBPyConnection:
+    """A DuckDB connection that reads source's objects: never downloads an extension (httpfs is
+    in the image, under AINTERCEPT_DUCKDB_EXTENSIONS), UTC, the memory and thread caps."""
+    config: dict[str, Any] = {"autoinstall_known_extensions": False, "autoload_known_extensions": False}
+    if os.environ.get("AINTERCEPT_DUCKDB_EXTENSIONS"):
+        config["extension_directory"] = os.environ["AINTERCEPT_DUCKDB_EXTENSIONS"]
+    con = duckdb.connect(config=config)
+    con.execute("SET TimeZone='UTC'")
+    if memory_limit:
+        if not re.fullmatch(r"\d+(\.\d+)?\s*[KMGT]i?B", memory_limit):
+            raise ValueError(f"memory_limit {memory_limit!r}: use a size like '512MB'")
+        con.execute(f"SET memory_limit = '{memory_limit}'")
+    if threads:
+        con.execute(f"SET threads = {int(threads)}")
+    source.configure(con)
+    return con
+
+
+def _in_list(keys: Sequence[str]) -> str:
+    return ", ".join("'" + k.replace("'", "''") + "'" for k in keys)
+
+
+def read_newest(
+    con: duckdb.DuckDBPyConnection,
+    urls: Sequence[str],
+    *,
+    keys: Sequence[str] | None = None,
+    keep_keys: bool = False,
+    hive: bool = False,
+) -> duckdb.DuckDBPyRelation:
+    """A table from its files (CONTRACT.md): the newest row of each (key, id) across the files
+    in commit order, tombstones dropped. With keys, one query that filters on key inside the
+    scan, so DuckDB reads only the row groups (by range request, over S3) whose key statistics
+    can hold them."""
+    where = "" if keys is None else (f"WHERE key IN ({_in_list(keys)})" if keys else "WHERE false")
+    drop = "tomb, _file, _r" if keep_keys else "key, id, tomb, _file, _r"
+    sql = f"""SELECT * EXCLUDE ({drop}) FROM (
+    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
+    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true, hive_partitioning = {str(hive).lower()})
+    {where}
+) WHERE _r = 1 AND NOT coalesce(tomb, false)"""  # noqa: S608 (keys quoted; the rest fixed)
+    return con.sql(sql, params=[list(urls), list(urls)])
 
 
 # Each table's routing: the key prefix and the column whose value follows it. "s:" tables are a
@@ -160,21 +208,6 @@ class TitleRun:
 
 _PERSON_RESOLUTION = ("person_sessions", "person_map")
 
-# The newest row of each (key, id), across the files in commit order; tombstones drop out.
-# (_NEWEST_KEYED keeps the key and id: the contract's tables as such, for tests and tools.)
-_NEWEST_KEYED = """SELECT * EXCLUDE (tomb, _file, _r) FROM (
-    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
-    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
-) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
-_NEWEST = """SELECT * EXCLUDE (key, id, tomb, _file, _r) FROM (
-    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
-    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true)
-) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
-# The stream state's tables: the same fold, without the path's bucket=NN read as a column.
-_STATE_NEWEST = """SELECT * EXCLUDE (key, id, tomb, _file, _r) FROM (
-    SELECT *, row_number() OVER (PARTITION BY key, id ORDER BY list_position(?::VARCHAR[], _file) DESC) AS _r
-    FROM read_parquet(?::VARCHAR[], filename = '_file', union_by_name = true, hive_partitioning = false)
-) WHERE _r = 1 AND NOT coalesce(tomb, false)"""
 _PERSON_SESSIONS = "SELECT DISTINCT session_id FROM person_sessions WHERE person_id = ? AND session_id IS NOT NULL"
 _PERSON_ACCOUNTS = "SELECT DISTINCT account_id FROM person_map WHERE person_id = ? AND account_id IS NOT NULL"
 
@@ -191,6 +224,14 @@ class Source(Protocol):
 
     def folders(self, prefix: str) -> list[str]:
         """The names of the "folders" directly under prefix (S3 common prefixes)."""
+        ...
+
+    def url(self, key: str) -> str:
+        """The object as DuckDB reads it: a local path, or s3://bucket/key through httpfs."""
+        ...
+
+    def configure(self, con: duckdb.DuckDBPyConnection) -> None:
+        """Ready con to read this source's urls (httpfs and its credentials, for S3)."""
         ...
 
 
@@ -213,6 +254,12 @@ class LocalSource:
     def folders(self, prefix: str) -> list[str]:
         base = self.root / prefix
         return sorted(p.name for p in base.iterdir() if p.is_dir()) if base.is_dir() else []
+
+    def url(self, key: str) -> str:
+        return str(self.root / key)
+
+    def configure(self, con: duckdb.DuckDBPyConnection) -> None:
+        pass
 
 
 class S3Source:
@@ -275,6 +322,32 @@ class S3Source:
             if more != ["true"] or not nxt:
                 return out
             token = nxt[0]
+
+    def url(self, key: str) -> str:
+        return f"s3://{self.bucket}/{key}"
+
+    def configure(self, con: duckdb.DuckDBPyConnection) -> None:
+        """httpfs (installed in the image, never downloaded here) with this source's credentials
+        as a DuckDB secret: the same keys or, with none, the default chain (IRSA, Pod Identity)
+        through the aws extension. The values stay in the process: no command line, no file."""
+        con.execute("LOAD httpfs")
+        u = urllib.parse.urlparse(self.endpoint)
+        opts = {"TYPE": "s3", "REGION": self.region}
+        if not u.netloc.endswith("amazonaws.com"):
+            opts |= {"ENDPOINT": u.netloc, "URL_STYLE": "path", "USE_SSL": "true" if u.scheme == "https" else "false"}
+        if self.access_key and self.secret_key:
+            opts |= {"KEY_ID": self.access_key, "SECRET": self.secret_key}
+            if self.session_token:
+                opts["SESSION_TOKEN"] = self.session_token
+        else:
+            con.execute("LOAD aws")
+            opts["PROVIDER"] = "credential_chain"
+
+        def lit(v: str) -> str:
+            return v if v in ("true", "false") else "'" + v.replace("'", "''") + "'"
+
+        body = ", ".join(f"{k} {v if k in ('TYPE', 'PROVIDER') else lit(v)}" for k, v in opts.items())
+        con.execute(f"CREATE OR REPLACE SECRET aintercept_s3 ({body})")
 
     def _request(self, path: str, query: dict[str, str]) -> bytes:
         now = dt.datetime.now(dt.UTC)
@@ -351,18 +424,35 @@ _COMMIT = re.compile(r"commit-(\d{12})\.json$")
 
 
 @dataclass(frozen=True)
+class FileRef:
+    key: str
+    min_key: str = ""
+    max_key: str = ""
+
+    def holds_any(self, keys: Sequence[str]) -> bool:
+        """Whether the file's key range can hold any of keys (no range recorded: it might)."""
+        if not self.min_key and not self.max_key:
+            return True
+        return any(self.min_key <= k <= self.max_key for k in keys)
+
+
+@dataclass(frozen=True)
 class Commit:
     bucket: int
     seq: int
     key: str
-    base: dict[str, list[str]]
-    runs: dict[str, list[str]]
+    base: dict[str, list[FileRef]]
+    runs: dict[str, list[FileRef]]
     newest_ns: int | None = None
     content_retained: bool | None = None
+    layout: str = ""
 
-    def files(self, table: str) -> list[str]:
-        """The table's files, oldest first: the base, then the runs since."""
-        return [*self.base.get(table, []), *self.runs.get(table, [])]
+    def files(self, table: str, keys: Sequence[str] | None = None) -> list[str]:
+        """The table's files, oldest first: the base, then the runs since; with keys, only the
+        files whose key range can hold one of them (CONTRACT.md: a file holds only keys in its
+        [min_key, max_key])."""
+        refs = [*self.base.get(table, []), *self.runs.get(table, [])]
+        return [r.key for r in refs if keys is None or r.holds_any(keys)]
 
 
 def _parse_commit(key: str, body: bytes, get: Callable[[str], bytes] | None = None) -> Commit:
@@ -370,8 +460,11 @@ def _parse_commit(key: str, body: bytes, get: Callable[[str], bytes] | None = No
     parts grow with history, so they're written once per generation, not per commit)."""
     m = json.loads(body)
 
-    def keys(refs: dict[str, list[dict[str, Any]] | None] | None) -> dict[str, list[str]]:
-        return {t: [r["key"] for r in rs or []] for t, rs in (refs or {}).items()}
+    def refs(by_table: dict[str, list[dict[str, Any]] | None] | None) -> dict[str, list[FileRef]]:
+        return {
+            t: [FileRef(r["key"], r.get("min_key") or "", r.get("max_key") or "") for r in rs or []]
+            for t, rs in (by_table or {}).items()
+        }
 
     base = m.get("base")
     if m.get("base_manifest"):
@@ -382,16 +475,20 @@ def _parse_commit(key: str, body: bytes, get: Callable[[str], bytes] | None = No
         bucket=int(m["bucket"]),
         seq=int(m["seq"]),
         key=key,
-        base=keys(base),
-        runs=keys(m.get("runs")),
+        base=refs(base),
+        runs=refs(m.get("runs")),
         newest_ns=m.get("newest_ns"),
         content_retained=m.get("content_retained"),
+        layout=m.get("layout") or "",
     )
 
 
 class CommitLog:
-    """One bucket's newest commit, looked for at most every min_interval seconds, listing
-    only after the newest one known (a listing that lags never moves it backwards)."""
+    """One bucket's newest commit, looked for at most every min_interval seconds. The first
+    look lists the bucket's log; after that, commits being create-only with zero-padded
+    sequence numbers, it GETs commit-(seq+1), then the next, until one isn't there: no listing
+    (a store's listing can lag, and never moves the newest backwards). A listing every
+    relist seconds still finds a newer commit past a gap (one collected, or never written)."""
 
     def __init__(
         self,
@@ -401,8 +498,11 @@ class CommitLog:
         *,
         clock: Callable[[], float] = time.monotonic,
         min_interval: float = 1.0,
+        relist: float = 60.0,
     ) -> None:
         self.source, self.bucket, self.clock, self.min_interval = source, bucket, clock, min_interval
+        self.relist = relist
+        self._listed: float | None = None
         self.prefix = f"{prefix}{ROOT}buckets/{bucket:02d}/"
         self._latest: Commit | None = None
         self._checked: float | None = None
@@ -414,12 +514,32 @@ class CommitLog:
             if self._checked is not None and now - self._checked < self.min_interval:
                 return self._latest
             self._checked = now
-            after = self._latest.key if self._latest else ""
-            newer = [k for k in self.source.list_after(self.prefix, after) if _COMMIT.search(k) and k > after]
-            if newer:
-                key = max(newer)
-                self._latest = _parse_commit(key, self.source.get(key), self.source.get)
-            return self._latest
+            if self._latest is None or self._listed is None or now - self._listed >= self.relist:
+                self._listed = now
+                after = self._latest.key if self._latest else ""
+                newer = [k for k in self.source.list_after(self.prefix, after) if _COMMIT.search(k) and k > after]
+                if newer:
+                    key = max(newer)
+                    self._latest = _parse_commit(key, self.source.get(key), self.source.get)
+                if self._latest is None:
+                    return None
+            while True:
+                key = f"{self.prefix}commit-{self._latest.seq + 1:012d}.json"
+                body = _get_if_exists(self.source, key)
+                if body is None:
+                    return self._latest
+                self._latest = _parse_commit(key, body, self.source.get)
+
+
+def _get_if_exists(source: Source, key: str) -> bytes | None:
+    try:
+        return source.get(key)
+    except FileNotFoundError:
+        return None
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
 
 
 # --- scopes ----------------------------------------------------------------------------------
@@ -432,6 +552,9 @@ class Scope:
     sessions: frozenset[str] | set[str] | None = None
     people: frozenset[str] | set[str] | None = None
     accounts: frozenset[str] | set[str] | None = None
+    # Tables the endpoint never reads (left empty): the ones read from every bucket, when an
+    # endpoint doesn't need them.
+    skip: frozenset[str] = frozenset()
 
     @classmethod
     def everything(cls) -> "Scope":
@@ -442,14 +565,25 @@ class Scope:
         keys = {"s:": self.sessions, "p:": self.people, "a:": self.accounts}.get(prefix)
         return None if keys is None else frozenset(bucket_of(prefix + k) for k in keys)
 
+    def keys(self, prefix: str) -> list[str] | None:
+        """The routing keys a table routed by prefix is filtered on (None: no filter)."""
+        keys = {"s:": self.sessions, "p:": self.people, "a:": self.accounts}.get(prefix)
+        return None if keys is None else sorted(prefix + k for k in keys)
+
     def signature(self) -> tuple[Any, ...]:
         def f(x: Any) -> Any:
             return None if x is None else tuple(sorted(x))
 
-        return (f(self.sessions), f(self.people), f(self.accounts))
+        return (f(self.sessions), f(self.people), f(self.accounts), tuple(sorted(self.skip)))
 
 
 _SESSION_PATH = re.compile(r"^/api/v1/sessions/([^/]+)")
+# What some endpoints never read (state tables read from every bucket).
+_REQUEST_INPUTS = frozenset({"request_txs", "batch_members"})
+_DIMENSION_INPUTS = frozenset(DIMENSIONS)
+# The endpoints that read every bucket (their own change narrows them: the spec's §2.3).
+_EVERYTHING_PATHS = ("/api/v1/status", "/api/v1/overview", "/api/v1/people")
+_EVERYTHING_PREFIXES = ("/api/v1/requests/", "/api/v1/events/")
 _PERSON_PATH = re.compile(r"^/api/v1/people/([^/]+)")
 
 
@@ -499,6 +633,7 @@ class BucketStore:
         self.skipped: list[str] = []
         self.loads = 0  # table sets built (one per new commit of a scope): the polling-cost counter
         self._loaded: OrderedDict[tuple[Any, ...], _Loaded] = OrderedDict()
+        self._read_keys: set[str] = set()
         self._loaded_max = loaded_max
         self._lock = threading.Lock()
         self._state: bool | None = None
@@ -508,20 +643,26 @@ class BucketStore:
 
     # --- scopes --------------------------------------------------------------------------------
 
-    def scope_for_path(self, path: str) -> Scope:
+    def scope_for_path(self, path: str) -> Scope | None:
         """A request path's scope: a session's endpoints read its bucket, a person's (and
-        /coverage's, for its personId) their sessions' and accounts'; everything else (the
-        directory, /status, the drawer) all."""
+        /coverage's, for its personId) their sessions' and accounts'; the directory, /status and
+        the drawer all. None for anything else (the UI's files, unknown paths, /coverage without
+        a personId): those read nothing."""
         path, _, query = path.partition("?")
         if path == "/api/v1/coverage":
             person = urllib.parse.parse_qs(query).get("personId")
-            if person:
-                return self.resolve_person(person[0])
+            return self.resolve_person(person[0]) if person else None
         if m := _SESSION_PATH.match(path):
-            return Scope(sessions={urllib.parse.unquote(m.group(1))})
+            rest = path[m.end() :]
+            # Only a session's Requests tab and its state readout (which counts that tab's rows)
+            # read the request log's inputs (and the credentials, a dimension, they're found by).
+            skip = frozenset() if rest in ("/requests", "/state") else _REQUEST_INPUTS | _DIMENSION_INPUTS
+            return Scope(sessions={urllib.parse.unquote(m.group(1))}, skip=skip)
         if m := _PERSON_PATH.match(path):
             return self.resolve_person(urllib.parse.unquote(m.group(1)))
-        return Scope.everything()
+        if path in _EVERYTHING_PATHS or path.startswith(_EVERYTHING_PREFIXES):
+            return Scope.everything()
+        return None
 
     def resolve_person(self, person_id: str) -> Scope:
         """A person's sessions and accounts, from the dimension tables (every bucket's)."""
@@ -550,36 +691,46 @@ class BucketStore:
     # For the app's middleware: `load_for` (blocking: run it off the event loop) finds and
     # loads the request's tables; `enter`, in the request's own context, makes them current.
     def load_for(self, path: str) -> object:
-        return self._load(self.scope_for_path(path))
+        scope = self.scope_for_path(path)
+        return None if scope is None else self._load(scope)
 
-    def enter(self, loaded: object) -> contextvars.Token[_Loaded | None]:
-        return _current.set(cast(_Loaded, loaded))
+    def enter(self, loaded: object) -> contextvars.Token[_Loaded | None] | None:
+        return None if loaded is None else _current.set(cast(_Loaded, loaded))
 
-    def leave(self, token: contextvars.Token[_Loaded | None]) -> None:
-        _current.reset(token)
+    def leave(self, token: contextvars.Token[_Loaded | None] | None) -> None:
+        if token is not None:
+            _current.reset(token)
 
     # --- loading -------------------------------------------------------------------------------
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
         routing = self._routing()
-        names = list(only) if only is not None else list(routing)
+        names = [t for t in (list(only) if only is not None else list(routing)) if t not in scope.skip]
         if scope.sessions is not None and self._has_session_inputs() and only is None:
-            scope = Scope(sessions=self._session_group(scope.sessions), people=scope.people, accounts=scope.accounts)
+            scope = Scope(
+                sessions=self._session_group(scope.sessions),
+                people=scope.people,
+                accounts=scope.accounts,
+                skip=scope.skip,
+            )
         wants = {t: None if routing[t][0] == "*" else scope.buckets(routing[t][0]) for t in names}
+        keys = {t: None if routing[t][0] == "*" else scope.keys(routing[t][0]) for t in names}
         needed: set[int] = set()
         for want in wants.values():
             needed |= set(range(1 << 16)) if want is None else want
-        commits = {b: c for b in sorted(needed & self._discover()) if (c := self._log(b).latest()) is not None}
+        commits = self._latest(sorted(needed & self._discover()))
         plan: dict[str, list[str]] = {}
         for t, want in wants.items():
-            plan[t] = [k for b in sorted(commits) if want is None or b in want for k in commits[b].files(t)]
+            plan[t] = [k for b in sorted(commits) if want is None or b in want for k in commits[b].files(t, keys[t])]
         sig = (scope.signature(), tuple(names), tuple((t, tuple(fs)) for t, fs in sorted(plan.items())))
         with self._lock:
             if sig in self._loaded:
                 self._loaded.move_to_end(sig)
                 return self._loaded[sig]
+        with self._lock:
+            self._read_keys.update(k for fs in plan.values() for k in fs)
         build = self._build_state if self.stream_state else self._build
-        loaded = _Loaded(build(plan, scope, partial=only is not None), commits)
+        loaded = _Loaded(build(plan, scope, partial=only is not None, keys=keys), commits)
         with self._lock:
             self.loads += 1
             self._loaded[sig] = loaded
@@ -588,27 +739,34 @@ class BucketStore:
                 old.con.close()
         return loaded
 
+    def _latest(self, bucket_ids: Sequence[int]) -> dict[int, Commit]:
+        """Each bucket's newest commit, looked up in parallel (a GET each, once warm)."""
+        logs = [self._log(b) for b in bucket_ids]
+        if len(logs) <= 1:
+            found = [log.latest() for log in logs]
+        else:
+            with ThreadPoolExecutor(max_workers=min(16, len(logs))) as pool:
+                found = list(pool.map(lambda log: log.latest(), logs))
+        return {log.bucket: c for log, c in zip(logs, found, strict=True) if c is not None}
+
     def _connect(self) -> duckdb.DuckDBPyConnection:
-        con = duckdb.connect()
-        con.execute("SET TimeZone='UTC'")
-        if self.memory_limit:
-            if not re.fullmatch(r"\d+(\.\d+)?\s*[KMGT]i?B", self.memory_limit):
-                raise ValueError(f"memory_limit {self.memory_limit!r}: use a size like '512MB'")
-            con.execute(f"SET memory_limit = '{self.memory_limit}'")
-        if self.threads:
-            con.execute(f"SET threads = {int(self.threads)}")
-        return con
+        return connect(self.source, memory_limit=self.memory_limit, threads=self.threads)
 
     def _build_state(
-        self, plan: dict[str, list[str]], scope: Scope | None = None, *, partial: bool = False
+        self,
+        plan: dict[str, list[str]],
+        scope: Scope | None = None,
+        *,
+        partial: bool = False,
+        keys: dict[str, list[str] | None] | None = None,
     ) -> duckdb.DuckDBPyConnection:
         """The API's tables from the stream state's (state_sql): each stored table folded as
         st_<table> (empty when the scope has none of its files), then rebuilt into today's."""
         con = self._connect()
         for table in state_sql.STATE_TABLES:
-            paths = [str(self.cache.path(k)) for k in plan.get(table, [])]
-            if paths:
-                con.sql(_STATE_NEWEST, params=[paths, paths]).create("st_" + table)
+            urls = [self.source.url(k) for k in plan.get(table, [])]
+            if urls:
+                read_newest(con, urls, keys=(keys or {}).get(table)).create("st_" + table)
             else:
                 con.execute(f"CREATE TABLE st_{table} ({state_sql.STATE_SCHEMA[table]})")
         state_sql.stored_views(con)
@@ -634,15 +792,20 @@ class BucketStore:
         return con
 
     def _build(
-        self, plan: dict[str, list[str]], scope: Scope | None = None, *, partial: bool = False
+        self,
+        plan: dict[str, list[str]],
+        scope: Scope | None = None,
+        *,
+        partial: bool = False,
+        keys: dict[str, list[str] | None] | None = None,
     ) -> duckdb.DuckDBPyConnection:
         con = self._connect()
         sessions_shape = self._has_session_inputs() and self._stored_sessions(plan.get("session_rows") or [])
-        for table, keys in plan.items():
-            paths = [str(self.cache.path(k)) for k in keys]
+        for table, files in plan.items():
+            urls = [self.source.url(k) for k in files]
             name = "_s_" + table if sessions_shape and table in SESSION_INPUTS else table
-            if paths:
-                con.sql(_NEWEST_KEYED if self.keep_keys else _NEWEST, params=[paths, paths]).create(name)
+            if urls:
+                read_newest(con, urls, keys=(keys or {}).get(table), keep_keys=self.keep_keys).create(name)
             elif sessions_shape and table in _SESSION_EMPTY:
                 con.execute(_SESSION_EMPTY[table])
             elif table in self.empty:
@@ -663,12 +826,20 @@ class BucketStore:
     @property
     def stream_state(self) -> bool:
         """Whether the layout is the stream state's tables (request_txs, prompt_items, …) rather
-        than finished API-shaped tables: the tables/ folders, listed at most every 30 seconds."""
+        than finished API-shaped tables: what the commits say (their layout), looked at most
+        every 30 seconds; never read from a table file. A store given its tables isn't."""
+        if self.tables is not ROUTING:
+            return False
         with self._lock:
             now = self.clock()
             if self._state is not None and self._state_listed is not None and now - self._state_listed < 30.0:
                 return self._state
-        found = "request_txs" in self.source.folders(f"{self.prefix}{ROOT}tables/")
+        found = False
+        for b in sorted(self._discover()):
+            c = self._log(b).latest()
+            if c is not None:
+                found = c.layout.startswith("stream-state/")
+                break
         with self._lock:
             self._state, self._state_listed = found, now
         return found
@@ -696,15 +867,17 @@ class BucketStore:
             return self._logs[bucket]
 
     def cache_keys(self) -> list[str]:
-        """The objects read so far (for tests)."""
-        return list(self.cache._lru)
+        """The objects read so far (for tests): the table files the loads named, and what the
+        local cache holds."""
+        with self._lock:
+            return sorted(self._read_keys | set(self.cache._lru))
 
     def _stored_sessions(self, keys: list[str]) -> bool:
         """Whether session_rows' files are the processor's per-session rows (with own_title) rather
         than the full-rebuild processor's finished rows."""
         if not keys:
             return False
-        cur = duckdb.connect().execute("SELECT * FROM read_parquet(?) LIMIT 0", [str(self.cache.path(keys[0]))])
+        cur = self._connect().execute("SELECT * FROM read_parquet(?) LIMIT 0", [self.source.url(keys[0])])
         return "own_title" in [d[0] for d in cur.description or []]
 
     def _has_session_inputs(self) -> bool:

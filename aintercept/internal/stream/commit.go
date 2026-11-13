@@ -63,6 +63,9 @@ type Commit struct {
 	// grow with history) is written once per generation, to BaseManifest; a
 	// commit names the manifest, not the base's parts, so every cycle writes a
 	// commit the size of its runs. In memory, Base and StateBase are loaded.
+	// Layout names the tables' shapes (the model's Layout): a reader knows
+	// them from the commit, without opening a table file.
+	Layout       string               `json:"layout,omitempty"`
 	Gen          int64                `json:"gen"`
 	BaseManifest string               `json:"base_manifest,omitempty"`
 	Base         map[string][]FileRef `json:"base,omitempty"`
@@ -111,7 +114,7 @@ func (c *Commit) Files() []string {
 // next is a copy of c as the start of its successor.
 func (c *Commit) next(epoch int64, replica string, at time.Time) *Commit {
 	n := &Commit{Bucket: c.Bucket, Seq: c.Seq + 1, Epoch: epoch, Replica: replica, Nonce: nonce(), At: at,
-		Watermark: c.Watermark, Processed: append([]string(nil), c.Processed...), Gen: c.Gen, BaseManifest: c.BaseManifest,
+		Layout: c.Layout, Watermark: c.Watermark, Processed: append([]string(nil), c.Processed...), Gen: c.Gen, BaseManifest: c.BaseManifest,
 		Base: map[string][]FileRef{}, Runs: map[string][]FileRef{},
 		StateBase: append([]FileRef(nil), c.StateBase...), State: append([]FileRef(nil), c.State...),
 		LastCompact: c.LastCompact, Garbage: append([]Garbage(nil), c.Garbage...)}

@@ -45,6 +45,7 @@ are kept for a grace period and then deleted. Fields:
 | `seq` | int | this commit's sequence |
 | `epoch`, `replica`, `nonce`, `at` | int, string, string, RFC 3339 | who wrote it and when; ignore |
 | `watermark`, `processed` | string, string[] | the processor's input position; ignore |
+| `layout` | string | the tables' shapes: `stream-state/1` (the stream state's tables, api `state_sql.py`) or `key-counts/1` (the stand-in model). A reader learns the layout here, never by opening a table file |
 | `gen` | int | the newest base segment number; ignore |
 | `base` | {table: FileRef[]} | each table's tiered base: its segments **oldest first**, each segment's parts in key order (may be absent: no rows) |
 | `runs` | {table: FileRef[]} | each table's run files since its base, **oldest first** |
@@ -76,6 +77,13 @@ the row: `s:<session>`, `c:<credential>:<day>` or `a:<account>`), `id`
 typed columns, flattened (an embedded struct's fields are columns of their
 own). In a tombstone row (`tomb = true`) the typed columns are zero values and
 mean nothing.
+
+Rows are in `(key, id)` order, in row groups of at most 2048 rows, with
+min/max statistics and a page index on every column. A reader filtering on
+`key` (`WHERE key IN (…)`, pushed into the scan) fetches only the row groups
+whose `key` range can hold its keys: by range request, straight from the
+object store. Never list or glob a table's folder: name exactly the files the
+commit names (below), filtered by their `[min_key, max_key]`.
 
 ## Reading a table
 

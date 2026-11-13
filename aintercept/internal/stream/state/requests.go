@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/json"
 	"reflect"
 	"strings"
 
@@ -458,21 +457,9 @@ func (rs rowSet) putEq(d *Delta, table, id string, row any) {
 	d.Changes = append(d.Changes, Change{Table: table, ID: id, Row: row})
 }
 
-// pendingOfStart is a call's start as the processor holds a call in flight: what
-// its headers say.
+// pendingOfStart is a call's start as the processor holds a call in flight:
+// everything ingest had of it (its client headers whole, so a Codex call is
+// Codex by its originator; the response's headers and bytes so far).
 func pendingOfStart(c *canon.Request) canon.Pending {
-	h := map[string]string{}
-	for k, v := range map[string]string{
-		"x-claude-code-session-id": c.SessionID, "x-claude-code-prompt-id": c.PromptID,
-		"x-claude-code-request-class": c.RequestClass, "x-client-request-id": c.ClientRequestID,
-		"x-claude-code-agent-type": c.AgentType,
-	} {
-		if v != "" {
-			h[k] = v
-		}
-	}
-	cj, _ := json.Marshal(h)
-	return canon.Pending{CorrelationID: c.CallID, SeenNS: c.StartNS, StartNS: c.StartNS, Host: c.Host,
-		Method: c.Method, Path: c.Path, Synthetic: c.Synthetic, KeyHash: c.KeyHash, RequestID: c.RequestID,
-		ClientJSON: string(cj), ResponseStartNS: c.ResponseStartNS}
+	return canon.PendingOfStart(c)
 }
