@@ -2,8 +2,9 @@
 stream processor's bucketed output, with nothing held but a cache.
 
 The processor (§4) owns each key bucket in turn and commits it as a create-only log,
-`stream/v1/buckets/NN/commit-<seq>.json`. A commit names, per table, the bucket's base
-files and the run files written since, oldest first. Every row carries the key whose
+`stream/v1/buckets/NN/commit-<seq>.json`. A commit names, per table, the bucket's tiered
+base (its segments oldest first; segments may overlap, so their order matters) and the run
+files written since, oldest first. Every row carries the key whose
 state produced it, its id within the table, and a tombstone flag; the newest file's row
 for a (key, id) wins, and a tombstone removes it.
 
