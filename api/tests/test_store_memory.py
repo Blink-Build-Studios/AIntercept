@@ -12,6 +12,7 @@ import json
 import pathlib
 
 import duckdb
+import pytest
 
 from aintercept_api.app import duckdb_memory_limit
 from aintercept_api.store import Store
@@ -49,9 +50,13 @@ def _write(con: duckdb.DuckDBPyConnection, path: pathlib.Path) -> None:
     con.execute(f"COPY part TO '{path}' (FORMAT parquet, ROW_GROUP_SIZE 8192)")
 
 
-def test_memory_stays_under_the_limit_through_churn(dataset, tmp_path):
+@pytest.mark.parametrize(
+    ("base", "commits", "compact_every"),
+    [pytest.param(300_000, 120, 30, marks=pytest.mark.full, id="full"), pytest.param(30_000, 12, 4, id="small")],
+)
+def test_memory_stays_under_the_limit_through_churn(dataset, tmp_path, base, commits, compact_every):
     """About 420k request rows (90% probes, 3 KB of headers each) and 120 commits with
-    four compactions, under a 128 MB limit."""
+    four compactions, under a 128 MB limit (the full run; make check runs a tenth of it)."""
     dataset.transaction("2026-11-04T17:00:00", path="/", method="GET", synthetic=True)
     dataset.transaction("2026-11-04T17:00:30")
     root = shaped(dataset)
@@ -73,7 +78,7 @@ def test_memory_stays_under_the_limit_through_churn(dataset, tmp_path):
         _write(con, out / key)
         return key
 
-    m["facts"]["requests"] = [part("base", 300_000, 0.9)]
+    m["facts"]["requests"] = [part("base", base, 0.9)]
     store = Store(root, memory_limit="128MB", threads=1, db_dir=tmp_path / "db")
     client = make_client(store)
 
@@ -85,11 +90,11 @@ def test_memory_stays_under_the_limit_through_churn(dataset, tmp_path):
 
     run = m["run"]
     fresh: list[str] = []
-    for _ in range(120):
+    for _ in range(commits):
         run += 1
         fresh.append(part(f"run-{run:012d}", 1_000, 0.9))
         m["facts"]["requests"].append(fresh[-1])
-        if len(fresh) == 30:  # compaction: the day's parts become one file
+        if len(fresh) == compact_every:  # compaction: the day's parts become one file
             day = f"{PREFIX}requests/day-{run:012d}.parquet"
             files = [str(out / k) for k in fresh]
             con.execute("CREATE OR REPLACE TABLE part AS SELECT * FROM read_parquet(?, union_by_name = true)", [files])
@@ -98,7 +103,7 @@ def test_memory_stays_under_the_limit_through_churn(dataset, tmp_path):
             fresh = []
         commit(run)
     real = store.query("SELECT count(*) FROM requests")[0][0]
-    assert real == 30_000 + 120 * 100  # the probes' 90% never loaded
+    assert real == base // 10 + commits * 100  # the probes' 90% never loaded
     assert store.query("SELECT path FROM duckdb_databases() WHERE database_name = current_database()")[0][0]
     used = store.query("SELECT sum(memory_usage_bytes) FROM duckdb_memory()")[0][0]
     assert used <= 128 * 2**20

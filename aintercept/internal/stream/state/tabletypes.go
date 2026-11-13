@@ -1,6 +1,9 @@
 package state
 
-import "github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+import (
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+)
 
 // TableTypes is each table's row type (a zero value): the processor registers
 // every table's file format from it.
@@ -39,4 +42,7 @@ var TableTypes = map[string]any{
 	TableSessionEdges:        SessionEdge{},
 	TableSessionTitleCalls:   SessionTitleCall{},
 	TableCallToolUses:        CallToolUse{},
+	TableFactRequests:        canon.Request{},
+	TableFactPending:         canon.Pending{},
+	TableFactEvents:          canon.Event{},
 }

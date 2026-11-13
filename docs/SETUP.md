@@ -85,13 +85,13 @@ Captured data stays in `data/`. To start over, delete `data/telemetry` and `data
 
 ## The cluster's data instead
 
-In a cluster the query API runs next to the data (the chart's `api.enabled=true`): an `api` Deployment whose `aintercept mirror` sidecar keeps the processor's tables in the pod and serves raw files from the bucket on demand, behind a ClusterIP Service that no other pod may reach. The UI connects to it through a tunnel:
+In a cluster the query API runs next to the data (the chart's `api.enabled=true`): an `api` Deployment that queries the bucket's files in place, behind a ClusterIP Service that no other pod may reach. The UI connects to it through a tunnel:
 
 ```bash
 make remote
 ```
 
-It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api 8787` (restarting itself when the API pod restarts) and the UI on :5173, which proxies `/api` to the tunnel as usual. The request drawer, raw view and events all work, since the API reads raw files through the mirror. `make down` stops the tunnel and the UI. It can't run alongside `make up`; both use ports 8787 and 5173.
+It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api 8787` (restarting itself when the API pod restarts) and the UI on :5173, which proxies `/api` to the tunnel as usual. The request drawer, raw view and events all work, since the API reads each call's rows from the bucket. `make down` stops the tunnel and the UI. It can't run alongside `make up`; both use ports 8787 and 5173.
 
 ## Troubleshooting
 

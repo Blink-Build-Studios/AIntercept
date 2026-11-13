@@ -16,7 +16,8 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 )
 
-// Run is `aintercept rollup`: one rollup replica (docs/PIPELINE.md §2).
+// Run is `aintercept rollup`: one rollup replica (docs/PIPELINE.md §2), and the
+// merge (§3) on whichever replica holds lock:merge.
 // Configured by environment:
 //
 //	ROLLUP_LOCAL_DIR                      a local directory as the store (development), or
@@ -45,9 +46,12 @@ func Run() {
 		}
 	}()
 	slog.Info("rollup: running", "replica", w.cfg.Replica)
+	merged := make(chan struct{})
+	go func() { defer close(merged); w.MergeLoop(ctx) }()
 	if err := w.Run(ctx); err != nil {
 		slog.Error("rollup: run", "err", err)
 	}
+	<-merged
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(sctx)

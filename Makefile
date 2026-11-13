@@ -178,6 +178,10 @@ test-full: ## Go: the exhaustive variants too (-tags full: more seeds, longer ca
 check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with a 90% coverage floor, requirements.json
 	cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q --cov
 
+.PHONY: test-api-full
+test-api-full: ## API: the full run too (every URL of the parity gates, the pipeline at full length, the memory churn); nightly in CI
+	cd api && AINTERCEPT_TESTS_FULL=1 uv run pytest -q -m full
+
 .PHONY: check-ui
 check-ui: ## UI: ESLint (story per component, formatting, a11y, ...), lint-ui (tokens, channels, copy), typecheck, tests, requirements.json
 	cd ui && pnpm lint && pnpm typecheck && pnpm test

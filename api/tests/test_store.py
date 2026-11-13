@@ -7,7 +7,7 @@ import itertools
 import json
 import pathlib
 
-from aintercept_api.raw import HttpRaw, LocalRaw
+from aintercept_api.raw import LocalRaw
 from aintercept_api.store import SNAPSHOTS, Store
 from tests.builders import Dataset, ns
 from tests.conftest import make_client, run_processor
@@ -200,46 +200,6 @@ def test_the_drawer_works_from_the_tables_when_raw_files_cant_be_read(dataset, t
         "user-agent",
         "x-claude-code-session-id",
     }  # what the tables keep
-
-
-def test_raw_files_can_come_from_the_mirror_over_http(dataset):
-    """In the cluster the raw files come from the `aintercept mirror` sidecar."""
-    import http.server
-    import threading
-    import urllib.parse
-
-    cid = dataset.transaction("2026-11-04T18:00:00")
-    root = shaped(dataset)
-    local = LocalRaw(root)
-
-    class Mirror(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            u = urllib.parse.urlparse(self.path)
-            q = urllib.parse.parse_qs(u.query)
-            if u.path == "/raw/list":
-                folder = q["prefix"][0]
-                body = "\n".join(folder + n for n in local.folder(folder)).encode()
-            else:
-                body = local.read(q["key"][0]) or b""
-                if not body:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, *a: object) -> None:
-            pass
-
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Mirror)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    try:
-        store = Store(root, raw=HttpRaw(f"http://127.0.0.1:{srv.server_address[1]}"))
-        store.ingest()
-        assert sorted(r["phase"] for r in store.raw_rows(cid)) == ["complete", "request_headers", "response_headers"]
-    finally:
-        srv.shutdown()
 
 
 def test_a_compaction_swaps_only_the_parts_it_replaced(dataset):

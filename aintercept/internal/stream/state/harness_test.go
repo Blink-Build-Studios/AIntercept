@@ -85,7 +85,10 @@ func callStart(c *canon.Request) records.Record {
 
 // reference is the single-pass reference over a set of records: each call's
 // ending (or its start, for a call still in flight), every event and account.
-func reference(rs []records.Record) *process.Derived {
+func reference(rs []records.Record) *process.Derived { return process.DeriveRows(refInput(rs)) }
+
+// refInput is the reference's input: the fact rows today's processor holds.
+func refInput(rs []records.Record) process.RefInput {
 	// One pass in capture order: a batch's events in the order ingest numbered
 	// them, so events tied on every ordering key take the ranks ingest gave them
 	// (records' batch_n), not whatever order a shuffled test fed them in.
@@ -140,7 +143,7 @@ func reference(rs []records.Record) *process.Derived {
 	}
 	sort.Slice(in.Accounts, func(i, j int) bool { return in.Accounts[i].AccountID < in.Accounts[j].AccountID })
 	// in.Events is already in capture order (by batch, then place: the sort above).
-	return process.DeriveRows(in)
+	return in
 }
 
 // pendingOf is a call in flight as the processor holds it.

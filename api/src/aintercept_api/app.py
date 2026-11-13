@@ -18,7 +18,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from aintercept_api.auth import OPEN_PATHS, AuthError, KeysUnavailable, Verifier, identity, verifier_from_env
 from aintercept_api.models.common import ErrorBody, ErrorResponse
-from aintercept_api.raw import HttpRaw
 from aintercept_api.routers import people, requests, sessions, status
 from aintercept_api.store import Store
 
@@ -59,11 +58,13 @@ def duckdb_memory_limit(env: Mapping[str, str]) -> str | None:
     return f"{int(container * DUCKDB_MEMORY_SHARE) >> 20}MB" if container > 0 else None
 
 
-def bucket_store_from_env(env: Mapping[str, str]) -> Any:
-    """The stateless read path (buckets.py, docs/STREAMING_PIPELINE.md §5): the stream
-    processor's bucketed tables, from a local directory (AINTERCEPT_BUCKETS_DIR) or the object
-    store (AINTERCEPT_S3_BUCKET, _PREFIX, _REGION, _ENDPOINT; AWS_* credentials)."""
+def bucket_store_from_env(env: Mapping[str, str], *, v1: bool = False) -> Any:
+    """A stateless read path, from a local directory (AINTERCEPT_BUCKETS_DIR) or the object
+    store (AINTERCEPT_S3_BUCKET, _PREFIX, _REGION, _ENDPOINT; AWS_* credentials): with v1, the
+    v5 pipeline's folders (v1.py, docs/PIPELINE.md §4), else the stream processor's bucketed
+    tables (buckets.py, docs/STREAMING_PIPELINE.md §5)."""
     from aintercept_api.buckets import BucketStore, LocalSource, S3Source, Source
+    from aintercept_api.v1 import V1Store
 
     source: Source
     if env.get("AINTERCEPT_BUCKETS_DIR"):
@@ -74,7 +75,7 @@ def bucket_store_from_env(env: Mapping[str, str]) -> Any:
         )
     prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
     cache = pathlib.Path(env.get("AINTERCEPT_CACHE_DIR") or "/data/cache")
-    return BucketStore(
+    return (V1Store if v1 else BucketStore)(
         source,
         cache,
         prefix=prefix + "/" if prefix else "",
@@ -116,16 +117,13 @@ def create_app(
         openapi_url="/openapi.json" if explorer else None,
     )
     data_dir = pathlib.Path(os.environ.get("AINTERCEPT_DATA_DIR") or DEFAULT_DATA_DIR)
-    if store is None and os.environ.get("AINTERCEPT_STORE") == "buckets":
-        store = bucket_store_from_env(os.environ)
+    if store is None and os.environ.get("AINTERCEPT_STORE") in ("v1", "buckets"):
+        store = bucket_store_from_env(os.environ, v1=os.environ["AINTERCEPT_STORE"] == "v1")
     if store is None:
         shaped = pathlib.Path(os.environ.get("AINTERCEPT_SHAPED_DIR") or DEFAULT_SHAPED_DIR)
-        # In the cluster, raw files come from the mirror sidecar rather than a directory.
-        raw_url = os.environ.get("AINTERCEPT_RAW_URL")
         store = Store(
             data_dir,
             shaped,
-            raw=HttpRaw(raw_url) if raw_url else None,
             memory_limit=duckdb_memory_limit(os.environ),
             threads=int(os.environ["AINTERCEPT_THREADS"]) if os.environ.get("AINTERCEPT_THREADS") else None,
             db_dir=pathlib.Path(os.environ["AINTERCEPT_DB_DIR"]) if os.environ.get("AINTERCEPT_DB_DIR") else None,
@@ -138,7 +136,8 @@ def create_app(
         "store ready",
         extra={
             "fields": {
-                "raw": os.environ.get("AINTERCEPT_RAW_URL") or str(app.state.store.data_dir),
+                "store": type(app.state.store).__name__,
+                "raw": str(app.state.store.data_dir),
                 "shapedDir": str(app.state.store.shaped_dir),
                 "memoryLimit": app.state.store.memory_limit,
             }
