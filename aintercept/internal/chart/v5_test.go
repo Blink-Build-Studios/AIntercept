@@ -109,12 +109,15 @@ func TestRollupDeployment(t *testing.T) {
 	}
 }
 
-// The observer flags dirty keys in the in-cluster Redis.
-func TestObserverPointsAtRedis(t *testing.T) {
+// Ingest has no database path (docs/PIPELINE.md §1): the observer gets no
+// Redis or Postgres address, DSN or Secret.
+func TestObserverHasNoDatabase(t *testing.T) {
 	envoy := find(render(t), "Deployment", "envoy")
 	obs := byName(get(envoy, "spec", "template", "spec", "containers"))["observer"]
-	if v := envOf(obs)["OBSERVER_REDIS_ADDR"]; v != "redis:6379" {
-		t.Errorf("OBSERVER_REDIS_ADDR = %v, want redis:6379", v)
+	for name, v := range envOf(obs) {
+		if s := strings.ToUpper(name + " " + fmt.Sprint(v)); strings.Contains(s, "REDIS") || strings.Contains(s, "POSTGRES") || strings.Contains(s, "DSN") {
+			t.Errorf("the observer has %s = %v", name, v)
+		}
 	}
 }
 

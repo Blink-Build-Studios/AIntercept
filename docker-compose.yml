@@ -57,17 +57,15 @@ services:
       OBSERVER_LOCAL_DIR: "${OBSERVER_LOCAL_DIR:-/data/telemetry}"
       # Flush every 15 s locally so the UI is close to live (object storage: 60 s).
       OBSERVER_S3_MAX_AGE_SECONDS: "${OBSERVER_S3_MAX_AGE_SECONDS:-15}"
-      # Per-key ingest files (v1/keys/<key>/in/), each flagging its key in Redis
-      # for the rollups. A key's buffer flushes after 5 s locally (default 30 s).
-      OBSERVER_REDIS_ADDR: "redis:6379"
+      # Per-key ingest files (v1/keys/<key>/in/), each named in the recent index
+      # (v1/recent/) the workers tail. A key's buffer flushes after 5 s locally
+      # (default 30 s).
       OBSERVER_KEY_FLUSH_SECONDS: "${OBSERVER_KEY_FLUSH_SECONDS:-5}"
     ports:
       - "9001:9001" # /healthz + /stats for the smoke test and operators
     volumes:
       # Host-visible capture directory. Files here are gitignored.
       - ./data:/data
-    depends_on:
-      - redis
     restart: unless-stopped
 
   # Coordination only (docs/PIPELINE.md): the dirty and committed sets and the

@@ -38,7 +38,8 @@ const (
 // KeyTemplate is an ingest file's key, with the writer's UploadTime placeholder
 // for its S3 time: <prefix>/v1/keys/<url.PathEscape(key)>/in/<time>-<inc>-<seq>.parquet.
 // It's the layout's rollup.InPrefix + rollup.InName (records can't import
-// rollup, which reads records); keyflag's test pins the two equal.
+// rollup, which reads records); rollup's TestInTemplateResolvesToTheLayoutsName
+// pins the two equal.
 func KeyTemplate(prefix, key, incarnation string, seq int64) string {
 	p := strings.Trim(prefix, "/")
 	if p != "" {
@@ -209,6 +210,11 @@ func (s *Sink) putBuffer(key, path string) error {
 	tmpl := KeyTemplate(s.cfg.Prefix, key, s.cfg.Incarnation, s.kseq)
 	if s.cfg.KeyObject != nil {
 		tmpl = s.cfg.KeyObject(key, s.kseq)
+	}
+	if s.cfg.Journal != nil {
+		if err := s.cfg.Journal(key, tmpl); err != nil {
+			return err
+		}
 	}
 	if kp, ok := s.cfg.Putter.(KeyFilePutter); ok {
 		return kp.PutKeyFile(context.Background(), tmpl, body, path)

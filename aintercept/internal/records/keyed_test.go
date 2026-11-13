@@ -272,6 +272,62 @@ func TestKeyedFlushWritesEveryBuffer(t *testing.T) {
 	}
 }
 
+// Atomic: each ingest file's key is journaled (the recent index, keyflag)
+// before the writer has the file, with the template it lands under; a journal
+// that fails keeps the buffer on disk, never uploading an unjournaled file.
+func TestKeyedJournalsEachFileBeforeItsUpload(t *testing.T) {
+	type entry struct{ key, tmpl string }
+	var (
+		mu      sync.Mutex
+		journal []entry
+		fail    bool
+		r       *rig
+	)
+	cfg := records.SinkConfig{FlushBytes: 1 << 20, FlushAge: 60 * time.Second,
+		Journal: func(key, tmpl string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if fail {
+				return errors.New("journal write failed")
+			}
+			if n := len(r.st.inFiles(t)[key]); n != 0 {
+				t.Errorf("%s journaled after %d of its files landed", key, n)
+			}
+			journal = append(journal, entry{key, tmpl})
+			return nil
+		}}
+	r = newRig(t, cfg)
+	for _, k := range []string{"s:a", "s:b"} {
+		r.s.AddRecords(rec(k))
+	}
+	if err := r.s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	r.drain(t)
+	if len(journal) != 2 {
+		t.Fatalf("journal %v, want both keys", journal)
+	}
+	for _, e := range journal {
+		if !strings.HasPrefix(e.tmpl, "v1/keys/"+url.PathEscape(e.key)+"/in/"+events.UploadTime+"-") {
+			t.Fatalf("journaled %s under %q", e.key, e.tmpl)
+		}
+	}
+	mu.Lock()
+	fail = true
+	mu.Unlock()
+	r.s.AddRecords(rec("s:c"))
+	if err := r.s.Flush(); err == nil {
+		t.Fatal("a failed journal write wasn't reported")
+	}
+	r.drain(t)
+	if got := r.st.inFiles(t)["s:c"]; len(got) != 0 {
+		t.Fatalf("s:c uploaded without its journal entry: %v", got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(r.keys, "*", "*")); len(left) != 1 {
+		t.Fatalf("buffer files left %v, want s:c's", left)
+	}
+}
+
 // Atomic: a crash with buffers on disk: the next process uploads them, every
 // record exactly once, and no object twice.
 func TestKeyedCrashRecoveryUploadsEachRecordOnce(t *testing.T) {
