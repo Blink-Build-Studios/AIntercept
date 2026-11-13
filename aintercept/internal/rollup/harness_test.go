@@ -190,3 +190,26 @@ func crashAt(step string) func(string, string) error {
 		return nil
 	}
 }
+
+// ingestNewest is ingest with the file's newest raw row time set.
+func (e *env) ingestNewest(sid string, n int, newest int64) string {
+	e.t.Helper()
+	key := sessionKey(sid)
+	at := e.clock.Now()
+	rs := make([]records.Record, n)
+	for i := range rs {
+		rs[i] = e.rec(sid, at.UnixNano()+int64(i))
+	}
+	b, err := records.EncodeWithNewest(rs, newest)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	e.seq++
+	name := InName(at, "inc", e.seq)
+	if err := e.store.Put(e.ctx, InPrefix(prefix, key)+name, b); err != nil {
+		e.t.Fatal(err)
+	}
+	e.all = append(e.all, rs...)
+	e.rdb.SAdd(e.ctx, "dirty", key)
+	return name
+}

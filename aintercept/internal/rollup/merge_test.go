@@ -371,3 +371,25 @@ func permutations(n int) [][]int {
 	}
 	return out
 }
+
+// The merge's newest is the newest raw row any committed key saw, even when
+// no fact row is that new (a call still streaming).
+func TestMergeNewestIsTheNewestRawRow(t *testing.T) {
+	s := stream.NewMemStore(stream.NewFakeClock(t0))
+	commitKey(t, s, "s:a", 1, map[string]mtRow{"x": {LastNS: day(0), V: "1"}})
+	ctx := context.Background()
+	c, _ := ReadNewest(ctx, s, "", "s:a")
+	c.N, c.NewestRowNS = 2, day(0)+7
+	body, _ := json.Marshal(c)
+	if ok, err := s.PutIfAbsent(ctx, CommitKey("", "s:a", 2), body); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	run(t, s, newQueue("s:a"))
+	m, err := ReadNewestMerge(ctx, s, "")
+	if err != nil || m == nil {
+		t.Fatal(m, err)
+	}
+	if m.NewestNS < day(0)+7 {
+		t.Fatalf("merge newest %d, want at least %d", m.NewestNS, day(0)+7)
+	}
+}
