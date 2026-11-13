@@ -72,7 +72,9 @@ def stores(tmp_path_factory):
         def fresh(tmp=tmp, root=root, layout=layout):
             # A new store for each measurement: nothing cached from an earlier request.
             src = CountingSource(layout)
-            store = V1Store(src, tmp / f"cache{len(made)}", prefix="sim/", raw=LocalRaw(root))
+            # A frozen clock: freshness relists at most once a second, so on a slow runner a
+            # request spanning a second would list once more, which says nothing about history.
+            store = V1Store(src, tmp / f"cache{len(made)}", prefix="sim/", raw=LocalRaw(root), clock=lambda: 0.0)
             made.append(store)
             return src, store
 
