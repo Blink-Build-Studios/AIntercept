@@ -108,8 +108,10 @@ _REPLACE = {
         "CREATE OR REPLACE TABLE requests AS SELECT * FROM read_parquet(?, filename = true, union_by_name = true)"
         " WHERE NOT coalesce(synthetic, false)"
     ),
+    # batch_n (an event's stored batch rank) is absent from files written before it.
     "analytics": (
         "CREATE OR REPLACE TABLE analytics AS SELECT * FROM read_parquet(?, filename = true, union_by_name = true)"
+        " UNION ALL BY NAME SELECT NULL::BIGINT AS batch_n WHERE false"
     ),
     "ledger": (
         "CREATE OR REPLACE TABLE ledger AS SELECT * FROM read_parquet(?, filename = true, union_by_name = true)"
@@ -194,7 +196,8 @@ _EMPTY = {
         source VARCHAR, name VARCHAR, type VARCHAR, client_event_id VARCHAR, session_id VARCHAR, prompt_id VARCHAR,
         person_id VARCHAR, org_id VARCHAR, device_id VARCHAR, agent_id VARCHAR, agent_type VARCHAR, model VARCHAR,
         request_id VARCHAR, client_request_id VARCHAR, tool_use_id VARCHAR, prompt_index BIGINT,
-        permission_mode VARCHAR, head_sha VARCHAR, metadata_json VARCHAR, env_json VARCHAR, filename VARCHAR)""",
+        permission_mode VARCHAR, head_sha VARCHAR, metadata_json VARCHAR, env_json VARCHAR, batch_n BIGINT,
+        filename VARCHAR)""",
     "ledger": """CREATE OR REPLACE TABLE ledger (raw_key VARCHAR, size BIGINT, rows BIGINT, bad BIGINT, run BIGINT,
         filename VARCHAR)""",
     "sessions": """CREATE OR REPLACE TABLE sessions (session_id VARCHAR, person_id VARCHAR, org_id VARCHAR,
@@ -342,7 +345,7 @@ CREATE OR REPLACE VIEW hidden_calls AS SELECT * FROM agent_calls WHERE hidden_ki
 CREATE OR REPLACE VIEW cc_events AS
 SELECT correlation_id, row_ns AS row_ts, ns AS ts, name, session_id, person_id AS account_uuid,
        org_id AS organization_uuid, device_id, metadata_json::JSON AS md, env_json::JSON AS env, head_sha, seq,
-       prompt_id, event_key, source_file, request_id, client_request_id, tool_use_id
+       prompt_id, event_key, source_file, request_id, client_request_id, tool_use_id, batch_n
 FROM analytics WHERE source = 'claude_code';
 
 -- Codex's own analytics (codex_turn_event, codex_thread_initialized, …): the params are `md`.

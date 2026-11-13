@@ -530,6 +530,7 @@ func rankClaudeCode(evs []Record) {
 	})
 	for i, r := range cc {
 		r.BatchCCN = int64(i + 1)
+		r.Event.BatchN = r.BatchCCN
 	}
 }
 
