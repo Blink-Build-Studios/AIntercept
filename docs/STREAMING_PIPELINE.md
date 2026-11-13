@@ -218,7 +218,7 @@ A record never makes the processor rebuild a whole session.
    - an interval index for presence.
 
    One record changes a handful of rows.
-3. *(Points 3 and 4 are superseded by "Read model (revised)": the processor now stores numbers and labels.)* **Values derived from the session as a whole aren't copied into rows.** For
+3. *(Points 3 and 4 are superseded by "Read model (revised)", later in this document: the processor now stores numbers and labels.)* **Values derived from the session as a whole aren't copied into rows.** For
    example: the session's last activity, a prompt's number, a call's label, and
    whether events are pending. Rows store keys (`prompt_id`, `request_id`,
    `session_id`). The query joins small per-session lookup tables: prompt to
@@ -235,7 +235,7 @@ answer key uses the same rule.
 
 ### Values that span keys
 
-> **Superseded** by "Read model (revised)" below, where they conflict.
+> **Superseded** by "Read model (revised)" (before the implementation plan), where they conflict.
 
 
 These are small tables joined at query time, never copied into rows:
@@ -277,7 +277,7 @@ These are small tables joined at query time, never copied into rows:
 
 ## 5. The query API
 
-> **Superseded** by "Read model (revised)" below, where they conflict.
+> **Superseded** by "Read model (revised)" (before the implementation plan), where they conflict.
 
 
 API replicas are stateless. Each request goes like this:
@@ -1372,7 +1372,7 @@ per-bucket appliers, then a writer.
 
 ### 4.5 Per-key incremental state: porting the reference builders
 
-> **Superseded** by "Read model (revised)" below, where they conflict.
+> **Superseded** by "Read model (revised)" (before the implementation plan), where they conflict.
 
 
 Each table's single-pass builder (PORT) is restructured into **per-record
@@ -1401,7 +1401,7 @@ table has its own gate (4.11).
 
 ### 4.6 Dimensions: values that span keys
 
-> **Superseded** by "Read model (revised)" below, where they conflict.
+> **Superseded** by "Read model (revised)" (before the implementation plan), where they conflict.
 
 
 These are small tables, written by each bucket's applier as upsert rows for the
@@ -1447,7 +1447,7 @@ instead of being copied into rows (4.5).
 
 ### 4.9 The request drawer
 
-> **Superseded** by "Read model (revised)" below, where they conflict.
+> **Superseded** by "Read model (revised)" (before the implementation plan), where they conflict.
 
 
 **What it reads.** `detail`, `raw` and `/events/{id}` read
@@ -1520,7 +1520,7 @@ compare the API (phase 5) the same way.
 
 ## Phase 5: the API reads the bucketed tables
 
-> **Superseded** by "Read model (revised)" below, where they conflict.
+> **Superseded** by "Read model (revised)" (before the implementation plan), where they conflict.
 
 
 ### 5.1 A new store (`api/src/aintercept_api/store.py`, rewritten)
