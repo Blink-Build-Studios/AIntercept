@@ -6,30 +6,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
 
-// How long a transaction may wait for its ending before it's written without
-// one (data time: the newest row seen). WebSocket connections live far longer.
-const (
-	pendingTTL   = 6 * time.Hour
-	pendingTTLWS = 7 * 24 * time.Hour
-	// expiredTTL is how long the marker of a transaction written without its
-	// ending (expire) is kept: its late rows, however late within it, are
-	// recognized and not written as a second row. These markers are few (one per
-	// transaction that never ended in time), so they're committed with the
-	// in-flight transactions rather than rebuilt from the requests.
-	expiredTTL = 7 * 24 * time.Hour
-)
-
 // state is what the shaped tables accumulate: the snapshot tables keyed by
 // their primary keys, and the transactions waiting for their ending. Every
 // update is a count, sum, min or max, so applying the same rows in any order
-// gives the same state. Applying a row twice doesn't: a run that fails to
-// commit leaves the processor dirty, and the next poll reloads (Poll).
+// gives the same state. Applying a row twice doesn't.
 type state struct {
 	sessions map[string]*Session
 	prompts  map[string]*Prompt
@@ -239,58 +224,6 @@ func (s *state) done(id string, at int64) {
 	delete(s.bodies, id)
 }
 
-// markTTL is how long an end marker is kept.
-func markTTL(p *Pending) time.Duration {
-	if p.Expired {
-		return expiredTTL
-	}
-	return pendingTTL
-}
-
-// markDone restores an end marker at open, unless a newer state already has one.
-func (s *state) markDone(id string, at int64) {
-	if p := s.pending[id]; p == nil || p.Done && !p.Expired {
-		if s.newestNS-at <= int64(pendingTTL) {
-			s.done(id, at)
-		}
-	}
-}
-
-// dropOldMarkers forgets restored markers past their window, as expire would have.
-func (s *state) dropOldMarkers() {
-	for id, p := range s.pending {
-		if p.Done && s.newestNS-p.SeenNS > int64(markTTL(p)) {
-			delete(s.pending, id)
-			delete(s.eventCopies, id)
-		}
-	}
-}
-
-// expire writes the transactions that waited too long for their ending (in
-// data time), and forgets end markers once late rows can no longer arrive.
-func (s *state) expire(out *batch) {
-	for id, p := range s.pending {
-		ttl := pendingTTL
-		switch {
-		case p.Done:
-			ttl = markTTL(p)
-		case p.WebSocket:
-			ttl = pendingTTLWS
-		}
-		if s.newestNS-p.SeenNS <= int64(ttl) {
-			continue
-		}
-		if p.Done {
-			delete(s.pending, id)
-			delete(s.eventCopies, id)
-			continue
-		}
-		s.addRequest(canon.RequestFromPending(p), out)
-		s.done(id, s.newestNS)
-		s.pending[id].Expired = true
-	}
-}
-
 func (s *state) pendingFor(e *events.Event, file string) *Pending {
 	p := s.pending[e.CorrelationID]
 	if p == nil {
@@ -424,11 +357,6 @@ func newer(cur string, curNS int64, v string, at int64) (string, int64) {
 	return cur, curNS
 }
 
-// accountRows is the accounts snapshot, by account id.
-func (s *state) accountRows() []Account {
-	return sortedValues(s.accounts, func(a *Account) string { return a.AccountID })
-}
-
 // loadAccounts restores the accounts snapshot.
 func (s *state) loadAccounts(rows []Account) {
 	for i := range rows {
@@ -495,44 +423,6 @@ func inFlight(m map[string]*Pending) []Pending {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CorrelationID < out[j].CorrelationID })
 	return out
-}
-
-// bodyRows is the in-flight calls' recorded bodies, by key, to commit.
-func (s *state) bodyRows() []PendingBodies {
-	out := make([]PendingBodies, 0, len(s.bodies))
-	for id, b := range s.bodies {
-		if p := s.pending[id]; p == nil || p.Done || len(b.req)+len(b.resp) == 0 && b.reqEnc == "" && b.respEnc == "" {
-			continue
-		}
-		out = append(out, PendingBodies{CorrelationID: id, Request: b.req, Response: b.resp,
-			RequestEncoding: b.reqEnc, ResponseEncoding: b.respEnc})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CorrelationID < out[j].CorrelationID })
-	return out
-}
-
-// loadBodies restores the in-flight calls' recorded bodies.
-func (s *state) loadBodies(rows []PendingBodies) {
-	for _, r := range rows {
-		s.bodies[r.CorrelationID] = &callBodies{req: r.Request, resp: r.Response, reqEnc: r.RequestEncoding, respEnc: r.ResponseEncoding}
-	}
-}
-
-// load restores the state from committed snapshot tables.
-func (s *state) load(sessions []Session, prompts []Prompt, devices []PersonDevice, pending []Pending, newest int64) {
-	for i := range sessions {
-		s.sessions[sessions[i].SessionID] = &sessions[i]
-	}
-	for i := range prompts {
-		s.prompts[prompts[i].PromptID] = &prompts[i]
-	}
-	for i := range devices {
-		s.devices[[2]string{devices[i].PersonID, devices[i].DeviceID}] = &devices[i]
-	}
-	for i := range pending {
-		s.pending[pending[i].CorrelationID] = &pending[i]
-	}
-	s.newestNS = newest
 }
 
 // --- small helpers -------------------------------------------------------------------

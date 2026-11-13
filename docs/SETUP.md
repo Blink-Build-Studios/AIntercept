@@ -8,9 +8,10 @@ What runs where:
 |---|---|---|---|
 | Envoy | Docker | 443 | Terminates TLS for `api.anthropic.com` with a certificate from the local dev CA, forwards to the real upstream |
 | certsvc | Docker | — | Mints those certificates (`aintercept certsvc`) |
-| observer | Docker | 9001 | Records each request and response, body-stripped, to `data/telemetry/` (`aintercept observer`) |
-| processor | Docker | 9002 | Turns `data/telemetry/` into Parquet tables in `data/shaped/` (`aintercept process`) |
-| API | this machine | 8787 | Serves the tables (`api/`) |
+| observer | Docker | 9001 | Records each request and response, body-stripped, to `data/telemetry/`: the raw log, and each routing key's ingest files under `v1/keys/<key>/in/` (`aintercept observer`) |
+| Redis | Docker | 16379 | Coordination only: which keys have new files, and the locks ([PIPELINE.md](PIPELINE.md)) |
+| rollups | Docker | 9004 | Apply each key's new files and commit its rows, and run the 30-second merge, under `data/telemetry/v1/` (`aintercept rollup`) |
+| API | this machine | 8787 | Serves the rollups' commits and merge (`api/`, `AINTERCEPT_STORE=v1`) |
 | UI | this machine | 5173 | The app (`ui/`) |
 
 Nothing leaves the machine except the forwarded requests themselves; captured data stays in `data/` (gitignored).
@@ -41,7 +42,7 @@ The first run builds the images (a few minutes) and installs the API's and UI's 
 make verify
 ```
 
-This sends one request through the proxy to the real `api.anthropic.com` (no key, so the upstream answers 401) and waits until the observer, the processor and the API all show it. It changes nothing on the machine. Expect three `ok` lines and `Verified.` within about 30 seconds.
+This sends one request through the proxy to the real `api.anthropic.com` (no key, so the upstream answers 401) and waits until the observer has written it, a rollup has committed it and the API shows it. It changes nothing on the machine. Expect four `ok` lines and `Verified.` within about 30 seconds.
 
 ## 4. Route Claude Code through the proxy (a person runs this)
 
@@ -66,7 +67,7 @@ Use it for a minute (any prompt). An agent can confirm traffic is arriving:
 curl -s localhost:8787/api/v1/people | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]), "people")'
 ```
 
-`1 people` (or more) means the person page has data. It can take up to about 30 seconds after the first prompt: the observer flushes every 15 seconds and the processor polls every 5.
+`1 people` (or more) means the person page has data. It can take up to about 40 seconds after the first prompt: the observer flushes a key's files after 5 seconds, a rollup applies them at once, and the merge that lists people runs every 30.
 
 **Important:** while the machine is routed, Claude Code depends on the proxy. Stopping the stack (`make down`) without reverting first leaves Claude Code unable to reach Anthropic, and that includes an agent following this doc. Always revert first (step 6).
 
@@ -81,7 +82,7 @@ sudo scripts/route-claude-through-proxy.sh revert   # first: give Claude Code it
 make down
 ```
 
-Captured data stays in `data/`. To start over, delete `data/telemetry` and `data/shaped`.
+Captured data stays in `data/`. To start over, delete `data/telemetry`.
 
 ## The cluster's data instead
 
@@ -102,5 +103,5 @@ It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api
 | `make verify`: expected 401, got 000 | no internet, or `api.anthropic.com` unreachable from Docker | check the network; `docker compose logs envoy` |
 | Claude Code: certificate errors | `NODE_EXTRA_CA_CERTS` isn't set in that shell | export it (step 4) and restart `claude` |
 | No people after using Claude Code | Claude Code isn't routed (or bypasses over IPv6) | `scripts/route-claude-through-proxy.sh status`; both host lines must be present |
-| The UI shows "Delayed" | no new data for 3 minutes | `curl localhost:9002/stats` (processor) and `curl localhost:9001/stats` (observer) |
-| Anything else | | logs: `.cache/run/api.log`, `.cache/run/ui.log`, `docker compose logs observer process envoy` |
+| The UI shows "Delayed" | no new data for 3 minutes | `curl localhost:9001/stats` (observer) and `curl localhost:9004/lag` (rollups: the oldest unapplied file's age) |
+| Anything else | | logs: `.cache/run/api.log`, `.cache/run/ui.log`, `docker compose logs observer rollup envoy` |

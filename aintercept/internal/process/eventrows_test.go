@@ -108,29 +108,6 @@ func TestEventRowsOrderAndIDs(t *testing.T) {
 	}
 }
 
-// A batch two parts hold is numbered over both (a part alone would number its
-// own share from 1).
-func TestEventRowsBatchAcrossParts(t *testing.T) {
-	s := newMem()
-	ev := func(name string, ns int64) eventCols {
-		return eventCols{CorrelationID: "b", NS: ns, Source: productClaudeCode, Name: name, SessionID: "s", MetadataJSON: `{}`}
-	}
-	s.objs["e1"] = encodeParquet([]eventCols{ev("tengu_c", 3), ev("tengu_a", 1)})
-	s.objs["e2"] = encodeParquet([]eventCols{ev("tengu_b", 2), ev("tengu_d", 4)})
-	m := &Manifest{Facts: map[string][]string{"events": {"e1", "e2"}}}
-	d, err := newRowParts(s).derive(t.Context(), m, nil, nil, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, r := range d.EventRows {
-		got = append(got, r.EventID+" "+r.Name)
-	}
-	if want := []string{"b:1 tengu_a", "b:2 tengu_b", "b:3 tengu_c", "b:4 tengu_d"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("rows %v, want %v", got, want)
-	}
-}
-
 // Internals, markers, the state readout's values, and the tools the calls and
 // events used (an MCP tool by its server, from the name when no server is given).
 func TestEventRowsState(t *testing.T) {

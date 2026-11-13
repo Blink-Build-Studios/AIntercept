@@ -61,7 +61,7 @@ A client reaches its ordinary hostname (`api.anthropic.com`), but DNS, scoped to
 - **Observe mode:** Envoy sends a copy and never waits, so a slow or failed observer can't stall real traffic.
 - **Enforce mode:** Envoy forwards only what the observer returns.
 
-The observer writes observations to an S3-compatible store. The **processor** compacts them into Parquet tables, shaped into one common schema across providers with per-provider extensions. The **query API** (Python, FastAPI and DuckDB) serves those tables, and the **UI** (React) reads the API.
+The observer writes observations to an S3-compatible store. The **rollups** fold each routing key's records into Parquet tables, shaped into one common schema across providers with per-provider extensions, and merge the org-level rows. The **query API** (Python, FastAPI and DuckDB) serves those tables, and the **UI** (React) reads the API.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale (telemetry mechanism, dynamic certs, DNS isolation, scaling model). [`docs/harness-parity.md`](docs/harness-parity.md) covers what each coding agent sends and how it maps onto the common schema, and [`docs/limitations.md`](docs/limitations.md) is an honest account of what is tested versus assumed.
 
@@ -98,10 +98,10 @@ make clean            # DESTRUCTIVE: also delete generated CA keys (prompts firs
 | Path | What |
 |---|---|
 | `envoy/` | Envoy configs (single-host, multi-provider). TLS termination, per-SNI cert selection, `ext_proc`, verified upstreams. |
-| `aintercept/` | Go, one binary in three roles: `certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `observer` (`ext_proc` in observe and enforce modes, provider-aware extractors, pluggable sinks, the Interceptor client) and `process` (raw partitions → Parquet tables). Also `schemareport`, which turns unrecognized-shape samples into a structure-only report. |
+| `aintercept/` | Go, one binary in three roles: `certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `observer` (`ext_proc` in observe and enforce modes, provider-aware extractors, pluggable sinks, the Interceptor client) and `rollup` (per-key rollups and the merge, [docs/PIPELINE.md](docs/PIPELINE.md)). Also `schemareport`, which turns unrecognized-shape samples into a structure-only report. |
 | `aintercept/interceptor/v1/` | The Interceptor gRPC contract and generated Go code. |
 | `aintercept/examples/redact/`, `aintercept/examples/python-redact/` | Example Interceptors, in Go and Python. |
-| `api/` | The query API (FastAPI and DuckDB) over the processor's tables. Its Pydantic models are the contract; the UI's types and samples are generated from them (`make regen`). |
+| `api/` | The query API (FastAPI and DuckDB) over the rollups' tables. Its Pydantic models are the contract; the UI's types and samples are generated from them (`make regen`). |
 | `ui/` | The web UI (React, Vite, Tailwind), with Storybook stories for every component and state. Design in `docs/ui/`. |
 | `fixture/` | A local HTTPS origin with synthetic content, for the end-to-end tests. |
 | `extractor/` | Offline schema extraction and the sanitizer that makes committable fixtures. |
