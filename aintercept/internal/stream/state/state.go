@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"reflect"
 	"sort"
 
@@ -72,6 +73,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.requests(r, &d)
 	s.sessionRows(r, &d)
 	s.callTools(r, &d)
+	s.facts(r, &d)
 	d.Changes = lastChanges(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
@@ -157,7 +159,8 @@ var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTur
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
 	PromptItem{}, StepRow{}, StepToolsRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},
-	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}, CallToolUse{}}
+	ReqTx{}, ReportRow{}, MissedRow{}, BatchMember{}, SessionLast{}, CallToolUse{},
+	canon.Request{}, canon.Pending{}, canon.Event{}}
 
 func init() {
 	for _, v := range RowTypes {
