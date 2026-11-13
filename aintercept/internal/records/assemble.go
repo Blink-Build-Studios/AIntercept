@@ -27,6 +27,8 @@ const (
 	CaseStartBodyEOS             = "start.body_eos"              // request body ends: call_start
 	CaseStartWSUpgrade           = "start.ws_upgrade"            // a WebSocket upgrade's headers (its request stream never ends): call_start
 	CaseStartWSTurn              = "start.ws_turn"               // a WebSocket turn's response.create: call_start
+	CaseStartResponse            = "start.response_headers"      // a response to a request whose end was never seen: call_start
+	CaseStartUploading           = "start.uploading"             // a request still uploading at a flush (or past the sink's age): call_start
 	CaseEndComplete              = "end.complete"                // complete after its headers: call_end
 	CaseEndCompleteNoHeaders     = "end.complete_no_headers"     // complete with no headers seen: call_end from it alone
 	CaseEndWSTurn                = "end.ws_turn"                 // a WebSocket turn ends: call_end
@@ -50,7 +52,7 @@ const (
 // AllCases is every case label.
 var AllCases = []string{
 	CasePendingHeaders, CasePendingRequestChunk, CasePendingResponseHeaders, CasePendingResponseChunk,
-	CaseStartHeadersEOS, CaseStartBodyEOS, CaseStartWSUpgrade, CaseStartWSTurn,
+	CaseStartHeadersEOS, CaseStartBodyEOS, CaseStartWSUpgrade, CaseStartWSTurn, CaseStartResponse, CaseStartUploading,
 	CaseEndComplete, CaseEndCompleteNoHeaders, CaseEndWSTurn, CaseEndWSConnection,
 	CaseEndDisconnect, CaseEndDisconnectEarly, CaseEndDisconnectThenHeaders, CaseEndSplitKey, CaseLateAfterDone,
 	CaseEventWithID, CaseEventNoID, CaseEventRepeat, CaseEventNoPayload,
@@ -81,6 +83,7 @@ type call struct {
 	headers  map[string]string // the request headers (a Codex turn's identity at its start)
 	done     bool
 	startKey string // its call_start's routing key ("": none written)
+	instance string // the observer its rows came from
 	bodies   *bodies
 	// Its analytics batch: the events seen, and the earliest that names a session.
 	batchN    int64
@@ -297,7 +300,6 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			a.hit(CasePendingHeaders)
 		}
 	case events.PhaseResponseHeaders:
-		a.hit(CasePendingResponseHeaders)
 		c := a.callFor(e, file)
 		c.p.ResponseStartNS = e.TimestampNS
 		if e.Status != 0 {
@@ -309,6 +311,13 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			b.respEnc = c.p.ContentEncoding
 		}
 		c.p.ProviderJSON = canon.Marshal(events.ProviderHeaderValues(e.Headers))
+		if c.p.StartNS != 0 && c.startKey == "" && !c.p.WebSocket {
+			// The request was sent, though its end of stream was never seen.
+			a.hit(CaseStartResponse)
+			out = append(out, a.start(c, e))
+		} else {
+			a.hit(CasePendingResponseHeaders)
+		}
 	case events.PhaseRequestBodyChunk:
 		c := a.callFor(e, file)
 		c.p.RequestBytes += int64(e.Bytes)
@@ -463,6 +472,20 @@ func (a *Assembler) release() []Record {
 			out[i].BatchID = h.corr
 		}
 	}
+	// An event row without its batch's credential takes the batch request's (the
+	// processor joins them by correlation id).
+	kh := ""
+	if h.call != nil && h.call.Call != nil {
+		kh = h.call.Call.KeyHash
+	}
+	if kh == "" && h.c != nil {
+		kh = h.c.p.KeyHash
+	}
+	for i := range h.events {
+		if c := h.events[i].Call; c != nil && c.KeyHash == "" {
+			c.KeyHash = kh
+		}
+	}
 	rankClaudeCode(h.events)
 	return append(out, h.events...)
 }
@@ -505,7 +528,28 @@ func rankClaudeCode(evs []Record) {
 // Flush releases what's held (an analytics request waiting for more events).
 // Call it when no more rows will come for now: at a sink's seal, at the end of
 // a file set.
-func (a *Assembler) Flush() []Record { return a.release() }
+func (a *Assembler) Flush() []Record { return append(a.StartUploading(0), a.release()...) }
+
+// StartUploading writes the start of each request still uploading (its headers
+// seen, neither its end of stream nor a response yet) that began at or before
+// before (0: every one): today's processor shows such a call in flight.
+func (a *Assembler) StartUploading(before int64) []Record {
+	var ids []string
+	for id, c := range a.calls {
+		if c.p.StartNS != 0 && c.startKey == "" && !c.done && !c.p.WebSocket && c.p.Error == "" &&
+			(before == 0 || c.p.StartNS <= before) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	out := make([]Record, 0, len(ids))
+	for _, id := range ids {
+		a.hit(CaseStartUploading)
+		c := a.calls[id]
+		out = append(out, a.start(c, &events.Event{ObserverInstance: c.instance}))
+	}
+	return out
+}
 
 // event is one analytics event's record.
 func (a *Assembler) event(e *events.Event, line []byte, file string) Record {
@@ -542,7 +586,7 @@ func (a *Assembler) event(e *events.Event, line []byte, file string) Record {
 func (a *Assembler) callFor(e *events.Event, file string) *call {
 	c := a.calls[e.CorrelationID]
 	if c == nil {
-		c = &call{p: canon.Pending{CorrelationID: e.CorrelationID, SourceFile: file}}
+		c = &call{p: canon.Pending{CorrelationID: e.CorrelationID, SourceFile: file}, instance: e.ObserverInstance}
 		a.calls[e.CorrelationID] = c
 	}
 	if c.p.SeenNS == 0 || e.TimestampNS != 0 && e.TimestampNS < c.p.SeenNS {

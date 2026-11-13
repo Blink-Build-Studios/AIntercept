@@ -196,7 +196,8 @@ def create_app(
         token = None
         try:
             if hasattr(store, "load_for"):
-                token = store.enter(await run_in_threadpool(store.load_for, request.url.path))
+                target = request.url.path + ("?" + request.url.query if request.url.query else "")
+                token = store.enter(await run_in_threadpool(store.load_for, target))
             response = await call_next(request)
         except Exception:
             log.exception("query failed", extra={"fields": {"queryId": qid, "path": request.url.path}})

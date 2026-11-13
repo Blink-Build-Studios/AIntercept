@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
@@ -39,6 +42,10 @@ type SimConfig struct {
 	Chaos                              Chaos
 	Input                              []records.Record // a real capture's records; else generated
 	Model                              Model            // default CountModel
+	// OutDir, when set, receives the committed layout at the end: every object
+	// under SimPrefix + "stream/v1/", keyed as in the store (what the stateless
+	// API reads, with SimPrefix as its prefix).
+	OutDir string
 }
 
 // SimResult is what happened.
@@ -84,13 +91,16 @@ type sim struct {
 	budget int
 }
 
+// SimPrefix is the simulated store's layout prefix.
+const SimPrefix = "sim/"
+
 func newSim(cfg SimConfig) *sim {
 	if cfg.Model == nil {
 		cfg.Model = CountModel{}
 	}
 	clock := NewFakeClock(time.Date(2027, 1, 5, 9, 0, 0, 0, time.UTC))
 	x := &sim{cfg: cfg, rng: rand.New(rand.NewSource(cfg.Seed)), clock: clock, s: NewMemStore(clock),
-		l: Layout{Prefix: "sim/"}, m: cfg.Model}
+		l: Layout{Prefix: SimPrefix}, m: cfg.Model}
 	for i := 0; i < max(cfg.Processors, 1); i++ {
 		x.addReplica()
 	}
@@ -348,7 +358,35 @@ func Simulate(ctx context.Context, cfg SimConfig) (SimResult, error) {
 			}
 		}
 	}
-	return x.res, x.drain(ctx)
+	if err := x.drain(ctx); err != nil {
+		return x.res, err
+	}
+	if cfg.OutDir != "" {
+		return x.res, x.dump(cfg.OutDir)
+	}
+	return x.res, nil
+}
+
+// dump writes what readers read of the committed layout (the commit logs and the
+// table files; never state/, leases or members) to dir, keyed exactly as in the
+// store: commits name their files by those keys.
+func (x *sim) dump(dir string) error {
+	x.s.mu.Lock()
+	defer x.s.mu.Unlock()
+	root := x.l.root()
+	for _, k := range x.s.keys(root) {
+		if rel := strings.TrimPrefix(k, root); !strings.HasPrefix(rel, "buckets/") && !strings.HasPrefix(rel, "tables/") {
+			continue
+		}
+		p := filepath.Join(dir, filepath.FromSlash(k))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, x.s.objs[k].b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // BurstConfig: a steady load, a burst of Burst times it, and a scaler that
