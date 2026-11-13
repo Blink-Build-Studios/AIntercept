@@ -354,384 +354,402 @@ enforced.
 
 ## Read model (revised)
 
-Status: **proposed, 2026-11-12.** This section replaces the read side of §3
-("Incremental per record" points 3 and 4, and "Values that span keys"), §5 "The
-query API", and the plan's §4.5, §4.6, §4.9 and phase 5 wherever they conflict.
-Those parts are marked superseded.
+Status: **proposed, revision 2 (2026-11-12).** This section replaces the read side
+of §3 ("Incremental per record" points 3–4, "Values that span keys"), §5 "The
+query API", and plan §4.5, §4.6, §4.9 and phase 5 wherever they conflict. Those
+parts are marked superseded. Revision 2 applies the user's rollup budget and the
+second adversarial review (27 findings).
 
-**Why it changed.** An independent review of the read side as built found 21
-defects, 7 of them blockers. The root cause was this spec's own rule, "values
-that span keys are small tables joined at query time." It moved derivation back
-into the API and made nearly every request read every partition:
-- person pages rebuilt the email grouping from every account;
-- session pages expanded to every session of the person, for Codex titles;
-- `request_txs` and the "dimensions" were read whole from all 64 partitions;
-- readers downloaded whole partitions;
-- the commit listed every file.
+### Exceptions needing a user decision
 
-At the scale model below, that's gigabytes per page view.
+Everything below this table meets the budget. These are the cases that can't
+without a change to the contract or its semantics.
 
-**The rules this section follows:**
-1. **Start from what the caller holds.** Every id the API emits carries its
-   routing key. Parsing an id gives its key and its partition, with no lookup
-   and no index.
+| # | What | Cost if kept as today | Smallest change (goes in the fixes PR) |
+|---|---|---|---|
+| X1 | **Custom (non-preset) windows on `/people` and `/overview`.** Distinct people, per-person ratio means and maxes of "latest" values can't be merged from bins exactly. The four presets (24h, 7d, 14d, All) are precomputed and flat; any other window isn't. | Reads one row per person active in the window: up to ~21k rows, cached per commit | Offer only the presets on org-wide pages (the UI already does), or accept the ~21k-row read for API callers using custom windows |
+| X2 | **Free-text `q`** on `/people`, person requests and session events | A scan of the scope: all people (~21k rows), or the window or session's rows | Prefix or token match over stored postings: O(matches) |
+| X3 | **Responses that are themselves long lists**, so the response grows: person timeline bands, prompt marks and friction marks over long windows (worst at "All"); per-call lanes of a very long session timeline; `/coverage` without a range (every missed call ever); a person's all-time coverage windows in directory and header rows | The response is O(items in range); the read matches the response, with nothing extra | Cap each list (for example, the latest N, plus a "more" flag) or paginate it |
+| X4 | **Person timeline presence depends on the window** (oddity #39): a session that starts after the window ends doesn't count toward presence | A union over the presence of the window's sessions, ~56 sessions for 14d | Fix #39: presence by device, independent of the window. It's then precomputed per person |
+| X5 | **An email change re-homes the account's history** onto the new person key | O(the account's history), once per change; changes are rare | Accept it (recommended), or key person lists by account and merge at read time (needs dedup) |
+| X6 | **Deep `page=N`** | O(N × pageSize) rows skipped from the stored edge | Cursor tokens instead of page numbers |
+
+### The rules
+
+1. **Start from what the caller holds.** Every id carries its routing key, so
+   parsing it gives the key and the partition, with no lookup.
 2. **Store what's shown.** The processor writes, per key and in display order,
-   the rows a page shows, with the numbers and flags already worked out. Values
-   that span keys are written by the processor to the key that's read. They're
-   never joined at query time.
-3. **The API does a filter, a page, and `now()` expressions,** in one DuckDB
-   query over the files the commits name, read from S3 through `httpfs`.
-4. **Flat cost.** Per request, per cycle and per commit, cost doesn't grow with
-   history, session size, person size or the number of pods. Where something is
-   bounded by the request itself (the window asked for, the page depth, the scope
-   of a free-text search), the bound is stated.
+   the rows a page shows, with numbers and flags already worked out. Values that
+   span keys reach the key that's read through **contributions** (R4). Nothing is
+   joined across keys at query time.
+3. **The API filters, pages, merges bins and evaluates `now()`.** That's one
+   DuckDB query over the files named by the commits, read from S3 through
+   `httpfs`.
+4. **The rollup budget (user rule).** Any request aggregates **at most about 100
+   stored rows**, whatever its range, including "All". Ranges decompose into
+   precomputed bins (R4). Aggregates are exact and mergeable.
+5. **Flat cost.** Per record, per cycle, per commit and per request, cost doesn't
+   grow with history, session size, person size, org size or pod count. The only
+   exceptions are listed above.
 
-**Scale model** (from the review; used for every budget below):
-- 21,000 people, 4 sessions per person per workday, 60 model calls and 400
-  analytics events per session, 250 workdays.
+**Scale model**, used for every budget below:
+- 21,000 people, 4 sessions a day per person, 60 calls and 400 events per
+  session, 250 workdays.
 - After one year: 21M sessions, 1.26B calls, 8.4B events.
-- 64 partitions, so per partition: about 330k sessions, 20M calls, 131M events.
-- Per person: about 1,000 sessions a year.
-- Row groups are 2,048 rows, about 100–300 KB compressed, so a single-key
-  lookup's data reads come in tens of KB, not GB.
+- 64 partitions, so about 330k sessions, 20M calls and 131M events per
+  partition.
+- A processor commit every 5 s.
 
 ### R1. Keys
 
-A key's partition is `fnv64a(key) >> (64 − bits)`, the same function as today.
+| Key | Partition | Holds | Written from |
+|---|---|---|---|
+| `s:<session>` | hash | The session: session row, prompts, steps, request rows, events, marks, presence, bins, drawer rows | the session's records; contributions (lineage from children, titles, `e:` id, sessionless calls) |
+| `a:<account>` | hash | Identity (email, name, org, plan, each by (ts, id)), devices, link to the session index, title state | identity changes, links, title calls and thread starts (via `s:`) |
+| `a:<account>:d<day>` | hash | The account's calls with no session, for that day | ingest |
+| `c:<keyhash>:<day>` | hash | Calls naming neither a session nor an account (rare) | ingest |
+| `e:<emailhash>` (or `a:<account>` for an account with no email, acting as the person) | hash | The person: account list (paged rows), person row, bins, preset aggregates, latest-value series, coverage windows | contributions from `a:` and `s:` |
+| `e:<h>:s<week>`, `e:<h>:r<day>` | hash | Time shards of the person's session index (by **end** week) and request rows (by day) | contributions from `s:` |
+| `@NN:u` | **pinned to NN** | Unattributed sessions of partition NN (index and request rows, time-sharded by week and day) | contributions |
+| `@NN:o` | **pinned to NN** | Org counters per preset, per-agent-subset counts, and the people-by-last-minute histogram | contributions from `e:` keys in NN |
+| `@NN:d:<preset>` | **pinned to NN** | Directory rows of partition NN's people for the preset, sorted by each UI sort, plus a sort-key histogram | contributions from `e:` keys in NN |
 
-| Key | Holds (state and stored rows) | Written from |
-|---|---|---|
-| `s:<session id>` | Everything a session page and the drawer show: the session row, prompt rows and steps, request-log rows, event rows, marks, presence segments, timeline bins, drawer facts, Codex turns | The session's own records; lineage links from child sessions; titles from `a:` |
-| `a:<account id>` | The account's identity (email, name, org, plan, by (ts, id)), its devices, its session index split by week, its request-log copy split by week, its day bins, and its Codex title assignment | Account sightings, session↔account links, contributions from `s:` keys, the account's sessionless calls, title calls and thread starts |
-| `a:<account id>:d<YYYY-MM-DD>` | The account's sessionless calls for that day, with their request-log rows (usage polls, model lists, flag fetches) | Calls that name an account but carry no session |
-| `e:<sha256(lower(email))[:32]>` | The person: their account list, all-time summary row, directory row, and person-level rollups by period | Account sightings with an email; account rollups forwarded from `a:` |
-| `c:<key hash>:<YYYY-MM-DD>` | Calls that name neither a session nor an account (rare), with their request-log rows | Ingest |
-| `u:<NN>` (one per partition, NN = 00…63) | Unattributed sessions: those with visible calls but no account, as a session index and request-log copy split by week | Contributions from `s:` keys whose session has no account; one bucket per partition so no key is hot |
-| `o:<NN>:<YYYY-MM-DD>` | Org counters for `/overview`: per partition, per day, per product | Contributions from `s:` and `a:` keys in partition NN |
-
-**The person id is `e:<hash>`.** An account with no email is a person by itself
-(`a:<account>` serves as its person key). A person is one key, and its account
-list (1 to 3 accounts) is a column on that key's row, so no request ever
-regroups accounts by email.
-
-**Email changes.**
-- **Same account, new email:** the account's `a:` key sends a retraction to the
-  old `e:` key and a full contribution to the new one. That's 2 records per
-  change.
-- **An email shared by two accounts:** both accounts' contributions land on the
-  same `e:` key. This replaces today's query-time email grouping.
+- **Pinned keys.** Keys beginning `@NN:` route to partition NN directly, without
+  hashing. That makes them partition-local, with no hot or empty partitions
+  (review finding 2).
+- **Hot accounts.** A heavy account (a CI or Codex runner pool) is sharded by
+  time like the person shards, so no single key takes unbounded writes.
+- **Person identity.** A person is one key. Its account list is a set of paged
+  rows on that key, so even a shared mailbox with 200 accounts is one key read
+  with paged accounts.
 
 ### R2. Ids the API emits
 
-Every id is URL-safe (`~` separates the fields, and each field is percent-encoded
-if it contains `~`). One function in Go and one in Python produce and parse
-them, and both are tested against the same test vectors.
+All ids are URL-safe: fields are separated by `~`, and percent-encoded where
+needed. One encoder lives in Go and one in Python, both tested against the same
+vectors.
 
 | Id | Format | Parses to |
 |---|---|---|
-| Person | `e~<hash>`, or `a~<account>`, or `u` (unattributed) | key `e:<hash>` / `a:<account>`; `u` reads all `u:NN` (64 small reads) |
-| Session | the client's session id, unchanged | key `s:<session id>` |
-| Request (a captured call) | `s~<session>~<corr>`, `a~<account>~<day>~<corr>`, `c~<keyhash>~<day>~<corr>` | that key, call `<corr>` |
-| WebSocket turn | `s~<session>~<conn>~<n>` | key `s:<session>`, call `<conn>#<n>` |
-| Reported (not captured) call | `reported~s~<session>~<request id>` | key `s:<session>` |
-| Event | `s~<session>~<batch>~<rank>` | key `s:<session>`, event (batch, rank) |
-| Page cursor (internal) | none; the contract's `page`/`pageSize` stay | — |
+| Person | `e~<h>`, `a~<account>` or `u` | that key. A stale `a~` id, from before the account had an email, reads `a:` → a `person_alias` row → `e:` (one extra read, only for stale ids) |
+| Session | the client's id | `s:<id>` |
+| Request | `s~<sid>~<corr>`, `a~<acct>~<day>~<corr>` or `c~<kh>~<day>~<corr>` | the key and the call |
+| WebSocket turn | `s~<sid>~<conn>~<n>` | `s:<sid>`, the call `<conn>#<n>` |
+| Reported call | `reported~s~<sid>~<rid>` | `s:<sid>` |
+| Event | `s~<sid>~<batch>~<rank>` | `s:<sid>`, the event |
 
-The API keeps its contract's `page` and `pageSize` parameters. Each page is read
-from the window's edge in stored order (R4), so no OFFSET over a computed result
-is ever run.
+The contract's `page` and `pageSize` stay. Pages are read from the stored edge
+(X6).
 
-### R3. What ingest writes under which keys
+**Person id transitions:**
+- **An account gains an email:** `a~` becomes `e~`. The old id resolves through
+  `person_alias`.
+- **An account's email changes:** a retraction is sent to the old `e:` and a
+  contribution to the new one (X5). An alias is left on the old key.
+- **An email is removed:** the account becomes its own person again, with an
+  alias left on the old key.
 
-Ingest already writes each record under its routing key (§3.3). It now also
-writes these extra records. Each is small, and none carries bodies.
+### R3. Extra records
 
-| Extra record | Written to | When | At most |
-|---|---|---|---|
-| Account sighting (account, email, name, org, plan, ts) | `a:<account>`, and `e:<hash>` if it carries an email | Each sighting | 2 per sighting. Sightings are about 2% of records. |
-| Session↔account link (session, account, first ts) | `a:<account>` | The first time a pod sees a session with an account, and again if the account changes | 1 per (session, account, pod). With P pods, ≤ P per session, usually 1. |
-| Lineage link (parent, child, kind, child first ts) | `s:<parent>` | A child session's first record per pod, and again if an earlier record lowers the first ts | 1 per (child, pod) |
-| Title call and thread start (Codex) | `a:<account>` | Each title call; each thread's first call per pod | 1 per title call, 1 per (thread, pod) |
-| Analytics event | its own session's `s:` key (as today); the batch's call goes to the batch's session (`batch_cc_n` rank, as today) | — | 0 extra |
+Most cross-key values now travel as **contributions** from the processor (R4),
+not as extra ingest records. Ingest still writes:
 
-**Bound:** at most 2 extra records per call or event (account sightings), plus a
-constant number per session per pod (links, thread starts). That's linear in
-traffic, with a constant under 1.1 on today's capture's mix.
-
-**No locators.** The `l:` locator records, `drawer_locator`, and the routing line
-in detail objects are deleted (R8).
-
-### R4. What the processor stores, per key
-
-All of these tables are written through the typed codec (`stream.RegisterTable`),
-sorted by `(key, <display order>)`, in row groups of 2,048 rows, with min/max
-statistics on every sort column and Parquet page indexes on.
-
-**Contributions** cross keys, and nothing else does. When a key's state changes a
-value that another key shows, the processor writes a *contribution* record to
-`records/v1` for the other key. It uses the same writer, the same routing and the
-same exactly-once rules as ingest (a per-writer high-water mark, R5). A
-contribution is a **replacement**, never a delta:
-- it's keyed by (source key, target key, slot);
-- the target keeps the newest one per slot by the source's commit sequence;
-- so a retry or a duplicate changes nothing, and a late correction replaces the
-  old value.
-
-The source sends at most one contribution per (target, slot) per cycle, only
-when the value changed.
-
-#### `s:<session>`: the session
-
-| Table | One row per | Display order (sort) | Shown by |
-|---|---|---|---|
-| `session_row` | session | — | `/sessions/{id}`, session bands, person lists |
-| `session_prompts` | prompt or between-row | prompt number, then item order | `/sessions/{id}/prompts` |
-| `session_steps` | step | (prompt number, step number) | prompts, the drawer |
-| `session_requests` | request-log row of the session | (ts, call id) | `/sessions/{id}/requests` |
-| `session_events` | event row | (ts, batch, rank) | `/sessions/{id}/events` |
-| `session_marks` | timeline mark | (kind, ts, id) | session timeline, state |
-| `session_bins` | (resolution, bin start) for each of 60 s, 10 min, 1 h, 1 d | (resolution, bin) | session timeline |
-| `session_presence` | presence segment | from | both timelines |
-| `drawer_call` | captured or reported call | call id | the drawer |
-| `drawer_facts` | fact about a call (success, stall, tool, bash, query, retry, sandbox change) | (call id, ts) | the drawer |
-| `session_counts` | one row: totals for each filter combination the UI offers (kinds × hidden × captured, events internal × collapsed) | — | totals in every paged session response |
-
-The `session_row` carries, as **columns**, what the review found joined at query
-time:
-- accounts, credentials, devices, prompt ids;
-- children: a list of (child, kind, child first ts), maintained from lineage
-  links;
-- the Codex title and title-alone, written by a contribution from `a:` (below);
-- `last_ns`, plus the inputs `now()` needs (open tail, unfinished max ts).
-
-Prompt numbers, step numbers, Codex turn numbers, the collapsed-tick flag, the
-"nested under a root" flag and the "delivered in step N" count are **stored**.
-
-#### `a:<account>`
-
-| Table | One row per | Order | Shown by |
-|---|---|---|---|
-| `account_row` | account | — | person header, directory |
-| `account_devices` | device | device id | person header |
-| `account_sessions` | (week, session) | (week, start ts, session) | person sessions list, timeline bands, coverage, windowed directory |
-| `account_requests` | (week, request-log row) | (week, ts, request id) | `/people/{id}/requests` |
-| `account_bins` | (resolution, bin) at 1 h and 1 d | (resolution, bin) | person timeline lanes, summary |
-| `account_periods` | (period kind, period start) for day, week, month and year | (kind, start) | windowed summary and directory sums |
-| `account_titles` | Codex title call | ts | (state only, no reads) |
-
-- **Feeding the account rows.** `account_sessions` and `account_requests` are
-  copies of what each session shows, kept current by contributions from the
-  sessions' `s:` keys: one contribution per changed row.
-- **Codex titles** are assigned here, by the greedy rule over the account's title
-  calls and thread starts. The window is 5 minutes, so a late title or thread
-  start re-runs the greedy assignment only within the affected 5-minute stretch.
-  Each title change is sent to the thread's `s:` key as a contribution.
-
-#### `e:<hash>`: the person
-
-| Table | One row per | Order | Shown by |
-|---|---|---|---|
-| `person_row` | person | — | `/people/{id}` header |
-| `person_periods` | (period kind, start) | (kind, start) | windowed summary |
-| `directory_row` | person, with every sort column the UI offers (last seen, activity, name) and the filter columns (agents, search text) | per sort key; three copies, one per sort | `/people` |
-
-These are sums of the person's accounts' contributions: 1 to 3 accounts, each
-replaced in place.
-
-#### `u:NN` and `o:NN:<day>`
-
-- `u:NN` holds an unattributed person's session index and request-log copy,
-  for the sessions in partition NN that have no account. `/people/u/*` reads
-  all 64.
-- `o:NN:<day>` holds per-product counts and the number of requests, for
-  `/overview`.
-
-#### Late data: what a late record can rewrite
-
-| Value | What a late record changes | Bound |
+| Ingest record | Key | When |
 |---|---|---|
-| Captured vs reported, retries, prompt membership | its own row and at most 2 neighbors (§3, unchanged) | O(1) |
-| Prompt totals, session row, counts | running totals, replaced in place | O(1) |
-| Collapsed-tick flags, nested-under-root | the record's neighbors in display order | O(1) |
-| **Step numbers within a prompt** | a step that lands before already-numbered steps shifts the later ones | **O(steps after it in that prompt)** |
-| **Codex turn numbers** | a turn whose first call lands before later turns shifts them | **O(turns after it in that session)** |
-| Titles (Codex) | re-assignment within the affected 5-minute window | O(title calls in 5 minutes) |
-| Account and person rollups | one contribution replaced | O(1) per changed session |
-| Email moves | retraction plus contribution | O(1) |
+| Account identity change (email, name, org or plan differs from the last one this pod sent for this account) | `a:<account>` | on change only, not on every sighting |
+| Calls with no session | `a:<acct>:d<day>` or `c:` | as today's routing |
 
-**Two values that aren't O(1): step numbers and Codex turn numbers.** A late
-record can shift every number after it in its prompt or session. Here's why we
-accept it:
-- **It only happens across commits.** Records within one cycle are applied
-  sorted, so only a call that arrives after a later call was already committed
-  shifts anything. That's rare: the calls of one prompt come from one client in
-  order. The replay gate measures how often it happens.
-- **The rewrite is bounded by the prompt** (steps) or the session (turns), not
-  by history.
+The processor emits, from the `s:` key (once, not once per pod):
+- the session↔account link to `a:`;
+- the lineage link to the parent `s:`;
+- thread starts and title calls to `a:`;
+- copies of what persons and orgs show, to `e:`, `@NN:*` and their shards.
 
-The alternative, numbering at query time with `row_number()`, makes every page
-read cost O(prompt) instead, on every request. We trade a rare write-time cost
-for a constant read cost. The flat-cost tests check the common path; a separate
-test bounds the late-shift rewrite by the prompt's size.
+**Write factor.** Per call, about 1 ingest record plus 2–4 contribution rows, one
+per changed shown row. Contributions are batched into one outbox file per target
+partition per cycle, so the object count is per cycle, not per row. The budget is
+≤ 5 rows written per input record; the R8 step-3 gate measures it.
+
+### R4. Stored tables and bins
+
+#### Contributions, through a transactional outbox
+
+A contribution is a **replacement** of one value that another key shows, keyed by
+(source key, target key, slot). Each cycle runs in this order:
+1. The cycle computes its contributions and writes `outbox-<seq>` (create-only).
+   `commit-<seq>` names it, so the outbox is part of the commit.
+2. **After** the commit succeeds, a forwarder writes each target partition's
+   share as a records file, with a create-only name of
+   `contrib-src<NN>-seq<n>-<k>`.
+   - A new owner re-forwards the outboxes of the last committed sequences that
+     haven't been confirmed.
+   - The names are deterministic, so re-forwarding is idempotent.
+   - A fenced or zombie cycle never committed, so its outbox is never forwarded
+     (review finding 3).
+3. **Ordering.** Each (source key, slot) has a version counter kept in the source
+   key's own state. It moves with the key on a bucket split. The target keeps the
+   highest version per (source, slot), so duplicates and stale arrivals do
+   nothing.
+4. **Retractions** are contributions whose value is a tombstone. The target keeps
+   a tombstone's version for as long as an older in-flight contribution could
+   still arrive, which is bounded by the outbox forwarding horizon.
+5. **Freshness.** Outboxes are forwarded at the end of each cycle, not on the
+   writer's ticker. Hops are kept to:
+   - `s:` → `e:` (and its shards);
+   - `e:` → `@NN:o`/`@NN:d`;
+   - `a:` → `s:` (the email hash and titles).
+
+   The longest chain is ingest → `s:` → `e:` → `@NN:d`, about 10 s (ingest flush)
+   plus 2 × (5 s cycle plus forward) ≈ 30 s. That's today's freshness, and a gate
+   checks it per hop.
+
+#### Bins: the rollup budget
+
+**Stored levels**, all epoch-aligned and fixed-length:
+
+| Level | 60 s | 300 s | 900 s | 3600 s | 21600 s | 86400 s | 604800 s (week) | 4 weeks | 16 weeks | 64 weeks |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Ratio to the next level | 5 | 3 | 4 | 6 | 4 | 7 | 4 | 4 | 4 | — |
+
+- **Range decomposition.** Any [from, to) splits into the coarsest whole bins
+  that fit, plus at most (ratio − 1) bins per level at each edge. The worst case
+  is 2 × (4+2+3+5+3+6+3+3+3) + 3 = **67 rows**, for any range up to about 5 years.
+  "All" is about 10–20 rows.
+- **Sub-minute edges.** A millisecond `from` or `to` reads the row-level records
+  of the partial minute at each edge, bounded by one key's records per minute.
+- **Timeline bins** for the UI's ladder (60, 300, 900, 3600, 10800, 21600, 43200
+  and 86400 s): each output bin is read from the largest stored divisor, at most
+  3 stored rows per output bin.
+- **Each record updates one bin per level** of its key: 10 running totals in
+  memory, emitted as changed rows each cycle (≤ 10 per key per cycle).
+
+**What a bin holds.** Every aggregate is exact and mergeable:
+
+| Value | Stored per bin | Merge |
+|---|---|---|
+| counts, tokens, cost, durations | sums | sum |
+| means (bypass %, …) | Σ and n | Σ / n |
+| max | max | max |
+| small-domain distincts (devices, tools, MCP servers, event types, hooks, PRs, head changes) | the set | union (sets are small) |
+| top-N (analytics names) | full name→count map | sum the maps, then take the top N |
+| sessions, prompts, analytics batches overlapping the range | count **started** in the bin, plus `open_at_start` (items open at the bin's start) | started in the range, plus `open_at_start` of the first bin. The edge minute is corrected from its records. |
+| "latest as of `to`" (limits, `mcpToolsTotal`, skills, versions) | not binned: a **change series** (one row per change, sorted by ts) | the last row ≤ `to`: 1 row |
+| coverage windows | rows keyed by (person, window start); only the open window is mutable | range read |
+| brushed session counts (requests by kind, hidden, captured; events by internal, collapsed) | per-cell count columns per bin, at a fixed small number of cells | sum, plus edge records |
+
+**Tick runs.** Each progress tick stores its run id and its offset within the
+run. A brushed range's `collapsedCount` is the last in-range offset minus the
+first, plus 1. The head row is the run's first tick inside the range (review
+finding 13).
+
+**Presets.** The UI's org-wide and default windows are 24h, 7d, 14d and All,
+sliding to now on the hour. They're precomputed per person and per partition:
+- Each `e:` key keeps per-preset aggregates (sum of hour bins over the span,
+  sessions overlapping, Σpct and n, latest limits).
+- **Expiry.** Each hour boundary drops the oldest hour. The processor runs this
+  as a scheduled tick for each `e:` key that was active within the preset's span:
+  O(1) per active person per hour, so it grows with traffic.
+- Each person's preset row contributes to `@NN:o` (sums, Σ and n, a value→count
+  multiset for exact max, distinct counts of people and devices) and to
+  `@NN:d:<preset>` (directory rows).
+
+#### Per key
+
+- **`s:<session>`:**
+  - `session_row`: accounts, credentials, devices, children (from lineage
+    contributions), the title, the parent's start, end and agent (from the
+    parent, for nesting), the `e:` id, `last_ns` and the inputs `now()` needs;
+  - `session_prompts`, `session_steps` (with prompt and step numbers), and
+    `session_requests` (including its covering threads' sessionless calls,
+    contributed from `a:…:d<day>`, re-checked when a thread's interval grows);
+  - `session_events` (with tick run ids and offsets), `session_marks`,
+    `session_presence`;
+  - `session_bins` at all levels, with count cells;
+  - `drawer_call` (with prev, next and `stepCount` stored, so a late insert
+    touches O(1) neighbours) and `drawer_facts`.
+- **`a:<account>`:** identity rows, devices, title state, `person_alias`.
+- **`e:<h>`, plus `:s<week>`/`:r<day>` shards:**
+  - person row, account list (paged), latest-value change series, coverage
+    window rows;
+  - person bins at all levels, with cells;
+  - preset aggregates;
+  - the session index by **end** week (finding 17): when a session's end crosses
+    into a new week, a tombstone is written at the old (week, sort) position;
+  - request rows by day, deduplicated by request id at write time (finding 15);
+  - person presence, from session presence contributions.
+- **`@NN:o`:** per-preset org counters, per-agent-subset counts, and the
+  people-by-last-active-minute histogram (`activeNow` is the sum of the last 5
+  minutes).
+- **`@NN:d:<preset>`:** directory rows sorted by each sort the UI offers, plus a
+  histogram of the sort key, for the keyset merge (R6).
+
+#### Tombstones and numbering under late data
+
+- **Moving rows leave tombstones.** When a stored row's sort key moves (a
+  session's end week, a step's number, a directory sort value), the processor
+  writes a tombstone at the old (key, sort) position. Range readers merge
+  tombstones. Compaction drops them at the bottom level (finding 6).
+- **Settled numbering.** Step numbers, Codex turn numbers (each turn's
+  `promptIndex`) and item ordinals are assigned only to rows at or below the
+  **settled point**: the minimum low watermark across the writers that feed the
+  key. Each writer publishes its watermark in its files' metadata.
+  - Rows newer than the settled point (the last ~20 s) get display numbers at
+    read time, from the few unsettled rows of that key. That's bounded by one
+    key's records in about 20 s.
+  - A shift then happens only when a spool replay delivers rows older than the
+    settled point.
+  - Where the client supplies an ordinal (Claude Code's `prompt_index`), it's
+    used as is (O(1)).
+  - Display numbers are never copied across keys before they're settled.
+
+| Value | A late record rewrites | Bound |
+|---|---|---|
+| Captured vs reported, retries, membership, totals, bins | its own rows plus O(1) neighbours | O(1) |
+| Step and turn numbers, item ordinals | nothing, unless a spool replay lands below the settled point | O(steps after it in its prompt), only on replay |
+| Codex titles | re-assignment within the chain segment (chains split at gaps ≥ 5 min) | O(titles in the segment) |
+| Email change | the account's copies moved to the new `e:` | **O(account history)**, rare (X5) |
+| Session end crossing a week | one tombstone plus one row | O(1) per week crossed |
 
 ### R5. Storage layout
 
-- **Files.** Every table file is sorted by `(key, display order)`, in 2,048-row
-  row groups, with column statistics and page indexes. Run files are sorted the
-  same way.
-- **Segments.** Tiered compaction (merged, #25) keeps O(log N) segments per table
-  per partition. Each segment's part list lives in an immutable
-  `segments/<table>/bucket=NN/seg-<id>.json`, written once, which records each
-  part's key min and max.
+- **Files.** Tables are sorted by `(key, display order)` in 2,048-row groups,
+  with min/max statistics and **Parquet bloom filters on the key column**.
+  DuckDB uses bloom filters for equality predicates; the step-2 gate verifies
+  that it does. Page indexes aren't relied on.
+- **Leveled compaction.**
+  - Level 0 holds at most `CompactRuns` = 8 overlapping runs.
+  - Levels 1 and up each hold **one sorted, non-overlapping run** of parts. Each
+    level is about 10× the size of the one before.
+  - A lookup reads ≤ 1 part per level (selected by key range) plus ≤ 8 L0 runs.
+    At the one-year scale model that's ≤ 7 levels, so ≤ 15 files, and bloom
+    filters skip the files that lack the key.
+  - Write amplification is about 10 per level. It's measured, not assumed.
+  - **Cold seal:** a finished session older than a day is compacted into the
+    cold levels, so hot levels stay small.
+  - Replaces tiered compaction (#25), which the review measured at ~27–35 files
+    per lookup.
 - **Commits are O(levels).** `commit-<seq>` names:
-  - the segment ids per table;
-  - at most `CompactRuns` = 8 run files per table, the runs written since the
-    last level-0 fold;
-  - the watermark, as **one high-water mark per ingest writer** (its incarnation
-    and highest sequence uploaded), instead of a `Processed` file list;
-  - the partition stats `/status` reads (`newest_ns`, `content_retained`,
-    `earliest_ns`, `first_call_ns`).
+  - the segment manifests (immutable, one per level, with part key ranges);
+  - the L0 runs;
+  - the outbox;
+  - the watermark;
+  - the partition stats `/status` reads;
+  - the layout version.
 
-  At the scale model, a commit is a few KB, whatever the history.
-- **Freshness without LIST.** Commit sequences are zero-padded and consecutive,
-  so a reader polls by GETting `commit-<n+1>`: a 404 means nothing new. That's at
-  most once a second per partition per API pod, in parallel.
-- **Reading one key in a partition:**
-  1. the commit, cached by sequence;
-  2. the segment manifests, immutable and cached;
-  3. **one part per segment whose key range contains the key** (≤ 7 at 1M rows
-     per table), plus the ≤ 8 runs;
-  4. their footers (immutable, cached);
-  5. the row groups whose statistics match, fetched by ranged GET.
+  A commit is a few KB, whatever the history.
+- **Watermarks** (finding 4).
+  - Each writer (pod incarnation) numbers its files **consecutively per bucket**,
+    and uploads them **in order per bucket**. A later file isn't attempted until
+    the earlier one has landed.
+  - The commit keeps, per (writer, bucket), the contiguous-prefix sequence plus a
+    small gap set.
+  - **A gap** triggers a targeted listing back to the writer's previous file's
+    minute. That tolerates clock skew up to that bound.
+  - **On graceful exit** a writer writes `closed-<bucket>-<lastseq>`, and once it
+    has drained, it's pruned from commits.
+  - **A writer lost with its spool** (node loss) is declared dead after a
+    timeout. Its gap is recorded as lost and alerted on.
+  - Pruning keeps commit size flat as pods come and go.
+- **Freshness and GC.**
+  - Readers probe `commit-<n+1>`.
+  - A cold reader finds the latest commit by exponential GET probing, starting
+    from the newest create-only `index-<k>` checkpoint (written every 1,000
+    commits).
+  - Commits are kept for at least a **GC floor** longer than the maximum reader
+    lag. A reader that falls below the floor re-discovers.
+  - Files are deleted only after their last commit is older than (max query time
+    + poll interval) × 2 (finding 19).
+- **DuckDB.** The `httpfs` object and metadata caches are on, so warm queries
+  issue no HEADs. `httpfs` is installed at image build.
 
-  All of that happens in one DuckDB query over `read_parquet([...])` with
-  `WHERE key = ?` and the window predicate.
+### R6. Read plans
 
-### R6. Read plans, endpoint by endpoint
+"Rows" means stored rows aggregated or read, worst case at the scale model. "≤ 15
+files" means per key per table: one part per level plus the L0 runs.
 
-**Notation used in the table:**
-- "≤ 15 files" means at most 7 segment parts plus 8 runs per table, all
-  footer-cached once warm.
-- "rg" means row groups fetched by ranged GET, about 100–300 KB each.
-- Budgets are for a warm API pod at the scale model. A cold pod adds one GET per
-  file footer.
+| Endpoint | Caller holds | Keys | Rows aggregated / read (worst case) | Within ~100? |
+|---|---|---|---|---|
+| `/status` | — | 64 commits | 64 commit stats | yes (64) |
+| `/overview`, preset window | preset | 64 `@NN:o` | 64 rows | yes |
+| `/overview`, custom window | window | e: keys active in the window | ≤ 21k person rows | **X1** |
+| `/people`, preset window, page p | sort, page | 64 `@NN:d:<preset>` | 64 histogram rows give the sort threshold; then about pageSize × p rows above it, merged | yes for page 1 (64 + ~50); X6 for deep pages |
+| `/people`, custom window | window | e: keys active in the window | ≤ 21k | **X1** |
+| `/people?q` | text | 64 `@NN:d` | ≤ 21k | **X2** |
+| `/people/{id}` | id → `e:` | 1 | person row, accounts (paged), devices, ≤ 5 latest-value rows | yes |
+| `/people/{id}/summary` | id, any window | `e:` | ≤ 67 bins + edge-minute records + ≤ 5 change-series rows + coverage rows in range | yes (≤ ~80) |
+| `/people/{id}/sessions` | id, window, page | `e:<h>:s<week>` from the window's end | pageSize × p rows, nesting from stored parent facts | yes (page 1) |
+| `/people/{id}/timeline` | id, window, bin | `e:` | lanes: ≤ 3 stored rows per output bin; bands, prompt and friction marks: items in range | lanes yes; lists **X3**; presence **X4** |
+| `/people/{id}/requests` | id, filters, page | `e:<h>:r<day>` from the window's edge | page rows; `total` and counts from ≤ 67 bins with cells | yes |
+| same, with `q` | text | as above | the window's rows | **X2** |
+| `/coverage?personId` (with range) | id, range | `e:` | coverage rows in range plus ≤ 67 bins | yes |
+| `/coverage` without range | id | `e:` | every missed call | **X3** |
+| `/coverage?personId&sessionId` | session | `s:` | session row plus ≤ 67 bins | yes |
+| `/sessions/{id}` | id | `s:` | 1 row | yes |
+| `/sessions/{id}/timeline` | id, bin | `s:` | lanes ≤ 3 per output bin; per-call lanes = items | lanes yes; per-call **X3** |
+| `/sessions/{id}/state` | id, range | `s:` | ≤ 67 bins with cells, edge records, ≤ 5 change rows | yes |
+| `/sessions/{id}/prompts` | id, page or prompt | `s:` | the page's prompts and their steps (direct range on the number) | yes |
+| `/sessions/{id}/requests` | id, range, filters, page | `s:` | page rows; counts from ≤ 67 bins | yes |
+| `/sessions/{id}/events` | id, range, filters, page | `s:` | page rows (runs via id and offset); counts from ≤ 67 bins | yes; `q` **X2** |
+| `/requests/{id}` (+ `/raw`, `/details`) | id → key and call | 1 | `drawer_call` + its facts + prev/next (stored) + 1 detail GET | yes |
+| `/events/{id}` | id → key and event | 1 | 1 row + 1 detail GET | yes |
+| `/people/u/*` | `u` | 64 `@NN:u` | histogram threshold plus a page, as for `/people` | yes (page 1) |
+| static UI paths, unknown paths | — | none | 0 | yes |
 
-| Endpoint | Caller holds | Keys read (partitions) | Tables | Rows read | At query time | Budget per request |
-|---|---|---|---|---|---|---|
-| `GET /status` | — | 64 commits only | none | none | sum and max of commit stats | 64 small GETs (cached, refreshed ≤ 1/s) |
-| `GET /overview?from&to` | window | `o:NN:<day>` for each day in the window (64 partitions) | `org_day` | 64 × days in window | sum | 64 files × days: 7 days ≈ 450 rows. **Grows with the window**, not history. |
-| `GET /people?from&to&sort&agent&q&page` (all-time) | sort, page | `directory_row` in all 64 partitions | `directory_row` (the copy sorted by `sort`) | keyset merge: ≤ pageSize × page rows per partition | filter by agent, merge, `now()` | 64 × ~1 rg for page 1 (≈ 64 × 200 KB) |
-| same, with a window | window, sort, page | `account_sessions` weeks in the window, all 64 partitions | `account_sessions` | every session overlapping the window, org-wide | sum per person, sort, page | **O(sessions in the window, org-wide)**: 7 days ≈ 420k rows ≈ 25 MB. **Flat in history, grows with org size times window.** See R7. |
-| same, with `q` | search text | `directory_row`, 64 partitions | `directory_row` | every row (a scan of the directory) | substring match | 21k rows ≈ 2 MB. Grows with people, not history. |
-| `GET /people/{id}` | person id → key | 1 `e:` + its 1–3 `a:` keys | `person_row`, `account_row`, `account_devices` | 1 + A + devices | limits' `now()` | ≤ 4 partitions × ≤ 15 files × 1 rg |
-| `GET /people/{id}/summary?from&to` | person id, window | `e:` | `person_periods` | ≤ 2 × (years + 12 + 5 + 7) + 2 hour edges ≈ 50 rows (period decomposition) | sum; edge hours from `account_bins` | 1–4 partitions, ≤ 3 rg |
-| `GET /people/{id}/sessions?from&to&page&agent` | person id, window, page | 1–3 `a:` keys, weeks in the window from the newest end | `account_sessions` | page depth × pageSize, read newest-first | agent filter, nesting flag stored, `now()` | ≤ 3 partitions × ≤ 15 files × (pages ÷ rg) |
-| `GET /people/{id}/timeline?from&to&bin` | person id, window, bin | 1–3 `a:` keys | `account_bins` at the coarsest stored resolution ≥ bin; `account_sessions` for the bands; `session_presence` of the sessions in the window | bins ≈ window ÷ resolution (≤ ~500 by the auto-bin rule) + sessions in the window | presence union over the window's sessions; `now()` | ≤ 3 partitions + 1 per session in the window. **Presence grows with sessions in the window.** See R7. |
-| `GET /people/{id}/requests?…&page` | person id, filters, page | 1–3 `a:` keys, weeks from the window edge | `account_requests` | page depth × pageSize (with `kind`/`captured`/`hidden`/`agent`: still in stored order, filtered row groups) | filter, `now()` | ≤ 3 partitions × few rg. `total` from `account_periods` counters per filter combination. |
-| same, with `q` | search text | as above | `account_requests` | every row in the window | substring | **O(the person's requests in the window).** Bounded by the window. |
-| `GET /coverage?personId` | person id | 1–3 `a:` keys | `account_periods`, `account_sessions` (the latest week) | ≈ 50 + a week | `now()` | ≤ 3 partitions, few rg |
-| `GET /coverage?personId&sessionId` | session id | 1 `s:`, checked against the session row's accounts | `session_row`, `session_counts` | 2 rows | — | 1 partition, 2 rg |
-| `GET /sessions/{id}` | session id | 1 `s:` | `session_row` | 1 | `now()` | 1 partition, 1 rg |
-| `/sessions/{id}/timeline?bin` | session id, bin | 1 `s:` | `session_bins` (coarsest ≥ bin), `session_marks` lanes, `session_presence` | bins (≤ ~500) + marks in the span shown | `now()` (open tail) | 1 partition, few rg. Marks lanes are bounded by the stored resolution. |
-| `/sessions/{id}/state?from&to` | session id, window | 1 `s:` | `session_counts`, `session_marks` (window) | counters + marks in the window | `now()` | 1 partition |
-| `/sessions/{id}/prompts?…&prompt` | session id, page or prompt number | 1 `s:` | `session_prompts`, `session_steps` | the page's prompts and their steps | `now()` (in flight, streaming) | 1 partition, ≤ few rg. A prompt jump is a direct range on the number. |
-| `/sessions/{id}/requests?…` | session id, filters, page | 1 `s:` (+ the Codex rule: the thread's credential's `a:…:d<day>`/`c:` day keys for the session's days) | `session_requests`, `session_counts` | page | filter, `now()` | 1 partition (+ 1 per Codex day key) |
-| `/sessions/{id}/events?…` | session id, filters, page | 1 `s:` | `session_events`, `session_counts` | page (collapsed flag stored) | `q` substring; filter | 1 partition. **With `q`: O(the session's events).** Bounded by the session. |
-| `GET /requests/{id}` (and `/raw`, `/details`) | request id → key and call | 1 key | `drawer_call`, `drawer_facts`, `session_steps` (this prompt), plus `calls/<corr>` for the raw bodies | the call's rows + its prompt's steps | — | 1 partition + 1 detail GET. **The prompt's steps grow with the prompt,** not the session. |
-| `GET /events/{id}` | event id → key, batch, rank | 1 `s:` | `session_events` (one row), `calls/<batch>` for raw | 1 row | — | 1 partition + 1 detail GET |
-| Static UI paths, unknown paths | — | **none.** The loader only runs for routed API paths, and only for that endpoint's tables. | — | — | — | 0 |
+**Notes on the plans:**
+- **Directory keyset merge.** Each `@NN:d:<preset>` holds a histogram of its sort
+  key. Summing the 64 histograms gives the threshold value above which ≥
+  pageSize × p rows lie. The second read takes only rows at or above it from
+  each partition, so the total is about pageSize × p plus histogram slack. The
+  `total` comes from per-agent-subset counts in `@NN:o`.
+- **WebSocket turns.** Ingest writes a per-turn detail object,
+  `calls/<conn>~<n>`, as each turn ends.
 
-**WebSocket turns' raw detail.** A turn's `calls/<conn>` object is written only
-when the connection closes. To fix that, ingest writes a per-turn detail object,
-`calls/<conn>~<n>`, when each turn ends.
+### R7. Cost summary
 
-### R7. Costs this design can't make flat (stated plainly)
+| Component | Work | State | Sharded by | Worst case |
+|---|---|---|---|---|
+| Ingest | O(1) per record; 1 file per bucket per flush (by size, max age 10 s) | spool | pod | flat; files per cycle ∝ pods only below the size threshold |
+| Processor | O(1) per record per table, ≤ 10 bin rows per key per cycle, ≤ 5 contribution rows per record | per key, LRU, tiered checkpoints | partition (leases) | flat; email change O(account history) (X5) |
+| Expiry ticks | O(1) per active person per hour | — | partition | flat in history |
+| Commit | O(levels + live writers) | — | partition | flat |
+| Lookup | ≤ 15 files per table, bloom-filtered, row groups by range | — | key | flat (gated at one year) |
+| API request | ≤ ~100 rows aggregated, except X1–X6 | none | stateless | see R6 |
 
-1. **The windowed directory** (`/people` with `from`/`to`) is
-   O(sessions overlapping the window, org-wide).
-   - **Why:** today's semantics count every session that overlaps an arbitrary
-     instant range, whole, so per-period sums can't reproduce them at the window
-     edges.
-   - **Budget:** a 7-day window at 21k people is about 420k session-index rows
-     (≈ 25 MB columnar) per request, cached per commit. It doesn't grow with
-     history.
-   - **Options:** (a) accept it; (b) precompute the windows the UI offers by
-     default, so only custom windows pay; (c) snap windows to day boundaries
-     (period sums, flat), which changes semantics and belongs in the fixes PR.
-2. **Free-text `q`** on requests and events is a scan of the scope: the person's
-   window, or the session. It's bounded by the scope, never by history.
-3. **Person timeline presence** is the union of the presence segments of the
-   sessions in the window. It's bounded by the window's sessions, and it keeps
-   today's window-dependent semantics (oddity #39).
-4. **Step and Codex turn renumbering** after a late record is bounded by the
-   prompt or session (R4).
-5. **`/overview`** reads one counter row per partition per day in the window.
-   That grows with the window, not history. A year's window is about 23k small
-   rows; month and year rollups in `o:` cap it near 64 × 50 if needed.
-
-Everything else above is flat: constant per request, independent of history,
-session size, person size and pod count.
-
-### R8. Migration from what's built
+### R8. Migration and build order
 
 **Kept:**
-- the per-key state engine (`internal/stream/state`) and its incremental
-  updates;
-- the commit log, leases and fencing;
-- tiered compaction (#25) and the journal checkpoints;
-- the typed table codec;
-- sorted files, pushdown, and one query per request over S3 (the
-  `api-s3-pushdown` work);
-- routing-key ids (the `api-drawer-no-raw` work, extended to the formats in R2);
+- the per-key state engine and its tests;
+- leases and fencing;
+- the commit log (reshaped);
+- the typed codec;
+- sorted files and pushdown (`api-s3-pushdown`);
+- routing-key ids (`wip-drawer-routing-ids`);
 - the writer and its spool;
-- the replay harness and parity tooling.
+- the replay and parity tools.
 
 **Dropped:**
+- `state_sql.py`, `person_sql.py`, `stream_sql.py`, `session_rows.sql` and its
+  recursive CTE;
+- the `dim_*` tables and the read-time lookups;
+- locators;
+- "*" routing and `Scope.everything()`;
+- inline part lists and `Processed`;
+- tiered table compaction, replaced by leveled.
 
-| Dropped | Replaced by |
-|---|---|
-| `api/.../state_sql.py` (rebuilding today's tables at read time) | stored display tables (R4) |
-| `person_sql.py`, the `dim_*` tables, `session_call_accounts`, `session_title_calls`, `session_edges` as read-time joins | `e:`/`a:` keys and columns on `session_row` |
-| `sql/session_rows.sql` and its recursive titles CTE | titles assigned on `a:` |
-| `stream_sql.py` person and session request rows | `account_requests` / `session_requests` |
-| `prompt_index`, `mark_prompt_index`, `session_request_links` lookups | stored numbers and labels |
-| `l:` locators, `drawer_locator`, and the detail routing line | ids that carry keys |
-| "*"-routed tables, `Scope.everything()`, and loading on unrouted paths | per-endpoint table lists |
-| the commit's inline part lists and `Processed` | segment manifests and writer high-water marks |
-| `request_txs`/`batch_members` read across all partitions | per-key request rows |
+**Build order.** Tests come first at every step, and each step's gate must pass
+before the next starts.
 
-**Build order** (tests first at every step; each step's gate must pass before
-the next one starts):
-1. **Commit O(levels), segment manifests, writer high-water marks.**
-   - Gate: commit size flat for 1× → 8× history and for 1 → 16 ingest pods; the
-     chaos replay is exact.
-2. **Sorted files and pushdown,** with 2,048-row groups and page indexes.
-   - Gate: one key's lookup fetches ≤ 15 footers and only matching row groups,
-     with request and byte counts flat 1× → 8× (moto).
-3. **Contributions:** records written by the processor through the writer, as
-   replacements.
-   - Gate: exactly-once under chaos; a late correction replaces; duplicates are
-     no-ops.
-4. **`s:` display tables with stored numbers and flags,** plus `session_counts`
-   and `session_bins`.
-   - Gate: endpoint parity with today for every session endpoint, through one
-     partition; flat cost per record; the late-shift rewrite bounded by the
-     prompt.
-5. **`a:`/`e:`/`u:`/`o:` keys,** ingest's extra records (R3), title assignment
-   on `a:`, and the person, directory and overview tables.
-   - Gate: person, directory and overview parity; requests per person page
-     ≤ 4 partitions; directory page 1 ≤ 64 × 1 rg.
-6. **The drawer and event ids by key** (R2); per-turn detail objects.
-   - Gate: drawer parity; 1 partition plus 1 detail GET.
-7. **The API as thin SQL:** delete `state_sql.py`, `person_sql.py`,
-   `stream_sql.py`, the session SQL, the locators and "*" routing; per-endpoint
-   table lists; no loader on static paths.
-   - Gate: byte-identical parity on the API datasets and the real capture (ids
-     compared through the id map), plus the budgets in R6 as asserted request
-     and byte counts (moto), flat 1× → 8× history and 1× → 4× people.
-8. **The real-capture end-to-end gate:** capture → ingest pods → R processors
-   with chaos → the API over S3. Every endpoint byte-identical (through the id
-   map), with the R6 budgets met.
+| Step | What | Gate |
+|---|---|---|
+| 1 | Writer: consecutive per-bucket sequences, in-order upload, closed markers. Watermarks plus gaps. Commits O(levels), manifests, probe discovery, GC floor | Out-of-order uploads, clock skew, writer churn (100 incarnations), a lost writer, a lagging reader across GC; commit size flat 1→8× history and 1→16 pods; chaos replay exact |
+| 2 | Leveled compaction, bloom filters, cold seal, pinned `@NN:` keys | Synthetic one-year scale model: ≤ 15 files per lookup, bytes flat; DuckDB confirmed to use bloom filters |
+| 3 | Outbox contributions, per-key versions, splits | A zombie owner, a fenced owner, a bucket split, duplicates, late corrections; freshness ≤ 30 s per chain; write factor ≤ 5 |
+| 4 | `s:` tables, settled numbering, bins with cells, tick runs, drawer prev/next | Session endpoint parity (Claude Code); reorder rate under multi-pod routing measured; flat per record |
+| 5 | `a:` identity, titles on `a:` (segmented chains), sessionless calls into `s:`, Codex | Codex session parity; skew gate (one account with 2,000 runners) |
+| 6 | `e:` and its shards, presets with expiry ticks, `@NN:o`, `@NN:d` | Person, directory and overview parity; the day roll; **≤ ~100 rows aggregated asserted per request**; flat 1×→8× history and 1×→4× people |
+| 7 | Drawer and event ids, per-turn detail objects | Drawer parity; 1 partition plus 1 detail GET |
+| 8 | API as thin SQL: deletions, per-endpoint table lists | Byte-identical parity (ids through the map); asserted row and request counts |
+| 9 | Real-capture end to end: capture → pods → R processors with chaos → API over S3 | Every endpoint byte-identical, budgets met |
 
 # Implementation plan
 
