@@ -6,15 +6,17 @@ request's cost follows what it shows, never how much is stored.
   summary rows, never the raw call and event tables (or the snapshots built from them).
 - The objects a request reads don't grow as history does.
 
-The request drawer still reads the raw tables, behind its explicit flag, until it moves onto
-the per-call detail objects and per-key outputs: that test is marked, strictly, as not yet true."""
+- The request drawer reads its call's detail object (calls/<id>) and its call's own rows (the
+  processor's drawer_* tables), found through the call's locator or the detail object's routing
+  line: never the raw tables, never its session's rows. The raw-file fallback (calls captured
+  before the detail objects) is behind drawer_raw, off by default."""
 
 import json
 import pathlib
 
 import pytest
 
-from aintercept_api.buckets import RAW_TABLES, BucketStore, LocalSource
+from aintercept_api.buckets import DRAWER_TABLES, RAW_TABLES, BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
 from tests.bucket_fixture import from_store
 from tests.builders import Dataset, load_fixture
@@ -88,13 +90,41 @@ def test_coverage_reads_one_person(stores):
     assert json.dumps(r.json(), sort_keys=True) == json.dumps(old.get(url).json(), sort_keys=True)
 
 
-@pytest.mark.xfail(strict=True, reason="the drawer reads the raw tables until it moves onto per-call objects (§4.9)")
+def _drawer_urls(old) -> list[str]:
+    """One captured call's drawer endpoints, a reported call's, and one event's."""
+    pid = old.get("/api/v1/people").json()["data"][0]["personId"]
+    rows = old.get(f"/api/v1/people/{pid}/requests?pageSize=200&hidden=true").json()["data"]
+    captured = next(r["requestId"] for r in rows if not r["requestId"].startswith("reported:"))
+    urls = [f"/api/v1/requests/{captured}", f"/api/v1/requests/{captured}/raw", f"/api/v1/requests/{captured}/details"]
+    if rep := next((r["requestId"] for r in rows if r["requestId"].startswith("reported:")), None):
+        urls += [f"/api/v1/requests/{rep}", f"/api/v1/requests/{rep}/details"]
+    sid = next(r["sessionId"] for r in rows if r.get("sessionId"))
+    evs = old.get(f"/api/v1/sessions/{sid}/events?pageSize=5").json()["data"]
+    urls += [f"/api/v1/events/{e['eventId']}" for e in evs[:2]]
+    return urls
+
+
 def test_drawer_reads_no_raw_table(stores):
     old, new, store, _ = stores
-    pid = old.get("/api/v1/people").json()["data"][0]["personId"]
-    rid = old.get(f"/api/v1/people/{pid}/requests?pageSize=1").json()["data"][0]["requestId"]
-    _get(new, store, f"/api/v1/requests/{rid}")
-    assert not (store.tables_read & RAW_TABLES), sorted(store.tables_read & RAW_TABLES)
+    for url in _drawer_urls(old):
+        r = _get(new, store, url)
+        assert not (store.tables_read & RAW_TABLES), (url, sorted(store.tables_read & RAW_TABLES))
+        assert store.tables_read <= DRAWER_TABLES, (url, sorted(store.tables_read - DRAWER_TABLES))
+        assert json.dumps(r.json(), sort_keys=True) == json.dumps(old.get(url).json(), sort_keys=True), url
+
+
+def test_drawer_reads_only_its_keys_buckets(stores):
+    """A drawer request reads the commits and table files of its call's keys' buckets only."""
+    old, new, store, _ = stores
+    for url in _drawer_urls(old):
+        _get(new, store, url)
+        buckets = {k.split("bucket=")[1][:2] for k in store.reads if "/tables/" in k}
+        assert 0 < len(buckets) <= 3, (url, sorted(buckets))
+
+
+def test_drawer_raw_fallback_is_off_by_default(tmp_path):
+    store = BucketStore(LocalSource(tmp_path), tmp_path / "cache")
+    assert store.drawer_raw is False
 
 
 # --- flat: objects read don't grow with history ---------------------------------------------------
@@ -119,14 +149,24 @@ def test_objects_read_stay_flat_as_history_grows(tmp_path, url):
     assert eight <= one, (url, one, eight)
 
 
+def test_drawer_objects_read_stay_flat_as_history_grows(tmp_path):
+    """Opening the same call reads no more objects with 8x the history beside it."""
+    root, layout, old = _layout(tmp_path / "x0", 3)
+    url = _drawer_urls(make_client(old))[0]
+    old.close()  # type: ignore[attr-defined]
+    one = _reads(tmp_path / "x1", 3, url)
+    eight = _reads(tmp_path / "x8", 24, url)
+    assert eight <= one, (url, one, eight)
+
+
 # --- the gate: every endpoint but the drawer -------------------------------------------------------
 
 
-def test_no_endpoint_but_the_drawer_reads_a_raw_table(stores):
+def test_no_endpoint_reads_a_raw_table(stores):
     from tests.test_bucket_parity import _urls
 
     old, new, store, _ = stores
-    urls = [u for u in _urls(old) if not u.startswith(("/api/v1/requests/", "/api/v1/events/"))]
+    urls = _urls(old)
     assert len(urls) > 80
     for url in urls:
         _get(new, store, url)

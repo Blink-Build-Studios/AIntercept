@@ -166,6 +166,18 @@ func atomicCases() []atomicCase {
 	verdict.Phase = events.PhaseVerdict
 
 	return []atomicCase{
+		{label: CaseLocatorCall, row: row(hdr("c1", true, ccHeaders)), only: KindLocator,
+			want: []want{{kind: KindLocator, callID: "c1", key: "l:c1", check: func(t *testing.T, r Record) {
+				if LocatorTarget(&r) != "s:s1" {
+					t.Fatalf("target %q", LocatorTarget(&r))
+				}
+			}}}},
+		{label: CaseLocatorReport, prior: ana, row: row(clientEvent("a1", "e1", "s1", 0)), flush: true, only: KindLocator,
+			want: []want{{kind: KindLocator, key: "l:reported:req_1", check: func(t *testing.T, r Record) {
+				if LocatorTarget(&r) != "s:s1" {
+					t.Fatalf("target %q", LocatorTarget(&r))
+				}
+			}}}},
 		{label: CasePendingHeaders, row: row(hdr("c1", false, ccHeaders))},
 		{label: CaseStartHeadersEOS, row: row(hdr("c1", true, ccHeaders)), want: []want{{KindCallStart, "c1", "s:s1", func(t *testing.T, r Record) {
 			if r.Call.SessionID != "s1" || r.Call.Product != "claude_code" || r.Call.EndNS != 0 {

@@ -28,7 +28,16 @@ const (
 	KindWSConnection = "ws_connection" // a WebSocket connection's own row, at its close
 	KindClientEvent  = "client_event"  // one analytics event a client reported
 	KindAccount      = "account"       // who an account is, as a row named it
+	// KindLocator says where the request drawer finds one call (l:<correlation
+	// id>) or one reported call (l:reported:<id>): routed by that id, so the
+	// drawer knows its bucket from the id alone. Its target is LocatorTarget.
+	// It isn't a call or an event: every table but the locator's ignores it.
+	KindLocator = "locator"
 )
+
+// LocatorTarget is the key a locator points at: the routing key its call's
+// start went to, or its report's session.
+func LocatorTarget(r *Record) string { return "" }
 
 // Record is one canonical record. Exactly one of Call, Event and Account is set,
 // except that a client event also carries its batch request's call (Call: the

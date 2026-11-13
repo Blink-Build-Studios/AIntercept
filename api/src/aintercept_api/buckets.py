@@ -113,6 +113,12 @@ RAW_TABLES = frozenset(
     {"requests", "analytics", "ledger", "probes", "pending", "sessions", "prompts", "people", "person_devices"}
 )
 
+# The request drawer's per-key tables (internal/stream/state drawer.go): a call's own rows. Only
+# a drawer request loads them, and only for its call's keys (§4.9).
+DRAWER_TABLES = frozenset(
+    {"drawer_locator", "drawer_calls", "drawer_steps", "drawer_facts", "drawer_sandbox", "drawer_reports", "drawer_events"}
+)
+
 # The processor's per-session tables session_rows is rebuilt from: when they're in the layout,
 # they're loaded as _s_<table> and the API's session_rows is the SQL over them.
 SESSION_INPUTS = (

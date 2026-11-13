@@ -45,6 +45,8 @@ const (
 	CaseAccountSighting          = "account.sighting"            // a row saying who an account is
 	CaseVerdict                  = "verdict"                     // an Interceptor verdict: not a record
 	CaseUnknownPhase             = "unknown.phase"               // a phase this code doesn't know: ignored, and fails a real-data run
+	CaseLocatorCall              = "locator.call"                // a call's start: its locator, l:<correlation id>
+	CaseLocatorReport            = "locator.report"              // a session's tengu_api_success: its locator, l:reported:<id>
 )
 
 // AllCases is every case label.
@@ -55,6 +57,7 @@ var AllCases = []string{
 	CaseEndDisconnect, CaseEndDisconnectEarly, CaseEndDisconnectThenHeaders, CaseEndSplitKey, CaseLateAfterDone,
 	CaseEventWithID, CaseEventNoID, CaseEventRepeat, CaseEventNoPayload,
 	CaseBatchSession, CaseBatchNoSession, CaseAccountSighting, CaseVerdict, CaseUnknownPhase,
+	CaseLocatorCall, CaseLocatorReport,
 }
 
 // How long a call's state is kept, in data time (the newest row seen): a call
@@ -136,6 +139,10 @@ type heldBatch struct {
 type Detail struct {
 	CorrelationID string
 	Lines         [][]byte
+	// RoutingKeys is every key the call's records went to (its start's, its
+	// end's, its batch's events' sessions, its turns'), sorted: the request
+	// drawer loads only those keys' rows.
+	RoutingKeys []string
 }
 
 type detailLines struct {
