@@ -196,6 +196,9 @@ fact rows. A new lookup then changes one row, not history.
 
 ## Scaling and statelessness (forward-looking)
 
+The data path behind the observers (processing, storage and queries) scales the
+same way: see `docs/STREAMING_PIPELINE.md` (proposed).
+
 The observer is designed to run as many replicas with **no sticky routing**:
 
 - Each HTTP transaction corresponds to one ext_proc stream, which stays on one
