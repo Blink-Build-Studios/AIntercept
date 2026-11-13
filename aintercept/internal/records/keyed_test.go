@@ -383,3 +383,64 @@ func head(s []string) []string {
 }
 
 var _ = os.Remove
+
+// An ingest file carries the newest raw row its pod had seen when it was
+// written (records.NewestRowNS): what today's processor reports as its newest
+// data, including rows that complete no record yet (a call still streaming).
+func TestKeyFileCarriesNewestRawRow(t *testing.T) {
+	r := newRig(t, records.SinkConfig{})
+	ns := start.UnixNano()
+	corr := "pod-1-aa"
+	emit := func(e events.Event) {
+		e.CorrelationID, e.ObserverInstance = corr, "pod"
+		if err := r.s.Emit(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	emit(events.Event{Phase: events.PhaseRequestHeaders, TimestampNS: ns, Host: "api.anthropic.com", Method: "POST",
+		Path: "/v1/messages", KeyHash: "k", EndOfStream: true,
+		Headers: map[string]string{"x-claude-code-session-id": "s1"}})
+	emit(events.Event{Phase: events.PhaseResponseHeaders, TimestampNS: ns + 10, Status: 200})
+	emit(events.Event{Phase: events.PhaseResponseBodyChunk, TimestampNS: ns + 5_000_000_000, Bytes: 10})
+	if err := r.s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	r.drain(t)
+	r.st.mu.Lock()
+	defer r.st.mu.Unlock()
+	found := false
+	for k, b := range r.st.objs {
+		if !strings.Contains(k, "/in/") {
+			continue
+		}
+		found = true
+		_, newest, err := records.DecodeWithNewest(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if newest != ns+5_000_000_000 {
+			t.Fatalf("%s: newest raw row %d, want %d (the streaming call's last chunk)", k, newest, ns+5_000_000_000)
+		}
+	}
+	if !found {
+		t.Fatal("no ingest file written")
+	}
+}
+
+func TestEncodeWithNewestRoundTrips(t *testing.T) {
+	b, err := records.EncodeWithNewest([]records.Record{rec("s:x")}, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, newest, err := records.DecodeWithNewest(b)
+	if err != nil || len(rs) != 1 || newest != 42 {
+		t.Fatalf("got %d records, newest %d, err %v", len(rs), newest, err)
+	}
+	plain, err := records.Encode([]records.Record{rec("s:x")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, newest, err := records.DecodeWithNewest(plain); err != nil || newest != 0 {
+		t.Fatalf("a file without it: newest %d err %v, want 0", newest, err)
+	}
+}

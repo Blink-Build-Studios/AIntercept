@@ -96,3 +96,13 @@ func Encode(rs []Record) ([]byte, error) {
 func Decode(b []byte) ([]Record, error) {
 	return parquet.Read[Record](bytes.NewReader(b), int64(len(b)))
 }
+
+// EncodeWithNewest is Encode, with the newest raw row time its pod had seen
+// (stub: not yet written).
+func EncodeWithNewest(rs []Record, newestRowNS int64) ([]byte, error) { return Encode(rs) }
+
+// DecodeWithNewest is Decode, with the file's newest raw row time (0: none).
+func DecodeWithNewest(b []byte) ([]Record, int64, error) {
+	rs, err := Decode(b)
+	return rs, 0, err
+}

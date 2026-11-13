@@ -521,3 +521,40 @@ func TestHolderKilledMidRunKeyIsReclaimed(t *testing.T) {
 		})
 	}
 }
+
+// A commit carries the newest raw row time of every ingest file it applied,
+// never moving back, through runs and compaction.
+func TestCommitCarriesNewestRawRow(t *testing.T) {
+	e := newEnv(t)
+	key := sessionKey("a")
+	e.ingestNewest("a", 2, 500)
+	w := e.worker("w1")
+	if _, _, err := w.RunKey(e.ctx, key); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := ReadNewest(e.ctx, e.store, prefix, key)
+	if c.NewestRowNS != 500 {
+		t.Fatalf("newest %d, want 500", c.NewestRowNS)
+	}
+	e.clock.Advance(time.Second)
+	e.ingestNewest("a", 1, 300) // an older pod's file: the newest stays
+	if _, _, err := w.RunKey(e.ctx, key); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = ReadNewest(e.ctx, e.store, prefix, key)
+	if c.NewestRowNS != 500 {
+		t.Fatalf("newest %d after an older file, want 500", c.NewestRowNS)
+	}
+	for i := 0; i < 40; i++ { // enough runs to compact
+		e.clock.Advance(time.Second)
+		e.ingest("a", 1)
+		if _, _, err := w.RunKey(e.ctx, key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, _ = ReadNewest(e.ctx, e.store, prefix, key)
+	if c.NewestRowNS != 500 {
+		t.Fatalf("newest %d after compaction, want 500", c.NewestRowNS)
+	}
+	e.check()
+}
