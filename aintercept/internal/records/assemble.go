@@ -496,8 +496,9 @@ func (a *Assembler) release() []Record {
 }
 
 // rankClaudeCode numbers a batch's Claude Code events as the event rows do:
-// by sequence, row time, client time, name ("(unnamed)" for none) and metadata;
-// identical ones in arrival order.
+// by sequence, row time, client time, name ("(unnamed)" for none), metadata,
+// then event key (a repeat of an identical row is keyed <key>-2, so identical
+// ones keep arrival order).
 func rankClaudeCode(evs []Record) {
 	var cc []*Record
 	for i := range evs {
@@ -522,8 +523,10 @@ func rankClaudeCode(evs []Record) {
 			return x.NS < y.NS
 		case name(cc[i]) != name(cc[j]):
 			return name(cc[i]) < name(cc[j])
+		case x.MetadataJSON != y.MetadataJSON:
+			return x.MetadataJSON < y.MetadataJSON
 		}
-		return x.MetadataJSON < y.MetadataJSON
+		return x.EventKey < y.EventKey
 	})
 	for i, r := range cc {
 		r.BatchCCN = int64(i + 1)
