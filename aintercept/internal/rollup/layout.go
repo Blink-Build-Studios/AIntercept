@@ -14,7 +14,8 @@
 // <esc key> is url.PathEscape(routing key). <s3 time> is InTime (UTC, to the
 // second, S3's clock); <s3 minute> is RecentMinute. Table files use the stream
 // table codec: key, id, tomb, then the table's typed columns (state.TableTypes).
-// A commit's out lists every current output directory oldest first: the newest
+// A commit's out lists every current output directory oldest first, each with
+// the tables it holds: the newest
 // row per (table, key, id) wins and tombstones drop it.
 package rollup
 
@@ -35,15 +36,23 @@ const (
 // Commit is keys/<key>/commit/<n>.json. Paths are relative to keys/<esc key>/.
 type Commit struct {
 	N           int64    `json:"n"`
-	Out         []string `json:"out"`          // "out/<n>-<nonce>/", oldest first
+	Key         string   `json:"key"`          // the routing key (unescaped)
+	Out         []Out    `json:"out"`          // every current output directory, oldest first
 	State       []string `json:"state"`        // "state/<n>-<nonce>", oldest first
 	LastApplied string   `json:"last_applied"` // the newest in/ name applied
 	Grace       []string `json:"grace"`        // in/ names applied within the grace window
 	UpdatedNS   int64    `json:"updated_ns"`
-	// Levels are the compaction tier of each Out entry (same order); absent is 0.
-	Levels []int `json:"levels,omitempty"`
 	// Garbage are files superseded by compaction, deleted once DeleteAfterNS passes.
 	Garbage []Garbage `json:"garbage,omitempty"`
+}
+
+// Out is one output directory (relative to the key folder, ending in "/") and
+// exactly the tables it holds a <table>.parquet for, so readers never LIST. Level
+// is its compaction tier (0: a run's own output).
+type Out struct {
+	Dir    string   `json:"dir"`
+	Tables []string `json:"tables"`
+	Level  int      `json:"level,omitempty"`
 }
 
 // Garbage is a superseded file or directory (relative path) and when it may go.
