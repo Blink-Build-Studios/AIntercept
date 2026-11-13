@@ -27,7 +27,7 @@ func TestColumnsPinned(t *testing.T) {
 		"event.source", "event.name", "event.type", "event.client_event_id", "event.session_id", "event.prompt_id",
 		"event.person_id", "event.org_id", "event.device_id", "event.agent_id", "event.agent_type", "event.model",
 		"event.request_id", "event.client_request_id", "event.tool_use_id", "event.prompt_index", "event.permission_mode",
-		"event.head_sha", "event.metadata_json", "event.env_json",
+		"event.head_sha", "event.metadata_json", "event.env_json", "event.batch_n",
 		"account.account_id", "account.email", "account.name", "account.org", "account.ns",
 	}
 	var got []string

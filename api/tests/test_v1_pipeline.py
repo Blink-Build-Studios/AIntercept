@@ -13,12 +13,15 @@ import pytest
 from aintercept_api.buckets import LocalSource
 from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
-from tests.builders import Dataset, load_fixture
+from tests.builders import ClaudeCode, Dataset, cid_of, load_fixture
 from tests.conftest import aintercept_binary, bounded_store, few_per_group, make_client
 from tests.endpoints import endpoint_urls as _urls
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
+from tests.test_session import H, prompt
 from tests.test_stream_pipeline import group, one_stream_one_id
+
+SPAN_A, SPAN_B = "aaaaaaaa-0000-4000-8000-0000000000a1", "bbbbbbbb-0000-4000-8000-0000000000b2"
 
 
 def v1_layout(raw: pathlib.Path, out: pathlib.Path) -> None:
@@ -96,3 +99,48 @@ def _hold(old, new, urls: list[str]) -> None:
         assert a["data"].pop("raw") and b["data"].pop("raw") == {} and a == b, url
         held["drawer (in flight: no raw row yet)"] += 1
     assert not differing, {g: (len(u), u[:3]) for g, u in differing.items()}
+
+
+@pytest.fixture
+def spanning(tmp_path):
+    """One analytics batch carrying two sessions' events: session B's tengu_api_success for B's
+    model call arrives first but ranks last (its sequence number is higher), then session A's
+    events, the earliest at the same time as B's. The drawer reads only B's call's keys."""
+    ds = Dataset(tmp_path / "data")
+    a, b = ClaudeCode(ds, SPAN_A), ClaudeCode(ds, SPAN_B)
+    prompt(a, f"{H}:00:01", "pa", 1)
+    prompt(b, f"{H}:00:02", "pb", 1)
+    rid = b.call(f"{H}:00:09", prompt="pb")
+    for i in range(4):  # B's later sequence numbers: its event ranks after A's in the batch
+        b.event(f"{H}:00:0{i + 3}", "tengu_feature_ok", n=i)
+    b.event(f"{H}:00:10", "tengu_api_success", batch="batch-span", cc_prompt_id="pb", requestId=rid)
+    for i in range(3):
+        a.event(f"{H}:00:1{i}", "tengu_feature_ok", batch="batch-span", n=i)
+    root = pathlib.Path(ds.write())
+    v1_layout(root, tmp_path / "layout")
+    old = bounded_store(root)
+    old.ingest()
+    new = V1Store(LocalSource(tmp_path / "layout"), tmp_path / "cache", prefix="sim/", raw=LocalRaw(root))
+    yield make_client(old), make_client(new), cid_of(ds, rid)
+    new.close()
+    old.close()
+
+
+def test_a_drawers_events_number_across_the_whole_batch(spanning):
+    # An event's id is its rank in its whole batch, which spans sessions; the drawer reads only
+    # its own call's keys, so the rank must come stored with the event, not counted from what's loaded.
+    old, new, cid = spanning
+    want = None
+    for client in (old, new):
+        listed = {e["eventId"] for e in client.get(f"/api/v1/sessions/{SPAN_B}/events").json()["data"]}
+        shown = {e["eventId"] for e in client.get(f"/api/v1/requests/{cid}/details").json()["data"]["events"]}
+        assert len(shown) == 1 and shown <= listed, (shown, listed)
+        assert want is None or shown == want, (shown, want)
+        want = shown
+
+
+def test_an_analytics_calls_session_is_its_batchs_earliest(spanning):
+    # As the request rows have it: the session the batch's earliest event names.
+    old, new, _ = spanning
+    for client in (old, new):
+        assert client.get("/api/v1/requests/batch-span").json()["data"]["sessionId"] == SPAN_A

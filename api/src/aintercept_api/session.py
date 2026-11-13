@@ -188,8 +188,9 @@ def _events(
         """SELECT correlation_id || ':' || n, ts, name, device_id, head_sha, md::VARCHAR, prompt_id FROM (
              SELECT correlation_id, ts, coalesce(name, '(unnamed)') AS name, device_id, head_sha, md, prompt_id,
                     session_id, request_id, client_request_id, tool_use_id,
-                    row_number() OVER (
-                        PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR, event_key) AS n
+                    -- Its stored rank: the batch can span sessions this scope doesn't hold.
+                    coalesce(batch_n, row_number() OVER (
+                        PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR, event_key)) AS n
              FROM cc_events
              -- Number only the batches holding a wanted event (numbering is per batch).
              WHERE correlation_id IN (

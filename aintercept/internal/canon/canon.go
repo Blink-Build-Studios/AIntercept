@@ -149,6 +149,10 @@ type Event struct {
 	HeadSHA         string `parquet:"head_sha,optional"`
 	MetadataJSON    string `parquet:"metadata_json,optional"` // data.additional_metadata
 	EnvJSON         string `parquet:"env_json,optional"`      // data.env
+	// BatchN is a Claude Code event's rank among its batch's Claude Code events
+	// (the number in its event id), stored so a reader of only some of the
+	// batch's sessions numbers it as the whole batch does; 0: not stored.
+	BatchN int64 `parquet:"batch_n,optional"`
 }
 
 // Pending is a transaction whose headers were seen but whose ending (complete,

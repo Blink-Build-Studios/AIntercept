@@ -40,7 +40,8 @@ func TestGeneratedSequencesMatchTheProcessor(t *testing.T) {
 
 // callsAndEvents is the records' request rows (one per call: a call written to
 // two keys is one row) and event rows, without the raw-file provenance the
-// processor names and a live observer can't.
+// processor names and a live observer can't, or the batch rank the processor
+// keeps in its event_rows rather than its event rows.
 func callsAndEvents(rs []records.Record) ([]canon.Request, []canon.Event) {
 	var reqs []canon.Request
 	var evs []canon.Event
@@ -53,7 +54,9 @@ func callsAndEvents(rs []records.Record) ([]canon.Request, []canon.Event) {
 				reqs = append(reqs, *r.Call)
 			}
 		case records.KindClientEvent:
-			evs = append(evs, *r.Event)
+			e := *r.Event
+			e.BatchN = 0
+			evs = append(evs, e)
 		}
 	}
 	return reqs, evs

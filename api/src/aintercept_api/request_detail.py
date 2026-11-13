@@ -197,6 +197,11 @@ class Wire:
 WS_TURN = "~"  # a WebSocket turn's id is <connection>~<turn> (its call_id, <connection>#<turn>, URL-safe)
 
 
+# An analytics request's session, as its request row has it: the one its batch's earliest event names.
+_BATCH_SESSION = """SELECT session_id FROM analytics WHERE correlation_id = ? AND coalesce(session_id, '') <> ''
+                    ORDER BY ns, session_id LIMIT 1"""
+
+
 def _wire_from_tables(store: Store, cid: str) -> Wire | None:
     """The transaction from its request row, when its raw files can't be read
     (not synced, or the object store unreachable): what the drawer can still say."""
@@ -246,7 +251,7 @@ def _wire_from_tables(store: Store, cid: str) -> Wire | None:
         from_tables=True,
     )
     if w.kind == "analytics":
-        found = store.query("SELECT any_value(session_id) FROM cc_events WHERE correlation_id = ?", [cid])
+        found = store.query(_BATCH_SESSION, [cid])
         w.batch_session = found[0][0] if found else None
     return w
 
@@ -332,7 +337,7 @@ def _load_wire(store: Store, cid: str) -> Wire | None:
                 (int(r.get("timestamp_ns") or 0), chunk)
             )
     if w.kind == "analytics":
-        sid = store.query("SELECT any_value(session_id) FROM cc_events WHERE correlation_id = ?", [cid])
+        sid = store.query(_BATCH_SESSION, [cid])
         w.batch_session = sid[0][0] if sid else None
     return w
 
@@ -1391,8 +1396,9 @@ def event(store: Store, event_id: str) -> EventDetail | None:
     found = store.query(
         """SELECT ts, name, session_id, event_key, source_file FROM (
              SELECT ts, coalesce(name, '(unnamed)') AS name, session_id, event_key, source_file,
-                    row_number() OVER (
-                        PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR, event_key) AS n
+                    -- Its stored rank: the batch can span sessions this scope doesn't hold.
+                    coalesce(batch_n, row_number() OVER (
+                        PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR, event_key)) AS n
              FROM cc_events WHERE correlation_id = ?)
            WHERE n = ?""",
         [cid, int(n)],
