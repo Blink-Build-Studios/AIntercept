@@ -135,3 +135,6 @@ func (CountModel) Decode(key string, chunks [][]byte) (any, error) {
 func (CountModel) Merge(_ string, chunks [][]byte) ([]byte, error) { return chunks[len(chunks)-1], nil }
 
 func (CountModel) Size(any) int { return 64 }
+
+// Layout names the stand-in model's table shapes (stub).
+func (CountModel) Layout() string { return "" }

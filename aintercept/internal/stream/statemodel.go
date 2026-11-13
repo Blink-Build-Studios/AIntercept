@@ -62,3 +62,6 @@ func (StateModel) Size(st any) int {
 	}
 	return 512 + 1024*n + 1024*st.(*state.KeyState).Held()
 }
+
+// Layout names the state's table shapes (stub).
+func (StateModel) Layout() string { return "" }

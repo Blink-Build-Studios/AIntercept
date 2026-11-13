@@ -178,3 +178,6 @@ func (t *Table) ValueMap(v any) map[string]any {
 	}
 	return out
 }
+
+// RowGroupRows is how many rows each row group of a table file holds (stub).
+var RowGroupRows = 0
