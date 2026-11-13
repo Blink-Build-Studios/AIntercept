@@ -104,6 +104,12 @@ ROUTING: dict[str, tuple[str, str]] = {
     "session_edges": ("*", ""),
 }
 
+# The raw fact tables and the snapshots built from all of history: no endpoint reads them
+# (docs/STREAMING_PIPELINE.md §4.9), save the request drawer's explicit fallback.
+RAW_TABLES = frozenset(
+    {"requests", "analytics", "ledger", "probes", "pending", "sessions", "prompts", "people", "person_devices"}
+)
+
 # The processor's per-session tables session_rows is rebuilt from: when they're in the layout,
 # they're loaded as _s_<table> and the API's session_rows is the SQL over them.
 SESSION_INPUTS = (
@@ -489,6 +495,10 @@ class BucketStore:
         self._lock = threading.Lock()
         self.title_runs: list[TitleRun] = []  # the newest table build's session_rows runs (for tests)
         self.title_all_sessions: frozenset[str] = frozenset()
+        # What requests read, for the scaling tests: every object a load names (commits and
+        # table files) and the tables it loads rows of. Callers clear them.
+        self.reads: list[str] = []
+        self.tables_read: set[str] = set()
 
     # --- scopes --------------------------------------------------------------------------------
 
@@ -547,6 +557,8 @@ class BucketStore:
         plan: dict[str, list[str]] = {}
         for t, want in wants.items():
             plan[t] = [k for b in sorted(commits) if want is None or b in want for k in commits[b].files(t)]
+        self.reads += [c.key for c in commits.values()] + [k for fs in plan.values() for k in fs]
+        self.tables_read |= {t for t, fs in plan.items() if fs}
         sig = (scope.signature(), tuple(names), tuple((t, tuple(fs)) for t, fs in sorted(plan.items())))
         with self._lock:
             if sig in self._loaded:

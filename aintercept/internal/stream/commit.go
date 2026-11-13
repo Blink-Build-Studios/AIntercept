@@ -59,6 +59,15 @@ type Commit struct {
 	State       []FileRef            `json:"state"`
 	LastCompact time.Time            `json:"last_compact"`
 	Garbage     []Garbage            `json:"garbage"`
+	// What /status shows, over every record the bucket has applied (carried
+	// from commit to commit): the newest data time, the earliest captured call
+	// (synthetic probes aside), the earliest record of any kind, and whether
+	// any call's recorded content was kept. The API sums them across buckets
+	// and reads no tables for it.
+	NewestNS        int64 `json:"newest_ns"`
+	FirstCallNS     int64 `json:"first_call_ns"`
+	EarliestNS      int64 `json:"earliest_ns"`
+	ContentRetained bool  `json:"content_retained"`
 }
 
 // Files are every file the commit names, garbage pending deletion included.
