@@ -298,6 +298,17 @@ observer:
   spool:
     sizeLimit: 10Gi
     maxBytes: 9663676416   # 9 GiB
+  # v5 per-key ingest buffers (docs/PIPELINE.md §1): each routing key's records
+  # flush as one file under v1/keys/<key>/in/ at flushBytes or flushSeconds after
+  # the buffer's first record (±10%, at most 60). Over maxBytes across all
+  # buffers, the oldest flush first. Buffers live in the spool volume.
+  keyBuffers:
+    flushBytes: 1048576     # 1 MiB
+    flushSeconds: 30
+    maxBytes: 67108864      # 64 MiB
+  # Redis (host:port) for dirty-key flags; empty disables them (the rollups'
+  # sweep still finds every key). Set by the Redis StatefulSet (step 5).
+  redisAddr: ""
   # Operational log level: debug | info | warn | error. Logs are structured JSON
   # on stderr (telemetry events go to stdout).
   logLevel: info

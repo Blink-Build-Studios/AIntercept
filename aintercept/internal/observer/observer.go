@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/extproc"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/keyflag"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
@@ -104,6 +106,7 @@ func Run() {
 	localDir := os.Getenv("OBSERVER_LOCAL_DIR")
 	var writer *events.Writer
 	var targets []events.Target
+	var flagger atomic.Pointer[keyflag.Flagger]
 	if bucket != "" {
 		// On AWS, leave the keys unset to use IRSA or Pod Identity; on
 		// DigitalOcean Spaces (or MinIO), set OBSERVER_S3_ENDPOINT + static keys.
@@ -135,6 +138,13 @@ func Run() {
 			FlushEvery:    time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
 			UploadTimeout: time.Duration(envInt("OBSERVER_UPLOAD_TIMEOUT_SECONDS", 0)) * time.Second,
 			Targets:       targets,
+			// Each landed ingest file flags its key (keyflag): set below, once
+			// the flagger exists; files a previous process left upload from now.
+			OnUploaded: func(target, key string) {
+				if f := flagger.Load(); f != nil {
+					f.Landed(target, key)
+				}
+			},
 		})
 		if err != nil {
 			fatal("writer init failed", "spool", spoolDir, "err", err)
@@ -195,32 +205,48 @@ func Run() {
 		}
 	}
 
-	// Canonical records (docs/STREAMING_PIPELINE.md §3): the bucketed
-	// processor's input, beside the raw log, through the same bucket or
-	// directory. From the full rows when bodies are recorded (a call's detail
-	// is read from them), else from the body-stripped ones.
+	// Canonical records, per routing key (docs/PIPELINE.md §1): each key's
+	// records are buffered (a spool file per key) and written as ingest files
+	// under v1/keys/<key>/in/, beside the raw log, through the same bucket or
+	// directory; each landed file flags its key for the rollups (keyflag). From
+	// the full rows when bodies are recorded (a call's detail is read from
+	// them), else from the body-stripped ones.
 	budget := setupMemory()
 	var recordsSink *records.Sink
 	if os.Getenv("OBSERVER_RECORDS") != "false" {
 		var put records.Putter
-		prefix := ""
+		prefix, target := "", ""
 		switch {
 		case s3Sink != nil:
-			put, prefix = records.WriterPutter(writer, "s3"), os.Getenv("OBSERVER_S3_PREFIX")
+			target, prefix = "s3", os.Getenv("OBSERVER_S3_PREFIX")
 		case localSink != nil:
-			put = records.WriterPutter(writer, "local")
+			target = "local"
 		}
-		if put != nil {
+		if target != "" {
+			put = records.WriterPutter(writer, target)
+			inc := records.NewIncarnation(instanceID)
+			recent := writer.NewObjectStream(events.ObjectStreamConfig{Target: target, ContentType: "application/json"})
+			f := keyflag.New(keyflag.Config{Redis: os.Getenv("OBSERVER_REDIS_ADDR"), Prefix: prefix, Incarnation: inc,
+				Put: recent.Put})
+			flagger.Store(f)
+			go f.Run(context.Background())
+			spoolDir := envDefault("OBSERVER_SPOOL_DIR", filepath.Join(os.TempDir(), "aintercept-spool"))
 			recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
-				Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies, Details: true,
-				MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
+				Incarnation: inc, Content: captureFullBodies, Details: true,
+				MaxAge:         time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
+				KeySpoolDir:    filepath.Join(spoolDir, "keys"),
+				KeyObject:      func(key string, seq int64) string { return keyflag.InTemplate(prefix, key, inc, seq) },
+				FlushBytes:     envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20),
+				FlushAge:       time.Duration(envInt("OBSERVER_KEY_FLUSH_SECONDS", 30)) * time.Second,
+				MaxBufferBytes: int64(envInt("OBSERVER_KEY_BUFFER_MAX_BYTES", 64<<20))})
 			if captureFullBodies {
 				full = append(full, recordsSink)
 			} else {
 				bodyStripped = append(bodyStripped, recordsSink)
 			}
 			go recordsSink.Run(context.Background())
-			slog.Info("canonical records enabled", "prefix", records.ObjectKeyPrefix(prefix, 0))
+			slog.Info("per-key ingest files enabled", "prefix", prefix, "redis", os.Getenv("OBSERVER_REDIS_ADDR") != "",
+				"flush_bytes", envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20), "flush_seconds", envInt("OBSERVER_KEY_FLUSH_SECONDS", 30))
 		}
 	}
 
@@ -387,6 +413,17 @@ func Run() {
 		if err := fileSink.Close(); err != nil {
 			slog.Error("capture file close error", "err", err)
 		}
+	}
+	if f := flagger.Load(); f != nil && writer != nil {
+		// Every key buffer is in the spool now (proc.Close flushed the records
+		// sink): upload it, then the recent index naming those files.
+		if err := writer.Flush(); err != nil {
+			slog.Error("writer flush error", "err", err)
+		}
+		if err := f.FlushRecent(); err != nil {
+			slog.Error("recent index upload failed at shutdown; the files are still flagged in Redis", "err", err)
+		}
+		f.Close()
 	}
 	if writer != nil {
 		// Seals what's buffered and waits until the spool is empty, so a graceful
