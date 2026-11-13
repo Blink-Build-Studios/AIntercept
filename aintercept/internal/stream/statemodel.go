@@ -63,5 +63,6 @@ func (StateModel) Size(st any) int {
 	return 512 + 1024*n + 1024*st.(*state.KeyState).Held()
 }
 
-// Layout names the state's table shapes (stub).
-func (StateModel) Layout() string { return "" }
+// Layout names the state's table shapes: the API reads them as the stream
+// state's (api/src/aintercept_api/state_sql.py).
+func (StateModel) Layout() string { return "stream-state/1" }

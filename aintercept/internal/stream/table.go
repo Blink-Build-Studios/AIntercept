@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
@@ -108,10 +109,16 @@ func columnName(f reflect.StructField) string {
 	return f.Name
 }
 
-// Encode is rows as a Parquet file of this table (zstd).
+// Encode is rows as a Parquet file of this table (zstd): in (key, id) order,
+// in row groups of RowGroupRows, so a reader filtering on key fetches only the
+// row groups whose key statistics can hold it.
 func (t *Table) Encode(rows []Row) ([]byte, error) {
+	if !sort.SliceIsSorted(rows, func(i, j int) bool { return rowLess(rows[i], rows[j]) }) {
+		rows = append([]Row(nil), rows...)
+		sort.Slice(rows, func(i, j int) bool { return rowLess(rows[i], rows[j]) })
+	}
 	var buf bytes.Buffer
-	w := parquet.NewWriter(&buf, t.sch, parquet.Compression(&zstd.Codec{}))
+	w := parquet.NewWriter(&buf, t.sch, parquet.Compression(&zstd.Codec{}), parquet.MaxRowsPerRowGroup(int64(RowGroupRows)))
 	v := reflect.New(t.flat).Elem()
 	for _, r := range rows {
 		v.SetZero()
@@ -179,5 +186,8 @@ func (t *Table) ValueMap(v any) map[string]any {
 	return out
 }
 
-// RowGroupRows is how many rows each row group of a table file holds (stub).
-var RowGroupRows = 0
+// RowGroupRows is how many rows each row group of a table file holds: small
+// enough that a key lookup in a large base part reads a sliver of it.
+var RowGroupRows = 2048
+
+func rowLess(a, b Row) bool { return a.Key < b.Key || a.Key == b.Key && a.ID < b.ID }

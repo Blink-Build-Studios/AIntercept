@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/json"
 	"strings"
 	"unicode/utf8"
 
@@ -221,24 +220,8 @@ func (ps *promptsState) prompt(pid string) *pPrompt {
 	return p
 }
 
-// startPending is a call in flight as the processor holds it (the observer's
-// call start: its request headers).
-func startPending(c *canon.Request) canon.Pending {
-	h := map[string]string{}
-	for k, v := range map[string]string{
-		"x-claude-code-session-id": c.SessionID, "x-claude-code-prompt-id": c.PromptID,
-		"x-claude-code-request-class": c.RequestClass, "x-client-request-id": c.ClientRequestID,
-		"x-claude-code-agent-type": c.AgentType,
-	} {
-		if v != "" {
-			h[k] = v
-		}
-	}
-	cj, _ := json.Marshal(h)
-	return canon.Pending{CorrelationID: c.CallID, SeenNS: c.StartNS, StartNS: c.StartNS, Host: c.Host,
-		Method: c.Method, Path: c.Path, Synthetic: c.Synthetic, KeyHash: c.KeyHash, RequestID: c.RequestID,
-		ClientJSON: string(cj), ResponseStartNS: c.ResponseStartNS}
-}
+// startPending is a call in flight as the processor holds it (canon.PendingOfStart).
+func startPending(c *canon.Request) canon.Pending { return canon.PendingOfStart(c) }
 
 // prompts folds a record into the prompt tables and marks.
 func (s *KeyState) prompts(r records.Record, d *Delta) {

@@ -136,5 +136,13 @@ func (CountModel) Merge(_ string, chunks [][]byte) ([]byte, error) { return chun
 
 func (CountModel) Size(any) int { return 64 }
 
-// Layout names the stand-in model's table shapes (stub).
-func (CountModel) Layout() string { return "" }
+// Layout names the stand-in model's table shapes.
+func (CountModel) Layout() string { return "key-counts/1" }
+
+// LayoutOf is m's Layout, when it names one: what a commit says its tables are.
+func LayoutOf(m Model) string {
+	if l, ok := m.(interface{ Layout() string }); ok {
+		return l.Layout()
+	}
+	return ""
+}

@@ -182,6 +182,7 @@ func (w *Bucket) Cycle(ctx context.Context) (CycleStats, error) {
 
 	// Write runs and state, then commit.
 	c := prev.next(w.Epoch, w.Replica, now)
+	c.Layout = LayoutOf(w.M)
 	for _, t := range sortedTables(deltas) {
 		tb, err := TableFor(t)
 		if err != nil {
