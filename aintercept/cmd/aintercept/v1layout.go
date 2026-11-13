@@ -4,14 +4,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/rollup"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
@@ -22,16 +25,15 @@ import (
 // (calls/<id>.ndjson.gz, what the drawer's raw view reads), each key's records
 // are applied in one pass (its calls still waiting expired by the newest data),
 // every key gets its first commit under v1/keys/, and one merge run writes
-// v1/merge/. With -v2 (the default) it also writes the v6 views beside v1
-// under v2/ (docs/PIPELINE.md §3, writeV2). The API's parity tests, the v6
-// oracle's table-level harness (api/tests/oracle/) and local tools read the
-// result.
+// v1/merge/. With -pg it also writes every key's rendered rows into Postgres
+// (writePG). The API's parity tests, the oracle's table-level harness
+// (api/tests/oracle/) and local tools read the result.
 func v1layout() {
 	fs := flag.NewFlagSet("v1layout", flag.ExitOnError)
 	src := fs.String("src", "", "raw capture directory")
 	out := fs.String("out", "", "output directory (the bucket's root)")
 	prefix := fs.String("prefix", "", "key prefix inside the bucket")
-	v2 := fs.Bool("v2", true, "also write the v6 views under <prefix>v2/ (docs/PIPELINE.md §3)")
+	pgDSN := fs.String("pg", "", "also write every key's rendered rows into this Postgres (docs/PIPELINE.md v7 §3.3-3.5)")
 	_ = fs.Parse(os.Args[2:])
 	if *src == "" || *out == "" {
 		fatalf("v1layout: -src and -out are required")
@@ -74,30 +76,30 @@ func v1layout() {
 	if err != nil {
 		fatalf("v1layout: merge: %v", err)
 	}
-	if *v2 {
-		if err := writeV2(ctx, s, *prefix, keys, byKey); err != nil {
-			fatalf("v1layout: v2: %v", err)
+	if *pgDSN != "" {
+		if err := writePG(ctx, *pgDSN, keys, byKey, now); err != nil {
+			fatalf("v1layout: pg: %v", err)
 		}
 	}
 	fmt.Printf("v1layout: %d records, %d keys, merge %d (%d partitions)\n", len(col.recs), len(keys), res.N, len(res.Rewritten))
 }
 
-// writeV2 writes the v6 side of a layout beside its v1 output
-// (docs/PIPELINE.md, Testing), for the oracle's side-by-side harness
-// (api/tests/oracle/). The v1 keys and merge partitions stay: the oracle reads
-// them until build step 11. So far, TEST-ONLY and not the v6 storage format
-// (still under review): each session key's finished tables (state.RenderSession),
-// one Parquet file per session per table, v2/test-sessions/<sid>/<table>.parquet
-// (an empty table has no file).
-func writeV2(ctx context.Context, s stream.DirStore, prefix string, keys []string, byKey map[string]map[string][]stream.Row) error {
-	if prefix != "" && !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
+// writePG writes every key's rendered rows (internal/render: a session's 9
+// tables, its call days, every key's agent calls and batch parts) into the
+// Postgres at dsn, each key written whole in its own transaction, under the
+// day its rows give it (rollup.DayOf). The schema is applied if the database
+// is empty. The side-by-side harness (api/tests/test_v6_session_rows.py)
+// reads them back.
+func writePG(ctx context.Context, dsn string, keys []string, byKey map[string]map[string][]stream.Row, now int64) error {
+	pool, err := pg.Open(ctx, dsn, 2)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	if err := pg.Apply(ctx, pool); err != nil {
+		return err
 	}
 	for _, k := range keys {
-		sid, ok := strings.CutPrefix(k, "s:")
-		if !ok {
-			continue
-		}
 		rows := state.Rows{}
 		for table, rs := range byKey[k] {
 			t := make(map[string]any, len(rs))
@@ -106,34 +108,15 @@ func writeV2(ctx context.Context, s stream.DirStore, prefix string, keys []strin
 			}
 			rows[table] = t
 		}
-		dir := prefix + "v2/test-sessions/" + url.PathEscape(sid) + "/"
-		for name, body := range sessionFiles(state.RenderSession(sid, rows)) {
-			if err := s.Put(ctx, dir+name+".parquet", body); err != nil {
-				return err
-			}
+		r, err := render.Render(k, rows, rollup.DayOf(k, byKey[k], now))
+		if err != nil {
+			return err
+		}
+		if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error { return r.Diff(nil).Write(ctx, tx) }); err != nil {
+			return fmt.Errorf("key %s: %w", k, err)
 		}
 	}
 	return nil
-}
-
-// sessionFiles is each non-empty table of a session as a Parquet file.
-func sessionFiles(t *state.SessionTables) map[string][]byte {
-	out := map[string][]byte{}
-	add := func(name string, n int, enc func() []byte) {
-		if n > 0 {
-			out[name] = enc()
-		}
-	}
-	add("session_rows", len(t.SessionRows), func() []byte { return process.EncodeParquet(t.SessionRows) })
-	add("presence_segments", len(t.PresenceSegments), func() []byte { return process.EncodeParquet(t.PresenceSegments) })
-	add("session_tools", len(t.SessionTools), func() []byte { return process.EncodeParquet(t.SessionTools) })
-	add("event_rows", len(t.EventRows), func() []byte { return process.EncodeParquet(t.EventRows) })
-	add("session_marks", len(t.SessionMarks), func() []byte { return process.EncodeParquet(t.SessionMarks) })
-	add("prompt_rows", len(t.PromptRows), func() []byte { return process.EncodeParquet(t.PromptRows) })
-	add("prompt_steps", len(t.PromptSteps), func() []byte { return process.EncodeParquet(t.PromptSteps) })
-	add("session_request_rows", len(t.SessionRequestRows), func() []byte { return process.EncodeParquet(t.SessionRequestRows) })
-	add("call_tool_uses", len(t.CallToolUses), func() []byte { return process.EncodeParquet(t.CallToolUses) })
-	return out
 }
 
 // detailsTo writes the calls' detail objects to the store and hands records to

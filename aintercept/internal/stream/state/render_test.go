@@ -167,8 +167,14 @@ func sameValue(a, b reflect.Value) bool {
 // reference's over the same records.
 func checkRender(t *testing.T, label string, rs []records.Record, o *streamOut) {
 	t.Helper()
+	checkRendered(t, label, rs, o, rendered(o))
+}
+
+// checkRendered requires got (each session's tables) to equal the reference's
+// over the same records; o is the stream that applied them.
+func checkRendered(t *testing.T, label string, rs []records.Record, o *streamOut, got map[string]*SessionTables) {
+	t.Helper()
 	ref := reference(rs)
-	got := rendered(o)
 	sids := map[string]bool{}
 	for s := range got {
 		sids[s] = true
@@ -239,34 +245,37 @@ func TestRenderSessionAtomic(t *testing.T) {
 // at is t ms past a fixed hour (2026-11-04T08:00Z).
 func at(t int64) int64 { return 1_793_779_200_000 + t }
 
+// renderShortSets are the short sequences the render is run over in every order.
+var renderShortSets = map[string]func() []records.Record{
+	// The event linking a call (its tengu_api_success) an hour before the call lands.
+	"a call landing an hour after the event linking it": func() []records.Record {
+		c := withIDs(step("c1", "s1", "p1", at(70*60_000)), "rid1", "crid1")
+		return []records.Record{typedPrompt("s1", "p1", "1", at(5*60_000)), success("s1", at(50*60_000), "rid1"),
+			callStart(c), callEnd(c), ccEvent("s1", "tengu_api_query", at(55*60_000), `{}`)}
+	},
+	// The prompt's input event, in the next hour, after its calls.
+	"a prompt's input event after its calls": func() []records.Record {
+		a := withIDs(step("c1", "s1", "p1", at(50*60_000)), "r1", "cr1")
+		b := withIDs(step("c2", "s1", "p1", at(58*60_000)), "r2", "cr2")
+		return []records.Record{callEnd(a), callStart(b), callEnd(b), typedPrompt("s1", "p1", "1", at(65*60_000)),
+			pev("s1", "p1", "tengu_turn_end", at(66*60_000), `{}`)}
+	},
+	// A plan-mode segment from one hour into the next: its to_ns is the next segment's start.
+	"a plan-mode segment spanning hours": func() []records.Record {
+		return []records.Record{ccEvent("s1", "tengu_api_query", at(10*60_000), `{"permissionMode":"default"}`),
+			ccEvent("s1", "tengu_api_query", at(50*60_000), `{"permissionMode":"plan"}`),
+			ccEvent("s1", "tengu_api_query", at(75*60_000), `{"permissionMode":"default"}`),
+			callEnd(withIP(step("c1", "s1", "", at(52*60_000)), "10.0.0.1")),
+			callEnd(withIP(step("c2", "s1", "", at(130*60_000)), "10.0.0.2"))}
+	},
+}
+
 // Short sequences: every order of up to 5 records; the render after each
 // prefix equals one pass over the same records, and the whole set the
 // reference's.
 func TestRenderSessionShortSequencesEveryOrder(t *testing.T) {
 	heavy(t)
-	sets := map[string]func() []records.Record{
-		// The event linking a call (its tengu_api_success) an hour before the call lands.
-		"a call landing an hour after the event linking it": func() []records.Record {
-			c := withIDs(step("c1", "s1", "p1", at(70*60_000)), "rid1", "crid1")
-			return []records.Record{typedPrompt("s1", "p1", "1", at(5*60_000)), success("s1", at(50*60_000), "rid1"),
-				callStart(c), callEnd(c), ccEvent("s1", "tengu_api_query", at(55*60_000), `{}`)}
-		},
-		// The prompt's input event, in the next hour, after its calls.
-		"a prompt's input event after its calls": func() []records.Record {
-			a := withIDs(step("c1", "s1", "p1", at(50*60_000)), "r1", "cr1")
-			b := withIDs(step("c2", "s1", "p1", at(58*60_000)), "r2", "cr2")
-			return []records.Record{callEnd(a), callStart(b), callEnd(b), typedPrompt("s1", "p1", "1", at(65*60_000)),
-				pev("s1", "p1", "tengu_turn_end", at(66*60_000), `{}`)}
-		},
-		// A plan-mode segment from one hour into the next: its to_ns is the next segment's start.
-		"a plan-mode segment spanning hours": func() []records.Record {
-			return []records.Record{ccEvent("s1", "tengu_api_query", at(10*60_000), `{"permissionMode":"default"}`),
-				ccEvent("s1", "tengu_api_query", at(50*60_000), `{"permissionMode":"plan"}`),
-				ccEvent("s1", "tengu_api_query", at(75*60_000), `{"permissionMode":"default"}`),
-				callEnd(withIP(step("c1", "s1", "", at(52*60_000)), "10.0.0.1")),
-				callEnd(withIP(step("c2", "s1", "", at(130*60_000)), "10.0.0.2"))}
-		},
-	}
+	sets := renderShortSets
 	for name, mk := range sets {
 		batchN = map[string]int64{}
 		rs := mk()

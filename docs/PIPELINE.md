@@ -395,7 +395,9 @@ order and seq. Two changes keep commits O(changed), and both are filled back
 when the API loads the rows, so the API sees today's rows:
 - **`prompt_rows.session_last_ns` is stored as 0.** It's kept once per session,
   as `session_rows.prompt_last_ns`. The render copies it onto every prompt row,
-  so storing it there would rewrite them all on every run.
+  so storing it there would rewrite them all on every run. A session with prompt
+  rows and no session row (the state never makes one) keeps it on its prompt
+  rows, so the load takes `coalesce(prompt_last_ns, session_last_ns)`.
 - **`session_marks.seq` is re-keyed per block** as `block << 32 | rank in the
   block`. The blocks follow the render: calls; reported and missed; friction;
   compaction; permission; network.
