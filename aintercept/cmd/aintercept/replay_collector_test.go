@@ -30,7 +30,7 @@ func TestRecordCollectorKeepsEveryRecordUnderConcurrentPuts(t *testing.T) {
 		wg.Add(1)
 		go func(f int) {
 			defer wg.Done()
-			if err := c.Put(context.Background(), fmt.Sprintf("records/v1/bucket=00/minute=x/%d.parquet", f), body); err != nil {
+			if err := c.Put(context.Background(), fmt.Sprintf("v1/keys/s%%3Ax/in/20270301T100000Z-pod-%012d.parquet", f), body); err != nil {
 				t.Error(err)
 			}
 		}(f)

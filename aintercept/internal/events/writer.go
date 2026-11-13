@@ -101,6 +101,9 @@ type WriterConfig struct {
 	SkipFsync bool
 	// Now is the clock upload-minute keys are named by (tests). Default time.Now.
 	Now func() time.Time
+	// OnUploaded is called once for every object that lands, with its target
+	// and the key it landed at.
+	OnUploaded func(target, key string)
 }
 
 // StreamConfig configures one Stream: a sequence of NDJSON lines sealed into
@@ -206,6 +209,8 @@ type bundledEntry struct {
 	Key      string `json:"key"`
 	Len      int    `json:"len"`
 	AtUpload bool   `json:"au,omitempty"`
+	// Src is a file the object was built from, removed once the spool holds it.
+	Src string `json:"src,omitempty"`
 }
 
 // WriterStats is a snapshot of the writer's spool and uploads.
@@ -635,6 +640,15 @@ func (w *Writer) recover() error {
 	sort.Strings(names)
 	for _, n := range names {
 		p := filepath.Join(w.cfg.SpoolDir, "ready", n)
+		// A buffer spooled just before a crash may still be beside it: it's in
+		// the spool now, so it goes.
+		if hdr, _, _, err := readSpooled(p); err == nil {
+			for _, e := range hdr.Bundle {
+				if e.Src != "" {
+					_ = os.Remove(e.Src)
+				}
+			}
+		}
 		info, err := os.Stat(p)
 		if err != nil {
 			continue
@@ -711,6 +725,7 @@ func (w *Writer) upload(path string) bool {
 			if !w.putUntilAccepted(t, o) {
 				return false
 			}
+			w.landed(t, o.Key)
 			continue
 		}
 		if att == nil {

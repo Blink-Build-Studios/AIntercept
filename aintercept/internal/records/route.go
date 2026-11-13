@@ -14,7 +14,8 @@ import (
 const DefaultBucketBits = 6
 
 // RoutingKey is the key a record is grouped by: its session ("s:<id>"), or,
-// for what names none, its credential and day ("c:<key hash>:<YYYY-MM-DD>");
+// for what names none, its credential and day ("c:<key hash>:<YYYY-MM-DD>"),
+// or with no credential its source IP and hour ("ip:<ip>:<YYYY-MM-DDTHH>");
 // an account sighting is its account ("a:<id>"). An analytics request's own
 // call goes with the session its batch's earliest event names; an event, with
 // its own session.
@@ -26,11 +27,11 @@ func RoutingKey(r *Record) string {
 		if r.Event.SessionID != "" {
 			return "s:" + r.Event.SessionID
 		}
-		var kh string
+		var kh, ip string
 		if r.Call != nil {
-			kh = r.Call.KeyHash
+			kh, ip = r.Call.KeyHash, r.Call.IP
 		}
-		return credentialKey(kh, r.Event.RowNS)
+		return credentialKey(kh, ip, r.Event.RowNS)
 	case r.Call != nil:
 		if r.BatchSession != "" {
 			return "s:" + r.BatchSession
@@ -42,12 +43,17 @@ func RoutingKey(r *Record) string {
 		if at == 0 {
 			at = r.Call.EndNS
 		}
-		return credentialKey(r.Call.KeyHash, at)
+		return credentialKey(r.Call.KeyHash, r.Call.IP, at)
 	}
 	return ""
 }
 
-func credentialKey(keyHash string, ns int64) string {
+// credentialKey is the key of what names no session: its credential and day,
+// or with no credential its source IP and hour ("ip:<ip>:<YYYY-MM-DDTHH>").
+func credentialKey(keyHash, ip string, ns int64) string {
+	if keyHash == "" && ip != "" {
+		return "ip:" + ip + ":" + time.Unix(0, ns).UTC().Format("2006-01-02T15")
+	}
 	return "c:" + keyHash + ":" + time.Unix(0, ns).UTC().Format("2006-01-02")
 }
 

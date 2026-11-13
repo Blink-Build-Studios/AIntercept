@@ -58,7 +58,7 @@ func canonCmd() {
 			s := live[pod]
 			if s == nil {
 				s = records.NewSink(records.SinkConfig{Putter: livePut, Incarnation: "live-" + pod, Content: *content,
-					MaxRecords: 50000, MaxAge: 365 * 24 * time.Hour})
+					MaxAge: 365 * 24 * time.Hour})
 				live[pod] = s
 			}
 			s.Emit(*e)

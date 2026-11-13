@@ -99,7 +99,12 @@ func CanonDirWith(ctx context.Context, dir string, put Putter, prefix string, op
 
 func canonPod(ctx context.Context, pod string, files []string, put Putter, prefix string, st *Stats, opt CanonOptions) error {
 	var at time.Time
-	s := NewSink(SinkConfig{Putter: put, Prefix: prefix, Incarnation: "canon-" + pod, MaxRecords: 50000, Details: opt.Details,
+	keys, err := os.MkdirTemp("", "aintercept-canon-keys-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(keys)
+	s := NewSink(SinkConfig{Putter: put, Prefix: prefix, Incarnation: "canon-" + pod, Details: opt.Details, KeySpoolDir: keys,
 		MaxAge: 365 * 24 * time.Hour, Now: func() time.Time { return at }})
 	for _, f := range files {
 		if err := ctx.Err(); err != nil {

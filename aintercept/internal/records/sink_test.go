@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,8 +48,8 @@ func (m *memPut) records(t *testing.T) []Record {
 			t.Fatalf("%s: %v", k, err)
 		}
 		for _, r := range rs {
-			if want := ObjectKeyPrefix("p", int(r.Bucket)); !strings.HasPrefix(k, want) {
-				t.Fatalf("record of bucket %d in %s", r.Bucket, k)
+			if want := "p/v1/keys/" + url.PathEscape(r.RoutingKey) + "/in/"; !strings.HasPrefix(k, want) {
+				t.Fatalf("record of %s in %s", r.RoutingKey, k)
 			}
 		}
 		out = append(out, rs...)
@@ -67,30 +68,40 @@ func sampleRows() []events.Event {
 	return rows
 }
 
-// The sink seals on age: each bucket's records become one object, named by
-// the upload minute, holding only that bucket's records.
-func TestSinkSealsPerBucketOnAge(t *testing.T) {
+// The sink writes each routing key's records as their own ingest file, under
+// the key's folder, named by S3 time at upload, once the key's buffer is due.
+func TestSinkWritesPerKeyOnAge(t *testing.T) {
 	now := time.Date(2026, 11, 12, 9, 7, 0, 0, time.UTC)
 	put := &memPut{}
-	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "pod-a-1-ab", MaxAge: 10 * time.Second, MaxRecords: 1000,
-		Now: func() time.Time { return now }})
+	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "pod-a-1-ab", MaxAge: 10 * time.Second,
+		FlushAge: 30 * time.Second, KeySpoolDir: t.TempDir(),
+		Jitter: func(d time.Duration) time.Duration { return d }, Now: func() time.Time { return now }})
 	for _, e := range sampleRows() {
 		if err := s.Emit(e); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if len(put.objs) != 0 {
-		t.Fatalf("sealed before its age: %v", len(put.objs))
+		t.Fatalf("written before its timer: %v", len(put.objs))
 	}
-	now = now.Add(11 * time.Second)
-	s.SealIfOld()
+	now = now.Add(31 * time.Second)
+	s.Tick()
 	s.Wait()
 	if len(put.objs) == 0 {
-		t.Fatal("nothing sealed after MaxAge")
+		t.Fatal("nothing written after FlushAge")
 	}
-	for k := range put.objs {
-		if !strings.Contains(k, "/minute=2026-11-12T09:07/pod-a-1-ab-") {
+	for k, b := range put.objs {
+		if !strings.HasPrefix(k, "p/v1/keys/") || !strings.Contains(k, "/in/20261112T090731Z-pod-a-1-ab-") {
 			t.Errorf("object key %s", k)
+		}
+		rs, err := Decode(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rs {
+			if !strings.Contains(k, "/keys/"+url.PathEscape(r.RoutingKey)+"/in/") {
+				t.Errorf("record of %s in %s", r.RoutingKey, k)
+			}
 		}
 	}
 	got := put.records(t)
@@ -99,22 +110,9 @@ func TestSinkSealsPerBucketOnAge(t *testing.T) {
 	}
 }
 
-func TestSinkSealsOnCount(t *testing.T) {
-	put := &memPut{}
-	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", MaxAge: time.Hour, MaxRecords: 2,
-		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
-	for _, e := range sampleRows() {
-		s.Emit(e)
-	}
-	s.Wait()
-	if len(put.objs) == 0 {
-		t.Fatal("nothing sealed at the count cap")
-	}
-}
-
 func TestFlushSealsEverything(t *testing.T) {
 	put := &memPut{}
-	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", MaxAge: time.Hour, MaxRecords: 1000,
+	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", MaxAge: time.Hour,
 		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
 	for _, e := range sampleRows() {
 		s.Emit(e)
@@ -160,7 +158,7 @@ func writeRaw(t *testing.T, dir string, rows []events.Event, perFile int) {
 func TestCanonMatchesTheLiveSink(t *testing.T) {
 	rows := sampleRows()
 	live := &memPut{}
-	s := NewSink(SinkConfig{Putter: live, Prefix: "p", Incarnation: "i", MaxAge: time.Hour, MaxRecords: 3,
+	s := NewSink(SinkConfig{Putter: live, Prefix: "p", Incarnation: "i", MaxAge: time.Hour,
 		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
 	for _, e := range rows {
 		s.Emit(e)

@@ -5,6 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"sync/atomic"
+	"time"
+
+	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -41,6 +48,36 @@ type S3Target struct {
 	name   string
 	client s3PutObjectAPI
 	bucket string
+	// The store's clock minus ours, from the Date header of the last response
+	// (ServerOffset), so ingest files are named by the store's clock.
+	offset atomic.Int64
+	known  atomic.Bool
+}
+
+// ServerOffset is the store's clock minus ours, as of the last response.
+func (t *S3Target) ServerOffset() (time.Duration, bool) {
+	return time.Duration(t.offset.Load()), t.known.Load()
+}
+
+// observeDate records the store's clock from a response's Date header.
+func (t *S3Target) observeDate(meta middleware.Metadata, err error) {
+	var resp *smithyhttp.Response
+	if r, ok := awsmiddleware.GetRawResponse(meta).(*smithyhttp.Response); ok {
+		resp = r
+	}
+	var re *smithyhttp.ResponseError
+	if resp == nil && errors.As(err, &re) {
+		resp = re.Response
+	}
+	if resp == nil {
+		return
+	}
+	d, perr := http.ParseTime(resp.Header.Get("Date"))
+	if perr != nil {
+		return
+	}
+	t.offset.Store(int64(d.Sub(time.Now().Truncate(time.Second))))
+	t.known.Store(true)
 }
 
 // S3TargetConfig configures an S3Target.
@@ -111,7 +148,12 @@ func (t *S3Target) Put(ctx context.Context, o Object) error {
 	if o.ContentEncoding != "" {
 		in.ContentEncoding = aws.String(o.ContentEncoding)
 	}
-	_, err := t.client.PutObject(ctx, in)
+	out, err := t.client.PutObject(ctx, in)
+	var meta middleware.Metadata
+	if out != nil {
+		meta = out.ResultMetadata
+	}
+	t.observeDate(meta, err)
 	return err
 }
 
@@ -128,7 +170,12 @@ func (t *S3Target) Exists(ctx context.Context, key string) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("s3 target: client can't HEAD")
 	}
-	_, err := h.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(t.bucket), Key: aws.String(key)})
+	out, err := h.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(t.bucket), Key: aws.String(key)})
+	var meta middleware.Metadata
+	if out != nil {
+		meta = out.ResultMetadata
+	}
+	t.observeDate(meta, err)
 	if err == nil {
 		return true, nil
 	}

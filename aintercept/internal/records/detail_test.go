@@ -99,7 +99,7 @@ func TestDetailBodiesStopAtTheCap(t *testing.T) {
 // The sink writes each detail object once, gzipped, under calls/.
 func TestSinkWritesDetails(t *testing.T) {
 	put := &memPut{}
-	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", Details: true, MaxAge: time.Hour, MaxRecords: 1000,
+	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", Details: true, MaxAge: time.Hour,
 		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
 	for _, e := range []events.Event{hdr("c1", true, ccHeaders), complete("c1", ccClient)} {
 		s.Emit(e)
@@ -125,7 +125,7 @@ func TestSinkWritesDetails(t *testing.T) {
 func TestCanonWritesTheSameDetails(t *testing.T) {
 	rows := sampleRows()
 	live := &memPut{}
-	s := NewSink(SinkConfig{Putter: live, Prefix: "p", Incarnation: "i", Details: true, MaxAge: time.Hour, MaxRecords: 1000,
+	s := NewSink(SinkConfig{Putter: live, Prefix: "p", Incarnation: "i", Details: true, MaxAge: time.Hour,
 		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
 	for _, e := range rows {
 		s.Emit(e)

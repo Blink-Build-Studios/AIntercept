@@ -174,7 +174,7 @@ type recordCollector struct {
 }
 
 func (c *recordCollector) Put(_ context.Context, key string, body []byte) error {
-	if !strings.HasSuffix(key, ".parquet") || !strings.Contains(key, "records/") {
+	if !strings.HasSuffix(key, ".parquet") || !strings.Contains(key, "v1/keys/") || !strings.Contains(key, "/in/") {
 		return nil
 	}
 	rs, err := records.Decode(body)

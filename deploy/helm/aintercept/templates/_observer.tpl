@@ -24,6 +24,11 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     # ── The writer's spool (docs/STREAMING_PIPELINE.md, phase 1) ──
     - { name: OBSERVER_SPOOL_DIR, value: /spool }
     - { name: OBSERVER_SPOOL_MAX_BYTES, value: {{ include "aintercept.spoolMaxBytes" . | quote }} }
+    # v5 per-key ingest buffers (docs/PIPELINE.md §1) and Redis dirty flags.
+    - { name: OBSERVER_KEY_FLUSH_BYTES, value: {{ .Values.observer.keyBuffers.flushBytes | int | quote }} }
+    - { name: OBSERVER_KEY_FLUSH_SECONDS, value: {{ .Values.observer.keyBuffers.flushSeconds | int | quote }} }
+    - { name: OBSERVER_KEY_BUFFER_MAX_BYTES, value: {{ .Values.observer.keyBuffers.maxBytes | int64 | quote }} }
+    - { name: OBSERVER_REDIS_ADDR, value: {{ .Values.observer.redisAddr | default "" | quote }} }
     - { name: OBSERVER_CLIENT_IP_HEADERS, value: {{ .Values.observer.clientIPHeaders | default list | join "," | quote }} }
     - name: OBSERVER_INSTANCE
       valueFrom:
