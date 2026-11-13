@@ -48,7 +48,8 @@ type Config struct {
 	Fanout     int           // output dirs (and state chunks) of one tier merged together (8)
 	GCGrace    time.Duration // a superseded file is deleted after this (10 min)
 	SweepEvery time.Duration // the sweep's period (10 min)
-	SweepSpan  time.Duration // how far back the sweep reads recent/ (15 min)
+	SweepSpan  time.Duration // how far back the sweep (and the merge, after a Redis wipe) reads recent/ (15 min)
+	MergeEvery time.Duration // the merge's period, on the replica holding lock:merge (30 s)
 	MaxFiles   int           // in/ files applied per run at most (500)
 	Parallel   int           // keys run at once (8)
 
@@ -71,6 +72,7 @@ func (c *Config) defaults() {
 	set(&c.GCGrace, 10*time.Minute)
 	set(&c.SweepEvery, 10*time.Minute)
 	set(&c.SweepSpan, 15*time.Minute)
+	set(&c.MergeEvery, 30*time.Second)
 	if c.Fanout < 2 {
 		c.Fanout = 8
 	}

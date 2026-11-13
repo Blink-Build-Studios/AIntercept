@@ -238,22 +238,36 @@ func (m *Merger) take(ctx context.Context, now time.Time) ([]string, bool, error
 	if err != nil {
 		return nil, false, err
 	}
-	if !alive {
-		keys, err := RecentKeys(ctx, m.Store, m.Prefix, now, m.recent())
-		if err != nil {
-			return nil, false, err
-		}
-		if err := m.Queue.MarkAlive(ctx); err != nil {
-			return nil, false, err
-		}
-		return keys, true, nil
-	}
 	batch := m.Batch
 	if batch <= 0 {
 		batch = 5000
 	}
 	keys, err := m.Queue.Pop(ctx, batch)
-	return keys, false, err
+	if err != nil || alive {
+		return keys, false, err
+	}
+	// Redis lost what the merge had (or this is its first run): every key
+	// committed within the recent window, and whatever was queued since.
+	recent, err := RecentKeys(ctx, m.Store, m.Prefix, now, m.recent())
+	if err == nil {
+		err = m.Queue.MarkAlive(ctx)
+	}
+	if err != nil {
+		if qerr := m.Queue.Requeue(context.WithoutCancel(ctx), keys); qerr != nil {
+			err = errors.Join(err, qerr)
+		}
+		return nil, false, err
+	}
+	seen := map[string]bool{}
+	for _, k := range recent {
+		seen[k] = true
+	}
+	for _, k := range keys {
+		if !seen[k] {
+			recent = append(recent, k)
+		}
+	}
+	return recent, true, nil
 }
 
 func (m *Merger) recent() time.Duration {
