@@ -147,6 +147,10 @@ replicas.
   4. Rewrite only the partitions that changed: today's and yesterday's
      per-session rows, and the people index.
   5. Create `merge/commit/<n+1>.json` only if it doesn't exist yet.
+- **Newest data:** each ingest file carries the newest raw row its pod had
+  seen (Parquet metadata), including rows that complete no record yet, such
+  as an in-flight stream's chunks. A key's commit keeps the maximum, and the
+  merge takes the maximum across commits: the API's `lastDataAt`.
 - **Fencing:** a concurrent merge loses the create and drops its run.
 - **If Redis loses `committed`:** the merge rebuilds from every key with a
   commit in the last 15 minutes, taken from `v1/recent/`.

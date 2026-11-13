@@ -216,16 +216,18 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 	}
 	applied = len(names)
 	var rs []records.Record
+	newestRow := h.c.NewestRowNS
 	for _, name := range names {
 		b, err := w.cfg.Store.Get(ctx, InPrefix(w.cfg.Prefix, key)+name)
 		if err != nil {
 			return applied, false, fmt.Errorf("rollup: %s %s: %w", key, name, err)
 		}
-		got, err := records.Decode(b)
+		got, newest, err := records.DecodeWithNewest(b)
 		if err != nil {
 			return applied, false, fmt.Errorf("rollup: %s %s: %w", key, name, err)
 		}
 		rs = append(rs, got...)
+		newestRow = max(newestRow, newest)
 	}
 	if err := w.hook("read", key); err != nil {
 		return applied, false, err
@@ -247,7 +249,7 @@ func (w *Worker) RunKey(ctx context.Context, key string) (applied int, committed
 	n, nonce := h.c.N+1, newNonce()
 	dir := KeyDir(w.cfg.Prefix, key)
 	next := &Commit{N: n, Key: key, Out: append([]Out(nil), h.c.Out...), State: append([]string(nil), h.c.State...),
-		StateLevels: padLevels(h.c.StateLevels, len(h.c.State)), UpdatedNS: w.now().UnixNano()}
+		StateLevels: padLevels(h.c.StateLevels, len(h.c.State)), UpdatedNS: w.now().UnixNano(), NewestRowNS: newestRow}
 	out, err := w.writeTables(ctx, dir, OutDir(n, nonce), 0, changed, false)
 	if err != nil {
 		return applied, false, err

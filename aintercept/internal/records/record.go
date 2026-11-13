@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
+	"strconv"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
@@ -79,10 +80,21 @@ func NewIncarnation(pod string) string {
 	return fmt.Sprintf("%019d-%s-%s", time.Now().UnixNano(), hex.EncodeToString(b), pod)
 }
 
+// newestRowKey is the Parquet metadata key holding the newest raw row time the
+// writing pod had seen (its clock: "newest data", even rows that complete no
+// record, such as an in-flight stream's chunks).
+const newestRowKey = "aintercept.newest_row_ns"
+
 // Encode is records as a Parquet file (zstd).
-func Encode(rs []Record) ([]byte, error) {
+func Encode(rs []Record) ([]byte, error) { return EncodeWithNewest(rs, 0) }
+
+// EncodeWithNewest is Encode, carrying the newest raw row time (0: none).
+func EncodeWithNewest(rs []Record, newestRowNS int64) ([]byte, error) {
 	var buf bytes.Buffer
 	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(zcodec.Shared))
+	if newestRowNS > 0 {
+		w.SetKeyValueMetadata(newestRowKey, strconv.FormatInt(newestRowNS, 10))
+	}
 	if _, err := w.Write(rs); err != nil {
 		return nil, err
 	}
@@ -97,12 +109,18 @@ func Decode(b []byte) ([]Record, error) {
 	return parquet.Read[Record](bytes.NewReader(b), int64(len(b)))
 }
 
-// EncodeWithNewest is Encode, with the newest raw row time its pod had seen
-// (stub: not yet written).
-func EncodeWithNewest(rs []Record, newestRowNS int64) ([]byte, error) { return Encode(rs) }
-
 // DecodeWithNewest is Decode, with the file's newest raw row time (0: none).
 func DecodeWithNewest(b []byte) ([]Record, int64, error) {
+	f, err := parquet.OpenFile(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		return nil, 0, err
+	}
+	var newest int64
+	if v, ok := f.Lookup(newestRowKey); ok {
+		if newest, err = strconv.ParseInt(v, 10, 64); err != nil {
+			return nil, 0, fmt.Errorf("records: %s: %w", newestRowKey, err)
+		}
+	}
 	rs, err := Decode(b)
-	return rs, 0, err
+	return rs, newest, err
 }

@@ -167,6 +167,9 @@ func (m *Merger) RunOnce(ctx context.Context) (res MergeResult, err error) {
 		if n := rawNewest(tables); n > next.NewestNS {
 			next.NewestNS = n
 		}
+		if c.NewestRowNS > next.NewestNS {
+			next.NewestNS = c.NewestRowNS
+		}
 		next.ContentRetained = next.ContentRetained || retainsContent(tables)
 	}
 	if len(changed) == 0 {
