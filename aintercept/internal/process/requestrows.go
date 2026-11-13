@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // The request_rows snapshot: every person's request log, as the query API
@@ -1404,10 +1406,90 @@ func pyInt(n int64) string {
 // jsonFields is the named top-level fields of a JSON object, the first of a
 // repeated key (as DuckDB's json_extract_string reads them).
 func jsonFields(s string, keys ...string) map[string]json.RawMessage {
-	out := map[string]json.RawMessage{}
 	if s == "" {
-		return out
+		return map[string]json.RawMessage{}
 	}
+	// One record's metadata is read by several tables in turn: parse it once.
+	// While an Apply holds the record's JSON (HoldFields), every table reads
+	// one parse of it, whatever runs on other goroutines; otherwise the most
+	// recent parse is reused (the single-pass reference). The map holds every
+	// top-level field (the first of a repeated key); callers never change it.
+	held.RLock()
+	h := held.m[s]
+	held.RUnlock()
+	if h != nil {
+		h.once.Do(func() { h.m = allFields(s) })
+		return h.m
+	}
+	if c := lastFields.Load(); c != nil && c.s == s {
+		return c.m
+	}
+	m := allFields(s)
+	lastFields.Store(&parsedFields{s: s, m: m})
+	return m
+}
+
+type parsedFields struct {
+	s string
+	m map[string]json.RawMessage
+}
+
+// lastFields is the most recently parsed object (shared by goroutines; each
+// entry is immutable once stored).
+var lastFields atomic.Pointer[parsedFields]
+
+// held is the JSON objects Applies in progress are reading, each parsed once
+// on first read and dropped when the last holder lets go.
+var held = struct {
+	sync.RWMutex
+	m map[string]*heldFields
+}{m: map[string]*heldFields{}}
+
+type heldFields struct {
+	refs int
+	once sync.Once
+	m    map[string]json.RawMessage
+}
+
+// HoldFields keeps the given JSON objects' parses until release is called: a
+// record's tables then parse each once, even with other keys applying on
+// other goroutines at the same time.
+func HoldFields(ss ...string) (release func()) {
+	held.Lock()
+	for _, s := range ss {
+		if s == "" {
+			continue
+		}
+		h := held.m[s]
+		if h == nil {
+			h = &heldFields{}
+			held.m[s] = h
+		}
+		h.refs++
+	}
+	held.Unlock()
+	return func() {
+		held.Lock()
+		for _, s := range ss {
+			if h := held.m[s]; h != nil {
+				if h.refs--; h.refs == 0 {
+					delete(held.m, s)
+				}
+			}
+		}
+		held.Unlock()
+	}
+}
+
+// fieldParses counts the JSON objects parsed (FieldParses).
+var fieldParses atomic.Int64
+
+// FieldParses is how many JSON objects jsonFields has parsed.
+func FieldParses() int64 { return fieldParses.Load() }
+
+func allFields(s string) map[string]json.RawMessage {
+	fieldParses.Add(1)
+	out := map[string]json.RawMessage{}
 	dec := json.NewDecoder(strings.NewReader(s))
 	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
 		return out
@@ -1423,11 +1505,7 @@ func jsonFields(s string, keys ...string) map[string]json.RawMessage {
 		}
 		k, _ := tok.(string)
 		if _, seen := out[k]; !seen {
-			for _, want := range keys {
-				if k == want {
-					out[k] = v
-				}
-			}
+			out[k] = v
 		}
 	}
 	return out

@@ -32,11 +32,7 @@ func TestCompactionMergesRunsIntoABase(t *testing.T) {
 		if len(parts) == 0 {
 			t.Fatalf("%s has an empty base", table)
 		}
-		for i, p := range parts { // key-ranged parts, in order, never overlapping
-			if p.MinKey == "" || p.MinKey > p.MaxKey || (i > 0 && parts[i-1].MaxKey >= p.MinKey) {
-				t.Fatalf("%s base part %d has a bad key range: %+v", table, i, parts)
-			}
-		}
+		checkShape(t, c, table, w.Fanout) // per segment: key-ranged parts, in order, never overlapping
 	}
 	h.checkAll(ctx)
 }

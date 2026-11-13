@@ -109,6 +109,7 @@ func TestCycleAppliesInTimeThenIDOrder(t *testing.T) {
 // Sequence: many uploads and cycles, in random sizes, equal one pass at every
 // cycle.
 func TestCycleSequenceEqualsOnePassThroughout(t *testing.T) {
+	heavy(t)
 	h, ctx := setup(t, 4)
 	ws := []*Bucket{}
 	for b := 0; b < 4; b++ {

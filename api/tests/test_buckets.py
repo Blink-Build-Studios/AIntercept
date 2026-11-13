@@ -229,6 +229,50 @@ def test_file_order_is_the_commits_not_the_names(tmp_path):
     assert _fold(tmp_path) == [(10,)]
 
 
+def _tiered(root, bucket, base, runs):
+    """base, runs: [(name, [(key, id, tomb, v)])], each in commit order (the base's segments
+    oldest first, possibly overlapping)."""
+    con = duckdb.connect()
+    names: dict[str, list[str]] = {"base": [], "runs": []}
+    for part, files in (("base", base), ("runs", runs)):
+        for name, rows in files:
+            k = table_key("", "t", bucket, name)
+            con.execute("DROP TABLE IF EXISTS r")
+            con.execute("CREATE TABLE r (key VARCHAR, id VARCHAR, tomb BOOLEAN, v INTEGER)")
+            if rows:
+                con.executemany("INSERT INTO r VALUES (?, ?, ?, ?)", rows)
+            write_rows(root, k, con, "SELECT * FROM r", [])
+            names[part].append(k)
+    write_commit(root, "", bucket, 1, {"t": names["base"]}, {"t": names["runs"]})
+
+
+def test_a_newer_base_segment_overrides_an_older_one(tmp_path):
+    # A tiered base: a level-1 segment, then a newer level-0 segment over the same keys.
+    _tiered(
+        tmp_path,
+        3,
+        [("base-l1", [("s:a", "1", False, 1), ("s:b", "1", False, 7)]), ("base-l0", [("s:a", "1", False, 2)])],
+        [],
+    )
+    assert _fold(tmp_path) == [(2,), (7,)]
+
+
+def test_a_tombstone_in_a_newer_base_segment_removes_the_older_row(tmp_path):
+    _tiered(
+        tmp_path,
+        3,
+        [("base-l1", [("s:a", "1", False, 1), ("s:b", "1", False, 7)]), ("base-l0", [("s:a", "1", True, None)])],
+        [("run-1", [("s:c", "1", False, 9)])],
+    )
+    assert _fold(tmp_path) == [(7,), (9,)]
+
+
+def test_base_order_is_the_commits_not_the_names(tmp_path):
+    # "base-b" sorts after "base-a", but the commit lists it as the older segment.
+    _tiered(tmp_path, 3, [("base-b", [("s:a", "1", False, 1)]), ("base-a", [("s:a", "1", False, 2)])], [])
+    assert _fold(tmp_path) == [(2,)]
+
+
 def test_the_same_id_under_two_keys_is_two_rows(tmp_path):
     _layout(tmp_path, 3, [("base-1", [("s:a", "1", False, 1), ("s:b", "1", False, 2)])])
     assert _fold(tmp_path) == [(1,), (2,)]
@@ -469,6 +513,10 @@ def test_reader_matches_stream_golden():
             newest[c.parent.name] = c
     for c in newest.values():
         m = json.loads(c.read_text())
-        for refs in [*(m.get("base") or {}).values(), *(m.get("runs") or {}).values()]:
+        base = m.get("base")
+        if m.get("base_manifest"):  # the base's parts, written once per generation
+            current.add(m["base_manifest"])
+            base = json.loads((golden / m["base_manifest"]).read_text()).get("base")
+        for refs in [*(base or {}).values(), *(m.get("runs") or {}).values()]:
             current |= {r["key"] for r in refs or []}
     assert read <= current and not (read & (garbage - current)), "read only the newest commits' files"

@@ -22,8 +22,7 @@ import (
 //	STREAM_REPLICA                        this replica's name (the pod's; default the hostname)
 //	STREAM_HTTP_LISTEN                    /healthz and /lag (default 0.0.0.0:9003)
 //
-// Until the derived tables' per-key state lands (§4.5), it runs the stand-in
-// model, so the pipeline can be deployed and observed end to end.
+// It runs the derived tables' per-key state (StateModel, §4.5).
 func Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -33,7 +32,7 @@ func Run() {
 		os.Exit(1)
 	}
 	host, _ := os.Hostname()
-	cfg := Config{Store: s, Layout: Layout{Prefix: prefix}, Model: CountModel{},
+	cfg := Config{Store: s, Layout: Layout{Prefix: prefix}, Model: StateModel{},
 		Replica: envOr("STREAM_REPLICA", host), BucketBits: envInt("STREAM_BUCKET_BITS", 6),
 		Cycle: time.Duration(envInt("STREAM_CYCLE_SECONDS", 5)) * time.Second}
 	p := New(cfg)

@@ -10,10 +10,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/compress/zstd"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 )
@@ -35,7 +35,7 @@ const (
 // carrier's identity, for routing an event that names no session).
 type Record struct {
 	Version  int32  `parquet:"record_version"`
-	RecordID string `parquet:"record_id"` // <incarnation>-<seq>: unique across pods and restarts
+	RecordID string `parquet:"record_id"` // <incarnation>-<20-digit seq>: unique, and sorts in emission order
 	Kind     string `parquet:"kind"`
 	Instance string `parquet:"instance"` // the observer that saw it
 	CallID   string `parquet:"call_id,optional"`
@@ -69,18 +69,20 @@ type Account struct {
 	NS        int64  `parquet:"ns"`
 }
 
-// NewIncarnation names one run of an observer: its pod, start time and random
-// bytes, so record ids stay unique when a container restarts with the same name.
+// NewIncarnation names one run of an observer: its start time (19 digits),
+// random bytes (8 hex) and pod, so record ids stay unique when a container
+// restarts with the same name. The fixed-width parts come first, so ids from
+// different incarnations sort by when they started.
 func NewIncarnation(pod string) string {
 	b := make([]byte, 4)
 	rand.Read(b)
-	return fmt.Sprintf("%s-%d-%s", pod, time.Now().UnixNano(), hex.EncodeToString(b))
+	return fmt.Sprintf("%019d-%s-%s", time.Now().UnixNano(), hex.EncodeToString(b), pod)
 }
 
 // Encode is records as a Parquet file (zstd).
 func Encode(rs []Record) ([]byte, error) {
 	var buf bytes.Buffer
-	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(&zstd.Codec{}))
+	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(zcodec.Shared))
 	if _, err := w.Write(rs); err != nil {
 		return nil, err
 	}

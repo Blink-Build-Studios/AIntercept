@@ -12,6 +12,7 @@ import (
 //	stream/v1/tables/<table>/bucket=NN/run-<epoch>-<seq>.parquet
 //	stream/v1/tables/<table>/bucket=NN/base-<gen>-<epoch>-<seq>-<part>.parquet
 //	stream/v1/state/bucket=NN/run-<epoch>-<seq>.parquet, base-<gen>-<epoch>-<seq>-<part>.parquet
+//	stream/v1/manifests/bucket=NN/base-<gen>-<epoch>-<seq>.json  a base generation's parts
 //	stream/v1/leases/bucket=NN/epoch-<n>                who owns the bucket
 //	stream/v1/members/<replica>                         live replicas (heartbeats)
 type Layout struct{ Prefix string }
@@ -47,6 +48,12 @@ func (l Layout) StateKey(b int, epoch, seq int64) string {
 }
 func (l Layout) StateBaseKey(b int, gen, epoch, seq int64, part int) string {
 	return fmt.Sprintf("%sbase-%012d-%010d-%012d-%04d.parquet", l.statePrefix(b), gen, epoch, seq, part)
+}
+func (l Layout) manifestPrefix(b int) string {
+	return fmt.Sprintf("%smanifests/bucket=%02d/", l.root(), b)
+}
+func (l Layout) BaseManifestKey(b int, gen, epoch, seq int64) string {
+	return fmt.Sprintf("%sbase-%012d-%010d-%012d.json", l.manifestPrefix(b), gen, epoch, seq)
 }
 func (l Layout) LeasePrefix(b int) string { return fmt.Sprintf("%sleases/bucket=%02d/", l.root(), b) }
 func (l Layout) LeaseKey(b int, epoch int64) string {
