@@ -20,6 +20,7 @@ const (
 	DefaultCompactRuns  = 64               // run files per table before compacting
 	DefaultCompactEvery = 10 * time.Minute // compact at least this often when there are runs
 	DefaultPartRows     = 4096             // rows per base part
+	DefaultFanout       = 8                // segments per level before they fold into the next
 	GCGrace             = 10 * time.Minute // a dropped file outlives the commit that dropped it by this
 	gcEvery             = time.Minute
 	minuteLayout        = "2006-01-02T15:04"
@@ -42,6 +43,12 @@ type Bucket struct {
 	CompactRuns  int
 	CompactEvery time.Duration
 	PartRows     int
+	// Fanout is how many segments of one level fold into one of the next
+	// (tiered table bases; 0: DefaultFanout).
+	Fanout int
+	// BaseRowsWritten counts the table rows compaction has written, for cost
+	// tests: each row should be rewritten O(log N) times over its life.
+	BaseRowsWritten int64
 	// MaxFiles caps the record files one cycle reads (0: no cap), oldest first.
 	MaxFiles int
 
