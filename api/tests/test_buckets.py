@@ -423,6 +423,7 @@ def test_requests_between_commits_reuse_the_loaded_tables(tmp_path):
 def test_the_app_reads_bucketed_tables_when_told_to(tmp_path, monkeypatch):
     from aintercept_api.app import create_app
     from aintercept_api.buckets import S3Source
+    from aintercept_api.v1 import V1Store
 
     monkeypatch.setenv("AINTERCEPT_STORE", "buckets")
     monkeypatch.setenv("AINTERCEPT_BUCKETS_DIR", str(tmp_path))
@@ -435,6 +436,9 @@ def test_the_app_reads_bucketed_tables_when_told_to(tmp_path, monkeypatch):
     monkeypatch.setenv("AINTERCEPT_S3_PREFIX", "ailogger")
     store = create_app().state.store
     assert isinstance(store.source, S3Source) and store.prefix == "ailogger/"
+    monkeypatch.setenv("AINTERCEPT_STORE", "v1")
+    store = create_app().state.store
+    assert isinstance(store, V1Store) and isinstance(store.source, S3Source) and store.prefix == "ailogger/"
 
 
 def test_s3_requests_are_signed(monkeypatch):

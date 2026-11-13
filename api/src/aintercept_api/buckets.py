@@ -560,6 +560,11 @@ class Scope:
     def everything(cls) -> "Scope":
         return cls()
 
+    def reads(self, prefix: str) -> bool:
+        """Whether a table routed by prefix is read at all: "f:" tables (the raw facts) only by a
+        scope of everything."""
+        return prefix != "f:" or (self.sessions is None and self.people is None and self.accounts is None)
+
     def buckets(self, prefix: str) -> frozenset[int] | None:
         """The buckets a table routed by prefix comes from (None: all of them)."""
         keys = {"s:": self.sessions, "p:": self.people, "a:": self.accounts}.get(prefix)
@@ -705,7 +710,11 @@ class BucketStore:
 
     def _load(self, scope: Scope, only: Sequence[str] | None = None) -> _Loaded:
         routing = self._routing()
-        names = [t for t in (list(only) if only is not None else list(routing)) if t not in scope.skip]
+        names = [
+            t
+            for t in (list(only) if only is not None else list(routing))
+            if t not in scope.skip and scope.reads(routing[t][0])
+        ]
         if scope.sessions is not None and self._has_session_inputs() and only is None:
             scope = Scope(
                 sessions=self._session_group(scope.sessions),
@@ -780,6 +789,7 @@ class BucketStore:
         state_sql.event_tables(con)
         state_sql.accounts(con)
         state_sql.request_tables(con, None if scope is None else scope.people, sessions)
+        state_sql.fact_tables(con)
         # What the drawer, /status and the directory still read of the raw history: not in the
         # stream's layout (another change moves them onto it), so empty here.
         have = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables()").fetchall()}

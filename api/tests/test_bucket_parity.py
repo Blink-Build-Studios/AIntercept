@@ -12,7 +12,7 @@ from aintercept_api.buckets import BucketStore, LocalSource
 from aintercept_api.raw import LocalRaw
 from tests.bucket_fixture import from_store
 from tests.builders import Dataset, load_fixture
-from tests.conftest import bounded_store, make_client
+from tests.conftest import bounded_store, few_per_group, make_client
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 
@@ -85,9 +85,18 @@ def _urls(old) -> list[str]:
     return urls
 
 
+@pytest.mark.full
 def test_every_endpoint_matches_todays_store(clients):
     old, new, _ = clients
     urls = _urls(old)
     assert len(urls) > 100
     for url in urls:
+        _same(old, new, url)
+
+
+def test_each_endpoint_group_matches_todays_store(clients):
+    from tests.test_stream_pipeline import group
+
+    old, new, _ = clients
+    for url in few_per_group(_urls(old), group):
         _same(old, new, url)

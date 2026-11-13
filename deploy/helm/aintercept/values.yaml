@@ -192,10 +192,10 @@ redis:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "500m", memory: "256Mi" }
 
-# The query API (api/), inside the cluster: it reads the processor's tables
-# (mirrored into the pod by an `aintercept mirror` sidecar) and raw files through
-# the sidecar. ClusterIP only, with a NetworkPolicy admitting no pod: reach it
-# with `kubectl port-forward svc/api 8787` (`make remote` does).
+# The query API (api/), inside the cluster: stateless, it queries the object
+# store's v1/ folders and a call's calls/<id> object (docs/PIPELINE.md §4).
+# ClusterIP only, with a NetworkPolicy admitting no pod: reach it with
+# `kubectl port-forward svc/api 8787` (`make remote` does).
 api:
   enabled: false
   # api's own ServiceAccount (never the observer's). On AWS its role needs
@@ -215,10 +215,8 @@ api:
   podDisruptionBudget:
     enabled: false
     maxUnavailable: 1
-  # The tables live in a DuckDB file on the pod's disk (`dbSizeLimit`), compressed
-  # and paged in under DuckDB's memory limit, so memory doesn't grow with the data.
-  # DuckDB's limit: empty = 60% of the container's memory limit (the rest is Python
-  # and the responses being built); or a size like "900MB".
+  # DuckDB's memory limit: empty = 60% of the container's memory limit (the rest is
+  # Python and the responses being built); or a size like "900MB".
   memoryLimit: ""
   threads: 2             # DuckDB's threads (its default is the node's cores, not the CPU limit)
   resources:
@@ -226,25 +224,14 @@ api:
     # last evicted when a node runs short (docs/INTERCEPTION_ISSUES.md P5).
     requests: { cpu: "500m", memory: "1536Mi" }
     limits: { cpu: "2", memory: "1536Mi" }
-  mirror:
-    pollSeconds: 10
-    resources:
-      requests: { cpu: "20m", memory: "64Mi" }
-      limits: { cpu: "500m", memory: "256Mi" }
-  # The stateless read path (docs/STREAMING_PIPELINE.md §5): the API reads the stream
-  # processor's bucketed tables from the object store, keeping only a cache, and an HPA
-  # on CPU sets its replica count. Off until the cutover (§6).
+  # The read path keeps nothing but scratch space (DuckDB's spill), and an HPA on
+  # CPU sets the replica count.
   stateless:
-    enabled: false
     cacheSizeLimit: 4Gi
-    cacheBytes: "3221225472"   # the cache's own cap, under cacheSizeLimit
+    cacheBytes: "3221225472"   # the scratch space's own cap, under cacheSizeLimit
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilization: 70
-  # The mirrored tables (tens of MB per million rows).
-  shapedSizeLimit: 2Gi
-  # The API's DuckDB file (about twice the mirrored tables) and its spill space.
-  dbSizeLimit: 4Gi
   # The image serves the web UI at / beside the API at /api/v1. To give a small
   # group the UI behind an identity-aware proxy (docs/PRODUCTION.md §5d):
   service:

@@ -7,13 +7,17 @@ checks the response but writes nothing. Run it through `make regen`, which
 regenerates spec.ts first.
 """
 
+import atexit
+import hashlib
 import json
 import os
 import pathlib
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import duckdb
@@ -35,15 +39,44 @@ FROZEN_QUERY_ID = "q_sample"
 _written: dict[pathlib.Path, str] = {}  # sample path -> test that wrote it, per session
 
 
+# The full run (`make test-api-full`, nightly in CI): the tests marked `full` (every URL of the
+# parity gates, the memory churn) and the pipeline at full length. `make check` runs the rest,
+# and the parity gates over a few URLs of each endpoint group.
+FULL = os.environ.get("AINTERCEPT_TESTS_FULL") == "1"
+
+
 def pytest_addoption(parser):
     parser.addoption("--write-samples", action="store_true", help="write endpoint responses as UI sample files")
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "full: only in the full run (make test-api-full, nightly)")
+
+
 def pytest_collection_modifyitems(config, items):
     """While samples are being (re)written, the requirements check would see a
-    half-written folder; it runs in the normal test pass instead."""
+    half-written folder; it runs in the normal test pass instead. The `full` tests run only in
+    the full run."""
     if config.getoption("--write-samples"):
         items[:] = [i for i in items if "test_requirements" not in i.nodeid]
+    if not FULL:
+        skip = pytest.mark.skip(reason="the full run only (make test-api-full)")
+        for item in items:
+            if "full" in item.keywords:
+                item.add_marker(skip)
+
+
+def few_per_group(urls: list[str], group: Callable[[str], str], n: int = 3) -> list[str]:
+    """The first n URLs of each endpoint group: what `make check` holds a parity gate to (the full
+    run holds every URL)."""
+    seen: dict[str, int] = {}
+    out = []
+    for url in urls:
+        g = group(url)
+        if seen.get(g, 0) < n:
+            seen[g] = seen.get(g, 0) + 1
+            out.append(url)
+    return out
 
 
 def make_client(store, **kwargs) -> TestClient:
@@ -71,11 +104,36 @@ def aintercept_binary() -> pathlib.Path:
     return _binary[0]
 
 
+def raw_digest(raw: pathlib.Path) -> str:
+    """The raw files' names and bytes, hashed: equal for two datasets the builders made alike."""
+    h = hashlib.sha256()
+    for p in sorted(raw.rglob("*.ndjson.gz")):
+        h.update(str(p.relative_to(raw)).encode() + b"\0" + p.read_bytes())
+    return h.hexdigest()
+
+
+_processed: dict[str, pathlib.Path] = {}  # raw digest -> the processor's output for it, this session
+_processed_dir: list[pathlib.Path] = []
+
+
+def _processed_root() -> pathlib.Path:
+    if not _processed_dir:
+        _processed_dir.append(pathlib.Path(tempfile.mkdtemp(prefix="aintercept-processed-")))
+        atexit.register(shutil.rmtree, _processed_dir[0], True)
+    return _processed_dir[0]
+
+
 def run_processor(raw: pathlib.Path, shaped: pathlib.Path, *, fresh: bool = True, compact_at: int = 0) -> None:
     """`aintercept process` over raw, into shaped, from scratch: the real pipeline. (Tests
-    rewrite their hour files as rows are added; the observer never rewrites one.)"""
+    rewrite their hour files as rows are added; the observer never rewrites one.) A from-scratch
+    run over raw files another test already processed is that run's output (the processor is
+    deterministic), copied: many tests share a fixture dataset."""
+    digest = raw_digest(raw) if fresh and not compact_at else None
     if fresh:
         shutil.rmtree(shaped, ignore_errors=True)
+    if digest is not None and digest in _processed:
+        shutil.copytree(_processed[digest], shaped)
+        return
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PROCESS_LOCAL_DIR": str(raw),
@@ -85,6 +143,9 @@ def run_processor(raw: pathlib.Path, shaped: pathlib.Path, *, fresh: bool = True
         **({"PROCESS_COMPACT_AT": str(compact_at)} if compact_at else {}),
     }
     subprocess.run([str(aintercept_binary()), "process"], env=env, check=True, capture_output=True)  # noqa: S603
+    if digest is not None and shaped.is_dir():  # (no raw files: no output, nothing to keep)
+        shutil.copytree(shaped, _processed_root() / digest)
+        _processed[digest] = _processed_root() / digest
 
 
 class ProcessedStore(Store):
@@ -129,10 +190,18 @@ def client_for():
         s.close()
 
 
+_parity_checked: set[str] = set()  # raw digests whose request_rows were held, this session
+
+
 def assert_request_rows_parity(store: Store) -> None:
     """The processor's request_rows table holds exactly the rows rows.request_rows derives, for every
-    person (docs/architecture.md, Decision 4): checked over every test's dataset at its end."""
+    person (docs/architecture.md, Decision 4): checked over every test's dataset at its end (once
+    per distinct dataset)."""
     store.ingest()
+    digest = raw_digest(store.data_dir)
+    if digest in _parity_checked:
+        return
+    _parity_checked.add(digest)
     try:
         manifest = json.loads((store.shaped_dir / "manifest.json").read_text())
     except FileNotFoundError:

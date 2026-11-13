@@ -210,13 +210,13 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 
 ## 5b. Query API capacity
 
-The API (`api.enabled`) keeps the processor's tables in a DuckDB file on the
-pod's disk, so its memory doesn't grow with the data:
+The API (`api.enabled`) is stateless (docs/PIPELINE.md §4): each request
+queries the object store's files in place, so it keeps no tables, and an HPA on
+CPU sets its replica count (`api.stateless`):
 - **Memory:** request = limit (`api.resources`, 1.5 Gi), so the scheduler
   reserves all of it and the pod is the last evicted. DuckDB gets 60% of it
   unless `api.memoryLimit` says otherwise.
-- **Disk:** `api.dbSizeLimit` (4 Gi) holds the DuckDB file, about twice the
-  mirrored Parquet, and its spill space.
+- **Disk:** only scratch space for DuckDB's spill (`api.stateless.cacheSizeLimit`).
 - **Size the nodes for the requests:** a node runs short when the pods on it
   use more than it has, and the kubelet then evicts whichever pod is furthest
   over its request. See `docs/INTERCEPTION_ISSUES.md` P5.

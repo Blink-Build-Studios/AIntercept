@@ -12,10 +12,10 @@ import pytest
 from aintercept_api import buckets
 from aintercept_api.buckets import BucketStore, LocalSource, S3Source
 from aintercept_api.raw import LocalRaw
-from tests.conftest import make_client
+from tests.conftest import few_per_group, make_client
 from tests.s3_fake import BUCKET, FakeS3, fake_s3
 from tests.test_bucket_parity import _urls
-from tests.test_stream_pipeline import layout  # noqa: F401 (the pipeline's committed layout, a fixture)
+from tests.test_stream_pipeline import group, layout  # noqa: F401 (layout: the pipeline's committed layout, a fixture)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -124,10 +124,20 @@ def test_freshness_gets_the_next_commit_instead_of_listing(s3):
     assert any(h.key.endswith(".json") for h in fake.hits)
 
 
+@pytest.mark.full
 def test_every_endpoint_through_s3_is_byte_identical_to_the_local_read(s3):
     _, client, local = s3
     urls = _urls(local)
     assert len(urls) > 100
+    _identical(client, local, urls)
+
+
+def test_each_endpoint_group_through_s3_is_byte_identical_to_the_local_read(s3):
+    _, client, local = s3
+    _identical(client, local, few_per_group(_urls(local), group))
+
+
+def _identical(client, local, urls: list[str]) -> None:
     differing = []
     for url in urls:
         a, b = local.get(url), client.get(url)
@@ -138,7 +148,8 @@ def test_every_endpoint_through_s3_is_byte_identical_to_the_local_read(s3):
     assert not differing, (len(differing), differing[:5])
 
 
-def test_files_no_commit_names_are_never_read(s3, layout):  # noqa: F811
+@pytest.mark.parametrize("every_url", [pytest.param(True, marks=pytest.mark.full), False])
+def test_files_no_commit_names_are_never_read(s3, layout, every_url):  # noqa: F811
     fake, client, local = s3
     tmp, _ = layout
     tables = tmp / "layout" / "sim" / "stream" / "v1" / "tables"
@@ -155,7 +166,8 @@ def test_files_no_commit_names_are_never_read(s3, layout):  # noqa: F811
                     planted.append(str((part / name).relative_to(tmp / "layout")))
     assert planted
     fake.reset()
-    for url in _urls(local):
+    urls = _urls(local)
+    for url in urls if every_url else few_per_group(urls, group):
         client.get(url)
     read = {h.key for h in fake.hits}
     assert not read & set(planted), sorted(read & set(planted))[:3]

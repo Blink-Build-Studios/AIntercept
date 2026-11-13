@@ -1,7 +1,7 @@
 # The query API (api/) and the built web UI (ui/), served together: the UI at /,
-# the API at /api/v1, one origin. FastAPI + DuckDB over the processor's tables. In
-# the cluster it runs beside `aintercept mirror`, which keeps the tables on a shared
-# volume and serves raw files over localhost (deploy/helm/aintercept/templates/api.yaml).
+# the API at /api/v1, one origin. FastAPI + DuckDB. In the cluster it queries the
+# object store's v1/ folders in place through httpfs (docs/PIPELINE.md §4,
+# deploy/helm/aintercept/templates/api.yaml).
 #
 # Build from the repository root (the UI is part of the image):
 #   docker build -f api/Dockerfile -t <registry>/aintercept-api:<tag> .
