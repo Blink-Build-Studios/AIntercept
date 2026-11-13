@@ -13,8 +13,8 @@ from aintercept_api import buckets
 from aintercept_api.buckets import BucketStore, LocalSource, S3Source
 from aintercept_api.raw import LocalRaw
 from tests.conftest import few_per_group, make_client
+from tests.endpoints import endpoint_urls as _urls
 from tests.s3_fake import BUCKET, FakeS3, fake_s3
-from tests.test_bucket_parity import _urls
 from tests.test_stream_pipeline import group, layout  # noqa: F401 (layout: the pipeline's committed layout, a fixture)
 
 

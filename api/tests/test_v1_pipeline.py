@@ -15,7 +15,7 @@ from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
 from tests.builders import Dataset, load_fixture
 from tests.conftest import aintercept_binary, bounded_store, few_per_group, make_client
-from tests.test_bucket_parity import _urls
+from tests.endpoints import endpoint_urls as _urls
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_stream_pipeline import group, one_stream_one_id

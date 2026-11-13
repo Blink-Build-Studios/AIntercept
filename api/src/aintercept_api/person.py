@@ -18,20 +18,6 @@ from aintercept_api.store import Store
 BACKGROUND_CLASSES = {"auxiliary", "compaction"}
 
 
-def key_hashes(store: Store, session_ids: list[str]) -> list[str]:
-    return [
-        r[0]
-        for r in store.query(
-            """SELECT key_hash FROM cc_calls WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND key_hash IS NOT NULL
-               UNION
-               SELECT c.key_hash FROM calls c JOIN (SELECT DISTINCT correlation_id FROM cc_events
-                 WHERE session_id IN (SELECT unnest(?::VARCHAR[]))) b USING (correlation_id)
-               WHERE c.key_hash IS NOT NULL""",
-            [session_ids, session_ids],
-        )
-    ]
-
-
 def kind_of(path: str) -> str:
     p = path.split("?", 1)[0]
     # Codex's channels (handoff §11L.6): model calls, analytics events, OTel metrics,
@@ -130,44 +116,6 @@ class Tx:
         return p.rsplit("/", 1)[-1] or self.path
 
 
-def transactions(store: Store, hashes: list[str], session_id: str | None = None) -> list[Tx]:
-    """Every transaction made with these credentials; with `session_id`, only that
-    session's (its own calls, and batches whose events are its). Shared: don't mutate it."""
-    if not hashes:
-        return []
-    # Once per commit: a person's summary and requests both need them, every poll.
-    return store.memo(("transactions", tuple(hashes), session_id), lambda: _transactions(store, hashes, session_id))
-
-
-def _transactions(store: Store, hashes: list[str], session_id: str | None) -> list[Tx]:
-    rows = store.query(
-        """WITH c AS (
-             -- Each coding agent's transactions: a WebSocket's turns, not the connection itself.
-             SELECT * REPLACE (replace(call_id, '#', '~') AS correlation_id) FROM calls
-             WHERE product IN ('claude_code', 'codex') AND NOT synthetic
-               AND NOT (ws_turn IS NULL AND method = 'GET' AND path = '/backend-api/codex/responses')
-               AND key_hash IN (SELECT unnest(?::VARCHAR[]))
-           ), batch AS (
-             -- An analytics batch's events (Claude Code's or Codex's) name its session.
-             SELECT correlation_id, count(*) AS n, any_value(session_id) AS sid, min(name) AS first_name
-             FROM (SELECT correlation_id, session_id, name FROM cc_events
-                   UNION ALL SELECT correlation_id, session_id, name FROM codex_events)
-             WHERE correlation_id IN (SELECT correlation_id FROM c) GROUP BY 1
-           )
-           SELECT c.correlation_id, c.ts, c.method, c.path, c.session_id, c.prompt_id, c.request_class,
-                  c.status, c.end_ts, c.model, c.stop_reason, c.request_bytes, c.response_bytes, batch.n, batch.sid,
-                  c.request_id, c.client_request_id, c.content_encoding, c.error,
-                  c.input_tokens, c.output_tokens, c.cache_read_tokens, c.cache_write_tokens,
-                  c.product, c.client, c.hidden_kind, c.effort, c.reasoning_tokens, c.tool_uses_json, c.ws_turn,
-                  batch.first_name, c.detail_json
-           FROM c LEFT JOIN batch USING (correlation_id)
-           WHERE ?::VARCHAR IS NULL OR coalesce(c.session_id, batch.sid) = ?
-           ORDER BY c.ts""",
-        [hashes, session_id, session_id],
-    )
-    return [Tx(*r) for r in rows]
-
-
 @dataclass
 class Reported:
     """What a tengu_api_success says about its call."""
@@ -175,24 +123,6 @@ class Reported:
     ttft_ms: float | None
     cache_5m: int | None
     cache_1h: int | None
-
-
-def reports(store: Store, session_ids: list[str]) -> dict[str, Reported]:
-    """requestId and clientRequestId -> the call's tengu_api_success facts."""
-    out: dict[str, Reported] = {}
-    for rid, crid, ttft, c5, c1 in store.query(
-        """SELECT json_extract_string(md, '$.requestId'), json_extract_string(md, '$.clientRequestId'),
-                  TRY_CAST(json_extract_string(md, '$.ttftMs') AS DOUBLE),
-                  TRY_CAST(json_extract_string(md, '$.cache_creation_5m_input_tokens') AS BIGINT),
-                  TRY_CAST(json_extract_string(md, '$.cache_creation_1h_input_tokens') AS BIGINT)
-           FROM cc_events WHERE name = 'tengu_api_success' AND session_id IN (SELECT unnest(?::VARCHAR[]))
-           ORDER BY ts""",
-        [session_ids],
-    ):
-        for key in (rid, crid):
-            if key:
-                out.setdefault(key, Reported(ttft, c5, c1))
-    return out
 
 
 RETRY_AFTER_NS = 30 * cc.NS  # tengu_api_retry is logged within seconds of the failed attempt's end

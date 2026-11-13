@@ -153,6 +153,22 @@ func DetailKey(prefix, correlationID string) string {
 	return withSlash(prefix) + "calls/" + correlationID + ".ndjson.gz"
 }
 
+// FlushDetails completes the detail object of every call still in flight, with
+// its rows so far: at the end of a replayed capture (canon), so the drawer's raw
+// view shows what the raw log has for a call that never ended. The live
+// observer doesn't call it.
+func (a *Assembler) FlushDetails() []Detail {
+	ids := make([]string, 0, len(a.lines))
+	for id := range a.lines {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		a.writeDetail(id)
+	}
+	return a.TakeDetails()
+}
+
 // TakeDetails returns the detail objects completed since the last call.
 func (a *Assembler) TakeDetails() []Detail {
 	d := a.details

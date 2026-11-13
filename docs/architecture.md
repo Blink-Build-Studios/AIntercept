@@ -22,8 +22,8 @@ upstream cluster (verified TLS, real SNI)
   M1: local fixture origin   |   M2+: real api.anthropic.com
 ```
 
-Both Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc`,
-`aintercept observer`), one mode per process and per pod.
+The Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc`,
+`aintercept observer`, `aintercept rollup`), one mode per process and per pod.
 
 - **certsvc** (Go): an Envoy SDS v3 gRPC server. Holds the issuing intermediate
   key. On each SDS request, the requested resource name *is* the SNI hostname;
@@ -32,6 +32,14 @@ Both Go services are one binary, `aintercept`, run in a mode (`aintercept certsv
 - **observer** (Go): an Envoy ext_proc v3 gRPC server. Acks every message
   immediately and tees observations onto a bounded in-memory buffer drained by a
   separate goroutine into a `Sink`.
+- **rollup** (Go): the data pipeline after ingest ([PIPELINE.md](PIPELINE.md)).
+  The observer writes each routing key's records to `v1/keys/<key>/in/` and flags
+  the key in Redis; a rollup replica locks the key, applies its new files with the
+  per-key state engine and commits its rows with a create-only write. The replica
+  holding `lock:merge` writes the org-level rows every 30 s. Redis holds only
+  coordination; the data is in the bucket (a directory locally).
+- **query API** (Python, `api/`): stateless; reads a key's newest commit, or the
+  merge, from the bucket with DuckDB.
 - **fixture** (Go): an HTTPS origin with a recognizable synthetic marker, used
   by M1 to prove MITM without real credentials.
 - **Envoy**: TLS termination, per-SNI cert selection, HTTP forwarding, upstream

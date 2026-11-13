@@ -27,7 +27,7 @@ log = logging.getLogger("aintercept_api")
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_DATA_DIR = REPO_ROOT / "data" / "telemetry"
 # `aintercept process` writes here from the raw partitions (docker compose runs it).
-DEFAULT_SHAPED_DIR = REPO_ROOT / "data" / "shaped"
+DEFAULT_BUCKETS_DIR = REPO_ROOT / "data" / "v1"
 # Ingest new files at most this often; requests in between read the tables as they are.
 DEFAULT_INGEST_INTERVAL_S = 5.0
 
@@ -123,18 +123,13 @@ def create_app(
         redoc_url="/redoc" if explorer else None,
         openapi_url="/openapi.json" if explorer else None,
     )
-    data_dir = pathlib.Path(os.environ.get("AINTERCEPT_DATA_DIR") or DEFAULT_DATA_DIR)
-    if store is None and os.environ.get("AINTERCEPT_STORE") in ("v1", "buckets"):
-        store = bucket_store_from_env(os.environ, v1=os.environ["AINTERCEPT_STORE"] == "v1")
     if store is None:
-        shaped = pathlib.Path(os.environ.get("AINTERCEPT_SHAPED_DIR") or DEFAULT_SHAPED_DIR)
-        store = Store(
-            data_dir,
-            shaped,
-            memory_limit=duckdb_memory_limit(os.environ),
-            threads=int(os.environ["AINTERCEPT_THREADS"]) if os.environ.get("AINTERCEPT_THREADS") else None,
-            db_dir=pathlib.Path(os.environ["AINTERCEPT_DB_DIR"]) if os.environ.get("AINTERCEPT_DB_DIR") else None,
-        )
+        # The v5 store (docs/PIPELINE.md §4): the object store, or a local directory laid out
+        # the same way (AINTERCEPT_BUCKETS_DIR, default data/v1 for local runs).
+        env = dict(os.environ)
+        if not env.get("AINTERCEPT_BUCKETS_DIR") and not env.get("AINTERCEPT_S3_BUCKET"):
+            env["AINTERCEPT_BUCKETS_DIR"] = str(DEFAULT_BUCKETS_DIR)
+        store = bucket_store_from_env(env, v1=env.get("AINTERCEPT_STORE", "v1") != "buckets")
     app.state.store = store
     app.state.ingest_interval_s = ingest_interval_s
     app.state.clock = clock or (lambda: datetime.now(UTC))
@@ -144,8 +139,6 @@ def create_app(
         extra={
             "fields": {
                 "store": type(app.state.store).__name__,
-                "raw": str(app.state.store.data_dir),
-                "shapedDir": str(app.state.store.shaped_dir),
                 "memoryLimit": app.state.store.memory_limit,
             }
         },

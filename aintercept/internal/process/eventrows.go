@@ -2,9 +2,7 @@ package process
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -324,94 +322,6 @@ func (d *eventAgg) numberEvents() {
 		ce.md = ""
 	}
 	d.ccAll = nil
-}
-
-// renumberSpanning numbers again the events of the batches that more than one of
-// the parts hold (a part numbers only its own share): it reads those parts'
-// events of those batches and numbers each batch over all of them.
-func (rp *rowParts) renumberSpanning(ctx context.Context, keys []string, d *rowData) error {
-	parts := map[string][]string{} // batch -> the parts holding its Claude Code events
-	for _, k := range keys {
-		for corr := range rp.cache[k].events.ccBatches {
-			parts[corr] = append(parts[corr], k)
-		}
-	}
-	spanning := map[string]bool{}
-	read := map[string]bool{}
-	for corr, ks := range parts {
-		if len(ks) > 1 {
-			spanning[corr] = true
-			for _, k := range ks {
-				read[k] = true
-			}
-		}
-	}
-	if len(spanning) == 0 {
-		return nil
-	}
-	type at struct {
-		part string
-		pos  int32
-	}
-	type keyed struct {
-		key batchKey
-		at
-		order int
-	}
-	byBatch := map[string][]keyed{}
-	order := 0
-	for _, k := range keys {
-		if !read[k] {
-			continue
-		}
-		pos := 0
-		err := eachParquet(ctx, rp.out, k, func(e eventCols) {
-			if e.Source != productClaudeCode {
-				return
-			}
-			if spanning[e.CorrelationID] {
-				byBatch[e.CorrelationID] = append(byBatch[e.CorrelationID],
-					keyed{batchKey{e.Seq, e.RowNS, e.NS, firstStr(e.Name, "(unnamed)"), e.MetadataJSON}, at{k, int32(pos)}, order})
-				order++
-			}
-			pos++
-		})
-		if err != nil {
-			return fmt.Errorf("derived tables: read %s: %w", k, err)
-		}
-	}
-	number := map[at]int32{}
-	for _, evs := range byBatch {
-		sort.SliceStable(evs, func(i, j int) bool { return evs[i].key.less(evs[j].key) })
-		for i, e := range evs {
-			number[e.at] = int32(i + 1)
-		}
-	}
-	for _, evs := range d.ccEvs {
-		for _, ce := range evs {
-			if spanning[ce.corr] {
-				ce.n = number[at{ce.part, ce.pos}]
-			}
-		}
-	}
-	for _, evs := range d.promptEvs {
-		for _, pe := range evs {
-			if spanning[pe.corr] {
-				pe.n = int(number[at{pe.part, int32(pe.pos)}])
-				if pe.unnamedInput() {
-					pe.id = pe.corr + ":" + strconv.Itoa(pe.n)
-				}
-			}
-		}
-	}
-	for _, evs := range d.markEvs {
-		for _, me := range evs {
-			if spanning[me.corr] {
-				me.n = int(number[at{me.part, int32(me.pos)}])
-			}
-		}
-	}
-	return nil
 }
 
 // EventRow is an event_rows row: one of a session's Claude Code analytics events

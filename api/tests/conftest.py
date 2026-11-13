@@ -19,15 +19,15 @@ import tempfile
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
-import duckdb
 import pytest
 from fastapi.testclient import TestClient
 
-from aintercept_api import claude_code as cc
 from aintercept_api.app import create_app
-from aintercept_api.rows import request_row_from_table, request_rows
-from aintercept_api.store import Store
+from aintercept_api.buckets import LocalSource
+from aintercept_api.raw import LocalRaw
+from aintercept_api.v1 import V1Store
 from tests.builders import Dataset
 
 SAMPLES_DIR = pathlib.Path(__file__).resolve().parents[2] / "ui" / "src" / "api" / "samples"
@@ -112,71 +112,87 @@ def raw_digest(raw: pathlib.Path) -> str:
     return h.hexdigest()
 
 
-_processed: dict[str, pathlib.Path] = {}  # raw digest -> the processor's output for it, this session
-_processed_dir: list[pathlib.Path] = []
+_laid_out: dict[str, pathlib.Path] = {}  # raw digest -> the v5 layout of it, this session
+_laid_out_dir: list[pathlib.Path] = []
 
 
-def _processed_root() -> pathlib.Path:
-    if not _processed_dir:
-        _processed_dir.append(pathlib.Path(tempfile.mkdtemp(prefix="aintercept-processed-")))
-        atexit.register(shutil.rmtree, _processed_dir[0], True)
-    return _processed_dir[0]
+def _laid_out_root() -> pathlib.Path:
+    if not _laid_out_dir:
+        _laid_out_dir.append(pathlib.Path(tempfile.mkdtemp(prefix="aintercept-v1-")))
+        atexit.register(shutil.rmtree, _laid_out_dir[0], True)
+    return _laid_out_dir[0]
 
 
-def run_processor(raw: pathlib.Path, shaped: pathlib.Path, *, fresh: bool = True, compact_at: int = 0) -> None:
-    """`aintercept process` over raw, into shaped, from scratch: the real pipeline. (Tests
-    rewrite their hour files as rows are added; the observer never rewrites one.) A from-scratch
-    run over raw files another test already processed is that run's output (the processor is
-    deterministic), copied: many tests share a fixture dataset."""
-    digest = raw_digest(raw) if fresh and not compact_at else None
-    if fresh:
-        shutil.rmtree(shaped, ignore_errors=True)
-    if digest is not None and digest in _processed:
-        shutil.copytree(_processed[digest], shaped)
-        return
-    env = {
-        "PATH": os.environ.get("PATH", ""),
-        "PROCESS_LOCAL_DIR": str(raw),
-        "PROCESS_OUT_DIR": str(shaped),
-        "PROCESS_ONCE": "true",
-        "PROCESS_HTTP_LISTEN": "127.0.0.1:0",
-        **({"PROCESS_COMPACT_AT": str(compact_at)} if compact_at else {}),
-    }
-    subprocess.run([str(aintercept_binary()), "process"], env=env, check=True, capture_output=True)  # noqa: S603
-    if digest is not None and shaped.is_dir():  # (no raw files: no output, nothing to keep)
-        shutil.copytree(shaped, _processed_root() / digest)
-        _processed[digest] = _processed_root() / digest
+def lay_out(raw: pathlib.Path) -> pathlib.Path:
+    """The v5 pipeline over raw (docs/PIPELINE.md): `aintercept v1layout` runs the observer's own
+    code to records and calls/ detail objects, applies each key's records and commits it under
+    v1/keys/, and runs one merge into v1/merge/. Deterministic, so a dataset another test already
+    laid out is reused."""
+    digest = raw_digest(raw)
+    if digest not in _laid_out:
+        out = _laid_out_root() / digest
+        subprocess.run(  # noqa: S603
+            [str(aintercept_binary()), "v1layout", "-src", str(raw), "-out", str(out), "-prefix", "sim"],
+            check=True,
+            capture_output=True,
+        )
+        _laid_out[digest] = out
+    return _laid_out[digest]
 
 
-class ProcessedStore(Store):
-    """A store whose ingest first runs the processor when the raw files changed,
-    so a test sees exactly the files it has written, shaped by the real pipeline."""
+class LaidOutStore:
+    """The API's v1 store over a test's dataset: whenever the test has written more raw files, the
+    dataset is laid out again by the v5 pipeline, so a test sees exactly the files it wrote."""
 
     def __init__(self, root: pathlib.Path, **kwargs):
-        super().__init__(root, root.parent / "shaped", **kwargs)
+        self.root, self.kwargs = root, kwargs
         self._listing: list[tuple[str, int]] | None = None
-        self._process_lock = threading.Lock()
+        self._lock = threading.Lock()
+        self._store: V1Store | None = None
+        self._cache = pathlib.Path(tempfile.mkdtemp(prefix="aintercept-cache-"))
+
+    def _current(self) -> V1Store:
+        with self._lock:
+            listing = sorted((str(p), p.stat().st_size) for p in self.root.glob("dt=*/hour=*/instance=*/*.ndjson.gz"))
+            if self._store is None or listing != self._listing:
+                if self._store is not None:
+                    self._store.close()
+                self._store = V1Store(
+                    LocalSource(lay_out(self.root)), self._cache, prefix="sim/", raw=LocalRaw(self.root), **self.kwargs
+                )
+                self._listing = listing
+            return self._store
+
+    def maybe_ingest(self, min_interval_s: float) -> None:
+        self._current()
 
     def ingest(self) -> int:
-        with self._process_lock:  # one processor at a time over the folder
-            listing = sorted(
-                (str(p), p.stat().st_size) for p in self.data_dir.glob("dt=*/hour=*/instance=*/*.ndjson.gz")
-            )
-            if listing != self._listing:
-                run_processor(self.data_dir, self.shaped_dir)
-                self._listing = listing
-            return super().ingest()
+        self._current()
+        return 0
+
+    def close(self) -> None:
+        if self._store is not None:
+            self._store.close()
+        shutil.rmtree(self._cache, ignore_errors=True)
+
+    @property
+    def data_dir(self) -> pathlib.Path:
+        return self.root
+
+    def __getattr__(self, name: str):
+        return getattr(self._current(), name)
 
 
-def bounded_store(root, **kwargs) -> Store:
-    """A store bounded like a small machine, so a memory regression fails here, not in CI's runner."""
-    return ProcessedStore(pathlib.Path(root), memory_limit="512MB", threads=2, **kwargs)
+def bounded_store(root, **kwargs) -> Any:
+    """The v5 store over a dataset (the endpoints' Store interface), bounded like a small
+    machine, so a memory regression fails here, not in CI's runner."""
+    return LaidOutStore(pathlib.Path(root), memory_limit="512MB", threads=2, **kwargs)
 
 
 @pytest.fixture
 def client_for():
     """client_for(dataset) -> a TestClient over that dataset with the frozen clock."""
-    stores: list[Store] = []
+    stores: list[LaidOutStore] = []
 
     def make(ds: Dataset, **kwargs) -> TestClient:
         root = ds.write()
@@ -186,42 +202,7 @@ def client_for():
 
     yield make
     for s in stores:
-        assert_request_rows_parity(s)
         s.close()
-
-
-_parity_checked: set[str] = set()  # raw digests whose request_rows were held, this session
-
-
-def assert_request_rows_parity(store: Store) -> None:
-    """The processor's request_rows table holds exactly the rows rows.request_rows derives, for every
-    person (docs/architecture.md, Decision 4): checked over every test's dataset at its end (once
-    per distinct dataset)."""
-    store.ingest()
-    digest = raw_digest(store.data_dir)
-    if digest in _parity_checked:
-        return
-    _parity_checked.add(digest)
-    try:
-        manifest = json.loads((store.shaped_dir / "manifest.json").read_text())
-    except FileNotFoundError:
-        return
-    key = manifest.get("snapshots", {}).get("request_rows")
-    if not key:
-        return
-    people = {r[0] for r in store.query("SELECT account_id FROM accounts UNION SELECT person_id FROM people")}
-    want = sorted(
-        json.dumps({"person": pid, **r.model_dump(mode="json")}, sort_keys=True)
-        for pid in people | {cc.UNATTRIBUTED}
-        for r in request_rows(store, cc.load_person(store, pid))
-    )
-    cur = duckdb.connect().execute("SELECT * FROM read_parquet(?)", [str(store.shaped_dir / key)])
-    cols = [c[0] for c in cur.description]
-    got = sorted(
-        json.dumps({"person": r["person_id"], **request_row_from_table(r).model_dump(mode="json")}, sort_keys=True)
-        for r in (dict(zip(cols, t, strict=True)) for t in cur.fetchall())
-    )
-    assert got == want
 
 
 def operation_for(app, method: str, path: str, status: int) -> tuple[str, str]:

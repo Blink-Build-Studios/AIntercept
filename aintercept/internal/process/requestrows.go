@@ -2,17 +2,16 @@ package process
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"fmt"
 	"math"
-	"path"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/parquet-go/parquet-go"
 )
 
 // The request_rows snapshot: every person's request log, as the query API
@@ -465,26 +464,6 @@ func newRowData(calls []*rowCall, events []*eventAgg, accounts []Account) *rowDa
 	return d
 }
 
-// partRows is what one fact part gives the request rows. Parts never change, so
-// it's kept across runs, and a run reads only the parts it hasn't seen.
-type partRows struct {
-	calls  []*rowCall // a requests part's
-	events *eventAgg  // an events part's
-}
-
-// rowParts reads the fact parts for the request rows, keeping what each gives
-// across runs: parts never change, so a run decodes only the parts it hasn't seen.
-// Its strings are copied out of the parts' buffers, one copy each.
-type rowParts struct {
-	out     Store
-	cache   map[string]*partRows
-	strings interner
-}
-
-func newRowParts(out Store) *rowParts {
-	return &rowParts{out: out, cache: map[string]*partRows{}, strings: interner{}}
-}
-
 // Derived is the snapshot tables built from all the committed data each run
 // (docs/architecture.md, Decision 4).
 type Derived struct {
@@ -505,121 +484,29 @@ type Derived struct {
 	CallTools    []CallToolUse
 }
 
-// derive builds the derived tables from the committed data the manifest names,
-// plus the in-flight transactions and the accounts and people committed with
-// them.
-func (rp *rowParts) derive(ctx context.Context, m *Manifest, pending []Pending, accounts []Account, people []Person, sessions []Session) (*Derived, error) {
-	named := map[string]bool{}
-	var calls []*rowCall
-	for _, k := range m.Facts["requests"] {
-		named[k] = true
-		part := rp.cache[k]
-		if part == nil {
-			part = &partRows{}
-			err := eachParquet(ctx, rp.out, k, func(r requestCols) {
-				if !r.Synthetic { // the API never loads the probe's rows
-					c := callFromRequest(r, rp.strings)
-					part.calls = append(part.calls, &c)
-				}
-			})
-			if err != nil {
-				return nil, fmt.Errorf("derived tables: read %s: %w", k, err)
+// EncodeParquet is rows as a Parquet file, written through the schema's
+// Deconstruct. (parquet-go v0.32.0's typed batch Write stores a zero value as
+// the zero, not null, in an optional column once that column has held a
+// non-zero value; TestOptionalZeroIsNull guards this.)
+func EncodeParquet[T any](rows []T) []byte {
+	var buf bytes.Buffer
+	w := parquet.NewGenericWriter[T](&buf, parquet.Compression(&parquet.Zstd))
+	schema := w.Schema()
+	batch := make([]parquet.Row, 0, 1024)
+	for i := range rows {
+		batch = append(batch, schema.Deconstruct(nil, &rows[i]))
+		if len(batch) == cap(batch) || i == len(rows)-1 {
+			if _, err := w.WriteRows(batch); err != nil {
+				panic(err) // writing to memory; only a schema bug can fail
 			}
-			rp.cache[k] = part
-		}
-		calls = append(calls, part.calls...)
-	}
-	for _, x := range pending {
-		if !x.Done && x.StartNS != 0 {
-			c := callFromPending(x)
-			calls = append(calls, &c)
+			batch = batch[:0]
 		}
 	}
-	var events []*eventAgg
-	for _, k := range m.Facts["events"] {
-		named[k] = true
-		part := rp.cache[k]
-		if part == nil {
-			part = &partRows{events: newEventAgg()}
-			part.events.part, part.events.in = k, rp.strings
-			add := func(e eventCols) {
-				e.CorrelationID, e.SessionID = rp.strings.of(e.CorrelationID), rp.strings.of(e.SessionID)
-				e.Name, e.PersonID = rp.strings.of(e.Name), rp.strings.of(e.PersonID)
-				e.DeviceID = rp.strings.of(e.DeviceID)
-				e.PromptID = rp.strings.of(e.PromptID)
-				e.HeadSHA = rp.strings.of(e.HeadSHA)
-				part.events.add(e)
-			}
-			if err := eachParquet(ctx, rp.out, k, add); err != nil {
-				return nil, fmt.Errorf("derived tables: read %s: %w", k, err)
-			}
-			part.events.numberEvents()
-			part.events.numberUnnamed()
-			rp.cache[k] = part
-		}
-		events = append(events, part.events)
+	if err := w.Close(); err != nil {
+		panic(err)
 	}
-	for k := range rp.cache {
-		if !named[k] { // replaced by a compaction
-			delete(rp.cache, k)
-		}
-	}
-	d := newRowData(calls, events, accounts)
-	if err := rp.renumberSpanning(ctx, m.Facts["events"], d); err != nil {
-		return nil, err
-	}
-	ids := map[string]bool{unattributed: true}
-	for _, a := range accounts {
-		ids[a.AccountID] = true
-	}
-	for _, x := range people {
-		ids[x.PersonID] = true
-	}
-	out := &Derived{}
-	out.RequestRows, out.PersonLast = d.rows(sortedKeys(ids))
-	out.PromptRows, out.PromptSteps, out.SessionMarks = d.promptRows()
-	out.SessionRows = d.sessionRows(sessions)
-	out.Presence = d.presenceSegments(out.SessionRows)
-	out.EventRows, out.SessionTools = d.eventRows()
-	out.SessionReqs = d.sessionRequestRows(out.SessionRows)
-	pt := d.personTables(sortedKeys(ids))
-	out.PersonMap, out.PersonSess, out.AcctFacts, out.AcctDevices, out.CallTools = pt.Map, pt.Sessions, pt.Facts, pt.Devices, pt.Tools
-	return out, nil
+	return buf.Bytes()
 }
-
-// Derive builds the derived tables from a committed output (the manifest under
-// prefix) without processing anything: `aintercept derive`, the parity test's
-// quick loop over an existing shaped directory.
-func Derive(ctx context.Context, s Store, prefix string) (*Derived, error) {
-	b, err := s.Get(ctx, path.Join(strings.Trim(prefix, "/"), "manifest.json"))
-	if err != nil {
-		return nil, fmt.Errorf("manifest: %w", err)
-	}
-	var m Manifest
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, fmt.Errorf("manifest: %w", err)
-	}
-	var pending []Pending
-	var accounts []Account
-	var people []Person
-	var sessions []Session
-	for table, into := range map[string]func(string) error{
-		"sessions": func(k string) error { return readInto(ctx, s, []string{k}, &sessions) },
-		"pending":  func(k string) error { return readInto(ctx, s, []string{k}, &pending) },
-		"accounts": func(k string) error { return readInto(ctx, s, []string{k}, &accounts) },
-		"people":   func(k string) error { return readInto(ctx, s, []string{k}, &people) },
-	} {
-		if k := m.Snapshots[table]; k != "" {
-			if err := into(k); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return newRowParts(s).derive(ctx, &m, pending, accounts, people, sessions)
-}
-
-// EncodeParquet is rows as a Parquet file, as a run writes a snapshot.
-func EncodeParquet[T any](rows []T) []byte { return encodeParquet(rows) }
 
 // rows builds every person's rows, sorted by person, time and id, and each
 // person's newest data time: the API's lastDataAt for the person, the latest of

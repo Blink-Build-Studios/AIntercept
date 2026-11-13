@@ -129,6 +129,9 @@ func canonPod(ctx context.Context, pod string, files []string, put Putter, prefi
 	}
 	s.mu.Lock()
 	s.add(s.asm.Flush())
+	for _, d := range s.asm.FlushDetails() {
+		s.putDetail(d)
+	}
 	s.mu.Unlock()
 	for c, n := range s.Cases() {
 		st.Cases[c] += n

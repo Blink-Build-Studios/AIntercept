@@ -256,10 +256,7 @@ func TestRequestRowsParquet(t *testing.T) {
 	zero := 0.0
 	rows := []RequestRow{{PersonID: "p", RequestID: "r", TTFTMS: &zero, TokensCacheWrite5m: ptr(int64(0)), ToolCalls: []string{}},
 		{PersonID: "p", RequestID: "r2", ToolCalls: []string{"exec ×2"}}}
-	b := encodeParquet(rows)
-	s := newMem()
-	s.objs["k"] = b
-	got, err := readParquet[RequestRow](t.Context(), s, "k")
+	got, err := readBack[RequestRow](EncodeParquet(rows))
 	if err != nil {
 		t.Fatal(err)
 	}

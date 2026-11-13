@@ -112,30 +112,6 @@ type Person struct {
 // Pending is a transaction waiting for its ending: see canon.Pending.
 type Pending = canon.Pending
 
-// PendingBodies is an in-flight model call's recorded bodies so far (full
-// interception only), so a restart mid-call still builds its complete
-// detail_json. Processor state, like pending's in-flight rows; the API never
-// reads it. Snapshot table.
-type PendingBodies struct {
-	CorrelationID    string `parquet:"correlation_id"`
-	Request          []byte `parquet:"request,optional"`
-	Response         []byte `parquet:"response,optional"`
-	RequestEncoding  string `parquet:"request_encoding,optional"`
-	ResponseEncoding string `parquet:"response_encoding,optional"`
-}
-
-// Ledger records each raw file a committed run processed: what makes a file
-// processed exactly once. Fact table.
-//
-//	PK  raw_key
-type Ledger struct {
-	RawKey string `parquet:"raw_key"`
-	Size   int64  `parquet:"size"`
-	Rows   int64  `parquet:"rows"`
-	Bad    int64  `parquet:"bad"` // lines that weren't a JSON row
-	Run    int64  `parquet:"run"`
-}
-
 // RequestRow is one row of a person's request log (the API's RequestRow,
 // docs/ui/handoff §4 RequestRowData), with every value already as the UI shows
 // it. Snapshot table, recomputed from all the committed data each run

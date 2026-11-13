@@ -78,7 +78,8 @@ def live_session(ds):
 
 
 def error_on_query(client, monkeypatch):
-    for name in ("query", "query_dicts"):
+    """Every read the store can do fails: its tables and a call's raw rows."""
+    for name in ("query", "query_dicts", "raw_rows", "raw_event"):
         monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0)
 
 

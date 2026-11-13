@@ -1,5 +1,3 @@
-import gzip
-import json
 import threading
 
 from tests.conftest import bounded_store, make_client
@@ -54,41 +52,11 @@ def test_query_failure_returns_typed_error(dataset, client_for, write_sample, mo
     def boom(*a, **k):
         raise RuntimeError("disk on fire")
 
-    monkeypatch.setattr(client.app.state.store, "query", boom)
+    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
+        monkeypatch.setattr(client.app.state.store, name, boom, raising=False)
     r = client.get("/api/v1/status")
     write_sample(client, r, "error", status=500)
     assert r.json() == {"error": {"code": "internal", "message": "Query failed", "queryId": "q_sample"}}
-
-
-def test_unreadable_files_are_skipped_not_fatal(dataset, tmp_path):
-    """An empty, truncated (mid-write) or non-gzip file must not fail the query."""
-    dataset.transaction("2026-11-04T18:00:00")
-    root = dataset.write()
-    part = next(root.glob("dt=*/hour=*/instance=*"))
-    good = next(part.glob("*.ndjson.gz")).read_bytes()
-    (part / "1-empty.ndjson.gz").write_bytes(b"")
-    (part / "2-truncated.ndjson.gz").write_bytes(good[: len(good) // 2])
-    (part / "3-notgzip.ndjson.gz").write_bytes(b"hello")
-    store = bounded_store(root)
-    r = make_client(store).get("/api/v1/status")
-    assert r.status_code == 200
-    assert r.json()["data"]["firstRequestAt"] == "2026-11-04T18:00:00Z"
-    assert sorted(p.rsplit("/", 1)[-1] for p in store.skipped) == ["2-truncated.ndjson.gz", "3-notgzip.ndjson.gz"]
-
-
-def test_skipped_file_is_retried_once_it_changes(dataset):
-    dataset.transaction("2026-11-04T18:00:00")
-    root = dataset.write()
-    part = next(root.glob("dt=*/hour=*/instance=*"))
-    late = part / "9-late.ndjson.gz"
-    late.write_bytes(b"partial")
-    store = bounded_store(root)
-    assert make_client(store).get("/api/v1/status").json()["data"]["lastIngestAt"] == "2026-11-04T18:00:00.002000Z"
-    row = {"timestamp_ns": 1_793_815_380_000_000_000, "phase": "complete", "correlation_id": "late-1"}  # 18:03
-    with gzip.open(late, "wt") as f:  # the write finishes
-        f.write(json.dumps(row) + "\n")
-    assert make_client(store).get("/api/v1/status").json()["data"]["lastIngestAt"] == "2026-11-04T18:03:00Z"
-    assert store.skipped == []
 
 
 def test_data_dir_name_is_never_parsed_as_sql_or_glob(tmp_path):
@@ -116,20 +84,6 @@ def test_concurrent_requests(dataset, client_for):
     for t in threads:
         t.join()
     assert results == ["2026-11-04T00:00:00Z"] * 16
-
-
-def test_deleted_skipped_file_is_forgotten(dataset):
-    dataset.transaction("2026-11-04T18:00:00")
-    root = dataset.write()
-    part = next(root.glob("dt=*/hour=*/instance=*"))
-    bad = part / "9-bad.ndjson.gz"
-    bad.write_bytes(b"not gzip")
-    store = bounded_store(root)
-    make_client(store).get("/api/v1/status")
-    assert len(store.skipped) == 1
-    bad.unlink()
-    make_client(store).get("/api/v1/status")
-    assert store.skipped == []
 
 
 def test_retention_mode(dataset, client_for):

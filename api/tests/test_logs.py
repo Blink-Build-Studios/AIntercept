@@ -26,7 +26,8 @@ def test_each_request_logs_one_structured_line(dataset, client_for, caplog):
 
 def test_failure_log_carries_the_same_query_id_as_the_error_body(dataset, client_for, caplog, monkeypatch):
     client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
+        monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0, raising=False)
     with caplog.at_level(logging.INFO, logger="aintercept_api"):
         r = client.get("/api/v1/status")
     qid = r.json()["error"]["queryId"]
@@ -38,7 +39,8 @@ def test_failure_log_carries_the_same_query_id_as_the_error_body(dataset, client
 
 def test_failed_request_still_gets_its_request_line(dataset, client_for, caplog, monkeypatch):
     client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
+        monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0, raising=False)
     with caplog.at_level(logging.INFO):
         client.get("/api/v1/status")
     lines = records(caplog)
