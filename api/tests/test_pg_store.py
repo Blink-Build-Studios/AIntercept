@@ -1,7 +1,8 @@
-"""The API's Postgres loader (docs/PIPELINE.md v7 §5, build step 5): per request one connection and
-one READ ONLY, REPEATABLE READ snapshot, the endpoint's statements in order, the rows as Arrow into
-the request's DuckDB under today's table names. /status reads the key rows and the pods' index times;
-the startup refuses a database whose schema isn't this build's.
+"""The API's Postgres store (docs/PIPELINE.md v7 §5, v8 §5.7): per request one connection and one READ
+ONLY, REPEATABLE READ snapshot, the page's statements in order. v8's reader (psycopg) serves /status
+(the key rows and the pods' index times) and the drawer; v7's loader the rest, its rows as Arrow into
+the request's DuckDB under today's table names. The startup refuses a database whose schema isn't
+this build's.
 
 What a session page reads (its statements, their count, their plans) is held here; what it serves is
 held to the oracle in test_v1_pipeline.py (responses) and test_v6_session_rows.py (tables)."""
@@ -13,7 +14,7 @@ import time
 import duckdb
 import pytest
 
-from aintercept_api import pgstore
+from aintercept_api import pgstore, ranges
 from aintercept_api.pgstore import PgStore, SchemaMismatch
 from tests import pgdb
 from tests.builders import Dataset, load_fixture
@@ -140,9 +141,10 @@ def test_a_request_reads_one_snapshot(db):
 def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
     store = PgStore(db, pool_size=2, trace=True)
     with contextlib.closing(store):
+        opened = store.opened  # the schema check's
         for _ in range(5):
-            assert store.load_for("/api/v1/status") is not None
-        assert store.opened == 1
+            assert store.load_for(f"/api/v1/sessions/x/events?from={_iso(T0)}") is not None
+        assert store.opened == opened + 1
         # A connection the server dropped (a restart, a timeout) is discarded and the request retried.
         # Only this test's database: the test server is shared with concurrent runs.
         _exec(
@@ -151,8 +153,22 @@ def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
             " WHERE application_name = 'aintercept_api' AND datname = current_database()",
         )
         time.sleep(0.2)
-        assert store.load_for("/api/v1/status") is not None
-        assert store.opened == 2
+        assert store.load_for("/api/v1/sessions/x/events") is not None
+        assert store.opened == opened + 2
+        # v8's reader's too: its pooled connection, dropped, is replaced before the request reads.
+        client = make_client(store)
+        assert client.get("/api/v1/status").status_code == 200
+        before = store.reader.pool.opened
+        assert client.get("/api/v1/status").status_code == 200
+        assert store.reader.pool.opened == before  # reused
+        _exec(
+            db,
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+            " WHERE application_name = 'aintercept_api' AND datname = current_database()",
+        )
+        time.sleep(0.2)
+        assert client.get("/api/v1/status").status_code == 200
+        assert store.reader.pool.opened == before + 1
 
 
 def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
@@ -160,14 +176,18 @@ def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
     # past the pool's size is closed, not kept idle: the server's connections stay bounded.
     store = PgStore(db, pool_size=2, trace=True)
     with contextlib.closing(store):
-        assert store.load_for("/api/v1/status") is not None
-        (statement,) = store.trace[0].statements
+        assert make_client(store).get("/api/v1/status").status_code == 200
+        assert store.load_for("/api/v1/sessions/x/events") is not None
+        statements = [s for load in store.trace for s in load.statements]
+        assert {s.via for s in statements} == {"psycopg", "adbc"}
         for _ in range(5):
-            assert store.explain(statement)
-        for _ in range(3):
-            with store.pool.connection(fresh=True):
-                pass
-        assert len(store.pool._idle) <= 2
+            for statement in statements:
+                assert store.explain(statement)
+        for pool in (store.pool, store.reader.pool):
+            for _ in range(3):
+                with pool.connection(fresh=True):
+                    pass
+            assert len(pool._idle) <= 2
         conn = pgdb.connect(db)
         cur = conn.cursor()
         try:
@@ -181,14 +201,17 @@ def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
         finally:
             cur.close()
             conn.close()
-        assert n <= 2, n
+        assert n <= 4, n  # each driver's pool at most its size (v7's loader's goes in build step 11)
         # And a request after them plans as usual.
-        assert store.load_for("/api/v1/status") is not None
+        assert make_client(store).get("/api/v1/status").status_code == 200
 
 
 def test_a_path_no_page_serves_reads_nothing(db):
     with contextlib.closing(PgStore(db)) as store:
         assert store.load_for("/ui/index.html") is None
+        # v8's reader's pages load nothing ahead: they read in their own snapshot.
+        for path in ("/api/v1/status", "/api/v1/requests/x", "/api/v1/requests/x/raw", "/api/v1/events/b:1"):
+            assert store.load_for(path) is None, path
         # Paths no person page serves read nothing (the router 404s or 422s them).
         assert store.load_for("/api/v1/people/x/nothing") is None
         assert store.load_for("/api/v1/coverage") is None
@@ -329,19 +352,24 @@ def test_the_directory_runs_a_fixed_set_of_statements(demo, pg_dsn):
 
 
 def test_the_drawer_and_status_run_a_fixed_set_of_statements(demo):
+    # On v8's reader: one statement each, on one connection, in one snapshot.
     _, dsn = demo
     store = PgStore(dsn, trace=True)
     with contextlib.closing(store):
+        client = make_client(store)
         for url, names in DRAWER_STATEMENTS.items():
             store.trace.clear()
-            assert store.load_for(url) is not None
+            client.get(url)
             (load,) = store.trace
             assert load.connections == 1 and [s.name for s in load.statements] == names, url
+            assert (
+                load.begin == "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" and load.statements[0].via == "psycopg"
+            )
 
 
 def test_the_events_tab_reads_only_its_range(demo):
-    # A range given is pushed down, widened by a millisecond each side (a superset of the tab's exact
-    # filter, whatever its parsing rounds); without one the tab is the session's whole span.
+    # A range given is pushed down as the router snaps it (whole minutes), widened by a millisecond each
+    # side; without one the tab is the session's whole span.
     _, dsn = demo
     store = PgStore(dsn, trace=True)
     with contextlib.closing(store):
@@ -354,7 +382,9 @@ def test_the_events_tab_reads_only_its_range(demo):
         some = store.load_for(f"/api/v1/sessions/{sid}/events?from={_iso(lo)}&to={_iso(hi)}")
         assert some is not None
         got = sorted(t for (t,) in some.con.sql("SELECT ts_ns FROM event_rows").fetchall())
-        a, b = lo // 1000 * 1000 - pgstore._WIDEN_NS, hi // 1000 * 1000 + pgstore._WIDEN_NS
+        snapped = ranges.snap(lo // 1000 * 1000, hi // 1000 * 1000)
+        assert snapped[0] is not None and snapped[1] is not None
+        a, b = snapped[0] - pgstore._WIDEN_NS, snapped[1] + pgstore._WIDEN_NS
         assert got == [t for t in ts if a <= t <= b] and len(got) < len(ts)
 
 
@@ -390,7 +420,12 @@ def test_every_statement_can_use_an_index(demo):
                 store.trace.clear()
                 store.load_for(f"/api/v1/sessions/{sid}{sub}")
                 plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
-        for url in [*DRAWER_STATEMENTS, *DIRECTORY_STATEMENTS]:
+        client = make_client(store)
+        for url in DRAWER_STATEMENTS:
+            store.trace.clear()
+            client.get(url)
+            plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
+        for url in DIRECTORY_STATEMENTS:
             store.trace.clear()
             store.load_for(url)
             plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
@@ -446,7 +481,8 @@ def calls(pg_dsn):
 
 def test_overviews_request_count_is_exact_on_and_off_the_hours(calls):
     # Whole hours from agent_call_hours, the partial ones from agent_calls: the count of calls in
-    # [lo, hi] either way; no range counts every call, one with no time too (as the merge's did).
+    # [lo, hi] either way, the range snapped to whole minutes as the router snaps it; no range counts
+    # every call, one with no time too (as the merge's did).
     dsn, times = calls
     bounds = [None, H0 - US, H0, H0 + US, H0 + HOUR - US, H0 + HOUR, H0 + HOUR + 7 * US, H0 + 2 * HOUR,
               H0 + 4 * HOUR]  # fmt: skip
@@ -457,12 +493,13 @@ def test_overviews_request_count_is_exact_on_and_off_the_hours(calls):
                 q = "&".join(f"{k}={_iso_us(v)}" for k, v in (("from", lo), ("to", hi)) if v is not None)
                 loaded = store.load_for(f"/api/v1/overview?{q}")
                 token = store.enter(loaded)
+                a, b = ranges.snap(lo, hi)
                 try:
-                    got = store.agent_calls_in(lo, hi)
+                    got = store.agent_calls_in(a, b)
                 finally:
                     store.leave(token)
-                want = sum(1 for t in times if (lo is None and hi is None) or (
-                    t is not None and (lo is None or t >= lo) and (hi is None or t <= hi)))  # fmt: skip
+                want = sum(1 for t in times if (a is None and b is None) or (
+                    t is not None and (a is None or t >= a) and (b is None or t <= b)))  # fmt: skip
                 assert got == want, (lo, hi)
 
 
