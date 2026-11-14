@@ -550,7 +550,8 @@ indexed lookup; nothing about it is derived at request time.
 
 | Table | Primary key; index | What |
 |---|---|---|
-| `drawer_requests` | (request_id, key); (key) | per drawer id: `data`, the finished `/requests/{id}` object, and `details`, the finished `/details` object, each as the JSON today's models serialize |
+| `drawer_requests` | (request_id, key); (key) | per drawer id: `data`, the finished `/requests/{id}` object, and `details`, the finished `/details` object, each as the JSON today's models serialize. *v8:* each is a template id and its values (below) |
+| `drawer_templates` | (id) | *v8:* the drawer rows' templates, by content (below) |
 | `drawer_step_counts` | (session_id, prompt_id, key); (key) | *v8:* per session and prompt, its steps' count: the `stepCount` of the rows that name it (below) |
 | `drawer_events` | (event_id, key); (key) | per Claude Code event: `/events/{id}` without its `raw` (its time, name, session, and the batch and event key that find its raw row) |
 
@@ -565,6 +566,42 @@ indexed lookup; nothing about it is derived at request time.
   Step N of M, prev/next and retries change as the session grows, so a run
   writes the rows whose hash changed (§2 Run 6), as for the session tables.
   *v8:* it derives only the rows whose inputs can have changed (below).
+- **The rows' JSON is a shared template and its values** (*v8*,
+  `internal/drawer/template.go`).
+  - **What repeats.** A row's `data` and `details` repeat their shape on
+    every row: the keys, the sections' titles and accents, the detail rows'
+    keys, units and tones, the fields' keys, the nulls. Measured on the
+    capture, the shape is most of the bytes. The metadata values that
+    repeat (tools available, betas, user agents) are ~21 MB of the
+    details' 351 MB of JSON. So the shape is what's deduplicated.
+  - **How it's stored.** Each object is a template and its values:
+    - the template is the compact JSON with every other value a `%s` (`%`
+      escaped as `%%`);
+    - the values are those values' JSON, joined by `\x1f`, which JSON text
+      never holds raw.
+  - **How it's read.** Templates are kept once, by the hex of their sha256's
+    first 16 bytes, in `drawer_templates`. The drawer's one statement joins
+    the row's template and rebuilds the row: `format(body, VARIADIC
+    string_to_array(values, E'\x1f'))`. That gives the same bytes. A test
+    holds Postgres's `format()` to the JSON over generated values, including
+    hundreds of values and `%s` or `%%` inside strings.
+  - **Writing them.** A worker inserts the templates of the rows it writes
+    (`ON CONFLICT DO NOTHING`), skipping those its own commits already
+    wrote.
+  - **Retention.** Templates are never deleted: they're shared by every
+    key's rows of one shape. On the capture there are 1,137 templates (3.5
+    MB) for 41,769 rows (Not now: collect the unreferenced ones).
+  - **The result** on the capture: `drawer_requests` 222 MB → 104 MB, plus
+    3.5 MB of templates. Every row the statement serves is the bytes it
+    served before.
+  - **What's left that is payload** (the owner's choice, S3 or Postgres),
+    as uncompressed JSON on the capture:
+    - the `fields` section's values: the call's whole `complete` row and its
+      analytics metadata, verbatim, 41.5 MB;
+    - the content rows' previews: 14.8 MB sent and 3.9 MB received.
+
+    Both could be read from the call's detail object at request time, as
+    `/raw` is. That would be a read-time derivation, so it's not done.
 - **Step N of M is stored once per prompt** (*v8*). A row's `stepCount` is
   its prompt's step count, so storing it in the row rewrote every earlier row
   of the prompt on each new step. Replaying the capture in 30 s windows (a run
