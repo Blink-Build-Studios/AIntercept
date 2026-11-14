@@ -243,7 +243,7 @@ def pg_urls(pg_clients):
     """The gate's URLs of the endpoints the Postgres store serves, and the sessions whose pages
     carry cross-key values."""
     old, _, _, layout = pg_clients
-    urls = [u for u in _urls(old) if group(u) in ("status", "sessions", "drawer")]
+    urls = [u for u in _urls(old) if group(u) in ("status", "sessions", "drawer", *PERSON_GROUPS)]
     with Oracle(Layout(layout)) as oracle:
         crossing = {sid for sid in oracle.session_ids() if differs_across_keys(oracle.session(sid), sid)}
     return urls, crossing
@@ -298,6 +298,56 @@ def test_the_cross_key_session_pages_match_the_oracle(pg_clients, pg_urls):
     chosen = [u for u in urls if group(u) == "sessions" and _session_of(u) in crossing]
     differing = _differing(old, new, chosen if FULL else few_per_group(chosen, _page, 6))
     assert not differing, (len(differing), differing[:5])
+
+
+# --- the person pages (build step 6) ---------------------------------------------------------------
+
+PERSON_GROUPS = ("person", "person/sessions", "person/summary", "person/timeline", "person/requests", "coverage")
+
+
+def _person_of(url: str) -> str:
+    path, _, query = url.partition("?")
+    if path == "/api/v1/coverage":
+        return urllib.parse.parse_qs(query)["personId"][0]
+    return urllib.parse.unquote(path.split("/")[4])
+
+
+def _person_pages(pg_clients, pg_urls, *, every: bool) -> None:
+    old, new, _, layout = pg_clients
+    urls, _ = pg_urls
+    person_urls = [u for u in urls if group(u) in PERSON_GROUPS]
+    people = list(dict.fromkeys(_person_of(u) for u in person_urls))
+    if every:
+        chosen = person_urls
+    else:
+        with Oracle(Layout(layout)) as oracle:
+            sessions = {p: oracle.person(p)["person_sessions"].rows for p in people}
+            codex = [p for p in people if any(_titled(oracle, s) for _, s in sessions[p])]
+        keep = {people[0], max(people, key=lambda p: len(sessions[p])), *codex[:1], "unattributed", "nobody"}
+        chosen = [u for u in person_urls if _person_of(u) in keep]
+    assert len(people) >= 5 and len(chosen) >= 70, (len(people), len(chosen))
+    differing = _differing(old, new, chosen)
+    print("person URLs held:", len(chosen) - len(differing), "of", len(chosen))  # noqa: T201
+    assert not differing, (len(differing), differing[:5])
+
+
+def test_the_person_pages_match_the_oracle(pg_clients, pg_urls):
+    """make check: every person URL of the gate's set for three people (the first, the one with the
+    most sessions, a Codex one with titled threads), unattributed and nobody."""
+    _person_pages(pg_clients, pg_urls, every=False)
+
+
+@pytest.mark.full
+def test_every_person_url_matches_the_oracle(pg_clients, pg_urls):
+    _person_pages(pg_clients, pg_urls, every=True)
+
+
+def _titled(oracle: Oracle, sid: str) -> bool:
+    """A Codex thread a title thread names (its label comes from the account component)."""
+    sr = oracle.session(sid)["session_rows"]
+    return any(
+        r[sr.columns.index("label_source")] == "title" and r[sr.columns.index("product")] == "codex" for r in sr.rows
+    )
 
 
 def test_status_matches_the_oracle(pg_clients):

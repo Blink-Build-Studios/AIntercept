@@ -312,8 +312,11 @@ def _agent_limits(r: dict[str, Any] | None, rl: dict[str, Any], plan: str | None
 
 # The summary's counts over a range, one pass each (person.py's, over the processor's rows).
 _EVENTS = """SELECT * FROM event_rows WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND ts_ns BETWEEN ? AND ?"""
+# An event's analytics batch: its event_id's prefix (<batch>:<n>). A store that keeps it as a column
+# names the column (Store.event_batch: the Postgres store's event_rows.batch, docs/PIPELINE.md v7 §5).
+_EVENT_BATCH = "regexp_extract(event_id, '^(.*):[0-9]+$', 1)"
 _EVENT_TOTALS = f"""WITH e AS ({_EVENTS})
-SELECT count(*), count(DISTINCT regexp_extract(event_id, '^(.*):[0-9]+$', 1)),
+SELECT count(*), count(DISTINCT {{batch}}),
        count(DISTINCT name) FILTER (WHERE NOT unnamed), count(DISTINCT head_sha),
        count(DISTINCT hook_name) FILTER (WHERE name = 'tengu_run_hook'),
        avg(hook_ms) FILTER (WHERE name = 'tengu_tool_use_success'),
@@ -382,7 +385,8 @@ def get_person_summary(
     )[0]
     shown = shown or []
     span = [shown, lo, hi]
-    events, batches, types, heads, hooks, hook_ms, c5, c1, cost, outside = store.query(_EVENT_TOTALS, span)[0]
+    totals = _EVENT_TOTALS.format(batch=getattr(store, "event_batch", _EVENT_BATCH))
+    events, batches, types, heads, hooks, hook_ms, c5, c1, cost, outside = store.query(totals, span)[0]
     dims: dict[str, Counter[str]] = {
         k: Counter() for k in ("name", "tool", "mcp_tool", "word", "destructive", "git", "pr")
     }

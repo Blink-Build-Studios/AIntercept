@@ -186,12 +186,12 @@ def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
         assert store.load_for("/api/v1/status") is not None
 
 
-def test_a_session_page_that_isnt_loaded_yet_fails_loudly(db):
-    # The person pages are a later step (6): the store refuses them rather than serving empty tables.
+def test_a_path_no_page_serves_reads_nothing(db):
     with contextlib.closing(PgStore(db)) as store:
-        with pytest.raises(NotImplementedError):
-            store.load_for("/api/v1/people/someone")
         assert store.load_for("/ui/index.html") is None
+        # Paths no person page serves read nothing (the router 404s or 422s them).
+        assert store.load_for("/api/v1/people/x/nothing") is None
+        assert store.load_for("/api/v1/coverage") is None
 
 
 # --- what each page reads ------------------------------------------------------------------------
@@ -244,6 +244,48 @@ def test_every_session_page_runs_a_fixed_set_of_statements_on_one_connection(dem
         store.trace.clear()
         store.load_for("/api/v1/sessions/no-such-session/timeline")
         assert [s.name for s in store.trace[0].statements] == ["session"]
+
+
+# The statements each person page runs (BEGIN and COMMIT aside), whatever the person's size: the
+# scope's dimension rows, its sessions' rows, the labels' component (the sessions list and the
+# timeline's bands), the ranged session tables, and the request log's inputs (one tagged statement).
+PERSON_STATEMENTS = {
+    "": ["dims", "sessions", "session_call_days"],
+    "/sessions": ["dims", "sessions", "labels"],
+    "/timeline": ["dims", "sessions", "labels", "event_rows", "session_marks", "prompt_rows", "presence_segments"],
+    "/summary": ["dims", "sessions", "event_rows", "session_marks", "call_tool_uses", "request_log"],
+    "/requests": ["dims", "request_log"],
+    "coverage": ["dims", "sessions", "session_marks", "request_log"],
+}
+_RANGES = ("", "?from=2026-11-04T00:00:00.000Z", "?from=2026-11-03T21:13:07.250Z&to=2026-11-04T16:41:59.875Z")
+
+
+def _person_urls(pid: str) -> dict[str, list[str]]:
+    out = {}
+    for sub in PERSON_STATEMENTS:
+        if sub == "coverage":
+            out[sub] = [f"/api/v1/coverage?personId={pid}" + q.replace("?", "&") for q in _RANGES]
+        else:
+            out[sub] = [f"/api/v1/people/{pid}{sub}{q}" for q in _RANGES]
+    return out
+
+
+def test_every_person_page_runs_a_fixed_set_of_statements_on_one_connection(demo):
+    layout, dsn = demo
+    with Oracle(Layout(layout)) as oracle:
+        pids = [*oracle.person_ids(), "unattributed", "nobody"]
+    assert len(pids) >= 5
+    store = PgStore(dsn, trace=True)
+    with contextlib.closing(store):
+        for pid in pids:
+            for sub, urls in _person_urls(pid).items():
+                for url in urls:
+                    store.trace.clear()
+                    assert store.load_for(url) is not None
+                    (load,) = store.trace
+                    assert load.connections == 1, url
+                    assert [s.name for s in load.statements] == PERSON_STATEMENTS[sub], url
+                    assert len(load.statements) <= 8
 
 
 # The drawer's and /events' statements: the call's keys' facts (or the batch's events), then
@@ -338,7 +380,7 @@ _SMALL = {"schema_version", "tail", "ingest_pods", "workers"}
 def test_every_statement_can_use_an_index(demo):
     """Each statement's plan, with sequential scans priced out (the test tables are tiny, so the
     planner would scan them anyway), reads every big table through an index: none needs a full scan."""
-    _, dsn = demo
+    layout, dsn = demo
     store = PgStore(dsn, trace=True)
     plans: list[tuple[str, str]] = []
     with contextlib.closing(store):
@@ -351,6 +393,20 @@ def test_every_statement_can_use_an_index(demo):
             store.trace.clear()
             store.load_for(url)
             plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
+        with Oracle(Layout(layout)) as oracle:
+            busiest = max(oracle.person_ids(), key=lambda p: len(oracle.person(p)["person_sessions"].rows))
+        for pid in (busiest, "unattributed"):
+            for urls in _person_urls(pid).values():
+                for url in urls:
+                    store.trace.clear()
+                    store.load_for(url)
+                    for s in store.trace[0].statements:
+                        for p in store.explain(s):
+                            # "unattributed" is every visible session no account names (§4): it reads
+                            # dim_session_visible whole, one row per session; the anti-join uses an index.
+                            if pid == "unattributed" and "Seq Scan on dim_session_visible " in p:
+                                continue
+                            plans.append((s.name, p))
     scans = [(n, p) for n, p in plans if "Seq Scan on" in p and p.split("Seq Scan on ")[1].split()[0] not in _SMALL]
     assert plans and not scans, scans
 

@@ -621,6 +621,21 @@ The DuckDB stores (V1Store, and the oracle in `tests/oracle/tables.py`) read
 `session_call_days` as a view over their own call marks. The gates run "old"
 with the three statements as they were (`tests/oracle/directory_sql.py`).
 
+- **As built (step 6), the person pages** (`pgstore_person.py`): each statement
+  resolves the scope itself (the group by `lower(email)`, its sessions by
+  `dim_session_account`). Several tables come back in one statement where they
+  share its CTEs, tagged by table: the dimension rows; the labels' inputs; the
+  request log's inputs. Statements per page: the header 3 (dimensions, session
+  rows, `session_call_days`), `/sessions` 3 (+ labels), `/timeline` 7,
+  `/summary` 6, `/requests` 2, `/coverage` 4. Differences from the table above:
+  - the header reads no missed marks: its response doesn't show the rollup's
+    coverage windows (the directory's);
+  - the summary's `account` transactions are the request log's statement cut to
+    `kind = 'account'`; `/coverage` reads the log's missed calls and their reports;
+  - the ranged tables are read for the sessions a range can show: started by its
+    end, and last active within the live window of its start, or after;
+  - `unattributed` reads `dim_session_visible` whole (one row per session), as
+    its definition needs; the anti-join uses `dim_session_account (session_id)`.
 - **Round trips:** one connection, one snapshot, the endpoint's statements in
   order. The drawer's S3 GET runs beside them. No N+1: each statement is per
   page, never per row.
