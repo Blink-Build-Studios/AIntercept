@@ -258,8 +258,8 @@ during S3 I/O or rendering.
    `workers` every 10 s, and live means seen in the last 30 s. No `pg_locks` or
    `pg_stat_activity` reads.
 4. **A held key stays warm,** its state kept in memory, until it has had no
-   input for 60 s (v8: 60 minutes, or its session's expiry, under a byte cap
-   per worker, §2's v8 block), then it's unlocked. All keys are unlocked on
+   input for 60 minutes (v7 had 60 s), under a byte cap per worker (§2's v8
+   block, as built), then it's unlocked. All keys are unlocked on
    SIGTERM (v8: after writing their snapshots).
 5. **If the lock connection drops, the worker forgets every key it holds,**
    along with their warm states. Postgres has freed the locks, so another worker
@@ -436,9 +436,29 @@ hashes every row and diffs against a baseline. v8 replaces that:
   60 s. The worker agent lands this, with the byte cap and the replay gate, on
   v7 first (Build order); v8's snapshots build on it.
   - Each worker caps its warm bytes, evicting the least recently used key.
-  - Warm bytes per key are measured with that PR. The capture's heaviest
-    session's journal is 114 MB of gob before compression (#57), an
-    upper bound for its state.
+  - *As built on v7:* 60 minutes idle, and a cap of 512 MiB per worker
+    (`ROLLUP_WARM_BYTES`, the chart's `rollup.warmBytes`), which fits the
+    rollup pod's 1 GiB limit.
+    - A warm state's bytes are estimated as its records times 7,000.
+    - v7 has no session expiry earlier than that: a call in flight expires
+      6 h after its start. So the 60 minutes decide.
+  - **Warm bytes per key, measured:** ~7 KB of heap per record held, for
+    the state and its render baseline together. The capture's heaviest
+    session is 402 MB warm (57,874 records); the next is 199 MB.
+  - **The replay gate isn't met on v7.** Records replayed by cold loads, ×
+    the 1.12M applied, at the capture's real gaps. This is simulated per key,
+    a run per in/ file at its S3 time, with one worker holding every key:
+
+    | Idle | No cap | 4 GiB | 2 GiB | 512 MiB |
+    |---|---|---|---|---|
+    | 60 s (v7) | 12.2× | — | 12.6× | 15.9× |
+    | 60 min | 1.15× | 1.23× | 1.80× | **10.2×** (as built) |
+    | 3 h | 0.74× | 0.86× | 1.55× | — |
+
+    At 512 MiB the heaviest keys crowd each other out. The window can't fix
+    that; the bytes per record are the problem. v8 step 2 has to answer two
+    questions: what the incremental render needs in memory per record held,
+    and what a snapshot decode costs per record held.
 - **Snapshot checkpoints.** The checkpoint stops being a journal of records.
   It's a snapshot of the warm state, so a cold load decodes it and never
   replays or renders. The records since the last snapshot are kept as delta

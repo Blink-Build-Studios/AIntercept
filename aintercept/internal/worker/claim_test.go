@@ -159,8 +159,9 @@ func TestNoLockTableReads(t *testing.T) {
 	}
 }
 
-// A held key stays warm until it's had no input for Idle, then it's unlocked;
-// Release unlocks everything.
+// A held key stays warm until it's had no input for Idle (60 minutes: a
+// session's next burst usually comes within it, so it isn't loaded cold
+// again), then it's unlocked; Release unlocks everything.
 func TestIdleKeysAreReleased(t *testing.T) {
 	e := newEnv(t)
 	key := sessionKey("a")
@@ -172,14 +173,14 @@ func TestIdleKeysAreReleased(t *testing.T) {
 	if !e.locked(key) {
 		t.Fatal("the claimed key isn't locked")
 	}
-	e.clock.Advance(30 * time.Second)
+	e.clock.Advance(59 * time.Minute)
 	if err := w.Tick(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(w.Held()) != 1 {
+	if len(w.Held()) != 1 || !w.Warm(key) {
 		t.Fatal("released before Idle")
 	}
-	e.clock.Advance(31 * time.Second)
+	e.clock.Advance(61 * time.Second)
 	if err := w.Tick(e.ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +194,31 @@ func TestIdleKeysAreReleased(t *testing.T) {
 	w.Release(e.ctx)
 	if len(w.Held()) != 0 || e.locked(key) {
 		t.Fatal("Release left a lock")
+	}
+	e.check()
+}
+
+// Warm states are capped in bytes (WarmBytes, estimated from the records each
+// holds): over the cap, the least recently fed keys are released first, so
+// the worker's memory stays bounded however many keys it holds warm.
+func TestWarmBytesCapReleasesLeastRecentlyUsed(t *testing.T) {
+	e := newEnv(t)
+	w := e.worker("w1", func(c *Config) { c.WarmBytes, c.BytesPerRecord = 2500, 1000 })
+	for _, sid := range []string{"a", "b", "c"} {
+		e.ingest(sid, 1)
+		if err := w.Tick(e.ctx); err != nil {
+			t.Fatal(err)
+		}
+		e.clock.Advance(time.Minute)
+	}
+	if err := w.Tick(e.ctx); err != nil { // releases over the cap
+		t.Fatal(err)
+	}
+	if w.Warm(sessionKey("a")) || e.locked(sessionKey("a")) {
+		t.Error("the least recently fed key is still warm over the cap")
+	}
+	if !w.Warm(sessionKey("b")) || !w.Warm(sessionKey("c")) {
+		t.Errorf("held %v: the two most recent keys fit the cap", w.Held())
 	}
 	e.check()
 }

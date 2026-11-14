@@ -24,6 +24,7 @@ import (
 //	ROLLUP_S3_BUCKET, _REGION, _ENDPOINT, _PREFIX, _ACCESS_KEY_ID, _SECRET_ACCESS_KEY, _FORCE_PATH_STYLE
 //	ROLLUP_REPLICA             this worker's name (default the hostname)
 //	ROLLUP_PARALLEL            keys run at once (default 8)
+//	ROLLUP_WARM_BYTES          the warm states' memory cap (default 512 MiB)
 //	ROLLUP_RETENTION_DAYS      keys whose day is older are forgotten (default 15; 0: never)
 //	ROLLUP_RETENTION_RAW_DAYS  the local raw cap (default 0: off; on a local directory it covers calls/ too)
 //	ROLLUP_HTTP_LISTEN         /healthz, /lag and /metrics (default 0.0.0.0:9004)
@@ -46,7 +47,9 @@ func Run() {
 		name = host
 	}
 	parallel, _ := strconv.Atoi(os.Getenv("ROLLUP_PARALLEL"))
-	w, err := New(ctx, Config{Store: s, Prefix: prefix, Name: name, DSN: dsn, Parallel: parallel, DetailWait: DefaultDetailWait})
+	warm, _ := strconv.ParseInt(os.Getenv("ROLLUP_WARM_BYTES"), 10, 64)
+	w, err := New(ctx, Config{Store: s, Prefix: prefix, Name: name, DSN: dsn, Parallel: parallel, WarmBytes: warm,
+		DetailWait: DefaultDetailWait})
 	if err != nil {
 		slog.Error("worker: Postgres", "err", err) // a schema mismatch refuses to start
 		os.Exit(1)

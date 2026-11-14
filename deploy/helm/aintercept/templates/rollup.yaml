@@ -63,6 +63,7 @@ spec:
             - { name: ROLLUP_RETENTION_DAYS, value: {{ .Values.retention.days | int | quote }} }
             - { name: ROLLUP_RETENTION_RAW_DAYS, value: {{ .Values.retention.rawDays | int | quote }} }
             - { name: ROLLUP_PARALLEL, value: {{ .Values.rollup.parallel | quote }} }
+            - { name: ROLLUP_WARM_BYTES, value: {{ .Values.rollup.warmBytes | int64 | quote }} }
             - { name: ROLLUP_HTTP_LISTEN, value: "0.0.0.0:9004" }
             - name: ROLLUP_REPLICA
               valueFrom:

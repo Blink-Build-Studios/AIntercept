@@ -66,6 +66,9 @@ type External struct {
 	Value any
 }
 
+// Records is how many records the state has applied.
+func (s *KeyState) Records() int { return len(s.seen) }
+
 // External is the input stored under id.
 func (s *KeyState) External(id string) (any, bool) {
 	v, ok := s.ext[id]
