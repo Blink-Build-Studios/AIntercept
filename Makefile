@@ -181,7 +181,9 @@ check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with 
 
 .PHONY: test-api-full
 test-api-full: ## API: the full run too (every URL of the parity gates, the pipeline at full length, the memory churn); nightly in CI
-	cd api && AINTERCEPT_TESTS_FULL=1 uv run pytest -q -m full
+	@# In parallel, each test on any worker (--dist load: the gates' parameters spread out, a module's
+	@# fixtures set up on each worker that needs them): the Postgres gates are too slow for one.
+	cd api && AINTERCEPT_TESTS_FULL=1 uv run pytest -q -m full -n auto --dist load
 
 .PHONY: test-api-oracle
 test-api-oracle: ## API: every test on the v6 oracle's read path (api/tests/oracle: today's derivation, frozen); nightly in CI

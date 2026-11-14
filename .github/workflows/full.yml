@@ -29,6 +29,17 @@ jobs:
     name: API, exhaustive (every URL of the parity gates)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    services:
+      # The tests' Postgres, as ui.yml's api job has it (the image docker-compose.yml pins, which
+      # scripts/check-pins.py holds equal): without it every Postgres gate skipped here.
+      postgres:
+        image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        ports: ["15433:5432"]
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -41,5 +52,10 @@ jobs:
           version: "0.11.9"
       - name: Install (lockfile must be current)
         run: cd api && uv sync --locked
+      # The Postgres gates (the session, person, directory and drawer pages against the oracle)
+      # fail rather than skip without their server.
       - run: make test-api-full
+        env:
+          AINTERCEPT_TEST_PG: postgres://postgres@localhost:15433/postgres?sslmode=disable
+          AINTERCEPT_TEST_PG_REQUIRED: "1"
       - run: make test-api-oracle
