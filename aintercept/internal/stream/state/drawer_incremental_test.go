@@ -5,9 +5,12 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
@@ -304,5 +307,55 @@ func TestRenderedDrawerEachLookupAlone(t *testing.T) {
 				t.Fatal("nothing derived")
 			}
 		})
+	}
+}
+
+// A run's drawer cost doesn't grow with the session (§3.7): the scope is kept
+// and updated, the rows a change reaches are derived, and the delta is
+// written. A new step and its success in a session of 20 prompts and in one
+// of 400 take about the same (timed with the check off; under -race it's
+// skipped, as the slow tests are).
+func TestRenderedDrawerRunCostIsFlat(t *testing.T) {
+	state.Heavy(t)
+	drawer.VerifyIncremental = false
+	defer func() { drawer.VerifyIncremental = true }()
+	runCost := func(prompts int) time.Duration {
+		state.ResetBatches()
+		o := state.NewStream(nil)
+		var base *render.Baseline
+		run := func(r records.Record) *render.Rows {
+			changed := drawer.Changed{}
+			for _, c := range o.Apply(r).Changes {
+				if changed[c.Table] == nil {
+					changed[c.Table] = map[string]bool{}
+				}
+				changed[c.Table][c.ID] = true
+			}
+			rows, err := render.RenderNext("s:s1", o.States()["s:s1"].Rows(), nil, day, base, changed, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			base = rows.Baseline()
+			return rows
+		}
+		for _, r := range promptSession(prompts, 5) {
+			run(r)
+		}
+		var best time.Duration
+		for i := 0; i < 5; i++ {
+			at := state.At(int64(prompts)*600_000 + int64(i+1)*10_000)
+			id := fmt.Sprintf("c-new%d", i)
+			d := run(state.CallEnd(promptStep(id, "s1", "p-last", at))).Took.Drawer
+			d += run(stepSuccess("p-last", id, at+700)).Took.Drawer
+			if i == 0 || d < best {
+				best = d
+			}
+		}
+		return best
+	}
+	small, large := runCost(20), runCost(400)
+	t.Logf("a step and its success: %v with 20 prompts, %v with 400", small, large)
+	if large > 3*small+2*time.Millisecond {
+		t.Errorf("the drawer's run cost grows with the session: %v with 20 prompts, %v with 400", small, large)
 	}
 }

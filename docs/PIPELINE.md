@@ -675,16 +675,49 @@ indexed lookup; nothing about it is derived at request time.
     - a test that changes each kind of lookup alone, and fails when that
       lookup isn't recorded;
     - the real capture, drained one file per run with every run compared.
-  - **Cost.** Measured on the capture's heaviest session, replayed one in/
-    file per run (234 runs):
-    - render and diff per run: p50 966 → 204 ms, p95 1,450 → 319 ms;
-    - drawer rows derived: 462,726 → 14,069.
+  - **The scope stays warm** (`internal/drawer/warm.go`). A render keeps
+    its scope in the memo, and the next one applies the run's changed rows
+    to it. The lists stay sorted, with inserts and removals in place:
+    - a session's steps and its steps per prompt;
+    - its events and their lists by prompt, request id, tool and kind;
+    - the message-id chain;
+    - a batch's events and their ranks;
+    - `find_report`'s keys.
 
-    What's left per run is O(session) but cheap:
-    - the scope's indexes and the inputs' filing (~50 ms: every event's
-      drawer id and rendered event row);
-    - the session tables' render (~27 ms) and the rows' hashing (~43 ms),
-      which v7 accepted.
+    A run doesn't rebuild the scope, scan the key's rows, or hash its
+    drawer rows:
+    - it files only what changed: the deltas, the externals the run set
+      (`KeyState.ExternalsChanged`), and the event rows whose hash changed
+      in the session tables' own diff;
+    - it derives the rows that reach;
+    - it writes the delta (`Memo.Delta`).
+
+    The ranges are tokens too:
+    - the sandbox, by 16 s buckets of a row's limit (a bash run files the
+      buckets from its time to the latest limit read);
+    - a step's place, by its index (a step added or removed at place k files
+      the places from k to the list's old end, so an appended step files
+      only "the end").
+
+    A cold load builds the scope whole, as before.
+  - **Cost: flat in the session's size.** The capture's heaviest session,
+    replayed one in/ file per run (234 runs, its events growing to 56k):
+
+    | events when the run happens | drawer per run | session tables and folds per run |
+    |---|---|---|
+    | 0–10k (41 runs) | 18 ms | 20 ms |
+    | 20–30k (38 runs) | 15 ms | 91 ms |
+    | 40–50k (62 runs) | 12 ms | 171 ms |
+    | 50–60k (20 runs) | 11 ms | 209 ms |
+
+    The drawer's cost follows what the run changed (~30 rows derived per
+    run), not the session. Before v8 it rendered every row: ~1 s per run at
+    50k events. A test holds the drawer's cost for one step to about the
+    same in sessions of 20 and 400 prompts.
+
+    The session tables (`state.RenderSession`) and the folds are still
+    rendered and hashed whole each run, so they grow with the session. They
+    belong to the session-pages spec (#56).
 - **What only the call's detail object holds** (headers, the whole `complete`
   row, body chunk times, retained bodies) is read once: the run GETs
   `calls/<id>.ndjson.gz` for each call that ended since, and keeps what the
@@ -1344,9 +1377,9 @@ The inventory's quirks, each reproduced:
 - **A periodic full listing of `v1/keys/`,** to flag keys a lost node never
   indexed.
 - **The in-flight drawer** (a `pending` table), if the owner wants it back.
-- **An incremental render of the session tables, and warm drawer indexes**
-  (the drawer's rows are incremental since v8, §3.7, but its scope is
-  rebuilt each run: ~50 ms on the capture's heaviest session).
+- **An incremental render of the session tables and the folds** (the
+  drawer's is, since v8, §3.7): ~200 ms per run at 50k events on the
+  capture's heaviest session.
 - **Schema migrations.** Until then, each schema change is a fresh start.
 - **A size cap,** not just an age, for local raw data.
 - **Hot keys:** a shared API key used by thousands of people, or many people

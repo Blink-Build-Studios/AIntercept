@@ -76,7 +76,8 @@ type Tables struct{}
 
 func (Tables) Render(in RenderInput) (RenderOutput, error) {
 	base, _ := in.Baseline.(*render.Baseline)
-	rows, err := render.RenderNext(in.Key, in.State.Rows(), in.State.Externals(), in.Day, base, in.Changed)
+	rows, err := render.RenderNext(in.Key, in.State.Rows(), in.State.Externals(), in.Day, base, in.Changed,
+		in.State.ExternalsChanged())
 	if err != nil {
 		return RenderOutput{}, err
 	}

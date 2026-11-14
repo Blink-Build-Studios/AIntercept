@@ -75,6 +75,16 @@ func (s *KeyState) External(id string) (any, bool) {
 // Externals is every external input, by id (read only).
 func (s *KeyState) Externals() map[string]any { return s.ext }
 
+// ExternalsChanged is the ids of the external inputs set since the last
+// Encode (a run's: the worker encodes after it renders).
+func (s *KeyState) ExternalsChanged() []string {
+	out := make([]string, 0, len(s.extJournal))
+	for _, x := range s.extJournal {
+		out = append(out, x.ID)
+	}
+	return out
+}
+
 // SetExternal stores an external input (nil removes it) and journals it,
 // unless it's unchanged; it reports whether it changed. Its value's type must
 // be gob-registered.
