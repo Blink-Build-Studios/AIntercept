@@ -46,6 +46,9 @@ func DDL() string {
 		if len(t.PK) > 0 {
 			lines = append(lines, "    PRIMARY KEY ("+strings.Join(t.PK, ", ")+")")
 		}
+		for _, r := range t.Refs {
+			lines = append(lines, "    FOREIGN KEY "+r)
+		}
 		b.WriteString(strings.Join(lines, ",\n"))
 		b.WriteString("\n)")
 		if t.With != "" {

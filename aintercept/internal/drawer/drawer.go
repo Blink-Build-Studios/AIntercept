@@ -37,11 +37,13 @@ type Inputs struct {
 	EventRows []process.EventRow
 }
 
-// Request is one drawer_requests row.
+// Request is one drawer_requests row. Its /requests/{id} object (its
+// stepCount null where it has a group) and its /details object are each a
+// template (by id: the memo's Template holds it) and its values (template.go).
 type Request struct {
-	ID      string
-	Data    string // the /requests/{id} object; its stepCount null where it has a group
-	Details string // the /details object
+	ID                      string
+	DataTpl, DataVals       string
+	DetailsTpl, DetailsVals string
 	// StepSession and StepPrompt are the (session, prompt) whose step count is
 	// its stepCount (drawer_step_counts, filled in at read); "" for none.
 	StepSession, StepPrompt string
@@ -131,10 +133,10 @@ func RenderNext(in Inputs, prev *Memo, changed Changed) ([]Request, []Event, *Me
 		m := &memoReq{yield: true}
 		m.deps = s.record(func() {
 			c := s.detailOf(w)
-			m.req = Request{ID: id, Data: compact(c.detail), Details: compact(s.detailsOf(c))}
+			m.req = next.request(id, c.detail, s.detailsOf(c))
 			if c.pos.group {
 				m.req.StepSession, m.req.StepPrompt = c.pos.sess, c.pos.groupPrompt
-				if strings.Count(m.req.Data, `"stepCount":null`) != 1 {
+				if strings.Count(next.tpls[m.req.DataTpl], `"stepCount":null`) != 1 {
 					panic("drawer: a row's stepCount isn't its one null")
 				}
 			}
@@ -158,7 +160,7 @@ func RenderNext(in Inputs, prev *Memo, changed Changed) ([]Request, []Event, *Me
 			next.derived++
 			m.deps = s.record(func() {
 				if c := s.reportedDetail(id); c != nil {
-					m.yield, m.req = true, Request{ID: id, Data: compact(c.detail), Details: compact(s.detailsOf(c))}
+					m.yield, m.req = true, next.request(id, c.detail, s.detailsOf(c))
 				}
 			})
 		}

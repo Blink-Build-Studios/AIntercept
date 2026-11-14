@@ -223,9 +223,9 @@ func render(key string, rows state.Rows, ext map[string]any, day string, memo *d
 		}}, memo, changed)
 	rq := make([][]any, len(reqs))
 	for i, r := range reqs {
-		rq[i] = []any{r.ID, key, r.Data, r.Details, nil, nil}
+		rq[i] = []any{r.ID, key, r.DataTpl, r.DataVals, r.DetailsTpl, r.DetailsVals, nil, nil}
 		if r.StepSession != "" || r.StepPrompt != "" {
-			rq[i][4], rq[i][5] = r.StepSession, r.StepPrompt
+			rq[i][6], rq[i][7] = r.StepSession, r.StepPrompt
 		}
 	}
 	counts := memo.StepCounts()
@@ -598,6 +598,10 @@ type Diff struct {
 	Session string
 	Reset   bool
 	Tables  []TableDiff // the tables with a change, in Tables' order
+	// Templates are the drawer templates (key, id, body) its drawer rows
+	// reference that the key hasn't written yet: inserted first (unless
+	// there), as the rows' foreign key needs.
+	Templates [][]any
 }
 
 // TableDiff is one table's changes.
@@ -642,6 +646,19 @@ func (r *Rows) Diff(base *Baseline) *Diff {
 		}
 		if len(td.Upserts) > 0 || len(td.Deletes) > 0 {
 			d.Tables = append(d.Tables, td)
+		}
+		if name == "drawer_requests" && r.next.drawer != nil {
+			var ids []string
+			for _, row := range td.Upserts {
+				for _, c := range []int{2, 4} {
+					if id, ok := row[c].(string); ok {
+						ids = append(ids, id)
+					}
+				}
+			}
+			for _, t := range r.next.drawer.Unwritten(ids) {
+				d.Templates = append(d.Templates, []any{r.Key, t[0], t[1]})
+			}
 		}
 	}
 	return d

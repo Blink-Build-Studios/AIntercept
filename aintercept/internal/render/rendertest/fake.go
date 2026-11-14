@@ -325,3 +325,25 @@ func FromPostgres(t *pg.Table, vals []any) []any {
 	}
 	return out
 }
+
+// WithTemplates gives a diff that writes drawer rows of its own making (a
+// test's) templates for the ids they reference, as the rows' foreign key
+// needs: a render's diff carries its own.
+func WithTemplates(d *render.Diff) *render.Diff {
+	seen := map[[2]string]bool{}
+	for _, td := range d.Tables {
+		if td.Table.Name != "drawer_requests" {
+			continue
+		}
+		for _, row := range td.Upserts {
+			key, _ := row[1].(string)
+			for _, c := range []int{2, 4} {
+				if id, ok := row[c].(string); ok && !seen[[2]string{key, id}] {
+					seen[[2]string{key, id}] = true
+					d.Templates = append(d.Templates, []any{key, id, "{}"})
+				}
+			}
+		}
+	}
+	return d
+}

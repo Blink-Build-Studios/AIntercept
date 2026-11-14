@@ -170,7 +170,12 @@ func detailObject(t *testing.T, rows ...map[string]any) []byte {
 func (e *env) drawerData(id string) map[string]any {
 	e.t.Helper()
 	var data string
-	if err := e.db.QueryRow(e.ctx, "SELECT data FROM drawer_requests WHERE request_id = $1", id).Scan(&data); err != nil {
+	// As the drawer's statement rebuilds it (api pgstore.py _drawer_sql).
+	if err := e.db.QueryRow(e.ctx, `SELECT replace(format(t.body, VARIADIC string_to_array(r.data_vals, E'\x1f')),
+		'"stepCount":null', '"stepCount":' || coalesce(c.n::text, 'null'))
+		FROM drawer_requests r JOIN drawer_templates t ON t.key = r.key AND t.id = r.data_tpl
+		LEFT JOIN drawer_step_counts c ON c.session_id = r.step_session AND c.prompt_id = r.step_prompt AND c.key = r.key
+		WHERE r.request_id = $1`, id).Scan(&data); err != nil {
 		e.t.Fatalf("drawer row %s: %v", id, err)
 	}
 	var out map[string]any

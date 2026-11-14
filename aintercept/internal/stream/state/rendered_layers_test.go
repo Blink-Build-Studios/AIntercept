@@ -100,7 +100,7 @@ func (x *runner) plant(t *testing.T, table string, row []any) {
 	t.Helper()
 	x.fake.Plant(table, row)
 	if x.pgRuns != nil {
-		x.pgRuns(&render.Diff{Tables: []render.TableDiff{{Table: pg.TableNamed(table), Upserts: [][]any{row}}}})
+		x.pgRuns(rendertest.WithTemplates(&render.Diff{Tables: []render.TableDiff{{Table: pg.TableNamed(table), Upserts: [][]any{row}}}}))
 	}
 }
 

@@ -50,6 +50,8 @@ type Memo struct {
 	lists   map[string][]uint64  // per (session, prompt), its steps' hashes in order (stepsDep)
 	md      map[string]*mdFields // fact_events row id → what renders read of its metadata
 	counts  []StepCount          // the render's step counts
+	tpls    map[string]string    // template id → template: its rows' (prev's, carried)
+	written map[string]bool      // the templates the key's commits wrote, since the memo was made whole
 }
 
 type memoReq struct {
@@ -338,7 +340,8 @@ func (s *scope) inputs(in Inputs, prev *Memo, changed Changed, next *Memo) *dirt
 	if prev != nil {
 		d = &dirty{own: map[string]bool{}, toks: map[uint64]bool{}, bash: map[string]int64{}, order: map[string]int{},
 			lists: map[string]int{}, events: map[string]bool{}}
-		next.evIn, next.callIn, next.wires, next.md = prev.evIn, prev.callIn, prev.wires, prev.md
+		next.evIn, next.callIn, next.wires, next.md, next.tpls = prev.evIn, prev.callIn, prev.wires, prev.md, prev.tpls
+		next.written = prev.written
 	}
 	mark := func(ids ...string) {
 		for _, id := range ids {
@@ -538,7 +541,8 @@ func (s *scope) inputs(in Inputs, prev *Memo, changed Changed, next *Memo) *dirt
 func newMemo() *Memo {
 	return &Memo{reqs: map[string]*memoReq{}, events: map[string]Event{}, evIn: map[string]*filed{},
 		callIn: map[string]*filed{}, wires: map[string]*Wire{}, parts: map[string]BatchParts{},
-		exists: map[string]bool{}, steps: map[string][]string{}, lists: map[string][]uint64{}, md: map[string]*mdFields{}}
+		exists: map[string]bool{}, steps: map[string][]string{}, lists: map[string][]uint64{}, md: map[string]*mdFields{},
+		tpls: map[string]string{}, written: map[string]bool{}}
 }
 
 // Derived is how many request rows the render derived; the rest were its prev's.

@@ -37,6 +37,7 @@ func applied(t *testing.T) (context.Context, *pgxpool.Pool) {
 
 func write(t *testing.T, ctx context.Context, p *pgxpool.Pool, d *render.Diff) {
 	t.Helper()
+	rendertest.WithTemplates(d)
 	if err := pgx.BeginFunc(ctx, p, func(tx pgx.Tx) error { return d.Write(ctx, tx) }); err != nil {
 		t.Fatalf("write: %v", err)
 	}

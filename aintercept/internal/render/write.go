@@ -20,6 +20,14 @@ import (
 // deletes by owner first, then each table's deletes and upserts. The caller
 // sends b in the commit's transaction, after the guard.
 func (d *Diff) Queue(b *pgx.Batch) {
+	if len(d.Templates) > 0 {
+		var keys, ids, bodies []string
+		for _, t := range d.Templates {
+			keys, ids, bodies = append(keys, t[0].(string)), append(ids, t[1].(string)), append(bodies, t[2].(string))
+		}
+		b.Queue(`INSERT INTO drawer_templates (key, id, body) SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+			ON CONFLICT (key, id) DO NOTHING`, keys, ids, bodies)
+	}
 	if d.Reset {
 		for _, t := range Tables {
 			e := encOf(t.Name)
