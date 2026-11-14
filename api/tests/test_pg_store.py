@@ -155,12 +155,42 @@ def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
         assert store.opened == 2
 
 
+def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
+    # An explain's connection (sequential scans priced out) is its own, closed after; a fresh one
+    # past the pool's size is closed, not kept idle: the server's connections stay bounded.
+    store = PgStore(db, pool_size=2, trace=True)
+    with contextlib.closing(store):
+        assert store.load_for("/api/v1/status") is not None
+        (statement,) = store.trace[0].statements
+        for _ in range(5):
+            assert store.explain(statement)
+        for _ in range(3):
+            with store.pool.connection(fresh=True):
+                pass
+        assert len(store.pool._idle) <= 2
+        conn = pgdb.connect(db)
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT count(*) AS n FROM pg_stat_activity"
+                " WHERE datname = current_database() AND application_name = 'aintercept_api'"
+            )
+            con = duckdb.connect()
+            con.from_arrow(cur.fetch_arrow()).create("n")
+            (n,) = con.execute("SELECT n FROM n").fetchall()[0]
+        finally:
+            cur.close()
+            conn.close()
+        assert n <= 2, n
+        # And a request after them plans as usual.
+        assert store.load_for("/api/v1/status") is not None
+
+
 def test_a_session_page_that_isnt_loaded_yet_fails_loudly(db):
-    # The person pages and the directory are later steps (6, 7): the store refuses them rather than
-    # serving empty tables.
+    # The person pages are a later step (6): the store refuses them rather than serving empty tables.
     with contextlib.closing(PgStore(db)) as store:
         with pytest.raises(NotImplementedError):
-            store.load_for("/api/v1/people")
+            store.load_for("/api/v1/people/someone")
         assert store.load_for("/ui/index.html") is None
 
 
@@ -228,6 +258,33 @@ DRAWER_STATEMENTS = {
 }
 
 
+# The directory's statements (build step 7): the dimension rows of the keys whose day is from's day
+# or later (and every a: key's; no from: every key's), those days' sessions' rows, their call-day
+# folds and missed marks; /overview's request count too. Whatever the from, the people and the keys.
+DIRECTORY = ["dimensions", "session_rows", "session_call_days", "missed_marks"]
+DIRECTORY_FROMS = ["", "?from=2026-11-04T00:00:00.000Z", "?from=2026-11-03T07:41:13.517Z&to=2026-11-04T09:00:00Z",
+                   "?to=2026-11-04T12:00:00Z", "?from=2030-01-01T00:00:00Z"]  # fmt: skip
+DIRECTORY_STATEMENTS = {
+    **{f"/api/v1/people{q}": DIRECTORY for q in DIRECTORY_FROMS},
+    **{f"/api/v1/overview{q}": [*DIRECTORY, "agent_calls"] for q in DIRECTORY_FROMS},
+    "/api/v1/people?q=codex&sort=name&page=2&pageSize=1": DIRECTORY,
+}
+
+
+def test_the_directory_runs_a_fixed_set_of_statements(demo, pg_dsn):
+    # The same statements on the demo and on an empty database: never one per person, key or session.
+    _, dsn = demo
+    for d in (dsn, pg_dsn):
+        store = PgStore(d, trace=True)
+        with contextlib.closing(store):
+            for url, names in DIRECTORY_STATEMENTS.items():
+                store.trace.clear()
+                assert store.load_for(url) is not None
+                (load,) = store.trace
+                assert load.connections == 1 and [s.name for s in load.statements] == names, url
+                assert make_client(store).get(url).status_code == 200, url
+
+
 def test_the_drawer_and_status_run_a_fixed_set_of_statements(demo):
     _, dsn = demo
     store = PgStore(dsn, trace=True)
@@ -290,12 +347,66 @@ def test_every_statement_can_use_an_index(demo):
                 store.trace.clear()
                 store.load_for(f"/api/v1/sessions/{sid}{sub}")
                 plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
-        for url in DRAWER_STATEMENTS:
+        for url in [*DRAWER_STATEMENTS, *DIRECTORY_STATEMENTS]:
             store.trace.clear()
             store.load_for(url)
             plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
     scans = [(n, p) for n, p in plans if "Seq Scan on" in p and p.split("Seq Scan on ")[1].split()[0] not in _SMALL]
     assert plans and not scans, scans
+
+
+# --- /overview's request count (agent_calls_in) ---------------------------------------------------
+
+HOUR = 3600 * NS
+US = 1000  # the finest a from= or to= can say
+H0 = T0 // HOUR * HOUR  # 2025-11-04T09:00:00Z
+
+
+def _iso_us(ns: int) -> str:
+    from datetime import UTC, datetime, timedelta
+
+    return (datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=ns // US)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+@pytest.fixture
+def calls(pg_dsn):
+    """Agent calls in two keys over three hours, on and around the hour boundaries, and one with no
+    time (neither a start nor an end); agent_call_hours as the worker folds them."""
+    times = [H0 - US, H0, H0 + US, H0 + HOUR // 2, H0 + HOUR - US, H0 + HOUR, H0 + HOUR + 7 * US,
+             H0 + 2 * HOUR - US, H0 + 2 * HOUR, H0 + 3 * HOUR + 5 * US]  # fmt: skip
+    rows = [(f"s:k{i % 2}", f"call-{i}", t) for i, t in enumerate(times)] + [("c:x:d", "untimed", None)]
+    values = ", ".join(f"('{k}', '{c}', {'NULL' if t is None else t})" for k, c, t in rows)
+    _exec(
+        pg_dsn,
+        f"INSERT INTO agent_calls (key, call_id, ts_ns) VALUES {values}",  # noqa: S608
+        f"""INSERT INTO agent_call_hours (hour, key, n)
+            SELECT ts_ns - ((ts_ns % {HOUR}) + {HOUR}) % {HOUR}, key, count(*) FROM agent_calls
+            WHERE ts_ns IS NOT NULL GROUP BY 1, 2""",  # noqa: S608
+    )
+    yield pg_dsn, [t for _, _, t in rows]
+    _exec(pg_dsn, "DELETE FROM agent_calls", "DELETE FROM agent_call_hours")
+
+
+def test_overviews_request_count_is_exact_on_and_off_the_hours(calls):
+    # Whole hours from agent_call_hours, the partial ones from agent_calls: the count of calls in
+    # [lo, hi] either way; no range counts every call, one with no time too (as the merge's did).
+    dsn, times = calls
+    bounds = [None, H0 - US, H0, H0 + US, H0 + HOUR - US, H0 + HOUR, H0 + HOUR + 7 * US, H0 + 2 * HOUR,
+              H0 + 4 * HOUR]  # fmt: skip
+    store = PgStore(dsn)
+    with contextlib.closing(store):
+        for lo in bounds:
+            for hi in bounds:
+                q = "&".join(f"{k}={_iso_us(v)}" for k, v in (("from", lo), ("to", hi)) if v is not None)
+                loaded = store.load_for(f"/api/v1/overview?{q}")
+                token = store.enter(loaded)
+                try:
+                    got = store.agent_calls_in(lo, hi)
+                finally:
+                    store.leave(token)
+                want = sum(1 for t in times if (lo is None and hi is None) or (
+                    t is not None and (lo is None or t >= lo) and (hi is None or t <= hi)))  # fmt: skip
+                assert got == want, (lo, hi)
 
 
 # --- what other keys hold, joined at load (§4) ---------------------------------------------------

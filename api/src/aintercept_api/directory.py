@@ -185,13 +185,14 @@ def people(store: Store, now_dt: datetime, lo: int | None = None, hi: int | None
     return out
 
 
+# The unattributed sessions with a model call: how many, their calls and the first call's time.
+_UNATTRIBUTED = """SELECT count(DISTINCT session_id), sum(n), min(first_ns) FROM session_call_days
+WHERE session_id IN (SELECT session_id FROM person_sessions WHERE person_id = ?)"""
+
+
 def unattributed(store: Store) -> Unattributed:
     """Sessions with no account id on any call or event (pre-parser rows from an unknown machine)."""
-    n, calls, first = store.query(
-        """SELECT count(DISTINCT session_id), count(*), min(t_ns) FROM session_marks
-           WHERE kind = 'call' AND session_id IN (SELECT session_id FROM person_sessions WHERE person_id = ?)""",
-        [cc.UNATTRIBUTED],
-    )[0]
+    n, calls, first = store.query(_UNATTRIBUTED, [cc.UNATTRIBUTED])[0]
     return Unattributed(
         sessions=n, modelCalls=calls if n else 0, firstSeen=dt(first) if first else None, reason=UNATTRIBUTED_REASON
     )
@@ -218,10 +219,18 @@ def _headline(agent: str, rows: list[PersonSummaryRow]) -> dict[str, float | int
     return out
 
 
+# Each product's sessions whose model calls overlap the window (their first and last call's times).
+_SESSIONS_BY = """SELECT s.product, count(*) FROM (
+  SELECT session_id, min(first_ns) AS first, max(last_ns) AS last FROM session_call_days GROUP BY session_id) c
+JOIN session_rows s USING (session_id)
+WHERE (?::BIGINT IS NULL OR last >= ?) AND (?::BIGINT IS NULL OR first <= ?)
+GROUP BY 1"""
+
+
 def overview(store: Store, rows: list[PersonSummaryRow], lo: int | None = None, hi: int | None = None) -> Overview:
     """Totals over the same window as `rows`: requests in it, and each agent's sessions overlapping it."""
     calls_in = getattr(store, "agent_calls_in", None)
-    if calls_in is not None:  # the v1 store: the merge's per-key call times, not the fact tables
+    if calls_in is not None:  # the v1 and Postgres stores: the per-key call times, not the fact tables
         requests = calls_in(lo, hi)
     else:
         (requests,) = store.query(
@@ -229,16 +238,7 @@ def overview(store: Store, rows: list[PersonSummaryRow], lo: int | None = None, 
                AND (?::BIGINT IS NULL OR ts >= ?) AND (?::BIGINT IS NULL OR ts <= ?)""",
             [lo, lo, hi, hi],
         )[0]
-    sessions_by = dict(
-        store.query(
-            """SELECT s.product, count(*) FROM (
-                 SELECT session_id, min(t_ns) AS first, max(t_ns) AS last FROM session_marks
-                 WHERE kind = 'call' GROUP BY session_id) c JOIN session_rows s USING (session_id)
-               WHERE (?::BIGINT IS NULL OR last >= ?) AND (?::BIGINT IS NULL OR first <= ?)
-               GROUP BY 1""",
-            [lo, lo, hi, hi],
-        )
-    )
+    sessions_by = dict(store.query(_SESSIONS_BY, [lo, lo, hi, hi]))
     cards = []
     for a, shape in SHAPES.items():
         mine = [r for r in rows if a in r.agents]

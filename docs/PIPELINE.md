@@ -586,6 +586,27 @@ sites get every column.
 | `/requests/{id}`, `/details`, `/raw` | The call's own keys: the keys holding its fact rows, or for `reported:<id>`, the session whose `request_missed` row has that id. Their `requests` rows, and their `analytics` rows of the names the drawer's code matches (`(key, name)`) or about the call (its prompt, its request and tool-use ids). The batch's `analytics` by `correlation_id`. `/status`'s statement. Beside them: GET `calls/<id>.ndjson.gz` | `request_detail.py`, unchanged |
 | `/events/{id}` | the batch's `analytics` by `correlation_id`; beside it: GET `calls/<batch>.ndjson.gz` | the event's rank and raw row |
 
+*As built (step 7):* `/people` runs 4 statements and `/overview` 5, whatever
+the `from` and however many people or keys (`pgstore_directory.py`):
+- `dimensions`: the 8 dimensions `person_sql` reads, as one statement with each
+  row tagged by its table, for the keys with `day ≥ day(from) OR day = ''`. With
+  no `from`, day(`from`) is `''`, so that's every key.
+- `session_rows`, by `key_day`, in the 28 columns the directory reads. The table
+  holds only those, so a column the code reads and the load misses is an SQL
+  error.
+- `session_call_days` and `missed_marks`, for the sessions of the `s:` keys with
+  `day ≥ day(from)`.
+- `agent_calls`, for `/overview` only. With no range at all it also counts the
+  calls with no time, as the merge's count did (the `ts_ns IS NULL` index).
+
+`from` gives the key day as v5 read it (`fromisoformat`; one that doesn't parse
+loads every key). It gives the request count's range as the endpoint parses it
+(pydantic's `AwareDatetime`).
+
+The DuckDB stores (V1Store, and the oracle in `tests/oracle/tables.py`) read
+`session_call_days` as a view over their own call marks. The gates run "old"
+with the three statements as they were (`tests/oracle/directory_sql.py`).
+
 - **Round trips:** one connection, one snapshot, the endpoint's statements in
   order. The drawer's S3 GET runs beside them. No N+1: each statement is per
   page, never per row.

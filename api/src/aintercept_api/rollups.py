@@ -94,10 +94,11 @@ _AGENTS = """SELECT row_id, agent, min(start_ns) AS first_ns, len(list_distinct(
           FILTER (WHERE client_version_ns IS NOT NULL))[1] AS client_version
 FROM kept GROUP BY row_id, agent"""
 
-# A call's UTC day, from its time in (float) seconds as Python's datetime.fromtimestamp read it.
-_ACTIVITY = """SELECT k.row_id, strftime(DATE '1970-01-01' + CAST(floor(m.t_ns / 1e9 / 86400) AS INTEGER), '%Y-%m-%d')
-         AS day, count(*) AS n
-FROM kept k JOIN session_marks m USING (session_id) WHERE m.kind = 'call' GROUP BY 1, 2"""
+# Each row's model calls per UTC day, from its sessions' call-day folds (session_call_days: per session
+# and day, its call marks' count, first and last time; the day is floor(t_ns / 1e9 / 86400) in float,
+# as Python's datetime.fromtimestamp read a call's time).
+_ACTIVITY = """SELECT k.row_id, strftime(DATE '1970-01-01' + CAST(d.day AS INTEGER), '%Y-%m-%d') AS day, sum(d.n) AS n
+FROM kept k JOIN session_call_days d USING (session_id) GROUP BY 1, 2"""
 
 _MISSED = """SELECT k.row_id AS grp, m.t_ns AS t FROM kept k JOIN session_marks m USING (session_id)
 WHERE m.kind = 'missed' AND k.events IS NOT NULL"""
