@@ -243,9 +243,11 @@ api:
   # Python and the responses being built); or a size like "900MB".
   memoryLimit: ""
   threads: 2             # DuckDB's threads (its default is the node's cores, not the CPU limit)
-  # Which store the API reads: v1 (the v5 folders) until the switch to the
-  # Postgres reader (pg; docs/PIPELINE.md v7 build step 8).
-  store: v1
+  # Which store the API reads: pg (Postgres, through postgres.existingSecret's
+  # api-url; docs/PIPELINE.md v7 §5). It refuses to start without the DSN or on
+  # a schema that isn't its build's. v1 (the v5 folders, which the workers no
+  # longer write) stays selectable until the v5 code is deleted.
+  store: pg
   resources:
     # Memory request = limit: the scheduler reserves all of it, and the pod is the
     # last evicted when a node runs short (docs/INTERCEPTION_ISSUES.md P5).

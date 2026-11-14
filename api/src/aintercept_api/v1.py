@@ -18,7 +18,7 @@ table codec, so a request reads them exactly as the tested stream-state SQL expe
 - the directory reads the day partitions its window can touch (from its `from` day on: whatever
   overlaps the window was last active in it or after) and the index;
 - /status reads no table: the merge commit's first request, earliest row, newest row and
-  retention, and the pods' newest ingest times in Redis (ingest:last:*) when it's reachable;
+  retention;
 - tables that span keys (the dimensions, the transactions, the title calls, ...) are read from
   every partition.
 
@@ -104,11 +104,8 @@ class _Newest:
 class V1Store(BucketStore):
     """The store the endpoints query, over v1/keys and v1/merge."""
 
-    def __init__(
-        self, source: Source, cache_dir: Any, *, raw: RawSource | None = None, redis: Any = None, **kw: Any
-    ) -> None:
+    def __init__(self, source: Source, cache_dir: Any, *, raw: RawSource | None = None, **kw: Any) -> None:
         super().__init__(source, cache_dir, raw=raw, **kw)
-        self.redis = redis  # the pods' newest ingest times, for /status (None: the merge's alone)
         self._merge_log = _Newest(source, f"{self.prefix}{V1}merge/commit/", self.clock)
         self._key_logs: dict[str, _Newest] = {}
         self._days: tuple[int, dict[str, str]] | None = None
@@ -186,31 +183,14 @@ class V1Store(BucketStore):
 
     @property
     def newest_ns(self) -> int | None:
-        """The newest of the merge's newest row and the pods' newest ingest (Redis)."""
+        """The merge's newest row."""
         m = self.merge()
-        found = [n for n in (m.newest_ns if m else None, self._redis_newest()) if n]
-        return max(found) if found else None
+        return (m.newest_ns or None) if m else None
 
     @property
     def content_retained(self) -> bool | None:
         m = self.merge()
         return m.content_retained if m else None
-
-    def _redis_newest(self) -> int | None:
-        if self.redis is None:
-            return None
-        try:
-            keys = list(self.redis.scan_iter(match="ingest:last:*"))
-            values = self.redis.mget(keys) if keys else []
-        except Exception:  # noqa: BLE001 (Redis down: the merge's newest alone)
-            return None
-        found = []
-        for v in values:
-            try:
-                found.append(int(v))
-            except (TypeError, ValueError):
-                continue
-        return max(found) if found else None
 
     # --- what's committed ----------------------------------------------------------------------
 

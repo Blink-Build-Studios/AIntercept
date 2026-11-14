@@ -108,8 +108,8 @@ AINTERCEPT_DATA_DIR ?= $(CURDIR)/data/telemetry
 export AINTERCEPT_DATA_DIR
 
 .PHONY: api
-api: ## Run the query API on :8787 over the v5 layout in $AINTERCEPT_DATA_DIR (the rollups' commits and merge; JSON logs on stdout)
-	cd api && AINTERCEPT_STORE=v1 AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" AINTERCEPT_CACHE_DIR="$(CURDIR)/.cache/api" \
+api: ## Run the query API on :8787 over the local Postgres (make up starts it), the calls' detail objects from $AINTERCEPT_DATA_DIR (JSON logs on stdout)
+	cd api && . ../scripts/api-pg-dsn.sh && AINTERCEPT_STORE=pg AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" AINTERCEPT_CACHE_DIR="$(CURDIR)/.cache/api" \
 		uv run python -m aintercept_api.serve --port 8787 --reload
 
 .PHONY: ui

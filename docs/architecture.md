@@ -40,8 +40,8 @@ The Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc
   rows to Postgres in one transaction. Raw data stays in the bucket (a directory
   locally); the queryable rows are in Postgres.
 - **query API** (Python, `api/`): stateless; reads a page's rows from Postgres
-  into DuckDB and runs the endpoint's SQL over them (until the switch, the v5
-  folders in the bucket).
+  into DuckDB and runs the endpoint's SQL over them, and each call's detail
+  object from the bucket for the raw view.
 - **fixture** (Go): an HTTPS origin with a recognizable synthetic marker, used
   by M1 to prove MITM without real credentials.
 - **Envoy**: TLS termination, per-SNI cert selection, HTTP forwarding, upstream

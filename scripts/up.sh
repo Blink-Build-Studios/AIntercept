@@ -6,8 +6,9 @@
 #                  gitignored .env) and the workers (docs/PIPELINE.md)
 #   this machine:  the query API (:8787) and the UI (:5173), in the background,
 #                  logs and pids in .cache/run/
-# The API reads the v5 store (AINTERCEPT_STORE=v1) until the switch to Postgres (build step 8);
-# `AINTERCEPT_STORE=pg make up` runs it on the Postgres reader now.
+# The API reads Postgres (AINTERCEPT_STORE=pg, the default) through the API login, with the calls'
+# detail objects from data/telemetry. `AINTERCEPT_STORE=v1 make up` reads the v5 folders instead
+# (which the workers no longer write: the tests and the oracle still use that reader).
 # Safe to re-run: whatever is already up stays up (make down first to switch the API's store).
 set -euo pipefail
 
@@ -48,29 +49,49 @@ bash "${ROOT}/scripts/pg-env.sh" # Postgres's passwords, once, into the gitignor
 (cd "$ROOT" && COMPOSE_FILE=docker-compose.yml:docker-compose.m2.yml docker compose up -d --build --quiet-pull \
   certsvc observer postgres rollup envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
 
-# --- the API and UI (this machine) -----------------------------------------------------------
+wait_for() { # name url log [pid name: give up early once that process has exited]
+  for _ in $(seq 90); do
+    curl -fsS -o /dev/null "$2" 2>/dev/null && return 0
+    [[ -n "${4:-}" ]] && ! alive "$4" && break
+    sleep 1
+  done
+  tail -20 "${RUN}/$3" >&2
+  fail "$1 didn't come up at $2 (log: .cache/run/$3)"
+}
 alive() { [[ -f "${RUN}/$1.pid" ]] && kill -0 "$(cat "${RUN}/$1.pid")" 2>/dev/null; }
+# The API starts on Postgres with the workers' schema applied (it refuses a database without it):
+# wait for both first.
+for _ in $(seq 90); do
+  (cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null && break
+  sleep 1
+done
+(cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null \
+  || fail "Postgres didn't come up (docker compose logs postgres)"
+wait_for "the observer" http://127.0.0.1:9001/healthz compose.log
+wait_for "the workers" http://127.0.0.1:9004/healthz compose.log
+
+# --- the API and UI (this machine) -----------------------------------------------------------
 port_free() { # port name: fail unless nothing listens there (ours is checked by alive first)
   local pid
   pid="$(lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
   [[ -z "$pid" ]] && return 0
   fail "port $1 (the $2) is in use by pid ${pid} ($(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')): stop it, or 'make down' in that checkout"
 }
-STORE="${AINTERCEPT_STORE:-v1}"
+STORE="${AINTERCEPT_STORE:-pg}"
 [[ "$STORE" == "v1" || "$STORE" == "pg" ]] || fail "AINTERCEPT_STORE must be v1 or pg, not ${STORE}"
 bold "2/3  Query API on :8787 (store: ${STORE})"
 if ! alive api; then
   port_free 8787 API
   (cd "${ROOT}/api" && uv sync --locked -q)
-  # The stateless API over data/telemetry (docs/PIPELINE.md §5): v1, the v5 folders; pg, Postgres
-  # through the API login (its password from .env, handed over in the environment, never printed),
-  # with the calls' detail objects from data/telemetry.
+  # The stateless API (docs/PIPELINE.md §5): pg, Postgres through the API login (its DSN from .env,
+  # handed over in the environment, never printed), with the calls' detail objects from
+  # data/telemetry; v1, the v5 folders under data/telemetry.
   (
     cd "${ROOT}/api" || exit 1
     export AINTERCEPT_STORE="$STORE" AINTERCEPT_BUCKETS_DIR="${ROOT}/data/telemetry" AINTERCEPT_CACHE_DIR="${ROOT}/.cache/api"
     if [[ "$STORE" == "pg" ]]; then
-      pw="$(sed -n 's/^AINTERCEPT_PG_API_PASSWORD=//p' "${ROOT}/.env" | head -1)"
-      export AINTERCEPT_PG_DSN="postgres://aintercept_api:${pw}@127.0.0.1:15432/aintercept?sslmode=disable&keepalives_idle=10&keepalives_interval=5&keepalives_count=3&tcp_user_timeout=30000"
+      # shellcheck source=scripts/api-pg-dsn.sh
+      source "${ROOT}/scripts/api-pg-dsn.sh"
     fi
     nohup uv run python -m aintercept_api.serve --port 8787 >"${RUN}/api.log" 2>&1 </dev/null &
     echo $! >"${RUN}/api.pid"
@@ -84,23 +105,7 @@ if ! alive ui; then
   (cd "${ROOT}/ui" || exit 1; nohup pnpm dev --port 5173 --strictPort >"${RUN}/ui.log" 2>&1 </dev/null & echo $! >"${RUN}/ui.pid")
 fi
 
-wait_for() { # name url log
-  for _ in $(seq 90); do
-    curl -fsS -o /dev/null "$2" 2>/dev/null && return 0
-    sleep 1
-  done
-  tail -20 "${RUN}/$3" >&2
-  fail "$1 didn't come up at $2 (log: .cache/run/$3)"
-}
-for _ in $(seq 90); do
-  (cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null && break
-  sleep 1
-done
-(cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null \
-  || fail "Postgres didn't come up (docker compose logs postgres)"
-wait_for "the observer" http://127.0.0.1:9001/healthz compose.log
-wait_for "the workers" http://127.0.0.1:9004/healthz compose.log
-wait_for "the API" http://127.0.0.1:8787/api/v1/status api.log
+wait_for "the API" http://127.0.0.1:8787/api/v1/status api.log api
 wait_for "the UI" http://localhost:5173/ ui.log
 
 echo

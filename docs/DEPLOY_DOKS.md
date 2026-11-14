@@ -154,6 +154,19 @@ kubectl exec statefulset/postgres -- psql -qtA -U postgres -d aintercept \
 kubectl run lag --rm -i --restart=Never --image=curlimages/curl -- -s http://rollup:9004/lag
 ```
 
+With the query API on (`api.enabled=true`), it reads Postgres too (`api.store`, default `pg`),
+through the Secret's `api-url`. It checks the schema's hash at start and refuses to start without
+the schema the workers apply, so it's ready only once they've run. Then the request shows up in it:
+
+```bash
+kubectl rollout status deploy/api
+kubectl port-forward svc/api 8787 &   # or make remote, which also starts the UI
+ID=$(kubectl exec statefulset/postgres -- psql -qtA -U postgres -d aintercept \
+  -c "SELECT call_id FROM requests WHERE host = 'api.anthropic.com' ORDER BY start_ns DESC LIMIT 1")
+curl -s "localhost:8787/api/v1/requests/$ID" | head -c 300; echo
+curl -s localhost:8787/api/v1/status
+```
+
 ## Upgrading to Postgres (from v5: Redis and the rollups' commit objects)
 
 There's no migration (docs/PIPELINE.md, Rollout): Postgres starts empty and the workers start from
@@ -171,9 +184,10 @@ bash deploy/digitalocean-bootstrap.sh postgres-secret
 
 # 2. Postgres in, Redis and the v5 rollups out, with the workers off for now: nothing writes v1/
 #    while it's cleared. --reset-then-reuse-values keeps your values and takes the chart's new
-#    defaults (postgres.*, retention.*).
+#    defaults (postgres.*, retention.*, api.store: pg). The new API pods aren't ready until step 4
+#    applies the schema (they refuse to start without it), so the old ones keep serving meanwhile.
 helm upgrade aintercept deploy/helm/aintercept --reset-then-reuse-values \
-  --set images.aintercept.tag=<new tag> \
+  --set images.aintercept.tag=<new tag> --set images.api.tag=<new tag> \
   --set postgres.inCluster.enabled=true --set rollup.enabled=false
 kubectl rollout status statefulset/postgres
 
@@ -183,9 +197,11 @@ AWS_ACCESS_KEY_ID=<scoped-access-key> AWS_SECRET_ACCESS_KEY=<scoped-secret> \
 AWS_ACCESS_KEY_ID=<scoped-access-key> AWS_SECRET_ACCESS_KEY=<scoped-secret> \
   aws s3 rm "s3://$SPACE/$PREFIX/calls/" --recursive --exclude '*' --include '*.keys/*' --endpoint-url "$ENDPOINT"
 
-# 4. The workers on: they apply the schema to the empty database and tail new traffic.
+# 4. The workers on: they apply the schema to the empty database and tail new traffic. The API's
+#    new pods then start on it (they read Postgres, the Secret's api-url).
 helm upgrade aintercept deploy/helm/aintercept --reset-then-reuse-values --set rollup.enabled=true
 kubectl rollout status deploy/rollup
+kubectl rollout status deploy/api
 
 # 5. Redis's volume: helm removed its StatefulSet and Service, but a StatefulSet's PVC stays.
 kubectl delete pvc data-redis-0
@@ -194,7 +210,7 @@ kubectl delete pvc data-redis-0
 (Keep the credentials out of your shell history: export them from a password manager, or let
 `aws` read a profile, rather than typing them inline.) Then check end to end as in
 "Verify end-to-end": a request through the proxy shows up in Postgres, `/lag` settles under 30 s,
-and it shows up in the UI.
+and it shows up in the API and the UI.
 
 ## Teardown
 

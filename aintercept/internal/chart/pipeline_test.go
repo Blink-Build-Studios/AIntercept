@@ -193,10 +193,11 @@ func TestObserverHasNoDatabase(t *testing.T) {
 	}
 }
 
-// The API's store stays the v5 reader until the switch (api.store); it gets
-// the API login's DSN either way.
+// The API reads Postgres (api.store pg, the default since build step 8); v1
+// (the v5 folders) stays selectable. It gets the API login's DSN either way,
+// and its readiness probe is /status, which reads Postgres.
 func TestAPIStore(t *testing.T) {
-	for set, want := range map[string]string{"": "v1", "api.store=pg": "pg"} {
+	for set, want := range map[string]string{"": "pg", "api.store=v1": "v1"} {
 		args := []string{"api.enabled=true"}
 		if set != "" {
 			args = append(args, set)
@@ -204,6 +205,12 @@ func TestAPIStore(t *testing.T) {
 		api := container(render(t, args...), "Deployment", "api", "api")
 		if v := envOf(api)["AINTERCEPT_STORE"]; v != want {
 			t.Errorf("%q: AINTERCEPT_STORE = %v, want %s", set, v, want)
+		}
+		if r := secretRef(api, "AINTERCEPT_PG_DSN"); r != "aintercept-postgres/api-url" {
+			t.Errorf("%q: AINTERCEPT_PG_DSN from %q, want the Secret's api-url", set, r)
+		}
+		if p := get(api, "readinessProbe", "httpGet", "path"); p != "/api/v1/status" {
+			t.Errorf("%q: api readiness %v, want /api/v1/status", set, p)
 		}
 	}
 }
