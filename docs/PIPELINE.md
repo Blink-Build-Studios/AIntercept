@@ -437,7 +437,7 @@ hashes every row and diffs against a baseline. v8 replaces that:
   v7 first (Build order); v8's snapshots build on it.
   - Each worker caps its warm bytes, evicting the least recently used key.
   - Warm bytes per key are measured with that PR. The capture's heaviest
-    session's journal is 114 MB of gob before compression (`v8-worker`), an
+    session's journal is 114 MB of gob before compression (#57), an
     upper bound for its state.
 - **Snapshot checkpoints.** The checkpoint stops being a journal of records.
   It's a snapshot of the warm state, so a cold load decodes it and never
@@ -447,7 +447,7 @@ hashes every row and diffs against a baseline. v8 replaces that:
   - It also writes one when its delta chunks hold as many records as the
     snapshot does, so a load replays at most that tail.
   - The CPU gate's bound: replayed ≤ 1× applied.
-  - This builds on `v8-worker`'s smaller checkpoints: zstd chunks, and
+  - This builds on #57's smaller checkpoints (merged): zstd chunks, and
     compaction that keeps each external input's last value once.
 - **Measured, why:** one cold load of the capture's heaviest session replays
   its journal in 2,581 ms (~45 µs a record). With a 5-minute warm window, the
@@ -1926,7 +1926,7 @@ bytes per row) → ~81 in v8.
   to 60 minutes idle. Each worker caps that total and evicts the least
   recently used key (writing its snapshot first). The bytes per key are
   measured with the warm-window PR; the capture's heaviest session's journal is 114 MB
-  before compression (`v8-worker`).
+  before compression (#57).
 - **S3:** ~800 ops/s in all at peak. AWS S3's limits are far above that; DO
   Spaces' 800/s per bucket fits the demo.
 
