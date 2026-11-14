@@ -1,8 +1,9 @@
 # Data pipeline (v8)
 
-Status: **proposed, for the owner's sign-off.** v7 is built and deployed
-(2026-11-14). v8 precomputes the session and person pages. Everything else is
-v7's, as built. The open decisions are listed in "Owner decisions" below.
+Status: **proposed; the owner's decisions are in.** v7 is built and deployed
+(2026-11-14). v8 precomputes every page the API serves, makes the worker's
+render incremental, and moves what Postgres doesn't query out of it. The
+decisions are listed below, and each is applied where it's used.
 
 **Why.** On the real capture, v7's heaviest pages take 300 to 450 ms warm
 (p95): a session's state, timeline and events, and a person's summary, timeline
@@ -12,59 +13,61 @@ and requests. Almost all of it is per request work:
 - today's endpoint code derives the page from them;
 - DuckDB's setup alone costs ~18 ms.
 
+The worker renders every session whole on every run, and v7 stores ~270 GB a
+day at the target (measured bytes per row), most of it rows nothing queries.
+
 **What v8 changes:**
-- **The API reads finished rows** (§5). For the session and person pages it
-  filters rows by the request's range and filters, pages them, and merges
-  precomputed cells, all in Postgres. It applies `now`. It derives nothing else,
-  and it has no DuckDB.
-- **The worker renders what those pages show** (§3.3, §3.8 to §3.10):
-  - *cells*: each session's and each credential's sums per minute and per hour;
-  - one *request-log row* per request, which both request logs read;
-  - the session row's *labels and children*, finished;
-  - *unit-start flags and first-occurrence marks* on the rows the pages count
-    and page through.
+- **The API reads finished rows** (§5). For every page it filters rows by the
+  request's range (snapped to whole minutes) and filters, pages them, and
+  merges precomputed cells, all in Postgres. It applies `now`. DuckDB and ADBC
+  leave the API.
+- **The worker's render is incremental** (§3.11). A run re-renders only the
+  rows its records affect: its CPU and writes follow the new records, never the
+  session's size. Rows carry sort keys, not ordinals. A value shared by many
+  rows (a prompt's number, a call's label, a step count) lives once, on its
+  prompt's, call's or session's row, and is joined at read.
+- **The worker renders what the pages show** (§3.3, §3.8 to §3.10): cells (sums
+  per minute and per hour); one request-log row per call, which both request
+  logs read; finished labels and children; first-occurrence marks.
+- **Postgres holds what's queried** (§3.12): the rows the pages read, and
+  finished display rows read by key. Raw payloads stay in S3. ~270 → ~87
+  GB/day at the target.
 - **Other keys' values are read at render time,** and the commits that change
-  them flag the reader dirty, as v7 does for the drawer's batch parts (§2, §4).
+  them flag the reader dirty (the cross-key rule, §2).
 
 Unchanged from v7, as built:
 - ingest and discovery (§1, the tail);
 - claims, the guarded commit and quarantine (§2);
 - the state engine and its S3 checkpoint, expiry, retention;
-- the session render (`state.RenderSession`) and the drawer (§3.7);
-- the directory (`/people`, `/overview`) and `/status` (§5.6);
+- `/status` (§5.6);
 - deployment (§6).
 
 v7's text is kept where it's still true. `docs/STREAMING_PIPELINE.md` is kept
 only as history.
 
-## Owner decisions
+## Owner decisions (decided)
 
-Open, for the owner. Each is explained where it's used.
-
-1. **`bin` must be a multiple of 60** (§5.3). Today any integer ≥ 60 is
-   accepted. The UI only sends the ladder (60 s to 1 d), all multiples of 60.
-   Cells can't give exact bins for any other width, so v8 answers 422.
-2. **Four folds that depend on order are still computed per request** (§5.5,
-   which lists every per-request computation with its bound): the `q` text
-   search, the person timeline's band packing, and presence and not-captured
-   windows across a person's sessions. `q` scans the range's rows for its matches; the
-   other three read only the page's bands, segments or missed calls, never
-   events. The alternatives are contract changes.
-3. **The render's CPU stays O(session) per run** (§2, Scaling budget), as v7
-   accepted: measured, that's ~40 cores at the target. v8 adds no O(session) writes: every new table is diffed. An
-   incremental render is a separate project.
-4. **The directory keeps DuckDB** (§5.6). It's out of scope, so `/people` and
-   `/overview` still run v7's loader. Porting their SQL to Postgres (no new
-   precompute) would take DuckDB and ADBC out of the API image.
-5. **psycopg 3 replaces ADBC** for the pages v8 serves (§5.7). Without DuckDB
-   nothing reads ADBC's Arrow. It's an exact pin, 14 days old, with a bundled
-   libpq.
-6. **Float sums are merged per cell** (quirks). Cost and hook overhead may
-   differ from today's in the last bits before rounding. They're shown rounded
-   (cents, 0.1 ms); the side-by-side tests and the gate must find them equal on
-   every dataset and the capture, or this comes back to the owner.
-7. **The deploy starts Postgres empty** (Rollout), as v7's did: the schema
-   changes, and there are no migrations.
+1. **Ranges snap to whole minutes** (§5.3): `from` to its minute's start, `to`
+   to its minute's end. Cells are then exact with no edge rows. Byte-identity is
+   proven by giving the oracle the same snapped range. `bin` must be a multiple
+   of 60.
+2. **A Codex thread's label is its own title calls'** (`label_text_alone`),
+   everywhere (§3.10). The assignment chain across threads, its table and its
+   flags are gone.
+3. **Spanning batches stay exact** (§5.3): the read corrects for each spanning
+   batch from its parts that overlap the range, with no G bound.
+4. **The render is incremental: delta in at every granularity** (§3.11). Per
+   commit, CPU and writes are proportional to the new records and the rows they
+   affect, never the session's size. A CPU gate holds it.
+5. **Postgres holds what's queried** (§3.12): every stored input no v8 read or
+   cross-key render needs goes; raw payloads stay in S3. The target is under
+   110 GB/day.
+6. **Cold latency at the target:** not now (Not now). The gate measures cold
+   latency on the capture only.
+7. **The directory is in scope** (§5.6): `/people` and `/overview` read
+   finished rows too, so DuckDB and ADBC leave the API.
+8. **The bounded per-request computations in §5.5 are accepted:** filters,
+   sorts and sums over finished rows, and the four folds there.
 
 ## Goals
 
@@ -86,26 +89,27 @@ Open, for the owner. Each is explained where it's used.
     keys' where a value needs them. Those are read at render time, and their
     commits flag the reader dirty (§4).
   - The API reads finished rows (§5.1). It filters them by the request's range
-    and filters, orders and pages them, and merges cells. It applies `now` and
-    resolves who a person is. Everything computed per request is listed with
-    its bound (§5.5): merges over finished rows, and four folds that depend on
-    order (decision 2).
+    (snapped to whole minutes) and filters, orders and pages them, and merges
+    cells. It applies `now` and resolves who a person is. Everything computed
+    per request is listed with its bound (§5.5), and accepted (decision 8).
   - One fetch per thing a page needs: a fixed number of statements per page,
     never one per row.
-- **Delta in, correct eventual state out.** A commit writes only the rows that
-  changed, never O(history). v8's tables are rendered and diffed like v7's, so a
-  run writes only the cells, request rows and labels its records changed. The
-  render's CPU stays O(session) per run, as v6 and v7 accepted (decision 3).
+- **Delta in, correct eventual state out, at every granularity** (decision 4).
+  A commit's CPU and writes are proportional to its new records and the rows
+  they affect: never the session's, the person's or history's size. The render
+  is driven by the state's per-record deltas (§3.11), and a CPU gate and a
+  write gate hold it (Testing).
 - **One transaction per commit.** A key's rows and its next commit number land
   together or not at all. The number orders a key's commits, so a stalled or
   duplicate worker can't write. This replaces the create-only commit objects,
   the ETag fencing and the Redis locks.
 - **Response bodies don't change.** Once the pipeline has settled (no flags
   left), every endpoint returns byte-identical JSON on the CI datasets and the
-  real capture, and the URLs stay the same. The
-  exceptions are in "Decisions and quirks"; the only ones a client can see are
-  the in-flight drawer (v7, the owner's call) and a `bin` that isn't a multiple
-  of 60 (decision 1).
+  real capture, for the same (snapped) range as today's code is given, and the
+  URLs stay the same. What a client can see change is decided and listed in
+  "Decisions and quirks": ranges snap to minutes, a `bin` must be a multiple of
+  60, a Codex thread's label is its own title calls' everywhere, and the
+  in-flight drawer (v7, the owner's call).
 - **Every tier scales horizontally:** ingest on CPU, workers on lag, the API on
   CPU. Postgres is the one component that scales vertically: one primary,
   sized in the scaling budget.
@@ -155,8 +159,7 @@ Postgres dirty_keys ◀── claim ── workers (`rollup`) ◀── LIST/GET
                                    ▼
                                Postgres ◀── API: one connection, one snapshot, a few indexed statements
                                              → the page's finished rows and merged cells → the response
-                                             (+ calls/<id>.ndjson.gz from S3 for /raw and /events/{id};
-                                              the directory: v7's loader, §5.6)
+                                             (+ calls/<id>.ndjson.gz from S3 for /raw and /events/{id})
 ```
 
 ## S3 layout
@@ -272,7 +275,8 @@ during S3 I/O or rendering.
    and record id. Expire due calls (below). Collect the run's state deltas,
    keeping each (table, id)'s last change.
 6. **Render**, for a session key: `state.RenderSession` (#44), every table
-   whole, and for every key its drawer rows (§3.7). First the run refreshes
+   whole, and for every key its drawer rows (§3.7). *v8:* only the rows the
+   run's deltas affect (§2's v8 block, §3.11). First the run refreshes
    the render's external inputs: the detail objects of calls that ended, and
    the other keys' `batch_parts` of its batches (one statement on a run
    connection).
@@ -379,46 +383,51 @@ unchanged: target 30 s, at least 2 replicas. If Postgres is unreachable,
 serves both as gauges. *Step 8:* `aintercept rollup` is this worker only, and
 refuses to start without `ROLLUP_POSTGRES_URL`.
 
-### v8: what a run renders and flags
+### v8: the incremental run, and the cross-key rule
 
-- **Render (Run 6) adds v8's rows:**
-  - cells (§3.8);
-  - request-log rows and their cells (§3.9);
-  - the finished labels and children, and title assignments (§3.10);
-  - presence runs and gap windows, and the new columns on `event_rows`,
-    `session_marks`, `prompt_rows`, `session_rows` and `batch_parts` (§3.3).
+**The run is driven by deltas** (§3.11). v7's Run 6 renders every table whole,
+hashes every row and diffs against a baseline. v8 replaces that:
+- `Apply` already returns each record's delta: the state rows it changed, by
+  (table, id). The run also knows which external inputs changed: the detail
+  objects it read, and the other keys' rows it read.
+- Each display table has a dependency rule (§3.11): which of its rows a changed
+  state row or input can affect. The run renders exactly those rows from the
+  state, and upserts them, or deletes those that are gone.
+- So there's no baseline and no hashing of every row, and a cold load doesn't
+  render. A key's very first run, and a run after a `render_version` change,
+  render every row once.
+- The drawer's rows follow the same rule (§3.7, the worker's incremental
+  drawer).
 
-  They're hashed and diffed like v7's rows, so a run writes only the ones that
-  changed.
-- **The render's reads of other keys** stay one statement per run, with more
-  parts:
-  - the other keys' parts of its batches, with their event times when a batch
-    spans keys;
-  - its children's edges;
-  - the title calls of its accounts in its first 5 minutes, and the assignment
-    naming it;
-  - for a key holding title calls: the candidate threads in the 5 minutes
-    before each, and the assignments of the calls in those 5 minutes.
-- **Flags.** A commit that changes a value another key renders flags that key
-  with `render`, in the same transaction, as §3.7 does for batch parts:
+**What a run renders:** the session tables (§3.3), cells (§3.8), request-log
+rows and their cells (§3.9), labels and children (§3.10), the drawer's rows
+(§3.7), and the directory's cells (§3.5).
 
-  | The commit changes | It flags (render) |
-  |---|---|
-  | a batch part (v7) | the batch's other keys |
-  | a `session_edges` row | the parent session's key |
-  | a title call (`session_title_calls`) | the candidate threads of its account started in the 5 minutes before it (their alone label), and the keys of the title calls in the 5 minutes after it (§3.10) |
-  | a thread's `title_candidates` rows (its start, accounts or candidacy) | the keys of its accounts' title calls in its first 5 minutes |
-  | a session's credential rows, when the session holds batch parts | the batch's other keys (their `in_tab`, §3.9) |
-  | a title assignment (§3.10) | the thread it named before and the one it names now; the keys of the title calls in the 5 minutes after it |
+**The cross-key rule.** A render that reads another key's rows must never miss
+a change to them. For every such read:
+1. **The writer flags the reader.** The writer's commit flags (`render`) every
+   key whose render reads the rows it changed, in the same transaction.
+2. **A lock orders a writer and a new reader.** The writer can only flag the
+   readers it can see. Where a reader becomes one by committing a row the
+   writer looks up, both commits take `pg_advisory_xact_lock` on the shared
+   entity, in order. Under the lock, the reader re-reads what its render read,
+   and flags itself if it changed. Whichever commits second sees the first.
+3. **Retention is a writer too.** When it forgets rows another key reads, it
+   flags the readers under the same locks (§3.6).
 
-  Each flag set is the few rows around one instant, never a session's or a
-  person's history. Retention flags by the same rules when it forgets these rows
-  (§3.6).
-- **Cost.** The render stays O(session) CPU per run (v7's accepted cost,
-  decision 3). v8 adds one pass over the rendered rows for the cells and
-  flags: a few ms beside the render itself (v7 measured ~0.4 s a run on the
-  test datasets' largest session, its drawer rows included: ~40 cores at the
-  target, Scaling budget).
+| A render reads | Written by | The writer flags | Lock |
+|---|---|---|---|
+| the other keys' parts of its batches (v7) | the keys holding the batch's events | the batch's other keys, and the key holding its call | the batch |
+| its children's edges | the child's key | the parent session's key, by id | none: the flag needs no lookup |
+| the title calls of its accounts in its first 5 minutes (its label) | the title thread's key | the candidates of the call's account started in the 5 minutes before it (`title_candidates`) | each account |
+
+Nothing else reads another key at render time:
+- a session tab's credential filter is a join at read (§3.9);
+- a Codex thread's unthreaded calls are a filter at read (§5.4);
+- who a person is gets resolved at read (§4).
+
+Each flag set is the few keys around one batch, one parent or 5 minutes of one
+account, never a session's or a person's history.
 
 ## 3. Postgres schema
 
@@ -516,7 +525,7 @@ both back, so it sees today's rows:
 
 The other tables keep the render's dense seq. They're in time order, so new
 rows append. A late row renumbers the rows after it: normally the last few
-seconds (Not now: hour order keys).
+seconds. *v8 drops `seq` from every key (§3.3), so nothing renumbers.*
 
 | Table | Primary key | Rows/day at 1,500 people | Columns the API doesn't load |
 |---|---|---|---|
@@ -528,7 +537,7 @@ seconds (Not now: hour order keys).
 | `presence_segments` | (session_id, seq) | small | — |
 | `session_tools` | (session_id, kind, server, tool) | small | — |
 | `call_tool_uses` | (session_id, ts_ns, kind, server, tool) | ~3M | — |
-| `session_request_rows` | — | — | **Gone in v8 (step 8):** replaced by `request_log_rows` (§3.9), which both request logs read |
+| `session_request_rows` | — | — | **Gone in v8 (step 11):** replaced by `request_log_rows` (§3.9), which both request logs read |
 
 - **Extra indexes:**
   - `session_rows (key_day)`;
@@ -540,75 +549,110 @@ seconds (Not now: hour order keys).
   time in Postgres. v8 puts the time in `event_rows`' and `prompt_rows`' keys
   (below).
 
-**v8 additions to the session tables.** They serve the reads in §5.3.
-- **`event_rows`:**
-  - its primary key becomes (session_id, ts_ns, batch, rank), where rank is
-    the event's number in its batch (the `event_id` suffix). That's the
-    render's order by construction (it sorts a session's events by time,
-    batch, rank), and it's checked equal to `seq` on the capture. The key never
-    changes for an event, so a late event is one insert, not a renumbering of
-    every row after it, and range reads need no second index on the largest
-    table;
-  - `seq` stays, out of the key, only for the v7 loader until step 8, then
-    goes;
+**v8: one canonical row per fact, keys not ordinals** (decisions 4 and 5).
+- **Each fact is stored once, in its canonical row:**
+  - an analytics event's in `event_rows`;
+  - a call's (or a not-captured call's) in `request_log_rows` (§3.9);
+  - a prompt's in its `prompt_rows` item;
+  - a session's in `session_rows`.
+
+  Everything else references those rows by id, and the read joins them in the
+  same statement. A value many rows share (a prompt's number, a call's label, a
+  step count) is a fact of its prompt or call, so it's stored there and joined,
+  never copied onto the rows that show it.
+- **Keys, not ordinals.** v7's `seq` columns are dense ranks: one late row
+  renumbers every row after it. v8 keys every row by the state's own stable id
+  or sort key, and ranks at read.
+- §3.11 has each table's dependency rule, and §3.12 lists every table.
+
+The session tables in v8:
+- **`event_rows`, an analytics event's one row** (the Events tab and
+  `/events/{id}`):
+  - primary key (batch, rank): the event's own id (`batch:rank`), so
+    `/events/{id}` is a primary-key read;
+  - index (session_id, ts_ns, batch, rank) for the session pages. That's the
+    render's order: `seq` sorts by time, batch, rank, then further columns, but
+    (batch, rank) is unique, so those never decide. On the capture it equals
+    `seq` on every row;
+  - `seq` stays, out of the key, only for the v7 loader until step 11;
+  - an event with no session has a row too, with `session_id` NULL, which no
+    page lists. `drawer_events` goes;
+  - the columns a page reads, and no others (§3.12): session_id, ts_ns, name,
+    internal, summary, marker, `link_kind` and `link_ref` (the raw request id,
+    tool use id, device or session it links to), `prompt_id`, `event_key`
+    (where its raw row is in the batch's S3 object), `head_all`, `head_pub`,
+    `batch_first`, `batch_prev_ns`, `recap`;
+  - `name_lower`, `summary_lower`: only where Python's `lower()` (today's)
+    differs from Postgres's (the dotted İ, a final sigma), else NULL. `q` reads
+    `coalesce(summary_lower, lower(summary))`. On the capture every one is NULL;
   - `head_all`, `head_pub`: the row starts a unit in the Events tab with ticks
     folded, over all rows and over the non-internal ones. A unit is a row that
-    isn't a tick, or a run of consecutive tick rows (`tengu_tool_use_progress`)
-    in that sequence: a tick starts one unless the row before it in that
-    sequence is a tick. A late event changes its own flags and the next row's;
-  - `batch_first`: it's its batch's first event in the session (in key order);
+    isn't a tick, or a run of consecutive tick rows
+    (`tengu_tool_use_progress`) in that sequence. A late event changes its own
+    flags and the next row's;
+  - `batch_first`: it's its batch's first event in the session, in key order;
     otherwise `batch_prev_ns` is the time of the batch's event before it in the
     session;
-  - partial indexes:
-    - (session_id, ts_ns) WHERE `batch_prev_ns` < `ts_ns` − `ts_ns` mod 60 s:
-      only the rows whose previous batch event lies in an earlier minute;
-    - (session_id, ts_ns, head_sha) WHERE head_sha IS NOT NULL: `/state`'s
-      first and last head. Without it, a session with no head would scan its
-      whole range;
-    - (session_id, ts_ns) WHERE recap: `/state`'s recaps.
-- **`session_marks`:**
-  - call marks get `prompt_first` and `prompt_prev_ns`, the same per prompt id,
-    with the same partial index;
-  - an index (session_id, kind, t_ns);
-  - network marks get `bypass_from_ns`: the earliest start of a not-captured
-    window that ends at or after the segment's start (the segment is bypassed
-    when its end reaches it). A closed segment also gets `not_captured`, its
-    missed calls.
-- **`prompt_rows`:** v7's key and dense, time-ordered `seq` (a tested render
-  property, §Testing), plus indexes (session_id, t_ns) for the range's ends and
-  (session_id, prompt_index) WHERE type = 'prompt' for the prompt jump. A late
-  prompt row renumbers the session's later prompt rows: a few.
-- **`session_rows`:**
-  - `batch_gap_ns`, `prompt_gap_ns`: the longest time between two consecutive
-    events of one batch, and between two consecutive calls of one prompt, in
-    the session;
-  - `unattributed`: the session is visible (`dim_session_visible`) and no
-    account names it (`dim_session_account`). Both are written by the session's
-    own key (checked on the capture), so the flag is rendered within the key.
-    `unattributed`'s scope is then a partial index (session_id) WHERE
-    unattributed, not an anti-join in every statement. Every visible session
-    has a session row (checked);
-  - the labels and children, final (§3.10).
-- **`batch_parts`:** `last_ns`; `spans`, when another key holds a part of the
-  batch; for a spanning part, `ns`, its events' times. Index (key, first_ns)
-  WHERE spans.
-- **New, per session.** Each is rendered whole every run: a few rows.
-
-  | Table | Primary key | What |
-  |---|---|---|
-  | `presence_runs` | (session_id, live, seq) | the session's presence fold (`timeline.PRESENCE_SQL` over its own segments): from_ns, to_ns, state. `live` false: today's fold for a session that isn't live. `live` true: the fold with [last_ns, ∞) focused added, which the API cuts at `now` (§5.3) |
-  | `gap_windows` | (session_id, seq) | the session timeline's not-captured lane over the whole session: from, to, count, reported, captured, cause |
-
-**No value that grows with its prompt or session is stored on a row.** A row's
-values may only change when its own data does. A value like a step's "of M", a
-prompt's call count, or "N events" while its batch fills is kept once, on a
-per-prompt (or per-session, per-batch) row, and joined in at read.
-- v7's drawer breaks this as built: `drawer_requests.data` embeds the prompt's
-  `stepCount`. Every new call rewrites every earlier call's row in its prompt:
-  222 rows a call on the capture's longest prompt, at one call per commit.
-- The fix: the drawer reads the count from the prompt's row in its one
-  statement. The worker change is in progress; this spec only holds the rule.
-- The write-amplification gate (§Testing) asserts the rule per table.
+  - partial indexes (session_id, ts_ns) WHERE `batch_prev_ns` < `ts_ns` −
+    `ts_ns` mod 60 s (the straddlers, §5.3), and WHERE recap;
+  - joined at read, not stored: its prompt's number (from the prompt's item),
+    and a request link's target and label (from the call's row: the newest
+    visible call of that request id in the session, its class, model family
+    and stop reason). The count columns (head, hooks, tools, git, PRs, cost,
+    cache, counts) go: the cells hold them, rendered from the state.
+- **`prompt_rows`, a prompt's one row** (its `p:<prompt id>` item), and the
+  between items:
+  - primary key (session_id, item_id), the state's id (`p:`, `b:`, `c:`, `r:`),
+    plus its sort columns, and a unique index (session_id, prompt_id) on the
+    prompt items. No `seq`: the Prompts tab pages by the sort key, counts by
+    cells (`prompt_row`), and numbers its rows at read;
+  - the prompt item holds the prompt's facts that other rows show: its three
+    Claude Code numbers (today's code has three: the latest
+    `tengu_input_prompt` by (time, key), for events and requests; the newest by
+    event order, for marks; the first input, for prompt rows), its Codex first
+    call time, and its step count (the drawer's `stepCount`). Events, marks,
+    calls and drawer rows reference it by (session_id, prompt_id). A late input
+    prompt rewrites this one row;
+  - three values that depend on the whole session are stored raw and finished
+    at read: `typed`, `duration_report_ms` and `turn_report_json` from the
+    session's `prompt_product` (its first step's product, on `session_rows`);
+    `open_tail` (the last prompt by start); and a Codex prompt's number, its
+    rank by start among the session's prompt items.
+- **`prompt_steps` folds into the call's row.** A step is a model call. Its
+  facts (tokens, model, timings, tools, commands, exit codes, patches, text) go
+  on the call's `request_log_rows` row (§3.9), and the Prompts tab reads a
+  page's steps from there by (session_id, prompt_id). A step's number in its
+  prompt is `row_number()` at read. Its tools are built by appending as tool
+  and tick events arrive (v7 rebuilt them from every tick of the request on each
+  tick). A tick updates one tool's entry: one row, of the request's tools' size.
+  `events_pending` is stored as `has_success` and `pend_end`, and compared at
+  read with the session's `last_prompt_event_ns`.
+- **`session_marks`:** primary key (session_id, kind, mark_id), the state's id,
+  with its sort columns. The API orders a kind by them, as it ordered by `seq`.
+  A call or friction mark stores its `prompt_id`; its number is joined.
+  Permission and network segments are recut locally when a point arrives, as
+  presence is: the state keeps their ordered points.
+- **`presence_segments`:** primary key (session_id, grp, from_ns), the state's
+  ids. The session timeline folds them at read, as today (§5.5).
+- **`session_rows`, a session's one row:** rewritten by most commits (one row).
+  - Its arrays become child rows or counts:
+    - `devices` → `session_devices` (session_id, device_id);
+    - `call_accounts` → `session_call_accounts`, already stored;
+    - `prompt_ids` → `prompt_id_count`: a person's distinct prompts are the
+      sum, by I3 (§5.3);
+    - `cov_window_*` go: a session's coverage windows are folded at read from
+      its missed marks (few), as the timeline's not-captured lane already is
+      (§5.5).
+  - New columns: `prompt_product`, `last_prompt_event_ns`, `has_prompt_event`,
+    `batch_gap_ns` and `prompt_gap_ns` (the longest gap between consecutive
+    rows of one batch, and of one prompt's calls), `session_last_ns` (from
+    `session_last`), and `unattributed`.
+  - `unattributed` means visible (`dim_session_visible`) with no account
+    (`dim_session_account`). Both inputs are written by the session's own key
+    (checked on the capture), so the flag is rendered within the key.
+  - `key_day` is kept as a running maximum, not by scanning the key.
+  - The drawer's per-session metadata lives once with the session's key
+    (`drawer_parts`, §3.7).
 
 ### 3.4 Stored inputs: the state's own rows
 
@@ -650,6 +694,17 @@ delete for a tombstone.
   - Primary key (batch_id, key); index (key).
   - Read in §4. #43's stamps on the batch call stay, unused.
 
+**v8:** these rows were stored so read-time SQL could run over them. v8 reads
+finished rows, so each one stays only if a page or a cross-key render reads it.
+- **Stay:** the dimensions (a person's scope and header, the directory),
+  `session_call_accounts` (a linked account's devices), `session_edges` and
+  `session_title_calls` (cross-key renders), `batch_parts`.
+- **Go:** `request_txs`, `requests`, `analytics`, `prompt_index`, `codex_turns`,
+  `request_reports`, `request_missed`, `session_last`, `dim_session_visible`.
+  Their values live in the call's, the prompt's or the session's row.
+
+§3.12 lists each table with its readers.
+
 ### 3.5 Directory folds
 
 Every key writes these from its render or its facts:
@@ -660,13 +715,19 @@ Every key writes these from its render or its facts:
 | `agent_calls` | (key, call_id); (ts_ns) | each Claude Code and Codex call's time, calls in flight included (v5's `merge_agent_calls` rows) | the merge's day partitions |
 | `agent_call_hours` | (hour, key) | the count per UTC hour | the whole hours of `/overview`'s count |
 
+*v8:* `agent_calls` and `agent_call_hours` become `agent_call_cells` (key, lvl,
+t): counts per minute and per hour, plus one row per key for calls with no time
+(§3.8). With snapped ranges, `/overview`'s count is a merge of whole cells.
+`session_call_days` stays.
+
 ### 3.6 Retention
 
 The retention singleton runs every hour, by day: it works through the keys whose
 `day` is older than `retention.days` (default 15; the UI's widest preset is 14 d
 back from an hour). For each key:
 1. **Delete its rows in small batches:** ≤ 5k rows per statement, by the key or
-   session prefix of each table's primary key, with `lock_timeout` 1 s. A batch
+   session prefix of each table's primary key (v8: or of an index, as for
+   `event_rows`), with `lock_timeout` 1 s. A batch
    that times out is retried on the next pass.
 2. **Delete its key row,** guarded on the `n` it read. A key that got new input
    meanwhile keeps its row, so it's never forgotten mid-run.
@@ -704,12 +765,11 @@ In the cloud, bucket lifecycle rules expire `raw/` and `calls/`
 
 **v8: retention flags the readers of what it forgets.** Some rows a key owns are
 read by other keys' renders: `batch_parts`, `session_edges`,
-`session_title_calls`, `title_assignments`, `title_candidates` and
-`session_call_accounts`. Forgetting them changes what those keys render: a
-batch's count, a parent's children, a label. So the transaction that forgets a
-key also flags (`render`) the readers of each of these rows it deletes, by the
-same rules a commit uses when it changes them (§2). A reader that's being
-forgotten in the same pass is skipped.
+`session_title_calls` and `title_candidates` (§2's table). Forgetting them
+changes what those keys render: a batch's count, a parent's children, a label.
+So the transaction that forgets a key also flags (`render`) the readers of each
+of these rows it deletes, by the same rules and under the same locks a commit
+uses (§2). A reader that's being forgotten in the same pass is skipped.
 
 ### 3.7 Request drawer: precomputed
 
@@ -730,7 +790,7 @@ indexed lookup; nothing about it is derived at request time.
   (the call's keys) is the call's own key for every call, plus the batch's
   other keys for an analytics batch, which only give its session (below).
   Step N of M, prev/next and retries change as the session grows, so every
-  run renders the key's drawer rows whole and writes the ones whose hash
+  run renders the key's drawer rows whole (v7; v8: §3.7's v8 block) and writes the ones whose hash
   changed (§2 Run 6), as for the session tables.
 - **What only the call's detail object holds** (headers, the whole `complete`
   row, body chunk times, retained bodies) is read once: the run GETs
@@ -766,26 +826,98 @@ indexed lookup; nothing about it is derived at request time.
   copy the analytics metadata again (the largest table, §Scaling budget).
 - **Retention** forgets both tables with the key (by `key`).
 
+**v8: the drawer.**
+- **Rendered incrementally.** The worker's incremental drawer (branch
+  `v8-worker`) derives a row from its own call and what it reads of the key's
+  other rows, through fixed lookups, and records what each lookup read:
+  - the events about it: by its request or client request id;
+  - its stall summary;
+  - its query: the last `tengu_api_query` of its prompt near its time;
+  - a failed call's retry, near its end;
+  - its tools' bash runs;
+  - its prompt's steps up to its place, and its next step;
+  - the message-id chain;
+  - its prompt's number;
+  - an analytics call's batch session;
+  - a reported call's success;
+  - the sandbox setting up to its time.
+
+  A run files every changed input under what it was and what it is, and
+  re-derives only the rows that recorded something filed.
+- **v8 makes all of it follow the run's records.** The scope's indexes are kept
+  with the state and updated by its deltas, not rebuilt each run. The inputs
+  filed are the run's deltas and the rows §3.11 re-renders. The rows aren't
+  hashed whole.
+- **Values that grow are filled at read,** from placeholders in the stored
+  JSON. `stepCount` is the prompt's step count, from its prompt item (§3.3).
+  `v8-worker` keeps it in `drawer_step_counts`; normalized, it's a column of
+  the prompt's row, and that table goes. The two others:
+  - a call's step number in its prompt: its prompt's steps before it;
+  - its "delivered in step N", a place among the session's steps: the
+    session's `call` cells before its minute, plus that minute's calls before
+    it.
+
+  `v8-worker` stores those two in the row. Read time is what this spec asks
+  for, so a late step rewrites only its own and its neighbours' rows, not every
+  later row of the prompt or the session.
+- **Per-session metadata is stored once, with its session.** The account
+  limits, request settings, "what the model could use" and Codex sections, and
+  the `tools_available` field (2.3 KB a call on the capture), are nearly
+  constant within a session: a session has a few distinct values of each.
+  - Each distinct value is stored once with its session's key, in
+    `drawer_parts` (key, part, hash). A `c:` key's calls share theirs the same
+    way.
+  - The drawer row references its values by (key, part, hash), a foreign key,
+    and the drawer's statement splices them in.
+  - On the capture that's ~47% of `details`' bytes.
+- **One drawer row per request, and no input copies:**
+  - `/raw`'s fallback view (a WebSocket turn's, or a call whose detail object is
+    missing) is rendered into the row (`raw_fallback`) instead of being read
+    from a `requests` row, so `requests` goes;
+  - `/events/{id}` reads the event's own row (`event_rows` by its primary key,
+    (batch, rank)), and its raw row from the batch's S3 object by `event_key`,
+    so `drawer_events` goes.
+- **Why a call keeps a log row and a drawer row, not one merged row:**
+  - **different reads:** the logs read narrow rows by range through four
+    indexes; the drawer reads one wide row by key;
+  - **different lifetimes:** a call in flight has a log row and no drawer row;
+  - **different updates:** a drawer row changes with its neighbours (its next
+    step, a retry), and the log row almost never does. Merged, each drawer
+    update would rewrite a row the log's indexes point at.
+- **Owner option (material, not applied).** `details`, the `/details` object,
+  is still ~60% of the row after the dedupe. It could be stored as a finished
+  object in S3 (`calls/<id>.details.json.gz`, written by the worker):
+  - the row: ~3.8 KB → ~1.9 KB, which is ~29 → ~14 GB/day at the target;
+  - the cost: `/details` adds one S3 GET (~10 to 30 ms on S3 or Spaces) to its
+    primary-key lookup.
+
+  The owner's rule keeps finished display rows read by key in Postgres, so this
+  spec doesn't move it.
+
 ### 3.8 Cells: sums per minute and per hour
 
 A cell holds what the pages merge of one unit's rows in one minute or one hour:
-counts, sums, the keys seen, the first of something. The API merges whole cells
-and reads only the rows of the range's partial minutes (§5.3).
+counts, sums, the keys seen, the first or last of something. Every range is
+whole minutes (§5.3), so the API merges whole cells and never reads rows to
+count a range. Cells are aggregates, not copies: summing the rows at read would
+read every row of the range.
 
 - **Two levels:** `lvl` 60 (minutes) and 3600 (hours). `t` is the cell's
   start, `t_ns − t_ns mod lvl` in Unix ns: aligned to the epoch, as the
   timelines' bins are.
-- **Written by the rows' own key,** rendered from its rendered rows and diffed
-  like every rendered table (§2 Run 6). A run that adds rows to the current
-  minute writes that minute's and that hour's cells for the keys it touched,
-  and nothing else.
+- **Written by the rows' own key, from deltas** (§3.11). When a state row
+  changes, the minute it lies in is re-merged from the state's rows of that
+  minute, and its hour from its 60 minute cells. That's bounded by a minute's
+  rows (the capture's busiest: 3.3k events), never the session's. The state
+  keeps its rows indexed by minute.
 - **Values merge** (§5.1):
   - counts and sums add;
   - a sum is NULL when no row had a value, so a sum over cells is NULL exactly
     when today's sum over the rows is;
-  - `first_*` carries the earliest (t, seq) and its value.
+  - `first_*` and `last_*` carry the earliest and latest (t, seq), and the
+    value there.
 
-  Floats are summed per cell (decision 6).
+  Floats are summed per cell (quirks).
 - **Keys are text, and a primary key can't hold NULL.** Each nullable key
   column (`key`, `key2`; `agent`, `client` in `request_cells`) has a boolean
   `<column>_null` beside it in the key, and holds '' when it's set. So NULL and
@@ -796,150 +928,303 @@ and reads only the rows of the range's partial minutes (§5.3).
 
 **`session_cells`:** primary key (session_id, lvl, t, dim, key, key_null, key2,
 key2_null), written by the session's key. Columns: `n`; `s1` to `s5` (bigint
-sums); `f1` (a double sum); `first_t`, `first_seq`, `first_val`; `key_num`.
+sums); `f1` (a double sum); `first_t`, `first_seq`, `first_val`, `last_t`,
+`last_val`; `key_num`.
 
 | dim | Rows (filter) | key, key2 | Values | Read by |
 |---|---|---|---|---|
-| `event` | `event_rows` | name, unnamed | n; s1 rows with `head_all`; s2 rows with `head_pub`; s3 non-internal rows | the analytics lane (count, top 3 names a bin); the summary's names and event types; `/state`'s events and pool changes; the Events tab's total and shown counts (§5.3) |
+| `event` | events | name, unnamed | n; s1 rows with `head_all`; s2 rows with `head_pub`; s3 non-internal rows | the analytics lane (count, top 3 names a bin); the summary's names and event types; `/state`'s events and pool changes; the Events tab's total and shown counts (§5.3) |
 | `tool`, `mcp_tool` | `tengu_tool_use_success` with a tool name, by `is_mcp` | tool name | n | the summary's toolsByName, toolCalls, builtinUsed |
-| `mcp_pair` | MCP tools named `mcp__server__tool` in analytics (parsed by the worker); `call_tool_uses` of kind mcp | server, tool | n | the summary's MCP servers, mcpToolsUsed |
-| `builtin` | `call_tool_uses` not mcp | tool | n | the summary's builtinUsed |
+| `mcp_pair` | MCP tools named `mcp__server__tool` in analytics (parsed by the worker); the calls' MCP tool uses | server, tool | n | the summary's MCP servers, mcpToolsUsed |
+| `builtin` | the calls' other tool uses | tool | n | the summary's builtinUsed |
 | `word` | `tengu_bash_tool_command_executed` | argv0 | n | topCommandWords |
 | `destructive` | the same, category ≠ none | category | n | the destructive counts |
 | `git` | `tengu_git_operation` | operation | n | the summary's commits, pushes |
 | `pr` | `tengu_session_linked_to_pr` | pr_number (and `key_num`) | n | the summary's PRs, in number order |
-| `head` | head_sha set | head_sha | n | headChanges (the summary, `/state`) |
+| `head` | events with a head | head_sha | n; `first_t`, `last_t` | headChanges (the summary, `/state`); `/state`'s first and last head: the least (first_t, sha), the greatest (last_t, sha) |
+| `latest` | `tengu_tool_search_mode_decision`, `tengu_skills_sync_success` with a count | name | `last_t`, `last_val`: the latest (t, count) | the latest MCP total and skills, up to hi (`/state`, the summary) |
 | `hook_name` | `tengu_run_hook` | hook_name | n | the summary's hooks |
 | `hook`, `git_op`, `pr_link`, `recap` | `hook` set; `git_op` set; `pr` set; recap, recap_key | the value (`pr_link` also `key_num`) | n | `/state`'s hooks, commits, pushes, PRs (in number order), recaps |
 | `api_success` | `tengu_api_success` | — | s1 cache_5m, s2 cache_1h, f1 cost_usd | the summary's cache writes and cost |
 | `hook_ms` | `tengu_tool_use_success` with hook_ms | — | n, f1 | hookOverheadMs (f1 / n) |
 | `outside_cwd` | bash commands outside the cwd | — | n | outsideCwd |
 | `batch_first` | rows with `batch_first` | — | n | analyticsBatches (§5.3) |
-| `call` | call marks | request_class | n, s1 input, s2 cache_read, s3 cache_write, s4 output, s5 context | the model-call lanes; the summary's calls and tokens; `/state`'s modelCalls |
+| `call` | call marks | request_class | n, s1 input, s2 cache_read, s3 cache_write, s4 output, s5 context | the model-call lanes; the summary's calls and tokens; `/state`'s modelCalls; the drawer's "delivered in step N" |
 | `call_unreported`, `prompt_first` | call marks: unreported; with `prompt_first` | — | n | estimatedCalls; the summary's prompts (§5.3) |
 | `reported`, `missed`, `compaction` | those marks | — | n | coverage; the lanes' not-captured counts; `/state` |
-| `friction` | friction marks | friction kind, detail | n, first (t, seq, prompt_index) | the friction lane: count, first prompt, details by first occurrence |
-| `prompt` | `prompt_rows` of type prompt | — | n | `/state`'s prompts |
+| `friction` | friction marks | friction kind, detail | n, first (t, seq, prompt) | the friction lane: count, first prompt, details by first occurrence |
+| `prompt`, `prompt_row` | prompt items; every prompt row | — | n | `/state`'s prompts; the Prompts tab's total |
 
 **`request_cells`:** primary key (unit, lvl, t, kind, hidden, captured, agent,
-agent_null, client, client_null, sessionless, missed, in_tab, key), with an
+agent_null, client, client_null, sessionless, missed, key_hash, key), with an
 index (key) for retention: Postgres 17 has no skip scan, so the reads' unit
-must lead. Column `n`. Written by the request-log row's key, so several keys
-write cells of one unit. `unit` is:
-- `s:<session>` for every request-log row with a session (its own, or its
-  batch's) and every missed row;
-- `h:<credential>` for every transaction with a credential.
+must lead. Column `n`. Written by the call's key, so several keys write cells
+of one unit. `unit` is:
+- `s:<session>` for every call with a session (its own, or its batch's) and
+  every missed row;
+- `h:<credential>` for every call with a credential.
 
 A person's log merges its credentials' `h:` cells and its sessions' missed `s:`
-cells. A session's tab merges its `s:` cells with `in_tab` (§3.9); a Codex
-thread's also merges its credentials' sessionless Codex cells of its client
-(§5.4).
+cells. A session's tab merges its `s:` cells whose `key_hash` is one of the
+session's credentials, a join at read (§3.9). A Codex thread's tab also merges
+its credentials' sessionless Codex cells of its client (§5.4).
+
+**`agent_call_cells`** (key, lvl, t), with `n`: the Claude Code and Codex calls
+per minute and per hour, for `/overview` (§5.6). They replace `agent_calls` and
+`agent_call_hours`.
 
 **Size on the capture.** The heaviest session (53k events over 48 h) has ~1.5k
 hour cells and ~10k minute cells over its event dims, and ~0.8k minute cells
 over its marks. The heaviest person (13 sessions, 71k events) has ~3.3k and
-~17k. The busiest minute of one session holds 3.3k events (p99 520).
+~17k. About one minute cell per 5 events.
 
-### 3.9 Request-log rows: both logs, one row per request
+### 3.9 Request-log rows: a call's one row
 
-`request_log_rows` replaces `session_request_rows`, which stays beside it until
-step 8 because the v7 loader still reads it. It holds one row per request
-either log lists, written by the key that holds the request:
-- every transaction with a credential (`request_txs` with `is_tx` and a key
-  hash), in a session's key or a `c:` key;
-- every not-captured call (`request_missed`, its `reported:` id), in its
-  session's key.
+`request_log_rows` is a call's canonical row: one per call, and one per
+not-captured call (its `reported:` id), written by the key that holds it. It
+replaces `session_request_rows`, `request_txs`, `requests` and `prompt_steps`,
+four copies of the same call in v7. (`session_request_rows` stays until step 11,
+because the v7 loader reads it.) It serves:
+- both request logs: a person's and a session's;
+- the Prompts tab's steps;
+- an event's link to its call;
+- the drawer's lookup of the key holding a batch call.
 
-Primary key (request_id, key). Indexes:
-- (key_hash, ts_us, request_id) and (key_hash, kind, ts_us, request_id): the
-  transactions, for a person's log without and with `kind`;
-- (session_id, ts_us, request_id) and (session_id, kind, ts_us, request_id):
-  every row with a session, for a session's tab;
-- (key), for retention (§3.6), as the drawer's tables have.
+**Rows:** every call, with or without a credential (a call with none appears in
+no log: the logs select by credential), and every not-captured call.
+
+**Primary key (request_id, key).** Indexes:
+- (key_hash, kind, ts_us, request_id): a person's log;
+- (session_id, kind, ts_us, request_id): a session's tab;
+- (session_id, prompt_id, ts_ns, request_id) WHERE it's a step: the Prompts
+  tab's steps, and step numbers;
+- (session_id, req_id): an event's link;
+- (key): retention (§3.6).
+
+A log without `kind` merges the kinds' index ranges, so no index without `kind`
+is needed.
 
 **Columns:** today's request-log columns as the logs show them
 (`stream_sql.COLUMNS`, but not person_id), plus:
 - `key_hash`; `ts_us` (`ts_ns / 1000`: the logs' order and their range);
-  `sessionless`; `missed`;
-- `in_tab`: its session's tab lists it. Today's session tab keeps a row only if
-  its credential is one of its session's (`dim_session_credential`). On the
-  capture 24 rows fail that: 6 hidden Codex title calls (in 6 sessions) and 18
-  analytics batch calls. Without the flag v8 would count them in the tab's
-  total, its hidden count and `/state`'s request count. Rendered within the
-  key: every row with a session is held by its session's key (checked on the
-  capture). A batch call in flight in a `c:` key reads its session's
-  credential row with the batch parts, and a session's commit that adds a
-  credential flags its batches' other keys, as a part change does;
+  `sessionless`; `missed`; `req_id`;
 - `session_id`, final: the call's own session, or its analytics batch's (the
   batch parts across keys, read at render time as the drawer's are, §3.7). A
   batch call still in flight in a `c:` key gets its session this way, so the
-  session's tab finds it by session;
-- **the three values a person's scope decides.** Each comes from the call's
-  own session (I1, I2, §5.3), so the read tests `session_id` against the scope.
-  No separate source column is kept; the periodic check (§5.3) is the alarm if
-  that ever stops holding:
-  - `prompt_index`: the prompt's number, from its session's `prompt_index`
-    (Claude Code) or `codex_turns` (Codex) rows;
-  - `ttft_ms`, `tokens_cache_write_5m`, `tokens_cache_write_1h` (model calls):
-    from the first report of its request id;
-  - `step_index`: its number among its prompt's model calls, in today's order
-    (time, then request id). When the prompt's calls used more than one
-    credential (a token refreshed mid-prompt: 2 prompts on the capture), also
-    `step_creds` and `step_before`: for each credential, how many of the
-    prompt's calls with it come before this one.
+  session's tab finds it;
+- `prompt_id`, and its prompt's number joined from the prompt's row, not
+  stored (§3.3);
+- for a step (a model call of a prompt), its Prompts-tab facts: request class,
+  model family, timings, tokens, tools, commands, exit codes, patches, text;
+- `ttft_ms`, `tokens_cache_write_5m`, `tokens_cache_write_1h` (model calls),
+  from the first report of its request id: its own session's (I2, §5.3).
 
-**Why the sources.** Today's person log takes these values from the person's
-own sessions and credentials only (`stream_sql` over the scope). On the
-capture, credentials are shared across email groups: a person's log holds
-thousands of model calls from sessions outside their scope, shown without a
-prompt number or a time to first token. The read shows each value only when the
-call's session is in the scope (§5.3), so one row serves every person and every
-session.
+**What a scope decides, at read** (§5.3):
+- **Prompt number and report values** are shown when the call's `session_id` is
+  in the scope: the person's sessions, or the one session.
+- **The step** is 1 + the number of its prompt's earlier model calls (by
+  `ts_ns`, then request id; visible, with a prompt id) whose credential is in
+  the scope's credentials. That's one index range on (session_id, prompt_id,
+  …). It's exact with no stored arrays, even when a token was refreshed
+  mid-prompt (2 prompts on the capture), and a late call renumbers nothing.
+- **A session's tab** lists its calls whose credential is one of the session's
+  (`dim_session_credential`): today's filter, a join at read. On the capture
+  24 calls fail it (6 hidden Codex title calls, 18 analytics batch calls).
+  Stored as a flag, a session's first call with a new credential would flip
+  every row with that credential.
 
-**What the render reads of other keys:** batch parts (v7), nothing else. A
-prompt's calls, its numbers and its reports are in its session's key (I1 to I3,
-§5.3).
+**Why the call's facts live here.** Today's person log takes these values from
+the person's own sessions and credentials only (`stream_sql` over the scope).
+On the capture, credentials are shared across email groups: a person's log
+holds thousands of model calls from sessions outside their scope, shown without
+a prompt number or a time to first token. Joining by scope at read lets one row
+serve every person and every session.
 
-**Writes:** a new call adds its row and nothing renumbers: the order is read
-from `ts_us` and `request_id`. A late call early in its prompt rewrites the
-later calls' steps in that prompt.
+**Render:** from the call's key's own state, plus batch parts (v7). A prompt's
+calls, its numbers and its reports are in its session's key (I1 to I3).
+**Writes:** a new call adds its row. Its retry fills one earlier row (the failed
+call's). Nothing renumbers.
 
 ### 3.10 Labels and children: finished on the session row
 
 v7 rendered a session's own label and joined the rest at read time
-(`sql/labels.sql`). v8 renders all five columns on `session_rows`, reading the
-other keys' rows at render time:
+(`sql/labels.sql`). v8 renders them on `session_rows`, reading the other keys'
+rows at render time.
+
+**One label** (decision 2). A Codex thread's label is its own title calls'
+(`labels.sql`'s `alone` rule), everywhere: the session header and timeline, and
+now the person pages too. `label_text`/`label_source` hold it, and the `_alone`
+columns go. Today's person pages ran an assignment over the account's whole
+component (quirk 2); that chain, its table and its flags are gone, so a
+thread's label never depends on another thread's.
 
 | Columns | From | Read at render | Flagged by |
 |---|---|---|---|
 | `children_json` | the `session_edges` naming it as parent, each written by the child's key | its edges | the child's commit that changes its edge |
-| `label_text_alone`, `label_source_alone` | its own title; else, for a Codex thread with a model call, the earliest title call (by time, then call id) of its accounts in its first 5 minutes (`labels.sql`'s `alone`); else `Session <id prefix>` | those title calls | the title call's commit (§2) |
-| `label_text`, `label_source` | its own title; else the title of the call that names it in `title_assignments`; else `Session <id prefix>` | the assignment naming it | the assignment's commit |
+| `label_text`, `label_source` | its own title; else, for a Codex thread with a model call (a *candidate*), the earliest title call (by time, then call id) of its accounts in its first 5 minutes; else `Session <id prefix>` | those title calls (`session_title_calls`, by account and time) | a title call's commit |
 
-**`title_assignments`** (call_id, key) → session_id, title, ts_ns, with indexes
-(session_id) and (key): `labels.sql`'s assignment, made by the key holding the
-title call.
-- **The rule (today's).** In time order (time, then call id), each title call
-  names one *candidate*: a Codex thread with no title of its own and a model
-  call, with the call's account, started at most 5 minutes before it. It names
-  the one that started last (then the least session id) among those no earlier
-  call named.
-- **`title_candidates`** (account_id, start_ns, session_id), the primary key:
-  each candidate thread writes one row per account of its calls. It changes
-  only when the thread's start, accounts or candidacy do.
-- **What a call's render reads.** Its choice depends only on the candidates
-  started in the 5 minutes before it, and on which of them earlier calls named.
-  An earlier call can name one of them only if it's in those same 5 minutes. So
-  the render reads just those: the candidates (`title_candidates`, an index
-  range by account and start) and those calls' assignments.
-- **A change runs forward.** A late call, or a candidate that changes, can
-  change the choice of the calls in the 5 minutes after it. Its commit flags
-  them (§2), and each choice that changes flags its own next 5 minutes, until a
-  choice stays the same. In the live case a new call is the newest, and flags
-  nothing after it.
-- **The same as today's.** Today the assignment runs over an account-connected
-  component, in the same time order. Calls interact only through shared
-  candidates, so splitting the work by time changes nothing.
+**`title_candidates`** (account_id, start_ns, session_id), the primary key: a
+candidate thread writes one row per account of its calls. It's how a title
+call's commit finds the threads to flag: the candidates of its account started
+in the 5 minutes before it, one index range. It changes only when a thread's
+start, accounts or candidacy do.
+
+**No race** (the cross-key rule, §2). A thread's render reads title calls, and a
+title call's commit flags the candidates it can see. They could miss each other:
+a thread becoming a candidate commits at the moment a title call commits. So both
+commits take `pg_advisory_xact_lock` on each account involved, in order. The
+thread's commit then re-reads the title calls in its window, and flags itself if
+they aren't the ones its render read. Whichever commits second sees the first.
+A child's edge needs no lock: its commit flags the parent by id, unconditionally.
+
+### 3.11 The incremental render: each table's dependencies
+
+A run renders exactly the rows its records' deltas affect (§2). This section
+gives each table's rule and bound.
+
+**Why every bound holds.** Every column of every rendered table is one of three
+kinds:
+1. a function of the row's own state row (its record);
+2. a function of a bounded group of state rows: one request id's rows, a
+   prompt's neighbouring items, the ≤ 3 segments of a local recut, one
+   minute's rows, one batch part;
+3. a value shared by an unbounded group (a prompt's number, a call's label, a
+   step count, a session's product). Each of these is stored once, on the
+   group's canonical row (§3.3), and joined at read.
+
+Rows carry stable keys, and ranks are computed at read. So a record changes a
+constant number of rows per table, plus one minute's rows when a cell is
+re-merged. The state engine already returns each record's delta by (table, id),
+and the run already collects them; the render is the only part that used to
+read everything.
+
+| Table | Key | A record re-renders | Bound |
+|---|---|---|---|
+| `event_rows` | (batch, rank) | its own row; in each view, the next row's head flags | ≤ 3 rows |
+| `prompt_rows` | (session, item id) | its prompt's item (numbers, aggregates, step count) and up to two neighbours (hidden and pasted runs); a between item in its compaction window | the prompt and its neighbours |
+| `request_log_rows` | (request id, key) | the call's row; on a request id's first report, that id's rows; on a retry, the failed call's row; a tool or tick event, its step's row (one tool entry); an analytics call, when its batch's parts change | one request id's rows |
+| `session_marks` | (session, kind, mark id) | the new mark; a call mark's `unreported` on its request's first report; ≤ 3 permission or network segments around a new point (a local recut) | constant |
+| `presence_segments` | (session, grp, from) | the recut stretch (`state/presence.go` already recuts locally) | the stretch the record moved |
+| `session_rows` | session | its one row (running aggregates; labels and children on a flag) | 1 |
+| `session_devices`, `session_call_accounts`, `session_tools` | (session, value) | a new value's row | 1 |
+| `session_cells` | (session, lvl, t, dim, keys) | the minutes whose rows changed, re-merged from their rows; their hours, from their minute cells | a minute's rows; 60 cells a key |
+| `request_cells`, `agent_call_cells` | as §3.8 | the call's minutes and hours | as above |
+| `batch_parts` | (batch, key) | the key's part of the event's batch: count, least name, first, last; its times when spanning | 1 |
+| `session_call_days` | (session, day) | the call's day | 1 |
+| `drawer_requests` | (request id, key) | the rows whose recorded lookups had an input filed (§3.7): the call's own; the previous step's (its next); a failed call's (its retry); the rows sharing its request id, prompt place, chain link or time bucket | the few rows sharing one id, place, link or bucket |
+| `drawer_parts` | (key, part, hash) | a new distinct value | 1 |
+| `title_candidates` | (account, start, session) | the thread's rows, when its start, accounts or candidacy change | its accounts |
+| `session_title_calls`, `session_edges`, the dimensions | as v7 | the changed rows | 1 |
+
+**Late and out-of-order records** follow the same rules:
+- a late event: its row, and the next row's flags;
+- a late input prompt: one prompt row;
+- a late call: its row (step numbers are read time);
+- a late title call: flags 5 minutes of one account's candidates.
+
+**What stays O(session):**
+- **A key's first run, and a run after a `render_version` change,** render
+  everything once.
+- **A cold load replays the key's journal.** `state.Decode` applies every
+  record: O(records held), once per load, not per commit. v8 drops the render
+  baseline a cold load also built.
+  - A key stays warm while its session is live (last activity within 5
+    minutes; v7 unloaded it after 60 s idle), so a live session loads once.
+  - A session whose bursts are further apart than that pays one replay per
+    burst. The CPU gate measures it at the capture's real gaps.
+  - A snapshot checkpoint (the state encoded, rather than its journal) would
+    make a load a decode instead of a replay (Not now, with the gate's
+    numbers).
+
+### 3.12 Every table: writer, readers, size
+
+**The rule** (decision 5): one canonical row per fact. Postgres holds what's
+queried (the rows the pages read, and finished display rows read by key). Raw
+payloads stay in S3, read by pointer. A table with no reader is deleted.
+Denormalized values are kept only where a join can't meet the latency target,
+each justified below.
+
+Sizes are measured bytes per row with indexes on the capture (v7 gate's
+Postgres) where the table exists, else estimated (est.). Rows a day are at the
+target (1,500 people).
+
+| Table | Writer | Readers | Bytes/row | Rows/day | GB/day |
+|---|---|---|---|---|---|
+| `event_rows` | the event's key | the Events tab (page, lookups); `/events/{id}` (primary key); `/state`'s recaps; the summary's straddlers | ~615 (est.; v7 701) | 75M | ~46 |
+| `drawer_requests` | the call's key | the drawer (primary key) | ~3,800 (est.; v7 5,358) | 7.5M | ~29 |
+| `request_log_rows` | the call's key | both logs; the Prompts tab's steps; an event's link; the worker's batch-call holder lookup | ~1,100 (est.) | 7.5M | ~8 |
+| `session_cells` | the session's key | every count and lane (§5.4) | ~270 (est.) | ~17M | ~4.6 |
+| `request_cells` | the call's key | the logs' counts; `/state`; the summary's account calls | ~200 (est.) | ~2M | ~0.4 |
+| `session_marks` | the session's key | the timelines; the Prompts tab's between rows | 310 | 3.5M | ~1.1 |
+| `batch_parts` | each key holding a batch's events | the render of a batch's other keys (§2); the summary's spanning correction | 365 | ~3M | ~1.1 |
+| `prompt_rows` | the session's key | the Prompts tab; the prompt lanes; joins for numbers and step counts | ~400 | 0.2M | ~0.1 |
+| `presence_segments`, `session_tools`, `session_devices`, `session_call_accounts`, `session_call_days`, `session_rows`, `drawer_parts`, `title_candidates`, `session_title_calls`, `session_edges`, `agent_call_cells` | the session's (or call's, title's, child's) key | the pages and renders named in §3.3 to §3.10, §5.4, §5.6 | 150 to 1,500 | under 1M each | ~0.5 together |
+| the dimensions (`dim_account`, `dim_session_account`, `dim_session_credential`, `dim_session_person`, `dim_person_device`, `dim_account_events`, `dim_account_device`, `dim_codex_plan`) | each key, its partial rows | a person's scope and header; the directory | small | per session or account | ~0.1 |
+| `keys`, `dirty_keys`, `workers`, `tail`, `ingest_pods`, `schema_version` | the workers | claims, runs, `/lag`, `/status`, retention | small | per key | ~0 |
+| **All** | | | | | **~91** |
+
+**Deleted: no reader once v8 reads finished rows** (v7 bytes/row → GB/day at
+the target):
+
+| Table | v7 bytes/row | v7 GB/day | Why it goes |
+|---|---|---|---|
+| `analytics` | 1,354 | 101 | no reader since the drawer was precomputed (#55); the worker agent removes it in its own PR |
+| `drawer_events` | 633 | 47 | `/events/{id}` reads the event's own `event_rows` row |
+| `requests` | 1,350 | 10 | `/raw`'s fallback view is rendered into the drawer row; the batch-call holder lookup reads `request_log_rows` |
+| `request_txs` | 966 | 7 | read only by v7's read-time `stream_sql`; the call's row holds its facts |
+| `session_request_rows` | 526 | 4 | replaced by `request_log_rows`, after step 11 |
+| `prompt_steps` | 814 | 1.2 | a step's facts are its call's row |
+| `request_reports`, `request_missed`, `prompt_index`, `codex_turns`, `session_last` | 775, —, 866, —, — | ~1.5 | read only by read-time SQL; their values are the call's, the prompt's or the session's row |
+| `call_tool_uses` | 250 | 0.8 | read only by the summary; the cells hold it |
+| `agent_calls`, `agent_call_hours` | 361, 249 | 1.6 | `agent_call_cells` |
+| `dim_session_visible` | — | ~0 | read only by `unattributed`'s anti-join; `session_rows.unattributed` replaces it |
+| `drawer_step_counts` (on `v8-worker`) | — | ~0 | a prompt's step count is its prompt row's |
+
+v7 stored ~270 GB/day at the target; v8 stores ~91 (decision 5: under 110). The
+three largest left are each one row per thing: an event's row, a call's drawer
+row, and a call's row. Further cuts are possible: `details` in S3 (§3.7, an
+owner option: ~14 GB/day less), or an event's raw position in place of its
+79-byte `event_key` (~6 GB/day less; Not now).
+
+**Denormalized, and why:**
+- **cells:** aggregates of rows. Merging the rows of a range at read would read
+  every row of the range.
+- **`event_rows`' head flags and first-occurrence marks:** a row's relation to
+  its neighbours, so counts can be cell sums. Each changes only with the row or
+  its neighbour.
+- **`drawer_requests`:** a finished display object, read by key. Its
+  derivation reads many rows of the key, so doing it per open would miss the
+  latency target. Its growing values are referenced, not stored (§3.7).
+- **`session_rows`' aggregates:** the session's own running totals, which every
+  session and person page reads.
+- **`batch_parts`:** each key's part of a batch, merged by its readers.
+- **`name_lower`, `summary_lower`:** only where Postgres's `lower()` differs
+  from today's.
+
+**Foreign keys.** Declared where parent and child are written in the same
+commit by the same key, so they're cheap and catch render bugs:
+- each table's `key` column → `keys (key)`: `request_log_rows`,
+  `drawer_requests`, `drawer_parts`, `request_cells`, `agent_call_cells`,
+  `batch_parts`, `session_title_calls`, the dimensions. A commit updates the
+  key row first, and retention deletes it last;
+- `drawer_requests (request_id, key)` → `request_log_rows (request_id, key)`;
+- `drawer_requests (key, part, hash)` → `drawer_parts`.
+
+Tables without a `key` column (the session tables) aren't given one only to
+hold a foreign key: on `event_rows` it would cost ~3 GB/day.
+
+**References that cross keys** can't be enforced foreign keys:
+- a batch call's `session_id` (the session's rows are another key's);
+- `batch_parts` across a batch's keys;
+- `session_edges`' parent;
+- `session_title_calls`' and `title_candidates`' accounts;
+- the dimensions' account and person ids;
+- an event's link to a call (a raw request id, joined at read).
+
+Their two sides are written by independent commits in any order (the
+referenced row can land later, or never: a call that wasn't captured), and
+retention forgets each key on its own schedule. The cross-key rule (§2) keeps
+their readers right instead.
 
 ## 4. Cross-key values
 
@@ -960,17 +1245,16 @@ time is who a person is, and the merges over that person's rows.
 | Person facts: `person_sql`'s picks, linked accounts, the header's rollup | read | read | merges over the group's rows (§5.1) |
 | A batch's session, count and name | write | write | v7 §3.7. Spanning parts also carry their event times (§3.3) |
 | A request's prompt number, first report and step across a person's sessions (quirk 3) | read (`stream_sql`) | write, shown by scope at read | `request_log_rows` carry each, from the call's own session (§3.9); the read shows it when that session is in the scope (§5.3) |
-| A session's Requests tab: other keys' rows | read (`stream_sql` over candidates) | write; a filter at read | A batch call in flight gets its session at render (§3.9). A Codex thread's unthreaded calls are read by the thread's credentials, client and window: a filter, nothing derived |
-| `children_json`, `label_text_alone`, Codex `label_text` (quirk 2) | read | write | §3.10 |
+| A session's Requests tab: other keys' rows | read (`stream_sql` over candidates) | write; filters at read | A batch call in flight gets its session at render (§3.9). The tab's credential filter, and a Codex thread's unthreaded calls (by the thread's credentials, client and window), are filters at read |
+| `children_json`; a Codex thread's label (its own title calls everywhere, decision 2) | read | write | §3.10 |
 | Presence and not-captured windows across a person's sessions | read | read (§5.5) | folds over the range's few segments and missed calls |
-| `/people`, `/overview` | read | read | v7 §5, unchanged |
+| `/people`, `/overview` | read (DuckDB) | read (merges in Postgres) | §5.6 |
 | `/status`; expiry's data time | read | read | unchanged |
 
 ## 5. API: reads finished rows, scaled on CPU
 
 v7's API read each page's rows into an in-memory DuckDB and ran today's endpoint
-code over them. v8 replaces that for the session and person pages. The
-directory keeps it (§5.6).
+code over them. v8 replaces that for every page, the directory included (§5.6).
 
 ### 5.1 What the API does
 
@@ -995,8 +1279,8 @@ bounded by the page's entity, its range and an index. In them it:
 Python then maps the rows onto today's models, as the routers do now: field
 copies, today's rounding, ns to times. There's no DuckDB, and no cache.
 
-Every computation that stays, each with its bound, is listed in §5.5; the four
-that depend on order are decision 2.
+Every computation that stays is listed in §5.5 with its bound, and accepted
+(decision 8).
 
 ### 5.2 Inventory: what each page computes today
 
@@ -1017,7 +1301,8 @@ accepted, and the parity URLs use some of them.
 | `/people/{id}/timeline` (355 ms) | `from` (now − span), `bin` 300 or 3600 (none for All) | bands: the shown sessions, packed into rows; over every scope session in range, the session timeline's lanes; presence over the bands | Codex titles | live; ends; hi |
 | `/people/{id}/requests` (296 ms) | `from`, `to`, `kind`, `q`, `captured`, `hidden`, `agent`, `page`, `pageSize` 20 (`order`) | `stream_sql` over: the scope credentials' transactions in range, the same prompts' others, their reports, prompt numbers, Codex turns, missed calls, batch parts. Then filters, counts, order, page; lastDataAt | every key using the credentials | — |
 | `/coverage?personId=` (the UI never calls it) | `personId`, `sessionId`, `from`, `to` | the marks' counts in range; the log's missed rows; missed windows | — | — |
-| `/people` (61 ms), `/overview` (66 ms), `/status` (27 ms), the drawer (~35 ms) | | out of scope (§5.6) | | |
+| `/people` (61 ms), `/overview` (66 ms) | `from` (floored to the hour), `to`, `sort`, `agent`, `q`, `page`, `pageSize` | v7's loader: the window's keys' dimension rows, session rows, call days and missed marks into DuckDB; `person_sql`, `rollups.py` and `directory.py` over them; for `/overview`, agent calls in the range | every key in the window | live |
+| `/status` (27 ms), the drawer (~35 ms) | — | one statement each, through the DuckDB loader | — | — |
 
 Ranges are often arbitrary instants: a brush is any ms, and a person's preset
 is `now − span` at ms. Bins are always on the ladder: 60, 300, 900, 3600,
@@ -1028,67 +1313,103 @@ is `now − span` at ms. Bins are always on the ladder: 60, 300, 900, 3600,
 **Finished rows.** Rows shown as they're stored. Their order is a stored key,
 and paging takes a page of it.
 
-**Ranges: cells and edges.** Each endpoint's range is a half-open interval
-[L, H) in ns, from its own predicate:
-- events and marks, `BETWEEN lo AND hi`: [lo, hi + 1);
-- prompts, `t_ns // 1000 * 1000 BETWEEN lo AND hi`: [⌈lo⌉, ⌊hi⌋ + 1 µs),
-  rounding to whole µs;
+**Ranges snap to whole minutes** (decision 1). The router snaps every range
+bound before any reader sees it, in ns:
+- `lo` → its minute's start: `lo − lo mod 60 s`;
+- `hi` → its minute's last ns: `hi − hi mod 60 s + 60 s − 1`.
+
+This applies to every range a page filters by, explicit or default:
+- a `from` or `to` in the URL;
+- a session's default `lo`, its start, and default `hi`, its last activity or
+  `now` while live;
+- a person's default `lo` (first activity, or `now` − 14 d) and default `hi`
+  (the later of `now` and the last activity);
+- the directory's `from` and `to`.
+
+The UI's ranges map like this:
+- a person preset sends `now − span` at ms precision and no `to`. Its `lo`
+  becomes the minute's start, and its default `hi` the end of `now`'s minute;
+- a brush's ends snap outward, so a brush narrower than a minute shows that
+  whole minute;
+- the People page's `from` is already floored to the hour, so it doesn't move.
+
+Pages that don't filter by a range don't snap. That's the session header and
+timeline: the timeline's lanes cover every row, and its `from`/`to` are the
+session's span. The response's meta echoes the snapped bounds: `from` is the
+minute's start (`…:00Z`), and `to` is its minute's last µs (`…:59.999999Z`),
+since times are shown to the µs.
+
+**Why snapped ranges are exact.** Each endpoint's own predicate keeps exactly
+the rows in [L, H), where L is the snapped `lo` and H = the snapped `hi` + 1
+ns, a minute boundary:
+- events and marks, `BETWEEN lo AND hi`: [L, H);
+- prompts, `t_ns // 1000 * 1000 BETWEEN lo AND hi`: [L, H), since L and H are
+  whole µs;
 - the request logs, `ts_ns // 1000` against `lo // 1000` and `hi // 1000`:
-  [⌊lo⌋, ⌊hi⌋ + 1 µs);
-- the summary's account calls, `ts_ns BETWEEN lo AND hi` over the person's log:
-  [lo, hi + 1) in ns, not µs. Its edge rows are tested on `ts_ns` too.
+  [L, H);
+- the summary's account calls, `ts_ns BETWEEN lo AND hi`: [L, H).
 
-The rows in [L, H) are a disjoint union of three parts:
-1. the whole hours inside [L, H): hour cells;
-2. the whole minutes inside [L, H) that aren't in such an hour: minute cells,
-   at most 59 at each end;
-3. the rows of the partial minutes at each end, tested with the endpoint's own
-   predicate: the *edge rows*.
+[L, H) is whole minutes: the whole hours inside it are hour cells, and the
+other minutes (at most 59 at each end) are minute cells. There are no partial
+minutes, so no rows are read to count a range, and a merge over the cells
+equals the merge over the rows.
 
-A merge over the parts equals the merge over the rows. The edge rows are merged
-by SQL that a test holds equal to every minute's cell (Testing).
+**Byte-identity is proven on the snapped range.** The oracle (today's code,
+V1Store's reader) gets the same snapped ns bounds from the same router, so
+every response must equal today's code's for that range. What snapping changes
+is visible and decided: a range's ends move to its minutes' ends, and its
+counts are its minutes'.
 
 **Bins.** A timeline bin is `t − t mod bin`, aligned to the epoch.
-- Every bin the UI sends is a multiple of 60, and those of an hour or more are
-  multiples of 3600.
+- `bin` must be a multiple of 60 (422 otherwise). The UI sends only the ladder
+  (60 s to 1 d), and those of an hour or more are multiples of 3600.
 - A bin of b seconds reads hour cells when 3600 divides b, else minute cells.
-  Each whole cell lies in one bin.
-- The range's first and last bins are cut as above.
-- A `bin` that isn't a multiple of 60 has no exact cells: 422 (decision 1).
+  Each cell lies in one bin.
+- A snapped range's first and last bins are whole minutes too.
 
 **Keys seen in a range** (event names and types, heads, hooks, tools, PRs): the
-union of the cells' and the edge rows' keys. A key occurs in the range if and
-only if it occurs in one of the parts.
+union of the cells' keys. A key occurs in the range if and only if it occurs in
+one of its minutes.
 
 **Things that span time, counted once** (an analytics batch's events, a
 prompt's calls): first occurrence.
-- Within a session, the entity's rows are in time order. A row is *first* if
+- Within a session, the entity's rows are in key order. A row is *first* if
   it's the entity's first in the session. Otherwise it carries `prev`, the
   time of the entity's row before it.
-- The entities with a row in [L, H) are counted by: the first rows in [L, H),
+- The entities with a row in [L, H) are counted by the first rows in [L, H),
   plus the rows in [L, H) whose `prev` < L.
 - Each entity with a row in range is counted exactly once, by its first row in
   range. That row is either its first overall, or its previous row is before L.
   No other row counts: a later row in range has its previous row in range.
 - The first term is a cell sum (`batch_first`, `prompt_first`).
-- The second term's rows lie in [L, min(H, L + G + 1)), where G is the
-  session's longest gap between consecutive rows of one entity (`batch_gap_ns`,
-  `prompt_gap_ns`). One whose previous row is in the same minute is in L's
-  partial minute, already read as an edge row. One whose previous row is in an
-  earlier minute is in the partial index (§3.3), which holds only those. On the
-  capture G is 17 minutes for batches (p99 8 s), and the index holds about one
-  row in six batches.
-- A person counts per session, and adds. A prompt's calls are in one key (I3,
-  below). A batch can span sessions (6 of 4.2k for the capture's heaviest person). The
-  sum counts it once per session with an event in range, so the read subtracts
-  k − 1 for each spanning batch with events in range in k ≥ 2 of the sessions
-  it counts. The spanning parts' event times give k: `batch_parts.ns`, through
-  the (key, first_ns) index from L − G.
+- The second term, the *straddlers*:
+  - such a row lies in [L, min(H, L + G + 1)), where G is the session's longest
+    gap between consecutive rows of one entity (`batch_gap_ns`,
+    `prompt_gap_ns`);
+  - L is a minute boundary, so its previous row is in an earlier minute. The
+    partial index (§3.3) holds exactly those rows;
+  - on the capture G is 17 minutes for batches (p99 8 s), and the index holds
+    about one row in six batches.
+- **A person counts per session, and adds.**
+  - A prompt's calls are in one key (I3, below).
+  - A batch can span sessions (6 of 4.2k for the capture's heaviest person).
+    The sum counts it once per session with an event in range, so the read
+    subtracts k − 1 for each spanning batch with events in range in k ≥ 2 of
+    the sessions it counts.
+  - k comes from the spanning parts that overlap the range: `first_ns ≤ hi AND
+    last_ns ≥ lo`, with no G bound (a part's events can span longer than G).
+    The (key, last_ns) WHERE spans index reads them. A part counts in k when
+    its event times (`ns`) hold one in range.
+  - Spanning parts are rare (8 of ~9.4k batches on the capture), so the read
+    is a handful of rows.
 
-**The Prompts tab: positions.** A session's `prompt_rows` are in time order
-with a dense `seq` (v7; a tested render property). The rows in a range are one
-contiguous run of it, so its total is a `seq` difference, and so is the place
-of prompt N in it (the page holding it).
+**The Prompts tab: sort keys and cells.** A session's `prompt_rows` are keyed
+by the state's ids, with their sort columns (§3.3).
+- The total in range is the `prompt_row` cells' sum.
+- A page is an `ORDER BY` the sort key with `OFFSET … LIMIT`.
+- Prompt N's place, and so the page holding it, is the `prompt_row` cells
+  before its minute plus its minute's rows before it: a minute of prompt rows
+  at most.
 
 **The Events tab: unit starts, counted in cells.** Today's SQL folds a tick into
 the row before it when that row is also a tick (`lag` over the rows the view
@@ -1098,36 +1419,32 @@ those rows in key order (§3.3).
   except for the range's first row of v: it has none, so it always starts a
   unit. Every other row starts a unit in the range iff it starts one overall
   (`head_all`, `head_pub`).
-- **Total** (every event in range): the `event` cells' `n`, plus the edge rows.
-- **Shown:** with ticks folded, the `event` cells' head counts for v (s1 or s2)
-  plus the edge rows' heads, plus 1 if the range's first row of v isn't a head
-  overall (one lookup). Unfolded, every row of v is a unit: `n`, or s3 for the
-  non-internal rows.
+- **Total** (every event in range): the `event` cells' `n`.
+- **Shown:** with ticks folded, the `event` cells' head counts for v (s1 or
+  s2), plus 1 if the range's first row of v isn't a head overall (one lookup).
+  Unfolded, every row of v is a unit: `n`, or s3 for the non-internal rows.
 - **The page:** the units of v in range start at its rows with a head flag,
   plus its first row. Two `ORDER BY key OFFSET … LIMIT 1` reads over those
   give the page's first unit start and the next page's. The page's rows lie
   between them, and each unit shows its first row, with `collapsedCount` the
   number of its rows there. That's bounded by the page's units: their rows,
   plus the offset's index entries for a later page.
-- This replaces the per-row positions an earlier draft stored (`pos_pub`,
-  `grp_all`, `grp_pub`). Those renumbered every later row on a late event;
-  head flags change only on the late row and the one after it.
+- Head flags change only on a late row and the one after it; stored positions
+  would renumber every later row.
 
-**`now`.** Every value that depends on `now` is one of three kinds:
+**`now`.** Every value that depends on `now` is one of two kinds:
 - **a threshold on stored values:** live (`now − last_ns ≤ 5 min`), in flight,
-  streaming, and the live tools and exit codes. These are today's expressions,
-  run in Postgres over the same stored columns;
-- **`now` itself:** a default range end; a band's or an open segment's end; an
-  open network segment's bypass (its end ≥ `bypass_from_ns`) and its
-  not-captured count (missed cells over the segment);
-- **presence while live.** Today's fold caps each open segment at `now` and adds
-  [last_ns, now] focused. Before `now`, every instant is covered by the same
-  segments as in the fold with [last_ns, ∞) focused added; after `now`, nothing
-  survives today's fold. So the live fold is the stored `live` runs, cut at
-  `now`.
+  streaming, events pending, and the live tools and exit codes. These are
+  today's expressions, run in Postgres over the stored columns (§3.3);
+- **`now` itself:** a default range end (snapped), a band's end, and the folds
+  over a session's own segments that end now. Those are its presence, its
+  permission and network segments (the last ends at the range's end), and
+  their not-captured windows. These run as today's SQL does, over the session's
+  stored segments and missed marks: a few rows (§5.5).
 
-These hold when `now` is before the newest row too (a client clock ahead of
-the API's): the range ends at `now`, and the runs are cut there.
+They hold when `now` is before the newest row too (a client clock ahead of the
+API's): the range ends at `now`'s minute, and the folds cut at `now` as today's
+SQL does.
 
 **The scope's values on request-log rows** (§3.9). A row in a person's log
 shows:
@@ -1155,92 +1472,128 @@ every dataset.
   as `quarantined_keys` does.
 - If one broke, the person's log would show the row's own session's value where
   today's shows the scope's.
-- A session's tab is the scope of one session, so its rows (those with `in_tab`)
-  show all three.
+- A session's tab is the scope of one session, so its rows (those whose
+  credential is the session's) show all three.
 
 ### 5.4 Each page in v8
 
 The numbers are the capture's heaviest session and person, estimated from their
-measured cells; the gate measures them.
+measured cells; the gate measures them. Every range is snapped (§5.3).
 
 | Endpoint | Statements, in order, in one snapshot | Rows read |
 |---|---|---|
-| `/sessions/{id}` | 1. the session row | 1 |
-| `/sessions/{id}/timeline` | 1. the session row. 2. the lanes' cells at the bin's level (`call`, `missed`, `event`, `friction`), merged per bin. 3. its rows, tagged: typed prompts, context points, compactions, permission and network segments, gap windows, presence runs | at bin 900 (its 48 h): ~9k minute cells and ~2k rows, ~1.7k of them context points. Today: 53k events and 2.5k marks |
-| `/sessions/{id}/state` | 1. the session row. 2. cells and edge rows over [lo, hi] (up to hi for hooks; every hour for recaps), and the request cells (`in_tab`) of the Requests tab's range. 3. lookups: the latest MCP and skills counts to hi, the first and last head in range, the recaps in range, `session_tools` first used by hi | the whole session: ~2k hour cells, at most ~1.2k minute cells, at most 2 minutes of rows |
-| `/sessions/{id}/events` | 1. the session row. 2. the total and shown counts (`event` cells and edge rows, the range's first row of the view); the page's first unit start and the next page's; the rows between, grouped by unit | the range's cells, a few lookups and the page's rows. A later page also reads the index entries of the unit starts before it. With `q`: the range's matches (§5.5) |
-| `/sessions/{id}/requests` | 1. the session row. 2. request cells and edge rows: hidden, total, per kind. 3. the page, by (`ts_us`, `request_id`): the session's rows with `in_tab`, and a Codex thread's unthreaded rows by its credentials, client and window | ~0.3k cells and 20 rows |
-| `/sessions/{id}/prompts` | 1. the session row. 2. the page, its total and its number (positions), with `now` applied. 3. the page's steps | at most 20 prompts and their steps |
-| `/people/{id}` | 1. the group's dimension rows: facts, devices, linked accounts. 2. its session rows, merged: the rollup, agents, each linked account's devices. 3. calls per day | the group's rows: tens to hundreds |
-| `/people/{id}/sessions` | 1. the scope's session rows: shown, agent, nested, paged; the total and lastDataAt | the scope's session rows |
-| `/people/{id}/summary` | 1. the shown sessions. 2. their cells, edge rows, straddling rows and spanning parts over [lo, hi]. 3. each shown session's latest MCP and skills counts to hi. 4. the account calls' cells; the missed windows (§5.5) | the 14 d preset: ~3.3k hour cells, at most ~2.5k minute cells, at most 2 minutes of rows per session |
-| `/people/{id}/timeline` | 1. the scope's sessions and the bands. 2. cells per bin and edge rows. 3. typed prompts in range. 4. the bands' presence segments (§5.5). 5. the missed windows (§5.5) with their cells | 24 h at 300 s: ~6k minute cells. Today: 24k events |
-| `/people/{id}/requests` | 1. the scope's credentials and sessions. 2. request cells and edge rows. 3. the page: for each credential (and each requested kind, by the kind index), and each session's missed rows, its first offset + size rows in order, merged | the cells, and k·(offset + 20) rows for k credentials |
-| `/coverage` | 1. the scope. 2. mark cells and edge rows; the missed rows. 3. the windows (§5.5) | the missed calls in range |
+| `/sessions/{id}` | 1. the session row, its devices, its children and label (rendered) | a few |
+| `/sessions/{id}/timeline` | 1. the session row. 2. the lanes' cells at the bin's level (`call`, `missed`, `event`, `friction`), merged per bin. 3. its rows, tagged: typed prompt items, context points, compactions, permission and network segments, presence segments, missed marks; the presence, network and not-captured folds over them (§5.5) | at bin 900 (its 48 h): ~9k minute cells and ~2k rows, ~1.7k of them context points. Today: 53k events and 2.5k marks |
+| `/sessions/{id}/state` | 1. the session row. 2. cells over [lo, hi] (up to hi for hooks, the latest counts and heads; every hour for recap totals), and the request cells of the Requests tab's range with the session's credentials. 3. the recaps in range; `session_tools` first used by hi | ~2k hour cells and at most ~1.2k minute cells for the whole session |
+| `/sessions/{id}/events` | 1. the session row. 2. the total and shown counts (`event` cells, the range's first row of the view); the page's first unit start and the next page's; the rows between, grouped by unit, with their prompt numbers and links joined | the range's cells, a few lookups and the page's rows. A later page also reads the index entries of the unit starts before it. With `q`: the range's matches (§5.5) |
+| `/sessions/{id}/requests` | 1. the session row. 2. request cells: hidden, total, per kind. 3. the page, by (`ts_us`, `request_id`): the session's calls whose credential is the session's, and a Codex thread's unthreaded calls by its credentials, client and window; prompt numbers and steps at read | ~0.3k cells and 20 rows, plus each row's prompt's earlier calls |
+| `/sessions/{id}/prompts` | 1. the session row. 2. the page by sort key, its total and number (`prompt_row` cells), with `now` applied. 3. the page's steps: its prompts' calls | at most 20 items and their steps |
+| `/people/{id}` | 1. the group's dimension rows: facts, devices, linked accounts. 2. its session rows, devices and call accounts, merged: the rollup, agents, each linked account's devices. 3. calls per day | the group's rows: tens to hundreds |
+| `/people/{id}/sessions` | 1. the scope's session rows: shown, agent, nested, paged; the total and lastDataAt; the page's sessions' coverage windows (§5.5) | the scope's session rows |
+| `/people/{id}/summary` | 1. the shown sessions. 2. their cells, straddling rows and spanning parts over [lo, hi]. 3. the account calls' cells; the missed windows (§5.5) | the 14 d preset: ~3.3k hour cells and at most ~2.5k minute cells per session |
+| `/people/{id}/timeline` | 1. the scope's sessions and the bands. 2. cells per bin. 3. typed prompt items in range. 4. the bands' presence segments (§5.5). 5. the missed windows (§5.5) with their cells | 24 h at 300 s: ~6k minute cells. Today: 24k events |
+| `/people/{id}/requests` | 1. the scope's credentials and sessions. 2. request cells. 3. the page: for each credential and kind (the kind index), and each session's missed rows, its first offset + size rows in order, merged; prompt numbers and steps at read | the cells, and k·(offset + 20) rows for k credentials and kinds |
+| `/coverage` | 1. the scope. 2. mark cells; the missed rows. 3. the windows (§5.5) | the missed calls in range |
+| `/people`, `/overview` | §5.6 | the window's session rows |
 
-### 5.5 Everything still computed per request
+### 5.5 Everything still computed per request (accepted, decision 8)
 
 Every computation left in a request, with its bound. "The page's rows" means
-the rows the response shows. None of these reads a range's rows except where
+the rows the response shows. None of these reads a range's rows, except where
 the bound says so.
 
-**Merges and filters over finished rows** (§5.1: exact however they're grouped):
+**Merges, joins and filters over finished rows** (§5.1: exact however they're
+grouped):
 
 | Computation | Where | Bound |
 |---|---|---|
 | The person's scope: the group by email, its sessions, its credentials; `unattributed` by its flag | every person page | the group's dimension rows |
 | The person header's merges: the rollup's sums and newest picks, the union of devices, agents, `person_sql`'s picks, each linked account's devices | `/people/{id}` | the group's dimension and session rows |
+| The directory's merges: the same, per person, over the window's sessions; the overview's totals | `/people`, `/overview` | the window's session rows (§5.6) |
 | The shown-sessions filter, nesting under a shown parent, paging by root | person sessions, summary, timeline | the scope's session rows |
-| Cell merges: sums, counts, the first by (time, seq), key unions (names, heads, hooks, tools, PRs) | every count and lane | the range's cells: whole hours, and at most 59 minute cells at each end, per session or credential, per key |
-| Edge rows, merged by the cells' own rules | every range | the rows of at most 2 partial minutes per session or credential (the capture's busiest minute: 3.3k events) |
+| Cell merges: sums, counts, the first or last by (time, seq), key unions (names, heads, hooks, tools, PRs) | every count and lane | the range's cells: whole hours, and at most 59 minute cells at each end, per session or credential, per key |
 | Per bin: the top 3 event names; friction's count, first prompt and details by first occurrence | both timelines | the bins' cell keys |
-| First-occurrence straddlers, and the spanning-batch correction (k − 1) | the summary's batches and prompts | the rows in [L, L + G] whose previous row is in an earlier minute (a partial index); the spanning parts from L − G |
+| First-occurrence straddlers, and the spanning-batch correction (k − 1) | the summary's batches and prompts | the rows in [L, L + G] whose previous row is in an earlier minute (a partial index); the spanning parts that overlap the range |
 | The Events tab's unit math: the first-row adjustment, the page's two unit starts, `collapsedCount` | `/events` | a lookup, the page's rows, the offset's index entries |
-| The Prompts tab's positions and the prompt jump | `/prompts` | two `seq` lookups |
-| The request logs' scope values: the session test for prompt numbers and reports; the step as a sum over the scope's credentials | request logs | the page's rows; a credential list per row only after a mid-prompt token refresh |
-| A Codex thread's unthreaded calls: credentials, client, kind and the thread's window | a Codex session's tab and `/state` | cells and the page, by index |
-| The person log's page: a k-way merge of each credential's (and kind's) first offset + size rows | person requests | k·(offset + size) rows |
-| `now`: thresholds, a range or segment ending now, the live presence cut, the open network segment's counts from cells | session pages, person timeline | per row; the session's few runs and segments |
-| Presentation: field copies, today's rounding, number order of PRs, the summary's top 8 words | every page | the response |
+| The Prompts tab's page and prompt jump | `/prompts` | the page's rows; a minute of prompt rows |
+| Joins for shared facts: a prompt's number (from its item), an event's link (the request id's newest visible call), a step count | events, logs, prompts, the drawer | one indexed row per shown row |
+| Step numbers: in the logs, 1 + the prompt's earlier visible model calls with credentials in scope; in the Prompts tab, `row_number()` in the prompt; the drawer's step N and "delivered in step N" | logs, prompts, the drawer | the prompt's calls; for "delivered in", the session's `call` cells before the call's minute |
+| The request logs' scope test: a call's session in scope for its prompt number and reports; a session tab's credential filter | request logs | the page's rows, and the scope's credentials |
+| A Codex thread's unthreaded calls: credentials, client, kind and the thread's window | a Codex session's tab and `/state` | cells, and the page by index |
+| The person log's page: a k-way merge of each credential's and kind's first offset + size rows | person requests | k·(offset + size) rows |
+| `now`: thresholds, and a range or band ending now | session pages, person timeline | per row |
+| Presentation: field copies, today's rounding, number order of PRs, the summary's top 8 words, `/raw`'s formatting of the S3 object | every page | the response |
 
-**Folds that depend on order** (decision 2: each runs in Postgres, in the page's
-statements, as today's SQL does):
+**Folds that depend on order** (today's SQL, in Postgres, in the page's
+statements):
 
-| What | Where | Bound | Why it isn't a merge |
-|---|---|---|---|
-| `q`: a substring of an event's name and summary, or of a request's path and detail | the Events and Requests tabs; a person's requests | the range's rows of the session or the credentials (a scan with `strpos`), and for the Events tab, its tick fold over the matches (one window function) | free text can't be precomputed |
-| Band rows (`cc.pack_rows`) | the person timeline | the bands shown | greedy, and its input depends on which sessions the range and `now` show |
-| Presence across sessions | the person timeline | the bands' segments in range | the priority fold needs every session's raw segments: a session's own fold drops time only it sleeps through, which still makes another session's time asleep |
-| Not-captured windows across sessions, with each window's reported count and bypass from cells | the person summary, timeline and `/coverage` | the missed calls in range (none on the capture), and per window its cells | a window's edges depend on the missed calls around it, in every session |
+| What | Where | Bound |
+|---|---|---|
+| `q`: a substring of an event's name and summary, or of a request's path and detail, and for the Events tab its tick fold over the matches (one window function) | the Events and Requests tabs; a person's requests | the range's rows of the session or the credentials (a scan with `strpos`) |
+| Band rows (`cc.pack_rows`) | the person timeline | the bands shown |
+| Presence: a session's own segments, or the person's bands' segments, with sleep's priority; live, open until `now` | both timelines | the segments in range |
+| A session's permission and network segments (the last ending at the range's end), with their bypass and not-captured counts | the session timeline | the session's segments and missed marks |
+| Not-captured windows (15-minute gaps), with each window's reported count and bypass | the session row's coverage, the session timeline, the person summary and timeline, `/coverage`, the directory | the missed calls in range (none on the capture) |
 
-Only `q` reads events, to match them. The alternatives are contract changes:
-drop the tick fold while searching; pack bands in the UI; show presence and
-windows per session.
+Only `q` reads events, to match them.
 
-### 5.6 Pages v8 leaves alone
+### 5.6 The directory, `/status` and the drawer
 
-- **`/status`, the drawer and `/events/{id}`:** one statement each (v7 §3.7,
-  §5), now through v8's reader instead of the DuckDB loader.
-- **`/people` and `/overview`:** v7 §5 as built: the v7 loader into DuckDB, and
-  today's directory code (decision 4).
+**`/status`, the drawer and `/events/{id}`** are one statement each, now
+through v8's reader instead of the DuckDB loader:
+- the drawer reads `drawer_requests` by its primary key, joined with its
+  `drawer_parts` and its prompt item, with the growing values filled in
+  (§3.7);
+- `/raw` reads the same row (its `raw_fallback`), and GETs the call's detail
+  object;
+- `/events/{id}` reads the event's `event_rows` row, and GETs the batch's
+  object.
+
+**`/people` and `/overview`** (decision 7) read finished rows like every other
+page, so DuckDB and ADBC leave the API. They need no new precompute: a person's
+directory row is the header's merges (§5.5) over the window's sessions. The
+statements, all bounded by the window's keys through `key_day` (v7 quirk 1, as
+built):
+1. The window's dimension rows (keys with `day` ≥ day(`from`), and every `a:`
+   key): `person_sql`'s leaders and members, as Postgres SQL. It's a merge
+   (min, newest pick) over the group's rows.
+2. The window's session rows with their person, merged per person: the
+   rollup's sums, maxima and newest picks, devices (`session_devices`),
+   prompts (the sum of `prompt_id_count`, by I3), agents, `live` by `now`.
+   Then the filters (`agent`, `q` over names, emails, ids and devices), the
+   sort and the page.
+3. Each row's calls per day over the last 14 days (`session_call_days`).
+4. Each row's not-captured windows: the fold over its sessions' missed marks
+   (§5.5).
+5. For `/overview`: the totals over those rows; its requests from
+   `agent_call_cells` over [lo, hi] (whole minutes and hours; with no range,
+   every cell and the calls with no time); sessions per product; and the
+   unattributed sessions (`session_rows.unattributed`, with their call days).
+
+Ranges snap like every other (§5.3). The UI's `from` is already floored to the
+hour. The read is bounded by the window's sessions: on the capture a few dozen;
+at the target ~6k for 24 h and ~90k for 14 d (v7's numbers). That makes the
+14-day directory the heaviest read left (a per-(account, day) cell is Not now).
 
 ### 5.7 Code
 
 - **The routers call a page reader.** V1Store's reader is today's SQL: it's
   the oracle. PgStore's is v8's statements. Both return what the routers map
   onto the models, so the side-by-side tests compare the two readers through the
-  same router.
-- **Gone from the API's Postgres path:**
-  - the v7 loader for these pages: `pgstore.py`'s session loads, the other
-    keys' candidates and `_request_rows`, and `pgstore_person.py`'s loads;
-  - `sql/labels.sql`, now the worker's (§3.10);
-  - every use of `stream_sql`, `state_sql`, `person_sql`, `rollups.py`'s folds,
-    and `session.py`'s and `timeline.py`'s endpoint SQL. They stay for V1Store
-    and the oracle.
-- **Driver:** with no DuckDB to read Arrow, the API reads Postgres with
-  psycopg 3: an exact pin, 14 days old (decision 5). The directory keeps ADBC
-  and DuckDB until it's ported (decision 4).
-- `agent_calls_in` (`/overview`) and `org_kind` are unchanged.
+  same router, on the same snapped range.
+- **Gone from the API:**
+  - the v7 loader: Arrow into DuckDB, `_into`, `_finish`, and the session,
+    person and directory loads in `pgstore.py`, `pgstore_person.py` and
+    `pgstore_directory.py`;
+  - `sql/labels.sql` (the worker renders labels, §3.10);
+  - DuckDB and ADBC as runtime dependencies. The API reads Postgres with
+    psycopg 3 (an exact pin, 14 days old).
+- **Kept only as the oracle,** moved under `api/tests/oracle` with DuckDB as a
+  dev dependency: V1Store and BucketStore, `store.py`, `v1.py`, `buckets.py`,
+  `state_sql`, `stream_sql`, `person_sql`, `rollups.py`'s folds,
+  `directory.py`'s SQL, and `session.py`'s and `timeline.py`'s endpoint SQL.
+  `AINTERCEPT_STORE=v1` leaves the app; the tests construct V1Store directly.
+- `org_kind` still reads `CUSTOMER_ORG_IDS` at request time.
 
 ## 6. Deployment
 
@@ -1317,7 +1670,7 @@ windows per session.
 
 ## Rollout
 
-None, as in v7 (decision 7). The schema changes, and there are no migrations,
+None, as in v7. The schema changes, and there are no migrations,
 so on deploy:
 - everything under `v1/` is deleted;
 - Postgres starts empty;
@@ -1343,10 +1696,10 @@ Assumptions, at the capture's rates per person:
 |---|---|---|---|---|---|---|
 | Ingest | per record, as v5 | per-key buffers, the index journal | pods, on CPU | S3 PUT | none | ~350 PUTs/s at peak (key files ~100, call detail objects ~250), plus ~10 index objects |
 | The tail | per index object: GET; per pass: one transaction | its cursor row | one holder | S3, Postgres | ~1 transaction every 2 s, ~100 flags/s | 1 LIST every 2 s, ~10 GETs/s |
-| Worker run | per record: apply (#19). Per run: the whole session rendered and hashed, its drawer rows and cells too (O(session) CPU, as v6 and v7: ~40 cores at the target, below; decision 3), the changed rows written. A key with no input costs a key-row read, a LIST and a DELETE | the key's state (with each ended call's wire summary, a few KB) and a hash per rendered row and cell, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak, ~135 rows each (v7: ~100): ~11k rows/s at peak, ~2.7k/s on average, ~240M rows/day; one read of other keys' rows per run; a few flags per commit | ~4 per run, plus one GET per call that ended (its detail object, once): ~650/s at peak |
-| Retention | per forgotten key: batched deletes | none | one holder | — | ~240M rows/day deleted at the target (Not now: partitions) | the forgotten keys' objects |
-| API | per request: at most 5 statements, reading the page's rows, the range's cells and at most 2 minutes of edge rows per session (§5.4); the drawer one primary-key lookup | none | pods, on CPU | Postgres; S3 GET (`/raw`, `/events/{id}`) | reads only | those GETs |
-| Postgres | — | the working set | one primary (vertical) | disk | ~270 GB/day measured per row (below); ~4 TB at 15 days | — |
+| Worker run | per record: apply (#19), then render the rows its delta affects (§3.11): O(the run's records), never O(session). A key with no input costs a key-row read, a LIST and a DELETE. A cold load replays the key's journal once (§3.11) | the key's state (with each ended call's wire summary) and the drawer's lookup memo, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak. ~1.5 rows a record (an event's row; a call's two; cells; neighbours): ~4.5k rows/s at peak (v7: ~10k), ~125M rows/day; a few flags per commit | ~4 per run, plus one GET per call that ended (its detail object, once): ~650/s at peak |
+| Retention | per forgotten key: batched deletes, and its readers' flags | none | one holder | — | ~125M rows/day deleted at the target (Not now: partitions) | the forgotten keys' objects |
+| API | per request: at most 5 statements, reading the page's rows and the range's cells (§5.4); the drawer one primary-key lookup | none | pods, on CPU | Postgres; S3 GET (`/raw`, `/events/{id}`) | reads only | those GETs |
+| Postgres | — | the working set | one primary (vertical) | disk | ~91 GB/day (§3.12); ~1.4 TB at 15 days | — |
 
 **What a commit writes, v7 and v8.** A typical run on the capture's heaviest
 session: ~100 events, a few calls and ~10 requests over a minute (estimated
@@ -1354,23 +1707,15 @@ from its measured cells: ~10 event-dim keys per active minute).
 
 | Table | v7 as built | v8 |
 |---|---|---|
-| `event_rows`, `prompt_rows`, `prompt_steps`, `session_marks`, … | ~120 | the same rows, a few more columns; a late event is one insert and one head-flag update, not a renumbering |
-| `drawer_requests` | the new calls' rows, plus every earlier call's row in their prompts (`stepCount`, §3.3): up to 222 rows a call on the capture's longest prompt | the new calls' rows and their prompt's row |
-| `session_request_rows` → `request_log_rows` | ~10 | ~10 (both, until step 8) |
-| `session_cells` | — | ~25: the minute's and the hour's cells of the keys the run touched |
-| `request_cells` | — | ~10 |
-| `presence_runs`, `gap_windows`, labels, title rows | — | 0 to a few |
-| A commit | ~130, and O(prompt) drawer rows | ~165 |
+| events | ~100 `event_rows`, ~100 `analytics`, ~100 `drawer_events` | ~100 `event_rows`, and the next row's flags |
+| calls | ~10 each in `request_txs`, `requests`, `session_request_rows`, `prompt_steps` (steps), plus the drawer rows: every earlier call's in their prompts (`stepCount`), up to 222 rows a call on the capture's longest prompt | ~10 `request_log_rows`, ~10 `drawer_requests`, and the previous step's and a retried call's rows |
+| prompts, marks, segments, session row | the rows whose hash changed, after rendering everything | the prompt item and its neighbours, the new marks, the recut segments, the session row |
+| cells | — | ~25 session cells and ~10 request cells: the minutes and hours the run touched |
+| a late event | every later `event_rows` row renumbered (`seq`) | one row, and its neighbour's flags |
+| A commit | ~350, plus O(prompt) drawer rows | ~170 |
 
-**What may grow per commit, and what may not.** v8's rule (§3.3): a row
-changes only when its own data does. Two costs still grow with something:
-- a late prompt row renumbers the session's later prompt rows (a few);
-- a late title call reruns the assignments of the calls after it, until one
-  stays the same.
-
-Everything else is bounded per record. v7's drawer as built isn't: its fix is in
-progress. The write-amplification gate (§Testing) asserts the rule table by
-table, in rows and bytes per record, rather than trusting this table.
+The write gate (Testing) asserts these per table, in rows and bytes per record,
+instead of trusting this table.
 
 **What a page reads** (the capture's heaviest, from §5.4; v7 read every row of
 the entity in the range):
@@ -1378,77 +1723,70 @@ the entity in the range):
 | Page | v7 rows read | v8 rows read |
 |---|---|---|
 | a session's header, prompts, requests, events (page 1) | the session's rows: up to 53k events | 1 to ~300: the page, its cells |
-| a session's state, whole range | 53k events, 2.5k marks, 3.4k requests | ~3k cells, at most 2 minutes of rows |
+| a session's state, whole range | 53k events, 2.5k marks, 3.4k requests | ~3k cells |
 | a session's timeline, bin 900 | 53k events, 2.5k marks | ~9k minute cells, ~2k rows |
-| a person's summary, 14 d | 71k events and their marks | ~6k cells, at most 2 minutes of rows a session |
+| a person's summary, 14 d | 71k events and their marks | ~6k cells |
 | a person's timeline, 24 h at 300 s | 24k events | ~6k minute cells |
-| a person's requests, page 1 | the log's inputs for the range | the cells, and 20 rows per credential |
+| a person's requests, page 1 | the log's inputs for the range | the cells, and 20 rows per credential and kind |
 
-**Storage, measured.** Bytes per row with indexes, from the capture in the v7
-gate's Postgres, times the target's rows a day:
+**Storage** (§3.12 has every table): ~270 GB/day at the target in v7 (measured
+bytes per row) → ~91 in v8.
 
-| Table | Bytes a row | Rows/day | GB/day |
-|---|---|---|---|
-| `analytics` | 1,354 | 75M | ~101 |
-| `event_rows` | 701 (v8: ~20 more) | 75M | ~53 |
-| `drawer_events` | 633 | 75M | ~47 |
-| `drawer_requests` | 5,358 | 7.5M | ~40 |
-| `requests`, `request_txs`, `request_log_rows` | 1,350, 966, ~530 | 7.5M each | ~21 |
-| `session_marks`, `prompt_steps`, `call_tool_uses`, `request_reports`, `agent_calls`, `batch_parts` | 250 to 815 | 1.5M to 4.5M each | ~7 |
-| `session_cells`, `request_cells` | ~200 (estimated; none written yet) | ~17M | ~4 |
-| **All** | | | **~270** |
+| | v7 GB/day | v8 GB/day |
+|---|---|---|
+| an analytics event | 101 (`analytics`) + 53 (`event_rows`) + 47 (`drawer_events`) | ~46 (`event_rows`) |
+| a call | 10 (`requests`) + 7 (`request_txs`) + 4 (`session_request_rows`) + 1 (`prompt_steps`) + 40 (`drawer_requests`) | ~8 (`request_log_rows`) + ~29 (`drawer_requests`) |
+| cells | — | ~5 |
+| everything else | ~7 | ~3 |
+| **All** | **~270** | **~91** |
 
-That's ~4 TB at 15 days. v7's budget (~110 GB/day) underestimated it: the four
-tables of one row per event or per request dominate. The owner decides the cuts
-(narrower `analytics`, drawer rows, retention); this spec doesn't.
-
-- **Postgres at the target.** One primary takes ~11k inserted rows/s at peak
-  (v7: ~8k) and ~270 GB/day. An r6g.2xlarge with 2 TB of gp3 doesn't hold
-  15 days of that; the class and the disk follow the owner's cuts.
-  - Retention's deletes match the inserts (~240M rows/day), and so does the
-    vacuum behind them. That's where day partitions start to pay (Not now,
-    with the numbers).
+- **Postgres at the target.** One primary takes ~4.5k inserted rows/s at peak
+  and ~91 GB/day: ~1.4 TB at 15 days. An r6g.2xlarge with 2 TB of gp3 at 12k
+  IOPS holds it.
+  - Retention's deletes match the inserts, and so does the vacuum behind them.
+    That's where day partitions start to pay (Not now, with the numbers).
   - Hour cells are updated in place while their hour is active: one row
     rewritten per key and run, which the vacuum absorbs.
-  - The next steps for reads: a read replica for the API (Not now).
+  - The next step for reads: a read replica for the API (Not now).
 - **Connections:** 3 per worker, and one per API request in flight (a pool of 8
   per pod). That's ~140 at the maximum replica counts.
 - **Advisory locks:** one per warm key, ~5k at peak, well under
-  `max_locks_per_transaction` × `max_connections`.
-- **CPU:** the render is O(session) per run. v7 measured ~0.4 s a run on the
-  test datasets' 21k-event session, drawer rows included. At ~100 runs/s of
-  sessions that size, that's ~40 cores across the workers, not v7's ~5. KEDA
-  scales them on lag. v8's cells add a pass over the rendered rows, a few
-  percent. This is decision 3's cost, stated as measured.
+  `max_locks_per_transaction` × `max_connections`. Keys stay warm while live
+  (§3.11), which holds more of them than v7's 60 s did.
+- **CPU, measured.** On the capture's heaviest session (57,874 records,
+  replayed one in/ file per run: 234 runs, ~250 records each), from `v8-worker`:
+  - v7's whole render and diff: p50 966 ms a run. At the target's ~100 runs/s,
+    that's ~40 cores at 0.4 s a run, and it grows with each session;
+  - with `v8-worker`'s incremental drawer: p50 204 ms. Of that, ~120 ms is the
+    O(session) work v8 removes: the scope's indexes and filing (~50 ms), the
+    session tables' whole render (~27 ms), and hashing every row (~43 ms);
+  - what stays scales with the run's records: ~84 ms for ~250 records, ~0.34
+    ms a record (apply not included).
+
+  At the target's ~83M records a day (75M events, 7.5M calls), ~2.9k a second
+  at peak, that's ~1 core for the render, plus apply and commits. The CPU gate
+  measures the real number, and holds it flat as a session grows (Testing).
+  KEDA scales the workers on lag.
 - **S3:** ~800 ops/s in all at peak. AWS S3's limits are far above that; DO
   Spaces' 800/s per bucket fits the demo.
 
-**Expected latency** in the cluster, warm (the gate measures it):
+**Expected latency** in the cluster, warm (the gate measures it on the
+capture):
 
 | Page | Rows read (the heaviest) | Expected |
 |---|---|---|
-| `/status`, the drawer, a session's header | 1 | ~5 ms |
+| `/status`, the drawer, a session's header | 1 to a few | ~5 ms |
 | a session's events, prompts, requests | a page, and a few hundred cells | ~10 ms |
-| a session's state | ~3k cells, at most 2 minutes of rows | ~15 ms |
+| a session's state | ~3k cells | ~10 ms |
 | a session's timeline | ~11k cells and rows at the finest bin the UI asks of it | ~30 ms |
 | a person's header, sessions | the group's rows | ~10 ms |
 | a person's summary (14 d) and timeline (24 h) | ~6k cells each | ~20 ms |
-| a person's requests | the cells, 20 rows per credential | ~15 ms |
-| `/people`, `/overview` at 1,500 people, 24 h and 14 d | ~6k and ~90k sessions, with their dimension rows and day counts | ~0.1 s and ~1 s (v7, unchanged) |
+| a person's requests | the cells, 20 rows per credential and kind | ~15 ms |
+| `/people`, `/overview` | the window's sessions: on the capture a few dozen | ~20 ms; at 1,500 people, ~6k and ~90k sessions for 24 h and 14 d, ~0.1 s and ~1 s |
 
-**The cold-cache limit,** recorded honestly.
-- v7's person summary and timeline folded raw event rows at read time, so at
-  1,500 people a heavy person's 7 days were ~16k random page reads from disk.
-- v8 reads hour cells for the whole hours (O(hours), written together per key)
-  and at most two minutes of rows per session at each edge. A heavy person's
-  7 days are then a few hundred pages.
-- The directory keeps v7's folds over session rows and day counts.
-
-The final gate measures cold p95 on the capture, with Postgres restarted and the
-OS cache dropped once. The capture is 0.9 GB and fits in any cache, so that
-can't prove cold ≤ 300 ms at the target. A target-shaped database will come
-from the load-test harness, planned separately, and the cold gate runs there
-too.
+**Cold latency:** measured on the capture only, with Postgres restarted and the
+OS cache dropped once. The capture is 0.9 GB and fits in any cache, so it says
+little about the target. A cold gate at the target is Not now (decision 6).
 
 ## Testing: small tests, written first
 
@@ -1562,72 +1900,84 @@ Each step writes its failing tests first. **The oracle is today's code, frozen**
 v7's tests stay, except that for the pages v8 serves, the table-level
 comparisons of what the API loads are replaced by the ones below. v8 adds
 these, each written before the code it holds. The oracle stays today's code,
-frozen: V1Store's reader (§5.7).
+frozen: V1Store's reader (§5.7), given the same snapped ranges.
 
-- **The worker's layers** (v7's harness: a fresh database per test, one pass
-  written into a `ref` schema, compared with `EXCEPT ALL` both ways) cover every
-  new table and column: cells, `request_log_rows` and `request_cells`, labels,
-  title assignments, head flags, first-occurrence marks, presence runs and gap
-  windows.
+- **Incremental equals whole.** After every run of every layer test, the rows
+  the incremental render wrote equal a whole render of the same state, table by
+  table (as `v8-worker`'s `VerifyIncremental` holds the drawer). That's v7's
+  harness: a fresh database per test, one pass written into a `ref` schema,
+  compared with `EXCEPT ALL` both ways.
   - Every order of up to 5 records, one run per record; and generated
     sequences, shuffled, duplicated, late across hours, reloaded cold halfway.
-    After each run the tables equal one pass, and the run wrote only the rows
-    and cells that changed (counted).
+  - **A test per dependency rule** (§3.11) changes one kind of input alone, and
+    fails if a row that reads it isn't re-rendered.
   - **Named cases:**
-    - a late event inside a tick run: only its own and the next row's head
-      flags change, and no other event row is written;
+    - a late event inside a tick run: only its own row and the next row's head
+      flags are written;
+    - a late input prompt: one prompt row is written;
+    - a call ending: its row and its link's events are unchanged, but the read
+      shows the new label;
     - a batch whose events span two sessions, its two keys committing in both
       orders, and while one of its calls is in flight in a `c:` key;
-    - a token refreshed mid-prompt: the step arrays;
-    - a late title call before one already assigned: the change runs forward
-      and stops;
-    - a thread that becomes a candidate (its first model call) and one that
-      stops being one (its own title);
+    - a token refreshed mid-prompt: the steps by scope;
+    - a title call and a thread becoming a candidate, committing at once in
+      both orders (the account lock);
     - a child's edge;
-    - a commit's flags never name more than the rows around one instant.
-- **Render properties:** `prompt_rows`' `seq` is dense and in time order;
-  `event_rows`' key order is the render's event order; every row's head flags
-  equal the oracle's `lag` over its view.
-- **Write amplification, rows and bytes.** Counting rows whose hash changed
-  can't catch a value that changes on every run, so the gate counts what's
-  written. The capture, and each CI dataset, is replayed in 5 s and in 30 s
-  windows, with its files spread over 2 to 4 simulated pods. For every table,
-  the rows and the bytes written per record applied must stay under a fixed
-  bound, and must not grow with the session's or the prompt's length:
-  - the bounds are set from the budget (§Scaling budget) and checked in each
-    of steps 2 to 5 for that step's tables;
-  - v7's drawer as built fails it (§3.3: 222 rows a call); the drawer fix must
-    pass it.
-- **Cells, row for row.** On every dataset:
-  - every minute and hour cell equals the oracle's merge of its rows;
-  - the API's edge SQL over every whole minute equals that minute's cell. This
-    holds the Go cells and the SQL edges to one definition.
+    - forgetting a key flags its readers;
+    - a commit's flags never name more than the keys around one batch, one
+      parent or 5 minutes of one account.
+- **Render properties:** `event_rows`' key order is the render's event order;
+  every row's head flags equal the oracle's `lag` over its view; a prompt item
+  holds its three numbers as today's three rules give them.
+- **The CPU gate.** The capture's heaviest session is replayed one in/ file per
+  run, and again in 5 s windows. Each run's CPU (apply, render, commit build)
+  is measured.
+  - CPU per record must stay flat, and per commit must be about equal at 1k and
+    at 50k events: within 1.5×, for runs of the same size.
+  - Cold loads are reported apart, at the capture's real gaps between files.
+  - A whole-session pass anywhere in a run fails it.
+- **The write gate: rows and bytes per record.** Counting rows whose hash
+  changed can't catch a value that changes on every run, so the gate counts
+  what's written.
+  - The capture, and each CI dataset, is replayed in 5 s and in 30 s windows,
+    with its files spread over 2 to 4 simulated pods.
+  - For every table, the rows and the bytes written per record applied must
+    stay under a fixed bound, and must not grow with the session's or the
+    prompt's length.
+  - The bounds come from the budget (§Scaling budget), and each of steps 2 to 6
+    checks them for its tables. v7's drawer as built fails it (222 rows a
+    call), and the fix must pass.
+- **Cells, row for row.** On every dataset, every minute and hour cell equals
+  the oracle's merge of its rows.
 - **Invariants I1 to I3** (§5.3) are asserted on every dataset, and at the gate.
   The periodic check's SQL is tested on a dataset with one violation of each:
   its gauge reports it.
-- **The read primitives against the oracle's tables.** Positions and units equal
-  the oracle's window SQL over its rows; first-occurrence counts equal
-  `count(DISTINCT)` for every generated range; the request log with each
-  person's scope applied equals `stream_sql`'s rows for every person and range.
+- **The read primitives against the oracle's tables.**
+  - first-occurrence counts equal `count(DISTINCT)` for every generated range,
+    spanning batches included;
+  - the request log with each person's scope applied equals `stream_sql`'s rows
+    for every person and range;
+  - each session's tab (its credential filter) equals today's.
+- **Snapping.** The router snaps every bound as §5.3 says: ends on a minute
+  boundary, ±1 ns, ±1 µs and ±1 ms around one, inside a minute, both in one
+  minute, open at either end, defaults included. The oracle and v8 get the same
+  snapped bounds.
 - **Response level, side by side.** Old is V1Store's reader (today's SQL), new
   is PgStore's, through the same router. For every endpoint in §5.2:
   - every URL of `endpoints.py`, which gains what the UI really sends: `kind` on
     a session's requests; the "other" chip's kinds with `skills`;
     `collapseTicks` always; `q` with a range;
   - generated ranges whose ends fall:
-    - on a minute or hour boundary, and ±1 ns and ±1 µs around one;
-    - inside a minute; both inside one minute;
     - inside a tick run; between two events of one batch (in one session, and
       across two); between two calls of one prompt; inside a presence segment;
       inside a not-captured window;
     - before and after all data; open at either end;
-  - every ladder bin with each of those ranges (partial first and last bins),
-    and `bin` 90 (422);
-  - a session's tab and `/state` for the sessions with rows outside their own
-    credentials (`in_tab`);
+  - every ladder bin with each of those ranges, and `bin` 90 (422);
   - `kind`-filtered logs, which read the kind indexes;
   - pages 1, 2 and past the end, and the prompt jump to the first, a middle and
-    a missing prompt.
+    a missing prompt;
+  - the directory for every `from` (presets, unaligned, none), with every
+    `sort`, `agent` and `q` the parity URLs use.
 
   `make check` runs the small datasets with 3 URLs per group plus every cut
   for one session and one person; `-m full` runs everything.
@@ -1646,39 +1996,47 @@ frozen: V1Store's reader (§5.7).
   - the statements in §5.4, on one connection;
   - every statement's plan (EXPLAIN) uses an index on the big tables;
   - the rows read don't change with 8× more history outside the range, nor
-    with more rows in the session outside the page (the Events tab: its page
-    and 4 lookups).
-- **No DuckDB:** the session and person pages run with DuckDB unimportable (a
-  test).
+    with more rows in the session outside the page.
+- **No DuckDB, no ADBC:** the API runs with neither importable (a test). Only
+  the oracle's tests import DuckDB.
+- **Foreign keys** (§3.12) are declared in `schema.sql`, so every layer test
+  runs under them.
 - **CI time.** The new layer tests run on the per-test databases v7 uses; the
   side-by-side cuts add under a minute across the parallel jobs.
-- **The real capture,** once, at the gate (step 9).
+- **The real capture,** once, at the gate (step 12).
 
 ## Build order
 
 v7's steps 1 to 10 are done: v7 is built and deployed. v8's steps follow. Each
 is one PR, tests first: its failing tests land in the PR before the code.
 
-**What runs in parallel.** Steps 1 to 5 can be built at once: each owns its
-tables, and the shared edits (`schema.sql`, `render.Version`) merge
-mechanically. Steps 6 and 7 are one PR per page, each starting when its inputs
-have landed.
+**What runs in parallel.**
+- Steps 1 and 2 start at once.
+- Steps 3 to 7 each own their tables, and can run at once once step 2 lands.
+  Their shared edits (`schema.sql`, `render.Version`) merge mechanically.
+- Step 8 is the worker agent's drawer, finished on 4 and 5.
+- Steps 9 and 10 are one PR per page, each starting when its inputs have
+  landed.
+- The worker agent's PR that drops `analytics` (no reader) goes in any time.
 
 | Step | What | Tests first | Gate | Needs |
 |---|---|---|---|---|
-| 1 | **The reader.** psycopg 3 (decision 5): the pool, one snapshot, the statements, the trace. The routers' page-reader seam (§5.7), with V1Store's reader today's SQL and PgStore's still v7's loader behind it. `/status`, the drawer and `/events/{id}` on the new reader. The harness: generated cuts, bins with cuts, replay checkpoints with `now` at each threshold | every v7 response unchanged through the seam; the harness's own tests (each cut lands where it claims) | `make check`; the harness green on v7, which is byte-identical today | — |
-| 2 | **Session cells:** `session_cells` rendered and diffed; the API's edge SQL for every dim | every minute and hour cell equals the oracle's merge; the edge SQL equals every minute's cell; the write-amplification bounds for cells | `make check` | — |
-| 3 | **Session-table columns:** `event_rows`' stable key and head flags (`seq` kept, out of the key, for the v7 loader); the partial indexes; batch and prompt first-occurrence marks and gaps; `batch_parts`' spans and times; the `unattributed` flag; `presence_runs`, `gap_windows`, network bypass | each equals the oracle's window SQL over its rows; the render properties; the named cases (a late tick, a spanning batch both ways, a client clock ahead); the write-amplification bounds | `make check` | — |
-| 4 | **Request-log rows:** `request_log_rows` and `request_cells` with `in_tab`, the kind indexes, the `c:` keys' rows, batch sessions; the periodic I1 to I3 check and its gauge. `session_request_rows` stays, for the v7 loader, until step 8 | for every person and range of every dataset, the log with the scope applied equals `stream_sql`'s; every session's tab equals today's (the `in_tab` rows included); a token refreshed mid-prompt; a batch call in flight getting its session; I1 to I3 and the gauge; the write-amplification bounds | `make check` | — |
-| 5 | **Labels and children:** `title_candidates`, `title_assignments`, alone labels, children; the flags of §2, and retention's (§3.6) | `session_rows`' labels and children equal `labels.sql`'s over every dataset's components; the named label cases; flags bounded; forgetting a key flags its readers | `make check` | — |
-| 6 | **Session pages on v8's reads,** one PR each: `/sessions/{id}` (5), `/prompts` (1), `/events` (3), `/requests` (4), `/state` (2, 3, 4), `/timeline` (2, 3, 5) | the page's side-by-side URLs and cuts, its checkpoints, its statements test | byte-identical on the CI datasets (`make check`: the subset; `-m full`: all) | 1, and the steps named |
-| 7 | **Person pages on v8's reads,** one PR each: `/people/{id}` (1), `/sessions` (5), `/requests` (4), `/summary` (2, 3, 4), `/timeline` (2, 3, 5), `/coverage` (2, 4) | as step 6 | as step 6 | 1, and the steps named |
-| 8 | **Delete** the v7 loader for these pages (§5.7), then what only it read: `session_request_rows` (v7 `pgstore.py:137` and `:754`) and `event_rows.seq`. If decision 4 says so, the directory's SQL in Postgres, and DuckDB and ADBC out of the API image. `SETUP.md`, `PRODUCTION.md` | the no-DuckDB test; the image test, if chosen | `make check`; `make up && make verify` | 6, 7 |
-| 9 | **The gate,** on the real capture, settled | — | every endpoint byte-identical (v7's 4,248 URLs, plus the new cuts and checkpoints); the write-amplification gate (rows and bytes per record per table, 5 s and 30 s windows, 2 to 4 pods); warm p95 ≤ 50 ms and cold p95 ≤ 300 ms for every in-scope page of the heaviest person and session; rows read per page measured against the budget. The capture is 0.9 GB, so its cold numbers can't prove the target's: the cold gate also runs on the target-shaped database the load-test harness builds (planned separately) | 8 |
-| 10 | **Deploy** to the DigitalOcean cluster: Postgres starts empty (Rollout), `helm upgrade` (never uninstall) | — | pages load on the cluster's new traffic; `/lag` settles under 30 s; a request through the proxy shows up end to end | 9 |
+| 1 | **The reader and snapping.** psycopg 3: the pool, one snapshot, the statements, the trace. The routers' page-reader seam (§5.7), with V1Store's reader today's SQL and PgStore's still v7's loader behind it. The router snaps every range (§5.3), for both readers. `/status`, the drawer and `/events/{id}` on the new reader. The harness: snapped cuts, bins with cuts, replay checkpoints with `now` at each threshold, settling before each comparison | the snapping tests; every response through the seam equals the oracle's on the same snapped range | `make check`; the harness green on v7 | — |
+| 2 | **The incremental render.** Deltas name the affected rows (§3.11); render and upsert exactly those; no baseline and no hashing of every row; keys warm while live. The incremental-equals-whole check for every table; the CPU gate and the write gate harnesses. It covers v7's tables whose keys are already stable (`session_tools`, `session_call_days`, `batch_parts`, the dimensions) | incremental equals whole; a test per rule; the CPU gate on those tables | `make check`; the CPU gate flat on the heaviest session | — |
+| 3 | **Events:** `event_rows`' key (batch, rank) and session index, its columns (§3.3), head flags, first-occurrence marks, `event_key`; `/events/{id}` from it; `drawer_events` goes. `seq` stays, out of the key, for the v7 loader | the render properties; the named event cases; the write gate for events | `make check` | 2 |
+| 4 | **Prompts, marks, segments, the session row:** prompt items with their numbers and step count; marks by id with local recuts; presence keys; the session row's child rows and new columns, `unattributed` | as step 3, for these tables | `make check` | 2 |
+| 5 | **Calls:** `request_log_rows` for every call, with steps folded in, and `request_cells`; `prompt_steps`, `request_txs`, `requests`, `request_reports`, `request_missed`, `prompt_index`, `codex_turns` and `session_last` go; the I1 to I3 check and its gauge. `session_request_rows` stays until step 11 | the log with each scope applied equals `stream_sql`'s; each session's tab equals today's; steps by scope after a token refresh; the gauge; the write gate | `make check` | 2 |
+| 6 | **Cells:** `session_cells` and `agent_call_cells`, from deltas (a minute re-merged from its rows, an hour from its minutes); `call_tool_uses`, `agent_calls` and `agent_call_hours` go | every cell equals the oracle's merge; the write gate | `make check` | 2 |
+| 7 | **Labels and children:** the one label rule, `title_candidates`, the account lock; children; retention's flags (§3.6) | labels and children equal today's alone rule over every dataset; both commit orders of a title call and a new candidate; forgetting a key flags its readers | `make check` | 2 |
+| 8 | **The drawer** (`v8-worker`'s incremental drawer, finished): its scope indexes kept from deltas; step N and "delivered in step N" filled at read; `stepCount` from the prompt item (`drawer_step_counts` goes); `drawer_parts`; `raw_fallback` | `VerifyIncremental`; the drawer byte for byte (v7's `test_v7_drawer.py`); the write gate | `make check` | 2, 4, 5 |
+| 9 | **Session pages on v8's reads,** one PR each: `/sessions/{id}` (4, 7), `/prompts` (4, 5), `/events` (3), `/requests` (5), `/state` (3, 5, 6), `/timeline` (4, 6) | the page's side-by-side URLs and cuts, its checkpoints, its statements test | byte-identical on the CI datasets (`make check`: the subset; `-m full`: all) | 1, and the steps named |
+| 10 | **Person pages on v8's reads,** one PR each: `/people/{id}` (4), `/sessions` (4, 7), `/requests` (5), `/summary` (3, 5, 6), `/timeline` (4, 6, 7), `/coverage` (4, 5, 6) | as step 9 | as step 9 | 1, and the steps named |
+| 11 | **The directory, and DuckDB out:** `/people` and `/overview` on v8's reads (§5.6); then the v7 loader goes, with what only it read (`session_request_rows`, `event_rows.seq`); DuckDB and ADBC leave the API, and the oracle moves under `api/tests`. `SETUP.md`, `PRODUCTION.md` | the directory side by side for every `from`, `sort`, `agent` and `q`; the no-DuckDB test; the image builds without either | `make check`; `make up && make verify` | 6, 9, 10 |
+| 12 | **The gate,** on the real capture, settled | — | every endpoint byte-identical on the snapped ranges (v7's 4,248 URLs, plus the new cuts and checkpoints); the CPU gate (flat per record and per commit, 1k vs 50k events); the write gate (rows and bytes per record per table, 5 s and 30 s windows, 2 to 4 pods); warm p95 ≤ 50 ms and cold p95 ≤ 300 ms for every page of the heaviest person and session, on the capture; bytes per row measured against §3.12 | 11 |
+| 13 | **Deploy** to the DigitalOcean cluster: Postgres starts empty (Rollout), `helm upgrade` (never uninstall) | — | pages load on the cluster's new traffic; `/lag` settles under 30 s; a request through the proxy shows up end to end | 12 |
 
 v7 planned to delete the oracle after its step 10. It's still here, and v8's
-tests need it, so it goes after v8's step 10 instead, with the rest of that
+tests need it. So it goes after v8's step 13 instead, with the rest of that
 list: `v1layout`'s v1 output, `merge.go`, `mergeloop.go`, `Commit` and
 `WriteOnePass`, and V1Store with today's endpoint SQL. From then on,
 `process.Derived` and the UI samples are the oracles.
@@ -1732,19 +2090,18 @@ list: `v1layout`'s v1 output, `merge.go`, `mergeloop.go`, `Commit` and
 - **Chart and Compose:** Redis.
 
 **Deleted in v8:**
-- **Postgres,** in step 8, once the v7 loader that reads them is gone:
-  `session_request_rows` (replaced by `request_log_rows`, §3.9) and
-  `event_rows.seq` (replaced by the stable key, §3.3).
-- **Go:** the render of `session_request_rows` and of `event_rows.seq` (step 8).
-- **API** (§5.7):
-  - the v7 loader for the session and person pages: `pgstore.py`'s session
-    loads, `_OTHER_KEYS` and `_request_rows`; `pgstore_person.py`'s loads;
-  - `sql/labels.sql`, now the worker's;
-  - the runtime use of `stream_sql`, `state_sql`, `person_sql`, `rollups.py`'s
-    folds, and `session.py`'s and `timeline.py`'s endpoint SQL. They stay for
-    V1Store and the oracle until after v8's step 10;
-  - per decisions 4 and 5: `adbc-driver-postgresql` and `duckdb` from the
-    API's image, once the directory is ported.
+- **Postgres** (§3.12): `analytics`, `drawer_events`, `requests`, `request_txs`,
+  `prompt_steps`, `request_reports`, `request_missed`, `prompt_index`,
+  `codex_turns`, `session_last`, `dim_session_visible`, `call_tool_uses`,
+  `agent_calls` and `agent_call_hours`. Then, in step 11, once the v7 loader
+  is gone: `session_request_rows` and `event_rows.seq`. `drawer_step_counts`
+  (on `v8-worker`) folds into the prompt item. Most of `event_rows`' columns go
+  (§3.3).
+- **Go:** the whole render and its hashed baseline (§2); the render of every
+  table above; the label assignment chain.
+- **API** (§5.7): the v7 loader and every DuckDB and ADBC import;
+  `sql/labels.sql`. Today's endpoint SQL, V1Store and BucketStore move under
+  `api/tests/oracle`.
 
 ## Deviations from the meeting and the accepted recommendations
 
@@ -1800,43 +2157,41 @@ list: `v1layout`'s v1 output, `merge.go`, `mergeloop.go`, `Commit` and
     singleton, not a new component, and it also applies the local raw cap.
 11. **The DigitalOcean demo:** Postgres in the cluster, not DO Managed Postgres.
 
-**v8, against the owner's brief** (2026-11-14: precompute the session and
-person pages):
+**v8, against the owner's brief** (2026-11-14, and the decisions since):
 
 12. **"The timeline as finished rows."** A session's timeline merges its own
     cells per bin, as a person's does, rather than storing finished bins for
-    each ladder width. That's one mechanism for both timelines, any bin that's
-    a multiple of 60, and no 8× write per row. It reads ~11k narrow rows at the
-    finest bin the UI asks of the capture's heaviest session (§5.4).
+    each ladder width. That's one mechanism for both timelines, and any bin that
+    is a multiple of 60, with no 8× write per row. It reads ~11k narrow rows at
+    the finest bin the UI asks of the capture's heaviest session (§5.4).
 13. **"State as a finished object."** `/state` takes any range (the brush), so
-    it's a merge of cells and four lookups. The default range is the same
-    query.
-14. **"No computing anything on the fly."** §5.5 lists everything still
-    computed per request, with its bound. Most are merges over finished rows.
-    Four folds depend on order (decision 2): `q`, band packing, and presence and not-captured windows
-    across a person's sessions. `q` scans the range's rows for its matches;
-    the other three read only the page's bands, segments or missed calls.
-15. **"Re-rendering a whole session per commit is not OK."** Writes are
-    O(changed): every v8 table is diffed. The render's CPU is still O(session)
-    per run, as v7 built it (decision 3).
-16. **"Per-session hourly rollups, summed."** Yes, and minute cells and edge
-    rows too: the UI's ranges are arbitrary instants (a preset is `now − span`
-    at ms, a brush is any ms), so whole hours alone can't be exact.
-17. **Who a person is stays a read-time resolution,** as in v7: a few index
+    it's a merge of cells. The default range is the same query.
+14. **A session's own folds stay at read:** its presence, its permission and
+    network segments, and its not-captured windows (§5.5). Rendering them would
+    store a second copy of the segments and marks they fold, and a session holds
+    a few of them.
+15. **Delta in at every granularity** (decision 4), except a cold load. A load
+    replays the key's journal: O(records held), once per load, not per commit.
+    Keys stay warm while live, and the CPU gate reports loads apart (§3.11).
+16. **Who a person is stays a read-time resolution,** as in v7: a few index
     lookups per statement. Rendering it would rewrite every session of a group
     whenever an account links.
+17. **`details` stays in Postgres** (§3.7). Moving it to S3 is an owner option
+    (~14 GB/day at the target, for one S3 GET per `/details`).
 
 ## Decisions and quirks
 
 - **Delta in, eventual state out.**
   - Stored inputs are the state's deltas.
-  - Rendered rows are recomputed whole and written where their hash changed.
+  - v7: rendered rows are recomputed whole and written where their hash
+    changed. v8: only the rows the run's deltas affect are rendered and
+    written (§3.11). An O(session) render per run is no longer accepted
+    (decision 4).
   - Everything is an upsert or a delete by primary key, so rewriting is
     harmless.
 - **One owner per row.** The guarded `n` orders each key's commits.
-- **Accepted costs:**
-  - O(session) render CPU per run (v6);
-  - a late row renumbers the rows after it in the time-ordered tables.
+- **v7's accepted costs, gone in v8:** the O(session) render per run, and a late
+  row renumbering the rows after it (v8 keys rows by stable ids, §3.3).
 - **Reads see one snapshot:** v6's "reads aren't isolated" quirk is gone.
 - **"All" is the retained window** (`retention.days`).
   - A key that is still active keeps its rows older than the window until it
@@ -1862,9 +2217,10 @@ person pages):
   - the summary and details keep what the call's detail object held when the
     worker read it: an object the local raw cap deletes later leaves `/raw`
     unavailable, as today, but not the summary;
-  - the render's cost per commit is O(session): on the test datasets' largest
-    session (21k events, 1.7k calls) ~0.3 s for its drawer rows, ~0.1 s for
-    its 9 tables (Not now: an incremental render).
+  - v7: the render's cost per commit was O(session): on the test datasets'
+    largest session (21k events, 1.7k calls) ~0.3 s for its drawer rows, ~0.1
+    s for its 9 tables. v8 renders only what a commit's records affect
+    (§3.11).
 - **A Codex thread's unthreaded calls** are read from the other keys' rows at
   request time, never copied: in v8 by a filter on `request_log_rows` (§5.4).
   An in-flight batch call gets its session at render time (v8, §3.9).
@@ -1893,23 +2249,31 @@ The inventory's quirks, each reproduced:
 8. **`org_kind` reads the environment at request time:** unchanged.
 
 **v8's decisions and quirks:**
+- **Ranges snap to whole minutes** (decision 1): `from` to its minute's start,
+  `to` to its minute's last ns, defaults included. A response's meta shows the
+  snapped bounds (`…:00Z`, `…:59.999999Z`), and its counts are those minutes'.
+  The session header and timeline don't filter by a range and don't snap.
 - **`bin` must be a multiple of 60** (decision 1). Any other width is a 422.
   Today any integer ≥ 60 is accepted; the UI sends only the ladder.
-- **Float sums are merged per cell** (decision 6): `cost_usd` and `hook_ms` are
-  summed in each cell, then across cells. Today's single sum runs in an order
-  DuckDB picks. The last bits can differ; they're shown rounded (cents, 0.1 ms),
-  and the tests compare the responses byte for byte. A sum within ~1e-12 of a
-  rounding boundary could show one cent differently.
-- **One request-log row serves both logs** (§3.9). Both logs must stay
-  byte-identical to today's on every dataset and the capture (steps 4, 9). By
-  construction they'd differ from today's person log only if I1 or I2 broke
-  (§5.3): the row would show its own session's value.
+- **A Codex thread's label is its own title calls'** (decision 2), on the
+  person pages too: today they ran an assignment across the account's threads.
+  Where the two differed, the person pages now show what the session page
+  always showed.
+- **Float sums are merged per cell:** `cost_usd` and `hook_ms` are summed in
+  each cell, then across cells. Today's single sum runs in an order DuckDB
+  picks. The last bits can differ; they're shown rounded (cents, 0.1 ms), and
+  the tests compare responses byte for byte. A sum within ~1e-12 of a rounding
+  boundary could show one cent differently.
+- **One row per call serves both logs, the Prompts tab and event links**
+  (§3.9). Both logs must stay byte-identical to today's on every dataset and the
+  capture (steps 5, 12). By construction they'd differ from today's person log
+  only if I1 or I2 broke (§5.3): the row would show its own session's value.
 - **A request id held by two keys at once** (a call whose ending another key
   held a moment ago, v7's drawer quirk) shows twice in the logs, as today, and
   sorts by key after (`ts_us`, `request_id`).
 - **Byte-identical once settled.** A cross-key value (a batch's count, a label,
-  `in_tab` after a credential lands) is right once its render flag has run.
-  Until then a page can show the value as it was, for about a run.
+  a child) is right once its render flag has run. Until then a page can show
+  the value as it was, for about a run.
 - **The Events tab's later pages** read the index entries of the unit starts
   before them (`OFFSET`): no index serves page N directly (Not now). Page 1
   reads its own rows.
@@ -1918,47 +2282,45 @@ The inventory's quirks, each reproduced:
   batches on the capture), so the times cost nothing measurable.
 
 **v7's quirks, in v8:**
-- quirk 2 (Codex titles over the account group): rendered by the title call's
-  key (§3.10), the same assignment in the same order.
+- quirk 2 (Codex titles over the account group): gone. One label, the thread's
+  own title calls' (decision 2).
 - quirk 3 (person and session request numbering differ): reproduced from one
-  row. Each log applies its own scope to the row's sourced values (§5.3): the
-  person's sessions and credentials, or the one session. Each matches today's
-  (step 4's test).
+  row. Each log applies its own scope at read (§5.3): the person's sessions and
+  credentials, or the one session. Each matches today's (step 5's test).
 - quirk 4 (no final tiebreaker in the person requests sort): request ids are
   unique per row except for the case above, so the order is (`ts_us`,
   `request_id`, key).
 - quirk 5 (session pages derived the whole account group): nothing is read at
   request time for labels at all.
-- Codex step numbers (#44): a step counts its prompt's calls in its own key
-  (I3), for both logs. Today's person log counts calls that share a credential
-  and a turn id across threads; real turn ids are UUIDs, and no dataset row
-  differs.
+- Codex step numbers (#44): a step counts its prompt's calls in its own
+  session's key (I3), for both logs. Today's person log counts calls that share
+  a credential and a turn id across threads; real turn ids are UUIDs, and no
+  dataset row differs.
 
 ## Not now: add when real traffic needs it
 
-- **Day partitioning** of the big tables (`event_rows`, `analytics`,
-  `request_txs`, `requests`, `request_log_rows`, `session_marks`,
-  `session_cells`). Add it when retention's DELETE and vacuum cost too much, or
-  when a table's indexes outgrow RAM.
-  - At 1,500 people that's ~240M rows and ~116 GB a day deleted again after 15
-    days: about 3k deletes/s around the clock, plus the vacuum behind them.
+- **A cold-latency gate at the target** (decision 6): on the target-shaped
+  database the load-test harness will build.
+- **Day partitioning** of the big tables (`event_rows`, `drawer_requests`,
+  `request_log_rows`, `session_cells`). Add it when retention's DELETE and
+  vacuum cost too much, or when a table's indexes outgrow RAM.
+  - At 1,500 people that's ~125M rows and ~91 GB a day deleted again after 15
+    days, plus the vacuum behind them.
   - At today's scale it's well under 1M rows a day.
-- **An incremental render** (O(changed) CPU), if workers' CPU shows up
-  (decision 3).
+- **A snapshot checkpoint,** if the CPU gate shows cold loads costly: the state
+  encoded rather than its journal, so a load is a decode, not a replay.
+- **`details` in S3** (§3.7, an owner option): ~14 GB/day less at the target,
+  for one S3 GET per `/details`.
+- **An event's raw position in place of its `event_key`** (79 bytes): ~6 GB/day
+  less, once the worker reads batch bodies to find positions.
 - **A 15-minute or day cell level,** if the timelines' minute-cell reads show
   up: the capture's heaviest session reads ~9k minute cells at bin 900.
+- **Per-(account, day) cells for the directory,** if the 14-day directory is
+  slow at scale (~90k sessions).
 - **An index over the Events tab's unit starts,** if deep pages show up.
   Cursor paging would be a contract change.
 - **A trigram index for `q`,** if searching long ranges shows up.
-- **The directory precomputed** (`/people`, `/overview`): its own design, after
-  v8.
 - **A read replica for the API, or RDS Proxy.**
-- **An API-side cache** of past days' rows.
-- **Hour order keys** (v6) for the time-ordered tables, if late rows show up in
-  writes/s.
-- **A narrower `analytics`,** at about half the database at 1,500 people: read
-  event metadata from the batch's S3 detail object, or keep it only for the
-  names the drawer reads, and serve `/events/{id}` from `event_rows`.
 - **A periodic full listing of `v1/keys/`,** to flag keys a lost node never
   indexed.
 - **The in-flight drawer** (a `pending` table), if the owner wants it back.
