@@ -764,20 +764,10 @@ func stepCountOf(pos position) Value {
 func (s *scope) findReport(rid string) (string, *ev) {
 	key := strings.TrimPrefix(rid, "reported:")
 	s.use(kReported, "", key)
-	if s.reports == nil {
-		s.reports = map[string]*ev{}
-		for _, e := range s.events {
-			if e.name != "tengu_api_success" {
-				continue
-			}
-			for _, k := range []string{e.extract("requestId"), e.extract("clientRequestId"), itoa(e.ts)} {
-				if _, ok := s.reports[k]; !ok {
-					s.reports[k] = e
-				}
-			}
-		}
+	var first *ev
+	if es := s.reports[key]; len(es) > 0 {
+		first = es[0]
 	}
-	first := s.reports[key]
 	if first == nil || first.session == "" {
 		return "", nil
 	}

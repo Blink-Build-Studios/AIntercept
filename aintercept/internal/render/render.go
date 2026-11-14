@@ -37,6 +37,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
@@ -98,6 +99,12 @@ type Rows struct {
 	Session string // the session a session key renders ("" for any other key)
 	tables  []*rendered
 	next    *Baseline
+	// drawerBase is the baseline the drawer applied its changes to: Diff from
+	// it writes the drawer's delta (the drawer's rows aren't hashed, §3.7).
+	drawerBase *Baseline
+	// Took is how long the render's parts took: the session's tables (and
+	// the folds, hashed), and the drawer.
+	Took struct{ Tables, Drawer time.Duration }
 }
 
 // rendered is one table's rows.
@@ -152,32 +159,29 @@ func fold(name string, vals [][]any) *rendered {
 // Render has no external inputs: the drawer is built from the calls' request
 // rows and each key's own batch parts. RenderState renders a state with its own.
 func Render(key string, rows state.Rows, day string) (*Rows, error) {
-	return render(key, rows, nil, day, nil, nil)
+	return render(key, rows, nil, day, nil, nil, nil)
 }
 
 // RenderState is key's rendered rows from its state: its rows and its
 // external inputs (docs/PIPELINE.md v7 §3.7): the calls' wires read from their
 // detail objects (WireID), and what other keys hold of its batches (PartsID).
 func RenderState(key string, st *state.KeyState, day string) (*Rows, error) {
-	return render(key, st.Rows(), st.Externals(), day, nil, nil)
+	return render(key, st.Rows(), st.Externals(), day, nil, nil, nil)
 }
 
 // RenderWith is Render with external inputs given by id (WireID, PartsID).
 func RenderWith(key string, rows state.Rows, ext map[string]any, day string) (*Rows, error) {
-	return render(key, rows, ext, day, nil, nil)
+	return render(key, rows, ext, day, nil, nil, nil)
 }
 
-// RenderNext is RenderWith after base's render, changed the state's rows
-// changed since (a run's deltas): the drawer derives again only the rows those
-// can have changed, and takes the rest from base (drawer.RenderNext, §3.7).
-// With no base it renders every row. base is consumed: a baseline is the next
-// render's once.
-func RenderNext(key string, rows state.Rows, ext map[string]any, day string, base *Baseline, changed drawer.Changed) (*Rows, error) {
-	var memo *drawer.Memo
-	if base != nil {
-		memo = base.drawer
-	}
-	return render(key, rows, ext, day, memo, changed)
+// RenderNext is RenderWith after base's render: changed is the state's rows
+// changed since (a run's deltas), extChanged the external inputs set since.
+// The drawer applies them to base's and writes only what they change
+// (drawer.RenderNext, §3.7); Diff(base) is that. With no base it renders every
+// row. base is consumed: a baseline is the next render's once.
+func RenderNext(key string, rows state.Rows, ext map[string]any, day string, base *Baseline, changed drawer.Changed,
+	extChanged []string) (*Rows, error) {
+	return render(key, rows, ext, day, base, changed, extChanged)
 }
 
 // The external inputs' ids.
@@ -194,19 +198,21 @@ func WireID(callID string) string { return wirePrefix + callID }
 // state.OtherParts (none: no other key holds any of it).
 func PartsID(batchID string) string { return partsPrefix + batchID }
 
-func render(key string, rows state.Rows, ext map[string]any, day string, memo *drawer.Memo, changed drawer.Changed) (*Rows, error) {
-	out := &Rows{Key: key}
-	others := map[string]state.OtherParts{}
-	for id, v := range ext {
-		if b, ok := strings.CutPrefix(id, partsPrefix); ok {
-			if p, ok := v.(state.OtherParts); ok {
-				others[b] = p
-			}
-		}
-	}
+func render(key string, rows state.Rows, ext map[string]any, day string, base *Baseline, changed drawer.Changed,
+	extChanged []string) (*Rows, error) {
+	out := &Rows{Key: key, drawerBase: base}
+	t0 := time.Now()
 	var events []process.EventRow
 	if sid, ok := strings.CutPrefix(key, "s:"); ok {
 		out.Session = sid
+		others := map[string]state.OtherParts{}
+		for id, v := range ext {
+			if b, ok := strings.CutPrefix(id, partsPrefix); ok {
+				if p, ok := v.(state.OtherParts); ok {
+					others[b] = p
+				}
+			}
+		}
 		st, ev, err := sessionTables(sid, rows, others, day)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", key, err)
@@ -216,33 +222,51 @@ func render(key string, rows state.Rows, ext map[string]any, day string, memo *d
 	calls := agentCalls(key, rows)
 	out.tables = append(out.tables, fold("agent_calls", calls), fold("agent_call_hours", agentCallHours(key, calls)),
 		fold("batch_parts", batchParts(key, rows)))
-	reqs, evs, memo := drawer.RenderNext(drawer.Inputs{Key: key, Rows: rows, Parts: others, EventRows: events,
-		Wire: func(callID string) *drawer.Wire {
-			w, _ := ext[WireID(callID)].(*drawer.Wire)
-			return w
-		}}, memo, changed)
-	rq := make([][]any, len(reqs))
-	for i, r := range reqs {
-		rq[i] = []any{r.ID, key, r.DataTpl, r.DataVals, r.DetailsTpl, r.DetailsVals, nil, nil}
-		if r.StepSession != "" || r.StepPrompt != "" {
-			rq[i][6], rq[i][7] = r.StepSession, r.StepPrompt
-		}
-	}
-	counts := memo.StepCounts()
-	sc := make([][]any, len(counts))
-	for i, c := range counts {
-		sc[i] = []any{c.Session, c.Prompt, key, c.N}
-	}
-	ev := make([][]any, len(evs))
-	for i, e := range evs {
-		ev[i] = []any{e.ID, key, e.Data, e.CorrelationID, e.EventKey}
-	}
-	out.tables = append(out.tables, fold("drawer_requests", rq), fold("drawer_step_counts", sc), fold("drawer_events", ev))
 	if err := out.hash(); err != nil {
 		return nil, fmt.Errorf("render %s: %w", key, err)
 	}
-	out.next.drawer = memo
+	var memo *drawer.Memo
+	var evChanged []process.EventRow
+	if base != nil && base.drawer != nil {
+		// What the drawer reads of the session's tables: their changed event
+		// rows, from the tables' own diff (their cost, not the drawer's).
+		memo, evChanged = base.drawer, changedEventRows(out, base, events)
+	}
+	out.Took.Tables = time.Since(t0)
+	t0 = time.Now()
+	in := drawer.Inputs{Key: key, Rows: rows, EventRows: events,
+		Wire: func(callID string) *drawer.Wire {
+			w, _ := ext[WireID(callID)].(*drawer.Wire)
+			return w
+		},
+		Part: func(batch string) (drawer.BatchParts, bool) {
+			p, ok := ext[PartsID(batch)].(state.OtherParts)
+			return p, ok
+		}}
+	if memo != nil {
+		in.ExternalsChanged, in.EventRowsChanged = extChanged, evChanged
+	}
+	out.next.drawer = drawer.RenderNext(in, memo, changed)
+	out.Took.Drawer = time.Since(t0)
 	return out, nil
+}
+
+// changedEventRows is the session's event rows whose hash isn't base's: what
+// the drawer reads of them again.
+func changedEventRows(r *Rows, base *Baseline, events []process.EventRow) []process.EventRow {
+	var out []process.EventRow
+	old, cur := base.hashes["event_rows"], r.next.hashes["event_rows"]
+	for _, t := range r.tables {
+		if t.enc.t.Name != "event_rows" {
+			continue
+		}
+		for i, k := range t.keys {
+			if h, ok := old[k]; !ok || h != cur[k] {
+				out = append(out, events[i])
+			}
+		}
+	}
+	return out
 }
 
 // DrawerDerived is how many drawer request rows the render derived; the rest
@@ -542,6 +566,10 @@ func (r *Rows) Len() int {
 	for _, t := range r.tables {
 		n += t.n
 	}
+	if m := r.next.drawer; m != nil {
+		reqs, evs, counts := m.All()
+		n += len(reqs) + len(evs) + len(counts)
+	}
 	return n
 }
 
@@ -560,6 +588,9 @@ type Baseline struct {
 func (b *Baseline) Equal(o *Baseline) bool {
 	if b == nil || o == nil {
 		return b == o
+	}
+	if !drawerEqual(b.drawer, o.drawer) {
+		return false
 	}
 	if len(b.hashes) != len(o.hashes) {
 		return false
@@ -618,7 +649,9 @@ type TableDiff struct {
 
 // Diff is the changes from base, the baseline of the rows already written (nil:
 // none written): the rows whose hash changed or that are new are upserts, the
-// rows base has and the render doesn't are deletes.
+// rows base has and the render doesn't are deletes. The drawer's tables are
+// its delta from the baseline it rendered after (all its rows from nil, none
+// from the render's own baseline).
 func (r *Rows) Diff(base *Baseline) *Diff {
 	d := &Diff{Key: r.Key, Session: r.Session}
 	for _, t := range r.tables {
@@ -647,21 +680,107 @@ func (r *Rows) Diff(base *Baseline) *Diff {
 		if len(td.Upserts) > 0 || len(td.Deletes) > 0 {
 			d.Tables = append(d.Tables, td)
 		}
-		if name == "drawer_requests" && r.next.drawer != nil {
-			var ids []string
-			for _, row := range td.Upserts {
-				for _, c := range []int{2, 4} {
-					if id, ok := row[c].(string); ok {
-						ids = append(ids, id)
-					}
+	}
+	d.Tables = append(d.Tables, r.drawerDiff(base)...)
+	// The templates its drawer rows reference that the key hasn't written.
+	for _, td := range d.Tables {
+		if td.Table.Name != "drawer_requests" || r.next.drawer == nil {
+			continue
+		}
+		var ids []string
+		for _, row := range td.Upserts {
+			for _, c := range []int{2, 4} {
+				if id, ok := row[c].(string); ok {
+					ids = append(ids, id)
 				}
 			}
-			for _, t := range r.next.drawer.Unwritten(ids) {
-				d.Templates = append(d.Templates, []any{r.Key, t[0], t[1]})
-			}
+		}
+		for _, t := range r.next.drawer.Unwritten(ids) {
+			d.Templates = append(d.Templates, []any{r.Key, t[0], t[1]})
 		}
 	}
 	return d
+}
+
+// drawerDiff is the drawer's tables' changes from base.
+func (r *Rows) drawerDiff(base *Baseline) []TableDiff {
+	m := r.next.drawer
+	var delta drawer.Delta
+	switch {
+	case m == nil || base == r.next:
+		return nil
+	case base == nil:
+		delta.Requests, delta.Events, delta.Counts = m.All()
+	case base == r.drawerBase && m.Delta() != nil:
+		delta = *m.Delta()
+	case base.drawer != nil:
+		delta = drawer.Between(base.drawer, m)
+	default:
+		delta.Requests, delta.Events, delta.Counts = m.All()
+	}
+	key := r.Key
+	rq := TableDiff{Table: pg.TableNamed("drawer_requests")}
+	for _, q := range delta.Requests {
+		row := []any{q.ID, key, q.DataTpl, q.DataVals, q.DetailsTpl, q.DetailsVals, nil, nil}
+		if q.StepSession != "" || q.StepPrompt != "" {
+			row[6], row[7] = q.StepSession, q.StepPrompt
+		}
+		rq.Upserts = append(rq.Upserts, row)
+	}
+	for _, id := range delta.GoneRequests {
+		rq.Deletes = append(rq.Deletes, []any{id, key})
+	}
+	sc := TableDiff{Table: pg.TableNamed("drawer_step_counts")}
+	for _, c := range delta.Counts {
+		sc.Upserts = append(sc.Upserts, []any{c.Session, c.Prompt, key, c.N})
+	}
+	for _, c := range delta.GoneCounts {
+		sc.Deletes = append(sc.Deletes, []any{c.Session, c.Prompt, key})
+	}
+	ev := TableDiff{Table: pg.TableNamed("drawer_events")}
+	for _, e := range delta.Events {
+		ev.Upserts = append(ev.Upserts, []any{e.ID, key, e.Data, e.CorrelationID, e.EventKey})
+	}
+	for _, id := range delta.GoneEvents {
+		ev.Deletes = append(ev.Deletes, []any{id, key})
+	}
+	var out []TableDiff
+	for _, td := range []TableDiff{rq, sc, ev} {
+		if len(td.Upserts) > 0 || len(td.Deletes) > 0 {
+			out = append(out, td)
+		}
+	}
+	return out
+}
+
+// drawerEqual is whether two drawer memos hold the same rows.
+func drawerEqual(a, b *drawer.Memo) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	ar, ae, ac := a.All()
+	br, be, bc := b.All()
+	if len(ar) != len(br) || len(ae) != len(be) || len(ac) != len(bc) {
+		return false
+	}
+	for i := range ar {
+		x, y := ar[i], br[i]
+		if x.ID != y.ID || x.DataVals != y.DataVals || x.DetailsVals != y.DetailsVals || a.Template(x.DataTpl) != b.Template(y.DataTpl) ||
+			a.Template(x.DetailsTpl) != b.Template(y.DetailsTpl) || x.StepSession != y.StepSession || x.StepPrompt != y.StepPrompt {
+			return false
+		}
+	}
+	for i := range ae {
+		if ae[i] != be[i] {
+			return false
+		}
+	}
+	for i := range ac {
+		if ac[i] != bc[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Rewrite is the whole render replacing every row the key owns: for a key row

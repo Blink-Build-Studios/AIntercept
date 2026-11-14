@@ -118,7 +118,7 @@ func (x *runner) apply(t *testing.T, r records.Record) {
 		changed[c.Table][c.ID] = true
 	}
 	key := r.RoutingKey
-	rows, err := render.RenderNext(key, x.o.States()[key].Rows(), nil, day, x.base[key], changed)
+	rows, err := render.RenderNext(key, x.o.States()[key].Rows(), nil, day, x.base[key], changed, nil)
 	if err != nil {
 		t.Fatalf("render %s: %v", key, err)
 	}

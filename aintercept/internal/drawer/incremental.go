@@ -33,70 +33,64 @@ import (
 // request_missed are read.
 type Changed map[string]map[string]bool
 
-// Memo is a render's rows and what the next render needs to tell which of
-// them can have changed. It's kept with the warm state (render.Baseline) and
-// consumed by the next RenderNext: never use one twice.
+// Memo is a render's scope and rows, and what the next render needs to tell
+// which rows its changes can reach. It's kept with the warm state
+// (render.Baseline) and consumed by the next RenderNext: never use one twice.
 type Memo struct {
-	used    bool
-	derived int                 // the rows this render derived (the rest were its prev's)
-	reqs    map[string]*memoReq // drawer request id → its row, or a reported id that gave none
-	events  map[string]Event    // drawer event id → its row
-	evIn    map[string]*filed   // fact_events row id → what it was filed under
-	callIn  map[string]*filed   // fact_requests row id → what it was filed under
-	wires   map[string]*Wire    // call id → the wire the render read (nil: none)
-	parts   map[string]BatchParts
-	exists  map[string]bool      // the sessions a call or an event names
-	steps   map[string][]string  // per existing session, its steps' ids in order
-	lists   map[string][]uint64  // per (session, prompt), its steps' hashes in order (stepsDep)
-	md      map[string]*mdFields // fact_events row id → what renders read of its metadata
-	counts  []StepCount          // the render's step counts
-	tpls    map[string]string    // template id → template: its rows' (prev's, carried)
-	written map[string]bool      // the templates the key's commits wrote, since the memo was made whole
+	used     bool
+	derived  int // the request rows this render derived
+	scope    *scope
+	reqs     map[string]*memoReq        // drawer request id → its row (or a reported id's none)
+	byTok    map[uint64]map[string]bool // token → the request ids that recorded it
+	events   map[string]Event           // drawer event id → its row
+	counts   map[string]StepCount       // session \x00 prompt → its step count
+	evIn     map[string]*filed          // fact_events id → what it's filed under
+	callIn   map[string]*filed          // fact_requests id → what it's filed under
+	missed   map[string]string          // request_missed id → the request id it names
+	reported map[string]int             // reported:… id → how many missed rows name it
+	limits   map[string]int64           // session → the latest sandbox limit a row read
+	tpls     map[string]string          // template id → template
+	written  map[string]bool            // the templates the key's commits wrote, since the memo was made whole
+	delta    *Delta                     // this render's changes to the rows (nil: it rendered them whole)
+}
+
+// Delta is what a render changed of the rows its prev held.
+type Delta struct {
+	Requests     []Request
+	GoneRequests []string
+	Events       []Event
+	GoneEvents   []string
+	Counts       []StepCount
+	GoneCounts   []StepCount
 }
 
 type memoReq struct {
 	yield bool
+	call  bool // a call's row (not a reported id's)
 	req   Request
 	deps  rowDeps
 }
 
-// rowDeps is what a row's derivation looked up.
+// rowDeps is what a row's derivation read, as tokens.
 type rowDeps struct {
-	toks  []uint64
-	sand  []sandDep  // the sandbox setting of a session, up to a time
-	order []orderDep // a step's place among its session's steps
-	steps []stepsDep // its prompt's steps, up to a place
+	toks   []uint64
+	limits []sandboxRead
 }
 
-// stepsDep is a row's read of a session's steps of one prompt (promptKey), in
-// order: up to place hi (len: up to the end, so a step added after them too).
-type stepsDep struct {
-	list string // session + "\x00" + promptKey
-	hi   int
-}
-
-type sandDep struct {
+type sandboxRead struct {
 	sess  string
 	limit int64
 }
 
-// orderDep is the place (-1: none) at which a row found a step in its
-// session's steps, all of them in order ("delivered in step N").
-type orderDep struct {
-	sess string
-	at   int
-}
-
 // filed is an input as the indexes hold it: its tokens, its time when it's a
 // bash event (the sandbox's), and for an event its drawer id and the hash of
-// its rendered event row (eventRow's fields).
+// its rendered event row.
 type filed struct {
 	toks    []uint64
 	bash    bool
 	sess    string
 	ts      int64
 	id      string // an event's drawer id; a call's drawer id
-	step    bool   // a call that's one of its session's steps
 	rowHash uint64
 }
 
@@ -115,6 +109,9 @@ const (
 	kChainV
 	kBatch
 	kReported
+	kSandbox // (session, 16 s bucket of a row's sandbox limit)
+	kOrder   // (session, a step's place among the session's steps)
+	kSteps   // (session \x00 prompt, a place in that prompt's steps)
 )
 
 const (
@@ -158,21 +155,28 @@ func (s *scope) use(k byte, a, b string) {
 	}
 }
 
+// useSandbox records a read of sess's sandbox setting up to limit: a bash run
+// at or before limit can change it (filed by the buckets from its time on).
 func (s *scope) useSandbox(sess string, limit int64) {
 	if s.rec != nil {
-		s.rec.sand = append(s.rec.sand, sandDep{sess, limit})
+		s.rec.toks = append(s.rec.toks, tok(kSandbox, sess, itoa(bucket(limit, sandboxBucket))))
+		s.rec.limits = append(s.rec.limits, sandboxRead{sess, limit})
 	}
 }
 
+// useSteps records a read of sess's steps of a prompt (promptKey) up to place
+// hi (len: to the end): a change at any place up to it can change the row.
 func (s *scope) useSteps(sess, prompt string, hi int) {
 	if s.rec != nil {
-		s.rec.steps = append(s.rec.steps, stepsDep{sess + "\x00" + prompt, hi})
+		s.rec.toks = append(s.rec.toks, tok(kSteps, sess+"\x00"+prompt, itoa(int64(hi))))
 	}
 }
 
+// useOrder records the place (-1: none) a row found a step at among all its
+// session's steps: a step added or removed at or before it moves it.
 func (s *scope) useOrder(sess string, at int) {
 	if s.rec != nil {
-		s.rec.order = append(s.rec.order, orderDep{sess, at})
+		s.rec.toks = append(s.rec.toks, tok(kOrder, sess, itoa(int64(at))))
 	}
 }
 
@@ -245,23 +249,6 @@ func fileEvent(e *canon.Event, x *ev) *filed {
 	return f
 }
 
-// fileCall is what the indexes hold of a request row: its message-id chain
-// entry's keys. (Its place in its session's steps is compared list by list.)
-func fileCall(r *callRow) *filed {
-	return &filed{id: r.id, step: r.ccCall(), toks: chainToks(r.c)}
-}
-
-func chainToks(c *canon.Request) []uint64 {
-	out := []uint64{tok(kChainK, "", c.CorrelationID)}
-	if c.MessageID != "" {
-		out = append(out, tok(kChainM, "", c.MessageID))
-	}
-	if c.PreviousMessageID != "" {
-		out = append(out, tok(kChainV, "", c.PreviousMessageID))
-	}
-	return out
-}
-
 func eventRowHash(r process.EventRow, ok bool) uint64 {
 	if !ok {
 		return 0
@@ -279,14 +266,15 @@ func eventRowHash(r process.EventRow, ok bool) uint64 {
 	return d.Sum64() | 1
 }
 
-// dirty is what changed since the memo's render.
+const sandboxBucket = 16 * ns
+
+// dirty is what a run's changes reach.
 type dirty struct {
-	own    map[string]bool  // drawer request ids whose own call changed
-	toks   map[uint64]bool  // tokens filed
-	bash   map[string]int64 // session → its earliest changed bash event
-	order  map[string]int   // session → the first place its steps differ at
-	lists  map[string]int   // (session, prompt) → the first place its steps differ at
-	events map[string]bool  // drawer event ids to render again
+	m      *Memo
+	own    map[string]bool // drawer request ids whose own call changed
+	toks   map[uint64]bool // tokens filed
+	events map[string]bool // drawer event ids to render again
+	counts map[string]bool // session \x00 prompt whose step count can have changed
 }
 
 func (d *dirty) file(f *filed) {
@@ -296,253 +284,201 @@ func (d *dirty) file(f *filed) {
 	for _, t := range f.toks {
 		d.toks[t] = true
 	}
-	if f.bash {
-		if at, ok := d.bash[f.sess]; !ok || f.ts < at {
-			d.bash[f.sess] = f.ts
+	if f.bash { // the rows whose sandbox limit is at or after it
+		for b, last := bucket(f.ts, sandboxBucket), bucket(d.m.limits[f.sess], sandboxBucket); b <= last; b++ {
+			d.toks[tok(kSandbox, f.sess, itoa(b))] = true
 		}
 	}
 }
 
-// hits is whether a row's lookups can have changed.
-func (d *dirty) hits(r rowDeps) bool {
-	for _, t := range r.toks {
-		if d.toks[t] {
-			return true
+// apply applies a run's changed rows to the memo's scope, and files what they
+// reach. It reads only what changed.
+func (m *Memo) apply(in Inputs, changed Changed) *dirty {
+	s := m.scope
+	s.ch, s.part = newChanges(), in.Part
+	d := &dirty{m: m, own: map[string]bool{}, toks: map[uint64]bool{}, events: map[string]bool{}, counts: map[string]bool{}}
+	for _, id := range sortedIDs(changed[state.TableFactRequests]) {
+		var c *canon.Request
+		if v, ok := in.Rows[state.TableFactRequests][id].(canon.Request); ok {
+			c = &v
+		}
+		if old := m.callIn[id]; old != nil {
+			d.own[old.id] = true
+			delete(m.callIn, id)
+		}
+		s.putCall(id, c)
+		if r := s.calls[id]; r != nil {
+			m.callIn[id] = &filed{id: r.id}
+			d.own[r.id] = true
 		}
 	}
-	for _, sd := range r.sand {
-		if at, ok := d.bash[sd.sess]; ok && at <= sd.limit {
-			return true
+	for _, id := range sortedIDs(changed[state.TableFactEvents]) {
+		var e *canon.Event
+		if v, ok := in.Rows[state.TableFactEvents][id].(canon.Event); ok {
+			e = &v
 		}
-	}
-	for _, od := range r.order {
-		if k, ok := d.order[od.sess]; ok && (od.at < 0 || od.at >= k) {
-			return true
-		}
-	}
-	for _, sd := range r.steps {
-		if k, ok := d.lists[sd.list]; ok && k <= sd.hi {
-			return true
-		}
-	}
-	return false
-}
-
-// VerifyIncremental makes every incremental render also render whole and
-// panic where they differ (the tests and the gate set it;
-// AINTERCEPT_DRAWER_VERIFY=1 does too).
-var VerifyIncremental = os.Getenv("AINTERCEPT_DRAWER_VERIFY") == "1"
-
-// inputs files every input of the scope into next, and, with prev, what
-// changed since prev into d. next reuses prev's input maps (prev is consumed).
-func (s *scope) inputs(in Inputs, prev *Memo, changed Changed, next *Memo) *dirty {
-	var d *dirty
-	if prev != nil {
-		d = &dirty{own: map[string]bool{}, toks: map[uint64]bool{}, bash: map[string]int64{}, order: map[string]int{},
-			lists: map[string]int{}, events: map[string]bool{}}
-		next.evIn, next.callIn, next.wires, next.md, next.tpls = prev.evIn, prev.callIn, prev.wires, prev.md, prev.tpls
-		next.written = prev.written
-	}
-	mark := func(ids ...string) {
-		for _, id := range ids {
-			if id != "" {
-				d.events[id] = true
-			}
-		}
-	}
-	// Events: each analytics row, its drawer id (Claude Code's) and event row.
-	ccByKey := make(map[string]*ev, len(s.events))
-	for _, e := range s.events {
-		ccByKey[e.rowKey] = e
-	}
-	rows := in.Rows[state.TableFactEvents]
-	for k, v := range rows {
-		e, ok := v.(canon.Event)
-		if !ok {
-			continue
-		}
-		x := ccByKey[k]
-		id, rh := "", uint64(0)
-		if x != nil {
-			r, ok := s.rows[x.id]
-			id, rh = x.id, eventRowHash(r, ok)
-		}
-		old := next.evIn[k]
-		if d == nil || old == nil || changed[state.TableFactEvents][k] {
-			f := fileEvent(&e, x)
-			f.id, f.rowHash = id, rh
-			next.evIn[k] = f
-			if d != nil {
-				d.file(old)
-				d.file(f)
-				if old != nil {
-					mark(old.id)
-				}
-				mark(id)
-			}
-			continue
-		}
-		if old.id != id || old.rowHash != rh {
+		if old := m.evIn[id]; old != nil {
 			d.file(old)
-			mark(old.id, id)
-			old.id, old.rowHash = id, rh
+			d.events[old.id] = true
+			delete(m.evIn, id)
 		}
-	}
-	if d != nil {
-		for k := range changed[state.TableFactEvents] { // gone
-			if _, ok := rows[k]; !ok {
-				if old := next.evIn[k]; old != nil {
-					d.file(old)
-					mark(old.id)
-					delete(next.evIn, k)
-					delete(next.md, k)
-				}
+		s.putEvent(id, e)
+		if e != nil {
+			f := fileEvent(e, s.evs[id])
+			if x := s.evs[id]; x != nil {
+				r, ok := s.rows[x.id]
+				f.id, f.rowHash = x.id, eventRowHash(r, ok)
+				d.events[x.id] = true
 			}
-		}
-	}
-	// Calls: each request row, and the wire the render reads for it.
-	byCorr := map[string][]*callRow{}
-	if d != nil {
-		for _, r := range s.calls {
-			byCorr[r.c.CorrelationID] = append(byCorr[r.c.CorrelationID], r)
-		}
-	}
-	stepChanged := func(id string) { // a step id that came or went: the calls whose chain entry it keys
-		for _, r := range byCorr[id] {
-			for _, t := range chainToks(r.c) {
-				d.toks[t] = true
-			}
-		}
-	}
-	gone := func(old *filed) {
-		d.file(old)
-		d.own[old.id] = true
-		if old.step {
-			stepChanged(old.id)
-		}
-	}
-	for _, r := range s.calls {
-		k := r.c.CallID
-		var w *Wire
-		if !strings.Contains(r.id, "~") && in.Wire != nil {
-			w = in.Wire(k)
-		}
-		if d != nil {
-			if old, ok := next.wires[k]; !ok || old != w {
-				d.own[r.id] = true
-			}
-		}
-		next.wires[k] = w
-		old := next.callIn[k]
-		if d != nil && old != nil && !changed[state.TableFactRequests][k] {
-			continue
-		}
-		f := fileCall(r)
-		next.callIn[k] = f
-		if d != nil {
-			if old != nil {
-				gone(old)
-			}
+			m.evIn[id] = f
 			d.file(f)
-			d.own[f.id] = true
-			if f.step {
-				stepChanged(f.id)
-			}
 		}
 	}
-	if d != nil {
-		calls := in.Rows[state.TableFactRequests]
-		for k := range changed[state.TableFactRequests] { // gone
-			if _, ok := calls[k]; !ok {
-				if old := next.callIn[k]; old != nil {
-					gone(old)
-					delete(next.callIn, k)
-					delete(next.wires, k)
+	for e, was := range s.ch.moved { // renumbered: another drawer id, another place in the lists
+		d.events[was], d.events[e.id] = true, true
+		if f := m.evIn[e.rowKey]; f != nil {
+			f.id = e.id
+			d.file(f)
+		}
+	}
+	for _, r := range in.EventRowsChanged { // the session's rendered event rows that changed
+		s.rows[r.EventID] = r
+		for _, e := range s.evByID[r.EventID] {
+			if f := m.evIn[e.rowKey]; f != nil {
+				if h := eventRowHash(r, true); h != f.rowHash {
+					f.rowHash = h
+					d.file(f)
 				}
 			}
 		}
 	}
-	// Other keys' parts of the key's batches.
-	for b, p := range in.Parts {
-		next.parts[b] = p
-		if d != nil {
-			if o, ok := prev.parts[b]; !ok || o != p {
-				d.toks[tok(kBatch, b, "")] = true
-			}
+	for _, id := range in.ExternalsChanged {
+		switch {
+		case strings.HasPrefix(id, "wire:"):
+			c := strings.TrimPrefix(id, "wire:")
+			d.own[strings.ReplaceAll(c, "#", "~")] = true
+		case strings.HasPrefix(id, "parts:"):
+			d.toks[tok(kBatch, strings.TrimPrefix(id, "parts:"), "")] = true
 		}
 	}
-	if d != nil {
-		for b := range prev.parts {
-			if _, ok := in.Parts[b]; !ok {
-				d.toks[tok(kBatch, b, "")] = true
-			}
+	for id := range changed[state.TableRequestMissed] {
+		if was, ok := m.missed[id]; ok {
+			m.unreport(was, d)
+			delete(m.missed, id)
+		}
+		if v, ok := in.Rows[state.TableRequestMissed][id].(state.MissedRow); ok {
+			m.missed[id] = v.Row.RequestID
+			m.report(v.Row.RequestID, d)
 		}
 	}
-	// The sessions that exist, and each one's step order.
-	for _, r := range s.calls {
-		if r.c.SessionID != "" && r.ccCall() {
-			next.exists[r.c.SessionID] = true
+	for key, sp := range s.ch.order {
+		for i := sp.k; i < sp.n; i++ {
+			d.toks[tok(kOrder, key, itoa(int64(i)))] = true
+		}
+		d.toks[tok(kOrder, key, "-1")] = true
+	}
+	for key, sp := range s.ch.lists {
+		for i := sp.k; i <= sp.n; i++ {
+			d.toks[tok(kSteps, key, itoa(int64(i)))] = true
+		}
+		d.counts[key] = true
+	}
+	for sid, was := range s.ch.exists {
+		if x := s.sessions[sid]; x != nil && x.exists != was {
+			d.toks[tok(kExists, sid, "")] = true
 		}
 	}
-	for _, e := range s.events {
-		if e.session != "" {
-			next.exists[e.session] = true
-		}
+	for _, c := range s.ch.chain {
+		d.toks[tok(kChainK, "", c)] = true
 	}
-	for sid := range next.exists {
-		steps := s.session(sid).steps
-		ids := make([]string, len(steps))
-		lists := map[string][]uint64{}
-		for i, st := range steps {
-			ids[i] = st.id
-			k := sid + "\x00" + promptKey(st.prompt)
-			lists[k] = append(lists[k], stepHash(st))
-		}
-		next.steps[sid] = ids
-		for k, l := range lists {
-			next.lists[k] = l
-			if d != nil {
-				if i := firstDiff(prev.lists[k], l); i >= 0 {
-					d.lists[k] = i
-				}
-			}
-		}
-		if d != nil {
-			if !prev.exists[sid] {
-				d.toks[tok(kExists, sid, "")] = true
-			}
-			// A step's place changes from the first place the lists differ;
-			// appended steps move none.
-			old, k := prev.steps[sid], 0
-			for k < len(old) && k < len(ids) && old[k] == ids[k] {
-				k++
-			}
-			if k < len(old) {
-				d.order[sid] = k
-			}
-		}
+	for _, m := range s.ch.mids {
+		d.toks[tok(kChainM, "", m)] = true
 	}
-	if d != nil {
-		for k, l := range prev.lists { // a prompt whose steps are all gone
-			if _, ok := next.lists[k]; !ok && len(l) > 0 {
-				d.lists[k] = 0
-			}
-		}
-		for sid := range prev.exists {
-			if !next.exists[sid] {
-				d.toks[tok(kExists, sid, "")] = true
-				d.order[sid] = 0
-			}
-		}
+	for _, p := range s.ch.prevs {
+		d.toks[tok(kChainV, "", p)] = true
 	}
+	s.ch = nil
 	return d
 }
 
+// report and unreport keep the reported ids the missed rows name.
+func (m *Memo) report(id string, d *dirty) {
+	if !strings.HasPrefix(id, "reported:") {
+		return
+	}
+	if m.reported[id]++; m.reported[id] == 1 {
+		d.own[id] = true
+	}
+}
+
+func (m *Memo) unreport(id string, d *dirty) {
+	if !strings.HasPrefix(id, "reported:") {
+		return
+	}
+	if m.reported[id]--; m.reported[id] <= 0 {
+		delete(m.reported, id)
+		d.own[id] = true
+	}
+}
+
+func sortedIDs(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for id := range m {
+		out = append(out, id)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// rows are the request ids a run's changes reach: their own, and those that
+// recorded a token filed.
+func (d *dirty) rows() []string {
+	set := map[string]bool{}
+	for id := range d.own {
+		set[id] = true
+	}
+	for t := range d.toks {
+		for id := range d.m.byTok[t] {
+			set[id] = true
+		}
+	}
+	return sortedIDs(set)
+}
+
+// keep records a row's lookups in the memo's index (taking its old ones out).
+func (m *Memo) keep(id string, r *memoReq) {
+	if old := m.reqs[id]; old != nil {
+		for _, t := range old.deps.toks {
+			if ids := m.byTok[t]; ids != nil {
+				delete(ids, id)
+				if len(ids) == 0 {
+					delete(m.byTok, t)
+				}
+			}
+		}
+	}
+	if r == nil {
+		delete(m.reqs, id)
+		return
+	}
+	m.reqs[id] = r
+	for _, t := range r.deps.toks {
+		if m.byTok[t] == nil {
+			m.byTok[t] = map[string]bool{}
+		}
+		m.byTok[t][id] = true
+	}
+	for _, l := range r.deps.limits {
+		if l.limit > m.limits[l.sess] {
+			m.limits[l.sess] = l.limit
+		}
+	}
+}
+
 func newMemo() *Memo {
-	return &Memo{reqs: map[string]*memoReq{}, events: map[string]Event{}, evIn: map[string]*filed{},
-		callIn: map[string]*filed{}, wires: map[string]*Wire{}, parts: map[string]BatchParts{},
-		exists: map[string]bool{}, steps: map[string][]string{}, lists: map[string][]uint64{}, md: map[string]*mdFields{},
-		tpls: map[string]string{}, written: map[string]bool{}}
+	return &Memo{reqs: map[string]*memoReq{}, byTok: map[uint64]map[string]bool{}, events: map[string]Event{},
+		counts: map[string]StepCount{}, evIn: map[string]*filed{}, callIn: map[string]*filed{}, missed: map[string]string{},
+		reported: map[string]int{}, limits: map[string]int64{}, tpls: map[string]string{}, written: map[string]bool{}}
 }
 
 // Derived is how many request rows the render derived; the rest were its prev's.
@@ -553,57 +489,119 @@ func (m *Memo) Derived() int {
 	return m.derived
 }
 
-// reqOf is prev's row of id when nothing it read changed (nil: derive it).
-func (m *Memo) reqOf(id string, d *dirty) *memoReq {
-	if m == nil || d == nil || d.own[id] {
-		return nil
-	}
-	if r := m.reqs[id]; r != nil && !d.hits(r.deps) {
-		return r
-	}
-	return nil
-}
+// VerifyIncremental makes every incremental render also render whole and
+// panic where they differ (the tests and the gate set it;
+// AINTERCEPT_DRAWER_VERIFY=1 does too).
+var VerifyIncremental = os.Getenv("AINTERCEPT_DRAWER_VERIFY") == "1"
 
-// verify panics where an incremental render's rows aren't a whole render's.
-func verify(in Inputs, reqs []Request, evs []Event) {
-	wr, we, _ := RenderNext(in, nil, nil)
-	for i := 0; i < max(len(wr), len(reqs)); i++ {
-		if i >= len(wr) || i >= len(reqs) || wr[i] != reqs[i] {
-			id := ""
-			if i < len(wr) {
-				id = wr[i].ID
-			} else {
-				id = reqs[i].ID
-			}
-			panic(fmt.Sprintf("drawer: key %s: the incremental render's request %q isn't the whole render's", in.Key, id))
+// verify panics where the memo's rows aren't a whole render's.
+func verify(in Inputs, m *Memo) {
+	full := in
+	full.EventRowsChanged, full.ExternalsChanged = nil, nil
+	w := RenderNext(full, nil, nil)
+	reqs, evs, counts := m.All()
+	wr, we, wc := w.All()
+	if len(wr) != len(reqs) || len(we) != len(evs) || len(wc) != len(counts) {
+		panic(fmt.Sprintf("drawer: key %s: the incremental render holds %d requests, %d events, %d counts; the whole one %d, %d, %d",
+			in.Key, len(reqs), len(evs), len(counts), len(wr), len(we), len(wc)))
+	}
+	for i := range wr {
+		a, b := wr[i], reqs[i]
+		if a.ID != b.ID || a.DataVals != b.DataVals || a.DetailsVals != b.DetailsVals || w.tpls[a.DataTpl] != m.tpls[b.DataTpl] ||
+			w.tpls[a.DetailsTpl] != m.tpls[b.DetailsTpl] || a.StepSession != b.StepSession || a.StepPrompt != b.StepPrompt {
+			panic(fmt.Sprintf("drawer: key %s: the incremental render's request %q isn't the whole render's", in.Key, a.ID))
 		}
 	}
-	for i := 0; i < max(len(we), len(evs)); i++ {
-		if i >= len(we) || i >= len(evs) || we[i] != evs[i] {
-			panic(fmt.Sprintf("drawer: key %s: the incremental render's event rows aren't the whole render's (at %d)", in.Key, i))
+	for i := range we {
+		if we[i] != evs[i] {
+			panic(fmt.Sprintf("drawer: key %s: the incremental render's event %q isn't the whole render's", in.Key, we[i].ID))
+		}
+	}
+	for i := range wc {
+		if wc[i] != counts[i] {
+			panic(fmt.Sprintf("drawer: key %s: the incremental render's step count %v isn't the whole render's %v", in.Key, counts[i], wc[i]))
 		}
 	}
 }
 
-// stepHash is what rows read of a step: its id, times, status, class and prompt.
-func stepHash(st *step) uint64 {
-	d := xxhash.New()
-	for _, v := range []Value{StrV(st.id), st.ts, st.end, st.status, st.class, st.prompt} {
-		_, _ = d.WriteString(v.Repr())
-		_, _ = d.Write([]byte{0})
+// All is the memo's rows, each kind by id.
+func (m *Memo) All() ([]Request, []Event, []StepCount) {
+	var reqs []Request
+	for _, r := range m.reqs {
+		if r.yield {
+			reqs = append(reqs, r.req)
+		}
 	}
-	return d.Sum64()
+	slices.SortFunc(reqs, func(a, b Request) int { return strings.Compare(a.ID, b.ID) })
+	evs := make([]Event, 0, len(m.events))
+	for _, e := range m.events {
+		evs = append(evs, e)
+	}
+	slices.SortFunc(evs, func(a, b Event) int { return strings.Compare(a.ID, b.ID) })
+	counts := make([]StepCount, 0, len(m.counts))
+	for _, c := range m.counts {
+		counts = append(counts, c)
+	}
+	slices.SortFunc(counts, func(a, b StepCount) int {
+		if c := strings.Compare(a.Session, b.Session); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Prompt, b.Prompt)
+	})
+	return reqs, evs, counts
 }
 
-// firstDiff is the first place two lists differ (len(old) when cur only adds
-// to old: nothing old moved, but a read up to its end changed); -1: the same.
-func firstDiff(old, cur []uint64) int {
-	i := 0
-	for i < len(old) && i < len(cur) && old[i] == cur[i] {
-		i++
+// Between is what changes from a's rows to b's, compared whole: for a render
+// diffed from a baseline it didn't render after (a's memo must be unused:
+// one consumed holds its successor's rows).
+func Between(a, b *Memo) Delta {
+	if a.used {
+		panic("drawer: rows compared with a memo another render consumed")
 	}
-	if i == len(old) && i == len(cur) {
-		return -1
+	var d Delta
+	ar, ae, ac := a.All()
+	br, be, bc := b.All()
+	oldReq := map[string]Request{}
+	for _, r := range ar {
+		oldReq[r.ID] = r
 	}
-	return i
+	for _, r := range br {
+		o, ok := oldReq[r.ID]
+		if !ok || o.DataVals != r.DataVals || o.DetailsVals != r.DetailsVals || a.tpls[o.DataTpl] != b.tpls[r.DataTpl] ||
+			a.tpls[o.DetailsTpl] != b.tpls[r.DetailsTpl] || o.StepSession != r.StepSession || o.StepPrompt != r.StepPrompt {
+			d.Requests = append(d.Requests, r)
+		}
+		delete(oldReq, r.ID)
+	}
+	for id := range oldReq {
+		d.GoneRequests = append(d.GoneRequests, id)
+	}
+	oldEv := map[string]Event{}
+	for _, e := range ae {
+		oldEv[e.ID] = e
+	}
+	for _, e := range be {
+		if o, ok := oldEv[e.ID]; !ok || o != e {
+			d.Events = append(d.Events, e)
+		}
+		delete(oldEv, e.ID)
+	}
+	for id := range oldEv {
+		d.GoneEvents = append(d.GoneEvents, id)
+	}
+	oldC := map[[2]string]StepCount{}
+	for _, c := range ac {
+		oldC[[2]string{c.Session, c.Prompt}] = c
+	}
+	for _, c := range bc {
+		if o, ok := oldC[[2]string{c.Session, c.Prompt}]; !ok || o != c {
+			d.Counts = append(d.Counts, c)
+		}
+		delete(oldC, [2]string{c.Session, c.Prompt})
+	}
+	for _, c := range oldC {
+		d.GoneCounts = append(d.GoneCounts, c)
+	}
+	d.sort()
+	return d
 }
