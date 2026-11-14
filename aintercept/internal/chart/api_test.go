@@ -28,7 +28,7 @@ func TestStatelessAPI(t *testing.T) {
 		t.Error("no scratch emptyDir")
 	}
 	env := byName(get(cs["api"], "env"))
-	for name, want := range map[string]string{"AINTERCEPT_STORE": "v1", "AINTERCEPT_S3_BUCKET": "b", "AINTERCEPT_S3_REGION": "r"} {
+	for name, want := range map[string]string{"AINTERCEPT_STORE": "pg", "AINTERCEPT_S3_BUCKET": "b", "AINTERCEPT_S3_REGION": "r"} {
 		if env[name] == nil || env[name]["value"] != want {
 			t.Errorf("env %s = %v, want %q", name, env[name], want)
 		}

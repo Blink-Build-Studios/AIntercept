@@ -19,7 +19,7 @@ Python values would need pyarrow, which the API doesn't ship.
 
 Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5), and
 the directory, /people and /overview (step 7: pgstore_directory), and the person pages (step 6:
-pgstore_person). Selected with AINTERCEPT_STORE=pg; V1Store stays the default until step 8.
+pgstore_person). The API's default store (step 8); AINTERCEPT_STORE=v1 selects V1Store instead.
 """
 
 import contextlib

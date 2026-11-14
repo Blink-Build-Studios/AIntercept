@@ -4,7 +4,8 @@
 # one request through the proxy to the real api.anthropic.com (no key, so the
 # upstream answers 401), then wait until the observer has written it, a worker
 # has committed it to Postgres (the tail found it in the recent index), the
-# workers' lag has settled and the API answers. Changes nothing on this machine:
+# workers' lag has settled and the API serves that request from Postgres (its
+# drawer, /api/v1/requests/<id>). Changes nothing on this machine:
 # curl's --resolve pins the host to the proxy for this one request.
 set -euo pipefail
 
@@ -24,6 +25,7 @@ curl -fsS -o /dev/null http://127.0.0.1:9004/healthz || fail "the workers aren't
 lag >/dev/null || fail "the workers can't read Postgres (/lag errors: docker compose logs rollup postgres)"
 ins="$(count)"
 before="$(commits)"
+sent_ns="$(python3 -c 'import time; print(time.time_ns() - 5_000_000_000)')" # a little slack for clocks
 code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 --cacert "${ROOT}/certs/root-ca.crt" \
   --resolve api.anthropic.com:443:127.0.0.1 -X POST -H 'content-type: application/json' -d '{}' \
   https://api.anthropic.com/v1/messages)" || fail "TLS through the proxy failed (is Docker up? make up)"
@@ -61,17 +63,26 @@ done
 [[ -n "$settled" ]] || fail "the workers' lag didn't settle under 30 s (last /lag: ${body:-none})"
 ok "the workers' lag settled (/lag: ${settled})"
 
-store="$(cat "${ROOT}/.cache/run/api.store" 2>/dev/null || echo v1)"
+store="$(cat "${ROOT}/.cache/run/api.store" 2>/dev/null || echo pg)"
 if [[ "$store" == "pg" ]]; then
+  # This request's id, as the worker committed it (the newest api.anthropic.com call since we sent it).
+  id="$(psql_q "SELECT call_id FROM requests WHERE host = 'api.anthropic.com' AND start_ns >= ${sent_ns}
+    AND call_id IS NOT NULL ORDER BY start_ns DESC LIMIT 1" 2>/dev/null || true)"
+  [[ -n "$id" ]] || fail "no requests row for it in Postgres (docker compose logs rollup)"
+  got=""
   for _ in $(seq 30); do
-    first="$(curl -fsS http://127.0.0.1:8787/api/v1/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["firstRequestAt"] or "")')"
-    [[ -n "$first" ]] && break
+    got="$(curl -fsS "http://127.0.0.1:8787/api/v1/requests/${id}" 2>/dev/null \
+      | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d["requestId"], d["method"], d["path"])' 2>/dev/null || true)"
+    [[ "$got" == "${id} POST /v1/messages" ]] && break
     sleep 1
   done
-  [[ -n "$first" ]] || fail "the API doesn't show it (.cache/run/api.log)"
-  ok "the API serves it from Postgres (first request at ${first})"
+  [[ "$got" == "${id} POST /v1/messages" ]] || fail "the API doesn't serve request ${id} (got: ${got:-nothing}; .cache/run/api.log)"
+  ok "the API serves it from Postgres (/api/v1/requests/${id}: POST /v1/messages)"
+  first="$(curl -fsS http://127.0.0.1:8787/api/v1/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["lastIngestAt"] or "")')"
+  [[ -n "$first" ]] || fail "the API's /status has no lastIngestAt (.cache/run/api.log)"
+  ok "the API's /status reads Postgres (last ingest at ${first})"
 else
   curl -fsS -o /dev/null http://127.0.0.1:8787/api/v1/status || fail "the API isn't answering (.cache/run/api.log)"
-  ok "the API answers (store v1, the v5 folders, until the switch; AINTERCEPT_STORE=pg make up reads Postgres)"
+  ok "the API answers (store v1, the v5 folders, which the workers no longer write; the default store is pg)"
 fi
 echo "Verified. Next: route Claude Code through the proxy (docs/SETUP.md step 4) and open http://localhost:5173"

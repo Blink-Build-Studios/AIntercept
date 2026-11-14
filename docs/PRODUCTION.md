@@ -213,9 +213,14 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 ## 5b. Query API capacity
 
 The API (`api.enabled`) is stateless (docs/PIPELINE.md §5): each request reads
-its rows from Postgres in one snapshot (with `api.store: v1`, until the switch,
-the object store's v1/ folders) and a call's `calls/<id>` object, so it keeps no
+its rows from Postgres in one snapshot, through the API login (the Secret's
+`api-url`, `api.store: pg`), and a call's `calls/<id>` object, so it keeps no
 tables, and an HPA on CPU sets its replica count (`api.stateless`):
+- **Startup and readiness:** the API checks the schema's hash at start and
+  refuses to start on a mismatch or without its DSN (a schema change needs a
+  fresh database, and the workers apply it first). Its readiness probe,
+  `/api/v1/status`, reads Postgres, so a pod that can't reach it leaves the
+  Service.
 - **Memory:** request = limit (`api.resources`, 1.5 Gi), so the scheduler
   reserves all of it and the pod is the last evicted. DuckDB gets 60% of it
   unless `api.memoryLimit` says otherwise.

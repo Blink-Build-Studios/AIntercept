@@ -75,16 +75,9 @@ def bucket_store_from_env(env: Mapping[str, str], *, v1: bool = False) -> Any:
         )
     prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
     cache = pathlib.Path(env.get("AINTERCEPT_CACHE_DIR") or "/data/cache")
-    extra: dict[str, Any] = {}
-    if v1 and env.get("AINTERCEPT_REDIS_ADDR"):
-        import redis
-
-        host, _, port = env["AINTERCEPT_REDIS_ADDR"].rpartition(":")
-        extra["redis"] = redis.Redis(host=host or "localhost", port=int(port or 6379), socket_timeout=0.5)
     return (V1Store if v1 else BucketStore)(
         source,
         cache,
-        **extra,
         prefix=prefix + "/" if prefix else "",
         cache_bytes=int(env.get("AINTERCEPT_CACHE_BYTES") or 2 << 30),
         memory_limit=duckdb_memory_limit(env),
@@ -104,7 +97,10 @@ def pg_store_from_env(env: Mapping[str, str]) -> Any:
     if not dsn and env.get("AINTERCEPT_PG_DSN_FILE"):
         dsn = pathlib.Path(env["AINTERCEPT_PG_DSN_FILE"]).read_text().strip()
     if not dsn:
-        raise ValueError("AINTERCEPT_STORE=pg needs AINTERCEPT_PG_DSN or AINTERCEPT_PG_DSN_FILE")
+        raise ValueError(
+            "the API reads Postgres and has no URL for it: set AINTERCEPT_PG_DSN (the API login's DSN)"
+            " or AINTERCEPT_PG_DSN_FILE (a file holding it); AINTERCEPT_STORE=v1 reads the v5 folders instead"
+        )
     source: Source
     if env.get("AINTERCEPT_BUCKETS_DIR"):
         source = LocalSource(pathlib.Path(env["AINTERCEPT_BUCKETS_DIR"]))
@@ -154,15 +150,22 @@ def create_app(
         openapi_url="/openapi.json" if explorer else None,
     )
     if store is None:
-        # The v5 store (docs/PIPELINE.md §4): the object store, or a local directory laid out
-        # the same way (AINTERCEPT_BUCKETS_DIR, default data/v1 for local runs).
+        # Postgres (docs/PIPELINE.md v7 §5), with the calls' detail objects from the object store
+        # or a local directory laid out the same way (AINTERCEPT_BUCKETS_DIR, default data/v1 for
+        # local runs). It refuses to start without a DSN, or on a database whose schema isn't this
+        # build's. AINTERCEPT_STORE=v1 (the v5 folders) and buckets stay selectable: the tests and
+        # the oracle read them.
         env = dict(os.environ)
         if not env.get("AINTERCEPT_BUCKETS_DIR") and not env.get("AINTERCEPT_S3_BUCKET"):
             env["AINTERCEPT_BUCKETS_DIR"] = str(DEFAULT_BUCKETS_DIR)
-        kind = env.get("AINTERCEPT_STORE", "v1")
-        # pg: the Postgres read path (build step 5: /status, the session pages, the drawer; the
-        # default once step 8 switches).
-        store = pg_store_from_env(env) if kind == "pg" else bucket_store_from_env(env, v1=kind != "buckets")
+        kind = env.get("AINTERCEPT_STORE") or "pg"
+        if kind not in ("pg", "v1", "buckets"):
+            raise ValueError(f"AINTERCEPT_STORE must be pg (the default), v1 or buckets, not {kind!r}")
+        try:
+            store = pg_store_from_env(env) if kind == "pg" else bucket_store_from_env(env, v1=kind == "v1")
+        except Exception as e:
+            log.critical("the API can't start", extra={"fields": {"store": kind, "reason": str(e)}})
+            raise
     app.state.store = store
     app.state.ingest_interval_s = ingest_interval_s
     app.state.clock = clock or (lambda: datetime.now(UTC))

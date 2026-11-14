@@ -2,9 +2,11 @@
 # The query API (api/) inside the cluster, as it runs in a client network: the
 # UI connects to it (today through `kubectl port-forward svc/api 8787`). It is
 # stateless (docs/PIPELINE.md §5): each request reads its rows from Postgres in
-# one snapshot (or, with api.store v1 until the switch, the object store's v1/
-# folders) and a call's calls/<id> object for the raw view, so it keeps no
-# tables, only scratch space, and an HPA on CPU sets the replica count.
+# one snapshot and a call's calls/<id> object for the raw view, so it keeps no
+# tables, only scratch space, and an HPA on CPU sets the replica count. It
+# checks the schema's hash at start and refuses a mismatch; /api/v1/status
+# (its readiness probe) reads Postgres, so a pod that can't is taken out of
+# the Service.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1,7 +1,7 @@
 """What a request reads stays flat as history grows (docs/PIPELINE.md §4).
 
 The drawer reads its call's keys (their marks, calls/<id>.keys/, name them), /status reads the merge
-commit (and Redis), and the directory reads the merge's day partitions in its window plus the
+commit, and the directory reads the merge's day partitions in its window plus the
 index. None of them reads a day partition outside its window or a key that isn't theirs, so the
 same request against 8x the history reads the same objects."""
 
@@ -126,44 +126,6 @@ def test_directory_reads_flat_in_history(stores):
         r8, f8, b8 = _reads(stores, 8, path)
         assert f8 == f1, (path, f1, f8)
         assert b8["data"] == b1["data"], path
-
-
-def test_status_takes_redis_newest_when_newer(stores, monkeypatch):
-    """lastIngestAt is the newest of the merge's newest row and the pods' newest ingest (Redis)."""
-    _, store = stores[1]()
-    merge = store.merge()
-    assert merge is not None and merge.newest_ns
-    newer = merge.newest_ns + 5_000_000_000
-
-    class FakeRedis:
-        def scan_iter(self, match: str):
-            assert match == "ingest:last:*"
-            return iter(["ingest:last:a", "ingest:last:b"])
-
-        def mget(self, keys):
-            return [str(newer).encode(), b"1"]
-
-    monkeypatch.setattr(store, "redis", FakeRedis())
-    got = make_client(store).get("/api/v1/status").json()
-    assert got["meta"]["lastDataAt"] == got["data"]["lastIngestAt"]
-    monkeypatch.setattr(store, "redis", None)
-    base = make_client(store).get("/api/v1/status").json()
-    assert got["data"]["lastIngestAt"] > base["data"]["lastIngestAt"]
-    assert {k: v for k, v in got["data"].items() if k != "lastIngestAt"} == {
-        k: v for k, v in base["data"].items() if k != "lastIngestAt"
-    }
-
-
-def test_status_survives_redis_down(stores, monkeypatch):
-    _, store = stores[1]()
-
-    class DownRedis:
-        def scan_iter(self, match: str):
-            raise ConnectionError("down")
-
-    monkeypatch.setattr(store, "redis", DownRedis())
-    r = make_client(store).get("/api/v1/status")
-    assert r.status_code == 200 and r.json()["data"]["lastIngestAt"]
 
 
 def test_directory_reads_no_fact_table(stores):

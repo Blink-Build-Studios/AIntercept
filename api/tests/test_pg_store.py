@@ -564,19 +564,25 @@ def test_a_requests_tab_joins_the_rows_other_keys_hold(joined):
         assert [r["requestId"] for r in body["data"]] == ["batch-1", "own-call"] and body["meta"]["total"] == 2
 
 
-def test_the_app_reads_postgres_when_told_to(pg_dsn, tmp_path, monkeypatch):
-    # V1Store stays the default (build step 8 switches); AINTERCEPT_STORE=pg picks this store, its
-    # DSN given outright or in a mounted file.
+def test_the_app_reads_postgres_by_default(pg_dsn, tmp_path, monkeypatch):
+    # Postgres is the API's store (build step 8): its DSN given outright or in a mounted file, and
+    # without one the API refuses to start. V1Store stays selectable (AINTERCEPT_STORE=v1) for the
+    # tests and the oracle.
     from aintercept_api.app import create_app
     from aintercept_api.buckets import LocalSource
 
     monkeypatch.setenv("AINTERCEPT_BUCKETS_DIR", str(tmp_path))
     monkeypatch.setenv("AINTERCEPT_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.delenv("AINTERCEPT_STORE", raising=False)
-    assert type(create_app().state.store).__name__ == "V1Store"
-    monkeypatch.setenv("AINTERCEPT_STORE", "pg")
-    with pytest.raises(ValueError, match="AINTERCEPT_PG_DSN"):
+    for name in ("AINTERCEPT_STORE", "AINTERCEPT_PG_DSN", "AINTERCEPT_PG_DSN_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValueError, match="AINTERCEPT_PG_DSN.*AINTERCEPT_STORE=v1"):
         create_app()
+    monkeypatch.setenv("AINTERCEPT_STORE", "v1")
+    assert type(create_app().state.store).__name__ == "V1Store"
+    monkeypatch.setenv("AINTERCEPT_STORE", "redis")
+    with pytest.raises(ValueError, match="AINTERCEPT_STORE"):
+        create_app()
+    monkeypatch.delenv("AINTERCEPT_STORE")
     (tmp_path / "dsn").write_text(pg_dsn + "\n")
     monkeypatch.setenv("AINTERCEPT_PG_DSN_FILE", str(tmp_path / "dsn"))
     store = create_app().state.store
@@ -585,3 +591,22 @@ def test_the_app_reads_postgres_when_told_to(pg_dsn, tmp_path, monkeypatch):
         assert make_client(store).get("/api/v1/status").status_code == 200
     finally:
         store.close()
+    monkeypatch.delenv("AINTERCEPT_PG_DSN_FILE")
+    monkeypatch.setenv("AINTERCEPT_PG_DSN", pg_dsn)
+    create_app().state.store.close()
+
+
+def test_the_app_refuses_to_start_on_another_schema(pg_dsn, tmp_path, monkeypatch):
+    # The schema-hash check runs when the app starts (the API is up only on this build's schema).
+    from aintercept_api.app import create_app
+
+    monkeypatch.setenv("AINTERCEPT_BUCKETS_DIR", str(tmp_path))
+    monkeypatch.delenv("AINTERCEPT_STORE", raising=False)
+    monkeypatch.delenv("AINTERCEPT_PG_DSN_FILE", raising=False)
+    admin = pgdb.admin_dsn()
+    assert admin is not None
+    with pgdb.fresh_database(admin) as other:
+        _exec(other, "UPDATE schema_version SET hash = 'not-this-build'")
+        monkeypatch.setenv("AINTERCEPT_PG_DSN", other)
+        with pytest.raises(SchemaMismatch):
+            create_app()

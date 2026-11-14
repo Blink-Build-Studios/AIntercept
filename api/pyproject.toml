@@ -13,7 +13,6 @@ dependencies = [
     "pyjwt==2.15.1",
     "cryptography==50.0.2",
     "uvicorn==0.54.0",
-    "redis==8.1.0",
     "adbc-driver-postgresql==1.12.0",
 ]
 

@@ -1,7 +1,7 @@
 # aintercept: notes for coding agents
 
 - **Setting aintercept up for someone** (a fresh clone to the People page with live Claude Code traffic): follow `docs/SETUP.md`. `make up` starts everything, `make verify` proves it, and routing Claude Code (step 4) needs the person, because it uses sudo.
-- **The data pipeline** is `docs/PIPELINE.md` (v5): the observer writes per-key ingest files, `aintercept rollup` commits each key's rows and the merge, and the API reads them (`AINTERCEPT_STORE=v1`). The old `aintercept process` processor is gone. The API's tests run the same path (`aintercept v1layout`).
+- **The data pipeline** is `docs/PIPELINE.md` (v7): the observer writes per-key ingest files, `aintercept rollup` (the workers) commits each key's rows to Postgres, and the API reads them from there (`AINTERCEPT_STORE=pg`, the default; `v1`, the v5 folders, is kept only for the tests and the oracle). The old `aintercept process` processor is gone. Many API tests and the parity oracle still read the v5 layout (`aintercept v1layout`).
 - **Before every commit, run `make check`.** It runs exactly the checks CI requires. A commit that fails it won't go green. It needs Docker: the Postgres tests run in the pinned image (`scripts/test-pg.sh`, or a server you name in `AINTERCEPT_TEST_PG`).
 - **UI and query API work** (`ui/`, `api/`): follow `docs/ui/BUILD_PLAN.md`. It overrides the design handoff in `docs/ui/handoff/`, and §11 lists every automated rule.
 - **The definition of done is `docs/ui/requirements.json`.** Building a component means a story for each state listed there; implementing an endpoint means a sample for each scenario.
