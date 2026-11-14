@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
 var update = flag.Bool("update", false, "rewrite schema.sql from Tables")
@@ -42,7 +44,6 @@ func TestSchemaShape(t *testing.T) {
 		// Rendered rows keep today's columns, and their extras come last.
 		{"session_rows", []string{"session_id", "start_ns", "last_ns", "product", "agent", "client"}, "session_id"},
 		{"event_rows", []string{"session_id", "seq", "event_id"}, "session_id, seq"},
-		{"analytics", []string{"key", "id", "event_key", "correlation_id"}, "key, id"},
 		{"call_tool_uses", []string{"session_id", "ts_ns", "kind", "server", "tool"}, "session_id, ts_ns, kind, server, tool"},
 	}
 	for _, c := range cases {
@@ -63,7 +64,6 @@ func TestSchemaShape(t *testing.T) {
 		}
 	}
 	for _, x := range []struct{ table, col string }{
-		{"analytics", "env_json"},      // not stored: no API code reads it
 		{"session_rows", "title"},      // parquet "-"
 		{"call_tool_uses", "call_id"},  // the state's, not the API's
 		{"fact_pending", "start_ns"},   // not stored: the drawer 404s for a call in flight
@@ -130,5 +130,18 @@ func TestLoginsSQLFillsPasswords(t *testing.T) {
 	}
 	if strings.Contains(sql, ":'") {
 		t.Fatal("a psql variable is left")
+	}
+}
+
+// The analytics events (state's fact_events) aren't stored: no API statement
+// and no worker read takes them from Postgres since the drawer is
+// precomputed (/events/{id} reads drawer_events, a batch's other keys come
+// from batch_parts), so writing them only cost the database its largest
+// table (docs/PIPELINE.md §3.4).
+func TestFactEventsAreNotStored(t *testing.T) {
+	for _, tb := range Tables {
+		if tb.Name == "analytics" || tb.State == state.TableFactEvents {
+			t.Errorf("table %s stores %s", tb.Name, state.TableFactEvents)
+		}
 	}
 }

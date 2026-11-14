@@ -762,17 +762,18 @@ delete for a tombstone.
 | `session_edges` | children_json (v8: the render) | (parent_session_id) |
 | `session_title_calls` | labels (v8: the render) | (account_id, ts_ns) |
 | `requests` (`fact_requests`) | the drawer | (call_id) |
-| `analytics` (`fact_events`) | the drawer, `/events/{id}` | (correlation_id), (key, name), both for the drawer |
 
 - **Facts.**
   - `fact_pending` isn't stored: the drawer 404s for a call in flight (owner).
-  - `analytics` keeps every event for now. Schema changes are wipes, and the
-    owner accepts discarding data, so narrowing it later costs nothing (Not
-    now).
-  - `analytics.env_json` isn't stored: no API code reads it (`store.py` exposes
-    it as `env`, which no query selects).
-  - `metadata_json` is most of an analytics row. It's compressed in line (lz4,
-    `toast_tuple_target = 128`).
+  - *v8:* `fact_events` (the analytics events, the table `analytics`) isn't
+    stored. Nothing reads it from Postgres since the drawer is precomputed
+    (§3.7):
+    - the drawer and `/events/{id}` read their own rows;
+    - a batch's other keys come from `batch_parts`.
+
+    On the capture it was the largest table: 216k rows, 292 MB of 916 MB.
+    Every table now has a reader, an API statement or the worker's own
+    (`api/tests/test_pg_readers.py`).
   - `fact_probes` folds into `keys.earliest_ns`.
 - **`batch_members` isn't stored:** it's a row per event.
   - Instead each key writes its **batch parts**: `batch_parts (batch_id, key, n,
@@ -1268,7 +1269,7 @@ the target):
 
 | Table | v7 bytes/row | v7 GB/day | Why it goes |
 |---|---|---|---|
-| `analytics` | 1,354 | 101 | no reader since the drawer was precomputed (#55); the worker agent removes it in its own PR |
+| `analytics` | 1,354 | 101 | no reader since the drawer was precomputed (#55); removed in #59 (`api/tests/test_pg_readers.py` checks every table has a reader) |
 | `drawer_events` | 633 | 47 | `/events/{id}` reads the event's own `event_rows` row |
 | `requests` | 1,350 | 10 | `/raw`'s fallback view is rendered into the drawer row; the batch-call holder lookup reads `request_log_rows` |
 | `request_txs` | 966 | 7 | read only by v7's read-time `stream_sql`; the call's row holds its facts |
@@ -2180,7 +2181,7 @@ is one PR, tests first: its failing tests land in the PR before the code.
 - Step 8 is the worker agent's drawer, finished on 4, 5 and 6.
 - Steps 9 and 10 are one PR per page, each starting when its inputs have
   landed.
-- The worker agent's PR that drops `analytics` (no reader) goes in any time.
+- The worker agent's PR that drops `analytics` (no reader) has landed (#59).
 
 | Step | What | Tests first | Gate | Needs |
 |---|---|---|---|---|
@@ -2262,7 +2263,7 @@ order):
     `request_reports`, `request_missed`, `prompt_index`, `codex_turns`,
     `session_last`, `dim_session_visible`, `call_tool_uses`, `agent_calls`,
     `agent_call_hours`, and `event_rows`' old columns;
-  - `analytics` (the worker agent's PR, any time);
+  - `analytics` (#59, landed);
   - `drawer_step_counts` (on `v8-worker`), which folds into the prompt item in
     step 8.
 

@@ -186,11 +186,9 @@ func buildTables() []Table {
 	add(stored("session_edges", state.TableSessionEdges, rowOpts{}, "(parent_session_id)"))
 	add(stored("session_title_calls", state.TableSessionTitleCalls, rowOpts{}, "(account_id, ts_ns)"))
 	add(stored("requests", state.TableFactRequests, rowOpts{}, "(call_id)"))
-	// env_json isn't stored: no API code reads it. metadata_json, most of a row, is compressed in line.
-	analytics := stored("analytics", state.TableFactEvents, rowOpts{omit: map[string]bool{"env_json": true}},
-		"(correlation_id)", "(key, name)")
-	analytics.With, analytics.LZ4 = "toast_tuple_target = 128", []string{"metadata_json"}
-	add(analytics)
+	// The analytics events (state.TableFactEvents) aren't stored: nothing reads them from Postgres
+	// (the drawer is precomputed, /events/{id} reads drawer_events, a batch's other keys come from
+	// batch_parts), and they were the largest table (docs/PIPELINE.md §3.4).
 	add(Table{Name: "batch_parts", Kind: Fold, PK: []string{"batch_id", "key"}, Columns: []Column{
 		notNull("batch_id", "text"), notNull("key", "text"), col("n", "bigint"), col("min_name", "text"),
 		col("first_ns", "bigint"), col("first_session", "text"),
