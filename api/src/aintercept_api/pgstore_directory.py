@@ -22,10 +22,9 @@ Everything else (the window, live, activity, filters, sort, page) is today's end
 from typing import TYPE_CHECKING, Any
 
 import duckdb
-import pydantic
 
 from aintercept_api import claude_code as cc
-from aintercept_api import person_sql, state_sql
+from aintercept_api import person_sql, ranges, state_sql
 from aintercept_api import store as legacy
 from aintercept_api.pgstore import SHAPES, _q
 
@@ -139,19 +138,6 @@ def agent_call_ranges(lo: int | None, hi: int | None) -> list[tuple[object, str]
 
 # --- the request's range ----------------------------------------------------------------------------
 
-_INSTANT = pydantic.TypeAdapter(pydantic.AwareDatetime)
-
-
-def _ns(value: str | None) -> int | None:
-    """A from= or to= as the endpoint reads it (FastAPI's AwareDatetime), in ns; None for none or one
-    the endpoint rejects."""
-    if value is None:
-        return None
-    try:
-        return cc.to_ns(_INSTANT.validate_python(value))
-    except pydantic.ValidationError:
-        return None
-
 
 def day_of(value: str | None) -> str | None:
     """A from= instant's UTC day (YYYY-MM-DD), or None for none or one that doesn't parse: the day v5
@@ -181,7 +167,7 @@ def load(run: "_Run", *, overview: bool, params: dict[str, list[str]]) -> None:
     call_days = run.fetch("session_call_days", CALL_DAYS_SQL, day)
     missed = run.fetch("missed_marks", MISSED_SQL, day)
     if overview:
-        lo, hi = (_ns(params[k][-1]) if params.get(k) else None for k in ("from", "to"))
+        lo, hi = ranges.of_query(params)  # the router's range, snapped
         t = run.fetch("agent_calls", AGENT_CALLS_SQL, agent_call_ranges(lo, hi))
         (n,) = con.execute(f"SELECT whole + head + tail + untimed FROM {t}").fetchall()[0]  # noqa: S608
         run.values["agent_calls"] = (lo, hi, int(n))

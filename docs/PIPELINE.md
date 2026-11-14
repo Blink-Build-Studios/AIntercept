@@ -1761,6 +1761,36 @@ owner.
   `AINTERCEPT_STORE=v1` leaves the app; the tests construct V1Store directly.
 - `org_kind` still reads `CUSTOMER_ORG_IDS` at request time.
 
+*As built (step 1):*
+- **The seam** is `api/src/aintercept_api/pages.py`. A router parses, snaps
+  (`ranges.py`), calls `pages.read(request, "<page>")` and maps what comes
+  back. `SqlPages` is today's SQL; a store without a picker (V1Store, the
+  oracle) reads every page with it. PgStore's `page_reader` picks `PgPages`
+  (`pgstore.py`, on the psycopg reader in `reader.py`) for the names in
+  `PgPages.PAGES`, and `SqlPages` over v7's loader for the rest. A page moves to
+  v8 by adding its name there and its method, with `SqlPages`' signature.
+- **On v8's reader so far:** `/status`, `/requests/{id}`, `/details`, `/raw`
+  and `/events/{id}`, one statement each. `/raw`'s fallback view still runs
+  `request_detail`'s `calls` SQL, over a one-row DuckDB made only when the
+  view is needed (step 8 renders it).
+- **Two pools until step 11:** v7's loader keeps its ADBC connections, so a pod
+  holds up to 8 of each.
+- **The auto bin follows the snapped span**, so a person with no data (the
+  default 14 days, which snap to 14 d + 60 s − 1 ns) gets daily bins, not
+  hourly.
+- **The harness** is `api/tests/side_by_side.py`: every page, one registration
+  each, walked by `test_v8_side_by_side.py` (each page), `test_v8_cuts.py`
+  (every cut, one session and one person) and `test_v8_checkpoints.py`. A
+  checkpoint is a prefix of the dataset's raw rows, laid out by the v7 worker
+  into a database of its own and settled (no flag left, render flags
+  included). The worker's own incremental runs are held in Go (incremental
+  equals whole). The API's clock is whole µs, so "±1 ns" around a threshold is
+  the µs either side.
+- `aintercept v1layout` now records each key's newest raw row in its one-pass
+  commit (`Commit.NewestRowNS`), as the rollup loop does. Without it, the
+  oracle's `/status` and drawer `lastDataAt` left out a call still in flight
+  at a checkpoint.
+
 ## 6. Deployment
 
 - **Production (AWS): RDS for PostgreSQL 17.** The operator creates it (support,

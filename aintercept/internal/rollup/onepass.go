@@ -13,8 +13,10 @@ import (
 // WriteOnePass writes a key's tables as its first commit: one output directory
 // holding every table it has rows in. It's how tools and tests lay out a
 // capture's one-pass result (`aintercept v1layout`); the rollup loop writes
-// the same layout run by run.
-func WriteOnePass(ctx context.Context, s stream.Store, prefix, key string, tables map[string][]stream.Row, updatedNS int64) error {
+// the same layout run by run. newestRowNS is the newest raw row the key's
+// ingest files carried, rows that complete no record included (a call still in
+// flight), as the loop's commits record it (Commit.NewestRowNS); 0 for none.
+func WriteOnePass(ctx context.Context, s stream.Store, prefix, key string, tables map[string][]stream.Row, updatedNS, newestRowNS int64) error {
 	names := make([]string, 0, len(tables))
 	for t := range tables {
 		names = append(names, t)
@@ -39,7 +41,7 @@ func WriteOnePass(ctx context.Context, s stream.Store, prefix, key string, table
 	if err := markReported(ctx, s, prefix, key, tables[state.TableRequestMissed]); err != nil {
 		return err
 	}
-	body, err := json.Marshal(Commit{N: 1, Key: key, Out: []Out{out}, UpdatedNS: updatedNS})
+	body, err := json.Marshal(Commit{N: 1, Key: key, Out: []Out{out}, UpdatedNS: updatedNS, NewestRowNS: newestRowNS})
 	if err != nil {
 		return err
 	}

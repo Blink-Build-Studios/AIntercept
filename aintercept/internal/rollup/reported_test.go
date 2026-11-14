@@ -40,7 +40,7 @@ func TestOnePassMarksItsMissedReports(t *testing.T) {
 	s := stream.NewMemStore(stream.RealClock{})
 	rows := map[string][]stream.Row{state.TableRequestMissed: {{Key: "s:a", ID: "m1",
 		Value: state.MissedRow{ReqID: "r1", Row: process.RequestRow{RequestID: "reported:r1"}}}}}
-	if err := WriteOnePass(context.Background(), s, "p", "s:a", rows, 1); err != nil {
+	if err := WriteOnePass(context.Background(), s, "p", "s:a", rows, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Get(context.Background(), ReportedMark("p", "r1", "s:a")); err != nil {

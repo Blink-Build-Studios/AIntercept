@@ -36,7 +36,7 @@ from aintercept_api import claude_code as cc
 from aintercept_api import state_sql, stream_sql
 from aintercept_api import store as legacy
 from aintercept_api.person_sql import DIMENSIONS, PERSON_TABLES
-from aintercept_api.pgstore import _LABELS_SQL, _WIDEN_NS, SHAPES, PgStore, Status, _instant_ns, _q, _Run, columns
+from aintercept_api.pgstore import _LABELS_SQL, _WIDEN_NS, SHAPES, PgStore, _q, _Run, columns
 
 UNATTRIBUTED = cc.UNATTRIBUTED
 ENTITY = "*"
@@ -386,8 +386,9 @@ def page_of(bare: str, query: dict[str, list[str]]) -> tuple[str, str] | None:
     return urllib.parse.unquote(pid), sub
 
 
-def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int | None) -> Status | None:
-    """The person page's tables, read in run's snapshot; lo and hi are its range's instants (ns)."""
+def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int | None) -> None:
+    """The person page's tables, read in run's snapshot; lo and hi are its range's instants (ns), snapped as
+    the router snaps them (ranges.of_query)."""
     con = run.con
     sql = _Sql(unattributed=pid == UNATTRIBUTED)
     one = [(pid, "VARCHAR")]
@@ -450,22 +451,15 @@ def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int
         _request_rows(con, pid, got["request_log"])
     for t in (*DIMENSIONS, *_REQUEST_INPUTS):
         con.execute(f"DROP TABLE IF EXISTS {t}")
-    return None
 
 
 def entity(store: PgStore, pid: str, lo: int | None = None, hi: int | None = None) -> Any:
     """A person's tables for a range, everything any of its pages reads (the table-level harness)."""
 
-    def plan(run: _Run) -> Status | None:
-        return load(store, run, pid, ENTITY, lo, hi)
+    def plan(run: _Run) -> None:
+        load(store, run, pid, ENTITY, lo, hi)
 
     return store._read(f"person:{pid}", plan)
-
-
-def range_of(query: dict[str, list[str]]) -> tuple[int | None, int | None]:
-    """A request's from= and to= instants (ns), each None when absent."""
-    lo, hi = (_instant_ns(query[k][0] if query.get(k) else None) for k in ("from", "to"))
-    return lo, hi
 
 
 # --- into today's tables ------------------------------------------------------------------------------

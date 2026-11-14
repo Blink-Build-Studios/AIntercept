@@ -27,7 +27,7 @@ func factKey(t *testing.T, s stream.Store, key string, reqs []canon.Request, pen
 	for _, e := range evs {
 		tables[state.TableFactEvents] = append(tables[state.TableFactEvents], stream.Row{Key: key, ID: e.EventKey, Value: e})
 	}
-	if err := WriteOnePass(context.Background(), s, "", key, tables, day(0)); err != nil {
+	if err := WriteOnePass(context.Background(), s, "", key, tables, day(0), 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -149,7 +149,7 @@ func TestMergeCountsProbes(t *testing.T) {
 		mtTable:               {{Key: "ip:a", ID: "1", Value: mtRow{LastNS: day(0), V: "x"}}},
 		state.TableFactProbes: {{Key: "ip:a", ID: "", Value: state.Probes{FirstNS: day(0) + 10, NewestNS: day(0) + 90}}},
 	}
-	if err := WriteOnePass(context.Background(), s, "", "ip:a", tables, day(0)); err != nil {
+	if err := WriteOnePass(context.Background(), s, "", "ip:a", tables, day(0), 0); err != nil {
 		t.Fatal(err)
 	}
 	factKey(t, s, "s:b", []canon.Request{{CallID: "c1", StartNS: day(0) + 50, EndNS: day(0) + 60}}, nil, nil, 0)

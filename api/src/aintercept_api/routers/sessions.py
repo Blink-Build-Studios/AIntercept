@@ -6,19 +6,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import AwareDatetime
 
-from aintercept_api import agents
+from aintercept_api import agents, pages, ranges
 from aintercept_api import claude_code as cc
-from aintercept_api import session as ss
-from aintercept_api import timeline as tl
 from aintercept_api.models.common import AgentLimits, ErrorResponse, Meta, RequestKind
 from aintercept_api.models.people import DeviceInfo, TokenCount
 from aintercept_api.models.sessions import (
-    Compaction,
-    ContextPoint,
     EventsMeta,
-    NetworkSegment,
-    PermissionChange,
-    PermissionSegment,
     SessionEventsResponse,
     SessionFacts,
     SessionHeader,
@@ -26,10 +19,9 @@ from aintercept_api.models.sessions import (
     SessionRequestsResponse,
     SessionResponse,
     SessionStateResponse,
-    SessionTimeline,
     SessionTimelineResponse,
 )
-from aintercept_api.rows import dt, request_filter, request_row_from_table, session_row_from_table, session_rows
+from aintercept_api.rows import dt, session_row_from_table
 from aintercept_api.timeutil import ns_to_dt
 
 # An unknown session is a typed 404, like every other error (app.py error handlers).
@@ -40,32 +32,44 @@ router = APIRouter(
     }
 )
 
-FROM = Query(None, alias="from", description="Range start (RFC 3339). Default: the session's start.")
-TO = Query(None, description="Range end (RFC 3339). Default: the session's end (now while it is live).")
+FROM = Query(
+    None,
+    alias="from",
+    description="Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
+)
+TO = Query(
+    None,
+    description="Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
+)
 PAGE = Query(1, ge=1)
 PROMPT = Query(None, ge=1, description="A prompt number (#N): return the page that holds it, in place of `page`.")
 PAGE_SIZE = Query(20, ge=1, le=200)
 
 
-def _load(request: Request, session_id: str) -> tuple[dict[str, Any], datetime, int]:
-    """The session's session_rows row (with `live` as of now)."""
+def _now(request: Request) -> tuple[datetime, int]:
     now_dt: datetime = request.app.state.clock()
-    now = cc.to_ns(now_dt)
-    found = session_rows(request.app.state.store, now, [session_id])
-    if not found:
+    return now_dt, cc.to_ns(now_dt)
+
+
+def _load(reader: pages.Pages, session_id: str, now: int) -> dict[str, Any]:
+    """The session's session_rows row (with `live` as of now); a 404 for no such session."""
+    found = reader.session(session_id, now)
+    if found is None:
         raise HTTPException(status_code=404, detail=f"No session {session_id}")
-    return found[0], now_dt, now
+    return found
+
+
+def _span(r: dict[str, Any], now: int) -> tuple[int, int]:
+    """The session's span: its start (truncated to the microseconds every response time carries) to
+    its end, now while it is live."""
+    return r["start_ns"] - r["start_ns"] % 1000, now if r["live"] else r["last_ns"]
 
 
 def _range(r: dict[str, Any], from_: datetime | None, to: datetime | None, now: int) -> tuple[int, int]:
-    """Default: the session's start (truncated to the microseconds every response time carries)
-    to its end, now while it is live."""
-    start = r["start_ns"] - r["start_ns"] % 1000
-    return (cc.to_ns(from_) if from_ else start, cc.to_ns(to) if to else now if r["live"] else r["last_ns"])
-
-
-def _page(items: list[Any], page: int, size: int) -> list[Any]:
-    return items[(page - 1) * size : page * size]
+    """The range a page filters by, snapped to whole minutes (ranges.py); by default the session's span."""
+    start, end = _span(r, now)
+    lo, hi = cc.to_ns(from_) if from_ else start, cc.to_ns(to) if to else end
+    return ranges.start_of_minute(lo), ranges.end_of_minute(hi)
 
 
 def header_from_table(r: dict[str, Any]) -> SessionHeader:
@@ -108,7 +112,9 @@ def header_from_table(r: dict[str, Any]) -> SessionHeader:
 
 @router.get("/sessions/{sessionId}", response_model=SessionResponse)
 def get_session(request: Request, sessionId: str) -> SessionResponse:  # noqa: N803 (the contract's camelCase)
-    r, now_dt, _ = _load(request, sessionId)
+    now_dt, now = _now(request)
+    with pages.read(request, "session") as reader:
+        r = _load(reader, sessionId, now)
     return SessionResponse(data=header_from_table(r), meta=Meta(asOf=now_dt, lastDataAt=ns_to_dt(r["last_ns"])))
 
 
@@ -116,68 +122,21 @@ def get_session(request: Request, sessionId: str) -> SessionResponse:  # noqa: N
 def get_session_timeline(
     request: Request,
     sessionId: str,  # noqa: N803
-    bin: int | None = Query(None, ge=60, description="Bin width in seconds. Default: auto from the session's span."),
+    bin: int | None = Query(
+        None,
+        ge=60,
+        multiple_of=ranges.BIN_MULTIPLE_S,
+        description="Bin width in seconds, a whole number of minutes. Default: auto from the session's span.",
+    ),
 ) -> SessionTimelineResponse:
-    store = request.app.state.store
-    r, now_dt, now = _load(request, sessionId)
-    live = r["live"]
-    lo, hi = _range(r, None, None, now)
-    bin_s = bin or cc.auto_bin_seconds(hi - lo)
-    perm = ss.permission(store, sessionId, hi)
-    sid = [sessionId]
-    # SQL over the processor's session_marks and presence_segments (docs/architecture.md, Decision 4).
-    timeline = SessionTimeline(
-        from_=dt(lo),
-        to=dt(hi),
-        now=now_dt if live else None,
-        binSeconds=bin_s,
-        sessions=[tl.band_from_table(r, 0, alone=True)],
-        prompts=tl.prompts(store, sid, now, None, None),
-        modelCalls=tl.model_calls(store, sid, bin_s, None, None),
-        analytics=tl.analytics(store, sid, bin_s, None, None),
-        notCaptured=tl.gaps(store, sid, None, None),
-        presence=tl.presence(store, sid, now, None, None),
-        friction=tl.friction(store, sid, bin_s, None, None),
-        context=[
-            ContextPoint(
-                t=dt(x["t_ns"]),
-                tokens=x["context"],
-                requestId=x["request_id"],
-                model=x["model"],
-                thread="main",
-                windowTokens=None,  # M7: from the request's model and context beta
-                promptIndex=x["prompt_index"],
-            )
-            for x in ss.context_points(store, sessionId)
-        ],
-        compactions=[
-            Compaction(
-                t=dt(c["t_ns"]),
-                from_=c["tokens_from"],
-                to=c["tokens_to"],
-                idle=c["idle"],
-                waitMs=c["wait_ms"],
-                messages=None,
-            )
-            for c in ss.compactions(store, sessionId)
-        ],
-        permission=[PermissionSegment(from_=dt(p["a"]), to=dt(p["b"]), mode=p["mode"]) for p in perm],
-        permissionChanges=[
-            PermissionChange(t=dt(p["a"]), from_=p["prev_mode"], to=p["mode"]) for p in perm if p["prev_mode"]
-        ],
-        network=[
-            NetworkSegment(
-                from_=dt(n["a"]),
-                to=dt(n["b"]),
-                label=n["ip"],
-                ipv6=n["ipv6"],
-                bypassed=n["bypassed"],
-                address=None,  # the coverage job (§5.4)
-                notCaptured=n["not_captured"],
-            )
-            for n in ss.networks(store, sessionId, hi)
-        ],
-    )
+    # The timeline doesn't filter by a range: its lanes cover every row, its from and to are the
+    # session's span (not snapped, docs/PIPELINE.md v8 §5.3).
+    now_dt, now = _now(request)
+    with pages.read(request, "session/timeline") as reader:
+        r = _load(reader, sessionId, now)
+        lo, hi = _span(r, now)
+        bin_s = bin or cc.auto_bin_seconds(hi - lo)
+        timeline = reader.session_timeline(sessionId, r, now_dt, now, lo, hi, bin_s)
     meta = Meta(asOf=now_dt, lastDataAt=ns_to_dt(r["last_ns"]), from_=dt(lo), to=dt(hi))
     return SessionTimelineResponse(data=timeline, meta=meta)
 
@@ -189,16 +148,12 @@ def get_session_state(
     from_: AwareDatetime | None = FROM,
     to: AwareDatetime | None = TO,
 ) -> SessionStateResponse:
-    # SQL over the processor's event_rows, session_tools and session_request_rows (docs/architecture.md,
-    # Decision 4).
-    store = request.app.state.store
-    r, now_dt, now = _load(request, sessionId)
-    lo, hi = _range(r, from_, to, now)
-    # Counted exactly as the Requests tab filters, so the readout matches it (analytics batches
-    # arrive after the events they carry, so the tab's range is open-ended by default).
-    where, params = request_filter("scope_session_id", sessionId, from_, to, None, None)
-    requests = store.query(f"SELECT count(*) FROM session_request_rows WHERE {where}", params)[0][0]  # noqa: S608
-    data = ss.state(store, sessionId, lo, hi, requests)
+    now_dt, now = _now(request)
+    with pages.read(request, "session/state") as reader:
+        r = _load(reader, sessionId, now)
+        lo, hi = _range(r, from_, to, now)
+        # The Requests tab's count, over its own range: open-ended by default.
+        data = reader.session_state(sessionId, lo, hi, *ranges.given(from_, to))
     meta = Meta(asOf=now_dt, lastDataAt=ns_to_dt(r["last_ns"]), from_=dt(lo), to=dt(hi))
     return SessionStateResponse(data=data, meta=meta)
 
@@ -213,10 +168,11 @@ def get_session_prompts(
     pageSize: int = PAGE_SIZE,  # noqa: N803
     prompt: int | None = PROMPT,
 ) -> SessionPromptsResponse:
-    # SQL over the processor's prompt_rows and prompt_steps (docs/architecture.md, Decision 4).
-    r, now_dt, now = _load(request, sessionId)
-    lo, hi = _range(r, from_, to, now)
-    items, total, page = ss.prompt_items(request.app.state.store, sessionId, now, lo, hi, page, pageSize, prompt)
+    now_dt, now = _now(request)
+    with pages.read(request, "session/prompts") as reader:
+        r = _load(reader, sessionId, now)
+        lo, hi = _range(r, from_, to, now)
+        items, total, page = reader.session_prompts(sessionId, now, lo, hi, page, pageSize, prompt)
     meta = Meta(
         asOf=now_dt,
         lastDataAt=ns_to_dt(r["last_ns"]),
@@ -243,45 +199,26 @@ def get_session_requests(
     order: str = Query("asc", pattern="^(asc|desc)$"),
     hidden: bool = Query(False, description="Include the calls the user never sees (Codex prewarm, title)."),
 ) -> SessionRequestsResponse:
-    # SQL over the processor's session_request_rows (docs/architecture.md, Decision 4): the rows are
-    # stored as shown, so this only filters, counts and pages them.
-    store = request.app.state.store
-    found, now_dt, _ = _load(request, sessionId)
-    where, params = request_filter("scope_session_id", sessionId, from_, to, q, captured)
-    hidden_count, total = store.query(
-        f"""SELECT count(*) FILTER (WHERE hidden_kind IS NOT NULL),
-                   count(*) FILTER (WHERE (? OR hidden_kind IS NULL) AND (? OR kind IN (SELECT unnest(?::VARCHAR[]))))
-            FROM session_request_rows WHERE {where}""",  # noqa: S608 (the clause is fixed text; values are parameters)
-        [hidden, not kind, list(kind or []), *params],
-    )[0]
-    kind_counts = dict(
-        store.query(
-            f"""SELECT kind, count(*) FROM session_request_rows WHERE {where} AND (? OR hidden_kind IS NULL)
-                GROUP BY kind ORDER BY kind""",  # noqa: S608
-            [*params, hidden],
-        )
-    )
-    direction = "DESC" if order == "desc" else "ASC"
-    page_rows = store.query_dicts(
-        f"""SELECT * FROM session_request_rows
-            WHERE {where} AND (? OR hidden_kind IS NULL) AND (? OR kind IN (SELECT unnest(?::VARCHAR[])))
-            ORDER BY ts_ns // 1000 {direction}, request_id {direction}, seq {direction} LIMIT ? OFFSET ?""",  # noqa: S608
-        [*params, hidden, not kind, list(kind or []), pageSize, (page - 1) * pageSize],
-    )
+    now_dt, now = _now(request)
+    # The tab's range is open-ended by default: analytics batches arrive after the events they carry.
+    lo, hi = ranges.given(from_, to)
+    with pages.read(request, "session/requests") as reader:
+        found = _load(reader, sessionId, now)
+        got = reader.session_requests(sessionId, lo, hi, kind, q, captured, page, pageSize, order, hidden)
     meta = Meta(
         asOf=now_dt,
         lastDataAt=ns_to_dt(found["last_ns"]),
-        from_=from_,
-        to=to,
+        from_=ns_to_dt(lo),
+        to=ns_to_dt(hi),
         page=page,
         pageSize=pageSize,
-        total=total,
+        total=got.total,
     )
     return SessionRequestsResponse(
-        data=[request_row_from_table(r) for r in page_rows],
+        data=got.rows,
         meta=meta,
-        kindCounts=kind_counts,
-        hiddenCount=hidden_count,
+        kindCounts=got.kind_counts,
+        hiddenCount=got.hidden_count,
     )
 
 
@@ -297,12 +234,11 @@ def get_session_events(
     page: int = PAGE,
     pageSize: int = PAGE_SIZE,  # noqa: N803
 ) -> SessionEventsResponse:
-    # SQL over the processor's event_rows (docs/architecture.md, Decision 4).
-    r, now_dt, now = _load(request, sessionId)
-    lo, hi = _range(r, from_, to, now)
-    total, shown, rows = ss.event_rows(
-        request.app.state.store, sessionId, lo, hi, internal, collapseTicks, q, page, pageSize
-    )
+    now_dt, now = _now(request)
+    with pages.read(request, "session/events") as reader:
+        r = _load(reader, sessionId, now)
+        lo, hi = _range(r, from_, to, now)
+        total, shown, rows = reader.session_events(sessionId, lo, hi, internal, collapseTicks, q, page, pageSize)
     meta = EventsMeta(
         asOf=now_dt,
         lastDataAt=ns_to_dt(r["last_ns"]),
