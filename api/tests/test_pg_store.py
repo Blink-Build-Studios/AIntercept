@@ -144,7 +144,12 @@ def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
             assert store.load_for("/api/v1/status") is not None
         assert store.opened == 1
         # A connection the server dropped (a restart, a timeout) is discarded and the request retried.
-        _exec(db, "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'aintercept_api'")
+        # Only this test's database: the test server is shared with concurrent runs.
+        _exec(
+            db,
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+            " WHERE application_name = 'aintercept_api' AND datname = current_database()",
+        )
         time.sleep(0.2)
         assert store.load_for("/api/v1/status") is not None
         assert store.opened == 2
