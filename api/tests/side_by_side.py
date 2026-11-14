@@ -266,17 +266,56 @@ def make(store: Any, now: datetime = FROZEN_NOW) -> TestClient:
     return TestClient(app)
 
 
-def _in_flight(old: TestClient, url_: str, a: Any, b: Any) -> bool:
-    """The one documented difference: a call in flight has no drawer row (404), and an event of a
-    batch in flight has its fields but no raw row yet."""
+def _call_in_flight(old: Any, new: Any, rid: str) -> bool:
+    """A call still in flight: the oracle's summary has no duration (no end yet), and v7 has no drawer
+    row for it (the owner's call, §3.7)."""
+    a = old.get(f"/api/v1/requests/{urllib.parse.quote(rid, safe='')}")
+    if a.status_code != 200 or a.json()["data"].get("durationMs") is not None:
+        return False
+    return bool(new.get(f"/api/v1/requests/{urllib.parse.quote(rid, safe='')}").status_code == 404)
+
+
+def _leaves(x: Any, y: Any, parent: Any = None) -> Iterator[tuple[str, Any, Any, Any]]:
+    """Each leaf where x and y differ: (its key, x's value, y's value, x's dict holding it)."""
+    if isinstance(x, dict) and isinstance(y, dict):
+        for k in sorted(set(x) | set(y)):
+            for key, a, b, p in _leaves(x.get(k), y.get(k), x):
+                yield (key or k), a, b, p
+    elif isinstance(x, list) and isinstance(y, list) and len(x) == len(y):
+        for a, b in zip(x, y, strict=True):
+            yield from _leaves(a, b, parent)
+    elif x != y:
+        yield "", x, y, parent
+
+
+def _in_flight(old: Any, new: Any, url_: str, a: Any, b: Any) -> bool:
+    """The one documented difference (§3.7, the owner's call): a call in flight has no drawer row, so
+    - its drawer 404s until it ends;
+    - an event of a batch in flight has its fields but no raw row yet;
+    - an ended call's drawer leaves it out: no link to it (and nothing beside the link), and a step
+      count that doesn't count it."""
+    if not url_.startswith(("/api/v1/requests/", "/api/v1/events/")):
+        return False
     if url_.startswith("/api/v1/events/") and a.status_code == b.status_code == 200:
         x, y = a.json(), b.json()
-        return x["data"].pop("raw", None) is not None and y["data"].pop("raw", None) == {} and x == y
-    if url_.startswith("/api/v1/requests/") and b.status_code == 404 and a.status_code == 200:
-        # In flight by the oracle's own summary of the call (its /details and /raw carry no status).
-        summary = old.get("/".join(url_.split("?")[0].split("/")[:5]))
-        return summary.status_code == 200 and summary.json()["data"].get("status") is None
-    return False
+        if x["data"].pop("raw", None) is not None and y["data"].pop("raw", None) == {} and x == y:
+            return True
+    rid = urllib.parse.unquote(url_.split("?")[0].split("/")[4])
+    if b.status_code == 404 and a.status_code == 200:
+        return url_.startswith("/api/v1/requests/") and _call_in_flight(old, new, rid)
+    if not (a.status_code == b.status_code == 200):
+        return False
+    for key, x, y, holder in _leaves(a.json(), b.json()):
+        if key == "stepCount" and isinstance(x, int) and isinstance(y, int) and x > y:
+            continue
+        if y is not None:
+            return False
+        if isinstance(x, str) and x != rid and _call_in_flight(old, new, x):
+            continue
+        beside = (holder or {}).values()
+        if not any(isinstance(v, str) and v != rid and _call_in_flight(old, new, v) for v in beside):
+            return False
+    return True
 
 
 @dataclass
@@ -296,7 +335,7 @@ def compare(old: TestClient, new: TestClient, urls: Iterable[str]) -> Held:
         held.by_page[page_of(u)] = held.by_page.get(page_of(u), 0) + 1
         if a.status_code == b.status_code and a.content == b.content:
             continue
-        if _in_flight(old, u, a, b):
+        if _in_flight(old, new, u, a, b):
             held.in_flight += 1
             continue
         held.differing.append(u)
@@ -304,7 +343,10 @@ def compare(old: TestClient, new: TestClient, urls: Iterable[str]) -> Held:
 
 
 def assert_held(held: Held, *, at: str = "") -> None:
-    print(f"{at} held {held.compared - len(held.differing)} of {held.compared}", held.by_page)  # noqa: T201
+    shown = f"{at} held {held.compared - len(held.differing)} of {held.compared}"
+    if held.in_flight:
+        shown += f" ({held.in_flight} by the in-flight drawer difference)"
+    print(shown, held.by_page)  # noqa: T201
     assert held.compared and not held.differing, (at, len(held.differing), held.differing[:5])
 
 
