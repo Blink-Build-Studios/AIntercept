@@ -18,9 +18,8 @@ Statement parameters go in as a DuckDB relation's Arrow stream: the driver's own
 Python values would need pyarrow, which the API doesn't ship.
 
 Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5), and
-the directory, /people and /overview (step 7: pgstore_directory). The person pages (step 6) are
-refused loudly. Selected with AINTERCEPT_STORE=pg;
-V1Store stays the default until step 8.
+the directory, /people and /overview (step 7: pgstore_directory), and the person pages (step 6:
+pgstore_person). Selected with AINTERCEPT_STORE=pg; V1Store stays the default until step 8.
 """
 
 import contextlib
@@ -442,6 +441,10 @@ _WIDEN_NS = 1_000_000
 class PgStore:
     """The store the endpoints query (store.Store's interface), over Postgres."""
 
+    # The person summary counts analytics batches by event_rows.batch, stored (§5), not by a regex
+    # over event_id (routers/people.py).
+    event_batch = "batch"
+
     def __init__(
         self,
         dsn: str,
@@ -531,8 +534,18 @@ class PgStore:
                 pgstore_directory.load(run, overview=bare == "/api/v1/overview", params=params)
                 return None
 
-        elif bare.startswith("/api/v1/"):
-            raise NotImplementedError(f"{bare}: the Postgres store doesn't serve it yet (docs/PIPELINE.md v7 step 6)")
+        elif bare.startswith("/api/v1/people/") or bare == "/api/v1/coverage":
+            from aintercept_api import pgstore_person  # it builds on this module's loader
+
+            page = pgstore_person.page_of(bare, params)
+            if page is None:
+                return None
+            pid, sub = page
+            lo, hi = pgstore_person.range_of(params)
+
+            def plan(run: _Run) -> Status | None:
+                return pgstore_person.load(self, run, pid, sub, lo, hi)
+
         else:
             return None
         return self._read(path, plan)

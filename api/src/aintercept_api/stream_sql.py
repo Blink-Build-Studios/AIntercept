@@ -161,10 +161,11 @@ def _dicts(cur: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
-def person_request_rows_sql(person: str) -> tuple[str, dict[str, object]]:
-    """A person's request log's query and parameters (request_rows, person_id = person)."""
+def person_request_rows_sql(person: str, *, parts: bool = False) -> tuple[str, dict[str, object]]:
+    """A person's request log's query and parameters (request_rows, person_id = person). With parts,
+    a batch's session, count and name come from batch_parts rather than batch_members."""
     scope = _UNATTRIBUTED_SCOPE if person == "unattributed" else _PERSON_SCOPE
-    sql = f"WITH {scope}, {_rows(False)} SELECT {_select('$person')} FROM all_rows ORDER BY {_ORDER}"  # noqa: S608
+    sql = f"WITH {scope}, {_rows(parts)} SELECT {_select('$person')} FROM all_rows ORDER BY {_ORDER}"  # noqa: S608
     return sql, {"person": person, "only": None}
 
 
