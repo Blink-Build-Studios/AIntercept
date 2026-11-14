@@ -21,13 +21,13 @@ from tests.builders import ClaudeCode, Dataset, cid_of, load_fixture
 from tests.conftest import aintercept_binary, few_per_group, lay_out, make_client
 from tests.endpoints import endpoint_urls as _urls
 from tests.oracle.directory_sql import todays_sql
-from tests.oracle.harness import KINDS, REQUEST_TABLES, Layout, Oracle, Table, assert_same, entity_tables, extract
+from tests.oracle.harness import KINDS, Layout, Oracle, assert_same, entity_tables
 from tests.oracle.store import OracleStore
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_session import H, prompt
 from tests.test_stream_pipeline import group, one_stream_one_id
-from tests.test_v6_session_rows import _without, differs_across_keys
+from tests.test_v6_session_rows import differs_across_keys
 
 SPAN_A, SPAN_B = "aaaaaaaa-0000-4000-8000-0000000000a1", "bbbbbbbb-0000-4000-8000-0000000000b2"
 
@@ -392,84 +392,9 @@ def _in_flight(old, new, url: str) -> bool:
     return b.status_code == 404 and a.status_code == 200 and a.json()["data"].get("status") is None
 
 
-def test_the_request_and_event_ids_tables_equal_the_oracles(pg_clients):
-    """make check's request ids: a request id per key set (every key's facts), a WebSocket turn and a
-    reported call; two batches' events."""
-    _request_and_event_tables(pg_clients, every=False)
-
-
-@pytest.mark.full
-def test_every_request_and_event_ids_tables_equal_the_oracles(pg_clients):
-    _request_and_event_tables(pg_clients, every=True)
-
-
-def _request_and_event_tables(pg_clients, *, every: bool) -> None:
-    """The drawer's tables for every request id the logs list, and each batch's events for /events/{id}.
-
-    The drawer reads the keys holding the call's fact rows; today's read the keys its marks name,
-    which also take in a key that held only the call's start while it was in flight (its pending
-    fact, which v7 doesn't store: the drawer 404s in flight). So: the call's own rows are equal, and
-    every row loaded is one the oracle loads (the response-level gate holds the drawer byte for byte)."""
-    _, new, _, layout = pg_clients
-    store = new.app.state.store
-    fewer = 0
-    with Oracle(Layout(layout)) as oracle:
-        ids = oracle.request_ids()
-        assert len(ids) >= 20
-        # make check: a request id per key set (every key's facts), a WebSocket turn and a reported
-        # call; the full run: every one.
-        kinds = [
-            next((r for r in ids if "~" in r), None),
-            next((r for r in ids if r.startswith("reported:")), None),
-        ]
-        rids = ids if every else sorted({*oracle.request_cover(), *(r for r in kinds if r)})
-        for rid in rids:
-            loaded = store.load_for(f"/api/v1/requests/{urllib.parse.quote(rid, safe='')}")
-            assert loaded is not None
-            try:
-                got = _stored(extract(loaded.con, REQUEST_TABLES, None))
-            finally:
-                loaded.con.close()
-            want = _stored(oracle.request(rid))
-            cid = rid.split("~", 1)[0]
-            assert_same(_about(want, cid), _about(got, cid), entity=f"request {rid}", unordered=REQUEST_TABLES)
-            for name, t in got.items():
-                extra = Counter(map(repr, t.rows)) - Counter(map(repr, want[name].rows))
-                assert not extra, f"request {rid}: {name}: {sum(extra.values())} rows the oracle doesn't load"
-            fewer += any(len(got[n].rows) < len(want[n].rows) for n in got)
-            oracle._memo.clear()  # a session's whole facts per id: don't keep them all
-        batches = sorted(r for r in ids if r.startswith("batch-"))
-        assert batches
-        for batch in batches if every else batches[:2]:
-            loaded = store.load_for(f"/api/v1/events/{batch}:1")
-            assert loaded is not None
-            want = _about(_stored({"analytics": oracle.request(batch)["analytics"]}), batch)
-            try:
-                got = _stored(extract(loaded.con, {"analytics": "correlation_id = $id"}, batch))
-            finally:
-                loaded.con.close()
-            assert want["analytics"].rows and got
-            assert_same(want, got, entity=f"events of {batch}", unordered=("analytics",))
-            oracle._memo.clear()
-    print("request ids:", len(rids), "with a pending-only key the oracle also read:", fewer)  # noqa: T201
-
-
-def _about(tables, cid: str):
-    """Each table's rows of the call (its correlation id: a WebSocket connection's turns included)."""
-    out = {}
-    for name, t in tables.items():
-        i = t.columns.index("correlation_id")
-        out[name] = Table(t.columns, [r for r in t.rows if r[i] == cid])
-    return out
-
-
-# What Postgres doesn't store of the drawer's tables (§3.4): analytics.env_json, which no query reads
-# (nor the cc_events view's env over it), and the oracle's own file names.
-_UNSTORED = ("env_json", "env", "filename")
-
-
-def _stored(tables):
-    return {name: _without(t, _UNSTORED) for name, t in tables.items()}
+# The drawer's own rows (its precomputed /requests/{id}, /details and /events/{id}) are held to the
+# oracle's derivation byte for byte, for every request id and event id of every dataset, in
+# test_v7_drawer.py: the Postgres drawer no longer loads tables to compare.
 
 
 # --- the directory (build step 7) -------------------------------------------------------------------

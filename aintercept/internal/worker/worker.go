@@ -35,6 +35,7 @@ import (
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/rollup"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
@@ -64,6 +65,11 @@ type Config struct {
 	MaxFiles   int           // in/ files applied per run at most (500)
 	Parallel   int           // keys run at once (8)
 	RunConns   int32         // run connections, shared by the runs (2)
+	// DetailWait is how long after a call ended its detail object is waited
+	// for (§3.7): a run that doesn't find it keeps its flag, to read it again.
+	// Zero: a missing object is final at once (the call is rendered from its
+	// row). The rollup service sets DefaultDetailWait.
+	DetailWait time.Duration
 
 	// Hook, if set, is called at each step of a run ("read-row", "listed",
 	// "read", "state", "commit", "guarded", "rows", "commit-result",
@@ -272,7 +278,7 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 		return res, err
 	}
 	due := row.ExpiresNS != 0 && row.ExpiresNS < clock
-	if len(names) == 0 && !due {
+	if len(names) == 0 && !due && !row.Render {
 		// B1: the LIST reached the end with nothing new: consume the flag.
 		if seq0 > 0 {
 			if _, err := w.pool.Exec(ctx, "DELETE FROM dirty_keys WHERE key = $1 AND seq = $2", key, seq0); err != nil {
@@ -341,6 +347,15 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 	if err := w.hook("read", key); err != nil {
 		return res, err
 	}
+	// The render's external inputs (§3.7): the ended calls' detail objects, the
+	// other keys' parts of its batches.
+	waiting, err := w.refreshWires(ctx, st)
+	if err != nil {
+		return res, err
+	}
+	if err := w.refreshParts(ctx, key, st); err != nil {
+		return res, err
+	}
 
 	nowNS := w.now().UnixNano()
 	facts := rollup.FactsOf(key, st.Rows(), nowNS)
@@ -400,7 +415,12 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 
 	changes := StoredChanges(key, flatten(delta))
 	changes = append(changes, rendered.Changes...)
-	committed, err := w.commit(ctx, row, next, changes, rendered.Queue, seq0, rest, start)
+	committed, err := w.commit(ctx, row, next, changes, rendered.Queue, seq0, rest, start, waiting, rendered.ChangedBatches,
+		func(batch string) (state.OtherParts, bool) {
+			v, ok := st.External(render.PartsID(batch))
+			p, _ := v.(state.OtherParts)
+			return p, ok
+		})
 	if err != nil {
 		if errors.Is(err, errUnknownResult) {
 			w.reflag(context.WithoutCancel(ctx), key)
@@ -428,7 +448,7 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 // commit is the run's transaction (§2 Run 8): the guard, the rows, the flag.
 // It reports false when the guard found another worker's commit.
 func (w *Worker) commit(ctx context.Context, prev, next KeyRow, changes []pg.Changes, queue func(*pgx.Batch), seq0 int64,
-	rest string, start time.Time) (bool, error) {
+	rest string, start time.Time, waiting bool, changedBatches []string, seen func(string) (state.OtherParts, bool)) (bool, error) {
 	if err := w.hook("commit", next.Key); err != nil {
 		return false, err
 	}
@@ -464,6 +484,12 @@ func (w *Worker) commit(ctx context.Context, prev, next KeyRow, changes []pg.Cha
 		b.Queue("DELETE FROM dirty_keys WHERE key = $1 AND seq = $2", next.Key, seq0)
 		b.Queue("UPDATE dirty_keys SET since = $2, failures = 0, last_error = NULL, failed_at = NULL WHERE key = $1", next.Key, start)
 	}
+	// A detail object waited for (§3.7): keep the key flagged, to render again.
+	if waiting {
+		b.Queue(`INSERT INTO dirty_keys (key, seq, since, render) VALUES ($1, 1, $2, true)
+			ON CONFLICT (key) DO UPDATE SET render = true`, next.Key, start)
+	}
+	queueCrossKeys(&b, next.Key, changedBatches, seen)
 	if err := tx.SendBatch(ctx, &b).Close(); err != nil {
 		return false, err
 	}

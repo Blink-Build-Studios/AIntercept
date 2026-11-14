@@ -41,6 +41,7 @@ CREATE TABLE dirty_keys (
     failures integer NOT NULL DEFAULT 0,
     last_error text,
     failed_at timestamptz,
+    render boolean NOT NULL DEFAULT false,
     PRIMARY KEY (key)
 );
 CREATE INDEX ON dirty_keys (since);
@@ -762,7 +763,7 @@ CREATE TABLE analytics (
 CREATE INDEX ON analytics (correlation_id);
 CREATE INDEX ON analytics (key, name);
 
--- §3.4-3.5 Batch parts and the directory folds.
+-- §3.4-3.5, §3.7 Batch parts, the directory folds and the request drawer.
 
 CREATE TABLE batch_parts (
     batch_id text NOT NULL,
@@ -798,3 +799,22 @@ CREATE TABLE agent_call_hours (
     n bigint,
     PRIMARY KEY (hour, key)
 );
+
+CREATE TABLE drawer_requests (
+    request_id text NOT NULL,
+    key text NOT NULL,
+    data text COMPRESSION lz4,
+    details text COMPRESSION lz4,
+    PRIMARY KEY (request_id, key)
+);
+CREATE INDEX ON drawer_requests (key);
+
+CREATE TABLE drawer_events (
+    event_id text NOT NULL,
+    key text NOT NULL,
+    data text,
+    correlation_id text,
+    event_key text,
+    PRIMARY KEY (event_id, key)
+);
+CREATE INDEX ON drawer_events (key);

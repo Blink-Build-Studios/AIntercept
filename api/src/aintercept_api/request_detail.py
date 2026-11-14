@@ -1021,20 +1021,30 @@ def raw(store: Store, cid: str) -> RequestRaw | None:
     if cid.startswith(REPORTED):
         if find_report(store, cid) is None:
             return None
-        return RequestRaw(
-            unavailable=(
-                "No wire data: this call never passed through the proxy, so there are no headers, body or stream."
-            ),
-            requestLine=None,
-            requestHeaders=[],
-            requestBody=None,
-            responseLine=None,
-            responseHeaders=[],
-            responseBody=None,
-            stream=None,
-            keyHash=None,
-            contentRetained=False,
-        )
+        return reported_raw()
+    return wire_raw(store, cid)
+
+
+def reported_raw() -> RequestRaw:
+    """A reported-only call's raw view: there's no wire data."""
+    return RequestRaw(
+        unavailable=(
+            "No wire data: this call never passed through the proxy, so there are no headers, body or stream."
+        ),
+        requestLine=None,
+        requestHeaders=[],
+        requestBody=None,
+        responseLine=None,
+        responseHeaders=[],
+        responseBody=None,
+        stream=None,
+        keyHash=None,
+        contentRetained=False,
+    )
+
+
+def wire_raw(store: Store, cid: str) -> RequestRaw | None:
+    """A captured call's raw view: its detail object (or, when that can't be read, its request row)."""
     w = load_wire(store, cid)
     if w is None:
         return None

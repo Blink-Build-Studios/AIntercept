@@ -39,6 +39,7 @@ import (
 	"strings"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
@@ -48,13 +49,14 @@ import (
 // whenever the same state renders other rows, so each key's next commit
 // rewrites its rendered rows whole (Rewrite) instead of diffing against rows
 // an older build wrote.
-const Version = 1
+const Version = 2
 
 // The tables a render writes, in the order a diff writes them.
 var tableNames = []string{
 	"session_rows", "prompt_rows", "prompt_steps", "session_marks", "event_rows", "presence_segments",
 	"session_tools", "call_tool_uses", "session_request_rows",
 	"session_call_days", "agent_calls", "agent_call_hours", "batch_parts",
+	"drawer_requests", "drawer_events",
 }
 
 // Tables is the tables a render writes (pg.Tables'), in the order a diff writes them.
@@ -146,19 +148,75 @@ func fold(name string, vals [][]any) *rendered {
 // day its key row's day (keys.day, which session_rows.key_day repeats). It
 // errors on rows the schema can't hold: two rows with one primary key, or a
 // NULL in one.
+//
+// Render has no external inputs: the drawer is built from the calls' request
+// rows and each key's own batch parts. RenderState renders a state with its own.
 func Render(key string, rows state.Rows, day string) (*Rows, error) {
+	return render(key, rows, nil, day)
+}
+
+// RenderState is key's rendered rows from its state: its rows and its
+// external inputs (docs/PIPELINE.md v7 §3.7): the calls' wires read from their
+// detail objects (WireID), and what other keys hold of its batches (PartsID).
+func RenderState(key string, st *state.KeyState, day string) (*Rows, error) {
+	return render(key, st.Rows(), st.Externals(), day)
+}
+
+// RenderWith is Render with external inputs given by id (WireID, PartsID).
+func RenderWith(key string, rows state.Rows, ext map[string]any, day string) (*Rows, error) {
+	return render(key, rows, ext, day)
+}
+
+// The external inputs' ids.
+const (
+	wirePrefix  = "wire:"
+	partsPrefix = "parts:"
+)
+
+// WireID is the external input of a call's wire: a *drawer.Wire, or
+// drawer.Missing where its detail object wasn't there.
+func WireID(callID string) string { return wirePrefix + callID }
+
+// PartsID is the external input of what other keys hold of a batch: a
+// state.OtherParts (none: no other key holds any of it).
+func PartsID(batchID string) string { return partsPrefix + batchID }
+
+func render(key string, rows state.Rows, ext map[string]any, day string) (*Rows, error) {
 	out := &Rows{Key: key}
+	others := map[string]state.OtherParts{}
+	for id, v := range ext {
+		if b, ok := strings.CutPrefix(id, partsPrefix); ok {
+			if p, ok := v.(state.OtherParts); ok {
+				others[b] = p
+			}
+		}
+	}
+	var events []process.EventRow
 	if sid, ok := strings.CutPrefix(key, "s:"); ok {
 		out.Session = sid
-		st, err := sessionTables(sid, rows, day)
+		st, ev, err := sessionTables(sid, rows, others, day)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", key, err)
 		}
-		out.tables = st
+		out.tables, events = st, ev
 	}
 	calls := agentCalls(key, rows)
 	out.tables = append(out.tables, fold("agent_calls", calls), fold("agent_call_hours", agentCallHours(key, calls)),
 		fold("batch_parts", batchParts(key, rows)))
+	reqs, evs := drawer.Render(drawer.Inputs{Key: key, Rows: rows, Parts: others, EventRows: events,
+		Wire: func(callID string) *drawer.Wire {
+			w, _ := ext[WireID(callID)].(*drawer.Wire)
+			return w
+		}})
+	rq := make([][]any, len(reqs))
+	for i, r := range reqs {
+		rq[i] = []any{r.ID, key, r.Data, r.Details}
+	}
+	ev := make([][]any, len(evs))
+	for i, e := range evs {
+		ev[i] = []any{e.ID, key, e.Data, e.CorrelationID, e.EventKey}
+	}
+	out.tables = append(out.tables, fold("drawer_requests", rq), fold("drawer_events", ev))
 	if err := out.hash(); err != nil {
 		return nil, fmt.Errorf("render %s: %w", key, err)
 	}
@@ -166,8 +224,8 @@ func Render(key string, rows state.Rows, day string) (*Rows, error) {
 }
 
 // sessionTables is session sid's 9 tables, re-encoded, and its call days.
-func sessionTables(sid string, rows state.Rows, day string) ([]*rendered, error) {
-	st := state.RenderSession(sid, rows)
+func sessionTables(sid string, rows state.Rows, others map[string]state.OtherParts, day string) ([]*rendered, []process.EventRow, error) {
+	st := state.RenderSessionWith(sid, rows, others)
 	// prompt_rows.session_last_ns is kept once, on the session's row. The render
 	// gives every prompt row the same one; a session with prompt rows and no
 	// session row (none the state makes) keeps it on its prompt rows.
@@ -177,7 +235,7 @@ func sessionTables(sid string, rows state.Rows, day string) ([]*rendered, error)
 		promptLast = &v
 		for i := range st.PromptRows {
 			if st.PromptRows[i].SessionLastNS != v {
-				return nil, errors.New("prompt rows with different session_last_ns")
+				return nil, nil, errors.New("prompt rows with different session_last_ns")
 			}
 			st.PromptRows[i].SessionLastNS = 0
 		}
@@ -190,10 +248,10 @@ func sessionTables(sid string, rows state.Rows, day string) ([]*rendered, error)
 		m := &st.SessionMarks[i]
 		b, ok := markBlocks[m.Kind]
 		if !ok {
-			return nil, fmt.Errorf("a session mark of kind %q, in no block", m.Kind)
+			return nil, nil, fmt.Errorf("a session mark of kind %q, in no block", m.Kind)
 		}
 		if b < last {
-			return nil, fmt.Errorf("session mark %d (%s) after a later block", m.Seq, m.Kind)
+			return nil, nil, fmt.Errorf("session mark %d (%s) after a later block", m.Seq, m.Kind)
 		}
 		last = b
 		m.Seq = b<<32 | rank[b]
@@ -227,7 +285,7 @@ func sessionTables(sid string, rows state.Rows, day string) ([]*rendered, error)
 		typed("call_tool_uses", st.CallToolUses, nil),
 		typed("session_request_rows", st.SessionRequestRows, nil),
 		fold("session_call_days", callDays(sid, st.SessionMarks)),
-	}, nil
+	}, st.EventRows, nil
 }
 
 // BatchOf is an event id's batch, as the person summary's
@@ -589,4 +647,32 @@ func (d *Diff) Counts() (upserts, deletes int) {
 		deletes += len(t.Deletes)
 	}
 	return upserts, deletes
+}
+
+// Changed is the first primary-key column's values of the rows the diff
+// writes or deletes in table (a batch_parts diff's batches).
+func (d *Diff) Changed(table string) []string {
+	set := map[string]bool{}
+	for _, t := range d.Tables {
+		if t.Table.Name != table {
+			continue
+		}
+		e := encOf(table)
+		for _, r := range t.Upserts {
+			if v, ok := r[e.pk[0]].(string); ok {
+				set[v] = true
+			}
+		}
+		for _, r := range t.Deletes {
+			if v, ok := r[0].(string); ok {
+				set[v] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
 }

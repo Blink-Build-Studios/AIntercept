@@ -52,6 +52,9 @@ type RenderOutput struct {
 	Baseline any
 	// RenderVersion is recorded in keys.render_version (0: keep Prev's).
 	RenderVersion int
+	// ChangedBatches are the batches whose batch_parts row the commit writes or
+	// deletes: the other keys holding them are flagged (§3.7).
+	ChangedBatches []string
 }
 
 // NoRender renders nothing.
@@ -67,7 +70,7 @@ func (NoRender) Baseline(string, *state.KeyState, string) (any, error) { return 
 type Tables struct{}
 
 func (Tables) Render(in RenderInput) (RenderOutput, error) {
-	rows, err := render.Render(in.Key, in.State.Rows(), in.Day)
+	rows, err := render.RenderState(in.Key, in.State, in.Day)
 	if err != nil {
 		return RenderOutput{}, err
 	}
@@ -78,11 +81,12 @@ func (Tables) Render(in RenderInput) (RenderOutput, error) {
 		base, _ := in.Baseline.(*render.Baseline)
 		d = rows.Diff(base)
 	}
-	return RenderOutput{Queue: d.Queue, Baseline: rows.Baseline(), RenderVersion: render.Version}, nil
+	return RenderOutput{Queue: d.Queue, Baseline: rows.Baseline(), RenderVersion: render.Version,
+		ChangedBatches: d.Changed("batch_parts")}, nil
 }
 
 func (Tables) Baseline(key string, st *state.KeyState, day string) (any, error) {
-	rows, err := render.Render(key, st.Rows(), day)
+	rows, err := render.RenderState(key, st, day)
 	if err != nil {
 		return nil, err
 	}

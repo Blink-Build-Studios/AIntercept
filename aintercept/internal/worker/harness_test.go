@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg/pgtest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
@@ -358,11 +359,8 @@ func (e *env) checkAt(clock int64, only ...string) {
 	var cs []pg.Changes
 	var diffs []*render.Diff
 	owners := append([]string(nil), only...)
+	keyRows := map[string]state.Rows{}
 	for key, tables := range byKey {
-		if len(only) > 0 && !contains(only, key) {
-			continue
-		}
-		cs = append(cs, StoredChanges(key, tables)...)
 		rows := state.Rows{}
 		for t, rs := range tables {
 			rows[t] = map[string]any{}
@@ -370,7 +368,16 @@ func (e *env) checkAt(clock int64, only ...string) {
 				rows[t][r.ID] = r.Value
 			}
 		}
-		r, err := render.Render(key, rows, e.keyRow(key).Day)
+		keyRows[key] = rows
+	}
+	ext := e.externals(keyRows)
+	for key, tables := range byKey {
+		if len(only) > 0 && !contains(only, key) {
+			continue
+		}
+		cs = append(cs, StoredChanges(key, tables)...)
+		rows := keyRows[key]
+		r, err := render.RenderWith(key, rows, ext[key], e.keyRow(key).Day)
 		if err != nil {
 			e.t.Fatal(err)
 		}
@@ -454,6 +461,72 @@ func (e *env) checkAt(clock int64, only ...string) {
 	if len(in) > 0 && refRows == 0 {
 		e.t.Fatal("check: the one pass stored nothing (vacuous)")
 	}
+}
+
+// externals is each key's external inputs as one pass has them (§3.7): its
+// ended calls' wires from their detail objects in the store, and the other
+// keys' parts of its batches summed.
+func (e *env) externals(keyRows map[string]state.Rows) map[string]map[string]any {
+	e.t.Helper()
+	parts := map[string]map[string][]any{} // batch → key → its batch_parts row
+	for key, rows := range keyRows {
+		r, err := render.Render(key, rows, "")
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		for _, td := range r.Diff(nil).Tables {
+			if td.Table.Name != "batch_parts" {
+				continue
+			}
+			for _, row := range td.Upserts {
+				b := row[0].(string)
+				if parts[b] == nil {
+					parts[b] = map[string][]any{}
+				}
+				parts[b][key] = row
+			}
+		}
+	}
+	out := map[string]map[string]any{}
+	for key, rows := range keyRows {
+		ext := map[string]any{}
+		for _, b := range drawer.Batches(rows) {
+			var sum state.OtherParts
+			others := false
+			for k, row := range parts[b] {
+				if k == key {
+					continue
+				}
+				others = true
+				n, _ := row[2].(int64)
+				name, _ := row[3].(string)
+				var np, sp *string
+				var fp *int64
+				if row[3] != nil {
+					np = &name
+				}
+				if row[4] != nil {
+					f, s := row[4].(int64), row[5].(string)
+					fp, sp = &f, &s
+				}
+				sum.Add(n, np, fp, sp)
+			}
+			if others {
+				ext[render.PartsID(b)] = sum
+			}
+		}
+		for id := range drawer.EndedCalls(rows) {
+			b, err := e.store.Get(e.ctx, records.DetailKey(prefix, id))
+			if err != nil {
+				continue // missing: rendered from its row
+			}
+			if w := drawer.ParseDetail(id, b); w != nil {
+				ext[render.WireID(id)] = w
+			}
+		}
+		out[key] = ext
+	}
+	return out
 }
 
 // ensureRef makes the ref schema: the same tables, for the one pass.

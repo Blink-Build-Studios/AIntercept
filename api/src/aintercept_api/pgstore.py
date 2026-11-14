@@ -17,9 +17,10 @@ For each request the store:
 Statement parameters go in as a DuckDB relation's Arrow stream: the driver's own conversions of
 Python values would need pyarrow, which the API doesn't ship.
 
-Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5), and
-the directory, /people and /overview (step 7: pgstore_directory), and the person pages (step 6:
-pgstore_person). The API's default store (step 8); AINTERCEPT_STORE=v1 selects V1Store instead.
+Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5; the
+drawer's rows precomputed by the worker, §3.7: one statement each), and the directory, /people and
+/overview (step 7: pgstore_directory), and the person pages (step 6: pgstore_person). The API's
+default store (step 8); AINTERCEPT_STORE=v1 selects V1Store instead.
 """
 
 import contextlib
@@ -47,7 +48,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "59ab30b1a6077f8ef0e08cc4e79780089a3d371fb7ef36ad72ac30376b49f993"
+SCHEMA_HASH = "8ec262a8859acf89a648bd9a6c26b01dc49a230cb4eae2bdd9b8b92bb964c166"
 
 BEGIN = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
 # Per connection, once (the API login sets the same; a DSN with another login still gets them).
@@ -221,26 +222,28 @@ _STATUS = """SELECT
     EXISTS (SELECT 1 FROM keys) AS any_key,
     EXISTS (SELECT 1 FROM keys WHERE content_retained) AS retained"""
 
-# The request drawer's keys (§5): the keys holding the call's fact rows, as v1.py read them from the
-# call's marks (calls/<id>.keys/): its requests rows (a WebSocket connection's turns, <id>#<turn>,
-# included) and its analytics rows (an analytics batch's events, in their sessions' keys). A call
-# Claude Code reported and the proxy never saw (reported:<id>): the session whose request_missed row
-# names it.
-_CALL_KEYS = """k AS (
-    SELECT key FROM requests WHERE call_id = $1 OR (call_id >= $1 || '#' AND call_id < $1 || '$')
-    UNION SELECT key FROM analytics WHERE correlation_id = $1)"""
-_REPORTED_KEYS = "k AS (SELECT DISTINCT key FROM request_missed WHERE row_request_id = $1)"
+
+# The request drawer (§3.7): the worker's finished row, by its primary key (request_id, key; a
+# call another key held a moment ago, its copy's: the first key), with /status's values (the
+# drawer's lastDataAt is global, quirk 7), in one statement.
+def _drawer_sql(column: str) -> str:
+    return f"""WITH status AS ({_STATUS})
+SELECT status.*, d.{column} AS data FROM status LEFT JOIN LATERAL (
+    SELECT {column} FROM drawer_requests WHERE request_id = $1 ORDER BY key LIMIT 1) d ON true"""  # noqa: S608
 
 
-def _keys_requests(keys: str) -> str:
-    return f"WITH {keys} SELECT {columns('requests')} FROM requests WHERE key IN (SELECT key FROM k)"  # noqa: S608
-
-
-def _keys_analytics(keys: str) -> str:
-    return f"WITH {keys} SELECT {columns('analytics')} FROM analytics WHERE key IN (SELECT key FROM k)"  # noqa: S608
-
-
-_BATCH_ANALYTICS = f"SELECT {columns('analytics')} FROM analytics WHERE correlation_id = $1"  # noqa: S608
+# /raw: the row's existence, and the call's requests row (the view when its detail object can't be
+# read: a WebSocket turn's, or one not found); request_detail formats the detail object as today.
+_RAW = f"""WITH status AS ({_STATUS}),
+d AS (SELECT request_id FROM drawer_requests WHERE request_id = $1 LIMIT 1)
+SELECT status.*, (SELECT count(*) FROM d) AS found, r.* FROM status LEFT JOIN (
+    SELECT {columns("requests")} FROM requests
+    WHERE call_id = replace($1, '~', '#') AND NOT coalesce(synthetic, false) AND EXISTS (SELECT 1 FROM d)) r ON true"""  # noqa: S608
+# /events/{id}: the event's row (its raw row comes from the batch's detail object, as today's).
+_EVENT = f"""WITH status AS ({_STATUS})
+SELECT status.*, e.data, e.correlation_id, e.event_key FROM status LEFT JOIN LATERAL (
+    SELECT data, correlation_id, event_key FROM drawer_events WHERE event_id = $1 ORDER BY key LIMIT 1) e ON true"""  # noqa: S608
+_STATUS_COLUMNS = ("first_request_ns", "earliest_ns", "newest_row_ns", "pods_ns", "any_key", "retained")
 
 # What each session page reads after its row: the tables its endpoint code queries.
 SESSION_PAGES: dict[str, tuple[str, ...]] = {
@@ -419,6 +422,16 @@ def _sid(value: str) -> list[tuple[object, str]]:
     return [(value, "VARCHAR")]
 
 
+def _event_id(eid: str) -> str:
+    """An event id as the worker writes it, <batch>:<rank>: request_detail.event reads the rank as
+    int(n), so "b:007" is b:7's (one that doesn't parse looks up as given, and 404s)."""
+    cid, _, n = eid.rpartition(":")
+    if cid and n.isdigit():
+        with contextlib.suppress(ValueError):
+            return f"{cid}:{int(n)}"
+    return eid
+
+
 def _instant_ns(value: str | None) -> int | None:
     """A from=/to= instant in ns, as the endpoint will parse it (None: absent or not one)."""
     if not value:
@@ -516,10 +529,11 @@ class PgStore:
                 return None
 
         elif bare.startswith("/api/v1/requests/"):
-            rid = urllib.parse.unquote(bare.removeprefix("/api/v1/requests/").split("/", 1)[0])
+            rid, _, sub = bare.removeprefix("/api/v1/requests/").partition("/")
+            rid = urllib.parse.unquote(rid)
 
             def plan(run: _Run) -> Status | None:
-                return self._drawer(run, rid)
+                return self._drawer(run, rid, sub)
 
         elif bare.startswith("/api/v1/events/"):
             eid = urllib.parse.unquote(bare.removeprefix("/api/v1/events/").split("/", 1)[0])
@@ -753,30 +767,45 @@ class PgStore:
             [sid],
         )
 
-    # --- the drawer and one event ------------------------------------------------------------------
+    # --- the drawer and one event (§3.7: the worker's rows) ---------------------------------------
 
-    def _facts(self, run: _Run, requests: str | None, analytics: str) -> None:
-        con = run.con
-        if requests is not None:
-            # The calls today's store loads: not synthetic (state_sql.fact_tables).
-            self._into(con, "requests", f"SELECT * FROM {requests} WHERE NOT coalesce(synthetic, false)")  # noqa: S608
-        self._into(con, "analytics", f"SELECT * FROM {analytics}")  # noqa: S608
+    @staticmethod
+    def _status_of_row(run: _Run, table: str) -> Status:
+        sql = f"SELECT {', '.join(_STATUS_COLUMNS)} FROM {table} LIMIT 1"  # noqa: S608
+        first, earliest, newest, pods, any_key, retained = run.con.execute(sql).fetchall()[0]
+        found = [n for n in (newest, pods) if n]
+        return Status(first or None, earliest or None, max(found) if found else None, retained if any_key else None)
 
-    def _drawer(self, run: _Run, rid: str) -> Status:
-        if rid.startswith("reported:"):
-            keys, key_param = _REPORTED_KEYS, rid
+    def _drawer(self, run: _Run, rid: str, sub: str) -> Status:
+        if sub == "raw":
+            t = run.fetch("drawer", _RAW, _sid(rid))
+            run.values["drawer"] = run.con.execute(f"SELECT found FROM {t} LIMIT 1").fetchall()[0][0] > 0  # noqa: S608
+            req = ", ".join(_q(c) for c, _ in SHAPES["requests"] if c not in _NOT_STORED)
+            self._into(run.con, "requests", f"SELECT {req} FROM {t} WHERE call_id IS NOT NULL")  # noqa: S608
         else:
-            keys, key_param = _CALL_KEYS, rid.split("~", 1)[0]
-        req = run.fetch("requests", _keys_requests(keys), _sid(key_param))
-        ana = run.fetch("analytics", _keys_analytics(keys), _sid(key_param))
-        self._facts(run, req, ana)
-        return self._status(run)  # lastDataAt is global (quirk 7), in the same snapshot
+            t = run.fetch("drawer", _drawer_sql("details" if sub == "details" else "data"), _sid(rid))
+            run.values["drawer"] = run.con.execute(f"SELECT data FROM {t}").fetchall()[0][0]  # noqa: S608
+        return self._status_of_row(run, t)
 
     def _event(self, run: _Run, eid: str) -> Status:
-        batch = eid.rpartition(":")[0]
-        ana = run.fetch("analytics", _BATCH_ANALYTICS, _sid(batch))
-        self._facts(run, None, ana)
-        return self._status(run)
+        t = run.fetch("event", _EVENT, _sid(_event_id(eid)))
+        run.values["event"] = run.con.execute(f"SELECT data, correlation_id, event_key FROM {t}").fetchall()[0]  # noqa: S608
+        return self._status_of_row(run, t)
+
+    # The drawer's endpoints read the worker's rows (routers/requests.py).
+    precomputed = True
+
+    def drawer_row(self) -> str | None:
+        """/requests/{id}'s or /details' finished JSON (None: no such request)."""
+        return cast(str | None, self._tables().values["drawer"])
+
+    def drawer_found(self) -> bool:
+        """/raw: whether the request has a row."""
+        return bool(self._tables().values["drawer"])
+
+    def event_row(self) -> tuple[str | None, str | None, str | None]:
+        """/events/{id}: the event's JSON (but its raw row), its batch and its event key."""
+        return cast(tuple[str | None, str | None, str | None], self._tables().values["event"])
 
     # --- tests: a statement's plan -----------------------------------------------------------------
 

@@ -288,14 +288,15 @@ def test_every_person_page_runs_a_fixed_set_of_statements_on_one_connection(demo
                     assert len(load.statements) <= 8
 
 
-# The drawer's and /events' statements: the call's keys' facts (or the batch's events), then
-# /status's (the drawer's lastDataAt is global, quirk 7), in the same snapshot.
+# The drawer's and /events' statement (§3.7): the worker's finished row by its primary key, with
+# /status's values (the drawer's lastDataAt is global, quirk 7), in one statement; /raw's also reads
+# the call's requests row (the view when its detail object can't be read).
 DRAWER_STATEMENTS = {
-    "/api/v1/requests/demo-000001": ["requests", "analytics", "status"],
-    "/api/v1/requests/demo-000001/details": ["requests", "analytics", "status"],
-    "/api/v1/requests/conn-1~2/raw": ["requests", "analytics", "status"],
-    "/api/v1/requests/reported:req_1": ["requests", "analytics", "status"],
-    "/api/v1/events/batch-1:3": ["analytics", "status"],
+    "/api/v1/requests/demo-000001": ["drawer"],
+    "/api/v1/requests/demo-000001/details": ["drawer"],
+    "/api/v1/requests/conn-1~2/raw": ["drawer"],
+    "/api/v1/requests/reported:req_1": ["drawer"],
+    "/api/v1/events/batch-1:3": ["event"],
     "/api/v1/status": ["status"],
 }
 

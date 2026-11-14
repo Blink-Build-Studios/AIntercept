@@ -200,9 +200,11 @@ during S3 I/O or rendering.
    file flagged after this point is seen either by this LIST or by the next run.
 2. **LIST** `in/` after (last applied − 5 min grace), skipping the grace-window
    names the row records, and keep at most 500 files (v5 §2 step 4, unchanged).
-3. **Nothing new and no expiry due:** consume the flag with `DELETE FROM
-   dirty_keys WHERE key = $1 AND seq = $seq0`, its own statement, and stop. The
-   state isn't loaded. Data time for expiry is read once per tick, not per run.
+3. **Nothing new, no expiry due and no `render` on the flag:** consume the flag
+   with `DELETE FROM dirty_keys WHERE key = $1 AND seq = $seq0`, its own
+   statement, and stop. The state isn't loaded. Data time for expiry is read
+   once per tick, not per run. A flag with `render` (§3.7) goes on to load,
+   render and commit.
 4. **Load the state.**
    - A warm state at the same `n` is used as is.
    - Otherwise, load cold: GET the chunks the row names and `state.Decode`
@@ -215,7 +217,10 @@ during S3 I/O or rendering.
    and record id. Expire due calls (below). Collect the run's state deltas,
    keeping each (table, id)'s last change.
 6. **Render**, for a session key: `state.RenderSession` (#44), every table
-   whole.
+   whole, and for every key its drawer rows (§3.7). First the run refreshes
+   the render's external inputs: the detail objects of calls that ended, and
+   the other keys' `batch_parts` of its batches (one statement on a run
+   connection).
    - Hash each row (xxhash64 of its encoding) and compare with the baseline.
      Changed and new rows become upserts, rows that are gone become deletes.
    - If `keys.render_version` differs from this worker's, delete the session's
@@ -240,6 +245,7 @@ during S3 I/O or rendering.
       key) DO UPDATE` and one `DELETE … WHERE (primary key) IN (SELECT * FROM
       unnest(…))`, pipelined as one pgx batch.
    3. **The flag:**
+      - a flag with `render` (§3.7) runs even when the LIST finds nothing new;
       - the LIST reached the end and `seq` hasn't moved: `DELETE FROM dirty_keys
         WHERE key = $1 AND seq = $seq0`;
       - the 500-file cap cut the run short: keep the flag, with `since` set to
@@ -380,7 +386,7 @@ refuses to start without `ROLLUP_POSTGRES_URL`.
 | Table | Columns | Primary key; indexes |
 |---|---|---|
 | `keys` | key, n, state `text[]`, state_levels `int[]`, last_applied, grace `text[]`, garbage `jsonb`, render_version, updated_ns, newest_row_ns, expires_ns, day, first_request_ns, earliest_ns, content_retained | key; (day); (newest_row_ns); partial (expires_ns) where > 0, (first_request_ns) and (earliest_ns) where > 0, (content_retained) where true |
-| `dirty_keys` | key, seq, since `timestamptz`, failures, last_error, failed_at `timestamptz` | key; (since) |
+| `dirty_keys` | key, seq, since `timestamptz`, failures, last_error, failed_at `timestamptz`, render | key; (since) |
 | `workers` | worker, seen `timestamptz` | worker |
 | `tail` | one row: last_name, grace `text[]`, checked_at `timestamptz` | — |
 | `ingest_pods` | incarnation, last_ns, at (the index object's S3 time) | incarnation |
@@ -529,11 +535,69 @@ In the cloud, bucket lifecycle rules expire `raw/` and `calls/`
 - the settings are `ROLLUP_RETENTION_DAYS` and `ROLLUP_RETENTION_RAW_DAYS`; the
   `calls/` part runs when the store is a local directory (`ROLLUP_LOCAL_DIR`).
 
+### 3.7 Request drawer: precomputed
+
+The drawer is rendered by the worker, like the session tables. Opening it is one
+indexed lookup; nothing about it is derived at request time.
+
+| Table | Primary key; index | What |
+|---|---|---|
+| `drawer_requests` | (request_id, key); (key) | per drawer id: `data`, the finished `/requests/{id}` object, and `details`, the finished `/details` object, each as the JSON today's models serialize |
+| `drawer_events` | (event_id, key); (key) | per Claude Code event: `/events/{id}` without its `raw` (its time, name, session, and the batch and event key that find its raw row) |
+
+- **Which rows.** Every key renders a row for each of its ended calls (a
+  WebSocket turn as `<connection>~<turn>`), each of its sessions' `reported:`
+  ids (its `request_missed` rows), and each of its Claude Code events as
+  `<batch>:<rank>`. A call in flight has no row: the drawer 404s until it ends.
+- **The derivation is `request_detail.py`'s, ported to Go**
+  (`internal/drawer`), over the key's own facts: what today's drawer loads
+  (the call's keys) is the call's own key for every call, plus the batch's
+  other keys for an analytics batch, which only give its session (below).
+  Step N of M, prev/next and retries change as the session grows, so every
+  run renders the key's drawer rows whole and writes the ones whose hash
+  changed (§2 Run 6), as for the session tables.
+- **What only the call's detail object holds** (headers, the whole `complete`
+  row, body chunk times, retained bodies) is read once: the run GETs
+  `calls/<id>.ndjson.gz` for each call that ended since, and keeps what the
+  drawer reads of it (the wire summary, never the bodies) as an *external
+  input* of the key's state: journaled with its records, so a cold load has it
+  without a GET. An object missing for a call that ended under 2 minutes ago
+  (wall clock; `Config.DetailWait`, which the rollup service sets) is retried:
+  the run keeps its flag, with `render`. After that the call is rendered from
+  its `requests` row, as today's drawer does for a missing object. (Ingest
+  writes the object when the call ends, before the key file holding its
+  ending.)
+- **Cross-key inputs are read at render time** from the other keys' stored
+  rows, and also kept as external inputs, so the render stays a function of
+  the state and a cold load's baseline is what was committed. Today that's
+  `batch_parts`: an analytics batch's count, name and session are the sums
+  over every key's part (the drawer's session of a batch call, and the
+  Requests tab's "N events" of an ended batch spanning sessions). Each run
+  reads the other keys' parts of every batch it holds: one statement.
+- **Dirtiness crosses keys through `dirty_keys`.** A commit whose
+  `batch_parts` change takes `pg_advisory_xact_lock` on each changed batch (in
+  order), then flags every other key holding a part of it (or its call) with
+  `render = true`, and itself when the other keys' parts it now sees aren't the
+  ones its render read. A run of a flag with `render` renders and commits even
+  with no new file. The lock orders two commits of one batch, so the second
+  sees the first's part: neither misses the other.
+- **The API** reads the row by its primary key, in one statement with
+  `/status`'s values (`lastDataAt` is global, quirk 7), and validates the JSON
+  through today's model. `/raw` reads the row (existence) with the call's
+  `requests` row (the fallback view) in one statement, and formats the detail
+  object as today. `/events/{id}` reads its row the same way and formats its
+  raw row from the batch's detail object: storing every event's raw row would
+  copy the analytics metadata again (the largest table, §Scaling budget).
+- **Retention** forgets both tables with the key (by `key`).
+
 ## 4. Cross-key values
 
 **Joins move to read time.** Each key does its own work at write time. A value
 that needs other keys' rows is joined at read time when the join is bounded by
-the page's entity and indexed.
+the page's entity and indexed. The exception is what a key's rendered rows show
+of other keys (an analytics batch's whole count, name and session): the render
+reads it from their stored rows, and their commits flag it to render again
+(§3.7).
 - v6 precomputed these because S3 has no joins, which took the merge, the person
   loop, `pdirty`, dispatch and group objects. The cold-load cost it fought was
   S3 file reads and scans of every partition, not joins.
@@ -551,7 +615,7 @@ the page's entity and indexed.
 | Codex `label_text` over the account-connected component (quirk 2): the person sessions list and the person timeline's bands | read | The page's sessions' component, closed through `session_call_accounts` (a recursive CTE over its two indexes); the candidates' `session_rows`; the component accounts' `session_title_calls`. Today's title SQL (`session_rows.sql`'s `cand` … `titled`, moved to `sql/labels.sql`) runs once per component, as `buckets.py`'s title runs do | It's order dependent across the component, which holds tens of Codex sessions and title calls. The title thread is another key |
 | `label_text_alone` (the session header and the session timeline) | read | The title calls of the session's accounts in [start, start + 5 min] | one index range |
 | `children_json` | read | `session_edges` where `parent_session_id` is one of the page's sessions | Each edge is written by the child's key |
-| A batch spanning sessions | read | `batch_parts` by batch: the count is the sum, the name the least, the session the earliest (ns, session). The drawer and `/events` read `analytics` by `correlation_id` | Each key writes its own part |
+| A batch spanning sessions | write (§3.7) | Each key's render reads the other keys' `batch_parts` of its batches: the count is the sum, the name the least, the session the earliest (ns, session). A commit that changes a part flags the batch's other keys | Each key writes its own part |
 | `/people`, `/overview` | read | §5 | — |
 | `/status` | read | Aggregates over `keys`, through indexes; `ingest_pods` | — |
 | Expiry's data time | read | `max(keys.newest_row_ns)` | — |
@@ -597,8 +661,9 @@ sites get every column.
 | `/sessions/{id}` | its `session_rows` row; its accounts' title calls (the alone label); its children's edges | `live` |
 | `/sessions/{id}/timeline`, `/prompts`, `/events`, `/state` | as `/sessions/{id}`, plus the session's `prompt_rows`, `prompt_steps`, `session_marks`, `event_rows`, `presence_segments` and `session_tools` (the range pushed down when the request has one) | as today |
 | `/sessions/{id}/requests` | `session_rows`, `session_request_rows`, its `dim_session_credential` rows, the other keys' candidates (§4) | `stream_sql` over the candidates; the union; as today |
-| `/requests/{id}`, `/details`, `/raw` | The call's own keys: the keys holding its fact rows, or for `reported:<id>`, the session whose `request_missed` row has that id. Their `requests` rows, and their `analytics` rows of the names the drawer's code matches (`(key, name)`) or about the call (its prompt, its request and tool-use ids). The batch's `analytics` by `correlation_id`. `/status`'s statement. Beside them: GET `calls/<id>.ndjson.gz` | `request_detail.py`, unchanged |
-| `/events/{id}` | the batch's `analytics` by `correlation_id`; beside it: GET `calls/<batch>.ndjson.gz` | the event's rank and raw row |
+| `/requests/{id}`, `/details` | one: the `drawer_requests` row by its primary key, with `/status`'s values | nothing: the row's JSON through today's model (§3.7) |
+| `/requests/{id}/raw` | one: the row, and the call's `requests` row. Beside it: GET `calls/<id>.ndjson.gz` | the detail object's raw view, as today |
+| `/events/{id}` | one: the `drawer_events` row by its primary key, with `/status`'s values; beside it: GET `calls/<batch>.ndjson.gz` | the event's raw row |
 
 *As built (step 7):* `/people` runs 4 statements and `/overview` 5, whatever
 the `from` and however many people or keys (`pgstore_directory.py`):
@@ -643,8 +708,7 @@ with the three statements as they were (`tests/oracle/directory_sql.py`).
 - **Round trips:** one connection, one snapshot, the endpoint's statements in
   order. The drawer's S3 GET runs beside them. No N+1: each statement is per
   page, never per row.
-- **The drawer's scope is today's.** It reads its call's own keys, as `v1.py`
-  does with the `calls/<id>.keys/` markers today, without needing them.
+- **The drawer is precomputed** (§3.7): one primary-key lookup per drawer page.
 - **Endpoint code that changes, and nothing else** (each change proven side by
   side):
   - `_ACTIVITY` (`rollups.py`), `overview()`'s `sessions_by` and
@@ -766,9 +830,9 @@ Assumptions, at the capture's rates per person:
 |---|---|---|---|---|---|---|
 | Ingest | per record, as v5 | per-key buffers, the index journal | pods, on CPU | S3 PUT | none | ~350 PUTs/s at peak (key files ~100, call detail objects ~250), plus ~10 index objects |
 | The tail | per index object: GET; per pass: one transaction | its cursor row | one holder | S3, Postgres | ~1 transaction every 2 s, ~100 flags/s | 1 LIST every 2 s, ~10 GETs/s |
-| Worker run | per record: apply (#19). Per run: the whole session rendered and hashed (O(session) CPU, as v6), the changed rows written. A key with no input costs a key-row read, a LIST and a DELETE | the key's state and a hash per rendered row, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak, ~100 rows each: ~8k rows/s at peak, ~2k/s on average, ~180M rows/day | ~4 per run: ~400/s at peak |
+| Worker run | per record: apply (#19). Per run: the whole session rendered and hashed, its drawer rows too (O(session) CPU, as v6), the changed rows written. A key with no input costs a key-row read, a LIST and a DELETE | the key's state (with each ended call's wire summary, a few KB) and a hash per rendered row, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak, ~100 rows each: ~8k rows/s at peak, ~2k/s on average, ~180M rows/day; one read of other keys' batch parts per run | ~4 per run, plus one GET per call that ended (its detail object, once): ~650/s at peak |
 | Retention | per forgotten key: batched deletes | none | one holder | — | ~180M rows/day deleted at the target (Not now: partitions) | the forgotten keys' objects |
-| API | per request: a few statements, the rows of the entity and range | none | pods, on CPU | Postgres; S3 GET (drawer) | reads only | the drawer's GETs |
+| API | per request: a few statements, the rows of the entity and range; the drawer one primary-key lookup (§3.7) | none | pods, on CPU | Postgres; S3 GET (`/raw`, `/events/{id}`) | reads only | those GETs |
 | Postgres | — | the working set | one primary (vertical) | disk | ~110 GB/day; ~1.6 TB at 15 days | — |
 
 | Table | Rows/day | With indexes |
@@ -805,7 +869,7 @@ Assumptions, at the capture's rates per person:
 | person summary and timeline, 24 h and 7 d (the capture's heaviest person, ~60k events a day) | 60k and 420k narrow event rows | ~0.1 s and ~0.4 s |
 | person requests, 24 h and 7 d | ~5k and ~35k transactions | ~60 ms and ~0.3 s |
 | `/people`, `/overview` at 1,500 people, 24 h and 14 d | ~6k and ~90k sessions, with their dimension rows and day counts | ~0.1 s and ~1 s |
-| the drawer | the session's calls (thousands) and its drawer events (~15k) | 50 to 100 ms |
+| the drawer | one row by its primary key (§3.7) | ~5 ms (`/raw`, `/events/{id}`: plus the detail object's GET) |
 
 **The cold-cache limit,** recorded honestly.
 - The person summary and timeline are read-time folds over raw event rows.
@@ -904,6 +968,17 @@ Each step writes its failing tests first. **The oracle is today's code, frozen**
   - `endpoints.py` gains the UI's real params (the presets' `from`s, an
     unaligned `from`, a brush, ladder bins) and drops the bogus `binSeconds` and
     `sort`.
+- **The drawer, byte for byte** (`test_v7_drawer.py`, §3.7): on each dataset
+  (the mixed builders and demo, a dataset of every drawer shape, the spanning
+  batch in flight), every request id (the logs' and every one the worker
+  rendered: WebSocket turns, `reported:` ids) and every event id: their
+  `/requests/{id}`, `/details`, `/raw` and `/events/{id}` responses are the
+  oracle's bytes. `make check` holds a request id of each kind and every
+  tenth, two events a batch and every tenth; `-m full` holds every one. An
+  ended batch spanning sessions is compared at the table level
+  (`test_v6_session_rows.py`) and the response level. The worker's own tests
+  hold the cross-key flags (two commits of one batch at once), the detail
+  object read once and kept, and the wait for a late one.
 - **Reads:** `test_flat_reads.py` becomes a statements test, per endpoint:
   - a fixed number of statements, on one connection;
   - on the big tables, every statement's plan (EXPLAIN) uses an index;
@@ -968,6 +1043,11 @@ From then on, `process.Derived` and the UI samples are the oracles.
   - the S3 table reads (`S3Source` keeps the `calls/` GETs);
   - the legacy empty tables' fills;
   - the dead code (`cc.person_sessions`, `cc.linked_accounts`, `pp.retries`);
+  - the drawer's read-time loading (`pgstore.py`'s call keys, their facts and
+    the batch's analytics): the worker renders the drawer (§3.7).
+    `request_detail.py` stays while V1Store (`AINTERCEPT_STORE=v1`) and
+    the oracle derive the drawer at request time, and for `/raw` and
+    `/events/{id}`'s raw rows;
   - the tests whose SQL is gone (`test_buckets`, `test_stream_pipeline`,
     `test_events_sql`, `test_prompts_sql`).
 
@@ -1059,6 +1139,20 @@ From then on, `process.Derived` and the UI samples are the oracles.
   - Real turn ids are UUIDs, and no dataset row differs.
 - **The drawer** 404s for a call in flight until it ends (owner); its sample
   changes.
+- **The drawer is precomputed** (§3.7):
+  - its rows are the ids the request logs list: a WebSocket turn as
+    `<connection>~<turn>` (its `#` form isn't served), and a `reported:` id
+    its session's `request_missed` rows name;
+  - an event id is looked up by its rank (`b:007` is `b:7`'s, as
+    `request_detail.event` reads it);
+  - a call whose ending another key held a moment ago (an expired row its
+    ending's copy replaces) reads the first key's row until the copy lands;
+  - the summary and details keep what the call's detail object held when the
+    worker read it: an object the local raw cap deletes later leaves `/raw`
+    unavailable, as today, but not the summary;
+  - the render's cost per commit is O(session): on the test datasets' largest
+    session (21k events, 1.7k calls) ~0.3 s for its drawer rows, ~0.1 s for
+    its 9 tables (Not now: an incremental render).
 - **A Codex thread's unthreaded calls and in-flight batch calls** are read from
   the other keys' transactions at request time, never copied.
 - **Calls that never end:** as built (#39), with data time from `keys`.

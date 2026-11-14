@@ -49,11 +49,55 @@ type KeyState struct {
 	// journal is the records applied since the last Encode: a checkpoint is
 	// them, so it holds what changed, never the key's history.
 	journal []records.Record
+	// ext is the render's external inputs (SetExternal), extJournal their
+	// changes since the last Encode.
+	ext        map[string]any
+	extJournal []External
+}
+
+// External is one of a key's external inputs: what the render reads from
+// outside the key's records (a call's detail object, other keys' rows of its
+// batches), kept with the state so the render stays a function of it. A cold
+// load gets them back from the checkpoint, so its baseline is the render that
+// was committed. Value nil removes it.
+type External struct {
+	ID    string
+	Value any
+}
+
+// External is the input stored under id.
+func (s *KeyState) External(id string) (any, bool) {
+	v, ok := s.ext[id]
+	return v, ok
+}
+
+// Externals is every external input, by id (read only).
+func (s *KeyState) Externals() map[string]any { return s.ext }
+
+// SetExternal stores an external input (nil removes it) and journals it,
+// unless it's unchanged; it reports whether it changed. Its value's type must
+// be gob-registered.
+func (s *KeyState) SetExternal(id string, v any) bool {
+	cur, ok := s.ext[id]
+	if v == nil && !ok || v != nil && ok && reflect.DeepEqual(cur, v) {
+		return false
+	}
+	s.setExt(id, v)
+	s.extJournal = append(s.extJournal, External{ID: id, Value: v})
+	return true
+}
+
+func (s *KeyState) setExt(id string, v any) {
+	if v == nil {
+		delete(s.ext, id)
+		return
+	}
+	s.ext[id] = v
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(),
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(), ext: map[string]any{},
 		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
 }
 
@@ -178,14 +222,17 @@ func init() {
 type journalChunk struct {
 	Key     string
 	Records []records.Record
+	// Externals are the external inputs set since the last checkpoint, in
+	// order (a chunk from before them has none).
+	Externals []External
 }
 
 // Encode is the key's checkpoint: the records applied since the last Encode.
 func Encode(s *KeyState) ([]byte, error) {
 	var b bytes.Buffer
-	err := gob.NewEncoder(&b).Encode(journalChunk{Key: s.Key, Records: s.journal})
+	err := gob.NewEncoder(&b).Encode(journalChunk{Key: s.Key, Records: s.journal, Externals: s.extJournal})
 	if err == nil {
-		s.journal = nil
+		s.journal, s.extJournal = nil, nil
 	}
 	return b.Bytes(), err
 }
@@ -207,8 +254,11 @@ func Decode(chunks ...[]byte) (*KeyState, error) {
 		for _, r := range c.Records {
 			s.Apply(r)
 		}
+		for _, x := range c.Externals {
+			s.setExt(x.ID, x.Value)
+		}
 	}
-	s.journal = nil
+	s.journal, s.extJournal = nil, nil
 	return s, nil
 }
 
@@ -225,6 +275,7 @@ func Merge(chunks ...[]byte) ([]byte, error) {
 			out.Key = c.Key
 		}
 		out.Records = append(out.Records, c.Records...)
+		out.Externals = append(out.Externals, c.Externals...)
 	}
 	var b bytes.Buffer
 	err := gob.NewEncoder(&b).Encode(out)
@@ -232,4 +283,4 @@ func Merge(chunks ...[]byte) ([]byte, error) {
 }
 
 // Held is how many records the key holds in its journal (not yet checkpointed).
-func (s *KeyState) Held() int { return len(s.journal) }
+func (s *KeyState) Held() int { return len(s.journal) + len(s.extJournal) }
