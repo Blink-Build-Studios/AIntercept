@@ -132,9 +132,8 @@ var secretAlts = []string{
 }
 
 var (
-	bounded   = []bool{false, true, true, true, true, true, false}
-	secretAny = regexp.MustCompile(strings.Join(secretAlts, "|"))
-	secretAt  = func() []*regexp.Regexp {
+	bounded  = []bool{false, true, true, true, true, true, false}
+	secretAt = func() []*regexp.Regexp {
 		out := make([]*regexp.Regexp, len(secretAlts))
 		for i, a := range secretAlts {
 			out[i] = regexp.MustCompile(`^(?:` + a + `)`)
@@ -143,44 +142,74 @@ var (
 	}()
 )
 
+// secretStarts are the literals the alternatives start with, each with its
+// alternative: a match can only start where one of them does. No two start
+// with the same byte, but for the last alternative's four keys, which differ
+// in their second: so at most one alternative can match at a position.
+var secretStarts = []struct {
+	lit string
+	alt int
+}{
+	{"sk-ant-", 0}, {"Bearer", 1}, {"eyJ", 2}, {"gh", 3}, {"xox", 4}, {"ya29.", 5},
+	{`"access_token"`, 6}, {`"refresh_token"`, 6}, {`"id_token"`, 6}, {`"client_secret"`, 6},
+}
+
 // isWord is Python's \w for a str: alphanumeric (a letter or a number) or _.
 func isWord(r rune) bool { return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r) }
 
 // redact is request_detail.redact: SECRET_TEXT.sub("[redacted]", text), with
-// Python's leftmost-first matching, \b and \s.
+// Python's leftmost-first matching, \b and \s. Python tries the alternatives
+// in order at each position, leftmost first; only the one whose literal starts
+// there can match, so the leftmost match is the first literal occurrence whose
+// alternative matches there (with its \b). The literals are found with
+// strings.Index, so a text with none costs a few memchr-speed scans, never a
+// regular expression over the whole body.
 func redact(s string) string {
-	if !secretAny.MatchString(s) {
-		return s
+	var next [10]int // each literal's next occurrence at or after pos; -1: none left
+	for i, st := range secretStarts {
+		next[i] = strings.Index(s, st.lit)
 	}
 	var b strings.Builder
 	last, pos := 0, 0
-	for pos < len(s) {
-		loc := secretAny.FindStringIndex(s[pos:])
-		if loc == nil {
+	for {
+		at := -1
+		for i := range next {
+			if next[i] >= 0 && (at < 0 || next[i] < next[at]) {
+				at = i
+			}
+		}
+		if at < 0 {
 			break
 		}
-		q := pos + loc[0]
+		q, alt := next[at], secretStarts[at].alt
 		end := -1
-		for i, re := range secretAt {
-			if bounded[i] && q > 0 {
-				r, _ := utf8.DecodeLastRuneInString(s[:q])
-				if isWord(r) {
-					continue
-				}
-			}
-			if m := re.FindStringIndex(s[q:]); m != nil {
+		if r, _ := utf8.DecodeLastRuneInString(s[:q]); !bounded[alt] || q == 0 || !isWord(r) {
+			if m := secretAt[alt].FindStringIndex(s[q:]); m != nil {
 				end = q + m[1]
-				break
 			}
 		}
 		if end < 0 {
-			_, w := utf8.DecodeRuneInString(s[q:])
-			pos = q + w
-			continue
+			pos = q + 1 // the literal starts with an ASCII byte: the next character
+		} else {
+			if b.Len() == 0 {
+				b.Grow(len(s))
+			}
+			b.WriteString(s[last:q])
+			b.WriteString("[redacted]")
+			last, pos = end, end
 		}
-		b.WriteString(s[last:q])
-		b.WriteString("[redacted]")
-		last, pos = end, end
+		for i, st := range secretStarts {
+			if next[i] >= 0 && next[i] < pos {
+				if k := strings.Index(s[pos:], st.lit); k >= 0 {
+					next[i] = pos + k
+				} else {
+					next[i] = -1
+				}
+			}
+		}
+	}
+	if last == 0 {
+		return s
 	}
 	b.WriteString(s[last:])
 	return b.String()

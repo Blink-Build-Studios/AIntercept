@@ -10,6 +10,7 @@ import (
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
 )
 
 // The tables a key's rows go to.
@@ -218,7 +219,9 @@ func init() {
 // its chunks' records again, oldest chunk first: Apply is deterministic, so the
 // state, its indexes and its rows come back exactly. A checkpoint's size is
 // what changed, however long the key's history; loading costs the same per
-// record held.
+// record held. The chunk is the journal's gob, compressed (zstd): records
+// repeat their event metadata and call headers, so it's a small fraction of
+// the gob. A chunk written before compression (plain gob) still loads.
 type journalChunk struct {
 	Key     string
 	Records []records.Record
@@ -227,14 +230,42 @@ type journalChunk struct {
 	Externals []External
 }
 
+// zstdMagic starts every zstd frame; a gob stream never starts with it (its
+// first message is journalChunk's type, 0x3d 0x7f …).
+var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+
+func pack(c journalChunk) ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(c); err != nil {
+		return nil, err
+	}
+	return zcodec.Shared.Encode(nil, b.Bytes())
+}
+
+// unpack is a chunk's gob: decompressed, or as it is for a plain-gob chunk.
+func unpack(b []byte) ([]byte, error) {
+	if !bytes.HasPrefix(b, zstdMagic) {
+		return b, nil
+	}
+	return zcodec.Shared.Decode(nil, b)
+}
+
+func decodeChunk(b []byte) (journalChunk, error) {
+	var c journalChunk
+	raw, err := unpack(b)
+	if err == nil {
+		err = gob.NewDecoder(bytes.NewReader(raw)).Decode(&c)
+	}
+	return c, err
+}
+
 // Encode is the key's checkpoint: the records applied since the last Encode.
 func Encode(s *KeyState) ([]byte, error) {
-	var b bytes.Buffer
-	err := gob.NewEncoder(&b).Encode(journalChunk{Key: s.Key, Records: s.journal, Externals: s.extJournal})
+	b, err := pack(journalChunk{Key: s.Key, Records: s.journal, Externals: s.extJournal})
 	if err == nil {
 		s.journal, s.extJournal = nil, nil
 	}
-	return b.Bytes(), err
+	return b, err
 }
 
 // Decode is a key's state from its checkpoints, oldest first.
@@ -244,8 +275,8 @@ func Decode(chunks ...[]byte) (*KeyState, error) {
 	}
 	var s *KeyState
 	for _, b := range chunks {
-		var c journalChunk
-		if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&c); err != nil {
+		c, err := decodeChunk(b)
+		if err != nil {
 			return nil, err
 		}
 		if s == nil {
@@ -263,23 +294,31 @@ func Decode(chunks ...[]byte) (*KeyState, error) {
 }
 
 // Merge is one checkpoint holding the given ones' records, in order: what
-// compaction keeps for a key.
+// compaction keeps for a key. Of the external inputs it keeps each one's last
+// value (a removal too: chunks before it may set the value), which is what
+// Decode ends with, so a value set on every run doesn't pile up.
 func Merge(chunks ...[]byte) ([]byte, error) {
 	var out journalChunk
+	last := map[string]int{}
 	for _, b := range chunks {
-		var c journalChunk
-		if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&c); err != nil {
+		c, err := decodeChunk(b)
+		if err != nil {
 			return nil, err
 		}
 		if out.Key == "" {
 			out.Key = c.Key
 		}
 		out.Records = append(out.Records, c.Records...)
-		out.Externals = append(out.Externals, c.Externals...)
+		for _, x := range c.Externals {
+			if i, ok := last[x.ID]; ok {
+				out.Externals[i].Value = x.Value
+				continue
+			}
+			last[x.ID] = len(out.Externals)
+			out.Externals = append(out.Externals, x)
+		}
 	}
-	var b bytes.Buffer
-	err := gob.NewEncoder(&b).Encode(out)
-	return b.Bytes(), err
+	return pack(out)
 }
 
 // Held is how many records the key holds in its journal (not yet checkpointed).
