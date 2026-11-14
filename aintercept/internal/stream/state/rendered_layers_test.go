@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg/pgtest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
@@ -52,11 +53,12 @@ func colIndex(t *pg.Table, name string) int {
 // runner is the worker's render half over a stream: per key, the warm
 // baseline of what its last commit wrote.
 type runner struct {
-	o      *state.Stream
-	fake   *rendertest.Fake
-	base   map[string]*render.Baseline
-	pgRuns func(*render.Diff) // also writes each diff to Postgres (nil: the fake only)
-	writes int                // rows upserted or deleted
+	o       *state.Stream
+	fake    *rendertest.Fake
+	base    map[string]*render.Baseline
+	pgRuns  func(*render.Diff) // also writes each diff to Postgres (nil: the fake only)
+	writes  int                // rows upserted or deleted
+	derived int                // drawer rows derived (the rest were the memo's)
 }
 
 func newRunner() *runner {
@@ -102,11 +104,30 @@ func (x *runner) plant(t *testing.T, table string, row []any) {
 	}
 }
 
+// apply is a run for one record, as the worker's: the drawer derives again
+// only the rows the record's delta can have changed (drawer.RenderNext), and
+// VerifyIncremental (init) holds that to a whole render on every run.
 func (x *runner) apply(t *testing.T, r records.Record) {
 	t.Helper()
-	x.o.Apply(r)
-	x.run(t, r.RoutingKey)
+	d := x.o.Apply(r)
+	changed := drawer.Changed{}
+	for _, c := range d.Changes {
+		if changed[c.Table] == nil {
+			changed[c.Table] = map[string]bool{}
+		}
+		changed[c.Table][c.ID] = true
+	}
+	key := r.RoutingKey
+	rows, err := render.RenderNext(key, x.o.States()[key].Rows(), nil, day, x.base[key], changed)
+	if err != nil {
+		t.Fatalf("render %s: %v", key, err)
+	}
+	x.derived += rows.DrawerDerived()
+	x.write(t, rows.Diff(x.base[key]))
+	x.base[key] = rows.Baseline()
 }
+
+func init() { drawer.VerifyIncremental = true }
 
 // onePass is the fake holding one pass's render over rs, every key written whole.
 func onePass(t *testing.T, rs []records.Record) *rendertest.Fake {

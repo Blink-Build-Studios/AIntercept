@@ -3,6 +3,7 @@ package worker
 import (
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
@@ -38,6 +39,10 @@ type RenderInput struct {
 	Baseline any
 	// Day is the keys.day this commit writes (session_rows.key_day).
 	Day string
+	// Changed is the state's rows this run changed (its deltas), by table and
+	// id: the drawer derives again only the rows they can have changed since
+	// Baseline's render (§3.7).
+	Changed drawer.Changed
 }
 
 // RenderOutput is what the commit writes for the render.
@@ -70,7 +75,8 @@ func (NoRender) Baseline(string, *state.KeyState, string) (any, error) { return 
 type Tables struct{}
 
 func (Tables) Render(in RenderInput) (RenderOutput, error) {
-	rows, err := render.RenderState(in.Key, in.State, in.Day)
+	base, _ := in.Baseline.(*render.Baseline)
+	rows, err := render.RenderNext(in.Key, in.State.Rows(), in.State.Externals(), in.Day, base, in.Changed)
 	if err != nil {
 		return RenderOutput{}, err
 	}
@@ -78,7 +84,6 @@ func (Tables) Render(in RenderInput) (RenderOutput, error) {
 	if in.Prev.N > 0 && in.Prev.RenderVersion != render.Version {
 		d = rows.Rewrite()
 	} else {
-		base, _ := in.Baseline.(*render.Baseline)
 		d = rows.Diff(base)
 	}
 	return RenderOutput{Queue: d.Queue, Baseline: rows.Baseline(), RenderVersion: render.Version,

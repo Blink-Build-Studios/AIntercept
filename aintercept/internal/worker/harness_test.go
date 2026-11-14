@@ -48,6 +48,9 @@ type env struct {
 	ref        bool
 }
 
+// Every run's drawer render is held to a whole render (§3.7's incremental render).
+func init() { drawer.VerifyIncremental = true }
+
 func newEnv(t testing.TB) *env {
 	t.Helper()
 	dsn := pgtest.Fresh(t)

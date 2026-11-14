@@ -40,9 +40,22 @@ type Inputs struct {
 // Request is one drawer_requests row.
 type Request struct {
 	ID      string
-	Data    string // the /requests/{id} object
+	Data    string // the /requests/{id} object; its stepCount null where it has a group
 	Details string // the /details object
+	// StepSession and StepPrompt are the (session, prompt) whose step count is
+	// its stepCount (drawer_step_counts, filled in at read); "" for none.
+	StepSession, StepPrompt string
 }
+
+// StepCount is one drawer_step_counts row: a session's steps of a prompt.
+type StepCount struct {
+	Session, Prompt string
+	N               int64
+}
+
+// StepCounts is the key's sessions' step counts by prompt (the drawer's
+// stepCount), from the memo a render returned.
+func (m *Memo) StepCounts() []StepCount { return m.counts }
 
 // Event is one drawer_events row: /events/{id} but its raw row, and where the
 // API finds that (the batch's detail object, the event's key).
@@ -59,13 +72,50 @@ func compact(v Value) string { return Dumps(v, ",", ":", -1) }
 // WebSocket turn's id is <connection>~<turn>) and each of its sessions'
 // reported calls, and an event row for each Claude Code event, by id.
 func Render(in Inputs) ([]Request, []Event) {
+	reqs, evs, _ := RenderNext(in, nil, nil)
+	return reqs, evs
+}
+
+// RenderNext is Render, deriving again only the rows whose inputs can have
+// changed since prev's render, changed the state's rows changed since
+// (incremental.go); every other row is prev's. With no prev (or no changed)
+// it derives every row. It returns the memo for the next render, and consumes
+// prev: a memo is never used twice.
+func RenderNext(in Inputs, prev *Memo, changed Changed) ([]Request, []Event, *Memo) {
+	if prev != nil && (prev.used || changed == nil) {
+		prev = nil
+	}
+	if prev != nil {
+		prev.used = true
+	}
 	s := newScope(in.Key, in.Rows, in.Parts, in.EventRows)
+	next := newMemo()
+	if prev != nil {
+		for _, e := range s.events {
+			if f := prev.md[e.rowKey]; f != nil && f.json == e.mdJSON {
+				e.fx = f
+			}
+		}
+	}
+	d := s.inputs(in, prev, changed, next)
 	var reqs []Request
 	seen := map[string]bool{}
 	for _, r := range s.calls {
 		id := r.id
 		if seen[id] {
 			continue
+		}
+		if d != nil && !d.own[id] {
+			m := prev.reqs[id]
+			if m == nil {
+				continue // it gave no row, and nothing of its own changed
+			}
+			if !d.hits(m.deps) {
+				seen[id] = true
+				next.reqs[id] = m
+				reqs = append(reqs, m.req)
+				continue
+			}
 		}
 		var w *Wire
 		if !strings.Contains(id, "~") && in.Wire != nil {
@@ -78,8 +128,20 @@ func Render(in Inputs) ([]Request, []Event) {
 			continue
 		}
 		seen[id] = true
-		c := s.detailOf(w)
-		reqs = append(reqs, Request{ID: id, Data: compact(c.detail), Details: compact(s.detailsOf(c))})
+		m := &memoReq{yield: true}
+		m.deps = s.record(func() {
+			c := s.detailOf(w)
+			m.req = Request{ID: id, Data: compact(c.detail), Details: compact(s.detailsOf(c))}
+			if c.pos.group {
+				m.req.StepSession, m.req.StepPrompt = c.pos.sess, c.pos.groupPrompt
+				if strings.Count(m.req.Data, `"stepCount":null`) != 1 {
+					panic("drawer: a row's stepCount isn't its one null")
+				}
+			}
+		})
+		next.reqs[id] = m
+		next.derived++
+		reqs = append(reqs, m.req)
 	}
 	var reported []string
 	for _, v := range in.Rows[state.TableRequestMissed] {
@@ -90,8 +152,19 @@ func Render(in Inputs) ([]Request, []Event) {
 	}
 	sort.Strings(reported)
 	for _, id := range reported {
-		if c := s.reportedDetail(id); c != nil {
-			reqs = append(reqs, Request{ID: id, Data: compact(c.detail), Details: compact(s.detailsOf(c))})
+		m := prev.reqOf(id, d)
+		if m == nil {
+			m = &memoReq{}
+			next.derived++
+			m.deps = s.record(func() {
+				if c := s.reportedDetail(id); c != nil {
+					m.yield, m.req = true, Request{ID: id, Data: compact(c.detail), Details: compact(s.detailsOf(c))}
+				}
+			})
+		}
+		next.reqs[id] = m
+		if m.yield {
+			reqs = append(reqs, m.req)
 		}
 	}
 	sort.Slice(reqs, func(i, j int) bool { return reqs[i].ID < reqs[j].ID })
@@ -102,11 +175,37 @@ func Render(in Inputs) ([]Request, []Event) {
 			continue
 		}
 		have[e.id] = true
-		data := obj("eventId", StrV(e.id), "t", dt(e.ts), "name", StrV(e.name), "sessionId", optS(e.session))
-		evs = append(evs, Event{ID: e.id, Data: compact(data), CorrelationID: e.corr, EventKey: e.key})
+		row, ok := Event{}, false
+		if d != nil && !d.events[e.id] {
+			row, ok = prev.events[e.id]
+		}
+		if !ok {
+			data := obj("eventId", StrV(e.id), "t", dt(e.ts), "name", StrV(e.name), "sessionId", optS(e.session))
+			row = Event{ID: e.id, Data: compact(data), CorrelationID: e.corr, EventKey: e.key}
+		}
+		next.events[e.id] = row
+		evs = append(evs, row)
 	}
 	sort.Slice(evs, func(i, j int) bool { return evs[i].ID < evs[j].ID })
-	return reqs, evs
+	for _, e := range s.events {
+		if e.fx != nil {
+			next.md[e.rowKey] = e.fx
+		}
+	}
+	for sid := range next.exists {
+		x := s.session(sid)
+		for p, steps := range x.byPrompt {
+			next.counts = append(next.counts, StepCount{sid, p, int64(len(steps))})
+		}
+	}
+	sort.Slice(next.counts, func(i, j int) bool {
+		a, b := next.counts[i], next.counts[j]
+		return a.Session < b.Session || a.Session == b.Session && a.Prompt < b.Prompt
+	})
+	if VerifyIncremental && d != nil {
+		verify(in, reqs, evs)
+	}
+	return reqs, evs, next
 }
 
 // Batches is the analytics batches a key's rows name: its events' batches and

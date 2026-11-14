@@ -17,6 +17,7 @@ const ns = 1_000_000_000
 
 // facts is request_detail.Facts.
 type facts struct {
+	sess    string // the session they're of
 	success *ev
 	query   *ev
 	stall   *ev
@@ -79,6 +80,13 @@ func (s *scope) factsOf(sid Value, rid, crid Value, w *Wire) facts {
 		}
 	}
 	evs := x.about(prompt, ids, nil)
+	// What the facts pick from the events, by role: by request id (the tool
+	// uses' ids, the success, the tool events), the stall summary, the query
+	// and the retry in their windows (incremental.go files every event under
+	// each role it can play).
+	for _, id := range ids {
+		s.use(kMdRID, x.id, id)
+	}
 	in := func(v *string) bool {
 		if v == nil {
 			return false
@@ -116,7 +124,7 @@ func (s *scope) factsOf(sid Value, rid, crid Value, w *Wire) facts {
 		})
 	}
 	j := joinsOf(evs)
-	f := facts{joins: j}
+	f := facts{sess: x.id, joins: j}
 	if rid.Truthy() {
 		f.success = j.success[strOf(rid)]
 	}
@@ -124,6 +132,11 @@ func (s *scope) factsOf(sid Value, rid, crid Value, w *Wire) facts {
 		f.success = j.success[strOf(crid)]
 	}
 	if rid.Truthy() {
+		if rid.K == Str {
+			s.use(kStallRID, x.id, rid.S)
+		} else {
+			s.use(kStalls, x.id, "")
+		}
 		for _, e := range evs {
 			if e.name == "tengu_streaming_stall_summary" && e.get("request_id").Eq(rid) {
 				f.stall = e
@@ -140,12 +153,30 @@ func (s *scope) factsOf(sid Value, rid, crid Value, w *Wire) facts {
 	case f.success != nil:
 		ts, p = f.success.ts, f.success.prompt
 	}
+	if p.K == Str || p.IsNone() {
+		for b := bucket(ts-60*ns, queryBucket); b <= bucket(ts+2*ns, queryBucket); b++ {
+			s.use(kQuery, x.id, promptKey(p)+"\x00"+itoa(b))
+		}
+	}
 	for _, e := range evs {
 		if e.name == "tengu_api_query" && e.prompt.Eq(p) && ts-60*ns <= e.ts && e.ts <= ts+2*ns {
 			f.query = e
 		}
 	}
 	if w != nil && w.failed() {
+		stop := w.TS
+		if w.EndTS.Truthy() {
+			stop, _ = w.EndTS.Int64()
+		}
+		keys := []string{"*"} // a call with no prompt takes any retry
+		if wp := w.prompt(); !wp.IsNone() {
+			keys = []string{promptKey(wp), promptKey(None)}
+		}
+		for _, k := range keys {
+			for b := bucket(w.TS, retryBucket); b <= bucket(stop+retryAfterNS, retryBucket); b++ {
+				s.use(kRetry, x.id, k+"\x00"+itoa(b))
+			}
+		}
 		var retries []*ev
 		for _, e := range evs {
 			if e.name == "tengu_api_retry" {
@@ -295,6 +326,12 @@ type position struct {
 	prevMessage Value
 	nextMessage Value
 	calls       []*step
+	sess        string // calls' session
+	// group is the (session, prompt) whose steps stepCount counts: the count
+	// is stored once per group (drawer_step_counts) and filled in at read, so
+	// a new step doesn't rewrite its prompt's rows.
+	group       bool
+	groupPrompt string
 }
 
 func (s *scope) positionOf(x *sess, w *Wire) position {
@@ -302,6 +339,7 @@ func (s *scope) positionOf(x *sess, w *Wire) position {
 		return position{}
 	}
 	steps := x.steps
+	s.use(kChainK, "", w.CID)
 	mid, prevMid := None, None
 	if c, ok := x.chain[w.CID]; ok {
 		mid, prevMid = c[0], c[1]
@@ -332,17 +370,19 @@ func (s *scope) positionOf(x *sess, w *Wire) position {
 			break
 		}
 	}
-	p := position{calls: steps, prevMessage: prevMid, prev: None, next: None, nextMessage: None}
+	p := position{calls: steps, sess: x.id, prevMessage: prevMid, prev: None, next: None, nextMessage: None}
 	key := ""
 	if prevMid.Truthy() {
 		key = prevMid.S
 	}
+	s.use(kChainM, "", key)
 	if c, ok := byMid[key]; ok && c != "" {
 		p.prev = StrV(c)
 	} else if at > 0 {
 		p.prev = StrV(lane[at-1].id)
 	}
 	if mid.Truthy() {
+		s.use(kChainV, "", mid.S)
 		if c, ok := byPrev[mid.S]; ok {
 			p.next = StrV(c)
 		}
@@ -350,19 +390,44 @@ func (s *scope) positionOf(x *sess, w *Wire) position {
 	if p.next.IsNone() && at >= 0 && at+1 < len(lane) {
 		p.next = StrV(lane[at+1].id)
 	}
+	mine := -1
 	for i, st := range same {
 		if st.id == w.CID {
 			p.stepIndex = i64(int64(i + 1))
+			mine = i
 			break
 		}
 	}
 	if len(same) > 0 {
 		p.stepCount = i64(int64(len(same)))
 	}
+	if wp := w.prompt(); wp.Truthy() && wp.K == Str {
+		p.group, p.groupPrompt = true, wp.S
+		// The steps it read of its prompt: up to itself (its index, the lane's
+		// prev), and up to its lane's next one (or the end: a new step can
+		// be its next).
+		hi := mine
+		if at >= 0 {
+			hi = len(same)
+			if at+1 < len(lane) {
+				for i, st := range same {
+					if st == lane[at+1] {
+						hi = i
+						break
+					}
+				}
+			}
+		}
+		if hi >= 0 {
+			s.useSteps(x.id, promptKey(wp), hi)
+		}
+	}
+	s.use(kIndex, x.id, w.prompt().Or(StrV("")).Str())
 	if n, ok := x.index[w.prompt().Or(StrV("")).Str()]; ok {
 		p.promptIndex = i64(n)
 	}
 	if p.next.Truthy() {
+		s.use(kChainK, "", p.next.S)
 		if c, ok := x.chain[p.next.S]; ok {
 			p.nextMessage = c[0]
 		}
@@ -371,7 +436,7 @@ func (s *scope) positionOf(x *sess, w *Wire) position {
 }
 
 // retryInfo is request_detail._retry_info.
-func retryInfo(w *Wire, f facts, pos position) Value {
+func (s *scope) retryInfo(w *Wire, f facts, pos position) Value {
 	if f.retry == nil {
 		return None
 	}
@@ -380,12 +445,20 @@ func retryInfo(w *Wire, f facts, pos position) Value {
 		attempt = *a
 	}
 	var nxt *step
+	k := 0 // the steps of its prompt read, in the prompt's (or none's) list
 	for _, x := range pos.calls {
+		if !x.prompt.Eq(w.prompt()) {
+			continue
+		}
 		xt, ok := x.ts.Int64()
-		if ok && !x.ts.IsNone() && xt > w.TS && x.prompt.Eq(w.prompt()) && x.class.Eq(w.requestClass()) {
+		if ok && !x.ts.IsNone() && xt > w.TS && x.class.Eq(w.requestClass()) {
 			nxt = x
 			break
 		}
+		k++
+	}
+	if wp := w.prompt(); pos.calls != nil && (wp.K == Str || wp.IsNone()) {
+		s.useSteps(pos.sess, promptKey(wp), k)
 	}
 	status := None
 	if nxt != nil {
@@ -565,7 +638,7 @@ func (s *scope) detailOf(w *Wire) *call {
 	}
 	model := w.Kind() == "model"
 	t := tokensOf(w, md)
-	retry := retryInfo(w, f, pos)
+	retry := s.retryInfo(w, f, pos)
 	status := w.Status
 	if status.IsNone() && !w.EndTS.IsNone() {
 		status = StrV("ERR")
@@ -661,7 +734,7 @@ func (s *scope) detailOf(w *Wire) *call {
 		"sessionId", sid,
 		"promptIndex", vInt(pos.promptIndex),
 		"stepIndex", vInt(pos.stepIndex),
-		"stepCount", vInt(pos.stepCount),
+		"stepCount", stepCountOf(pos),
 		"requestClass", w.requestClass(),
 		"prevRequestId", pos.prev,
 		"nextRequestId", pos.next,
@@ -676,17 +749,28 @@ func (s *scope) detailOf(w *Wire) *call {
 	return &call{detail: d, w: w, sid: sid, f: f, pos: pos, md: md, tokens: t}
 }
 
+// stepCountOf is the row's stepCount as stored: null where it counts a
+// (session, prompt) group's steps, which drawer_step_counts holds once and the
+// drawer's statement fills in (§3.7).
+func stepCountOf(pos position) Value {
+	if pos.group {
+		return None
+	}
+	return vInt(pos.stepCount)
+}
+
 // findReport is request_detail.find_report: the session and tengu_api_success
 // a reported:<requestId | clientRequestId | ts> id names.
 func (s *scope) findReport(rid string) (string, *ev) {
 	key := strings.TrimPrefix(rid, "reported:")
+	s.use(kReported, "", key)
 	if s.reports == nil {
 		s.reports = map[string]*ev{}
 		for _, e := range s.events {
 			if e.name != "tengu_api_success" {
 				continue
 			}
-			for _, k := range []string{extractString(e.mdJSON, "requestId"), extractString(e.mdJSON, "clientRequestId"), itoa(e.ts)} {
+			for _, k := range []string{e.extract("requestId"), e.extract("clientRequestId"), itoa(e.ts)} {
 				if _, ok := s.reports[k]; !ok {
 					s.reports[k] = e
 				}
@@ -768,6 +852,7 @@ func (s *scope) reportedDetail(rid string) *call {
 	}
 	var promptIndex *int64
 	if x.exists {
+		s.use(kIndex, sid, e.prompt.Or(StrV("")).Str())
 		if n, ok := x.index[e.prompt.Or(StrV("")).Str()]; ok {
 			promptIndex = i64(n)
 		}

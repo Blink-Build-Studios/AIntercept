@@ -115,13 +115,13 @@ func ptr[T any](v T) *T { return &v }
 func TestTablesAndOwners(t *testing.T) {
 	want := map[string]string{"session_rows": "session_id", "event_rows": "session_id", "session_request_rows": "scope_session_id",
 		"session_call_days": "session_id", "agent_calls": "key", "agent_call_hours": "key", "batch_parts": "key",
-		"drawer_requests": "key", "drawer_events": "key"}
+		"drawer_requests": "key", "drawer_step_counts": "key", "drawer_events": "key"}
 	for name, owner := range want {
 		if got := OwnerColumn(name); got != owner {
 			t.Errorf("%s's owner %s, want %s", name, got, owner)
 		}
 	}
-	if len(Tables) != 15 {
+	if len(Tables) != 16 {
 		t.Errorf("%d tables", len(Tables))
 	}
 }

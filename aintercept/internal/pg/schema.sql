@@ -771,9 +771,20 @@ CREATE TABLE drawer_requests (
     key text NOT NULL,
     data text COMPRESSION lz4,
     details text COMPRESSION lz4,
+    step_session text,
+    step_prompt text,
     PRIMARY KEY (request_id, key)
 );
 CREATE INDEX ON drawer_requests (key);
+
+CREATE TABLE drawer_step_counts (
+    session_id text NOT NULL,
+    prompt_id text NOT NULL,
+    key text NOT NULL,
+    n bigint,
+    PRIMARY KEY (session_id, prompt_id, key)
+);
+CREATE INDEX ON drawer_step_counts (key);
 
 CREATE TABLE drawer_events (
     event_id text NOT NULL,
