@@ -4,7 +4,7 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["PersonTimelineResponse"] = {
   "data": {
     "analytics": [],
-    "binSeconds": 86400,
+    "binSeconds": 3600,
     "friction": [],
     "from": "2026-10-21T18:05:00Z",
     "modelCalls": [],

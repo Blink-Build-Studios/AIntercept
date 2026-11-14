@@ -81,8 +81,9 @@ def get_person_timeline(
         # By default the person's first activity (or the last 14 days) to now, or their last if later.
         lo = cc.to_ns(from_) if from_ else min((r["start_ns"] for r in rs), default=now - 14 * 86400 * cc.NS)
         hi = cc.to_ns(to) if to else max([now, *(r["last_ns"] for r in rs)])
-        lo, hi = ranges.start_of_minute(lo), ranges.end_of_minute(hi)
+        # The auto bin comes from the span asked for: snapping never changes which bin the UI gets.
         bin_s = bin or cc.auto_bin_seconds(hi - lo)
+        lo, hi = ranges.start_of_minute(lo), ranges.end_of_minute(hi)
         timeline = reader.person_timeline(sids, rs, now_dt, now, lo, hi, bin_s)
     last = max((r["last_ns"] for r in rs), default=None)
     meta = Meta(asOf=now_dt, lastDataAt=ns_to_dt(last), from_=_dt(lo), to=_dt(hi))

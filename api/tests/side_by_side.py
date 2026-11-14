@@ -293,7 +293,8 @@ def _in_flight(old: Any, new: Any, url_: str, a: Any, b: Any) -> bool:
     - its drawer 404s until it ends;
     - an event of a batch in flight has its fields but no raw row yet;
     - an ended call's drawer leaves it out: no link to it (and nothing beside the link), and a step
-      count that doesn't count it."""
+      count that doesn't count it. That one is temporary (docs/PIPELINE.md's quirks): step 8 counts
+      in-flight calls at read time, as the oracle does, and deletes it."""
     if not url_.startswith(("/api/v1/requests/", "/api/v1/events/")):
         return False
     if url_.startswith("/api/v1/events/") and a.status_code == b.status_code == 200:

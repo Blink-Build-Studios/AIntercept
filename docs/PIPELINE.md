@@ -1516,9 +1516,10 @@ counts are its minutes'.
 - A bin of b seconds reads hour cells when 3600 divides b, else minute cells.
   Each cell lies in one bin.
 - A snapped range's first and last bins are whole minutes too.
-- With no `bin`, the person timeline's auto bin comes from the snapped span
-  (`hi − lo` after snapping). The session timeline doesn't snap: its auto bin
-  comes from its span, as today.
+- With no `bin`, the person timeline's auto bin comes from the span the request
+  asked for (`hi − lo` before snapping), so snapping never changes which bin
+  the UI gets (owner). The session timeline doesn't snap: its auto bin comes
+  from its span, as today.
 
 **Keys seen in a range** (event names and types, heads, hooks, tools, PRs): the
 union of the cells' keys. A key occurs in the range if and only if it occurs in
@@ -1774,10 +1775,10 @@ owner.
   `request_detail`'s `calls` SQL, over a one-row DuckDB made only when the
   view is needed (step 8 renders it).
 - **Two pools until step 11:** v7's loader keeps its ADBC connections, so a pod
-  holds up to 8 of each.
-- **The auto bin follows the snapped span**, so a person with no data (the
-  default 14 days, which snap to 14 d + 60 s − 1 ns) gets daily bins, not
-  hourly.
+  holds up to 8 of each (8 + 8; step 11's row).
+- **The auto bin comes from the span asked for, before snapping** (owner). The
+  default 14 days snap to 14 d + 60 s − 1 ns, which would otherwise make them
+  daily.
 - **The harness** is `api/tests/side_by_side.py`: every page, one registration
   each, walked by `test_v8_side_by_side.py` (each page), `test_v8_cuts.py`
   (every cut, one session and one person) and `test_v8_checkpoints.py`. A
@@ -2265,10 +2266,10 @@ is one PR, tests first: its failing tests land in the PR before the code.
 | 5 | **Calls:** `request_log_rows` for every call, with steps folded in, and `request_cells`. The worker's batch-call holder lookup reads `request_log_rows`. `session_request_rows`, `request_txs`, `request_reports`, `request_missed`, `prompt_index`, `codex_turns` and `session_last` stay until their last reader goes (step 11) | the log with each scope applied equals `stream_sql`'s; each session's tab equals today's; steps by scope after a token refresh; I1 to I3 as tests | as step 3 | 2 |
 | 6 | **Cells:** `session_cells` and `agent_call_cells`, memoized from deltas (§3.8). `call_tool_uses`, `agent_calls` and `agent_call_hours` stay until step 11 | every cell equals the oracle's merge | as step 3 | 2 |
 | 7 | **The cross-key rule:** batch locks in the global order right after the guard; flags in one sorted statement; the holder's lock and re-check; retention's flags in the same order | both commit orders of a batch call and its parts; no deadlock; forgetting a key flags its readers | as step 3 | 2 |
-| 8 | **The drawer** (`v8-worker`'s incremental drawer, finished): its indexes and memo in the warm state and snapshot; step N and "delivered in step N" filled at read (`step` cells); `stepCount` from the prompt item (`drawer_step_counts` goes); templates per key; `raw_fallback`, so `/raw` stops reading `requests`, which goes with the holder lookup moved in step 5; the raw formatter split from DuckDB | `VerifyIncremental`; the drawer byte for byte (v7's `test_v7_drawer.py`) | as step 3 | 2, 4, 5, 6, 7 |
+| 8 | **The drawer** (`v8-worker`'s incremental drawer, finished): its indexes and memo in the warm state and snapshot; step N and "delivered in step N" filled at read (`step` cells); `stepCount` from the prompt item (`drawer_step_counts` goes); templates per key; `raw_fallback`, so `/raw` stops reading `requests`, which goes with the holder lookup moved in step 5; the raw formatter split from DuckDB. The step count and next link, read at read time, count in-flight calls from the call rows as the oracle does, and the harness's in-flight-neighbour excuse (`side_by_side.py`, the temporary quirk) is deleted | `VerifyIncremental`; the drawer byte for byte (v7's `test_v7_drawer.py`); the replay checkpoints with no in-flight-neighbour excuse | as step 3 | 2, 4, 5, 6, 7 |
 | 9 | **Session pages on v8's reads,** one PR each: `/sessions/{id}` (4), `/prompts` (4, 5; `prompt_steps` goes), `/events` (3, 4, 5, 6), `/requests` (5, 6), `/state` (3, 5, 6), `/timeline` (4, 6) | the page's side-by-side URLs and cuts, its checkpoints, its statements test | byte-identical on the CI datasets (`make check`: the subset; `-m full`: all) | 1, and the steps named |
 | 10 | **Person pages on v8's reads,** one PR each: `/people/{id}` (4), `/sessions` (4), `/requests` (5, 6), `/summary` (3, 5, 6), `/timeline` (4, 6), `/coverage` (4, 5, 6). The oracle is patched to the one label rule (decision 2) first, so it compares | as step 9 | as step 9 | 1, and the steps named |
-| 11 | **The directory, and DuckDB out:** `/people` and `/overview` on v8's reads (§5.6). Then the v7 loader goes, with every table and column only it read: `session_request_rows`, `request_txs`, `request_reports`, `request_missed`, `prompt_index`, `codex_turns`, `session_last`, `call_tool_uses`, `agent_calls`, `agent_call_hours`, `dim_session_visible`, `event_rows`' old columns. DuckDB and ADBC leave the API, and the oracle moves under `api/tests`. `SETUP.md`, `PRODUCTION.md` | the directory side by side for every `from`, `sort`, `agent` and `q`; the no-DuckDB test; the image builds without either | `make check`; `make up && make verify`; the whole run's CPU and write gates | 6, 8, 9, 10 |
+| 11 | **The directory, and DuckDB out:** `/people` and `/overview` on v8's reads (§5.6). Then the v7 loader goes, with every table and column only it read: `session_request_rows`, `request_txs`, `request_reports`, `request_missed`, `prompt_index`, `codex_turns`, `session_last`, `call_tool_uses`, `agent_calls`, `agent_call_hours`, `dim_session_visible`, `event_rows`' old columns. DuckDB and ADBC leave the API, and the oracle moves under `api/tests`. With ADBC goes the loader's own pool: until then a pod holds up to 8 + 8 connections (psycopg's and ADBC's, step 1). `SETUP.md`, `PRODUCTION.md` | the directory side by side for every `from`, `sort`, `agent` and `q`; the no-DuckDB test; the image builds without either | `make check`; `make up && make verify`; the whole run's CPU and write gates | 6, 8, 9, 10 |
 | 12 | **The gate,** on the real capture, settled | — | every endpoint byte-identical on the snapped ranges (v7's 4,248 URLs, plus the new cuts and checkpoints); the CPU gate (flat per record and per commit, 1k vs 50k events, cold loads ≤ 1× replay, restarts and scale-in); the write gate (rows and bytes per record per table, 5 s and 30 s windows, 2 to 4 pods); warm p95 ≤ 50 ms and cold p95 ≤ 300 ms for every page of the heaviest person and session, on the capture; bytes per row against §3.12 | 11 |
 | 13 | **Deploy** to the DigitalOcean cluster: Postgres starts empty (Rollout), `helm upgrade` (never uninstall) | — | pages load on the cluster's new traffic; `/lag` settles under 30 s; a request through the proxy shows up end to end | 12 |
 
@@ -2514,7 +2515,18 @@ The inventory's quirks, each reproduced:
   snapped bounds (`…:00Z`, `…:59.999999Z`), and its counts are those minutes'.
   The session header and timeline don't filter by a range and don't snap.
 - **`bin` must be a multiple of 60** (decision 1). Any other width is a 422.
-  Today any integer ≥ 60 is accepted; the UI sends only the ladder.
+  Today any integer ≥ 60 is accepted; the UI sends only the ladder. With no
+  `bin`, the auto bin comes from the span asked for, before snapping, so it's
+  today's (owner).
+- **Temporary, until step 8: the in-flight drawer leaves its neighbours'
+  links and counts out.** An ended call whose next step in its prompt is still
+  in flight has no `nextRequestId` (nor "delivered in step N") for it, and its
+  `stepCount` doesn't count it; the oracle links and counts it. It heals when
+  the call ends. v7's drawer has no row for a call in flight (owner) and
+  renders its neighbours without it. The side-by-side harness excuses exactly
+  this (`api/tests/side_by_side.py`, `_in_flight`). In v8 the step count and
+  the next link are read at read time, so step 8 counts in-flight calls from
+  the call rows, as the oracle does, and deletes that excuse.
 - **A Codex thread's label is its own title calls'** (decision 2), on the
   person pages too: today they ran an assignment across the account's threads.
   Where the two differed, the person pages now show what the session page
