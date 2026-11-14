@@ -163,6 +163,10 @@ rollup:
     name: aintercept-rollup
     roleArn: ""
   parallel: 8          # keys one replica runs at once
+  # The warm states' memory cap per replica (bytes): keys stay warm until 60 min
+  # idle, least recently fed out first over it. Keep it under the memory limit
+  # below (a warm key is ~7 KB per record held; the capture's heaviest, 400 MB).
+  warmBytes: 536870912
   autoscaling:
     keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
     minReplicas: 2     # never fewer: the tail and the singletons always have a holder

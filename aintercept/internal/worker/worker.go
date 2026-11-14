@@ -56,7 +56,7 @@ type Config struct {
 	Singletons []Singleton
 
 	Grace      time.Duration // late-file window on in/ names (5 min)
-	Idle       time.Duration // a held key with no input this long is unlocked (60 s)
+	Idle       time.Duration // a held key with no input this long is unlocked (60 min)
 	GCGrace    time.Duration // a superseded chunk is deleted after this (10 min)
 	Heartbeat  time.Duration // the workers row's period (10 s)
 	Live       time.Duration // a worker seen this recently is live (30 s)
@@ -66,6 +66,12 @@ type Config struct {
 	MaxFiles   int           // in/ files applied per run at most (500)
 	Parallel   int           // keys run at once (8)
 	RunConns   int32         // run connections, shared by the runs (2)
+	// WarmBytes caps the warm states' memory (512 MiB): over it, the least
+	// recently fed keys are unlocked. A state's bytes are estimated as its
+	// records times BytesPerRecord (7,000: a warm key's heap per record on
+	// the capture, its state and render baseline).
+	WarmBytes      int64
+	BytesPerRecord int64
 	// DetailWait is how long after a call ended its detail object is waited
 	// for (§3.7): a run that doesn't find it keeps its flag, to read it again.
 	// Zero: a missing object is final at once (the call is rendered from its
@@ -85,7 +91,13 @@ func (c *Config) defaults() {
 		}
 	}
 	set(&c.Grace, 5*time.Minute)
-	set(&c.Idle, 60*time.Second)
+	set(&c.Idle, 60*time.Minute)
+	if c.WarmBytes <= 0 {
+		c.WarmBytes = 512 << 20
+	}
+	if c.BytesPerRecord <= 0 {
+		c.BytesPerRecord = 7000
+	}
 	set(&c.GCGrace, 10*time.Minute)
 	set(&c.Heartbeat, 10*time.Second)
 	set(&c.Live, 30*time.Second)
@@ -137,6 +149,7 @@ type held struct {
 	n        int64
 	st       *state.KeyState
 	baseline any
+	records  int // the records the state holds (its bytes' estimate)
 }
 
 // Result is what one run did.
@@ -215,7 +228,7 @@ func (w *Worker) keep(key string, n int64, st *state.KeyState, baseline any, inp
 	if h == nil || !h.locked {
 		return
 	}
-	h.n, h.st, h.baseline = n, st, baseline
+	h.n, h.st, h.baseline, h.records = n, st, baseline, st.Records()
 	if input {
 		h.lastInput = w.now()
 	}
@@ -234,7 +247,7 @@ func (w *Worker) drop(key string) {
 		delete(w.keys, key)
 		return
 	}
-	h.st, h.baseline, h.n = nil, nil, 0
+	h.st, h.baseline, h.n, h.records = nil, nil, 0, 0
 }
 
 // --- a run --------------------------------------------------------------------

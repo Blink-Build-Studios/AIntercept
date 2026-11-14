@@ -253,17 +253,42 @@ func (w *Worker) markLocked(k string, now time.Time) {
 }
 
 // releaseIdle unlocks the held keys with no input for Idle that weren't just
-// flagged, and drops their warm states.
+// flagged, and drops their warm states; then, while the warm states' bytes are
+// over WarmBytes, the least recently fed of the others.
 func (w *Worker) releaseIdle(ctx context.Context, conn *pgx.Conn, flagged map[string]bool) error {
 	now := w.now()
 	var idle []string
+	type warmKey struct {
+		key  string
+		last time.Time
+	}
+	var rest []warmKey
+	var bytes int64
 	w.mu.Lock()
 	for k, h := range w.keys {
-		if h.locked && !flagged[k] && now.Sub(h.lastInput) >= w.cfg.Idle {
+		switch {
+		case h.locked && !flagged[k] && now.Sub(h.lastInput) >= w.cfg.Idle:
 			idle = append(idle, k)
+		case h.st != nil:
+			bytes += int64(h.records) * w.cfg.BytesPerRecord
+			if h.locked && !flagged[k] {
+				rest = append(rest, warmKey{k, h.lastInput})
+			}
 		}
 	}
 	w.mu.Unlock()
+	sort.Slice(rest, func(i, j int) bool { return rest[i].last.Before(rest[j].last) })
+	for _, r := range rest {
+		if bytes <= w.cfg.WarmBytes {
+			break
+		}
+		w.mu.Lock()
+		if h := w.keys[r.key]; h != nil {
+			bytes -= int64(h.records) * w.cfg.BytesPerRecord
+		}
+		w.mu.Unlock()
+		idle = append(idle, r.key)
+	}
 	return w.unlock(ctx, conn, idle)
 }
 
