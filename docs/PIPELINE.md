@@ -470,24 +470,35 @@ hashes every row and diffs against a baseline. v8 replaces that:
   - **Warm bytes per key, measured:** ~7 KB of heap per record held, for
     the state and its render baseline together. The capture's heaviest
     session is 402 MB warm (57,874 records); the next is 199 MB.
-  - *Step 2, measured on the heaviest session* (main after #61 held 9.7 KB a
-    record: the drawer's memo kept every event's metadata parsed, 4 KB):
+  - *Step 2, measured on the heaviest session.* The ~7 KB above undercounted
+    the state: its measurement freed the key's 114 MB journal chunk inside
+    its window. Measured with the chunk held throughout, main after #61 holds
+    11.7 KB a record. Its drawer memo kept every event's metadata parsed.
 
-    | Per record held | Main | Step 2 | Needed by |
+    | Per record held | Main | Step 2, built by runs | Step 2, decoded |
     |---|---|---|---|
-    | the state: its rows (event rows, analytics rows, batch members), indexes, record ids, the calls' wires (0.9 KB) | 3.1 KB | 2.2 KB | the whole render of `event_rows` (step 3), the drawer (step 8), the state engine |
-    | the render's warm state: the drawer's memo (main 6.1 KB, now 1.8 KB), the whole tables' hashes, the rules | 6.6 KB | 2.4 KB | the drawer (step 8), steps 3 to 7 |
-    | **total, built by runs** | 9.7 KB | **4.6 KB** | |
-    | **total, decoded from a snapshot** | — | **5.8 KB** | |
+    | the state | 5.1 KB | 4.2 KB | 3.7 KB |
+    | the render's warm state (main: its baseline) | 6.6 KB | 2.4 KB | 2.2 KB |
+    | **total** | 11.7 KB | **6.6 KB** | **5.9 KB** |
+
+    What each part keeps alive alone (built; decoded in brackets): the
+    state's rows 1.5 KB (1.4: analytics rows 0.47, event rows 0.77, batch
+    members 0.12); the state's indexes 0.88 KB (0.71: prompts 0.46, span
+    0.15, record ids 0.11, requests 0.08, session rows 0.07); the running
+    values 0.03; the calls' wires 0.89 (0.73); the whole tables' hashes 0.09;
+    the rules 0.09; the drawer's memo 2.2 (2.0: its events' copies 0.97,
+    their read fields 0.34, its event rows 0.34, its request rows and their
+    lookups 0.27, its token index 0.13, its filed inputs 0.13, the event rows
+    it reads 0.15). Shared by two or more (an event's metadata held by its
+    analytics row, its event row and the drawer): ~0.9 KB. No minute cells
+    yet (step 6).
 
     Cut: the drawer keeps what it read of an event's metadata, not the parsed
     tree, and of a batch's rows and the event rows only the fields it reads;
     the state interns the strings a session's events repeat; zstd's pooled
     decoders no longer keep their last output alive (up to a key's journal or
-    snapshot, ~100 MB, per decoder). A decoded state is ~25% larger than one
-    built by runs, with fewer objects; the cause isn't found. The rest stays
-    per record until steps 3 and 8 change what reads it. The worker estimates
-    6,000 bytes a record.
+    snapshot, ~100 MB, per decoder). A decoded state is ~10% smaller (its
+    strings are stored once). The worker estimates 7,000 bytes a record.
   - **The replay gate isn't met on v7.** Records replayed by cold loads, ×
     the 1.12M applied, at the capture's real gaps. This is simulated per key,
     a run per in/ file at its S3 time, with one worker holding every key:
@@ -525,25 +536,33 @@ hashes every row and diffs against a baseline. v8 replaces that:
       it, a row a tail commit wrote and the run removes stays.)
     - **Going cold writes one only for a quarter tail:** when the journal
       holds a quarter of the key's records or more since its snapshot. A
-      smaller tail costs less to apply than a snapshot to write.
+      smaller tail costs less to apply (41 µs a record) than a snapshot to
+      write (12.8 µs a record held). That left out the catch-up render (~90
+      µs a tail record): priced in, a tenth costs less (below).
     - **Costs, the heaviest session (57,874 records):** a snapshot is 28 MB
       (480 bytes a record); it encodes in 0.74 s (13 µs a record held) and
       decodes in 0.33 s (6 µs). v7's cold load replayed in 2.4 s (41 µs a
       record) and rendered its baseline in 1.6 s.
+    - **The worst cold load** under the quarter rule (a tail of a quarter
+      of the records, the heaviest session): decode and replay 0.81 s, the
+      catch-up render 1.3 s (the drawer 1.1 s, the whole tables 0.15 s):
+      2.1 s, ~36 µs a record held. A key that goes cold again before its
+      tail reaches a quarter pays its tail again on every load.
     - **The replay gate, simulated as v7's** (a run per in/ file at its S3
-      time, one worker), at 5,600 bytes a record held; the cost of decodes,
-      tail replays and snapshot writes, × the replay of the 1.12M applied:
+      time, one worker), at 6,600 bytes a record held. The cost of decodes,
+      tail replays with their catch-up (~90 µs a tail record, measured) and
+      snapshot writes, × the replay of the 1.12M applied:
 
-      | Idle | No cap | 4 GiB | 2 GiB | 1 GiB | 512 MiB |
+      | Idle 60 min | No cap | 4 GiB | 2 GiB | 1 GiB | 512 MiB |
       |---|---|---|---|---|---|
-      | 60 min | 0.72× | 0.72× | 0.82× | 1.13× | **2.55×** (v7: 10.2×) |
-      | 3 h | 0.60× | 0.60× | 0.73× | 1.10× | 2.52× |
+      | quarter rule (as built) | 0.91× | 0.92× | 1.18× | 2.06× | **5.16×** (v7: 10.2×) |
+      | a snapshot for any tail | 1.09× | — | 1.33× | 2.11× | 4.89× |
+      | a snapshot for a tenth | 0.93× | — | 1.09× | 1.72× | 3.55× |
 
-      At 512 MiB: decodes 1.04×, tail replays 0.92×, snapshot writes 0.60×
-      (going cold 0.36×, the runs' 0.24×). **Not met at 512 MiB**: the
-      heaviest key alone is 270 MB warm. It's met at 2 GiB. What's left
-      per record is the state's rows and the drawer's scope (above): steps 3
-      and 8.
+      **Not met at 512 MiB**: the heaviest key alone is ~380 MB warm, and
+      at that cap the heaviest keys evict each other (4,281 loads). The
+      bytes per record are the bound; the threshold only moves the cost
+      between tails and writes.
   - This builds on #57's smaller checkpoints (merged): zstd chunks, and
     compaction that keeps each external input's last value once.
 - **Measured, why:** one cold load of the capture's heaviest session replays

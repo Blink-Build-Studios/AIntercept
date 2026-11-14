@@ -76,9 +76,9 @@ type Config struct {
 	RunConns   int32         // run connections, shared by the runs (2)
 	// WarmBytes caps the warm states' memory (512 MiB): over it, the least
 	// recently fed keys are unlocked. A state's bytes are estimated as its
-	// records times BytesPerRecord (6,000: a warm key's heap per record on
-	// the capture, its state and the render's warm state, decoded from its
-	// snapshot; built by its runs it's ~4,600).
+	// records times BytesPerRecord (7,000: a warm key's heap per record on
+	// the capture, its state and the render's warm state: 6,600 built by its
+	// runs, 5,900 decoded from its snapshot).
 	WarmBytes      int64
 	BytesPerRecord int64
 	// DetailWait is how long after a call ended its detail object is waited
@@ -105,7 +105,7 @@ func (c *Config) defaults() {
 		c.WarmBytes = 512 << 20
 	}
 	if c.BytesPerRecord <= 0 {
-		c.BytesPerRecord = 6000
+		c.BytesPerRecord = 7000
 	}
 	set(&c.GCGrace, 10*time.Minute)
 	set(&c.Heartbeat, 10*time.Second)
@@ -292,8 +292,9 @@ func verifyRunning(key string, st *state.KeyState, nowNS int64) {
 // evicted, or on SIGTERM) whose journal holds a quarter of its records or more
 // since its last snapshot (§2, v8): the next holder decodes it and applies
 // that few at most. A smaller tail costs less to apply than a snapshot does
-// to write (~41 µs a record applied, ~12 µs a record held written, on the
-// capture). Its key row names it, guarded on the n the warm state is at; a
+// to write (~41 µs a record applied, ~13 µs a record held written, on the
+// capture), the catch-up render aside (~90 µs a tail record: docs/PIPELINE.md
+// §2 has the numbers). Its key row names it, guarded on the n the warm state is at; a
 // key another worker committed since keeps its row, and the snapshot is
 // deleted. A failure only costs the next load its tail.
 func (w *Worker) snapshotCold(ctx context.Context, keys []string) {
