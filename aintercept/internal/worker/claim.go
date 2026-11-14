@@ -296,6 +296,7 @@ func (w *Worker) unlock(ctx context.Context, conn *pgx.Conn, keys []string) erro
 	if len(keys) == 0 {
 		return nil
 	}
+	w.snapshotCold(ctx, keys) // while the locks are held: no other worker writes these keys
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_unlock("+lockOf("k")+") FROM unnest($1::text[]) AS k", keys); err != nil {
 		return err
 	}

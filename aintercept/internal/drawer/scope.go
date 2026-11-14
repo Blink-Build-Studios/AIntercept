@@ -84,6 +84,7 @@ type step struct {
 
 // ev is session.Event, with the columns the drawer's queries filter on.
 type ev struct {
+	sc      *scope // its scope: what a render parsed is dropped at its end
 	id      string
 	ts      int64
 	name    string
@@ -107,21 +108,36 @@ type ev struct {
 
 // mdFields is what renders have read of an event's metadata: kept across
 // renders (Memo) while the metadata is the same, so an event about many rows
-// is parsed once, not once per render.
+// is parsed once, not once per render. Each is a short list (an event is
+// read for a few keys): a map of so few costs a kilobyte an event.
 type mdFields struct {
 	json string
-	vals map[string]Value   // md.get(k)
-	strs map[string]*string // _str(md.get(k))
-	ext  map[string]string  // json_extract_string(md, '$.k')
+	vals []mdVal    // md.get(k)
+	strs []mdStr    // _str(md.get(k))
+	ext  []mdExtStr // json_extract_string(md, '$.k')
 }
+
+type mdVal struct {
+	k string
+	v Value
+}
+
+type mdStr struct {
+	k string
+	v *string
+}
+
+type mdExtStr struct{ k, v string }
 
 func (e *ev) fields() *mdFields {
 	if e.fx == nil || e.fx.json != e.mdJSON {
-		e.fx = &mdFields{json: e.mdJSON, vals: map[string]Value{}, strs: map[string]*string{}, ext: map[string]string{}}
+		e.fx = &mdFields{json: e.mdJSON}
 	}
 	return e.fx
 }
 
+// MD is the event's metadata, parsed. A render keeps it while it runs; the
+// memo keeps only what was read of it (settle drops the tree).
 func (e *ev) MD() Value {
 	if e.md == nil {
 		v := Value{K: Object}
@@ -131,6 +147,9 @@ func (e *ev) MD() Value {
 			}
 		}
 		e.md = &v
+		if e.sc != nil {
+			e.sc.parsed = append(e.sc.parsed, e)
+		}
 	}
 	return *e.md
 }
@@ -138,11 +157,13 @@ func (e *ev) MD() Value {
 // get is e.md.get(k), cached.
 func (e *ev) get(k string) Value {
 	f := e.fields()
-	if v, ok := f.vals[k]; ok {
-		return v
+	for _, x := range f.vals {
+		if x.k == k {
+			return x.v
+		}
 	}
 	v := e.MD().Get(k)
-	f.vals[k] = v
+	f.vals = append(f.vals, mdVal{k, v})
 	return v
 }
 
@@ -150,22 +171,26 @@ func (e *ev) get(k string) Value {
 // every event about it.
 func (e *ev) mdStr(k string) *string {
 	f := e.fields()
-	if v, ok := f.strs[k]; ok {
-		return v
+	for _, x := range f.strs {
+		if x.k == k {
+			return x.v
+		}
 	}
 	v := pyStr(e.get(k))
-	f.strs[k] = v
+	f.strs = append(f.strs, mdStr{k, v})
 	return v
 }
 
 // extract is extractString(e.md, k), cached.
 func (e *ev) extract(k string) string {
 	f := e.fields()
-	if v, ok := f.ext[k]; ok {
-		return v
+	for _, x := range f.ext {
+		if x.k == k {
+			return x.v
+		}
 	}
 	v := extractString(e.mdJSON, k)
-	f.ext[k] = v
+	f.ext = append(f.ext, mdExtStr{k, v})
 	return v
 }
 
@@ -229,23 +254,43 @@ type scope struct {
 	rowCorr   map[string]string     // fact_events id → its batch
 	sessions  map[string]*sess
 	part      func(batch string) (BatchParts, bool)
-	rows      map[string]process.EventRow // the session's rendered event rows, by event id
-	rec       *rowDeps                    // the lookups of the row being derived (incremental.go); nil: none recorded
-	ch        *changes                    // what a run's updates moved (warm.go); nil: none tracked
+	rows      map[string]evRow // what the drawer reads of the session's rendered event rows, by event id
+	rec       *rowDeps         // the lookups of the row being derived (incremental.go); nil: none recorded
+	ch        *changes         // what a run's updates moved (warm.go); nil: none tracked
+	parsed    []*ev            // the events whose metadata this render parsed
+}
+
+// evRow is what the drawer reads of a rendered event row (session.py's link,
+// summary and marker): a warm key keeps one per event, not the whole row.
+type evRow struct {
+	PromptIndex                                  *int64
+	LinkKind, LinkID, LinkLabel, Summary, Marker string
+	Internal                                     bool
+}
+
+func evRowOf(r process.EventRow) evRow {
+	return evRow{r.PromptIndex, r.LinkKind, r.LinkID, r.LinkLabel, r.Summary, r.Marker, r.Internal}
 }
 
 // batch is an analytics batch's rows in the key.
 type batch struct {
-	evs      []*ev                   // its Claude Code events, by fact_events id
-	analytic map[string]*canon.Event // every analytics row of it, by fact_events id
-	session  *canon.Event            // its earliest row naming a session
+	evs      []*ev            // its Claude Code events, by fact_events id
+	analytic map[string]rowAt // every analytics row of it, by fact_events id
+	session  *rowAt           // its earliest row naming a session
+}
+
+// rowAt is an analytics row as its batch's earliest session reads it: its
+// time and session (not the row: a warm key keeps one per event).
+type rowAt struct {
+	NS        int64
+	SessionID string
 }
 
 func newScope(key string, rows state.Rows, part func(string) (BatchParts, bool), eventRows []process.EventRow) *scope {
 	s := &scope{key: key, calls: map[string]*callRow{}, drawer: map[string][]*callRow{}, byCorr: map[string][]*callRow{},
 		callsOf: map[string][]*callRow{}, evs: map[string]*ev{}, evsOf: map[string][]*ev{}, batches: map[string]*batch{},
 		evByID: map[string][]*ev{}, reports: map[string][]*ev{}, stepOwner: map[string]string{}, rowCorr: map[string]string{},
-		sessions: map[string]*sess{}, part: part, rows: map[string]process.EventRow{}}
+		sessions: map[string]*sess{}, part: part, rows: map[string]evRow{}}
 	ids := make([]string, 0, len(rows[state.TableFactRequests]))
 	for id := range rows[state.TableFactRequests] {
 		ids = append(ids, id)
@@ -271,9 +316,9 @@ func newScope(key string, rows state.Rows, part func(string) (BatchParts, bool),
 			continue
 		}
 		b := s.batch(e.CorrelationID)
-		b.analytic[k] = &e
+		b.analytic[k] = rowAt{e.NS, e.SessionID}
 		s.rowCorr[k] = e.CorrelationID
-		if x := newEv(&e, k); x != nil {
+		if x := s.newEv(&e, k); x != nil {
 			s.evs[k] = x
 			s.evsOf[x.session] = append(s.evsOf[x.session], x)
 			b.evs = append(b.evs, x)
@@ -294,7 +339,7 @@ func newScope(key string, rows state.Rows, part func(string) (BatchParts, bool),
 		}
 	}
 	for _, r := range eventRows {
-		s.rows[r.EventID] = r
+		s.rows[r.EventID] = evRowOf(r)
 	}
 	for sid := range s.callsOf {
 		s.build(sid)
@@ -308,14 +353,14 @@ func newScope(key string, rows state.Rows, part func(string) (BatchParts, bool),
 func (s *scope) batch(c string) *batch {
 	b := s.batches[c]
 	if b == nil {
-		b = &batch{analytic: map[string]*canon.Event{}}
+		b = &batch{analytic: map[string]rowAt{}}
 		s.batches[c] = b
 	}
 	return b
 }
 
 // newEv is a Claude Code analytics row's event (nil for another source's).
-func newEv(e *canon.Event, k string) *ev {
+func (s *scope) newEv(e *canon.Event, k string) *ev {
 	if e.Source != "claude_code" {
 		return nil
 	}
@@ -323,21 +368,22 @@ func newEv(e *canon.Event, k string) *ev {
 	if name == "" {
 		name = "(unnamed)"
 	}
-	return &ev{ts: e.NS, name: name, device: optS(e.DeviceID), mdJSON: e.MetadataJSON,
+	return &ev{sc: s, ts: e.NS, name: name, device: optS(e.DeviceID), mdJSON: e.MetadataJSON,
 		prompt: optS(e.PromptID), session: e.SessionID, rid: e.RequestID, crid: e.ClientRequestID, tool: e.ToolUseID,
 		corr: e.CorrelationID, rank: e.BatchN, n: e.BatchN, seq: e.Seq, rowNS: e.RowNS, key: e.EventKey, rowKey: k}
 }
 
 // earliestSession is _BATCH_SESSION's row of the key: the batch's earliest
 // (time, session) that names a session.
-func earliestSession(b *batch) *canon.Event {
-	var best *canon.Event
+func earliestSession(b *batch) *rowAt {
+	var best *rowAt
 	for _, e := range b.analytic {
 		if e.SessionID == "" {
 			continue
 		}
 		if best == nil || e.NS < best.NS || e.NS == best.NS && e.SessionID < best.SessionID {
-			best = e
+			x := e
+			best = &x
 		}
 	}
 	return best
@@ -697,7 +743,7 @@ func (x *sess) about(prompt Value, ids, tools []string) []*ev {
 // others' batch parts).
 func (s *scope) batchSession(cid string) Value {
 	s.use(kBatch, cid, "")
-	var best *canon.Event
+	var best *rowAt
 	if b := s.batches[cid]; b != nil {
 		best = b.session
 	}

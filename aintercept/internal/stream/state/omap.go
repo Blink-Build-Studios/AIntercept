@@ -23,6 +23,10 @@ type chunk[K, V any] struct{ e []entry[K, V] }
 
 func newOmap[K, V any](less func(a, b K) bool) *omap[K, V] { return &omap[K, V]{less: less} }
 
+// lessInt64 is an omap's order by an int64 key. Every order an omap holds is
+// a top-level func, so a snapshot names it (snapshot.go).
+func lessInt64(a, b int64) bool { return a < b }
+
 func (m *omap[K, V]) Len() int { return m.n }
 
 // chunkFor is the index of the chunk k belongs in: the last whose first entry is
@@ -44,6 +48,16 @@ func (m *omap[K, V]) find(k K) (int, int, bool) {
 	e := m.chunks[ci].e
 	j := sort.Search(len(e), func(j int) bool { return !m.less(e[j].k, k) })
 	return ci, j, j < len(e) && !m.less(k, e[j].k)
+}
+
+// Get is k's value, and whether it's there.
+func (m *omap[K, V]) Get(k K) (V, bool) {
+	ci, j, ok := m.find(k)
+	if !ok {
+		var zero V
+		return zero, false
+	}
+	return m.chunks[ci].e[j].v, true
 }
 
 func (m *omap[K, V]) Set(k K, v V) {

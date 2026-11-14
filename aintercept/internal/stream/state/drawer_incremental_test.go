@@ -317,25 +317,19 @@ func TestRenderedDrawerEachLookupAlone(t *testing.T) {
 // skipped, as the slow tests are).
 func TestRenderedDrawerRunCostIsFlat(t *testing.T) {
 	state.Heavy(t)
-	drawer.VerifyIncremental = false
-	defer func() { drawer.VerifyIncremental = true }()
+	drawer.VerifyIncremental, render.VerifyIncremental = false, false
+	defer func() { drawer.VerifyIncremental, render.VerifyIncremental = true, true }()
 	runCost := func(prompts int) time.Duration {
 		state.ResetBatches()
 		o := state.NewStream(nil)
-		var base *render.Baseline
+		var base *render.Warm
 		run := func(r records.Record) *render.Rows {
-			changed := drawer.Changed{}
-			for _, c := range o.Apply(r).Changes {
-				if changed[c.Table] == nil {
-					changed[c.Table] = map[string]bool{}
-				}
-				changed[c.Table][c.ID] = true
-			}
-			rows, err := render.RenderNext("s:s1", o.States()["s:s1"].Rows(), nil, day, base, changed, nil)
+			changes := o.Apply(r).Changes
+			rows, err := render.RenderNext("s:s1", o.States()["s:s1"].Rows(), nil, day, base, changes, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			base = rows.Baseline()
+			base = rows.Warm()
 			return rows
 		}
 		for _, r := range promptSession(prompts, 5) {

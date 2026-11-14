@@ -241,10 +241,9 @@ func (s *scope) putEvent(id string, e *canon.Event) {
 	}
 	if e != nil {
 		b := s.batch(e.CorrelationID)
-		row := *e
-		b.analytic[id] = &row
+		b.analytic[id] = rowAt{e.NS, e.SessionID}
 		s.rowCorr[id] = e.CorrelationID
-		if x := newEv(&row, id); x != nil {
+		if x := s.newEv(e, id); x != nil {
 			s.evs[id] = x
 			s.evsOf[x.session], _ = insertSorted(s.evsOf[x.session], x, byRowKey)
 			b.evs, _ = insertSorted(b.evs, x, byRowKey)

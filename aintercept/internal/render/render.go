@@ -1,32 +1,44 @@
 // Package render turns a key's state into the rows it writes to Postgres's
-// rendered tables (docs/PIPELINE.md v7 §2 step 6, §3.3-3.5), and those rows
-// into the changes a commit writes:
+// rendered tables (docs/PIPELINE.md §2 step 6, §3.3-3.5, §3.11), and those
+// rows into the changes a commit writes:
 //
-//   - a session key's 9 session tables (state.RenderSession), with the two
+//   - a session key's session tables (state.RenderSession), with the two
 //     re-encodings that keep a commit O(changed): prompt_rows.session_last_ns
 //     stored as 0 and kept once as session_rows.prompt_last_ns, and
 //     session_marks.seq keyed per block (block << 32 | rank in the block);
 //   - its session_call_days (the directory's per-day call counts);
-//   - every key's agent_calls and agent_call_hours, and its batch_parts.
+//   - every key's agent_calls and agent_call_hours, and its batch_parts;
+//   - every key's drawer rows (internal/drawer).
+//
+// The render is incremental (§3.11, v8). A key's warm state (Warm) is what
+// its render keeps between runs, in memory and in its snapshot checkpoint:
+//   - the rules' running values (rules.go): the tables whose rows have stable
+//     keys render only the rows a run's state changes reach;
+//   - the drawer's memo (§3.7);
+//   - for the tables build steps 3 to 7 make incremental (event_rows,
+//     prompt_rows, prompt_steps, session_marks, presence_segments,
+//     session_rows, session_request_rows), the hashes of the rows last
+//     written: until then those render whole and write the rows whose hash
+//     changed.
 //
 // The worker's run, for a key (the commit itself is the worker's):
 //
-//	rows, err := render.Render(key, state.Rows(), day)    // day: the keys.day the commit writes
+//	rows, err := render.RenderNext(key, st.Rows(), st.Externals(), day, warm, changes, extChanged)
 //	var d *render.Diff
 //	switch {
-//	case keyRow.n == 0:                         d = rows.Diff(nil)       // nothing written yet
-//	case keyRow.render_version != render.Version: d = rows.Rewrite()      // another render's rows
-//	default:                                    d = rows.Diff(baseline) // only the rows that changed
+//	case keyRow.n == 0:                         d = rows.Diff(nil)  // nothing written yet: every row
+//	case warm == nil, keyRow.render_version != render.Version:
+//		d = rows.Rewrite() // rows no warm state describes, or another render's
+//	default:                                    d = rows.Diff(warm) // only the rows that changed
 //	}
 //	d.Queue(batch)                                // in the commit's transaction, after the guard
-//	… COMMIT; then baseline = rows.Baseline()     // kept in memory with the warm state
+//	… COMMIT; then warm = rows.Warm()             // kept with the state, and in its snapshot
 //
-// The baseline is the hashes of the rows the last commit wrote. It's kept in
-// memory only: a cold load renders the replayed state with the day its key
-// row holds, Render(key, decoded.Rows(), keyRow.day).Baseline(), which are
-// the rows committed with that state as long as keyRow.render_version is
-// Version. Postgres is never read for it. A lost guard or an unknown COMMIT
-// drops it with the warm state.
+// With no warm state (a key's first run, a render_version change, a key with
+// no snapshot) RenderNext renders every row once. A warm state is consumed by
+// the render after it, which changes it in place: a run that doesn't commit
+// drops it with the state. A cold load decodes it from the key's snapshot and
+// never renders.
 package render
 
 import (
@@ -39,10 +51,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/snap"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
@@ -63,8 +75,14 @@ var tableNames = []string{
 // Tables is the tables a render writes (pg.Tables'), in the order a diff writes them.
 var Tables []*pg.Table
 
+// tableOrder is each table's place in tableNames.
+var tableOrder = map[string]int{}
+
 func init() {
-	for _, name := range tableNames {
+	// The warm state, and the column values its rows as written hold.
+	snap.Register(&Warm{}, "", int64(0), float64(0), false, []string{}, []int64{})
+	for i, name := range tableNames {
+		tableOrder[name] = i
 		t := pg.TableNamed(name)
 		if t == nil {
 			panic("render: no table " + name + " in pg.Tables")
@@ -93,18 +111,20 @@ func OwnerColumn(table string) string {
 // later block.
 var markBlocks = map[string]int64{"call": 0, "reported": 1, "missed": 1, "friction": 2, "compaction": 3, "permission": 4, "network": 5}
 
-// Rows is a key's rendered rows, hashed.
+// Rows is a key's render: the tables it rendered whole (hashed), the rules'
+// run, and the drawer's.
 type Rows struct {
 	Key     string
 	Session string // the session a session key renders ("" for any other key)
 	tables  []*rendered
-	next    *Baseline
-	// drawerBase is the baseline the drawer applied its changes to: Diff from
-	// it writes the drawer's delta (the drawer's rows aren't hashed, §3.7).
-	drawerBase *Baseline
-	// Took is how long the render's parts took: the session's tables (and
-	// the folds, hashed), and the drawer.
-	Took struct{ Tables, Drawer time.Duration }
+	next    *Warm
+	// base is the warm state it rendered after (nil: a whole render): Diff
+	// from it writes the rules' and the drawer's changes.
+	base *Warm
+	run  *ruleRun
+	// Took is how long the render's parts took: the session's tables (whole,
+	// hashed), the rules, and the drawer; and Diff's of the whole tables.
+	Took struct{ Tables, Rules, Drawer, WholeDiff time.Duration }
 }
 
 // rendered is one table's rows.
@@ -174,19 +194,20 @@ func RenderWith(key string, rows state.Rows, ext map[string]any, day string) (*R
 	return render(key, rows, ext, day, nil, nil, nil)
 }
 
-// RenderNext is RenderWith after base's render: changed is the state's rows
-// changed since (a run's deltas), extChanged the external inputs set since.
-// The drawer applies them to base's and writes only what they change
-// (drawer.RenderNext, §3.7); Diff(base) is that. With no base it renders every
-// row. base is consumed: a baseline is the next render's once.
-func RenderNext(key string, rows state.Rows, ext map[string]any, day string, base *Baseline, changed drawer.Changed,
+// RenderNext is RenderWith after warm's render: changes are the state's
+// changes since (a run's deltas: each (table, id)'s first Old and last Row),
+// extChanged the external inputs set since. The rules and the drawer apply
+// them to warm's and render only what they reach (§3.11, §3.7); Diff(warm) is
+// what changed. With no warm state it renders every row. warm is consumed:
+// it's the next render's once.
+func RenderNext(key string, rows state.Rows, ext map[string]any, day string, warm *Warm, changes []state.Change,
 	extChanged []string) (*Rows, error) {
-	return render(key, rows, ext, day, base, changed, extChanged)
+	return render(key, rows, ext, day, warm, changes, extChanged)
 }
 
 // The external inputs' ids.
 const (
-	wirePrefix  = "wire:"
+	wirePrefix  = state.WirePrefix
 	partsPrefix = "parts:"
 )
 
@@ -198,9 +219,12 @@ func WireID(callID string) string { return wirePrefix + callID }
 // state.OtherParts (none: no other key holds any of it).
 func PartsID(batchID string) string { return partsPrefix + batchID }
 
-func render(key string, rows state.Rows, ext map[string]any, day string, base *Baseline, changed drawer.Changed,
+func render(key string, rows state.Rows, ext map[string]any, day string, base *Warm, changes []state.Change,
 	extChanged []string) (*Rows, error) {
-	out := &Rows{Key: key, drawerBase: base}
+	if base != nil && (base.Rules == nil || base.used) {
+		panic("render: a warm state rendered from twice, or without its rules")
+	}
+	out := &Rows{Key: key, base: base}
 	t0 := time.Now()
 	var events []process.EventRow
 	if sid, ok := strings.CutPrefix(key, "s:"); ok {
@@ -219,21 +243,40 @@ func render(key string, rows state.Rows, ext map[string]any, day string, base *B
 		}
 		out.tables, events = st, ev
 	}
-	calls := agentCalls(key, rows)
-	out.tables = append(out.tables, fold("agent_calls", calls), fold("agent_call_hours", agentCallHours(key, calls)),
-		fold("batch_parts", batchParts(key, rows)))
 	if err := out.hash(); err != nil {
 		return nil, fmt.Errorf("render %s: %w", key, err)
 	}
 	var memo *drawer.Memo
 	var evChanged []process.EventRow
-	if base != nil && base.drawer != nil {
+	if base != nil && base.Drawer != nil {
 		// What the drawer reads of the session's tables: their changed event
 		// rows, from the tables' own diff (their cost, not the drawer's).
-		memo, evChanged = base.drawer, changedEventRows(out, base, events)
+		memo, evChanged = base.Drawer, changedEventRows(out, base, events)
 	}
 	out.Took.Tables = time.Since(t0)
 	t0 = time.Now()
+	// The rules: every row from nothing, or the run's changes.
+	rules, ruleIn := base.rulesOf(), changes
+	if base == nil {
+		ruleIn = wholeChanges(rows)
+	} else {
+		base.used = true
+	}
+	out.run = &ruleRun{r: rules, key: key, session: out.Session, rows: rows}
+	out.run.apply(ruleIn)
+	if VerifyIncremental && base != nil {
+		verifyRules(key, out.Session, rows, rules)
+	}
+	out.next.Rules = rules
+	out.Took.Rules = time.Since(t0)
+	t0 = time.Now()
+	changed := drawer.Changed{}
+	for _, c := range changes {
+		if changed[c.Table] == nil {
+			changed[c.Table] = map[string]bool{}
+		}
+		changed[c.Table][c.ID] = true
+	}
 	in := drawer.Inputs{Key: key, Rows: rows, EventRows: events,
 		Wire: func(callID string) *drawer.Wire {
 			w, _ := ext[WireID(callID)].(*drawer.Wire)
@@ -246,16 +289,16 @@ func render(key string, rows state.Rows, ext map[string]any, day string, base *B
 	if memo != nil {
 		in.ExternalsChanged, in.EventRowsChanged = extChanged, evChanged
 	}
-	out.next.drawer = drawer.RenderNext(in, memo, changed)
+	out.next.Drawer = drawer.RenderNext(in, memo, changed)
 	out.Took.Drawer = time.Since(t0)
 	return out, nil
 }
 
 // changedEventRows is the session's event rows whose hash isn't base's: what
 // the drawer reads of them again.
-func changedEventRows(r *Rows, base *Baseline, events []process.EventRow) []process.EventRow {
+func changedEventRows(r *Rows, base *Warm, events []process.EventRow) []process.EventRow {
 	var out []process.EventRow
-	old, cur := base.hashes["event_rows"], r.next.hashes["event_rows"]
+	old, cur := base.Hashes["event_rows"], r.next.Hashes["event_rows"]
 	for _, t := range r.tables {
 		if t.enc.t.Name != "event_rows" {
 			continue
@@ -271,9 +314,11 @@ func changedEventRows(r *Rows, base *Baseline, events []process.EventRow) []proc
 
 // DrawerDerived is how many drawer request rows the render derived; the rest
 // were its base's.
-func (r *Rows) DrawerDerived() int { return r.next.drawer.Derived() }
+func (r *Rows) DrawerDerived() int { return r.next.Drawer.Derived() }
 
-// sessionTables is session sid's 9 tables, re-encoded, and its call days.
+// sessionTables is session sid's tables that render whole (the ones build
+// steps 3 to 7 make incremental), re-encoded. Its session_tools,
+// call_tool_uses and session_call_days are the rules'.
 func sessionTables(sid string, rows state.Rows, others map[string]state.OtherParts, day string) ([]*rendered, []process.EventRow, error) {
 	st := state.RenderSessionWith(sid, rows, others)
 	// prompt_rows.session_last_ns is kept once, on the session's row. The render
@@ -331,10 +376,7 @@ func sessionTables(sid string, rows state.Rows, others map[string]state.OtherPar
 		typed("session_marks", st.SessionMarks, nil),
 		typed("event_rows", st.EventRows, eventExtra),
 		typed("presence_segments", st.PresenceSegments, nil),
-		typed("session_tools", st.SessionTools, nil),
-		typed("call_tool_uses", st.CallToolUses, nil),
 		typed("session_request_rows", st.SessionRequestRows, nil),
-		fold("session_call_days", callDays(sid, st.SessionMarks)),
 	}, st.EventRows, nil
 }
 
@@ -358,83 +400,7 @@ func BatchOf(eventID string) string {
 // in float64.
 func DayNumber(tNS int64) int64 { return int64(math.Floor(float64(tNS) / 1e9 / 86400)) }
 
-// callDays is session_call_days: per day, the session's call marks' count,
-// first and last t_ns.
-func callDays(sid string, marks []process.SessionMark) [][]any {
-	type agg struct{ n, first, last int64 }
-	days := map[int64]*agg{}
-	for _, m := range marks {
-		if m.Kind != "call" {
-			continue
-		}
-		d := DayNumber(m.TNS)
-		a := days[d]
-		if a == nil {
-			days[d] = &agg{1, m.TNS, m.TNS}
-			continue
-		}
-		a.n++
-		a.first, a.last = min(a.first, m.TNS), max(a.last, m.TNS)
-	}
-	out := make([][]any, 0, len(days))
-	for d, a := range days {
-		out = append(out, []any{sid, d, a.n, a.first, a.last})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i][1].(int64) < out[j][1].(int64) })
-	return out
-}
-
 const anthropicHost = "api.anthropic.com"
-
-// agentCalls is the key's agent_calls rows (key, call_id, ts_ns), as the
-// merge's merge_agent_calls (rollup/merge.go agentCalls) and /overview count
-// requests: non-synthetic ended calls whose product is claude_code or codex (a
-// call to api.anthropic.com is Claude Code's when it has none), at their
-// start, else their end (NULL: neither); calls in flight with a start, at it,
-// by host (Claude Code's) or originator (Codex's).
-func agentCalls(key string, rows state.Rows) [][]any {
-	ts := map[string]any{}
-	for id, v := range rows[state.TableFactRequests] {
-		c, ok := v.(canon.Request)
-		if !ok || c.Synthetic {
-			continue
-		}
-		product := c.Product
-		if product == "" && c.Host == anthropicHost {
-			product = canon.ProductClaudeCode
-		}
-		if product != canon.ProductClaudeCode && product != canon.ProductCodex {
-			continue
-		}
-		ns := c.StartNS
-		if ns == 0 {
-			ns = c.EndNS
-		}
-		if ns == 0 {
-			ts[id] = nil
-		} else {
-			ts[id] = ns
-		}
-	}
-	for id, v := range rows[state.TableFactPending] {
-		p, ok := v.(canon.Pending)
-		if !ok || p.Done || p.Synthetic || p.StartNS == 0 {
-			continue
-		}
-		if p.Host != anthropicHost && !strings.HasPrefix(originator(p.ClientJSON), "codex") {
-			continue
-		}
-		if _, ended := ts[id]; !ended {
-			ts[id] = p.StartNS
-		}
-	}
-	out := make([][]any, 0, len(ts))
-	for id, ns := range ts {
-		out = append(out, []any{key, id, ns})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i][1].(string) < out[j][1].(string) })
-	return out
-}
 
 // originator is a call's client headers' originator ("" for none).
 func originator(clientJSON string) string {
@@ -460,78 +426,14 @@ func HourNS(tNS int64) int64 {
 	return h
 }
 
-// agentCallHours is agent_call_hours: the key's agent calls per UTC hour (a
-// call with no time is in none).
-func agentCallHours(key string, calls [][]any) [][]any {
-	n := map[int64]int64{}
-	for _, c := range calls {
-		if ns, ok := c[2].(int64); ok {
-			n[HourNS(ns)]++
-		}
-	}
-	out := make([][]any, 0, len(n))
-	for h, k := range n {
-		out = append(out, []any{h, key, k})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i][0].(int64) < out[j][0].(int64) })
-	return out
-}
-
-// batchParts is batch_parts: per batch, the key's events of it (batch_members):
-// their count, their least non-empty name, and the earliest (ns, session) that
-// has a session. Read at query time as the sum, the least and the earliest
-// over a batch's parts.
-func batchParts(key string, rows state.Rows) [][]any {
-	type part struct {
-		n          int64
-		name       string
-		hasName    bool
-		ns         int64
-		session    string
-		hasSession bool
-	}
-	parts := map[string]*part{}
-	for _, v := range rows[state.TableBatchMembers] {
-		m, ok := v.(state.BatchMember)
-		if !ok {
-			continue
-		}
-		p := parts[m.BatchID]
-		if p == nil {
-			p = &part{}
-			parts[m.BatchID] = p
-		}
-		p.n++
-		if m.Name != "" && (!p.hasName || m.Name < p.name) {
-			p.name, p.hasName = m.Name, true
-		}
-		if m.SessionID != "" && (!p.hasSession || m.NS < p.ns || m.NS == p.ns && m.SessionID < p.session) {
-			p.ns, p.session, p.hasSession = m.NS, m.SessionID, true
-		}
-	}
-	out := make([][]any, 0, len(parts))
-	for id, p := range parts {
-		row := []any{id, key, p.n, nil, nil, nil}
-		if p.hasName {
-			row[3] = p.name
-		}
-		if p.hasSession {
-			row[4], row[5] = p.ns, p.session
-		}
-		out = append(out, row)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i][0].(string) < out[j][0].(string) })
-	return out
-}
-
-// hash computes every row's primary key and hash: the render's baseline.
+// hash computes every whole table's rows' primary keys and hashes.
 func (r *Rows) hash() error {
-	r.next = &Baseline{hashes: map[string]map[string]uint64{}}
+	r.next = &Warm{Hashes: map[string]map[string]uint64{}}
 	h := newHasher()
 	for _, t := range r.tables {
 		e := t.enc
 		m := make(map[string]uint64, t.n)
-		r.next.hashes[e.t.Name] = m
+		r.next.Hashes[e.t.Name] = m
 		t.keys = make([]string, t.n)
 		pk := make([]cell, len(e.pk))
 		kinds := make([]kind, len(e.pk))
@@ -561,61 +463,66 @@ func (r *Rows) hash() error {
 }
 
 // Len is how many rows the render holds.
-func (r *Rows) Len() int {
-	n := 0
-	for _, t := range r.tables {
-		n += t.n
-	}
-	if m := r.next.drawer; m != nil {
-		reqs, evs, counts := m.All()
-		n += len(reqs) + len(evs) + len(counts)
-	}
-	return n
+func (r *Rows) Len() int { return r.next.Len() }
+
+// Warm is the render's warm state: once its rows are committed, the next
+// run's.
+func (r *Rows) Warm() *Warm { return r.next }
+
+// Warm is what a key's render keeps between runs (docs/PIPELINE.md §2, v8):
+// in memory with the warm state, and in the key's snapshot.
+type Warm struct {
+	// Hashes are the hashes of the whole tables' rows as last written, by
+	// table and primary key (build steps 3 to 7 replace them with rules).
+	Hashes map[string]map[string]uint64
+	// Rules are the rules' running values and rows as last written.
+	Rules *Rules
+	// Drawer is the drawer's rows and what they read (§3.7).
+	Drawer *drawer.Memo
+	used   bool // rendered from: consumed
 }
 
-// Baseline is the render's hashes: once its rows are committed, the next
-// run's baseline.
-func (r *Rows) Baseline() *Baseline { return r.next }
-
-// Baseline is a render's rows' hashes, by table and primary key: what a commit
-// wrote, kept in memory with the key's warm state.
-type Baseline struct {
-	hashes map[string]map[string]uint64
-	drawer *drawer.Memo // the drawer's rows and what they read, for RenderNext
+// rulesOf is the warm state's rules, or new ones with none.
+func (b *Warm) rulesOf() *Rules {
+	if b == nil {
+		return newRules()
+	}
+	return b.Rules
 }
 
-// Equal is whether two baselines hold the same rows.
-func (b *Baseline) Equal(o *Baseline) bool {
+// Equal is whether two warm states hold the same rows and running values.
+func (b *Warm) Equal(o *Warm) bool {
 	if b == nil || o == nil {
 		return b == o
 	}
-	if !drawerEqual(b.drawer, o.drawer) {
+	if !drawerEqual(b.Drawer, o.Drawer) || !reflect.DeepEqual(b.Hashes, o.Hashes) {
 		return false
 	}
-	if len(b.hashes) != len(o.hashes) {
+	if (b.Rules == nil) != (o.Rules == nil) {
 		return false
 	}
-	for t, m := range b.hashes {
-		n := o.hashes[t]
-		if len(m) != len(n) {
-			return false
-		}
-		for k, h := range m {
-			if g, ok := n[k]; !ok || g != h {
-				return false
-			}
-		}
-	}
-	return true
+	return b.Rules == nil || reflect.DeepEqual(b.Rules.Written, o.Rules.Written) && reflect.DeepEqual(b.Rules.ToolUses, o.Rules.ToolUses) &&
+		reflect.DeepEqual(b.Rules.Days, o.Rules.Days) && reflect.DeepEqual(b.Rules.Hours, o.Rules.Hours) &&
+		reflect.DeepEqual(b.Rules.Members, o.Rules.Members)
 }
 
-// Len is how many rows the baseline holds.
-func (b *Baseline) Len() int {
+// Len is how many rows the warm state holds.
+func (b *Warm) Len() int {
 	n := 0
-	if b != nil {
-		for _, m := range b.hashes {
+	if b == nil {
+		return 0
+	}
+	for _, m := range b.Hashes {
+		n += len(m)
+	}
+	if b.Rules != nil {
+		for _, m := range b.Rules.Written {
 			n += len(m)
 		}
+	}
+	if m := b.Drawer; m != nil {
+		reqs, evs, counts := m.All()
+		n += len(reqs) + len(evs) + len(counts)
 	}
 	return n
 }
@@ -647,20 +554,21 @@ type TableDiff struct {
 	Deletes [][]any
 }
 
-// Diff is the changes from base, the baseline of the rows already written (nil:
-// none written): the rows whose hash changed or that are new are upserts, the
-// rows base has and the render doesn't are deletes. The drawer's tables are
-// its delta from the baseline it rendered after (all its rows from nil, none
-// from the render's own baseline).
-func (r *Rows) Diff(base *Baseline) *Diff {
+// Diff is the changes from base, the warm state of the rows already written
+// (nil: none written). The whole tables' rows whose hash changed or that are
+// new are upserts, the rows base has and the render doesn't are deletes. The
+// rules' and the drawer's tables are their changes from the warm state they
+// rendered after (all their rows from nil, none from the render's own).
+func (r *Rows) Diff(base *Warm) *Diff {
 	d := &Diff{Key: r.Key, Session: r.Session}
+	t0 := time.Now()
 	for _, t := range r.tables {
 		name := t.enc.t.Name
 		var old map[string]uint64
 		if base != nil {
-			old = base.hashes[name]
+			old = base.Hashes[name]
 		}
-		cur := r.next.hashes[name]
+		cur := r.next.Hashes[name]
 		td := TableDiff{Table: t.enc.t}
 		for i := 0; i < t.n; i++ {
 			if h, ok := old[t.keys[i]]; !ok || h != cur[t.keys[i]] {
@@ -681,10 +589,13 @@ func (r *Rows) Diff(base *Baseline) *Diff {
 			d.Tables = append(d.Tables, td)
 		}
 	}
+	r.Took.WholeDiff = time.Since(t0)
+	d.Tables = append(d.Tables, r.ruleDiff(base)...)
 	d.Tables = append(d.Tables, r.drawerDiff(base)...)
+	sort.SliceStable(d.Tables, func(i, j int) bool { return tableOrder[d.Tables[i].Table.Name] < tableOrder[d.Tables[j].Table.Name] })
 	// The templates its drawer rows reference that the key hasn't written.
 	for _, td := range d.Tables {
-		if td.Table.Name != "drawer_requests" || r.next.drawer == nil {
+		if td.Table.Name != "drawer_requests" || r.next.Drawer == nil {
 			continue
 		}
 		var ids []string
@@ -695,26 +606,41 @@ func (r *Rows) Diff(base *Baseline) *Diff {
 				}
 			}
 		}
-		for _, t := range r.next.drawer.Unwritten(ids) {
+		for _, t := range r.next.Drawer.Unwritten(ids) {
 			d.Templates = append(d.Templates, []any{r.Key, t[0], t[1]})
 		}
 	}
 	return d
 }
 
+// ruleDiff is the rule tables' changes from base.
+func (r *Rows) ruleDiff(base *Warm) []TableDiff {
+	switch {
+	case base == r.base:
+		return r.run.diffs()
+	case base != nil && base.Rules == r.next.Rules:
+		return nil
+	}
+	var from map[string]map[string][]any
+	if base != nil && base.Rules != nil {
+		from = base.Rules.Written
+	}
+	return writtenDiff(from, r.next.Rules.Written)
+}
+
 // drawerDiff is the drawer's tables' changes from base.
-func (r *Rows) drawerDiff(base *Baseline) []TableDiff {
-	m := r.next.drawer
+func (r *Rows) drawerDiff(base *Warm) []TableDiff {
+	m := r.next.Drawer
 	var delta drawer.Delta
 	switch {
 	case m == nil || base == r.next:
 		return nil
 	case base == nil:
 		delta.Requests, delta.Events, delta.Counts = m.All()
-	case base == r.drawerBase && m.Delta() != nil:
+	case base == r.base && m.Delta() != nil:
 		delta = *m.Delta()
-	case base.drawer != nil:
-		delta = drawer.Between(base.drawer, m)
+	case base.Drawer != nil:
+		delta = drawer.Between(base.Drawer, m)
 	default:
 		delta.Requests, delta.Events, delta.Counts = m.All()
 	}

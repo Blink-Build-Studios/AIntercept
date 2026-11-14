@@ -25,6 +25,9 @@ CREATE TABLE keys (
     first_request_ns bigint,
     earliest_ns bigint,
     content_retained boolean,
+    state_records bigint[],
+    snapshot text,
+    snapshot_records bigint,
     PRIMARY KEY (key)
 );
 CREATE INDEX ON keys (day);
@@ -45,6 +48,14 @@ CREATE TABLE dirty_keys (
     PRIMARY KEY (key)
 );
 CREATE INDEX ON dirty_keys (since);
+
+CREATE TABLE dirty_inputs (
+    key text NOT NULL,
+    kind text NOT NULL,
+    id text NOT NULL,
+    seq bigint NOT NULL,
+    PRIMARY KEY (key, kind, id)
+);
 
 CREATE TABLE workers (
     worker text NOT NULL,

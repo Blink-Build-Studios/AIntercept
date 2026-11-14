@@ -3,7 +3,6 @@ package state
 import (
 	"bytes"
 	"encoding/gob"
-	"errors"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 	"reflect"
 	"sort"
@@ -19,11 +18,14 @@ const (
 )
 
 // Change is one row of a Delta: Row is the row to upsert under ID, or nil to
-// remove the row stored under ID.
+// remove the row stored under ID. Old is the row it replaces (nil: none), so
+// a render that keeps running values (docs/PIPELINE.md §3.11) takes the old
+// one out and puts the new one in.
 type Change struct {
 	Table string
 	ID    string
 	Row   any
+	Old   any
 }
 
 // Delta is what one record changed: rows in (Table, ID) order, and the cases
@@ -47,6 +49,11 @@ type KeyState struct {
 	sr   *sesRows
 	rows rowSet
 	open *openCalls // calls waiting for their ending, by when they expire (expire.go)
+	// facts is the key row's facts, as running values (runfacts.go).
+	facts *runFacts
+	// strs interns the strings events repeat (intern): one copy of a value a
+	// session's events all hold, as a decoded snapshot holds them.
+	strs map[string]string
 	// journal is the records applied since the last Encode: a checkpoint is
 	// them, so it holds what changed, never the key's history.
 	journal []records.Record
@@ -104,15 +111,16 @@ func (s *KeyState) SetExternal(id string, v any) bool {
 func (s *KeyState) setExt(id string, v any) {
 	if v == nil {
 		delete(s.ext, id)
-		return
+	} else {
+		s.ext[id] = v
 	}
-	s.ext[id] = v
+	s.noteExt(id, v)
 }
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(), ext: map[string]any{},
-		segs: newOmap[int64, Presence](func(a, b int64) bool { return a < b })}
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(), ext: map[string]any{}, facts: newRunFacts(), strs: map[string]string{},
+		segs: newOmap[int64, Presence](lessInt64)}
 }
 
 // Apply folds one record in and says which rows changed.
@@ -121,6 +129,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 		return Delta{Cases: []string{CaseDuplicate}}
 	}
 	s.seen[r.RecordID] = true
+	s.intern(&r)
 	s.journal = append(s.journal, r)
 	defer process.HoldFields(jsonOf(&r)...)()
 	var d Delta
@@ -132,13 +141,39 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.requests(r, &d)
 	s.sessionRows(r, &d)
 	s.callTools(r, &d)
-	s.facts(r, &d)
+	s.factRows(r, &d)
 	d.Changes = lastChanges(d.Changes)
+	s.noteFacts(d.Changes)
 	sort.Slice(d.Changes, func(i, j int) bool {
 		a, b := d.Changes[i], d.Changes[j]
 		return a.Table < b.Table || a.Table == b.Table && a.ID < b.ID
 	})
 	return d
+}
+
+// intern gives an event's strings that its session's events repeat (its
+// environment, file, ids, names) the key's one copy of each value. Equal
+// strings are interchangeable, so it changes no value; it keeps a warm key's
+// events from holding a copy each (docs/PIPELINE.md §2, v8: a warm key's
+// bytes per record).
+func (s *KeyState) intern(r *records.Record) {
+	if r.Event == nil {
+		return
+	}
+	e := *r.Event
+	for _, f := range []*string{&e.EnvJSON, &e.SourceFile, &e.Source, &e.SessionID, &e.PersonID, &e.OrgID, &e.DeviceID,
+		&e.AgentID, &e.AgentType, &e.Model, &e.PermissionMode, &e.HeadSHA, &e.Name, &e.Type, &e.CorrelationID,
+		&e.PromptID, &e.RequestID, &e.ClientRequestID} {
+		if *f == "" {
+			continue
+		}
+		if v, ok := s.strs[*f]; ok {
+			*f = v
+		} else {
+			s.strs[*f] = *f
+		}
+	}
+	r.Event = &e
 }
 
 // jsonOf is the record's JSON objects the tables read fields of.
@@ -154,7 +189,7 @@ func jsonOf(r *records.Record) []string {
 
 // lastChanges keeps each row's last change: one record can write a row more than
 // once (a prompt its call and its hidden call both touch), and only the last is
-// the row.
+// the row. Its Old is the first change's: the row before the record.
 func lastChanges(cs []Change) []Change {
 	if len(cs) < 2 {
 		return cs
@@ -166,12 +201,55 @@ func lastChanges(cs []Change) []Change {
 	if len(last) == len(cs) {
 		return cs
 	}
+	first := map[[2]string]any{} // a row written twice: its Old before the first write
 	out := cs[:0:0]
 	for i, c := range cs {
-		if last[[2]string{c.Table, c.ID}] == i {
+		k := [2]string{c.Table, c.ID}
+		if _, ok := first[k]; !ok {
+			first[k] = c.Old
+		}
+		if last[k] == i {
+			c.Old = first[k]
 			out = append(out, c)
 		}
 	}
+	return out
+}
+
+// changeSet folds changes to each (table, id)'s net change: its first Old and
+// its last Row.
+type changeSet struct {
+	at    map[[2]string]int
+	order []Change
+}
+
+func (c *changeSet) add(cs []Change) {
+	if c.at == nil {
+		c.at = map[[2]string]int{}
+	}
+	for _, x := range cs {
+		k := [2]string{x.Table, x.ID}
+		if i, ok := c.at[k]; ok {
+			c.order[i].Row = x.Row
+			continue
+		}
+		c.at[k] = len(c.order)
+		c.order = append(c.order, x)
+	}
+}
+
+// list is the net changes that change something, by (table, id).
+func (c *changeSet) list() []Change {
+	out := make([]Change, 0, len(c.order))
+	for _, x := range c.order {
+		if x.Old == nil && x.Row == nil || x.Old != nil && x.Row != nil && sameRow(x.Old, x.Row) {
+			continue
+		}
+		out = append(out, x)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Table < out[j].Table || out[i].Table == out[j].Table && out[i].ID < out[j].ID
+	})
 	return out
 }
 
@@ -185,11 +263,12 @@ func (rs rowSet) put(d *Delta, table, id string, row any) {
 		t = map[string]any{}
 		rs[table] = t
 	}
-	if cur, ok := t[id]; ok && sameRow(cur, row) {
+	cur, ok := t[id]
+	if ok && sameRow(cur, row) {
 		return
 	}
 	t[id] = row
-	d.Changes = append(d.Changes, Change{Table: table, ID: id, Row: row})
+	d.Changes = append(d.Changes, Change{Table: table, ID: id, Row: row, Old: cur})
 }
 
 // sameRow is whether a row is unchanged: == for a comparable row (pointer fields
@@ -202,11 +281,12 @@ func sameRow(a, b any) bool {
 }
 
 func (rs rowSet) drop(d *Delta, table, id string) {
-	if _, ok := rs[table][id]; !ok {
+	cur, ok := rs[table][id]
+	if !ok {
 		return
 	}
 	delete(rs[table], id)
-	d.Changes = append(d.Changes, Change{Table: table, ID: id})
+	d.Changes = append(d.Changes, Change{Table: table, ID: id, Old: cur})
 }
 
 // Rows is every row the key has written, by table and id.
@@ -281,29 +361,21 @@ func Encode(s *KeyState) ([]byte, error) {
 	return b, err
 }
 
-// Decode is a key's state from its checkpoints, oldest first.
+// Decode is a key's state from its journal chunks, oldest first (or a
+// snapshot and the chunks of the records after it).
 func Decode(chunks ...[]byte) (*KeyState, error) {
-	if len(chunks) == 0 {
-		return nil, errors.New("state: no checkpoint to load")
-	}
-	var s *KeyState
-	for _, b := range chunks {
-		c, err := decodeChunk(b)
+	if len(chunks) > 0 && IsSnapshot(chunks[0]) {
+		l, err := Load(chunks[0], 0, chunks[1:]...)
 		if err != nil {
 			return nil, err
 		}
-		if s == nil {
-			s = New(c.Key)
-		}
-		for _, r := range c.Records {
-			s.Apply(r)
-		}
-		for _, x := range c.Externals {
-			s.setExt(x.ID, x.Value)
-		}
+		return l.State, nil
 	}
-	s.journal, s.extJournal = nil, nil
-	return s, nil
+	l, err := Load(nil, 0, chunks...)
+	if err != nil {
+		return nil, err
+	}
+	return l.State, nil
 }
 
 // Merge is one checkpoint holding the given ones' records, in order: what

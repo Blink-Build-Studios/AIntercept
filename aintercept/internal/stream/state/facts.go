@@ -41,8 +41,8 @@ func init() {
 	AllCases = append(AllCases, CaseFactProbe, CaseFactRequest, CaseFactPending, CaseFactPendingGone, CaseFactEvent)
 }
 
-// facts folds a record into the fact tables.
-func (s *KeyState) facts(r records.Record, d *Delta) {
+// factRows folds a record into the fact tables.
+func (s *KeyState) factRows(r records.Record, d *Delta) {
 	switch {
 	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
 		c := r.Call

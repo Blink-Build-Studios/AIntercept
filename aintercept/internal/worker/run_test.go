@@ -275,7 +275,7 @@ func TestCompactionKeepsChunksBoundedAndGCs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	named := map[string]bool{}
+	named := map[string]bool{row.Snapshot: true}
 	for _, p := range row.State {
 		named[p] = true
 	}
@@ -286,6 +286,16 @@ func TestCompactionKeepsChunksBoundedAndGCs(t *testing.T) {
 		if rel := strings.TrimPrefix(in.Key, rollup.KeyDir(prefix, key)); !named[rel] {
 			t.Errorf("%s is neither named nor garbage", rel)
 		}
+	}
+	// The snapshot (v8): the journal holds fewer records since it than it
+	// does, and the chunks' counts add up to every record.
+	var total int64
+	for _, r := range row.StateRecords {
+		total += r
+	}
+	if row.Snapshot == "" || len(row.StateRecords) != len(row.State) || total-row.SnapshotRecords >= row.SnapshotRecords ||
+		total < row.SnapshotRecords {
+		t.Fatalf("snapshot %q of %d records, chunk records %v", row.Snapshot, row.SnapshotRecords, row.StateRecords)
 	}
 	e.check()
 }
