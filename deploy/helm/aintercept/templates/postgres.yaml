@@ -1,0 +1,121 @@
+{{- if .Values.postgres.inCluster.enabled }}
+# Postgres in the cluster (docs/PIPELINE.md §6), for the DigitalOcean demo:
+# one replica with a PVC. Production uses RDS instead (postgres.inCluster off),
+# created by the operator. On its first start the init script creates the
+# aintercept database's two logins with the passwords in the Secret
+# (postgres.existingSecret, made by deploy/digitalocean-bootstrap.sh).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    app: postgres
+    {{- include "aintercept.labels" . | nindent 4 }}
+data:
+  10-aintercept.sh: |
+    {{- .Files.Get "files/postgres/initdb.sh" | nindent 4 }}
+  logins.sql: |
+    {{- .Files.Get "files/postgres/logins.sql" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+      annotations:
+        # A changed init script only matters to a fresh volume, but keeps the pod honest.
+        checksum/init: {{ printf "%s%s" (.Files.Get "files/postgres/initdb.sh") (.Files.Get "files/postgres/logins.sql") | sha256sum }}
+    spec:
+      # The image's postgres user (alpine: 70).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.postgres.inCluster) }}{{ . | nindent 6 }}{{ end }}
+      # A fast shutdown: Postgres checkpoints and exits within the grace period.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: {{ include "aintercept.image" .Values.images.postgres }}
+          imagePullPolicy: IfNotPresent
+          args: ["-c", "max_locks_per_transaction=256", "-c", "max_connections=200"]
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_DB, value: aintercept }
+            - { name: POSTGRES_INITDB_ARGS, value: "--locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8" }
+            # A folder inside the volume: its root holds lost+found.
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.existingSecret }}, key: postgres-password }
+            - name: AINTERCEPT_PG_WORKER_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.existingSecret }}, key: worker-password }
+            - name: AINTERCEPT_PG_API_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.existingSecret }}, key: api-password }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-q", "-U", "postgres", "-d", "aintercept"] }
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["pg_isready", "-q", "-U", "postgres", "-d", "aintercept"] }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.postgres.inCluster.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d/10-aintercept.sh, subPath: 10-aintercept.sh }
+            - { name: init, mountPath: /aintercept/logins.sql, subPath: logins.sql }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: init
+          # Executable: the entrypoint runs it (a script it isn't allowed to run, it sources).
+          configMap: { name: postgres-init, defaultMode: 0555 }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.postgres.inCluster.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.inCluster.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  selector: { app: postgres }
+  ports:
+    - { name: postgres, port: 5432, targetPort: 5432 }
+{{- end }}

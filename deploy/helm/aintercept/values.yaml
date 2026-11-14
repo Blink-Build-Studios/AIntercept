@@ -77,11 +77,12 @@ images:
     tag: dev
     digest: ""
     pullPolicy: IfNotPresent
-  # In-cluster Redis (redis.enabled): coordination only.
-  redis:
-    repository: redis
-    tag: 7.4.6-alpine
-    digest: sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98
+  # In-cluster Postgres (postgres.inCluster.enabled): the same pin as docker-compose.yml's and
+  # CI's (the chart test holds them equal).
+  postgres:
+    repository: postgres
+    tag: 17.10-alpine3.24
+    digest: sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
   # The query API (api/Dockerfile), when `api.enabled`.
   api:
     repository: aintercept/api
@@ -146,14 +147,16 @@ objectStore:
   accessKeyId: ""
   secretAccessKey: ""
 
-# ── Rollups (docs/PIPELINE.md §2) ─────────────────────────────────────────────
-# `aintercept rollup`: takes dirty keys from Redis, applies each key's new
-# ingest files under <prefix>/v1/keys/<key>/in/ and commits that key's tables;
-# also runs the 30 s merge and the sweep. Scaled on lag; never below two.
+# ── Workers (docs/PIPELINE.md §2) ─────────────────────────────────────────────
+# `aintercept rollup`: claims flagged keys (Postgres's dirty_keys), applies
+# each key's new ingest files under <prefix>/v1/keys/<key>/in/ and commits its
+# rows to Postgres; one of them also tails the recent index (v1/recent/), flags
+# calls due to expire and runs retention. Scaled on lag; never below two.
 rollup:
   enabled: true
   # rollup's own ServiceAccount (never the observer's). On AWS its role needs
-  # list + get + put + delete under <prefix>/v1/ (docs/PRODUCTION.md §7).
+  # list + get + put + delete under <prefix>/v1/ (docs/PRODUCTION.md §7), and
+  # with retention.rawDays, delete on the raw and calls/ objects too.
   # create: false uses an existing one named name. roleArn is IRSA only.
   serviceAccount:
     create: true
@@ -162,7 +165,7 @@ rollup:
   parallel: 8          # keys one replica runs at once
   autoscaling:
     keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
-    minReplicas: 2     # never fewer: the sweep and the merge always run
+    minReplicas: 2     # never fewer: the tail and the singletons always have a holder
     maxReplicas: 20
     lagTargetSeconds: 30
   nodeSelector: {}
@@ -176,24 +179,45 @@ rollup:
     requests: { cpu: "100m", memory: "256Mi" }
     limits: { cpu: "1", memory: "1Gi" }
 
-# ── Redis (docs/PIPELINE.md) ──────────────────────────────────────────────────
-# In the cluster, one replica: the dirty-key set and the rollups' locks only.
-# Losing it costs freshness, never data. Image under images.redis.
-redis:
-  enabled: true
-  persistence:
-    size: 1Gi
-    storageClass: ""   # empty: the cluster's default
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  topologySpreadConstraints: []
-  resources:
-    requests: { cpu: "50m", memory: "64Mi" }
-    limits: { cpu: "500m", memory: "256Mi" }
+# ── Postgres (docs/PIPELINE.md §3, §6) ────────────────────────────────────────
+# The queryable data: the workers write it, the API reads it. RDS for
+# PostgreSQL 17 in production (created by the operator: docs/PRODUCTION.md), in
+# the cluster on the DigitalOcean demo (inCluster.enabled).
+postgres:
+  # A Secret with one DSN per component: worker-url (the workers'), api-url
+  # (the API's). In the cluster it also carries the passwords its init script
+  # sets: postgres-password, worker-password, api-password. Created out of band
+  # (deploy/digitalocean-bootstrap.sh postgres-secret), never through --set.
+  # Each pod reads only its own component's DSN; ingest gets none.
+  existingSecret: aintercept-postgres
+  # RDS: a ConfigMap holding the RDS CA bundle, mounted read-only at
+  # /etc/aintercept/postgres-ca in the workers and the API; the DSNs name it
+  # (sslmode=verify-full&sslrootcert=/etc/aintercept/postgres-ca/<file>).
+  caConfigMap: ""
+  inCluster:
+    enabled: false            # true on the DigitalOcean demo: a StatefulSet with a PVC
+    persistence:
+      size: 20Gi
+      storageClass: ""        # empty: the cluster's default (do-block-storage on DOKS)
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    topologySpreadConstraints: []
+    resources:
+      requests: { cpu: "250m", memory: "1Gi" }
+      limits: { cpu: "2", memory: "2Gi" }
 
-# The query API (api/), inside the cluster: stateless, it queries the object
-# store's v1/ folders and a call's calls/<id> object (docs/PIPELINE.md §4).
+# ── Retention (docs/PIPELINE.md §3.6) ─────────────────────────────────────────
+# Every hour one worker forgets the keys whose day is older than `days`: their
+# rows in Postgres, then their state and applied ingest files. "All" in the UI
+# is this window.
+retention:
+  days: 15                    # keys whose day is older are forgotten (0: never)
+  rawDays: 0                  # raw/, applied in/ (0: off; in the cloud, bucket lifecycle rules expire raw and calls/)
+
+# The query API (api/), inside the cluster: stateless, it reads Postgres (the
+# API login's DSN, postgres.existingSecret's api-url) and a call's calls/<id>
+# object (docs/PIPELINE.md §5).
 # ClusterIP only, with a NetworkPolicy admitting no pod: reach it with
 # `kubectl port-forward svc/api 8787` (`make remote` does).
 api:
@@ -219,10 +243,9 @@ api:
   # Python and the responses being built); or a size like "900MB".
   memoryLimit: ""
   threads: 2             # DuckDB's threads (its default is the node's cores, not the CPU limit)
-  # Redis (host:port) for the pods' newest ingest times (/status). Empty: the
-  # observer's (observer.redisAddr, else the in-cluster Redis). With none, /status
-  # takes the merge's newest row alone.
-  redisAddr: ""
+  # Which store the API reads: v1 (the v5 folders) until the switch to the
+  # Postgres reader (pg; docs/PIPELINE.md v7 build step 8).
+  store: v1
   resources:
     # Memory request = limit: the scheduler reserves all of it, and the pod is the
     # last evicted when a node runs short (docs/INTERCEPTION_ISSUES.md P5).
@@ -296,9 +319,6 @@ observer:
     flushBytes: 1048576     # 1 MiB
     flushSeconds: 30
     maxBytes: 67108864      # 64 MiB
-  # Redis (host:port) for dirty-key flags. Empty: the in-cluster Redis
-  # (redis.enabled), else none (the rollups' sweep still finds every key).
-  redisAddr: ""
   # Operational log level: debug | info | warn | error. Logs are structured JSON
   # on stderr (telemetry events go to stdout).
   logLevel: info

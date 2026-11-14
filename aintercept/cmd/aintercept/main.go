@@ -5,7 +5,7 @@
 //	aintercept certsvc    Envoy SDS server: mints leaf certificates on demand
 //	aintercept replay     replays an existing capture through the stream processor with chaos and checks it (a tool; takes flags)
 //	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
-//	aintercept rollup     the workers: with ROLLUP_POSTGRES_URL, v7's (claim flagged keys, apply new ingest files, commit to Postgres; the tail); else v5's (Redis locks, the merge)
+//	aintercept rollup     the workers (docs/PIPELINE.md §2): claim flagged keys, apply their new ingest files, commit to Postgres; the tail, due calls and retention
 //	aintercept v1layout   lays out a raw capture as the v5 pipeline would (keys and merge; a tool; takes flags)
 //	aintercept storecheck whether an object store has what the stream processor needs (a tool; takes flags)
 //
@@ -18,7 +18,6 @@ import (
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/certsvc"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/observer"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/rollup"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/worker"
 )
 
@@ -29,17 +28,7 @@ var modes = map[string]func(){
 	"canon":      canonCmd,
 	"storecheck": storecheck,
 	"v1layout":   v1layout,
-	"rollup":     rollupMode,
-}
-
-// rollupMode is the v7 worker when ROLLUP_POSTGRES_URL names its Postgres,
-// else v5's rollup (Redis) until build step 8 switches Compose and the chart.
-func rollupMode() {
-	if os.Getenv("ROLLUP_POSTGRES_URL") != "" {
-		worker.Run()
-		return
-	}
-	rollup.Run()
+	"rollup":     worker.Run,
 }
 
 func main() {

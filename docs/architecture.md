@@ -32,14 +32,16 @@ The Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc
 - **observer** (Go): an Envoy ext_proc v3 gRPC server. Acks every message
   immediately and tees observations onto a bounded in-memory buffer drained by a
   separate goroutine into a `Sink`.
-- **rollup** (Go): the data pipeline after ingest ([PIPELINE.md](PIPELINE.md)).
-  The observer writes each routing key's records to `v1/keys/<key>/in/` and flags
-  the key in Redis; a rollup replica locks the key, applies its new files with the
-  per-key state engine and commits its rows with a create-only write. The replica
-  holding `lock:merge` writes the org-level rows every 30 s. Redis holds only
-  coordination; the data is in the bucket (a directory locally).
-- **query API** (Python, `api/`): stateless; reads a key's newest commit, or the
-  merge, from the bucket with DuckDB.
+- **rollup** (Go): the workers, the data pipeline after ingest
+  ([PIPELINE.md](PIPELINE.md)). The observer writes each routing key's records to
+  `v1/keys/<key>/in/` and names the key in its recent index (`v1/recent/`); one
+  worker tails the index into Postgres's flags, and the workers claim the flagged
+  keys, apply their new files with the per-key state engine and commit each key's
+  rows to Postgres in one transaction. Raw data stays in the bucket (a directory
+  locally); the queryable rows are in Postgres.
+- **query API** (Python, `api/`): stateless; reads a page's rows from Postgres
+  into DuckDB and runs the endpoint's SQL over them (until the switch, the v5
+  folders in the bucket).
 - **fixture** (Go): an HTTPS origin with a recognizable synthetic marker, used
   by M1 to prove MITM without real credentials.
 - **Envoy**: TLS termination, per-SNI cert selection, HTTP forwarding, upstream

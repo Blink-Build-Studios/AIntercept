@@ -176,3 +176,11 @@ func (s *S3Store) CreateBucketIfMissing(ctx context.Context) error {
 	}
 	return err
 }
+
+func isNotFound(err error) bool {
+	var nf *s3types.NotFound
+	var nk *s3types.NoSuchKey
+	var ae smithy.APIError
+	return errors.As(err, &nf) || errors.As(err, &nk) ||
+		(errors.As(err, &ae) && (ae.ErrorCode() == "NotFound" || ae.ErrorCode() == "NoSuchKey"))
+}

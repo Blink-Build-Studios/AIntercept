@@ -1,9 +1,12 @@
-// Package rollup is v5's per-key rollups (docs/PIPELINE.md §2): workers claim
-// dirty keys through Redis locks, apply each key's new ingest files with the
-// per-key state engine (internal/stream/state), and publish the result with a
-// create-only commit. Redis only speeds things up; the commit decides.
+// Package rollup is the per-key layout under <prefix>/v1/keys/ that ingest and
+// the workers (internal/worker) share: the ingest files' names (InName,
+// InTime), each key's folder and its state chunks. v5's rollup loop (Redis
+// locks, a create-only commit per run, the out/ tables) is gone
+// (docs/PIPELINE.md v7, Deleted). The commit objects (Commit, WriteOnePass,
+// ReadNewest) and the merge stay until the final gate: the oracle's layout
+// (`aintercept v1layout`) still writes them.
 //
-// Layout (all under <prefix>/v1/), the contract steps 1, 3 and 4 code against:
+// Layout (all under <prefix>/v1/), as v5 wrote it:
 //
 //	keys/<esc key>/in/<s3 time>-<incarnation>-<seq>.parquet   ingest files (step 1)
 //	keys/<esc key>/out/<n 12 digits>-<nonce>/<table>.parquet  a run's changed rows, one file per table

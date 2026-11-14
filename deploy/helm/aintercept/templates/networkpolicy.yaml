@@ -53,32 +53,29 @@ spec:
             matchLabels: { app: envoy }
       ports:
         - { protocol: TCP, port: 18000 }
-{{- if .Values.redis.enabled }}
+{{- if .Values.postgres.inCluster.enabled }}
 ---
-# Redis holds the dirty-key set, the rollups' locks and each pod's newest ingest
-# time: only the observer (in the Envoy pod), the rollups and the API (/status)
-# may connect.
+# The in-cluster Postgres holds everything the UI shows: only the workers and
+# the API may connect. Ingest never does (docs/PIPELINE.md §1).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: redis-restrict
+  name: postgres-restrict
   labels:
-    app: redis
+    app: postgres
     {{- include "aintercept.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: { app: redis }
+    matchLabels: { app: postgres }
   policyTypes: ["Ingress"]
   ingress:
     - from:
-        - podSelector:
-            matchLabels: { app: envoy }
         - podSelector:
             matchLabels: { app: rollup }
         - podSelector:
             matchLabels: { app: api }
       ports:
-        - { protocol: TCP, port: 6379 }
+        - { protocol: TCP, port: 5432 }
 {{- end }}
 {{- if .Values.api.enabled }}
 ---

@@ -5,14 +5,59 @@
 # bucket-scoped Spaces key, a DOKS cluster, and the in-cluster Secrets the Helm
 # chart expects — so a `helm install` is the only remaining step.
 #
-# Requires: doctl (authenticated), kubectl, aws CLI, helm.
+# Requires: doctl (authenticated), kubectl, aws CLI, helm, openssl.
 #
 # Usage:
 #   REGION=nyc3 SPACE=aintercept-telemetry CLUSTER=aintercept-demo \
 #     bash deploy/digitalocean-bootstrap.sh
 #
 # Prints the exact `helm install` to run at the end.
+#
+#   bash deploy/digitalocean-bootstrap.sh postgres-secret
+#
+# creates only the in-cluster Postgres's Secret (docs/PIPELINE.md §6), in the current kubectl
+# context: what an existing deployment needs before the `helm upgrade` that brings Postgres in
+# (docs/DEPLOY_DOKS.md, "Upgrading to Postgres").
 set -euo pipefail
+
+PG_SECRET="${PG_SECRET:-aintercept-postgres}"
+
+log() { echo "==> $*"; }
+
+# The in-cluster Postgres's Secret: its three passwords (openssl rand) and one DSN per component
+# (worker-url, api-url), as the chart reads them. Written to files in a private temporary
+# directory and handed to kubectl from there, so no password is ever on a command line or
+# printed. An existing Secret is kept: its passwords are the ones the Postgres volume was
+# initialized with.
+postgres_secret() {
+  if kubectl get secret "$PG_SECRET" >/dev/null 2>&1; then
+    log "Postgres Secret ${PG_SECRET} already exists (kept: its passwords are the database's)"
+    return
+  fi
+  log "Creating Postgres Secret ${PG_SECRET} (generated passwords, never printed)"
+  local dir ka
+  dir="$(mktemp -d)"
+  chmod 700 "$dir"
+  ka="keepalives_idle=10&keepalives_interval=5&keepalives_count=3&tcp_user_timeout=30000"
+  for k in postgres-password worker-password api-password; do
+    (umask 077; openssl rand -hex 24 | tr -d '\n' >"${dir}/${k}")
+  done
+  (umask 077
+    printf 'postgres://aintercept_worker:%s@postgres:5432/aintercept?sslmode=disable&%s' "$(cat "${dir}/worker-password")" "$ka" >"${dir}/worker-url"
+    printf 'postgres://aintercept_api:%s@postgres:5432/aintercept?sslmode=disable&%s' "$(cat "${dir}/api-password")" "$ka" >"${dir}/api-url")
+  kubectl create secret generic "$PG_SECRET" \
+    --from-file=postgres-password="${dir}/postgres-password" \
+    --from-file=worker-password="${dir}/worker-password" \
+    --from-file=api-password="${dir}/api-password" \
+    --from-file=worker-url="${dir}/worker-url" \
+    --from-file=api-url="${dir}/api-url" >/dev/null || { rm -rf "$dir"; return 1; }
+  rm -rf "$dir"
+}
+
+if [[ "${1:-}" == "postgres-secret" ]]; then
+  postgres_secret
+  exit 0
+fi
 
 REGION="${REGION:-nyc3}"
 SPACE="${SPACE:?set SPACE (globally-unique Space name)}"
@@ -23,8 +68,6 @@ ENDPOINT="https://${REGION}.digitaloceanspaces.com"
 CA_SECRET="${CA_SECRET:-interception-ca}"
 CREDS_SECRET="${CREDS_SECRET:-aintercept-objectstore}"
 CERTS_DIR="${CERTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/certs}"
-
-log() { echo "==> $*"; }
 
 # ── 1. Spaces bucket (via a temporary full-access key) ───────────────────────
 log "Provisioning Space ${SPACE} in ${REGION}"
@@ -85,6 +128,8 @@ kubectl create secret generic "$CREDS_SECRET" \
   --from-literal=secretAccessKey="$OBS_SK" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+postgres_secret
+
 # ── Done: print the install command ──────────────────────────────────────────
 cat <<EOF
 
@@ -99,6 +144,8 @@ never the CLI):
     --set objectStore.bucket=${SPACE} \\
     --set objectStore.region=${REGION} \\
     --set objectStore.endpoint=${ENDPOINT} \\
-    --set objectStore.existingSecret=${CREDS_SECRET}
+    --set objectStore.existingSecret=${CREDS_SECRET} \\
+    --set postgres.inCluster.enabled=true \\
+    --set postgres.existingSecret=${PG_SECRET}
 ────────────────────────────────────────────────────────────────────────────
 EOF

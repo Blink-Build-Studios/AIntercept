@@ -28,11 +28,11 @@ build: ## Build all container images
 	$(COMPOSE) build
 
 .PHONY: up
-up: ## Everything, locally, one command: proxy (real upstream), observer, Redis, Postgres and rollups in Docker; the API and UI here (docs/SETUP.md)
+up: ## Everything, locally, one command: proxy (real upstream), observer, Postgres and workers in Docker; the API and UI here (docs/SETUP.md)
 	@bash scripts/up.sh
 
 .PHONY: verify
-verify: ## Prove the local stack end to end: one request through the proxy, seen by the observer, rollups and API
+verify: ## Prove the local stack end to end: one request through the proxy, seen by the observer, committed to Postgres by a worker, lag settled, API up
 	@bash scripts/verify.sh
 
 .PHONY: remote
@@ -109,7 +109,7 @@ export AINTERCEPT_DATA_DIR
 
 .PHONY: api
 api: ## Run the query API on :8787 over the v5 layout in $AINTERCEPT_DATA_DIR (the rollups' commits and merge; JSON logs on stdout)
-	cd api && AINTERCEPT_STORE=v1 AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" AINTERCEPT_CACHE_DIR="$(CURDIR)/.cache/api" AINTERCEPT_REDIS_ADDR=127.0.0.1:16379 \
+	cd api && AINTERCEPT_STORE=v1 AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" AINTERCEPT_CACHE_DIR="$(CURDIR)/.cache/api" \
 		uv run python -m aintercept_api.serve --port 8787 --reload
 
 .PHONY: ui

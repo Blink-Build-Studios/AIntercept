@@ -110,3 +110,11 @@ func dataTime(ctx context.Context, q Querier) (int64, error) {
 	err := q.QueryRow(ctx, "SELECT coalesce(max(newest_row_ns), 0) FROM keys").Scan(&t)
 	return t, err
 }
+
+// jsonGarbage parses a key row's garbage column into row.
+func jsonGarbage(b []byte, row *KeyRow) error {
+	if err := json.Unmarshal(b, &row.Garbage); err != nil {
+		return fmt.Errorf("worker: %s garbage: %w", row.Key, err)
+	}
+	return nil
+}

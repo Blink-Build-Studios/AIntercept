@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
@@ -36,17 +35,7 @@ type Store interface {
 	ListInfo(ctx context.Context, prefix string) ([]Info, error)
 	// ListDirsAfter lists the folders directly under prefix sorting after `after`.
 	ListDirsAfter(ctx context.Context, prefix, after string) ([]string, error)
-	// ETag is key's current ETag, unquoted (a HEAD); process.ErrNotFound if
-	// there's no object.
-	ETag(ctx context.Context, key string) (string, error)
-	// PutIf writes key only if its ETag is still etag (If-Match, sent
-	// unquoted), or, with etag "", only if there's no object (If-None-Match: *).
-	// It returns the new ETag; a refused write is ErrPrecondition.
-	PutIf(ctx context.Context, key string, b []byte, etag string) (string, error)
 }
-
-// ErrPrecondition is a conditional write the store refused (a 412).
-var ErrPrecondition = process.ErrPrecondition
 
 // DirStore is a local directory as a Store.
 type DirStore struct{ process.DirStore }
@@ -100,9 +89,8 @@ type MemStore struct {
 }
 
 type memObj struct {
-	b    []byte
-	mod  time.Time
-	etag string
+	b   []byte
+	mod time.Time
 }
 
 // ErrInjected is a fault the test asked for.
@@ -174,7 +162,7 @@ func (m *MemStore) set(key string, b []byte) {
 		copy(m.sorted[i+1:], m.sorted[i:])
 		m.sorted[i] = key
 	}
-	m.objs[key] = memObj{b: bytes.Clone(b), mod: m.clock.Now(), etag: process.ContentETag(b)}
+	m.objs[key] = memObj{b: bytes.Clone(b), mod: m.clock.Now()}
 	m.written += int64(len(b))
 }
 
@@ -309,39 +297,6 @@ func (m *MemStore) PutIfAbsent(_ context.Context, key string, b []byte) (bool, e
 		return false, ErrInjected
 	}
 	return true, nil
-}
-
-func (m *MemStore) ETag(_ context.Context, key string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.reqs++
-	o, ok := m.objs[key]
-	if !ok {
-		return "", process.ErrNotFound
-	}
-	return o.etag, nil
-}
-
-func (m *MemStore) PutIf(_ context.Context, key string, b []byte, etag string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.reqs++
-	fail, lands := m.fault()
-	if fail && !lands {
-		return "", ErrInjected
-	}
-	o, ok := m.objs[key]
-	if etag = process.NormalizeETag(etag); (etag == "" && ok) || (etag != "" && (!ok || o.etag != etag)) {
-		if fail {
-			return "", ErrInjected
-		}
-		return "", fmt.Errorf("put %s: %w", key, ErrPrecondition)
-	}
-	m.set(key, b)
-	if fail {
-		return "", ErrInjected
-	}
-	return m.objs[key].etag, nil
 }
 
 func (m *MemStore) Delete(_ context.Context, key string) error {

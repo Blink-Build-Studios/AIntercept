@@ -2,7 +2,6 @@ package rollup
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
@@ -34,28 +33,6 @@ func (m missedModel) Apply(st any, r *records.Record) stream.Delta {
 func TestReportedMark(t *testing.T) {
 	if got := ReportedMark("p", "req/1", "s:a"); got != "p/v1/reported/req%2F1/s:a" {
 		t.Fatalf("mark %q", got)
-	}
-}
-
-func TestRunMarksItsMissedReports(t *testing.T) {
-	e := newEnv(t)
-	e.model = missedModel{}
-	e.ingest("s1", 2)
-	w := e.worker("w1")
-	if _, ok, err := w.RunKey(e.ctx, sessionKey("s1")); err != nil || !ok {
-		t.Fatalf("run: %v %v", ok, err)
-	}
-	objs, err := e.store.List(e.ctx, prefix+"/v1/reported/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(objs) != 2 {
-		t.Fatalf("%d reported marks, want 2", len(objs))
-	}
-	for _, o := range objs {
-		if !strings.HasSuffix(o.Key, "/"+sessionKey("s1")) {
-			t.Fatalf("mark %s isn't the session's", o.Key)
-		}
 	}
 }
 
