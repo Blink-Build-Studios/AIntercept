@@ -12,13 +12,12 @@ newest row (a client clock ahead). The oracle's reader against PgStore's through
 import pytest
 
 from tests import pgdb
-from tests.conftest import FULL
 from tests.side_by_side import PAGES, Side, assert_held, built, checkpoints, compare, nows, page_urls, prefix, walk
 from tests.test_v7_drawer import DATASETS
 from tests.test_v8_side_by_side import admin
 
 
-def _urls_at(side: Side, sids: list[str]) -> list[str]:
+def _urls_at(side: Side, sids: list[str], *, every: bool) -> list[str]:
     """A clock's URLs: the pages of the sessions it decides and of their people, or (none named) every
     page; each with no range (make check: its first URL)."""
     people = [p for p in side.oracle.person_ids() if set(side.person_sessions(p)) & set(sids)]
@@ -27,9 +26,9 @@ def _urls_at(side: Side, sids: list[str]) -> list[str]:
         if sids and page.of not in ("session", "person"):
             continue
         idents = {"session": sids or side.sessions(), "person": people or side.people()}.get(page.of)
-        for ident in (idents if FULL or sids else idents[:1]) if idents is not None else [None]:
+        for ident in (idents if every or sids else idents[:1]) if idents is not None else [None]:
             got = side.urls(page, every=False) if ident is None else page_urls(page, ident, [], every=False)
-            out += got if FULL else got[:1]
+            out += got if every else got[:1]
     return list(dict.fromkeys(out))
 
 
@@ -37,12 +36,16 @@ def _urls_at(side: Side, sids: list[str]) -> list[str]:
 _CHECKED = {"drawer cases": "mid-prompt", "spanning in flight": "mid-batch"}
 
 
-@pytest.mark.parametrize("dataset", list(DATASETS) if FULL else list(_CHECKED))
-def test_replay_checkpoints_equal_the_oracle_at_each_threshold(tmp_path, dataset):
+@pytest.mark.parametrize(
+    ("dataset", "every"),
+    [pytest.param(d, False, id=f"{d}-subset") for d in _CHECKED]
+    + [pytest.param(d, True, id=f"{d}-every", marks=pytest.mark.full) for d in DATASETS],
+)
+def test_replay_checkpoints_equal_the_oracle_at_each_threshold(tmp_path, dataset, every):
     dsn_admin = admin()
     _, rows = built(dataset, tmp_path / "data")
     found = checkpoints(rows)
-    if not FULL:
+    if not every:
         found = {k: v for k, v in found.items() if k == _CHECKED[dataset]}
     assert found, dataset
     kinds: set[str] = set()
@@ -50,9 +53,10 @@ def test_replay_checkpoints_equal_the_oracle_at_each_threshold(tmp_path, dataset
         with pgdb.fresh_database(dsn_admin) as dsn:
             side = Side(prefix(rows, t, tmp_path / label.replace(" ", "-")), dsn)
             try:
-                for kind, now, sids in walk(nows(side.oracle, t), every=FULL):
+                for kind, now, sids in walk(nows(side.oracle, t), every=every):
                     old, new = side.at(now)
-                    assert_held(compare(old, new, _urls_at(side, sids)), at=f"{dataset} {label}, {kind} ({now})")
+                    urls = _urls_at(side, sids, every=every)
+                    assert_held(compare(old, new, urls), at=f"{dataset} {label}, {kind} ({now})")
                     kinds.add(kind)
             finally:
                 side.close()

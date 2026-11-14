@@ -10,7 +10,6 @@ page, each variant with each cut and each bin."""
 import pytest
 
 from tests import pgdb
-from tests.conftest import FULL
 from tests.side_by_side import BY_NAME, PAGES, assert_held, built, compare, sides
 from tests.test_v7_drawer import DATASETS
 
@@ -31,9 +30,14 @@ def laid_out(tmp_path_factory):
         yield out
 
 
+# make check's subset, and the full run's every URL (`-m full`).
+EVERY = [pytest.param(False, id="subset"), pytest.param(True, id="every", marks=pytest.mark.full)]
+
+
+@pytest.mark.parametrize("every", EVERY)
 @pytest.mark.parametrize("name", [p.name for p in PAGES])
-def test_each_page_through_the_seam_equals_the_oracle(laid_out, name):
+def test_each_page_through_the_seam_equals_the_oracle(laid_out, name, every):
     page = BY_NAME[name]
     for ds, side in laid_out.items():
-        urls = side.urls(page, every=True, per_kind=3) if FULL else side.urls(page, every=False)[:3]
+        urls = side.urls(page, every=True, per_kind=3) if every else side.urls(page, every=False)[:3]
         assert_held(compare(side.old, side.new, urls), at=f"{name} on {ds}")

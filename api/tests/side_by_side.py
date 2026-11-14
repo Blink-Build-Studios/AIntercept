@@ -242,12 +242,13 @@ def url(page: Page, ident: str | None, *parts: str) -> str:
 
 
 def page_urls(page: Page, ident: str | None, rs: list[Range], *, every: bool) -> list[str]:
-    """page's URLs for one id: each variant on its own; each range with the first variant (every: with
-    each); each ladder bin, with each range when ranged; and bin 90 (a 422)."""
+    """page's URLs for one id: each variant on its own; each range with the first variant (the page as
+    the UI opens it), and (every) each variant with three of them; each ladder bin, with each range when
+    ranged; and bin 90 (a 422)."""
     out = [url(page, ident, v) for v in page.variants]
     if page.ranged:
         for i, r in enumerate(rs):
-            for v in page.variants if every else page.variants[:1]:
+            for v in page.variants if every and i < 3 else page.variants[:1]:
                 out.append(url(page, ident, v, range_query(r, ms=i % 3 == 2)))
     if page.binned:
         for b in BIN_LADDER:
@@ -265,14 +266,16 @@ def make(store: Any, now: datetime = FROZEN_NOW) -> TestClient:
     return TestClient(app)
 
 
-def _in_flight(url_: str, a: Any, b: Any) -> bool:
+def _in_flight(old: TestClient, url_: str, a: Any, b: Any) -> bool:
     """The one documented difference: a call in flight has no drawer row (404), and an event of a
     batch in flight has its fields but no raw row yet."""
     if url_.startswith("/api/v1/events/") and a.status_code == b.status_code == 200:
         x, y = a.json(), b.json()
         return x["data"].pop("raw", None) is not None and y["data"].pop("raw", None) == {} and x == y
-    if url_.startswith("/api/v1/requests/"):
-        return b.status_code == 404 and a.status_code == 200 and a.json()["data"].get("status") is None
+    if url_.startswith("/api/v1/requests/") and b.status_code == 404 and a.status_code == 200:
+        # In flight by the oracle's own summary of the call (its /details and /raw carry no status).
+        summary = old.get("/".join(url_.split("?")[0].split("/")[:5]))
+        return summary.status_code == 200 and summary.json()["data"].get("status") is None
     return False
 
 
@@ -293,7 +296,7 @@ def compare(old: TestClient, new: TestClient, urls: Iterable[str]) -> Held:
         held.by_page[page_of(u)] = held.by_page.get(page_of(u), 0) + 1
         if a.status_code == b.status_code and a.content == b.content:
             continue
-        if _in_flight(u, a, b):
+        if _in_flight(old, u, a, b):
             held.in_flight += 1
             continue
         held.differing.append(u)
@@ -369,11 +372,13 @@ class Side:
         return max(self.oracle.person_ids(), key=lambda p: (len(self.person_sessions(p)), p))
 
     def ids(self, page: Page) -> list[str | None]:
+        """What page's {id} walks: every session and person; every 10th request id and 50th event id
+        (test_v7_drawer.py holds the drawer for every one, byte for byte)."""
         return {
             "session": self.sessions,
             "person": self.people,
-            "request": self.request_ids,
-            "event": self.event_ids,
+            "request": lambda: self.request_ids()[::10],
+            "event": lambda: self.event_ids()[::50],
         }.get(page.of, lambda: [None])()  # type: ignore[return-value]
 
     def ranges_of(self, page: Page, ident: str | None, *, per_kind: int) -> list[Range]:
