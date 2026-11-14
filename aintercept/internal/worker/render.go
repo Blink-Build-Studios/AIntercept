@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"sync"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
@@ -60,6 +62,9 @@ type RenderOutput struct {
 	// ChangedBatches are the batches whose batch_parts row the commit writes or
 	// deletes: the other keys holding them are flagged (§3.7).
 	ChangedBatches []string
+	// Templates are the drawer templates (id, body) of the drawer rows the
+	// commit writes: inserted unless there (drawer_templates).
+	Templates [][]any
 }
 
 // NoRender renders nothing.
@@ -87,7 +92,32 @@ func (Tables) Render(in RenderInput) (RenderOutput, error) {
 		d = rows.Diff(base)
 	}
 	return RenderOutput{Queue: d.Queue, Baseline: rows.Baseline(), RenderVersion: render.Version,
-		ChangedBatches: d.Changed("batch_parts")}, nil
+		ChangedBatches: d.Changed("batch_parts"), Templates: rows.DrawerTemplates(d)}, nil
+}
+
+// templateSet is the drawer templates a worker's commits have written:
+// drawer_templates is shared and never deleted, so one written stays written,
+// and a commit inserts only the others (§3.7).
+type templateSet struct {
+	mu  sync.Mutex
+	ids map[string]bool
+}
+
+func (s *templateSet) has(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ids[id]
+}
+
+func (s *templateSet) add(ids []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ids == nil {
+		s.ids = map[string]bool{}
+	}
+	for _, id := range ids {
+		s.ids[id] = true
+	}
 }
 
 func (Tables) Baseline(key string, st *state.KeyState, day string) (any, error) {

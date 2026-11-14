@@ -769,13 +769,21 @@ CREATE TABLE agent_call_hours (
 CREATE TABLE drawer_requests (
     request_id text NOT NULL,
     key text NOT NULL,
-    data text COMPRESSION lz4,
-    details text COMPRESSION lz4,
+    data_tpl text,
+    data_vals text COMPRESSION lz4,
+    details_tpl text,
+    details_vals text COMPRESSION lz4,
     step_session text,
     step_prompt text,
     PRIMARY KEY (request_id, key)
 );
 CREATE INDEX ON drawer_requests (key);
+
+CREATE TABLE drawer_templates (
+    id text NOT NULL,
+    body text COMPRESSION lz4,
+    PRIMARY KEY (id)
+);
 
 CREATE TABLE drawer_step_counts (
     session_id text NOT NULL,

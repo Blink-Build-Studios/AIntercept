@@ -223,9 +223,9 @@ func render(key string, rows state.Rows, ext map[string]any, day string, memo *d
 		}}, memo, changed)
 	rq := make([][]any, len(reqs))
 	for i, r := range reqs {
-		rq[i] = []any{r.ID, key, r.Data, r.Details, nil, nil}
+		rq[i] = []any{r.ID, key, r.DataTpl, r.DataVals, r.DetailsTpl, r.DetailsVals, nil, nil}
 		if r.StepSession != "" || r.StepPrompt != "" {
-			rq[i][4], rq[i][5] = r.StepSession, r.StepPrompt
+			rq[i][6], rq[i][7] = r.StepSession, r.StepPrompt
 		}
 	}
 	counts := memo.StepCounts()
@@ -248,6 +248,27 @@ func render(key string, rows state.Rows, ext map[string]any, day string, memo *d
 // DrawerDerived is how many drawer request rows the render derived; the rest
 // were its base's.
 func (r *Rows) DrawerDerived() int { return r.next.drawer.Derived() }
+
+// DrawerTemplates is the templates (drawer_templates: id, body) of the
+// drawer rows d upserts.
+func (r *Rows) DrawerTemplates(d *Diff) [][]any {
+	seen := map[string]bool{}
+	var out [][]any
+	for _, t := range d.Tables {
+		if t.Table.Name != "drawer_requests" {
+			continue
+		}
+		for _, row := range t.Upserts {
+			for _, c := range []int{2, 4} {
+				if id, ok := row[c].(string); ok && !seen[id] {
+					seen[id] = true
+					out = append(out, []any{id, r.next.drawer.Template(id)})
+				}
+			}
+		}
+	}
+	return out
+}
 
 // sessionTables is session sid's 9 tables, re-encoded, and its call days.
 func sessionTables(sid string, rows state.Rows, others map[string]state.OtherParts, day string) ([]*rendered, []process.EventRow, error) {

@@ -48,7 +48,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "e86a259a600e486667a5da527002caf5941808f2d7e6e7e7cc598ac221336d5b"
+SCHEMA_HASH = "7fb7127aaa594307d91bef3aaa0cb886093e0d017bb061b7d582ab31e136c465"
 
 BEGIN = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
 # Per connection, once (the API login sets the same; a DSN with another login still gets them).
@@ -225,17 +225,22 @@ _STATUS = """SELECT
 
 # The request drawer (§3.7): the worker's finished row, by its primary key (request_id, key; a
 # call another key held a moment ago, its copy's: the first key), with /status's values (the
-# drawer's lastDataAt is global, quirk 7), in one statement. A row's stepCount is its prompt's
-# step count, kept once per (session, prompt) in drawer_step_counts (v8) so a new step doesn't
-# rewrite its prompt's rows: the row holds it as its one `"stepCount":null`, filled in here.
-_STEP_COUNT = """replace(r.data, '"stepCount":null', '"stepCount":' || coalesce(c.n::text, 'null'))"""
+# drawer's lastDataAt is global, quirk 7), in one statement. v8 stores each object as a template
+# (drawer_templates, shared by every row of its shape) and its values, joined by \x1f, and the
+# statement rebuilds it with format(); a row's stepCount is its prompt's step count, kept once per
+# (session, prompt) in drawer_step_counts so a new step doesn't rewrite its prompt's rows: the row
+# holds it as its one `"stepCount":null`, filled in here.
+_STEP_COUNT = """replace({}, '"stepCount":null', '"stepCount":' || coalesce(c.n::text, 'null'))"""
 
 
 def _drawer_sql(column: str) -> str:
-    value = _STEP_COUNT if column == "data" else f"r.{column}"
+    value = f"format(t.body, VARIADIC string_to_array(r.{column}_vals, E'\\x1f'))"
+    if column == "data":
+        value = _STEP_COUNT.format(value)
     return f"""WITH status AS ({_STATUS})
 SELECT status.*, d.data FROM status LEFT JOIN LATERAL (
     SELECT {value} AS data FROM drawer_requests r
+    JOIN drawer_templates t ON t.id = r.{column}_tpl
     LEFT JOIN drawer_step_counts c ON c.session_id = r.step_session AND c.prompt_id = r.step_prompt AND c.key = r.key
     WHERE r.request_id = $1 ORDER BY r.key LIMIT 1) d ON true"""  # noqa: S608
 
