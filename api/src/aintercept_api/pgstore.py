@@ -17,8 +17,9 @@ For each request the store:
 Statement parameters go in as a DuckDB relation's Arrow stream: the driver's own conversions of
 Python values would need pyarrow, which the API doesn't ship.
 
-Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5). The
-person pages and the directory (steps 6, 7) are refused loudly. Selected with AINTERCEPT_STORE=pg;
+Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5), and
+the directory, /people and /overview (step 7: pgstore_directory). The person pages (step 6) are
+refused loudly. Selected with AINTERCEPT_STORE=pg;
 V1Store stays the default until step 8.
 """
 
@@ -315,6 +316,7 @@ class _Loaded:
     con: duckdb.DuckDBPyConnection
     n: int
     status: Status | None = None
+    values: dict[str, Any] = field(default_factory=dict)  # what a plan computed for the endpoint
     memo: OrderedDict[tuple[Any, ...], Any] = field(default_factory=OrderedDict)
 
 
@@ -390,6 +392,7 @@ class _Run:
 
     def __init__(self, cur: Any, con: duckdb.DuckDBPyConnection, load: Load, between: Callable[[int], None] | None):
         self.cur, self.con, self.load, self.between = cur, con, load, between
+        self.values: dict[str, Any] = {}  # handed to the request (_Loaded.values)
         self._params = con.cursor()  # its own connection: the relation's open result can't block con
 
     def fetch(self, name: str, sql: str, params: Sequence[tuple[object, str]] = ()) -> str:
@@ -518,10 +521,15 @@ class PgStore:
             def plan(run: _Run) -> Status | None:
                 return self._event(run, eid)
 
+        elif bare in ("/api/v1/people", "/api/v1/overview"):
+            from aintercept_api import pgstore_directory
+
+            def plan(run: _Run) -> Status | None:
+                pgstore_directory.load(run, overview=bare == "/api/v1/overview", params=params)
+                return None
+
         elif bare.startswith("/api/v1/"):
-            raise NotImplementedError(
-                f"{bare}: the Postgres store doesn't serve it yet (docs/PIPELINE.md v7 steps 6-7)"
-            )
+            raise NotImplementedError(f"{bare}: the Postgres store doesn't serve it yet (docs/PIPELINE.md v7 step 6)")
         else:
             return None
         return self._read(path, plan)
@@ -555,7 +563,8 @@ class PgStore:
                         if reused:
                             raise _Broken() from e
                         raise
-                    status = plan(_Run(cur, con, load, self.between))
+                    run = _Run(cur, con, load, self.between)
+                    status = plan(run)
                     cur.execute("COMMIT")
                 finally:
                     cur.close()
@@ -565,7 +574,7 @@ class PgStore:
             raise
         if self._tracing:
             self.trace.append(load)
-        return _Loaded(con, next(self._n), status)
+        return _Loaded(con, next(self._n), status, run.values)
 
     def _duckdb(self) -> duckdb.DuckDBPyConnection:
         config: dict[str, Any] = {"autoinstall_known_extensions": False, "autoload_known_extensions": False}
@@ -812,6 +821,13 @@ class PgStore:
     @property
     def content_retained(self) -> bool | None:
         return self._status_of().content_retained
+
+    def agent_calls_in(self, lo: int | None, hi: int | None) -> int:
+        """/overview's requests: the Claude Code and Codex calls in [lo, hi], counted in the request's
+        snapshot (pgstore_directory)."""
+        from aintercept_api import pgstore_directory
+
+        return pgstore_directory.agent_calls_in(self._tables().values, lo, hi)
 
     def memo(self, key: tuple[Any, ...], build: Callable[[], T]) -> T:
         loaded = self._tables()

@@ -264,6 +264,7 @@ def session_tables(con: duckdb.DuckDBPyConnection) -> None:
         ("v_session_marks", "session_marks"),
     ):
         _insert(con, table, f"SELECT * FROM {view}")  # noqa: S608 (fixed names)
+    con.execute(legacy.CALL_DAYS_VIEW)
 
 
 def accounts(con: duckdb.DuckDBPyConnection) -> None:

@@ -20,6 +20,7 @@ from tests import pgdb
 from tests.builders import ClaudeCode, Dataset, cid_of, load_fixture
 from tests.conftest import FULL, aintercept_binary, few_per_group, lay_out, make_client
 from tests.endpoints import endpoint_urls as _urls
+from tests.oracle.directory_sql import todays_sql
 from tests.oracle.harness import KINDS, REQUEST_TABLES, Layout, Oracle, Table, assert_same, entity_tables, extract
 from tests.oracle.store import OracleStore
 from tests.test_codex import claude_code_account, codex_work
@@ -212,9 +213,10 @@ def test_an_analytics_calls_session_is_its_batchs_earliest(spanning):
         assert client.get("/api/v1/requests/batch-span").json()["data"]["sessionId"] == SPAN_A
 
 
-# --- the Postgres store (docs/PIPELINE.md v7 build step 5) ------------------------------------------
+# --- the Postgres store (docs/PIPELINE.md v7 build steps 5 and 7) -----------------------------------
 # "new" is the API's Postgres loader over the same dataset (v1layout -pg: the v7 worker's rows), for
-# the endpoints it serves so far: /status, the session pages, the drawer and /events/{id}.
+# the endpoints it serves so far: /status, the session pages, the drawer, /events/{id}, /people and
+# /overview.
 
 
 @pytest.fixture(scope="module")
@@ -389,3 +391,56 @@ _UNSTORED = ("env_json", "env", "filename")
 
 def _stored(tables):
     return {name: _without(t, _UNSTORED) for name, t in tables.items()}
+
+
+# --- the directory (build step 7) -------------------------------------------------------------------
+
+# Each day's from as the UI sends a preset's (on the hour) and as any other client might (unaligned),
+# and a closed range within the day.
+_DAY_QUERIES = ("from={d}T00:00:00.000Z", "from={d}T07:41:13.517Z", "from={d}T13:00:00Z&to={d}T23:59:59.999Z")
+
+
+def _directory_urls(old, layout: pathlib.Path, *, every: bool) -> list[str]:
+    """/people and /overview for every from: none (All), the People page's presets and filters
+    (endpoints.py), and on each day the merge has: on the hour, unaligned, and a closed range
+    (not every: one of the three per day, rotating)."""
+    urls = [u for u in _urls(old) if group(u) == "directory"]
+    with Oracle(Layout(layout)) as oracle:
+        days = oracle.store.merge_days()
+    assert len(days) >= 2, days
+    for i, d in enumerate(days):
+        for j, q in enumerate(_DAY_QUERIES):
+            if every or j == i % len(_DAY_QUERIES):
+                urls += [f"/api/v1/people?{q.format(d=d)}", f"/api/v1/overview?{q.format(d=d)}"]
+    return urls
+
+
+def _hold_directory(old, new, urls: list[str]) -> None:
+    """/people and /overview, byte for byte: "old" is the oracle's tables through the directory's SQL
+    as it was (every call mark), "new" Postgres's rows through today's (session_call_days)."""
+    differing = []
+    for url in urls:
+        with todays_sql():
+            a = old.get(url)
+        b = new.get(url)
+        assert a.status_code == 200, url
+        if b.status_code != a.status_code or json.dumps(b.json(), sort_keys=True) != json.dumps(
+            a.json(), sort_keys=True
+        ):
+            differing.append(url)
+    print("directory URLs held:", len(urls) - len(differing), "of", len(urls))  # noqa: T201
+    assert not differing, (len(differing), differing[:5])
+    # Not vacuous: the windows see different people and counts.
+    people = {len(old.get(u).json()["data"]) for u in urls if u.startswith("/api/v1/people")}
+    assert len(people) >= 2, people
+
+
+def test_the_directory_matches_the_oracle_for_every_from(pg_clients):
+    old, new, _, layout = pg_clients
+    _hold_directory(old, new, _directory_urls(old, layout, every=FULL))
+
+
+@pytest.mark.full
+def test_every_directory_url_matches_the_oracle(pg_clients):
+    old, new, _, layout = pg_clients
+    _hold_directory(old, new, _directory_urls(old, layout, every=True))

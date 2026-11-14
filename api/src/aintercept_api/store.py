@@ -135,6 +135,17 @@ _EMPTY = {
         patches_json VARCHAR, text VARCHAR, usage_missing VARCHAR)""",
 }
 
+# What the DuckDB stores read for the Postgres store's session_call_days (directory.py, rollups.py).
+CALL_DAYS_VIEW = """
+-- The directory's call-day folds (docs/PIPELINE.md v7 §3.5) over the call marks: per session and UTC
+-- day (floor(t_ns / 1e9 / 86400) in float), the calls' count, first and last time. Postgres holds
+-- them as the worker folds them; here they're the marks' own.
+CREATE OR REPLACE VIEW session_call_days AS
+SELECT session_id, CAST(floor(t_ns / 1e9 / 86400) AS BIGINT) AS day, count(*) AS n, min(t_ns) AS first_ns,
+       max(t_ns) AS last_ns
+FROM session_marks WHERE kind = 'call' GROUP BY 1, 2;
+"""
+
 VIEWS = """
 CREATE OR REPLACE VIEW calls AS
 SELECT call_id, correlation_id, ws_turn, coalesce(start_ns, end_ns) AS ts, end_ns AS end_ts, response_start_ns,

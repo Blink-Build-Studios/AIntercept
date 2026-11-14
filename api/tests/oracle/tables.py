@@ -180,4 +180,12 @@ FROM analytics WHERE source = 'claude_code';
 CREATE OR REPLACE VIEW codex_events AS
 SELECT correlation_id, ns AS ts, name, session_id, prompt_id, metadata_json::JSON AS md, event_key
 FROM analytics WHERE source = 'codex';
+
+-- Not a derivation (v7 build step 7): the directory's SQL reads per-session call-day counts since the
+-- worker folds them (docs/PIPELINE.md v7 §3.5); over the oracle's own call marks they're these. The
+-- directory gates run "old" with the SQL as it was instead (tests/oracle/directory_sql.py).
+CREATE OR REPLACE VIEW session_call_days AS
+SELECT session_id, CAST(floor(t_ns / 1e9 / 86400) AS BIGINT) AS day, count(*) AS n, min(t_ns) AS first_ns,
+       max(t_ns) AS last_ns
+FROM session_marks WHERE kind = 'call' GROUP BY 1, 2;
 """
