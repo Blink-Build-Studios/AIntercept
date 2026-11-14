@@ -3,7 +3,7 @@
 
 Stored inputs (step 2): each §3.4 table equals the oracle's st_<state table> over every key, row for
 row, keyed by (key, the state's row id): the oracle's nested structs flattened as the schema flattens
-them (row_<column>, plan_v), its id as bytes, analytics without env_json.
+them (row_<column>, plan_v), its id as bytes. (The analytics events aren't stored: v8.)
 
 Sessions (steps 3 and 5):
 
@@ -270,8 +270,8 @@ def test_the_folds_equal_the_oracles(layouts):
 # --- stored inputs (step 2) -------------------------------------------------------------------
 
 # The stored tables whose state table is named otherwise (§3.4); the rest share their names.
-_STATE_OF = {"requests": "fact_requests", "analytics": "fact_events"}
-_NOT_STORED = {"analytics": ("env_json",)}
+_STATE_OF = {"requests": "fact_requests"}
+_NOT_STORED: dict[str, tuple[str, ...]] = {}
 
 
 def stored_tables() -> list[str]:
@@ -296,7 +296,7 @@ def _flattened(rel: duckdb.DuckDBPyRelation, drop: tuple[str, ...]) -> str:
 
 def test_every_datasets_stored_inputs_equal_the_oracles(layouts):
     tables = stored_tables()
-    assert len(tables) == 20, tables  # nine dimensions, six request-log inputs, three labels and edges, two facts
+    assert len(tables) == 19, tables  # nine dimensions, six request-log inputs, three labels and edges, one fact
     rows: dict[str, int] = {}
     for name, root, dsn in layouts:
         oracle = OracleStore(LocalSource(root), prefix="sim/")

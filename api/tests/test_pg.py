@@ -195,7 +195,6 @@ ORACLE_ONLY = {"filename", "env_json"}
         "call_tool_uses",
         "session_request_rows",
         "requests",
-        "analytics",
     ],
 )
 def test_tables_load_with_the_oracles_columns_and_types(pg, table):

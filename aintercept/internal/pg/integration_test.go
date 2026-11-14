@@ -114,8 +114,8 @@ func TestSchemaAppliesOnce(t *testing.T) {
 		}
 	}
 	var lz4 string
-	if err := p.QueryRow(c, "SELECT attcompression FROM pg_attribute WHERE attrelid = 'analytics'::regclass AND attname = 'metadata_json'").Scan(&lz4); err != nil || lz4 != "l" {
-		t.Errorf("analytics.metadata_json compression %q, %v", lz4, err)
+	if err := p.QueryRow(c, "SELECT attcompression FROM pg_attribute WHERE attrelid = 'drawer_requests'::regclass AND attname = 'details'").Scan(&lz4); err != nil || lz4 != "l" {
+		t.Errorf("drawer_requests.details compression %q, %v", lz4, err)
 	}
 	var tailRows int
 	if err := p.QueryRow(c, "SELECT count(*) FROM tail").Scan(&tailRows); err != nil || tailRows != 1 {

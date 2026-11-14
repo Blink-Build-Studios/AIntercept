@@ -38,10 +38,10 @@ func TestRowValuesFollowTheCodec(t *testing.T) {
 	if got["row_agent"] != nil || got["row_status"] != int64(0) {
 		t.Errorf("row_agent %#v, row_status %#v", got["row_agent"], got["row_status"])
 	}
-	ev := pg.TableNamed("analytics")
-	for i, val := range ev.RowValues(canon.Event{}) {
-		if c := ev.Columns[i+2]; c.Optional && val != nil {
-			t.Errorf("analytics.%s: an optional zero is %#v, want NULL", c.Name, val)
+	rq := pg.TableNamed("requests")
+	for i, val := range rq.RowValues(canon.Request{}) {
+		if c := rq.Columns[i+2]; c.Optional && val != nil {
+			t.Errorf("requests.%s: an optional zero is %#v, want NULL", c.Name, val)
 		}
 	}
 }
