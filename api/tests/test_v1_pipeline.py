@@ -18,7 +18,7 @@ from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
 from tests import pgdb
 from tests.builders import ClaudeCode, Dataset, cid_of, load_fixture
-from tests.conftest import FULL, aintercept_binary, few_per_group, lay_out, make_client
+from tests.conftest import aintercept_binary, few_per_group, lay_out, make_client
 from tests.endpoints import endpoint_urls as _urls
 from tests.oracle.directory_sql import todays_sql
 from tests.oracle.harness import KINDS, REQUEST_TABLES, Layout, Oracle, Table, assert_same, entity_tables, extract
@@ -263,9 +263,9 @@ def _session_of(url: str) -> str:
 _JOINED_PAGES = ("", "requests", "state")
 
 
-def _session_urls(urls: list[str]) -> list[str]:
+def _session_urls(urls: list[str], *, every: bool) -> list[str]:
     sessions = [u for u in urls if group(u) == "sessions"]
-    if FULL:
+    if every:
         return sessions
     joined = [u for u in sessions if _page(u) in _JOINED_PAGES]
     return joined + few_per_group([u for u in sessions if _page(u) not in _JOINED_PAGES], _page)
@@ -282,22 +282,40 @@ def _differing(old, new, urls: list[str]) -> list[str]:
     return out
 
 
-def test_the_session_pages_match_the_oracle(pg_clients, pg_urls):
+def _session_pages(pg_clients, pg_urls, *, every: bool) -> None:
     old, new, _, _ = pg_clients
     urls, crossing = pg_urls
-    chosen = _session_urls(urls)
+    chosen = _session_urls(urls, every=every)
     assert len(chosen) >= 50 and crossing, (len(chosen), crossing)
     differing = _differing(old, new, chosen)
     print("session URLs held:", len(chosen) - len(differing), "of", len(chosen))  # noqa: T201
     assert not differing, (len(differing), differing[:5])
 
 
-def test_the_cross_key_session_pages_match_the_oracle(pg_clients, pg_urls):
+def test_the_session_pages_match_the_oracle(pg_clients, pg_urls):
+    _session_pages(pg_clients, pg_urls, every=False)
+
+
+@pytest.mark.full
+def test_every_session_url_matches_the_oracle(pg_clients, pg_urls):
+    _session_pages(pg_clients, pg_urls, every=True)
+
+
+def _cross_key_session_pages(pg_clients, pg_urls, *, every: bool) -> None:
     old, new, _, _ = pg_clients
     urls, crossing = pg_urls
     chosen = [u for u in urls if group(u) == "sessions" and _session_of(u) in crossing]
-    differing = _differing(old, new, chosen if FULL else few_per_group(chosen, _page, 6))
+    differing = _differing(old, new, chosen if every else few_per_group(chosen, _page, 6))
     assert not differing, (len(differing), differing[:5])
+
+
+def test_the_cross_key_session_pages_match_the_oracle(pg_clients, pg_urls):
+    _cross_key_session_pages(pg_clients, pg_urls, every=False)
+
+
+@pytest.mark.full
+def test_every_cross_key_session_url_matches_the_oracle(pg_clients, pg_urls):
+    _cross_key_session_pages(pg_clients, pg_urls, every=True)
 
 
 # --- the person pages (build step 6) ---------------------------------------------------------------
@@ -374,7 +392,18 @@ def _in_flight(old, new, url: str) -> bool:
     return b.status_code == 404 and a.status_code == 200 and a.json()["data"].get("status") is None
 
 
+def test_the_request_and_event_ids_tables_equal_the_oracles(pg_clients):
+    """make check's request ids: a request id per key set (every key's facts), a WebSocket turn and a
+    reported call; two batches' events."""
+    _request_and_event_tables(pg_clients, every=False)
+
+
+@pytest.mark.full
 def test_every_request_and_event_ids_tables_equal_the_oracles(pg_clients):
+    _request_and_event_tables(pg_clients, every=True)
+
+
+def _request_and_event_tables(pg_clients, *, every: bool) -> None:
     """The drawer's tables for every request id the logs list, and each batch's events for /events/{id}.
 
     The drawer reads the keys holding the call's fact rows; today's read the keys its marks name,
@@ -385,15 +414,15 @@ def test_every_request_and_event_ids_tables_equal_the_oracles(pg_clients):
     store = new.app.state.store
     fewer = 0
     with Oracle(Layout(layout)) as oracle:
-        every = oracle.request_ids()
-        assert len(every) >= 20
+        ids = oracle.request_ids()
+        assert len(ids) >= 20
         # make check: a request id per key set (every key's facts), a WebSocket turn and a reported
         # call; the full run: every one.
         kinds = [
-            next((r for r in every if "~" in r), None),
-            next((r for r in every if r.startswith("reported:")), None),
+            next((r for r in ids if "~" in r), None),
+            next((r for r in ids if r.startswith("reported:")), None),
         ]
-        rids = every if FULL else sorted({*oracle.request_cover(), *(r for r in kinds if r)})
+        rids = ids if every else sorted({*oracle.request_cover(), *(r for r in kinds if r)})
         for rid in rids:
             loaded = store.load_for(f"/api/v1/requests/{urllib.parse.quote(rid, safe='')}")
             assert loaded is not None
@@ -409,9 +438,9 @@ def test_every_request_and_event_ids_tables_equal_the_oracles(pg_clients):
                 assert not extra, f"request {rid}: {name}: {sum(extra.values())} rows the oracle doesn't load"
             fewer += any(len(got[n].rows) < len(want[n].rows) for n in got)
             oracle._memo.clear()  # a session's whole facts per id: don't keep them all
-        batches = sorted(r for r in every if r.startswith("batch-"))
+        batches = sorted(r for r in ids if r.startswith("batch-"))
         assert batches
-        for batch in batches if FULL else batches[:2]:
+        for batch in batches if every else batches[:2]:
             loaded = store.load_for(f"/api/v1/events/{batch}:1")
             assert loaded is not None
             want = _about(_stored({"analytics": oracle.request(batch)["analytics"]}), batch)
@@ -487,7 +516,7 @@ def _hold_directory(old, new, urls: list[str]) -> None:
 
 def test_the_directory_matches_the_oracle_for_every_from(pg_clients):
     old, new, _, layout = pg_clients
-    _hold_directory(old, new, _directory_urls(old, layout, every=FULL))
+    _hold_directory(old, new, _directory_urls(old, layout, every=False))
 
 
 @pytest.mark.full

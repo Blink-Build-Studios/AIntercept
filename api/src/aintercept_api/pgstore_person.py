@@ -12,8 +12,10 @@ request's DuckDB under today's names, and today's code runs over them unchanged:
 - session_rows, with the labels other keys' rows give them (sql/labels.sql): a Codex thread's
   title over its account-connected component (quirk 2), run once per component with title calls,
   as buckets.py's title runs are; its alone label; its children;
-- the ranged session tables, for the sessions a range can show (a superset of rollups.SHOWN: started
-  by its end, and active, or live, at its start), and per session its newest event of each `_LATEST`
+- the session tables in the range: the timeline's and /coverage's of every scope session (they count
+  them all), the summary's only of the sessions the range can show (a superset of rollups.SHOWN:
+  started by its end, and active, or live, at its start; the summary keeps only those), as are the
+  timeline's presence segments (its bands'); and per shown session its newest event of each `_LATEST`
   name before the range (the summary's carry);
 - request_rows and person_last: stream_sql over the request log's inputs for the range (§4): the
   scope's credentials' transactions in it, the other transactions of the same prompts (their step
@@ -242,16 +244,21 @@ class _Sql:
     JOIN session_call_accounts b ON b.account_id = a.account_id)"""
         return f"WITH RECURSIVE {self.scope},\n{comp}\n{_union(arms)}"
 
-    def ranged(self, table: str, cols: str, time: str, extra: str = "") -> str:
-        """table's rows of the sessions the range can show, in the range ($2, $3)."""
-        where = f"session_id IN (SELECT session_id FROM ranged) AND {_in_range(time)}{extra}"  # noqa: S608
-        return f"WITH {self.scope}, {_RANGED} SELECT {cols} FROM {table} WHERE {where}"  # noqa: S608
+    def ranged(self, table: str, cols: str, time: str, extra: str = "", *, shown: bool, carry: bool = False) -> str:
+        """table's rows in the range ($2, $3) of the scope's sessions; shown, only of the sessions the
+        range can show (`ranged`: for a page whose own SQL keeps only rollups.SHOWN's sessions, the
+        same test on the same session_rows columns, so the cut is exact by construction)."""
+        sessions = "ranged" if shown else "scope"
+        where = f"session_id IN (SELECT session_id FROM {sessions}) AND {_in_range(time)}{extra}"  # noqa: S608
+        ctes = f"{self.scope}, {_RANGED}" if shown or carry else self.scope
+        return f"WITH {ctes} SELECT {cols} FROM {table} WHERE {where}"  # noqa: S608
 
-    def events(self, carry: bool) -> str:
-        """The ranged event rows; with carry, each such session's newest event of each _LATEST name
-        before the range too (the partial index; arg_max skips a NULL count)."""
+    def events(self, *, shown: bool, carry: bool) -> str:
+        """The event rows in the range; with carry, each shown-range session's newest event of each
+        _LATEST name before the range too (the partial index; arg_max skips a NULL count): the
+        summary reads _LATEST over its shown sessions up to the range's end."""
         cols = ", ".join(_q(c) for c in (*EVENT_COLUMNS, "batch"))
-        sql = self.ranged("event_rows", cols, "ts_ns")
+        sql = self.ranged("event_rows", cols, "ts_ns", shown=shown, carry=carry)
         if not carry:
             return sql
         for name in LATEST:
@@ -389,6 +396,11 @@ def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int
         (None if lo is None else lo - _WIDEN_NS, "BIGINT"),
         (None if hi is None else hi + _WIDEN_NS, "BIGINT"),
     ]
+    # The summary keeps only the sessions its range shows (rollups.SHOWN), so it reads only theirs. The
+    # timeline and /coverage count every session's rows in the range, so they read every scope
+    # session's, by its time alone (a row can lie outside its session's start_ns..last_ns: presence
+    # windows, hidden calls). The timeline's presence is the bands' (SHOWN's test), so always shown.
+    shown = page == "summary"
     got: dict[str, str] = {}
     for name in PAGES[page]:
         if name == "dims":
@@ -400,13 +412,14 @@ def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int
         elif name == "session_call_days":
             got[name] = run.fetch(name, sql.call_days(), one)
         elif name.startswith("event_rows"):
-            got["event_rows"] = run.fetch("event_rows", sql.events(carry=name.endswith("+carry")), ranged)
+            events = sql.events(shown=shown, carry=name.endswith("+carry"))
+            got["event_rows"] = run.fetch("event_rows", events, ranged)
         elif name == "session_marks":
-            got[name] = run.fetch(name, sql.ranged(name, columns(name), "t_ns"), ranged)
+            got[name] = run.fetch(name, sql.ranged(name, columns(name), "t_ns", shown=shown), ranged)
         elif name == "prompt_rows":
-            got[name] = run.fetch(name, sql.ranged(name, columns(name), "t_ns", " AND typed"), ranged)
+            got[name] = run.fetch(name, sql.ranged(name, columns(name), "t_ns", " AND typed", shown=shown), ranged)
         elif name == "call_tool_uses":
-            got[name] = run.fetch(name, sql.ranged(name, columns(name), "ts_ns"), ranged)
+            got[name] = run.fetch(name, sql.ranged(name, columns(name), "ts_ns", shown=shown), ranged)
         elif name == "presence_segments":
             got[name] = run.fetch(name, sql.presence(), ranged)
         elif name.startswith("request_log:"):

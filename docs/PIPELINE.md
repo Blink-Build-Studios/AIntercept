@@ -632,8 +632,12 @@ with the three statements as they were (`tests/oracle/directory_sql.py`).
     coverage windows (the directory's);
   - the summary's `account` transactions are the request log's statement cut to
     `kind = 'account'`; `/coverage` reads the log's missed calls and their reports;
-  - the ranged tables are read for the sessions a range can show: started by its
-    end, and last active within the live window of its start, or after;
+  - the timeline and `/coverage` count every person session's rows in the range,
+    so they read every scope session's rows by their own time: a row can lie
+    outside its session's `start_ns`..`last_ns` (presence windows, hidden calls).
+    Only the summary, whose own SQL keeps `SHOWN`'s sessions, and the timeline's
+    presence (its bands') read just the sessions the range can show (`SHOWN`'s
+    test on the same columns, with the live window as slack);
   - `unattributed` reads `dim_session_visible` whole (one row per session), as
     its definition needs; the anti-join uses `dim_session_account (session_id)`.
 - **Round trips:** one connection, one snapshot, the endpoint's statements in
