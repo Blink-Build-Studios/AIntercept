@@ -463,17 +463,18 @@ delete for a tombstone.
 | `session_edges` | children_json | (parent_session_id) |
 | `session_title_calls` | labels | (account_id, ts_ns) |
 | `requests` (`fact_requests`) | the drawer | (call_id) |
-| `analytics` (`fact_events`) | the drawer, `/events/{id}` | (correlation_id), (key, name), both for the drawer |
 
 - **Facts.**
   - `fact_pending` isn't stored: the drawer 404s for a call in flight (owner).
-  - `analytics` keeps every event for now. Schema changes are wipes, and the
-    owner accepts discarding data, so narrowing it later costs nothing (Not
-    now).
-  - `analytics.env_json` isn't stored: no API code reads it (`store.py` exposes
-    it as `env`, which no query selects).
-  - `metadata_json` is most of an analytics row. It's compressed in line (lz4,
-    `toast_tuple_target = 128`).
+  - *v8:* `fact_events` (the analytics events, the table `analytics`) isn't
+    stored. Nothing reads it from Postgres since the drawer is precomputed
+    (§3.7):
+    - the drawer and `/events/{id}` read their own rows;
+    - a batch's other keys come from `batch_parts`.
+
+    On the capture it was the largest table: 216k rows, 292 MB of 916 MB.
+    Every table now has a reader, an API statement or the worker's own
+    (`api/tests/test_pg_readers.py`).
   - `fact_probes` folds into `keys.earliest_ns`.
 - **`batch_members` isn't stored:** it's a row per event.
   - Instead each key writes its **batch parts**: `batch_parts (batch_id, key, n,
@@ -837,7 +838,6 @@ Assumptions, at the capture's rates per person:
 
 | Table | Rows/day | With indexes |
 |---|---|---|
-| `analytics` | 75M | ~55 GB (its (correlation_id) and (key, name) indexes for the drawer: ~10 GB of that) |
 | `event_rows` | 75M | ~28 GB |
 | `request_txs`, `requests`, `session_request_rows` | ~7.5M each | ~15 GB together |
 | `session_marks`, `prompt_steps`, `call_tool_uses`, `request_reports`, `agent_calls`, `batch_parts` | 1.5M to 4M each | ~8 GB together |
@@ -1197,9 +1197,6 @@ The inventory's quirks, each reproduced:
 - **An API-side cache** of past days' rows.
 - **Hour order keys** (v6) for the time-ordered tables, if late rows show up in
   writes/s.
-- **A narrower `analytics`,** at about half the database at 1,500 people: read
-  event metadata from the batch's S3 detail object, or keep it only for the
-  names the drawer reads, and serve `/events/{id}` from `event_rows`.
 - **A periodic full listing of `v1/keys/`,** to flag keys a lost node never
   indexed.
 - **The in-flight drawer** (a `pending` table), if the owner wants it back.

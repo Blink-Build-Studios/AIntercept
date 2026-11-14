@@ -729,40 +729,6 @@ CREATE TABLE requests (
 );
 CREATE INDEX ON requests (call_id);
 
-CREATE TABLE analytics (
-    key text NOT NULL,
-    id bytea NOT NULL,
-    event_key text,
-    correlation_id text,
-    source_file text,
-    row_ns bigint,
-    ns bigint,
-    seq bigint,
-    source text,
-    name text,
-    type text,
-    client_event_id text,
-    session_id text,
-    prompt_id text,
-    person_id text,
-    org_id text,
-    device_id text,
-    agent_id text,
-    agent_type text,
-    model text,
-    request_id text,
-    client_request_id text,
-    tool_use_id text,
-    prompt_index bigint,
-    permission_mode text,
-    head_sha text,
-    metadata_json text COMPRESSION lz4,
-    batch_n bigint,
-    PRIMARY KEY (key, id)
-) WITH (toast_tuple_target = 128);
-CREATE INDEX ON analytics (correlation_id);
-CREATE INDEX ON analytics (key, name);
-
 -- §3.4-3.5, §3.7 Batch parts, the directory folds and the request drawer.
 
 CREATE TABLE batch_parts (

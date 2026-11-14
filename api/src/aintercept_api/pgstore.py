@@ -48,7 +48,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "8ec262a8859acf89a648bd9a6c26b01dc49a230cb4eae2bdd9b8b92bb964c166"
+SCHEMA_HASH = "dfa6f4ee3911b2e5996290395138983ca54fe802343b7efd756932cadedc9fe0"
 
 BEGIN = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
 # Per connection, once (the API login sets the same; a DSN with another login still gets them).
