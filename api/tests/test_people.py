@@ -120,9 +120,9 @@ def test_timeline_empty(dataset, client_for, write_sample):
     r = client.get(TIMELINE)
     write_sample(client, r, "empty")
     d = r.json()["data"]
-    # The default range, the last 14 days, snaps to 14 days and a minute less 1 ns: past the hourly
-    # bin's 14 days, so the auto bin is a day's (docs/PIPELINE.md v8 §5.3: from the snapped span).
-    assert d["sessions"] == [] and d["modelCalls"] == [] and d["binSeconds"] == 86400
+    # The default range is the last 14 days: hourly bins. Snapped, it's 14 days and a minute less
+    # 1 ns, but the auto bin comes from the span asked for (docs/PIPELINE.md v8 §5.3).
+    assert d["sessions"] == [] and d["modelCalls"] == [] and d["binSeconds"] == 3600
 
 
 def test_timeline_one_session(dataset, client_for, write_sample):

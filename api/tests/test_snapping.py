@@ -289,13 +289,21 @@ def test_the_session_header_and_timeline_dont_snap(spied):
     assert header.get("from") is None and header.get("to") is None, header
 
 
-def test_the_person_timelines_auto_bin_comes_from_the_snapped_span(spied):
-    # With no bin, from the span after snapping (§5.3). A person with no data defaults to the last 14
-    # days, which snaps to 14 days and a minute less 1 ns: past the hourly bin's 14 days, so daily.
-    client, _ = spied
+def test_snapping_never_changes_the_person_timelines_auto_bin(spied):
+    """With no bin, the auto bin comes from the span the request asked for, before snapping (the
+    owner's call): snapping must not change which bin the UI gets."""
+    client, store = spied
+    # No data: the default 14 days (they snap to 14 days and a minute less 1 ns) keep hourly bins.
     got = client.get("/api/v1/people/nobody/timeline").json()
-    assert got["data"]["binSeconds"] == 86400, got["data"]["binSeconds"]
+    assert got["data"]["binSeconds"] == 3600, got["data"]["binSeconds"]
     assert got["meta"]["from"].endswith(":00Z") and got["meta"]["to"] == "2026-11-04T18:05:59.999999Z"
+    # A day back, a second short: 5-minute bins, though the snapped range is a day and a minute.
+    day = cc.to_ns(FROZEN_NOW) - 86400 * NS + NS
+    store.seen.clear()
+    got = client.get(f"/api/v1/people/{_person(client)}/timeline?from={_iso(day)}").json()
+    assert got["data"]["binSeconds"] == 300, got["data"]["binSeconds"]
+    (_, lo, hi), *_ = [x for x in store.seen if x[0] == "person/timeline"]
+    assert hi - lo > 86400 * NS, (lo, hi)  # the snapped span alone would have made it hourly
 
 
 @pytest.mark.parametrize("path", [f"/api/v1/sessions/{S1}/timeline", "/api/v1/people/{p}/timeline"])
