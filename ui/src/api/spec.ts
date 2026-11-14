@@ -2334,9 +2334,9 @@ export interface operations {
                 personId: string;
                 /** @description Narrow to one of the person's sessions. */
                 sessionId?: string | null;
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
             };
             header?: never;
@@ -2426,9 +2426,9 @@ export interface operations {
     get_overview: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
             };
             header?: never;
@@ -2469,9 +2469,9 @@ export interface operations {
     get_people: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
                 sort?: string;
                 /** @description Repeatable; people who use any of these agents. */
@@ -2559,9 +2559,9 @@ export interface operations {
     get_person_requests: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
                 /** @description Repeatable; default all kinds. */
                 kind?: ("model" | "analytics" | "flags" | "count" | "account" | "metrics" | "usage" | "catalog")[] | null;
@@ -2617,9 +2617,9 @@ export interface operations {
     get_person_sessions: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
                 page?: number;
                 pageSize?: number;
@@ -2666,9 +2666,9 @@ export interface operations {
     get_person_summary: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
             };
             header?: never;
@@ -2711,11 +2711,11 @@ export interface operations {
     get_person_timeline: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: unbounded / the person's first activity. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: unbounded / now. */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
                 to?: string | null;
-                /** @description Bin width in seconds. Default: auto from the range (§5.2.5). */
+                /** @description Bin width in seconds, a whole number of minutes. Default: auto from the range (§5.2.5). */
                 bin?: number | null;
             };
             header?: never;
@@ -2954,9 +2954,9 @@ export interface operations {
     get_session_events: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: the session's start. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: the session's start. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: the session's end (now while it is live). */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live). */
                 to?: string | null;
                 /** @description Substring of the event name or its summary. */
                 q?: string | null;
@@ -3016,9 +3016,9 @@ export interface operations {
     get_session_prompts: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: the session's start. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: the session's start. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: the session's end (now while it is live). */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live). */
                 to?: string | null;
                 page?: number;
                 pageSize?: number;
@@ -3074,9 +3074,9 @@ export interface operations {
     get_session_requests: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: the session's start. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: the session's start. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: the session's end (now while it is live). */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live). */
                 to?: string | null;
                 /** @description Repeatable; default all kinds. */
                 kind?: ("model" | "analytics" | "flags" | "count" | "account" | "metrics" | "usage" | "catalog")[] | null;
@@ -3139,9 +3139,9 @@ export interface operations {
     get_session_state: {
         parameters: {
             query?: {
-                /** @description Range start (RFC 3339). Default: the session's start. */
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: the session's start. */
                 from?: string | null;
-                /** @description Range end (RFC 3339). Default: the session's end (now while it is live). */
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live). */
                 to?: string | null;
             };
             header?: never;
@@ -3193,7 +3193,7 @@ export interface operations {
     get_session_timeline: {
         parameters: {
             query?: {
-                /** @description Bin width in seconds. Default: auto from the session's span. */
+                /** @description Bin width in seconds, a whole number of minutes. Default: auto from the session's span. */
                 bin?: number | null;
             };
             header?: never;

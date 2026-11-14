@@ -158,7 +158,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
     "lastDataAt": "2026-11-04T18:03:10Z",
     "page": 1,
     "pageSize": 20,
-    "to": "2026-11-04T18:05:00Z",
+    "to": "2026-11-04T18:05:59.999999Z",
     "total": 2
   }
 };

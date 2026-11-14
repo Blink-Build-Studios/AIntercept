@@ -110,7 +110,7 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
     "lastDataAt": "2026-11-04T14:06:08Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T18:05:00Z",
+    "to": "2026-11-04T18:05:59.999999Z",
     "total": null
   }
 };

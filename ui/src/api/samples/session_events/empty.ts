@@ -10,7 +10,7 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
     "page": 1,
     "pageSize": 20,
     "shown": 0,
-    "to": "2026-11-04T09:01:00Z",
+    "to": "2026-11-04T09:01:59.999999Z",
     "total": 0
   }
 };

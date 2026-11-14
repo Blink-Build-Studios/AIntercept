@@ -4,7 +4,7 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["PersonTimelineResponse"] = {
   "data": {
     "analytics": [],
-    "binSeconds": 3600,
+    "binSeconds": 86400,
     "friction": [],
     "from": "2026-10-21T18:05:00Z",
     "modelCalls": [],
@@ -13,7 +13,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "presence": [],
     "prompts": [],
     "sessions": [],
-    "to": "2026-11-04T18:05:00Z"
+    "to": "2026-11-04T18:05:59.999999Z"
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
@@ -21,7 +21,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "lastDataAt": null,
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T18:05:00Z",
+    "to": "2026-11-04T18:05:59.999999Z",
     "total": null
   }
 };

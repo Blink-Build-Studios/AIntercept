@@ -7317,7 +7317,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -7331,12 +7331,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -7350,7 +7350,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           }
@@ -7455,7 +7455,7 @@
         "operationId": "get_overview",
         "parameters": [
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -7469,12 +7469,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -7488,7 +7488,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           }
@@ -7533,7 +7533,7 @@
         "operationId": "get_people",
         "parameters": [
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -7547,12 +7547,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -7566,7 +7566,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           },
@@ -7748,7 +7748,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -7762,12 +7762,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -7781,7 +7781,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           },
@@ -7975,7 +7975,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -7989,12 +7989,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -8008,7 +8008,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           },
@@ -8112,7 +8112,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -8126,12 +8126,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -8145,7 +8145,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           }
@@ -8199,7 +8199,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -8213,12 +8213,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: unbounded / the person's first activity.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: unbounded / now.",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
             "in": "query",
             "name": "to",
             "required": false,
@@ -8232,12 +8232,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: unbounded / now.",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
               "title": "To"
             }
           },
           {
-            "description": "Bin width in seconds. Default: auto from the range (\u00a75.2.5).",
+            "description": "Bin width in seconds, a whole number of minutes. Default: auto from the range (\u00a75.2.5).",
             "in": "query",
             "name": "bin",
             "required": false,
@@ -8245,13 +8245,14 @@
               "anyOf": [
                 {
                   "minimum": 60,
+                  "multipleOf": 60,
                   "type": "integer"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Bin width in seconds. Default: auto from the range (\u00a75.2.5).",
+              "description": "Bin width in seconds, a whole number of minutes. Default: auto from the range (\u00a75.2.5).",
               "title": "Bin"
             }
           }
@@ -8542,7 +8543,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: the session's start.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -8556,12 +8557,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: the session's start.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
             "in": "query",
             "name": "to",
             "required": false,
@@ -8575,7 +8576,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
               "title": "To"
             }
           },
@@ -8704,7 +8705,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: the session's start.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -8718,12 +8719,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: the session's start.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
             "in": "query",
             "name": "to",
             "required": false,
@@ -8737,7 +8738,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
               "title": "To"
             }
           },
@@ -8843,7 +8844,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: the session's start.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -8857,12 +8858,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: the session's start.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
             "in": "query",
             "name": "to",
             "required": false,
@@ -8876,7 +8877,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
               "title": "To"
             }
           },
@@ -9053,7 +9054,7 @@
             }
           },
           {
-            "description": "Range start (RFC 3339). Default: the session's start.",
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
             "in": "query",
             "name": "from",
             "required": false,
@@ -9067,12 +9068,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Range start (RFC 3339). Default: the session's start.",
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
               "title": "From"
             }
           },
           {
-            "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
             "in": "query",
             "name": "to",
             "required": false,
@@ -9086,7 +9087,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Range end (RFC 3339). Default: the session's end (now while it is live).",
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
               "title": "To"
             }
           }
@@ -9150,7 +9151,7 @@
             }
           },
           {
-            "description": "Bin width in seconds. Default: auto from the session's span.",
+            "description": "Bin width in seconds, a whole number of minutes. Default: auto from the session's span.",
             "in": "query",
             "name": "bin",
             "required": false,
@@ -9158,13 +9159,14 @@
               "anyOf": [
                 {
                   "minimum": 60,
+                  "multipleOf": 60,
                   "type": "integer"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Bin width in seconds. Default: auto from the session's span.",
+              "description": "Bin width in seconds, a whole number of minutes. Default: auto from the session's span.",
               "title": "Bin"
             }
           }

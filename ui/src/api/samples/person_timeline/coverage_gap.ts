@@ -183,7 +183,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "start": "2026-11-04T09:00:00Z"
       }
     ],
-    "to": "2026-11-04T10:00:00Z"
+    "to": "2026-11-04T10:00:59.999999Z"
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
@@ -191,7 +191,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "lastDataAt": "2026-11-04T09:45:00Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T10:00:00Z",
+    "to": "2026-11-04T10:00:59.999999Z",
     "total": null
   }
 };
