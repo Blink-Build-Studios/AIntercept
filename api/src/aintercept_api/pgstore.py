@@ -334,7 +334,7 @@ class _Pool:
     """At most size connections; idle ones are reused, a failed one is closed, never returned."""
 
     def __init__(self, dsn: str, size: int) -> None:
-        self.dsn = dsn
+        self.dsn, self.size = dsn, size
         self._idle: list[Any] = []
         self._slots = threading.BoundedSemaphore(size)
         self._lock = threading.Lock()
@@ -367,10 +367,13 @@ class _Pool:
                 yield conn, reused
                 ok = True
             finally:
+                keep = False
                 if ok:
                     with self._lock:
-                        self._idle.append(conn)
-                else:
+                        keep = len(self._idle) < self.size
+                        if keep:
+                            self._idle.append(conn)
+                if not keep:
                     with contextlib.suppress(Exception):
                         conn.close()
         finally:
@@ -765,8 +768,9 @@ class PgStore:
     # --- tests: a statement's plan -----------------------------------------------------------------
 
     def explain(self, statement: Statement) -> list[str]:
-        """statement's plan with sequential scans priced out (what an index can serve)."""
-        with self.pool.connection(fresh=True) as (conn, _):
+        """statement's plan with sequential scans priced out (what an index can serve), on a connection
+        of its own: its setting never reaches a pooled one."""
+        with contextlib.closing(self.pool.open()) as conn:
             cur = conn.cursor()
             con = duckdb.connect()
             try:

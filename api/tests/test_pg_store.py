@@ -155,6 +155,37 @@ def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
         assert store.opened == 2
 
 
+def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
+    # An explain's connection (sequential scans priced out) is its own, closed after; a fresh one
+    # past the pool's size is closed, not kept idle: the server's connections stay bounded.
+    store = PgStore(db, pool_size=2, trace=True)
+    with contextlib.closing(store):
+        assert store.load_for("/api/v1/status") is not None
+        (statement,) = store.trace[0].statements
+        for _ in range(5):
+            assert store.explain(statement)
+        for _ in range(3):
+            with store.pool.connection(fresh=True):
+                pass
+        assert len(store.pool._idle) <= 2
+        conn = pgdb.connect(db)
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT count(*) AS n FROM pg_stat_activity"
+                " WHERE datname = current_database() AND application_name = 'aintercept_api'"
+            )
+            con = duckdb.connect()
+            con.from_arrow(cur.fetch_arrow()).create("n")
+            (n,) = con.execute("SELECT n FROM n").fetchall()[0]
+        finally:
+            cur.close()
+            conn.close()
+        assert n <= 2, n
+        # And a request after them plans as usual.
+        assert store.load_for("/api/v1/status") is not None
+
+
 def test_a_session_page_that_isnt_loaded_yet_fails_loudly(db):
     # The person pages are a later step (6): the store refuses them rather than serving empty tables.
     with contextlib.closing(PgStore(db)) as store:
