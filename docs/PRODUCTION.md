@@ -101,7 +101,9 @@ attempt HTTP/3 (QUIC), which the proxy does not intercept.
   `repository@digest`. Envoy ships pinned (`v1.39.6` by digest).
 - Build the `aintercept` image (observer, certsvc and rollup) with the stock
   Dockerfile. One image serves both interception modes.
-- Redis is the stock upstream image, pinned by digest (`images.redis`).
+- The in-cluster Postgres (`postgres.inCluster`, the DigitalOcean demo only) is
+  the stock upstream image, pinned by digest (`images.postgres`), the same pin
+  as Compose's and CI's.
 
 ## 4b. Interception mode: what is recorded
 
@@ -210,9 +212,10 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 
 ## 5b. Query API capacity
 
-The API (`api.enabled`) is stateless (docs/PIPELINE.md §4): each request
-queries the object store's files in place, so it keeps no tables, and an HPA on
-CPU sets its replica count (`api.stateless`):
+The API (`api.enabled`) is stateless (docs/PIPELINE.md §5): each request reads
+its rows from Postgres in one snapshot (with `api.store: v1`, until the switch,
+the object store's v1/ folders) and a call's `calls/<id>` object, so it keeps no
+tables, and an HPA on CPU sets its replica count (`api.stateless`):
 - **Memory:** request = limit (`api.resources`, 1.5 Gi), so the scheduler
   reserves all of it and the pod is the last evicted. DuckDB gets 60% of it
   unless `api.memoryLimit` says otherwise.
@@ -221,20 +224,55 @@ CPU sets its replica count (`api.stateless`):
   use more than it has, and the kubelet then evicts whichever pod is furthest
   over its request. See `docs/INTERCEPTION_ISSUES.md` P5.
 
-## 5b2. Rollups and Redis (docs/PIPELINE.md)
+## 5b2. Workers and Postgres (docs/PIPELINE.md §2, §6)
 
-- **Rollups** (`rollup.*`): the `rollup` Deployment turns each key's ingest
-  files under `<prefix>/v1/keys/<key>/in/` into that key's tables, runs the
-  30 s merge and the sweep. KEDA scales it on `GET /lag` (the oldest unapplied
-  ingest file, target `rollup.autoscaling.lagTargetSeconds`); with
+- **Workers** (`rollup.*`): the `rollup` Deployment claims the keys with new
+  ingest files (Postgres's `dirty_keys`), applies each key's files under
+  `<prefix>/v1/keys/<key>/in/` and commits its rows to Postgres in one
+  transaction. One replica at a time also tails the recent index
+  (`<prefix>/v1/recent/`) into the flags, flags calls due to expire and runs
+  retention. KEDA scales it on `GET /lag` (the oldest flag's wait or the tail's,
+  target `rollup.autoscaling.lagTargetSeconds`); with
   `rollup.autoscaling.keda: false` a CPU HPA does. Never fewer than two
-  replicas, so the sweep and the merge always run.
-- **Redis** (`redis.*`): one replica in the cluster, with a small persistent
-  volume (`redis.persistence.size`, 1 Gi) and append-only persistence. It holds
-  only the dirty-key set and the rollups' locks: correctness never depends on
-  it. If it's lost, the tables stay correct, the rollups pause until it's back,
-  and the sweep re-flags every recent key. Only the observer and the rollups may
-  connect (NetworkPolicy `redis-restrict`).
+  replicas. Ingest never talks to Postgres: an outage only delays the pages,
+  and the workers catch up from the bucket.
+- **Postgres: RDS for PostgreSQL 17** (`postgres.inCluster.enabled: false`, the
+  default). You create it (the chart doesn't): gp3 with storage autoscaling,
+  Multi-AZ as you choose; today's load needs the smallest class, and
+  docs/PIPELINE.md's scaling budget sizes it for 1,500 people.
+  1. **Parameter group:** `max_locks_per_transaction = 256`,
+     `max_connections` ≥ 200 (each warm key holds an advisory lock).
+  2. **The database,** with the built-in `C.UTF-8` locale (text sorts and
+     lowercases as the code expects), as the master user:
+     `CREATE DATABASE aintercept LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8' TEMPLATE template0;`
+  3. **The two logins,** connected to that database as the master user:
+     `psql -v worker_password=… -v api_password=… -f aintercept/internal/pg/logins.sql`
+     (from a shell that keeps the passwords out of its history). It creates
+     `aintercept_worker` (owns the schema; the workers apply it on first start)
+     and `aintercept_api` (read only), with their timeouts.
+  4. **The CA bundle:** every connection uses TLS. Put the RDS CA bundle in a
+     ConfigMap (`kubectl create configmap rds-ca --from-file=rds-ca.pem=global-bundle.pem`)
+     and set `postgres.caConfigMap: rds-ca`; the workers and the API mount it
+     at `/etc/aintercept/postgres-ca`.
+  5. **The Secret** (`postgres.existingSecret`, default `aintercept-postgres`)
+     with one DSN per component, created out of band, never through `--set`:
+     `worker-url` and `api-url`, each
+     `postgres://<login>:<password>@<endpoint>:5432/aintercept?sslmode=verify-full&sslrootcert=/etc/aintercept/postgres-ca/rds-ca.pem&keepalives_idle=10&keepalives_interval=5&keepalives_count=3&tcp_user_timeout=30000`.
+     Each pod reads only its own component's key; ingest reads none.
+- **Postgres in the cluster** (`postgres.inCluster.enabled: true`, the
+  DigitalOcean demo): one replica with a PVC (`postgres.inCluster.persistence`,
+  20 Gi), non-root with a read-only root filesystem. On its first start its
+  init script creates the database and the two logins with the passwords in the
+  Secret, which `deploy/digitalocean-bootstrap.sh` makes (docs/DEPLOY_DOKS.md).
+  Only the workers and the API may connect (NetworkPolicy `postgres-restrict`).
+  Its data is the demo's: it isn't backed up.
+- **Retention** (`retention.*`, docs/PIPELINE.md §3.6): every hour the workers
+  forget the keys whose day is older than `retention.days` (15): their rows,
+  then their state and applied ingest files. "All" in the UI is that window.
+  The raw capture (`<prefix>/dt=…/`, `<prefix>/capture/dt=…/`) and the calls'
+  detail objects (`<prefix>/calls/`) aren't the workers' to delete in the
+  cloud: give the bucket **lifecycle rules** that expire them (for example
+  after 15 days, to match). `retention.rawDays` (0, off) is the local cap.
 
 ## 5c. Rollouts, disruption and placement
 
@@ -353,8 +391,8 @@ Nothing in the chart provisions AWS resources; it consumes them.
 |---|---|---|
 | observer | `s3:PutObject` on the telemetry prefix (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
 | certsvc | `kms:GetPublicKey`, `kms:Sign` on the intermediate's key | `certsvc.serviceAccount`, `certsvc.kms.keyId` |
-| rollup | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/v1/*` | `rollup.serviceAccount` |
-| api | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*` | `api.serviceAccount` |
+| rollup | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/v1/*` (with `retention.rawDays`, `s3:DeleteObject` on `<prefix>/*`); Postgres through the Secret's `worker-url` | `rollup.serviceAccount`, `postgres.*` |
+| api | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`; Postgres through the Secret's `api-url` | `api.serviceAccount`, `postgres.*` |
 
 - **EKS Pod Identity:** associate each role with its ServiceAccount
   (`aintercept-observer`, `aintercept-certsvc`, `aintercept-rollup`,

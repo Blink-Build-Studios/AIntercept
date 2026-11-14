@@ -9,10 +9,9 @@ What runs where:
 | Envoy | Docker | 443 | Terminates TLS for `api.anthropic.com` with a certificate from the local dev CA, forwards to the real upstream |
 | certsvc | Docker | — | Mints those certificates (`aintercept certsvc`) |
 | observer | Docker | 9001 | Records each request and response, body-stripped, to `data/telemetry/`: the raw log, and each routing key's ingest files under `v1/keys/<key>/in/` (`aintercept observer`) |
-| Redis | Docker | 16379 | Coordination only: which keys have new files, and the locks ([PIPELINE.md](PIPELINE.md)) |
-| Postgres | Docker | 15432 (this machine only) | The queryable data, as the v7 pipeline is built ([PIPELINE.md](PIPELINE.md)): nothing reads or writes it yet. `make up` generates its passwords into the gitignored `.env` |
-| rollups | Docker | 9004 | Apply each key's new files and commit its rows, and run the 30-second merge, under `data/telemetry/v1/` (`aintercept rollup`) |
-| API | this machine | 8787 | Serves the rollups' commits and merge (`api/`, `AINTERCEPT_STORE=v1`) |
+| Postgres | Docker | 15432 (this machine only) | The queryable data ([PIPELINE.md](PIPELINE.md)): the workers write it, the API reads it. `make up` generates its passwords into the gitignored `.env` |
+| workers | Docker | 9004 | Tail the observer's recent index (`data/telemetry/v1/recent/`), apply each key's new files and commit its rows to Postgres; retention every hour (`aintercept rollup`) |
+| API | this machine | 8787 | Serves the pages (`api/`). Until the switch to Postgres it reads the v5 folders (`AINTERCEPT_STORE=v1`, which the workers no longer write); `AINTERCEPT_STORE=pg make up` reads Postgres |
 | UI | this machine | 5173 | The app (`ui/`) |
 
 Nothing leaves the machine except the forwarded requests themselves; captured data stays in `data/` (gitignored).
@@ -43,7 +42,9 @@ The first run builds the images (a few minutes) and installs the API's and UI's 
 make verify
 ```
 
-This sends one request through the proxy to the real `api.anthropic.com` (no key, so the upstream answers 401) and waits until the observer has written it, a rollup has committed it and the API shows it. It changes nothing on the machine. Expect four `ok` lines and `Verified.` within about 30 seconds.
+This sends one request through the proxy to the real `api.anthropic.com` (no key, so the upstream answers 401) and waits until the observer has written it, a worker has committed it to Postgres (it prints the tables' row counts), the workers' `/lag` has settled under 30 seconds, and the API answers (with `AINTERCEPT_STORE=pg`, that `/status` shows the request). It changes nothing on the machine. Expect five `ok` lines and `Verified.` within about 30 seconds.
+
+To look at the rows yourself: `docker compose exec postgres psql -U postgres -d aintercept`.
 
 ## 4. Route Claude Code through the proxy (a person runs this)
 
@@ -68,7 +69,7 @@ Use it for a minute (any prompt). An agent can confirm traffic is arriving:
 curl -s localhost:8787/api/v1/people | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]), "people")'
 ```
 
-`1 people` (or more) means the person page has data. It can take up to about 40 seconds after the first prompt: the observer flushes a key's files after 5 seconds, a rollup applies them at once, and the merge that lists people runs every 30.
+`1 people` (or more) means the person page has data. It can take about 15 seconds after the first prompt: the observer flushes a key's files after 5 seconds and indexes them within 5 more, and the workers' tail picks them up every 2 seconds and applies them at once. (Until the switch to Postgres, the default API store shows nothing new: run `make up` with `AINTERCEPT_STORE=pg`.)
 
 **Important:** while the machine is routed, Claude Code depends on the proxy. Stopping the stack (`make down`) without reverting first leaves Claude Code unable to reach Anthropic, and that includes an agent following this doc. Always revert first (step 6).
 
@@ -83,17 +84,17 @@ sudo scripts/route-claude-through-proxy.sh revert   # first: give Claude Code it
 make down
 ```
 
-Captured data stays in `data/`. To start over, delete `data/telemetry`.
+Captured data stays in `data/` and Postgres's Docker volume (`<checkout folder>_pgdata`). To start over, delete both: `rm -rf data/telemetry` and `docker volume rm <checkout folder>_pgdata`. The schema has no migrations, so after pulling a schema change the workers refuse to start (`docker compose logs rollup`: a schema hash mismatch) until you do. Locally, retention keeps 15 days of keys and 3 days of raw data, applied ingest files and calls' detail objects.
 
 ## The cluster's data instead
 
-In a cluster the query API runs next to the data (the chart's `api.enabled=true`): an `api` Deployment that queries the bucket's files in place, behind a ClusterIP Service that no other pod may reach. The UI connects to it through a tunnel:
+In a cluster the query API runs next to the data (the chart's `api.enabled=true`): an `api` Deployment that reads Postgres (and each call's detail object from the bucket), behind a ClusterIP Service that no other pod may reach. The UI connects to it through a tunnel:
 
 ```bash
 make remote
 ```
 
-It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api 8787` (restarting itself when the API pod restarts) and the UI on :5173, which proxies `/api` to the tunnel as usual. The request drawer, raw view and events all work, since the API reads each call's rows from the bucket. `make down` stops the tunnel and the UI. It can't run alongside `make up`; both use ports 8787 and 5173.
+It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api 8787` (restarting itself when the API pod restarts) and the UI on :5173, which proxies `/api` to the tunnel as usual. The request drawer, raw view and events all work, since the API reads each call's detail object from the bucket. `make down` stops the tunnel and the UI. It can't run alongside `make up`; both use ports 8787 and 5173.
 
 ## Troubleshooting
 
@@ -104,5 +105,7 @@ It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api
 | `make verify`: expected 401, got 000 | no internet, or `api.anthropic.com` unreachable from Docker | check the network; `docker compose logs envoy` |
 | Claude Code: certificate errors | `NODE_EXTRA_CA_CERTS` isn't set in that shell | export it (step 4) and restart `claude` |
 | No people after using Claude Code | Claude Code isn't routed (or bypasses over IPv6) | `scripts/route-claude-through-proxy.sh status`; both host lines must be present |
-| The UI shows "Delayed" | no new data for 3 minutes | `curl localhost:9001/stats` (observer) and `curl localhost:9004/lag` (rollups: the oldest unapplied file's age) |
-| Anything else | | logs: `.cache/run/api.log`, `.cache/run/ui.log`, `docker compose logs observer rollup envoy` |
+| `make verify`: the workers can't read Postgres | Postgres is down, or its volume predates `.env`'s passwords | `docker compose logs postgres rollup`; start over (step 6) |
+| The workers restart: schema hash mismatch | the volume holds an older schema (no migrations) | start over (step 6) |
+| The UI shows "Delayed" | no new data for 3 minutes | `curl localhost:9001/stats` (observer) and `curl localhost:9004/lag` (workers: the oldest flag's wait, and keys that keep failing) |
+| Anything else | | logs: `.cache/run/api.log`, `.cache/run/ui.log`, `docker compose logs observer rollup postgres envoy` |

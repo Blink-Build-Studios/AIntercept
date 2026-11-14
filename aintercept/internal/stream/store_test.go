@@ -2,10 +2,6 @@ package stream
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -96,113 +92,5 @@ func TestMemStoreFaultsAreRetryable(t *testing.T) {
 	}
 	if _, err := s.Get(ctx, "k"); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// Conditional writes (docs/PIPELINE.md §3.1, fencing): If-Match on the current
-// ETag lands, anything else is ErrPrecondition and changes nothing. The same
-// cases run against S3 (moto) in TestConditionalPutAgainstS3.
-func TestConditionalPut(t *testing.T) {
-	for name, s := range stores(t) {
-		t.Run(name, func(t *testing.T) { conditionalPutCases(t, s, "cond/") })
-	}
-}
-
-func conditionalPutCases(t *testing.T, s Store, prefix string) {
-	ctx := context.Background()
-	key := prefix + "s/abc/head"
-	expect := func(want string) {
-		t.Helper()
-		b, err := s.Get(ctx, key)
-		if err != nil || string(b) != want {
-			t.Fatalf("object = %q %v, want %q", b, err, want)
-		}
-	}
-	if _, err := s.ETag(ctx, key); !errors.Is(err, process.ErrNotFound) {
-		t.Fatalf("ETag of a missing key: %v, want ErrNotFound", err)
-	}
-	// If-Match on a missing object fails (DO Spaces 412s; AWS 404s: both are a lost race).
-	if _, err := s.PutIf(ctx, key, []byte("v0"), "0123456789abcdef0123456789abcdef"); !errors.Is(err, ErrPrecondition) {
-		t.Fatalf("If-Match on a missing key: %v, want ErrPrecondition", err)
-	}
-	// If-None-Match: * creates.
-	e1, err := s.PutIf(ctx, key, []byte("v1"), "")
-	if err != nil || e1 == "" {
-		t.Fatalf("create: %q %v", e1, err)
-	}
-	if got, err := s.ETag(ctx, key); err != nil || got != e1 {
-		t.Fatalf("ETag after create = %q %v, want the create's %q", got, err, e1)
-	}
-	if strings.Contains(e1, `"`) {
-		t.Fatalf("ETags are unquoted: %q", e1)
-	}
-	// ... and refuses an existing object.
-	if _, err := s.PutIf(ctx, key, []byte("other"), ""); !errors.Is(err, ErrPrecondition) {
-		t.Fatalf("If-None-Match on an existing key: %v, want ErrPrecondition", err)
-	}
-	expect("v1")
-	// If-Match on the current ETag lands, quoted or not.
-	e2, err := s.PutIf(ctx, key, []byte("v2"), e1)
-	if err != nil || e2 == "" || e2 == e1 {
-		t.Fatalf("If-Match current: %q %v (was %q)", e2, err, e1)
-	}
-	e3, err := s.PutIf(ctx, key, []byte("v3"), `"`+e2+`"`)
-	if err != nil {
-		t.Fatalf("If-Match with a quoted current ETag: %v", err)
-	}
-	// A stale ETag fails and changes nothing.
-	if _, err := s.PutIf(ctx, key, []byte("stale"), e1); !errors.Is(err, ErrPrecondition) {
-		t.Fatalf("If-Match stale: %v, want ErrPrecondition", err)
-	}
-	expect("v3")
-	if got, _ := s.ETag(ctx, key); got != e3 {
-		t.Fatalf("ETag = %q, want %q", got, e3)
-	}
-}
-
-// Racers holding the same ETag: exactly one lands, the rest get ErrPrecondition.
-func TestConditionalPutRacersOneWins(t *testing.T) {
-	ctx := context.Background()
-	for name, s := range stores(t) {
-		t.Run(name, func(t *testing.T) {
-			for _, create := range []bool{true, false} {
-				key := fmt.Sprintf("race/%v", create)
-				etag := ""
-				if !create {
-					var err error
-					if etag, err = s.PutIf(ctx, key, []byte("base"), ""); err != nil {
-						t.Fatal(err)
-					}
-				}
-				const n = 16
-				errs := make([]error, n)
-				var wg sync.WaitGroup
-				for i := range n {
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						_, errs[i] = s.PutIf(ctx, key, []byte(fmt.Sprint("racer ", i)), etag)
-					}()
-				}
-				wg.Wait()
-				won := -1
-				for i, err := range errs {
-					switch {
-					case err == nil && won >= 0:
-						t.Fatalf("create=%v: racers %d and %d both won", create, won, i)
-					case err == nil:
-						won = i
-					case !errors.Is(err, ErrPrecondition):
-						t.Fatalf("racer %d: %v", i, err)
-					}
-				}
-				if won < 0 {
-					t.Fatalf("create=%v: no racer won", create)
-				}
-				if b, _ := s.Get(ctx, key); string(b) != fmt.Sprint("racer ", won) {
-					t.Fatalf("create=%v: object %q, want the winner's", create, b)
-				}
-			}
-		})
 	}
 }

@@ -6,8 +6,8 @@ description: >-
   a horizontally-scaled Go observer, which batches them to an S3-compatible
   object store (AWS S3 via IRSA, or DigitalOcean Spaces via static keys).
 type: application
-version: 0.4.1
-appVersion: "0.4.1"
+version: 0.5.0
+appVersion: "0.5.0"
 keywords:
   - observability
   - ai

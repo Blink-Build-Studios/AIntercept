@@ -1,10 +1,11 @@
 {{- if .Values.rollup.enabled }}
-# The rollups (docs/PIPELINE.md §2): `aintercept rollup`. Each replica takes
-# dirty keys from Redis, locks one at a time, applies its new ingest files and
-# commits with a create-only write; it also runs the 30 s merge (under a Redis
-# lock) and the sweep. Any number can run; KEDA scales them on lag (GET /lag:
-# the age of the oldest unapplied ingest file). At least two, so the sweep
-# never stops.
+# The workers (docs/PIPELINE.md §2): `aintercept rollup`. Each replica claims
+# flagged keys in Postgres (advisory locks shared out by heartbeats), applies
+# their new ingest files and commits each key's rows in one transaction,
+# guarded on its commit number. Whichever replica holds a singleton's lock runs
+# it: the tail (the recent index into the flags), the due calls and retention.
+# Any number can run; KEDA scales them on lag (GET /lag: the oldest flag's
+# wait, or the tail's). At least two, so the singletons always have a holder.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,6 +30,12 @@ spec:
       {{- end }}
       # A stopped replica releases its key locks before it exits (SIGTERM).
       terminationGracePeriodSeconds: 60
+      {{- if .Values.postgres.caConfigMap }}
+      volumes:
+        # The RDS CA bundle the DSN's sslrootcert names (docs/PRODUCTION.md).
+        - name: postgres-ca
+          configMap: { name: {{ .Values.postgres.caConfigMap }} }
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -49,7 +56,12 @@ spec:
             {{- if .Values.objectStore.forcePathStyle }}
             - { name: ROLLUP_S3_FORCE_PATH_STYLE, value: "true" }
             {{- end }}
-            - { name: ROLLUP_REDIS_ADDR, value: {{ include "aintercept.redisAddr" . | quote }} }
+            # The worker login's DSN (docs/PIPELINE.md §6), and nothing else of the Secret's.
+            - name: ROLLUP_POSTGRES_URL
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.existingSecret }}, key: worker-url }
+            - { name: ROLLUP_RETENTION_DAYS, value: {{ .Values.retention.days | int | quote }} }
+            - { name: ROLLUP_RETENTION_RAW_DAYS, value: {{ .Values.retention.rawDays | int | quote }} }
             - { name: ROLLUP_PARALLEL, value: {{ .Values.rollup.parallel | quote }} }
             - { name: ROLLUP_HTTP_LISTEN, value: "0.0.0.0:9004" }
             - name: ROLLUP_REPLICA
@@ -77,6 +89,10 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.rollup.resources | nindent 12 }}
+          {{- if .Values.postgres.caConfigMap }}
+          volumeMounts:
+            - { name: postgres-ca, mountPath: /etc/aintercept/postgres-ca, readOnly: true }
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

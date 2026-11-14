@@ -16,7 +16,7 @@ for name in ui api tunnel preview; do
     rm -f "${RUN}/${name}.pid"
   fi
 done
-rm -f "${RUN}/api.mode"
+rm -f "${RUN}/api.mode" "${RUN}/api.store"
 (cd "$ROOT" && COMPOSE_FILE=docker-compose.yml:docker-compose.m2.yml docker compose down >/dev/null 2>&1)
 echo "Stopped. Captured data stays in data/ (delete data/telemetry to start over)."
 if grep "# aintercept-interception" /etc/hosts 2>/dev/null | grep -q "127\.0\.0\.1"; then

@@ -315,9 +315,8 @@ unchanged: target 30 s, at least 2 replicas. If Postgres is unreachable,
 `/lag` errors and KEDA holds the replica count.
 
 *As built (step 2):* `/lag` also reports `quarantined_keys`, and `/metrics`
-serves both as gauges. Until step 8 switches Compose and the chart,
-`aintercept rollup` is this worker when `ROLLUP_POSTGRES_URL` names its
-Postgres, and v5's Redis rollup otherwise.
+serves both as gauges. *Step 8:* `aintercept rollup` is this worker only, and
+refuses to start without `ROLLUP_POSTGRES_URL`.
 
 ## 3. Postgres schema
 
@@ -514,6 +513,21 @@ Compose. The same pass deletes:
 
 In the cloud, bucket lifecycle rules expire `raw/` and `calls/`
 (`docs/PRODUCTION.md`).
+
+*As built (step 8, `internal/worker/retention.go`):*
+- each key is forgotten in **one transaction**: its key row is locked first
+  (`FOR UPDATE`, `lock_timeout` 1 s) and re-checked against the `n` and day the
+  pass read, then its rows go (≤ 5k a statement) and its key row last. A key
+  that moved keeps everything, and a page never sees half a key. A lock timeout
+  skips the key until the next pass;
+- account keys (`day` empty) are never forgotten;
+- the recent index is trimmed a day behind the tail's cursor on every pass, raw
+  cap or not: nothing else ever deletes it;
+- the raw capture is written as `<prefix>/dt=…/` (and full interception's
+  `<prefix>/capture/dt=…/`), not under `raw/`: those are the day folders the
+  cap deletes;
+- the settings are `ROLLUP_RETENTION_DAYS` and `ROLLUP_RETENTION_RAW_DAYS`; the
+  `calls/` part runs when the store is a local directory (`ROLLUP_LOCAL_DIR`).
 
 ## 4. Cross-key values
 
