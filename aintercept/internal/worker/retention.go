@@ -149,9 +149,10 @@ func (w *Worker) forget(ctx context.Context, key string, n int64, cutoff string)
 		return row, false, err
 	}
 	sid, session := strings.CutPrefix(key, "s:")
-	for _, t := range append(storedTables(), render.Tables...) {
+	// The drawer's templates last: its rows reference them.
+	for _, t := range append(append(storedTables(), render.Tables...), pg.TableNamed("drawer_templates")) {
 		owner, arg := "key", key
-		if t.Kind != pg.Stored {
+		if t.Kind != pg.Stored && t.Name != "drawer_templates" {
 			if owner = render.OwnerColumn(t.Name); owner != "key" {
 				if !session {
 					continue // a key that isn't a session's owns no session rows

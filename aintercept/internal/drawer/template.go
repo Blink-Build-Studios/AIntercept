@@ -105,6 +105,20 @@ func (m *Memo) intern(tpl string) string {
 // Template is the template of id, as the render that made the memo holds it.
 func (m *Memo) Template(id string) string { return m.tpls[id] }
 
+// Unwritten is the templates (id, body) of ids that the key's commits haven't
+// written since the memo was made whole, which it then counts as written: a
+// commit inserts them before the rows that reference them.
+func (m *Memo) Unwritten(ids []string) [][2]string {
+	var out [][2]string
+	for _, id := range ids {
+		if !m.written[id] {
+			m.written[id] = true
+			out = append(out, [2]string{id, m.tpls[id]})
+		}
+	}
+	return out
+}
+
 // Format is Postgres's format(tpl, VARIADIC string_to_array(vals, ValueSep))
 // for a template's %s and %%: the row's JSON, as the drawer's statement
 // rebuilds it.

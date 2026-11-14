@@ -117,8 +117,6 @@ func (c *Config) defaults() {
 type Worker struct {
 	cfg  Config
 	pool *pgxpool.Pool // run connections
-	// templates are the drawer templates its commits wrote (§3.7).
-	templates templateSet
 
 	mu   sync.Mutex
 	keys map[string]*held
@@ -425,23 +423,7 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 
 	changes := StoredChanges(key, flatten(delta))
 	changes = append(changes, rendered.Changes...)
-	var newTemplates, bodies []string
-	for _, t := range rendered.Templates {
-		if id := t[0].(string); !w.templates.has(id) {
-			newTemplates, bodies = append(newTemplates, id), append(bodies, t[1].(string))
-		}
-	}
-	queue := rendered.Queue
-	if len(newTemplates) > 0 {
-		queue = func(b *pgx.Batch) {
-			if rendered.Queue != nil {
-				rendered.Queue(b)
-			}
-			b.Queue(`INSERT INTO drawer_templates (id, body) SELECT * FROM unnest($1::text[], $2::text[])
-				ON CONFLICT (id) DO NOTHING`, newTemplates, bodies)
-		}
-	}
-	committed, err := w.commit(ctx, row, next, changes, queue, seq0, rest, start, waiting, rendered.ChangedBatches,
+	committed, err := w.commit(ctx, row, next, changes, rendered.Queue, seq0, rest, start, waiting, rendered.ChangedBatches,
 		func(batch string) (state.OtherParts, bool) {
 			v, ok := st.External(render.PartsID(batch))
 			p, _ := v.(state.OtherParts)
@@ -458,7 +440,6 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 		return res, nil
 	}
 	res.Committed = true
-	w.templates.add(newTemplates)
 	w.keep(key, n, st, rendered.Baseline, len(names) > 0)
 	for _, g := range dueGarbage {
 		_ = w.cfg.Store.Delete(ctx, dir+g.Path)

@@ -766,6 +766,13 @@ CREATE TABLE agent_call_hours (
     PRIMARY KEY (hour, key)
 );
 
+CREATE TABLE drawer_templates (
+    key text NOT NULL,
+    id text NOT NULL,
+    body text COMPRESSION lz4,
+    PRIMARY KEY (key, id)
+);
+
 CREATE TABLE drawer_requests (
     request_id text NOT NULL,
     key text NOT NULL,
@@ -775,15 +782,11 @@ CREATE TABLE drawer_requests (
     details_vals text COMPRESSION lz4,
     step_session text,
     step_prompt text,
-    PRIMARY KEY (request_id, key)
+    PRIMARY KEY (request_id, key),
+    FOREIGN KEY (key, data_tpl) REFERENCES drawer_templates (key, id),
+    FOREIGN KEY (key, details_tpl) REFERENCES drawer_templates (key, id)
 );
 CREATE INDEX ON drawer_requests (key);
-
-CREATE TABLE drawer_templates (
-    id text NOT NULL,
-    body text COMPRESSION lz4,
-    PRIMARY KEY (id)
-);
 
 CREATE TABLE drawer_step_counts (
     session_id text NOT NULL,

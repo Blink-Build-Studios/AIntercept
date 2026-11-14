@@ -249,27 +249,6 @@ func render(key string, rows state.Rows, ext map[string]any, day string, memo *d
 // were its base's.
 func (r *Rows) DrawerDerived() int { return r.next.drawer.Derived() }
 
-// DrawerTemplates is the templates (drawer_templates: id, body) of the
-// drawer rows d upserts.
-func (r *Rows) DrawerTemplates(d *Diff) [][]any {
-	seen := map[string]bool{}
-	var out [][]any
-	for _, t := range d.Tables {
-		if t.Table.Name != "drawer_requests" {
-			continue
-		}
-		for _, row := range t.Upserts {
-			for _, c := range []int{2, 4} {
-				if id, ok := row[c].(string); ok && !seen[id] {
-					seen[id] = true
-					out = append(out, []any{id, r.next.drawer.Template(id)})
-				}
-			}
-		}
-	}
-	return out
-}
-
 // sessionTables is session sid's 9 tables, re-encoded, and its call days.
 func sessionTables(sid string, rows state.Rows, others map[string]state.OtherParts, day string) ([]*rendered, []process.EventRow, error) {
 	st := state.RenderSessionWith(sid, rows, others)
@@ -619,6 +598,10 @@ type Diff struct {
 	Session string
 	Reset   bool
 	Tables  []TableDiff // the tables with a change, in Tables' order
+	// Templates are the drawer templates (key, id, body) its drawer rows
+	// reference that the key hasn't written yet: inserted first (unless
+	// there), as the rows' foreign key needs.
+	Templates [][]any
 }
 
 // TableDiff is one table's changes.
@@ -663,6 +646,19 @@ func (r *Rows) Diff(base *Baseline) *Diff {
 		}
 		if len(td.Upserts) > 0 || len(td.Deletes) > 0 {
 			d.Tables = append(d.Tables, td)
+		}
+		if name == "drawer_requests" && r.next.drawer != nil {
+			var ids []string
+			for _, row := range td.Upserts {
+				for _, c := range []int{2, 4} {
+					if id, ok := row[c].(string); ok {
+						ids = append(ids, id)
+					}
+				}
+			}
+			for _, t := range r.next.drawer.Unwritten(ids) {
+				d.Templates = append(d.Templates, []any{r.Key, t[0], t[1]})
+			}
 		}
 	}
 	return d

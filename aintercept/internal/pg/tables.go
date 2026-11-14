@@ -61,6 +61,8 @@ type Table struct {
 	LZ4  []string
 	// Seed is a statement that fills the table once it's created.
 	Seed string
+	// Refs are its foreign keys: "(columns) REFERENCES table (columns)".
+	Refs []string
 }
 
 // Column returns the named column (false: none).
@@ -207,18 +209,19 @@ func buildTables() []Table {
 	}})
 
 	// §3.7 The request drawer: each key's finished drawer rows, read by primary key. A row's
-	// /requests/{id} and /details objects are each a template (drawer_templates, by id) and its
-	// values, joined by \x1f; its stepCount is its (step_session, step_prompt)'s
-	// drawer_step_counts row, filled in at read.
+	// /requests/{id} and /details objects are each a template of its key's (drawer_templates, by
+	// key and id) and its values, joined by \x1f; its stepCount is its (step_session,
+	// step_prompt)'s drawer_step_counts row, filled in at read. Templates are by content (the hex
+	// of their sha256's first 16 bytes), shared by the key's rows of one shape, and forgotten with
+	// the key.
+	add(Table{Name: "drawer_templates", Kind: Fold, PK: []string{"key", "id"}, Columns: []Column{
+		notNull("key", "text"), notNull("id", "text"), col("body", "text"),
+	}, LZ4: []string{"body"}})
 	add(Table{Name: "drawer_requests", Kind: Fold, PK: []string{"request_id", "key"}, Columns: []Column{
 		notNull("request_id", "text"), notNull("key", "text"), col("data_tpl", "text"), col("data_vals", "text"),
 		col("details_tpl", "text"), col("details_vals", "text"), col("step_session", "text"), col("step_prompt", "text"),
-	}, Indexes: []string{"(key)"}, LZ4: []string{"data_vals", "details_vals"}})
-	// The drawer rows' templates, by content (the hex of their sha256's first 16 bytes): shared by
-	// every key's rows of one shape, never deleted (a few thousand; §3.7).
-	add(Table{Name: "drawer_templates", Kind: Fold, PK: []string{"id"}, Columns: []Column{
-		notNull("id", "text"), col("body", "text"),
-	}, LZ4: []string{"body"}})
+	}, Indexes: []string{"(key)"}, LZ4: []string{"data_vals", "details_vals"},
+		Refs: []string{"(key, data_tpl) REFERENCES drawer_templates (key, id)", "(key, details_tpl) REFERENCES drawer_templates (key, id)"}})
 	add(Table{Name: "drawer_step_counts", Kind: Fold, PK: []string{"session_id", "prompt_id", "key"}, Columns: []Column{
 		notNull("session_id", "text"), notNull("prompt_id", "text"), notNull("key", "text"), col("n", "bigint"),
 	}, Indexes: []string{"(key)"}})

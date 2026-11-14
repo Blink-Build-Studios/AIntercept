@@ -551,7 +551,7 @@ indexed lookup; nothing about it is derived at request time.
 | Table | Primary key; index | What |
 |---|---|---|
 | `drawer_requests` | (request_id, key); (key) | per drawer id: `data`, the finished `/requests/{id}` object, and `details`, the finished `/details` object, each as the JSON today's models serialize. *v8:* each is a template id and its values (below) |
-| `drawer_templates` | (id) | *v8:* the drawer rows' templates, by content (below) |
+| `drawer_templates` | (key, id) | *v8:* each key's drawer rows' templates, by content (below); `drawer_requests` references them (a foreign key) |
 | `drawer_step_counts` | (session_id, prompt_id, key); (key) | *v8:* per session and prompt, its steps' count: the `stepCount` of the rows that name it (below) |
 | `drawer_events` | (event_id, key); (key) | per Claude Code event: `/events/{id}` without its `raw` (its time, name, session, and the batch and event key that find its raw row) |
 
@@ -579,21 +579,24 @@ indexed lookup; nothing about it is derived at request time.
       escaped as `%%`);
     - the values are those values' JSON, joined by `\x1f`, which JSON text
       never holds raw.
-  - **How it's read.** Templates are kept once, by the hex of their sha256's
-    first 16 bytes, in `drawer_templates`. The drawer's one statement joins
-    the row's template and rebuilds the row: `format(body, VARIADIC
-    string_to_array(values, E'\x1f'))`. That gives the same bytes. A test
+  - **How it's read.** Each key keeps its templates once, by the hex of
+    their sha256's first 16 bytes, in `drawer_templates` (key, id). The
+    drawer's one statement joins the row's template and rebuilds the row:
+    `format(body, VARIADIC string_to_array(values, E'\x1f'))`. That gives the same bytes. A test
     holds Postgres's `format()` to the JSON over generated values, including
     hundreds of values and `%s` or `%%` inside strings.
-  - **Writing them.** A worker inserts the templates of the rows it writes
-    (`ON CONFLICT DO NOTHING`), skipping those its own commits already
-    wrote.
-  - **Retention.** Templates are never deleted: they're shared by every
-    key's rows of one shape. On the capture there are 1,137 templates (3.5
-    MB) for 41,769 rows (Not now: collect the unreferenced ones).
+  - **Writing them.** A commit inserts the templates its rows reference
+    (`ON CONFLICT DO NOTHING`), before the rows: `drawer_requests` has a
+    foreign key to them. It skips the ones the key has written since its
+    memo was made whole.
+  - **Retention** forgets a key's templates with its rows, after them.
+  - **Per key, not shared across keys.** On the capture that costs 2,645
+    templates (6.4 MB with their index) instead of 1,137 (3.6 MB), against
+    104 MB of rows.
   - **The result** on the capture: `drawer_requests` 222 MB → 104 MB, plus
-    3.5 MB of templates. Every row the statement serves is the bytes it
-    served before.
+    6.4 MB of templates. Every row the statement serves is the bytes it
+    served before. With `analytics` gone too (§3.4), the database is 511 MB
+    instead of 915 MB: 46 MB per person-day instead of 83.
   - **What's left that is payload** (the owner's choice, S3 or Postgres),
     as uncompressed JSON on the capture:
     - the `fields` section's values: the call's whole `complete` row and its

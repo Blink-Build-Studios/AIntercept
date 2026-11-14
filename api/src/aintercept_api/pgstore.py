@@ -48,7 +48,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "7fb7127aaa594307d91bef3aaa0cb886093e0d017bb061b7d582ab31e136c465"
+SCHEMA_HASH = "6c398638f39a0175e60b6f838d0ecd314465558c134514c36dc0ae06e63eedd5"
 
 BEGIN = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
 # Per connection, once (the API login sets the same; a DSN with another login still gets them).
@@ -240,7 +240,7 @@ def _drawer_sql(column: str) -> str:
     return f"""WITH status AS ({_STATUS})
 SELECT status.*, d.data FROM status LEFT JOIN LATERAL (
     SELECT {value} AS data FROM drawer_requests r
-    JOIN drawer_templates t ON t.id = r.{column}_tpl
+    JOIN drawer_templates t ON t.key = r.key AND t.id = r.{column}_tpl
     LEFT JOIN drawer_step_counts c ON c.session_id = r.step_session AND c.prompt_id = r.step_prompt AND c.key = r.key
     WHERE r.request_id = $1 ORDER BY r.key LIMIT 1) d ON true"""  # noqa: S608
 
