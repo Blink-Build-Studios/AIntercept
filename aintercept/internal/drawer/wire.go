@@ -274,7 +274,39 @@ func ParseDetail(cid string, gz []byte) *Wire {
 	if w.Retained {
 		w.retainedViews(reqChunks, respChunks)
 	}
+	// The wire is kept with the key's state: of the headers, only what the
+	// render reads (the bodies' views above are done with them).
+	w.ReqHeaders = keepKeys(w.ReqHeaders, func(k string) bool { return readReqHeaders[k] })
+	w.RespHeaders = keepKeys(w.RespHeaders, readRespHeader)
 	return w
+}
+
+// readReqHeaders are the request headers the render reads (Wire.prompt,
+// requestClass, clientRequestID, scope.sessionOf), by exact name.
+var readReqHeaders = map[string]bool{"x-claude-code-prompt-id": true, "x-claude-code-request-class": true,
+	"x-client-request-id": true, "x-claude-code-session-id": true}
+
+// readRespHeader is whether the render reads a response header: request-id
+// (Wire.requestID), the unified rate limits (limit: by lowered name, the first
+// that matches) and Codex's (codexLimits: by exact name).
+func readRespHeader(k string) bool {
+	return k == "request-id" || strings.HasPrefix(k, "x-codex-") ||
+		strings.HasPrefix(strings.ToLower(k), "anthropic-ratelimit-unified-")
+}
+
+// keepKeys is a dict's members whose key keep accepts, in order; any other
+// value as it is.
+func keepKeys(v Value, keep func(string) bool) Value {
+	if v.K != Object {
+		return v
+	}
+	out := Value{K: Object, O: []Member{}}
+	for _, m := range v.O {
+		if keep(m.Key) {
+			out.O = append(out.O, m)
+		}
+	}
+	return out
 }
 
 func mustInt(v Value) int64 {
