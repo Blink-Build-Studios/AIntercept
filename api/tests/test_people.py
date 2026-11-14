@@ -120,6 +120,8 @@ def test_timeline_empty(dataset, client_for, write_sample):
     r = client.get(TIMELINE)
     write_sample(client, r, "empty")
     d = r.json()["data"]
+    # The default range is the last 14 days: hourly bins. Snapped, it's 14 days and a minute less
+    # 1 ns, but the auto bin comes from the span asked for (docs/PIPELINE.md v8 §5.3).
     assert d["sessions"] == [] and d["modelCalls"] == [] and d["binSeconds"] == 3600
 
 

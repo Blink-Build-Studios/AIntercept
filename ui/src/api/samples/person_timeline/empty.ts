@@ -13,7 +13,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "presence": [],
     "prompts": [],
     "sessions": [],
-    "to": "2026-11-04T18:05:00Z"
+    "to": "2026-11-04T18:05:59.999999Z"
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
@@ -21,7 +21,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "lastDataAt": null,
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T18:05:00Z",
+    "to": "2026-11-04T18:05:59.999999Z",
     "total": null
   }
 };

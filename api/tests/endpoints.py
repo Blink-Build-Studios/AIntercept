@@ -1,7 +1,8 @@
 """The URLs every endpoint-parity gate walks: each endpoint, for every person and session a
 client serves, with the parameters the UI sends (ui/src/api/hooks/use*Page.ts, ui/src/lib/bins.ts):
 the People page's hour-aligned windows, a person page's unaligned now−span `from` and its brush,
-the ladder's bins, and the requests' `order`."""
+the ladder's bins, the requests' `order` and kinds (the "other" chip asks for its members), the Events
+tab's `collapseTicks` (always sent), and `q` with a range."""
 
 import urllib.parse
 from datetime import datetime, timedelta
@@ -34,6 +35,9 @@ def person_from(win: str) -> str:
     """A person page's `from`: Date.now() − span when the query runs, so never aligned (usePersonPage.ts)."""
     return _iso(FROZEN_NOW - _SPANS[win] - timedelta(seconds=8, milliseconds=663))
 
+
+# The "other" chip's kinds (ui/src/screens/SessionScreen/sessionView.ts SHARED_CHANNELS).
+OTHER_KINDS = ["flags", "count", "skills", "metrics", "catalog"]
 
 # A brush over the person timeline: arbitrary instants, ms precision.
 PERSON_BRUSH = {"from": "2026-11-03T21:13:07.250Z", "to": "2026-11-04T16:41:59.875Z"}
@@ -83,7 +87,8 @@ def endpoint_urls(client) -> list[str]:
             f"{base}/requests?pageSize=5&page=3&order=asc",
             f"{base}/requests?q=model",
             f"{base}/requests{_qs(**{'from': day, 'pageSize': 20, 'order': 'desc'})}",
-            f"{base}/requests{_qs(**PERSON_BRUSH, kind=['flags', 'count', 'metrics', 'catalog'], pageSize=20)}",
+            f"{base}/requests{_qs(**PERSON_BRUSH, kind=OTHER_KINDS, pageSize=20)}",
+            f"{base}/requests{_qs(**PERSON_BRUSH, q='model', pageSize=20)}",
             f"{base}/requests{_qs(agent='codex', captured='false', hidden='true', pageSize=20)}",
             f"/api/v1/coverage?personId={pid}",
         ]
@@ -110,8 +115,11 @@ def endpoint_urls(client) -> list[str]:
             f"{base}/requests",
             f"{base}/requests?order=desc&pageSize=20",
             f"{base}/requests?captured=false&hidden=true&pageSize=20",
+            f"{base}/requests{_qs(kind='model', pageSize=20)}",
+            f"{base}/requests{_qs(kind=OTHER_KINDS, pageSize=20)}",
             f"{base}/events",
-            f"{base}/events?q=tool&pageSize=10",
+            f"{base}/events?collapseTicks=true&pageSize=20",
+            f"{base}/events?q=tool&collapseTicks=true&pageSize=10",
             f"{base}/events?internal=true&collapseTicks=false&pageSize=20",
         ]
         if brush:
@@ -119,6 +127,8 @@ def endpoint_urls(client) -> list[str]:
                 f"{base}/state{_qs(**brush)}",
                 f"{base}/prompts{_qs(**brush, page=1, pageSize=20)}",
                 f"{base}/requests{_qs(**brush, pageSize=20)}",
+                f"{base}/requests{_qs(**brush, q='model', pageSize=20)}",
                 f"{base}/events{_qs(**brush, collapseTicks='true', pageSize=20)}",
+                f"{base}/events{_qs(**brush, q='tool', collapseTicks='true', pageSize=20)}",
             ]
     return urls

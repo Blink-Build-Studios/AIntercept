@@ -56,11 +56,11 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """While samples are being (re)written, the requirements check would see a
-    half-written folder; it runs in the normal test pass instead. The `full` tests run only in
-    the full run."""
+    """While samples are being (re)written, only the tests that write them run (the write_sample
+    fixture): the rest run in the normal test pass, and the requirements check would see a
+    half-written folder. The `full` tests run only in the full run."""
     if config.getoption("--write-samples"):
-        items[:] = [i for i in items if "test_requirements" not in i.nodeid]
+        items[:] = [i for i in items if "write_sample" in getattr(i, "fixturenames", ())]
     if not FULL:
         skip = pytest.mark.skip(reason="the full run only (make test-api-full)")
         for item in items:

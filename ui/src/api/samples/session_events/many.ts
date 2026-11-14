@@ -311,7 +311,7 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
     "page": 1,
     "pageSize": 50,
     "shown": 20,
-    "to": "2026-11-04T09:13:00Z",
+    "to": "2026-11-04T09:13:59.999999Z",
     "total": 20
   }
 };

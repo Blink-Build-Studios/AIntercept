@@ -172,11 +172,11 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
   ],
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
-    "from": "2026-11-04T15:53:02Z",
+    "from": "2026-11-04T15:53:00Z",
     "lastDataAt": "2026-11-04T15:56:00Z",
     "page": 1,
     "pageSize": 20,
-    "to": "2026-11-04T15:56:00Z",
+    "to": "2026-11-04T15:56:59.999999Z",
     "total": 2
   }
 };

@@ -195,18 +195,18 @@ def request_row_from_table(r: Mapping[str, Any]) -> RequestRow:
 def request_filter(
     scope: str,
     value: str,
-    from_: datetime | None,
-    to: datetime | None,
+    lo_ns: int | None,
+    hi_ns: int | None,
     q: str | None,
     captured: bool | None,
     agent: Sequence[str] | None = None,
 ) -> tuple[str, list[object]]:
     """The WHERE clause for a request log's stored rows (`scope` = `value`: a person's request_rows,
-    a session's session_request_rows): the window (rows' times are compared at the microseconds
-    they're shown with), captured, agent and `q` as `matches` reads it. Fixed text with every value
-    a parameter."""
-    lo = cc.to_ns(from_) // 1000 if from_ else None
-    hi = cc.to_ns(to) // 1000 if to else None
+    a session's session_request_rows): the window [lo_ns, hi_ns] (each None: open; rows' times are
+    compared at the microseconds they're shown with), captured, agent and `q` as `matches` reads it.
+    Fixed text with every value a parameter."""
+    lo = lo_ns // 1000 if lo_ns is not None else None
+    hi = hi_ns // 1000 if hi_ns is not None else None
     where = [
         f"{scope} = ?",
         "(?::BIGINT IS NULL OR ts_ns // 1000 >= ?)",

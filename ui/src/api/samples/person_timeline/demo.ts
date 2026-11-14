@@ -894,7 +894,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tool": "Bash"
       }
     ],
-    "from": "2026-11-02T05:31:51.155051Z",
+    "from": "2026-11-02T05:31:00Z",
     "modelCalls": [
       {
         "byClass": {
@@ -5145,15 +5145,15 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "start": "2026-11-02T05:31:51.155051Z"
       }
     ],
-    "to": "2026-11-04T18:05:00Z"
+    "to": "2026-11-04T18:05:59.999999Z"
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
-    "from": "2026-11-02T05:31:51.155051Z",
+    "from": "2026-11-02T05:31:00Z",
     "lastDataAt": "2026-11-04T18:02:49.146000Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T18:05:00Z",
+    "to": "2026-11-04T18:05:59.999999Z",
     "total": null
   }
 };

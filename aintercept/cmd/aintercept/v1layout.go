@@ -64,7 +64,7 @@ func v1layout() {
 	sort.Strings(keys)
 	now := time.Now().UnixNano()
 	for _, k := range keys {
-		if err := rollup.WriteOnePass(ctx, s, *prefix, k, byKey[k], now); err != nil {
+		if err := rollup.WriteOnePass(ctx, s, *prefix, k, byKey[k], now, col.byKey[k]); err != nil {
 			fatalf("v1layout: %v", err)
 		}
 	}

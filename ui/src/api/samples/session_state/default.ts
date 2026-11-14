@@ -60,7 +60,7 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "lastDataAt": "2026-11-04T09:11:05Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T09:11:05Z",
+    "to": "2026-11-04T09:11:59.999999Z",
     "total": null
   }
 };

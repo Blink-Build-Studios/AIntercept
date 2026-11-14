@@ -1,5 +1,9 @@
-"""The read path over Postgres (docs/PIPELINE.md v7 §5): each request reads its rows from Postgres
-and today's endpoint code runs over them in DuckDB.
+"""The read path over Postgres (docs/PIPELINE.md v7 §5, v8 §5.7): each page's reader (pages.py).
+
+/status, the request drawer and /events/{id} read the worker's finished rows through v8's reader
+(PgPages, on the psycopg reader in reader.py): one statement each. Every other page is still v7's
+loader's, below, until build steps 9 to 11 move it: its rows from Postgres into an in-memory DuckDB,
+and today's endpoint SQL (pages.SqlPages) over them.
 
 For each request the store:
 1. takes one pooled connection and opens one snapshot (READ ONLY, REPEATABLE READ), so every
@@ -17,31 +21,43 @@ For each request the store:
 Statement parameters go in as a DuckDB relation's Arrow stream: the driver's own conversions of
 Python values would need pyarrow, which the API doesn't ship.
 
-Served so far: /status, the session pages, the request drawer and /events/{id} (build step 5; the
-drawer's rows precomputed by the worker, §3.7: one statement each), and the directory, /people and
-/overview (step 7: pgstore_directory), and the person pages (step 6: pgstore_person). The API's
-default store (step 8); AINTERCEPT_STORE=v1 selects V1Store instead.
+v7's loader serves the session pages, the directory (/people and /overview: pgstore_directory) and
+the person pages (pgstore_person). A range the router filters by is snapped to whole minutes
+(ranges.py); the loader pushes down that same snapped range. The API's default store;
+AINTERCEPT_STORE=v1 selects V1Store instead.
 """
 
 import contextlib
 import contextvars
 import importlib.resources
 import itertools
+import json
 import pathlib
-import threading
 import time
 import urllib.parse
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any, TypeVar, cast
 
 import adbc_driver_postgresql.dbapi as pgdbapi
 import duckdb
 
-from aintercept_api import raw, state_sql, stream_sql
+from aintercept_api import pages, ranges, raw, state_sql, stream_sql
+from aintercept_api import request_detail as rd
 from aintercept_api import store as legacy
+from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
+from aintercept_api.reader import (
+    BEGIN,
+    POOL_SIZE,
+    SESSION_SETTINGS,
+    Load,
+    Pool,
+    Reader,
+    SchemaMismatch,
+    Snapshot,
+    Statement,
+)
 
 T = TypeVar("T")
 
@@ -50,21 +66,9 @@ T = TypeVar("T")
 # two equal.
 SCHEMA_HASH = "6c398638f39a0175e60b6f838d0ecd314465558c134514c36dc0ae06e63eedd5"
 
-BEGIN = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
-# Per connection, once (the API login sets the same; a DSN with another login still gets them).
-_SESSION_SETTINGS = (
-    "SET application_name = 'aintercept_api'",
-    "SET statement_timeout = '30s'",
-    "SET idle_in_transaction_session_timeout = '30s'",
-)
-POOL_SIZE = 8
+__all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
 _LABELS_SQL = importlib.resources.files("aintercept_api").joinpath("sql/labels.sql").read_text()
-
-
-class SchemaMismatch(RuntimeError):
-    """The database's schema isn't this build's (pg.ErrSchemaMismatch, pg.ErrNoSchema): the API
-    refuses to start."""
 
 
 # --- the API's tables, as today's store shapes them -----------------------------------------------
@@ -242,21 +246,23 @@ SELECT status.*, d.data FROM status LEFT JOIN LATERAL (
     SELECT {value} AS data FROM drawer_requests r
     JOIN drawer_templates t ON t.key = r.key AND t.id = r.{column}_tpl
     LEFT JOIN drawer_step_counts c ON c.session_id = r.step_session AND c.prompt_id = r.step_prompt AND c.key = r.key
-    WHERE r.request_id = $1 ORDER BY r.key LIMIT 1) d ON true"""  # noqa: S608
+    WHERE r.request_id = %(id)s ORDER BY r.key LIMIT 1) d ON true"""  # noqa: S608
 
 
 # /raw: the row's existence, and the call's requests row (the view when its detail object can't be
 # read: a WebSocket turn's, or one not found); request_detail formats the detail object as today.
+_REQUEST_COLUMNS = [c for c, _ in SHAPES["requests"] if c not in _NOT_STORED]
 _RAW = f"""WITH status AS ({_STATUS}),
-d AS (SELECT request_id FROM drawer_requests WHERE request_id = $1 LIMIT 1)
+d AS (SELECT request_id FROM drawer_requests WHERE request_id = %(id)s LIMIT 1)
 SELECT status.*, (SELECT count(*) FROM d) AS found, r.* FROM status LEFT JOIN (
     SELECT {columns("requests")} FROM requests
-    WHERE call_id = replace($1, '~', '#') AND NOT coalesce(synthetic, false) AND EXISTS (SELECT 1 FROM d)) r ON true"""  # noqa: S608
+    WHERE call_id = replace(%(id)s, '~', '#') AND NOT coalesce(synthetic, false) AND EXISTS (SELECT 1 FROM d)) r
+  ON true"""  # noqa: S608
 # /events/{id}: the event's row (its raw row comes from the batch's detail object, as today's).
 _EVENT = f"""WITH status AS ({_STATUS})
 SELECT status.*, e.data, e.correlation_id, e.event_key FROM status LEFT JOIN LATERAL (
-    SELECT data, correlation_id, event_key FROM drawer_events WHERE event_id = $1 ORDER BY key LIMIT 1) e ON true"""  # noqa: S608
-_STATUS_COLUMNS = ("first_request_ns", "earliest_ns", "newest_row_ns", "pods_ns", "any_key", "retained")
+    SELECT data, correlation_id, event_key FROM drawer_events WHERE event_id = %(id)s ORDER BY key LIMIT 1) e
+  ON true"""  # noqa: S608
 
 # What each session page reads after its row: the tables its endpoint code queries.
 SESSION_PAGES: dict[str, tuple[str, ...]] = {
@@ -298,39 +304,11 @@ BEGIN
   FOR r IN EXECUTE 'EXPLAIN ' || q LOOP RETURN NEXT r; END LOOP;
 END $f$"""
 
-# --- tracing (tests: what a request read) -----------------------------------------------------------
-
-
-@dataclass
-class Statement:
-    name: str
-    sql: str
-    params: list[tuple[object, str]]
-    rows: int = 0
-    ms: float = 0.0
-
-
-@dataclass
-class Load:
-    path: str
-    begin: str = BEGIN
-    connections: int = 0
-    statements: list[Statement] = field(default_factory=list)
-
-
-@dataclass
-class Status:
-    first_request_ns: int | None
-    earliest_ns: int | None
-    newest_ns: int | None
-    content_retained: bool | None
-
 
 @dataclass
 class _Loaded:
     con: duckdb.DuckDBPyConnection
     n: int
-    status: Status | None = None
     values: dict[str, Any] = field(default_factory=dict)  # what a plan computed for the endpoint
     memo: OrderedDict[tuple[Any, ...], Any] = field(default_factory=OrderedDict)
 
@@ -340,66 +318,6 @@ _current: contextvars.ContextVar[_Loaded | None] = contextvars.ContextVar("pg_ta
 
 class _Broken(Exception):
     """A pooled connection that failed before its snapshot began (the server dropped it)."""
-
-
-# --- the connection pool --------------------------------------------------------------------------
-
-
-class _Pool:
-    """At most size connections; idle ones are reused, a failed one is closed, never returned."""
-
-    def __init__(self, dsn: str, size: int) -> None:
-        self.dsn, self.size = dsn, size
-        self._idle: list[Any] = []
-        self._slots = threading.BoundedSemaphore(size)
-        self._lock = threading.Lock()
-        self.opened = 0
-
-    def open(self) -> Any:
-        conn = pgdbapi.connect(self.dsn, autocommit=True)
-        cur = conn.cursor()
-        try:
-            for s in _SESSION_SETTINGS:
-                cur.execute(s)
-        finally:
-            cur.close()
-        with self._lock:
-            self.opened += 1
-        return conn
-
-    @contextlib.contextmanager
-    def connection(self, *, fresh: bool = False) -> Iterator[tuple[Any, bool]]:
-        """(a connection, whether it was reused)."""
-        self._slots.acquire()
-        try:
-            with self._lock:
-                conn = None if fresh or not self._idle else self._idle.pop()
-            reused = conn is not None
-            if conn is None:
-                conn = self.open()
-            ok = False
-            try:
-                yield conn, reused
-                ok = True
-            finally:
-                keep = False
-                if ok:
-                    with self._lock:
-                        keep = len(self._idle) < self.size
-                        if keep:
-                            self._idle.append(conn)
-                if not keep:
-                    with contextlib.suppress(Exception):
-                        conn.close()
-        finally:
-            self._slots.release()
-
-    def close(self) -> None:
-        with self._lock:
-            idle, self._idle = self._idle, []
-        for conn in idle:
-            with contextlib.suppress(Exception):
-                conn.close()
 
 
 # --- one request's reads --------------------------------------------------------------------------
@@ -425,7 +343,8 @@ class _Run:
         table = "_pg_" + name
         self.con.from_arrow(self.cur.fetch_arrow()).create(table)
         n = int(self.con.execute(f"SELECT count(*) FROM {table}").fetchall()[0][0])  # noqa: S608
-        self.load.statements.append(Statement(name, sql, list(params), n, (time.perf_counter() - t0) * 1000))
+        ms = (time.perf_counter() - t0) * 1000
+        self.load.statements.append(Statement(name, sql, list(params), n, ms, via="adbc"))
         if self.between is not None:
             self.between(len(self.load.statements) - 1)
         return table
@@ -445,22 +364,7 @@ def _event_id(eid: str) -> str:
     return eid
 
 
-def _instant_ns(value: str | None) -> int | None:
-    """A from=/to= instant in ns, as the endpoint will parse it (None: absent or not one)."""
-    if not value:
-        return None
-    try:
-        t = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if t.tzinfo is None:
-        return None
-    t = t.astimezone(UTC)
-    return int(t.timestamp()) * 1_000_000_000 + t.microsecond * 1000
-
-
-# A range pushed down is widened by this much each side: a superset of the endpoint's exact filter
-# whatever its parsing rounds.
+# A range pushed down (the router's, snapped: ranges.of_query) is widened by this much each side.
 _WIDEN_NS = 1_000_000
 
 
@@ -482,84 +386,76 @@ class PgStore:
         threads: int | None = None,
         trace: bool = False,
     ) -> None:
-        self.pool = _Pool(dsn, pool_size)
+        self.dsn = dsn
+        self.trace: list[Load] = []
+        # v8's reader (psycopg), and v7's loader's connections (ADBC) until build step 11 removes it.
+        self.reader = Reader(dsn, pool_size=pool_size, trace=self.trace if trace else None)
+        self.pool = Pool(self._adbc_connect, pool_size)
         self.source, self.prefix = source, prefix  # calls/<id>.ndjson.gz (the drawer's raw view)
         self.memory_limit, self.threads = memory_limit, threads
         self.data_dir = pathlib.Path(".")
         self.skipped: list[str] = []
-        self.trace: list[Load] = []
         self._tracing = trace
-        self.between: Callable[[int], None] | None = None  # tests: called after each statement
+        self.between: Callable[[int], None] | None = None  # tests: called after each loader statement
         self._n = itertools.count(1)
-        self.check_schema()
+        self.reader.check_schema(SCHEMA_HASH)
+
+    def _adbc_connect(self) -> Any:
+        conn = pgdbapi.connect(self.dsn, autocommit=True)
+        cur = conn.cursor()
+        try:
+            for s in SESSION_SETTINGS:
+                cur.execute(s)
+        finally:
+            cur.close()
+        return conn
 
     @property
     def opened(self) -> int:
-        return self.pool.opened
-
-    def check_schema(self) -> None:
-        """Refuse a database whose schema isn't this build's (pg.Check)."""
-        with self.pool.connection() as (conn, _):
-            cur = conn.cursor()
-            con = duckdb.connect()
-            try:
-                cur.execute("SELECT to_regclass('schema_version')::text AS reg")
-                con.from_arrow(cur.fetch_arrow()).create("reg")
-                if con.execute("SELECT reg FROM reg").fetchall() != [("schema_version",)]:
-                    raise SchemaMismatch("the database has no schema (the workers apply it)")
-                cur.execute("SELECT hash FROM schema_version")
-                con.from_arrow(cur.fetch_arrow()).create("h")
-                found = [h for (h,) in con.execute("SELECT hash FROM h").fetchall()]
-            finally:
-                cur.close()
-                con.close()
-        if found != [SCHEMA_HASH]:
-            raise SchemaMismatch(
-                f"the database's schema {found} isn't this build's {SCHEMA_HASH}"
-                " (a schema change needs a fresh database)"
-            )
+        """Connections opened so far, by either driver."""
+        return self.reader.pool.opened + self.pool.opened
 
     def close(self) -> None:
+        self.reader.close()
         self.pool.close()
+
+    # --- each page's reader (pages.py) -------------------------------------------------------------
+
+    def page_reader(self, page: str, path: str) -> contextlib.AbstractContextManager[pages.Pages]:
+        """v8's reader for the pages it serves (PgPages.PAGES), in one snapshot; v7's loader's tables
+        (which load_for read in the request's snapshot) under today's SQL for the rest."""
+        if page in PgPages.PAGES:
+            return self._v8(path)
+        return contextlib.nullcontext(pages.SqlPages(cast(legacy.Store, self)))
+
+    @contextlib.contextmanager
+    def _v8(self, path: str) -> Iterator[pages.Pages]:
+        with self.reader.snapshot(path) as snap:
+            yield cast(pages.Pages, PgPages(self, snap))
 
     # --- loading -----------------------------------------------------------------------------------
 
     def load_for(self, path: str) -> _Loaded | None:
         """The request's tables, read in one snapshot; None for a path that reads none."""
         bare, _, query = path.partition("?")
+        if pages.page_of(bare) in PgPages.PAGES:
+            return None  # v8's reader reads it, in the page's own snapshot
         params = urllib.parse.parse_qs(query)
-        plan: Callable[[_Run], Status | None]
-        if bare == "/api/v1/status":
-            plan = self._status
-        elif bare.startswith("/api/v1/sessions/"):
+        plan: Callable[[_Run], None]
+        if bare.startswith("/api/v1/sessions/"):
             sid, _, sub = bare.removeprefix("/api/v1/sessions/").partition("/")
             sid = urllib.parse.unquote(sid)
             if sub not in SESSION_PAGES or sub == ENTITY:
                 return None
 
-            def plan(run: _Run) -> Status | None:
+            def plan(run: _Run) -> None:
                 self._session(run, sid, sub, params)
-                return None
-
-        elif bare.startswith("/api/v1/requests/"):
-            rid, _, sub = bare.removeprefix("/api/v1/requests/").partition("/")
-            rid = urllib.parse.unquote(rid)
-
-            def plan(run: _Run) -> Status | None:
-                return self._drawer(run, rid, sub)
-
-        elif bare.startswith("/api/v1/events/"):
-            eid = urllib.parse.unquote(bare.removeprefix("/api/v1/events/").split("/", 1)[0])
-
-            def plan(run: _Run) -> Status | None:
-                return self._event(run, eid)
 
         elif bare in ("/api/v1/people", "/api/v1/overview"):
             from aintercept_api import pgstore_directory
 
-            def plan(run: _Run) -> Status | None:
+            def plan(run: _Run) -> None:
                 pgstore_directory.load(run, overview=bare == "/api/v1/overview", params=params)
-                return None
 
         elif bare.startswith("/api/v1/people/") or bare == "/api/v1/coverage":
             from aintercept_api import pgstore_person  # it builds on this module's loader
@@ -568,10 +464,10 @@ class PgStore:
             if page is None:
                 return None
             pid, sub = page
-            lo, hi = pgstore_person.range_of(params)
+            lo, hi = ranges.of_query(params)
 
-            def plan(run: _Run) -> Status | None:
-                return pgstore_person.load(self, run, pid, sub, lo, hi)
+            def plan(run: _Run) -> None:
+                pgstore_person.load(self, run, pid, sub, lo, hi)
 
         else:
             return None
@@ -580,19 +476,18 @@ class PgStore:
     def session_entity(self, sid: str) -> _Loaded:
         """A whole session's tables, everything any of its pages reads (the table-level harness)."""
 
-        def plan(run: _Run) -> Status | None:
+        def plan(run: _Run) -> None:
             self._session(run, sid, ENTITY, {})
-            return None
 
         return self._read(f"entity:{sid}", plan)
 
-    def _read(self, path: str, plan: Callable[[_Run], Status | None]) -> _Loaded:
+    def _read(self, path: str, plan: Callable[[_Run], None]) -> _Loaded:
         try:
             return self._read_once(path, plan, fresh=False)
         except _Broken:
             return self._read_once(path, plan, fresh=True)
 
-    def _read_once(self, path: str, plan: Callable[[_Run], Status | None], *, fresh: bool) -> _Loaded:
+    def _read_once(self, path: str, plan: Callable[[_Run], None], *, fresh: bool) -> _Loaded:
         load = Load(path)
         con = self._duckdb()
         try:
@@ -607,7 +502,7 @@ class PgStore:
                             raise _Broken() from e
                         raise
                     run = _Run(cur, con, load, self.between)
-                    status = plan(run)
+                    plan(run)
                     cur.execute("COMMIT")
                 finally:
                     cur.close()
@@ -617,7 +512,7 @@ class PgStore:
             raise
         if self._tracing:
             self.trace.append(load)
-        return _Loaded(con, next(self._n), status, run.values)
+        return _Loaded(con, next(self._n), run.values)
 
     def _duckdb(self) -> duckdb.DuckDBPyConnection:
         config: dict[str, Any] = {"autoinstall_known_extensions": False, "autoload_known_extensions": False}
@@ -650,14 +545,6 @@ class PgStore:
         order = f" ORDER BY {_ORDER[table]}" if table in _ORDER else ""
         con.execute(f"INSERT INTO {table} BY NAME SELECT * FROM ({select}){order}", list(params))  # noqa: S608
 
-    # --- /status -----------------------------------------------------------------------------------
-
-    def _status(self, run: _Run) -> Status:
-        t = run.fetch("status", _STATUS)
-        first, earliest, newest, pods, any_key, retained = run.con.execute(f"SELECT * FROM {t}").fetchall()[0]  # noqa: S608
-        found = [n for n in (newest, pods) if n]
-        return Status(first or None, earliest or None, max(found) if found else None, retained if any_key else None)
-
     # --- session pages -----------------------------------------------------------------------------
 
     def _session(self, run: _Run, sid: str, sub: str, params: dict[str, list[str]]) -> None:
@@ -673,7 +560,7 @@ class PgStore:
             elif name == "edges":
                 loaded[name] = run.fetch(name, _EDGES, _sid(sid))
             elif name == "event_rows" and sub == "events":
-                lo, hi = (_instant_ns(params[k][0] if params.get(k) else None) for k in ("from", "to"))
+                lo, hi = ranges.of_query(params)
                 ranged = [
                     (sid, "VARCHAR"),
                     (None if lo is None else lo - _WIDEN_NS, "BIGINT"),
@@ -780,52 +667,14 @@ class PgStore:
             [sid],
         )
 
-    # --- the drawer and one event (§3.7: the worker's rows) ---------------------------------------
-
-    @staticmethod
-    def _status_of_row(run: _Run, table: str) -> Status:
-        sql = f"SELECT {', '.join(_STATUS_COLUMNS)} FROM {table} LIMIT 1"  # noqa: S608
-        first, earliest, newest, pods, any_key, retained = run.con.execute(sql).fetchall()[0]
-        found = [n for n in (newest, pods) if n]
-        return Status(first or None, earliest or None, max(found) if found else None, retained if any_key else None)
-
-    def _drawer(self, run: _Run, rid: str, sub: str) -> Status:
-        if sub == "raw":
-            t = run.fetch("drawer", _RAW, _sid(rid))
-            run.values["drawer"] = run.con.execute(f"SELECT found FROM {t} LIMIT 1").fetchall()[0][0] > 0  # noqa: S608
-            req = ", ".join(_q(c) for c, _ in SHAPES["requests"] if c not in _NOT_STORED)
-            self._into(run.con, "requests", f"SELECT {req} FROM {t} WHERE call_id IS NOT NULL")  # noqa: S608
-        else:
-            t = run.fetch("drawer", _drawer_sql("details" if sub == "details" else "data"), _sid(rid))
-            run.values["drawer"] = run.con.execute(f"SELECT data FROM {t}").fetchall()[0][0]  # noqa: S608
-        return self._status_of_row(run, t)
-
-    def _event(self, run: _Run, eid: str) -> Status:
-        t = run.fetch("event", _EVENT, _sid(_event_id(eid)))
-        run.values["event"] = run.con.execute(f"SELECT data, correlation_id, event_key FROM {t}").fetchall()[0]  # noqa: S608
-        return self._status_of_row(run, t)
-
-    # The drawer's endpoints read the worker's rows (routers/requests.py).
-    precomputed = True
-
-    def drawer_row(self) -> str | None:
-        """/requests/{id}'s or /details' finished JSON (None: no such request)."""
-        return cast(str | None, self._tables().values["drawer"])
-
-    def drawer_found(self) -> bool:
-        """/raw: whether the request has a row."""
-        return bool(self._tables().values["drawer"])
-
-    def event_row(self) -> tuple[str | None, str | None, str | None]:
-        """/events/{id}: the event's JSON (but its raw row), its batch and its event key."""
-        return cast(tuple[str | None, str | None, str | None], self._tables().values["event"])
-
     # --- tests: a statement's plan -----------------------------------------------------------------
 
     def explain(self, statement: Statement) -> list[str]:
         """statement's plan with sequential scans priced out (what an index can serve), on a connection
         of its own: its setting never reaches a pooled one."""
-        with contextlib.closing(self.pool.open()) as conn:
+        if statement.via != "adbc":
+            return self.reader.explain(statement)
+        with contextlib.closing(self._adbc_connect()) as conn:
             cur = conn.cursor()
             con = duckdb.connect()
             try:
@@ -862,24 +711,6 @@ class PgStore:
     @property
     def commit(self) -> object:
         return self._tables().n
-
-    def _status_of(self) -> Status:
-        status = self._tables().status
-        if status is None:
-            raise RuntimeError("this page's load didn't read /status's statement")
-        return status
-
-    def status_stats(self) -> tuple[int | None, int | None]:
-        s = self._status_of()
-        return s.first_request_ns, s.earliest_ns
-
-    @property
-    def newest_ns(self) -> int | None:
-        return self._status_of().newest_ns
-
-    @property
-    def content_retained(self) -> bool | None:
-        return self._status_of().content_retained
 
     def agent_calls_in(self, lo: int | None, hi: int | None) -> int:
         """/overview's requests: the Claude Code and Codex calls in [lo, hi], counted in the request's
@@ -927,3 +758,105 @@ class PgStore:
 
     def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
         return legacy.event_row(self._detail(correlation_id), correlation_id, event_key)
+
+
+# --- v8's reader (docs/PIPELINE.md v8 §5.6, §5.7) -------------------------------------------------------
+
+
+class PgPages:
+    """PgStore's pages that read finished rows through the psycopg reader, in one snapshot: /status, the
+    request drawer and /events/{id}, one statement each. A page moves here (build steps 9 to 11) by
+    adding its name to PAGES and its method, with pages.SqlPages' signature."""
+
+    PAGES = frozenset({"status", "request", "request/raw", "request/details", "event"})
+
+    def __init__(self, store: PgStore, snap: Snapshot) -> None:
+        self.store, self.snap = store, snap
+        self._status: pages.StatusValues | None = None
+
+    def _with_status(self, name: str, sql: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """A statement's one row, which carries /status's values (the drawer's lastDataAt is global,
+        quirk 7)."""
+        (row,) = self.snap.dicts(name, sql, params or {})
+        found = [n for n in (row["newest_row_ns"], row["pods_ns"]) if n]
+        self._status = pages.StatusValues(
+            row["first_request_ns"] or None,
+            row["earliest_ns"] or None,
+            max(found) if found else None,
+            row["retained"] if row["any_key"] else None,
+        )
+        return row
+
+    def status(self) -> pages.StatusValues:
+        if self._status is None:
+            self._with_status("status", _STATUS)
+        return cast(pages.StatusValues, self._status)
+
+    def newest_ns(self) -> int | None:
+        return self.status().newest_ns
+
+    def _drawer(self, rid: str, column: str) -> Any:
+        data = self._with_status("drawer", _drawer_sql(column), {"id": rid})["data"]
+        return None if data is None else json.loads(data)
+
+    def request(self, rid: str) -> RequestDetail | None:
+        d = self._drawer(rid, "data")
+        return None if d is None else RequestDetail.model_validate(d)
+
+    def request_details(self, rid: str) -> RequestDetails | None:
+        d = self._drawer(rid, "details")
+        return None if d is None else RequestDetails.model_validate(d)
+
+    def request_raw(self, rid: str) -> RequestRaw | None:
+        row = self._with_status("drawer", _RAW, {"id": rid})
+        if not row["found"]:
+            return None
+        if rid.startswith(rd.REPORTED):
+            return rd.reported_raw()
+        with contextlib.closing(_OneCall(self.store, row)) as call:
+            return rd.wire_raw(cast(legacy.Store, call), rid)
+
+    def event(self, eid: str) -> EventDetail | None:
+        """The worker's row of the event, and its raw row from the batch's detail object."""
+        row = self._with_status("event", _EVENT, {"id": _event_id(eid)})
+        cid, _, n = eid.rpartition(":")
+        if not cid or not n.isdigit() or row["data"] is None:
+            return None
+        body = self.store.raw_event(row["correlation_id"], row["event_key"], "") or {}
+        ev = body.get("client_event") if isinstance(body, dict) else None
+        d = json.loads(row["data"])
+        d["eventId"], d["raw"] = eid, rd._scrub(ev if isinstance(ev, dict) else {})
+        return EventDetail.model_validate(d)
+
+
+class _OneCall:
+    """What /raw's formatter (request_detail.wire_raw) reads of one call: its detail object (S3), and
+    its requests row as today's `calls` view has it (a WebSocket turn's view, or one whose object is
+    missing), in a DuckDB of its own, made only when asked (build step 8 renders that view instead)."""
+
+    def __init__(self, store: PgStore, row: dict[str, Any]) -> None:
+        self.store, self.row = store, row
+        self.commit = next(store._n)
+        self._con: duckdb.DuckDBPyConnection | None = None
+
+    def raw_rows(self, correlation_id: str) -> list[dict[str, Any]]:
+        return self.store.raw_rows(correlation_id)
+
+    def query(self, sql: str, params: Sequence[object] | None = None) -> list[tuple[Any, ...]]:
+        if self._con is None:
+            con = self.store._duckdb()
+            con.execute(legacy._EMPTY["requests"])
+            if self.row.get("call_id") is not None:
+                cols = ", ".join(_q(c) for c in _REQUEST_COLUMNS)
+                marks = ", ".join("?" for _ in _REQUEST_COLUMNS)
+                con.execute(
+                    f"INSERT INTO requests ({cols}) VALUES ({marks})",  # noqa: S608 (fixed names)
+                    [self.row[c] for c in _REQUEST_COLUMNS],
+                )
+            PgStore._finish(con)
+            self._con = con
+        return self._con.execute(sql, params or []).fetchall()
+
+    def close(self) -> None:
+        if self._con is not None:
+            self._con.close()

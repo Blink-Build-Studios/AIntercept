@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -68,7 +69,8 @@ func replayStream(src string, seed int64, pods, processors, steps, checkpoints i
 type recordCollector struct {
 	mu     sync.Mutex
 	recs   []records.Record
-	newest int64 // the newest raw row any file carried (data time)
+	newest int64            // the newest raw row any file carried (data time)
+	byKey  map[string]int64 // each key's newest raw row its files carried (rows that complete no record too)
 }
 
 func (c *recordCollector) Put(_ context.Context, key string, body []byte) error {
@@ -82,6 +84,26 @@ func (c *recordCollector) Put(_ context.Context, key string, body []byte) error 
 	c.mu.Lock()
 	c.recs = append(c.recs, rs...)
 	c.newest = max(c.newest, newest)
+	if k, ok := ingestKey(key); ok {
+		if c.byKey == nil {
+			c.byKey = map[string]int64{}
+		}
+		c.byKey[k] = max(c.byKey[k], newest)
+	}
 	c.mu.Unlock()
 	return nil
+}
+
+// ingestKey is the routing key an ingest file's name holds: <prefix>v1/keys/<esc key>/in/….
+func ingestKey(name string) (string, bool) {
+	_, rest, ok := strings.Cut(name, "v1/keys/")
+	if !ok {
+		return "", false
+	}
+	esc, _, ok := strings.Cut(rest, "/in/")
+	if !ok {
+		return "", false
+	}
+	k, err := url.PathUnescape(esc)
+	return k, err == nil
 }
