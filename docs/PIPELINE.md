@@ -194,6 +194,13 @@ v1/recent/<s3-time>-<incarnation>-<seq>.json    per pod every 5 s: the keys whos
 - **The state checkpoint stays in S3.** It's the key's journal of applied
   records (`state.Encode`), compacted in tiers of 8 as built.
   - Its size is the key's records, and only the worker loading the key reads it.
+  - *v8:* each chunk is the journal's gob compressed with zstd (a chunk of plain
+    gob, from before, still loads). The records repeat their event metadata
+    and headers, so on the capture's heaviest session (57,874 records, 3,430
+    wires) the chunk is 6.2 MB instead of 114 MB: the records were 99 MB of
+    it, the wires 15. Compaction keeps each external input's last value once
+    (`state.Merge`), so a value that changes every run (other keys' batch
+    parts) doesn't pile up.
   - Postgres holds the chunk names in the key's row.
   - Moving it into Postgres would copy every record into the database for no
     query.
@@ -891,7 +898,23 @@ indexed lookup; nothing about it is derived at request time.
   `calls/<id>.ndjson.gz` for each call that ended since, and keeps what the
   drawer reads of it (the wire summary, never the bodies) as an *external
   input* of the key's state: journaled with its records, so a cold load has it
-  without a GET. An object missing for a call that ended under 2 minutes ago
+  without a GET. *v8:* of its headers the wire keeps only the ones the render
+  reads (the request's prompt, class, client request id and session; the
+  response's request id, unified rate limits and Codex headers), and of its
+  bodies only the drawer's views of them (content rows with their 4,000-char
+  previews, the stream's event count, the tools' input rows).
+  - **Redaction stays whole-body and exact.** `request_detail.redact` runs over
+    the decoded body before it's parsed, and that order shows: a redacted
+    `"access_token": "…"` pair leaves the JSON invalid (no content rows), a
+    secret is matched in the body's JSON-escaped text, not in the decoded
+    strings, and the content rows' sizes are the redacted text's. Redacting
+    only the emitted previews would change all three, so the worker still
+    redacts the whole body, but finds candidates by the literal each
+    alternative starts with (`sk-ant-`, `Bearer`, `eyJ`, `gh`, `xox`, `ya29.`,
+    the four quoted keys) with `strings.Index`, and runs an alternative's
+    regular expression only where its literal is. Only one alternative can
+    match at any position, so this is the same leftmost-first scan; a fuzz
+    test holds it to the regular expression's. It was 55% of the drain's CPU. An object missing for a call that ended under 2 minutes ago
   (wall clock; `Config.DetailWait`, which the rollup service sets) is retried:
   the run keeps its flag, with `render`. After that the call is rendered from
   its `requests` row, as today's drawer does for a missing object. (Ingest
