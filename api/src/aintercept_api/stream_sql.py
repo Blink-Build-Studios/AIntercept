@@ -47,13 +47,26 @@ scope AS (SELECT $session AS session_id)
 
 # The rows of the transactions made with the scope's credentials (with $only, just that
 # session's), and the scope's not-captured calls, with what spans them joined.
-_ROWS = """
-hashes AS (SELECT DISTINCT key_hash FROM dim_session_credential WHERE session_id IN (SELECT session_id FROM scope)),
+_BATCH_MEMBERS = """
 batch_session AS (
     SELECT batch_id, session_id FROM batch_members WHERE session_id <> ''
     QUALIFY row_number() OVER (PARTITION BY batch_id ORDER BY ns, session_id) = 1),
 batch AS (
-    SELECT batch_id, count(*) AS n, min(name) FILTER (WHERE name <> '') AS name FROM batch_members GROUP BY batch_id),
+    SELECT batch_id, count(*) AS n, min(name) FILTER (WHERE name <> '') AS name FROM batch_members
+    GROUP BY batch_id),"""
+
+# The same two values from each key's part of a batch (docs/PIPELINE.md v7 §3.4, batch_parts: a
+# key's events of the batch, their least non-empty name, its earliest (ns, session) with a session):
+# the count is the parts' sum, the name their least, the session the earliest (ns, session).
+_BATCH_PARTS = """
+batch_session AS (
+    SELECT batch_id, first_session AS session_id FROM batch_parts WHERE coalesce(first_session, '') <> ''
+    QUALIFY row_number() OVER (PARTITION BY batch_id ORDER BY first_ns, first_session) = 1),
+batch AS (SELECT batch_id, sum(n)::BIGINT AS n, min(min_name) AS name FROM batch_parts GROUP BY batch_id),"""
+
+_ROWS = """
+hashes AS (SELECT DISTINCT key_hash FROM dim_session_credential WHERE session_id IN (SELECT session_id FROM scope)),
+{batch}
 txs AS (
     SELECT t.*, coalesce(nullif(t.own_session, ''), bs.session_id) AS tx_session
     FROM request_txs t LEFT JOIN batch_session bs ON bs.batch_id = t.call_id
@@ -115,6 +128,11 @@ missed_rows AS (
 all_rows AS (SELECT * FROM tx_rows UNION ALL SELECT * FROM missed_rows)
 """
 
+
+def _rows(parts: bool) -> str:
+    return _ROWS.format(batch=_BATCH_PARTS if parts else _BATCH_MEMBERS)
+
+
 _OVERRIDES = {
     "session_id": "row_session",
     "prompt_index": "row_prompt_index",
@@ -146,7 +164,7 @@ def _dicts(cur: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
 def person_request_rows_sql(person: str) -> tuple[str, dict[str, object]]:
     """A person's request log's query and parameters (request_rows, person_id = person)."""
     scope = _UNATTRIBUTED_SCOPE if person == "unattributed" else _PERSON_SCOPE
-    sql = f"WITH {scope}, {_ROWS} SELECT {_select('$person')} FROM all_rows ORDER BY {_ORDER}"  # noqa: S608
+    sql = f"WITH {scope}, {_rows(False)} SELECT {_select('$person')} FROM all_rows ORDER BY {_ORDER}"  # noqa: S608
     return sql, {"person": person, "only": None}
 
 
@@ -165,10 +183,13 @@ def person_last(con: duckdb.DuckDBPyConnection, person: str) -> int | None:
     return None if row is None else row[0]
 
 
-def session_request_rows_sql(con: duckdb.DuckDBPyConnection, session: str) -> tuple[str, dict[str, object]]:
+def session_request_rows_sql(
+    con: duckdb.DuckDBPyConnection, session: str, *, parts: bool = False
+) -> tuple[str, dict[str, object]]:
     """A session's Requests tab's query and parameters (session_request_rows): its own rows,
     and for a Codex thread its client's calls no thread names, from its start to a minute after
-    its last activity. Each row with its place (seq) and an empty person_id."""
+    its last activity. Each row with its place (seq) and an empty person_id. With parts, a batch's
+    session, count and name come from batch_parts rather than batch_members."""
     sr = con.execute(
         "SELECT product, coalesce(client, ''), start_ns // 1000, (last_ns + 60000000000) // 1000"
         " FROM session_rows WHERE session_id = $session",
@@ -183,7 +204,7 @@ def session_request_rows_sql(con: duckdb.DuckDBPyConnection, session: str) -> tu
             " AND coalesce(r.client, '') = $client AND r.ts_ns // 1000 BETWEEN $lo AND $hi)"
         )
     sql = (
-        f"WITH {_SESSION_SCOPE}, {_ROWS} SELECT row_number() OVER (ORDER BY {_ORDER}) - 1 AS seq,"  # noqa: S608
+        f"WITH {_SESSION_SCOPE}, {_rows(parts)} SELECT row_number() OVER (ORDER BY {_ORDER}) - 1 AS seq,"  # noqa: S608
         f" {_select(chr(39) * 2)} FROM all_rows WHERE {keep} ORDER BY {_ORDER}"
     )
     params: dict[str, object] = {"session": session, "only": None if codex else session}

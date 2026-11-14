@@ -1,29 +1,25 @@
-"""The worker's Postgres rows side by side with the oracle (docs/PIPELINE.md v7 build steps 2 and 3).
-
-`aintercept v1layout -pg <dsn>` runs the v7 worker (internal/worker) over the dataset's ingest files
-into a fresh Postgres: every key flagged and drained, the due calls run until nothing is flagged.
+"""The worker's Postgres rows and every session's loaded tables side by side with the oracle
+(docs/PIPELINE.md v7 build steps 2, 3 and 5).
 
 Stored inputs (step 2): each §3.4 table equals the oracle's st_<state table> over every key, row for
 row, keyed by (key, the state's row id): the oracle's nested structs flattened as the schema flattens
-them (row_<column>, plan_v), its id as bytes, analytics without env_json. (The SQL fixture seeds
-aren't here: they're stored inputs already, with no capture for a worker to apply.)
+them (row_<column>, plan_v), its id as bytes, analytics without env_json.
 
-Rendered rows (step 3: internal/render, state.RenderSession re-encoded, the folds): this reads each session's 9 tables
-back as the API will load them, and compares them with the oracle's for that session, row for row,
-seq by order. The load fills back the two re-encodings (prompt_rows.session_last_ns from
-session_rows.prompt_last_ns; session_marks.seq keyed per block, compared by order) and drops the
-columns the API doesn't load (own_title, prompt_last_ns, key_day, event_rows.batch). The folds are
-checked against the oracle's tables too: session_call_days, agent_calls (and their hours) and
-batch_parts.
+Sessions (steps 3 and 5):
 
-What the session's own key can't know isn't rendered, so it isn't compared:
-- children_json (the children's keys): NULL in Postgres, joined at read time;
-- a Codex thread's label from a title thread, another key. The datasets' Codex threads have none,
-  so every label is compared;
-- a Codex thread's Requests tab rows that no thread names (the credential's c: key);
-- an analytics batch's call still in flight: its start names no session, so it sits in its
-  credential's c: key until its ending brings the batch's session (records.Assembler.release).
-  The builders' batches never end, so their rows are left out here; an ended batch's are compared.
+`aintercept v1layout -pg <dsn>` writes every key's rows into a fresh Postgres (internal/render:
+state.RenderSession re-encoded, the folds); the API's loader (pgstore.PgStore) reads each session
+back as its pages do, and its 9 tables must equal the oracle's for that session, row for row, seq by
+order. The load fills back the two re-encodings (prompt_rows.session_last_ns from
+session_rows.prompt_last_ns; session_marks.seq keyed per block, compared by order), drops the
+columns the API doesn't load (own_title, prompt_last_ns, key_day, event_rows.batch), and joins what
+other keys hold (§4): children_json (the children's edges), a Codex thread's alone label (a title
+thread's calls) and the Requests tab's rows other keys hold (a Codex thread's unthreaded client
+calls, an analytics batch's call still in flight). The folds are checked against the oracle's
+tables too: session_call_days, agent_calls (and their hours) and batch_parts.
+
+Not compared here: label_text and label_source, the Codex title over the account-connected
+component, which only the person pages read (build step 6); every session page reads the alone label.
 """
 
 import contextlib
@@ -35,78 +31,34 @@ from typing import Any
 import duckdb
 import pytest
 
+from aintercept_api.pgstore import PgStore
 from tests import pgdb
-from tests.builders import ClaudeCode, Dataset, load_fixture
+from tests.builders import ClaudeCode, Codex, Dataset, load_fixture
 from tests.conftest import lay_out
-from tests.oracle.harness import SESSION_TABLES, Layout, Oracle, Table, Tables, assert_same
+from tests.oracle.harness import SESSION_TABLES, Layout, Oracle, Table, Tables, assert_same, extract
 from tests.oracle.store import LocalSource, OracleStore, Scope, read_newest
-from tests.test_codex import claude_code_account, codex_work
+from tests.test_codex import CHILD, claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_session import H, prompt
 from tests.test_stream_pipeline import one_stream_one_id
 
 SPAN_A, SPAN_B = "aaaaaaaa-0000-4000-8000-0000000000a1", "bbbbbbbb-0000-4000-8000-0000000000b2"
-# Today's table order (the oracle's store keeps each table sorted so): the render's rows are loaded
-# the same way, sorted by these columns. Ties keep the render's order.
-_ORDER = {
-    "prompt_rows": ("session_id", "seq"),
-    "session_marks": ("session_id", "kind", "seq"),
-    "presence_segments": ("session_id", "seq"),
-    "prompt_steps": ("session_id", "seq", "step"),
-    "event_rows": ("session_id", "seq"),
-    "session_request_rows": ("scope_session_id", "seq"),
-    "call_tool_uses": ("session_id", "ts_ns"),
-}
+TITLE_THREAD = "01a1c1ec-3e49-71b3-b32b-55a748502bab"
 # Kept in no particular order by today's store (sorted by session only, or with ties): multisets.
 _UNORDERED = ("session_tools", "call_tool_uses")
-_CROSS_SESSION = ("children_json",)
+# The component label (build step 6): no session page reads it.
+_COMPONENT = ("label_text", "label_source")
+# What a session's own key can't know, joined from other keys' rows at load (§4).
+_CROSS_KEY = ("children_json", "label_text_alone", "label_source_alone")
 
 
-# The columns a table holds that the API doesn't load (docs/PIPELINE.md §3.3).
-_EXTRAS = {"session_rows": ("own_title", "prompt_last_ns", "key_day"), "event_rows": ("batch",)}
-
-
-def _quoted(s: str) -> str:
-    return "'" + s.replace("'", "''") + "'"
-
-
-def rendered_tables(dsn: str, sid: str) -> Tables:
-    """A session's rendered tables read back from Postgres as the API loads them: the extras dropped,
-    prompt_rows.session_last_ns from its session row (a session with no row keeps its own)."""
-    out: Tables = {}
-    con, pg = duckdb.connect(), pgdb.connect(dsn)
+def loaded_tables(store: PgStore, sid: str) -> Tables:
+    """A session's 9 tables as the API loads them (everything any of its pages reads)."""
+    loaded = store.session_entity(sid)
     try:
-        con.execute("SET threads = 1")
-        for name in SESSION_TABLES:
-            owner = "scope_session_id" if name == "session_request_rows" else "session_id"
-            pgdb.load(con, pg, name, f"SELECT * FROM {name} WHERE {owner} = {_quoted(sid)}")  # noqa: S608
-        con.execute(
-            """UPDATE prompt_rows p SET session_last_ns = s.prompt_last_ns FROM session_rows s
-               WHERE s.session_id = p.session_id AND s.prompt_last_ns IS NOT NULL"""
-        )
-        for name in SESSION_TABLES:
-            cols = f"* EXCLUDE ({', '.join(_EXTRAS[name])})" if name in _EXTRAS else "*"
-            cur = con.execute(f"SELECT {cols} FROM {name}")  # noqa: S608 (our table and column names)
-            t = Table(tuple(c[0] for c in cur.description or []), cur.fetchall())
-            if t.rows:
-                out[name] = t
+        return extract(loaded.con, SESSION_TABLES, sid)
     finally:
-        con.close()
-        pg.close()
-    return out
-
-
-def _shaped(want: Table, got: Table | None, name: str) -> Table:
-    """got with want's columns (loaded BY NAME), in today's table order."""
-    if got is None:  # an empty table has no file
-        return Table(want.columns, [])
-    assert set(got.columns) == set(want.columns), set(got.columns) ^ set(want.columns)
-    idx = [got.columns.index(c) for c in want.columns]
-    rows = [tuple(r[i] for i in idx) for r in got.rows]
-    if name in _ORDER:
-        keys = [want.columns.index(c) for c in _ORDER[name]]
-        rows.sort(key=lambda r: tuple(r[k] for k in keys))
-    return Table(want.columns, rows)
+        loaded.con.close()
 
 
 def _without(t: Table, cols: tuple[str, ...]) -> Table:
@@ -114,14 +66,14 @@ def _without(t: Table, cols: tuple[str, ...]) -> Table:
     return Table(tuple(t.columns[i] for i in keep), [tuple(r[i] for i in keep) for r in t.rows])
 
 
-def comparable(want: Tables, got: Tables, sid: str) -> tuple[Tables, Tables]:
-    """The oracle's session tables and the render's, in today's columns, with what the session's
-    own key can't know left out (module docstring)."""
-    w = {name: want[name] for name in SESSION_TABLES}
-    g = {name: _shaped(want[name], got.get(name), name) for name in SESSION_TABLES}
-    sr = w["session_rows"]
+def own_rows(want: Tables, sid: str) -> Tables:
+    """The oracle's tables with the cross-key values left out: the session row's children and alone
+    label, and the Requests tab's rows other keys hold (renumbered over what's kept, as the render
+    numbers its own)."""
+    w = dict(want)
+    w["session_rows"] = _without(w["session_rows"], _CROSS_KEY)
+    sr = want["session_rows"]
     codex = any(r[sr.columns.index("product")] == "codex" for r in sr.rows)
-    w["session_rows"], g["session_rows"] = _without(sr, _CROSS_SESSION), _without(g["session_rows"], _CROSS_SESSION)
     t = w["session_request_rows"]
     col = {c: t.columns.index(c) for c in ("seq", "session_id", "kind", "status", "status_err", "duration_ms")}
 
@@ -132,11 +84,36 @@ def comparable(want: Tables, got: Tables, sid: str) -> tuple[Tables, Tables]:
         return not (r[col["kind"]] == "analytics" and in_flight)
 
     kept = [r for r in t.rows if own(r)]
-    if len(kept) != len(t.rows):  # numbered over what's kept, as the render numbers its own
+    if len(kept) != len(t.rows):
         s = col["seq"]
         kept = [(*r[:s], n, *r[s + 1 :]) for n, r in enumerate(kept)]
     w["session_request_rows"] = Table(t.columns, kept)
+    return w
+
+
+def comparable(want: Tables, got: Tables, sid: str, *, cross_key: bool) -> tuple[Tables, Tables]:
+    """The oracle's session tables and the loader's, without the component label; without the
+    cross-key values too unless cross_key."""
+    w = {name: want[name] for name in SESSION_TABLES}
+    g = {name: got[name] for name in SESSION_TABLES}
+    w["session_rows"], g["session_rows"] = (
+        _without(w["session_rows"], _COMPONENT),
+        _without(g["session_rows"], _COMPONENT),
+    )
+    if not cross_key:
+        w = own_rows(w, sid)
+        g["session_rows"] = _without(g["session_rows"], _CROSS_KEY)
     return w, g
+
+
+def differs_across_keys(want: Tables, sid: str) -> bool:
+    """Whether a session has cross-key values the oracle shows (children, a title thread's label,
+    other keys' request rows)."""
+    sr = want["session_rows"]
+    children, source, product = (sr.columns.index(c) for c in ("children_json", "label_source_alone", "product"))
+    titled = any(r[source] == "title" and r[product] == "codex" for r in sr.rows)
+    others = len(own_rows(want, sid)["session_request_rows"].rows) != len(want["session_request_rows"].rows)
+    return titled or others or any(r[children] is not None for r in sr.rows)
 
 
 def _datasets(tmp: pathlib.Path) -> Iterator[tuple[str, pathlib.Path]]:
@@ -147,6 +124,20 @@ def _datasets(tmp: pathlib.Path) -> Iterator[tuple[str, pathlib.Path]]:
     person(ds, S1, account=OTHER, hour=11, calls=3)
     unattributed(ds)
     one_stream_one_id(ds)
+    # A Codex thread titled by a title thread of its own (another key), bodies recorded.
+    Codex(ds, CHILD).post("2026-11-04T16:00:00", "turn-x", {"input": []}, [])
+    Codex(ds, TITLE_THREAD).post(
+        "2026-11-04T16:00:01",
+        "",
+        {"input": []},
+        [
+            {
+                "type": "response.output_item.done",
+                "item": {"type": "message", "content": [{"type": "output_text", "text": "Fix flaky timer test"}]},
+            }
+        ],
+        source="thread_title",
+    )
     yield "demo and builders", pathlib.Path(ds.write())
     # One analytics batch carrying two sessions' events (test_v1_pipeline's spanning batch).
     ds = Dataset(tmp / "spanning" / "data")
@@ -179,23 +170,34 @@ def layouts(tmp_path_factory) -> Iterator[list[tuple[str, pathlib.Path, str]]]:
         yield out
 
 
-def test_every_sessions_rendered_rows_equal_the_oracles_tables(layouts):
+def _compare(layouts, *, cross_key: bool) -> dict[str, int]:
     compared: dict[str, int] = {}
     rows: dict[str, int] = {}
+    crossing = 0
     for name, root, dsn in layouts:
-        with Oracle(Layout(root)) as oracle:
+        with Oracle(Layout(root)) as oracle, contextlib.closing(PgStore(dsn, threads=1)) as store:
             sids = oracle.session_ids()
             assert sids, name
             for sid in sids:
-                w, g = comparable(oracle.session(sid), rendered_tables(dsn, sid), sid)
+                want = oracle.session(sid)
+                crossing += differs_across_keys(want, sid)
+                w, g = comparable(want, loaded_tables(store, sid), sid, cross_key=cross_key)
                 assert_same(w, g, entity=f"{name}: session {sid}", unordered=_UNORDERED)
                 compared[name] = compared.get(name, 0) + 1
                 for t, v in w.items():
                     rows[t] = rows.get(t, 0) + len(v.rows)
-    print("sessions compared:", compared, "rows:", rows)  # noqa: T201 (the gate's coverage, in -s output)
+    print("sessions compared:", compared, "rows:", rows, "with cross-key values:", crossing)  # noqa: T201
     assert compared["demo and builders"] >= 5 and compared["spanning batch"] == 2, compared
-    # Not vacuous: every session table holds rows somewhere.
+    # Not vacuous: every session table holds rows somewhere, and the datasets hold cross-key values.
     assert all(rows[t] for t in SESSION_TABLES), rows
+    assert crossing >= 3, crossing
+    return compared
+
+
+def test_every_sessions_tables_equal_the_oracles(layouts):
+    """Every session's tables as the API loads them, the cross-key values joined (§4): children_json,
+    the alone label from a title thread, and the Requests tab's rows other keys hold."""
+    _compare(layouts, cross_key=True)
 
 
 def _pg_rows(dsn: str, sql: str) -> list[tuple[Any, ...]]:

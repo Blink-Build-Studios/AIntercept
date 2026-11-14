@@ -92,6 +92,36 @@ def bucket_store_from_env(env: Mapping[str, str], *, v1: bool = False) -> Any:
     )
 
 
+def pg_store_from_env(env: Mapping[str, str]) -> Any:
+    """The Postgres read path (pgstore.py, docs/PIPELINE.md v7 §5): the API login's DSN from
+    AINTERCEPT_PG_DSN, or the file AINTERCEPT_PG_DSN_FILE names (the mounted Secret); the calls'
+    detail objects from the same bucket or directory as the v1 store's (AINTERCEPT_BUCKETS_DIR, or
+    AINTERCEPT_S3_*)."""
+    from aintercept_api.buckets import LocalSource, S3Source, Source
+    from aintercept_api.pgstore import PgStore
+
+    dsn = env.get("AINTERCEPT_PG_DSN") or ""
+    if not dsn and env.get("AINTERCEPT_PG_DSN_FILE"):
+        dsn = pathlib.Path(env["AINTERCEPT_PG_DSN_FILE"]).read_text().strip()
+    if not dsn:
+        raise ValueError("AINTERCEPT_STORE=pg needs AINTERCEPT_PG_DSN or AINTERCEPT_PG_DSN_FILE")
+    source: Source
+    if env.get("AINTERCEPT_BUCKETS_DIR"):
+        source = LocalSource(pathlib.Path(env["AINTERCEPT_BUCKETS_DIR"]))
+    else:
+        source = S3Source(
+            env["AINTERCEPT_S3_BUCKET"], env["AINTERCEPT_S3_REGION"], endpoint=env.get("AINTERCEPT_S3_ENDPOINT")
+        )
+    prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
+    return PgStore(
+        dsn,
+        source=source,
+        prefix=prefix + "/" if prefix else "",
+        memory_limit=duckdb_memory_limit(env),
+        threads=int(env["AINTERCEPT_THREADS"]) if env.get("AINTERCEPT_THREADS") else None,
+    )
+
+
 def create_app(
     store: Store | None = None,
     clock: Callable[[], datetime] | None = None,
@@ -129,7 +159,10 @@ def create_app(
         env = dict(os.environ)
         if not env.get("AINTERCEPT_BUCKETS_DIR") and not env.get("AINTERCEPT_S3_BUCKET"):
             env["AINTERCEPT_BUCKETS_DIR"] = str(DEFAULT_BUCKETS_DIR)
-        store = bucket_store_from_env(env, v1=env.get("AINTERCEPT_STORE", "v1") != "buckets")
+        kind = env.get("AINTERCEPT_STORE", "v1")
+        # pg: the Postgres read path (build step 5: /status, the session pages, the drawer; the
+        # default once step 8 switches).
+        store = pg_store_from_env(env) if kind == "pg" else bucket_store_from_env(env, v1=kind != "buckets")
     app.state.store = store
     app.state.ingest_interval_s = ingest_interval_s
     app.state.clock = clock or (lambda: datetime.now(UTC))
