@@ -307,3 +307,7 @@ func ReportIDsOf(e Event) (rid, crid string) {
 	crid, _ = jsonString(md["clientRequestId"])
 	return rid, crid
 }
+
+// StatusPhrase is a status code's reason phrase as Python's http.HTTPStatus
+// has it (rows._phrase); nil for a code it doesn't register.
+func StatusPhrase(status int64) *string { return statusPhrase(status) }

@@ -28,9 +28,38 @@ type SessionTables struct {
 	CallToolUses       []process.CallToolUse
 }
 
+// OtherParts is what the other keys hold of an analytics batch: their
+// batch_parts summed (the count, the least non-empty name, the earliest
+// (ns, session) that has a session). The render reads them (docs/PIPELINE.md
+// v7 §3.7) so a batch spanning sessions counts the whole batch.
+type OtherParts struct {
+	N            int64
+	Name         string
+	HasName      bool
+	FirstNS      int64
+	FirstSession string
+	HasSession   bool
+}
+
+// Add folds one key's part into the sum.
+func (p *OtherParts) Add(n int64, name *string, firstNS *int64, firstSession *string) {
+	p.N += n
+	if name != nil && *name != "" && (!p.HasName || *name < p.Name) {
+		p.Name, p.HasName = *name, true
+	}
+	if firstNS != nil && firstSession != nil &&
+		(!p.HasSession || *firstNS < p.FirstNS || *firstNS == p.FirstNS && *firstSession < p.FirstSession) {
+		p.FirstNS, p.FirstSession, p.HasSession = *firstNS, *firstSession, true
+	}
+}
+
 // RenderSession is session sid's tables from its key's rows (a session key's
-// KeyState.Rows).
-func RenderSession(sid string, rows Rows) *SessionTables {
+// KeyState.Rows), its batches as its own key holds them.
+func RenderSession(sid string, rows Rows) *SessionTables { return RenderSessionWith(sid, rows, nil) }
+
+// RenderSessionWith is RenderSession with what other keys hold of its batches
+// (by batch): an analytics batch's count, name and session are every key's.
+func RenderSessionWith(sid string, rows Rows, others map[string]OtherParts) *SessionTables {
 	own := func(s string) bool { return s == sid }
 	prompts, steps, marks := PromptViewOf(rows)
 	return &SessionTables{
@@ -41,7 +70,7 @@ func RenderSession(sid string, rows Rows) *SessionTables {
 		SessionMarks:       filter(marks, func(r process.SessionMark) bool { return own(r.SessionID) }),
 		PromptRows:         filter(prompts, func(r process.PromptRow) bool { return own(r.SessionID) }),
 		PromptSteps:        filter(steps, func(r process.PromptStep) bool { return own(r.SessionID) }),
-		SessionRequestRows: viewOf(rows, nil).ownSessionRows(sid),
+		SessionRequestRows: viewOf(rows, nil).withOthers(others).ownSessionRows(sid),
 		CallToolUses:       filter(CallToolUsesOf(rows), func(r process.CallToolUse) bool { return own(r.SessionID) }),
 	}
 }
@@ -87,4 +116,23 @@ func filter[T any](xs []T, keep func(T) bool) []T {
 		}
 	}
 	return out
+}
+
+// withOthers folds the other keys' parts into the view's batches.
+func (v *rqView) withOthers(others map[string]OtherParts) *rqView {
+	for id, o := range others {
+		b := v.batches[id]
+		if b == nil {
+			b = &rqBatch{}
+			v.batches[id] = b
+		}
+		b.n += o.N
+		if o.HasName && (!b.hasName || o.Name < b.name) {
+			b.name, b.hasName = o.Name, true
+		}
+		if o.HasSession && (!b.hasSess || o.FirstNS < b.sessionNS || o.FirstNS == b.sessionNS && o.FirstSession < b.session) {
+			b.session, b.sessionNS, b.hasSess = o.FirstSession, o.FirstNS, true
+		}
+	}
+	return v
 }

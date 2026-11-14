@@ -33,6 +33,9 @@ type KeyRow struct {
 	FirstRequestNS  int64
 	EarliestNS      int64
 	ContentRetained bool
+	// Render is the key's flag's render (dirty_keys.render, not a keys column):
+	// the run renders and commits even with no new file (§3.7).
+	Render bool
 }
 
 // Querier is a pool or a transaction.
@@ -52,9 +55,9 @@ func readRow(ctx context.Context, q Querier, key string) (KeyRow, int64, error) 
 	var seq int64
 	var levels []int32
 	var garbage []byte
-	err := q.QueryRow(ctx, `SELECT coalesce(d.seq, 0), `+keyColumns+`
+	err := q.QueryRow(ctx, `SELECT coalesce(d.seq, 0), coalesce(d.render, false), `+keyColumns+`
 		FROM (SELECT $1::text AS key) q LEFT JOIN keys k ON k.key = q.key LEFT JOIN dirty_keys d ON d.key = q.key`, key).Scan(
-		&seq, &row.N, &row.State, &levels, &row.LastApplied, &row.Grace, &garbage, &row.RenderVersion, &row.UpdatedNS,
+		&seq, &row.Render, &row.N, &row.State, &levels, &row.LastApplied, &row.Grace, &garbage, &row.RenderVersion, &row.UpdatedNS,
 		&row.NewestRowNS, &row.ExpiresNS, &row.Day, &row.FirstRequestNS, &row.EarliestNS, &row.ContentRetained)
 	if err != nil {
 		return row, 0, err

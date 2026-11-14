@@ -85,6 +85,10 @@ func TestRetentionForgetsKeysOlderThanTheWindow(t *testing.T) {
 	if e.rowsOf(old) == 0 || len(e.objects(old)) == 0 {
 		t.Fatal("vacuous: the old key has no rows or objects")
 	}
+	// Its drawer rows (§3.7) go with it.
+	if e.count("drawer_requests", old) == 0 || e.count("drawer_events", old) == 0 {
+		t.Fatal("vacuous: the old key has no drawer rows")
+	}
 	before := e.rowsOf(recent)
 
 	res, err := w.Retain(e.ctx, Retention{Days: 15}, e.clock.Now())
@@ -97,7 +101,7 @@ func TestRetentionForgetsKeysOlderThanTheWindow(t *testing.T) {
 	if e.hasRow(old) {
 		t.Error("the old key's row is still there")
 	}
-	if n := e.rowsOf(old); n != 0 {
+	if n := e.rowsOf(old); n != 0 || e.count("drawer_requests", old)+e.count("drawer_events", old) != 0 {
 		t.Errorf("the old key still has %d rows", n)
 	}
 	if objs := e.objects(old); len(objs) != 0 {

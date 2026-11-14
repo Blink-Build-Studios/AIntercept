@@ -116,6 +116,9 @@ func buildTables() []Table {
 	add(Table{Name: "dirty_keys", PK: []string{"key"}, Columns: []Column{
 		notNull("key", "text"), notNull("seq", "bigint"), notNull("since", "timestamptz"),
 		{Name: "failures", Type: "integer NOT NULL DEFAULT 0"}, col("last_error", "text"), col("failed_at", "timestamptz"),
+		// render: a run renders and commits even with no new file (another key changed what its
+		// rows show, or a detail object it waits for may have landed: §3.7).
+		{Name: "render", Type: "boolean NOT NULL DEFAULT false"},
 	}, Indexes: []string{"(since)"}})
 	add(Table{Name: "workers", PK: []string{"worker"}, Columns: []Column{notNull("worker", "text"), notNull("seen", "timestamptz")}})
 	add(Table{Name: "tail", Columns: []Column{col("last_name", "text"), col("grace", "text[]"), col("checked_at", "timestamptz")},
@@ -204,6 +207,15 @@ func buildTables() []Table {
 	add(Table{Name: "agent_call_hours", Kind: Fold, PK: []string{"hour", "key"}, Columns: []Column{
 		notNull("hour", "bigint"), notNull("key", "text"), col("n", "bigint"),
 	}})
+
+	// §3.7 The request drawer: each key's finished drawer rows, read by primary key.
+	add(Table{Name: "drawer_requests", Kind: Fold, PK: []string{"request_id", "key"}, Columns: []Column{
+		notNull("request_id", "text"), notNull("key", "text"), col("data", "text"), col("details", "text"),
+	}, Indexes: []string{"(key)"}, LZ4: []string{"data", "details"}})
+	add(Table{Name: "drawer_events", Kind: Fold, PK: []string{"event_id", "key"}, Columns: []Column{
+		notNull("event_id", "text"), notNull("key", "text"), col("data", "text"), col("correlation_id", "text"),
+		col("event_key", "text"),
+	}, Indexes: []string{"(key)"}})
 
 	for i := range ts {
 		checkTable(&ts[i])

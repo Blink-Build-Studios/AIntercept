@@ -46,7 +46,7 @@ func Run() {
 		name = host
 	}
 	parallel, _ := strconv.Atoi(os.Getenv("ROLLUP_PARALLEL"))
-	w, err := New(ctx, Config{Store: s, Prefix: prefix, Name: name, DSN: dsn, Parallel: parallel})
+	w, err := New(ctx, Config{Store: s, Prefix: prefix, Name: name, DSN: dsn, Parallel: parallel, DetailWait: DefaultDetailWait})
 	if err != nil {
 		slog.Error("worker: Postgres", "err", err) // a schema mismatch refuses to start
 		os.Exit(1)

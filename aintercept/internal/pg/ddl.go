@@ -10,7 +10,7 @@ var sections = map[Kind]string{
 	Coordination: "§3.2 Coordination: the key rows (the commit), the flags, the workers, the tail.",
 	Rendered:     "§3.3 Session tables: a session's rows of state.RenderSession, written by its own key.",
 	Stored:       "§3.4 Stored inputs: the state's own rows, keyed by (key, the state's row id).",
-	Fold:         "§3.4-3.5 Batch parts and the directory folds.",
+	Fold:         "§3.4-3.5, §3.7 Batch parts, the directory folds and the request drawer.",
 }
 
 // DDL is the schema as schema.sql holds it, generated from Tables.
