@@ -349,9 +349,15 @@ func (s *scope) toolDetails(w *Wire, f facts, pos position) Value {
 				break
 			}
 		}
+		if len(f.tools) > 0 {
+			s.useOrder(pos.sess, nxt)
+		}
 	}
 	out := list()
 	for _, e := range f.tools {
+		if tid := pyStr(e.get("toolUseID")); tid != nil && *tid != "" {
+			s.use(kBash, f.sess, *tid) // toolOf reads its bash run by it
+		}
 		t := toolOf(e, f.joins)
 		var input []DetailRow
 		if w != nil {

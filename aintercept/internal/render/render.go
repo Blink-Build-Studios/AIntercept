@@ -49,14 +49,14 @@ import (
 // whenever the same state renders other rows, so each key's next commit
 // rewrites its rendered rows whole (Rewrite) instead of diffing against rows
 // an older build wrote.
-const Version = 2
+const Version = 3
 
 // The tables a render writes, in the order a diff writes them.
 var tableNames = []string{
 	"session_rows", "prompt_rows", "prompt_steps", "session_marks", "event_rows", "presence_segments",
 	"session_tools", "call_tool_uses", "session_request_rows",
 	"session_call_days", "agent_calls", "agent_call_hours", "batch_parts",
-	"drawer_requests", "drawer_events",
+	"drawer_requests", "drawer_step_counts", "drawer_events",
 }
 
 // Tables is the tables a render writes (pg.Tables'), in the order a diff writes them.
@@ -152,19 +152,32 @@ func fold(name string, vals [][]any) *rendered {
 // Render has no external inputs: the drawer is built from the calls' request
 // rows and each key's own batch parts. RenderState renders a state with its own.
 func Render(key string, rows state.Rows, day string) (*Rows, error) {
-	return render(key, rows, nil, day)
+	return render(key, rows, nil, day, nil, nil)
 }
 
 // RenderState is key's rendered rows from its state: its rows and its
 // external inputs (docs/PIPELINE.md v7 §3.7): the calls' wires read from their
 // detail objects (WireID), and what other keys hold of its batches (PartsID).
 func RenderState(key string, st *state.KeyState, day string) (*Rows, error) {
-	return render(key, st.Rows(), st.Externals(), day)
+	return render(key, st.Rows(), st.Externals(), day, nil, nil)
 }
 
 // RenderWith is Render with external inputs given by id (WireID, PartsID).
 func RenderWith(key string, rows state.Rows, ext map[string]any, day string) (*Rows, error) {
-	return render(key, rows, ext, day)
+	return render(key, rows, ext, day, nil, nil)
+}
+
+// RenderNext is RenderWith after base's render, changed the state's rows
+// changed since (a run's deltas): the drawer derives again only the rows those
+// can have changed, and takes the rest from base (drawer.RenderNext, §3.7).
+// With no base it renders every row. base is consumed: a baseline is the next
+// render's once.
+func RenderNext(key string, rows state.Rows, ext map[string]any, day string, base *Baseline, changed drawer.Changed) (*Rows, error) {
+	var memo *drawer.Memo
+	if base != nil {
+		memo = base.drawer
+	}
+	return render(key, rows, ext, day, memo, changed)
 }
 
 // The external inputs' ids.
@@ -181,7 +194,7 @@ func WireID(callID string) string { return wirePrefix + callID }
 // state.OtherParts (none: no other key holds any of it).
 func PartsID(batchID string) string { return partsPrefix + batchID }
 
-func render(key string, rows state.Rows, ext map[string]any, day string) (*Rows, error) {
+func render(key string, rows state.Rows, ext map[string]any, day string, memo *drawer.Memo, changed drawer.Changed) (*Rows, error) {
 	out := &Rows{Key: key}
 	others := map[string]state.OtherParts{}
 	for id, v := range ext {
@@ -203,25 +216,38 @@ func render(key string, rows state.Rows, ext map[string]any, day string) (*Rows,
 	calls := agentCalls(key, rows)
 	out.tables = append(out.tables, fold("agent_calls", calls), fold("agent_call_hours", agentCallHours(key, calls)),
 		fold("batch_parts", batchParts(key, rows)))
-	reqs, evs := drawer.Render(drawer.Inputs{Key: key, Rows: rows, Parts: others, EventRows: events,
+	reqs, evs, memo := drawer.RenderNext(drawer.Inputs{Key: key, Rows: rows, Parts: others, EventRows: events,
 		Wire: func(callID string) *drawer.Wire {
 			w, _ := ext[WireID(callID)].(*drawer.Wire)
 			return w
-		}})
+		}}, memo, changed)
 	rq := make([][]any, len(reqs))
 	for i, r := range reqs {
-		rq[i] = []any{r.ID, key, r.Data, r.Details}
+		rq[i] = []any{r.ID, key, r.Data, r.Details, nil, nil}
+		if r.StepSession != "" || r.StepPrompt != "" {
+			rq[i][4], rq[i][5] = r.StepSession, r.StepPrompt
+		}
+	}
+	counts := memo.StepCounts()
+	sc := make([][]any, len(counts))
+	for i, c := range counts {
+		sc[i] = []any{c.Session, c.Prompt, key, c.N}
 	}
 	ev := make([][]any, len(evs))
 	for i, e := range evs {
 		ev[i] = []any{e.ID, key, e.Data, e.CorrelationID, e.EventKey}
 	}
-	out.tables = append(out.tables, fold("drawer_requests", rq), fold("drawer_events", ev))
+	out.tables = append(out.tables, fold("drawer_requests", rq), fold("drawer_step_counts", sc), fold("drawer_events", ev))
 	if err := out.hash(); err != nil {
 		return nil, fmt.Errorf("render %s: %w", key, err)
 	}
+	out.next.drawer = memo
 	return out, nil
 }
+
+// DrawerDerived is how many drawer request rows the render derived; the rest
+// were its base's.
+func (r *Rows) DrawerDerived() int { return r.next.drawer.Derived() }
 
 // sessionTables is session sid's 9 tables, re-encoded, and its call days.
 func sessionTables(sid string, rows state.Rows, others map[string]state.OtherParts, day string) ([]*rendered, []process.EventRow, error) {
@@ -527,6 +553,7 @@ func (r *Rows) Baseline() *Baseline { return r.next }
 // wrote, kept in memory with the key's warm state.
 type Baseline struct {
 	hashes map[string]map[string]uint64
+	drawer *drawer.Memo // the drawer's rows and what they read, for RenderNext
 }
 
 // Equal is whether two baselines hold the same rows.

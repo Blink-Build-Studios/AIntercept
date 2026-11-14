@@ -97,7 +97,25 @@ type ev struct {
 	seq     int64
 	rowNS   int64
 	key     string
-	strs    map[string]*string
+	fx      *mdFields
+	rowKey  string // its fact_events row id
+}
+
+// mdFields is what renders have read of an event's metadata: kept across
+// renders (Memo) while the metadata is the same, so an event about many rows
+// is parsed once, not once per render.
+type mdFields struct {
+	json string
+	vals map[string]Value   // md.get(k)
+	strs map[string]*string // _str(md.get(k))
+	ext  map[string]string  // json_extract_string(md, '$.k')
+}
+
+func (e *ev) fields() *mdFields {
+	if e.fx == nil || e.fx.json != e.mdJSON {
+		e.fx = &mdFields{json: e.mdJSON, vals: map[string]Value{}, strs: map[string]*string{}, ext: map[string]string{}}
+	}
+	return e.fx
 }
 
 func (e *ev) MD() Value {
@@ -113,19 +131,37 @@ func (e *ev) MD() Value {
 	return *e.md
 }
 
-func (e *ev) get(k string) Value { return e.MD().Get(k) }
+// get is e.md.get(k), cached.
+func (e *ev) get(k string) Value {
+	f := e.fields()
+	if v, ok := f.vals[k]; ok {
+		return v
+	}
+	v := e.MD().Get(k)
+	f.vals[k] = v
+	return v
+}
 
 // mdStr is _str(e.md.get(k)), cached: the fields every call's facts read of
 // every event about it.
 func (e *ev) mdStr(k string) *string {
-	if e.strs == nil {
-		e.strs = map[string]*string{}
-	}
-	if v, ok := e.strs[k]; ok {
+	f := e.fields()
+	if v, ok := f.strs[k]; ok {
 		return v
 	}
 	v := pyStr(e.get(k))
-	e.strs[k] = v
+	f.strs[k] = v
+	return v
+}
+
+// extract is extractString(e.md, k), cached.
+func (e *ev) extract(k string) string {
+	f := e.fields()
+	if v, ok := f.ext[k]; ok {
+		return v
+	}
+	v := extractString(e.mdJSON, k)
+	f.ext[k] = v
 	return v
 }
 
@@ -151,6 +187,7 @@ type scope struct {
 	rows     map[string]process.EventRow // the session's rendered event rows, by event id
 	batchSes map[string]*canon.Event     // each batch's earliest event that names a session
 	reports  map[string]*ev              // find_report's first match, by requestId, clientRequestId, ts
+	rec      *rowDeps                    // the lookups of the row being derived (incremental.go); nil: none recorded
 }
 
 func newScope(key string, rows state.Rows, parts map[string]BatchParts, eventRows []process.EventRow) *scope {
@@ -190,7 +227,7 @@ func newScope(key string, rows state.Rows, parts map[string]BatchParts, eventRow
 		}
 		s.events = append(s.events, &ev{ts: e.NS, name: name, device: optS(e.DeviceID), mdJSON: e.MetadataJSON,
 			prompt: optS(e.PromptID), session: e.SessionID, rid: e.RequestID, crid: e.ClientRequestID, tool: e.ToolUseID,
-			corr: e.CorrelationID, n: e.BatchN, seq: e.Seq, rowNS: e.RowNS, key: e.EventKey})
+			corr: e.CorrelationID, n: e.BatchN, seq: e.Seq, rowNS: e.RowNS, key: e.EventKey, rowKey: k})
 	}
 	s.number()
 	s.batchSes = map[string]*canon.Event{}
@@ -271,6 +308,7 @@ func nullsLast(a, b string) bool {
 
 // sess is what the drawer reads of one session in the scope.
 type sess struct {
+	s        *scope
 	id       string
 	exists   bool // cc.load_session isn't None: a call or an event carries it
 	steps    []*step
@@ -300,6 +338,7 @@ type sandboxAt struct {
 
 // sandboxUpTo is the sandbox setting of the session's bash events at or before limit.
 func (x *sess) sandboxUpTo(limit int64) *string {
+	x.s.useSandbox(x.id, limit)
 	i := sort.Search(len(x.sandbox), func(i int) bool { return x.sandbox[i].ts > limit })
 	if i == 0 {
 		return nil
@@ -308,10 +347,11 @@ func (x *sess) sandboxUpTo(limit int64) *string {
 }
 
 func (s *scope) session(sid string) *sess {
+	s.use(kExists, sid, "")
 	if x := s.sessions[sid]; x != nil {
 		return x
 	}
-	x := &sess{id: sid, stepOf: map[string]int{}, byPrompt: map[string][]*step{}, evPrompt: map[string][]*ev{},
+	x := &sess{s: s, id: sid, stepOf: map[string]int{}, byPrompt: map[string][]*step{}, evPrompt: map[string][]*ev{},
 		evRID: map[string][]*ev{}, evCRID: map[string][]*ev{}, evTool: map[string][]*ev{}, index: map[string]int64{},
 		chain: map[string][2]Value{}}
 	s.sessions[sid] = x
@@ -422,6 +462,10 @@ func (s *scope) session(sid string) *sess {
 
 // about is session.events(…, about=(prompt, ids, tools)): the session's events
 // about one call, oldest first.
+//
+// Which events it returns doesn't make a row's dependencies: the facts record
+// what they pick from them, by role (factsOf), and an event is filed under
+// every role it can play (incremental.go).
 func (x *sess) about(prompt Value, ids, tools []string) []*ev {
 	seen := map[*ev]bool{}
 	var out []*ev
@@ -452,6 +496,7 @@ func (x *sess) about(prompt Value, ids, tools []string) []*ev {
 // earliest event names, over every key's events of it (this key's rows, the
 // others' batch parts).
 func (s *scope) batchSession(cid string) Value {
+	s.use(kBatch, cid, "")
 	best := s.batchSes[cid]
 	ns, sid, ok := int64(0), "", best != nil
 	if ok {

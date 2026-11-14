@@ -206,10 +206,15 @@ func buildTables() []Table {
 		notNull("hour", "bigint"), notNull("key", "text"), col("n", "bigint"),
 	}})
 
-	// §3.7 The request drawer: each key's finished drawer rows, read by primary key.
+	// §3.7 The request drawer: each key's finished drawer rows, read by primary key. A row's
+	// stepCount is its (step_session, step_prompt)'s drawer_step_counts row, filled in at read.
 	add(Table{Name: "drawer_requests", Kind: Fold, PK: []string{"request_id", "key"}, Columns: []Column{
 		notNull("request_id", "text"), notNull("key", "text"), col("data", "text"), col("details", "text"),
+		col("step_session", "text"), col("step_prompt", "text"),
 	}, Indexes: []string{"(key)"}, LZ4: []string{"data", "details"}})
+	add(Table{Name: "drawer_step_counts", Kind: Fold, PK: []string{"session_id", "prompt_id", "key"}, Columns: []Column{
+		notNull("session_id", "text"), notNull("prompt_id", "text"), notNull("key", "text"), col("n", "bigint"),
+	}, Indexes: []string{"(key)"}})
 	add(Table{Name: "drawer_events", Kind: Fold, PK: []string{"event_id", "key"}, Columns: []Column{
 		notNull("event_id", "text"), notNull("key", "text"), col("data", "text"), col("correlation_id", "text"),
 		col("event_key", "text"),

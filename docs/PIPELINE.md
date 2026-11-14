@@ -551,6 +551,7 @@ indexed lookup; nothing about it is derived at request time.
 | Table | Primary key; index | What |
 |---|---|---|
 | `drawer_requests` | (request_id, key); (key) | per drawer id: `data`, the finished `/requests/{id}` object, and `details`, the finished `/details` object, each as the JSON today's models serialize |
+| `drawer_step_counts` | (session_id, prompt_id, key); (key) | *v8:* per session and prompt, its steps' count: the `stepCount` of the rows that name it (below) |
 | `drawer_events` | (event_id, key); (key) | per Claude Code event: `/events/{id}` without its `raw` (its time, name, session, and the batch and event key that find its raw row) |
 
 - **Which rows.** Every key renders a row for each of its ended calls (a
@@ -561,9 +562,89 @@ indexed lookup; nothing about it is derived at request time.
   (`internal/drawer`), over the key's own facts: what today's drawer loads
   (the call's keys) is the call's own key for every call, plus the batch's
   other keys for an analytics batch, which only give its session (below).
-  Step N of M, prev/next and retries change as the session grows, so every
-  run renders the key's drawer rows whole and writes the ones whose hash
-  changed (§2 Run 6), as for the session tables.
+  Step N of M, prev/next and retries change as the session grows, so a run
+  writes the rows whose hash changed (§2 Run 6), as for the session tables.
+  *v8:* it derives only the rows whose inputs can have changed (below).
+- **Step N of M is stored once per prompt** (*v8*). A row's `stepCount` is
+  its prompt's step count, so storing it in the row rewrote every earlier row
+  of the prompt on each new step. Replaying the capture in 30 s windows (a run
+  per window, every key) that was most of the drawer's writes (numbers below).
+  - The worker writes each (session, prompt)'s count once, to
+    `drawer_step_counts` (session_id, prompt_id, key; n). A row whose
+    `stepCount` counts one stores `"stepCount":null` and names it in
+    `step_session` and `step_prompt`.
+  - The drawer's one statement joins the count by that key and fills it in:
+    `replace(data, '"stepCount":null', '"stepCount":' || n)`.
+  - The row's JSON has that text exactly once: its keys are fixed, and a JSON
+    string can't hold an unescaped `"`. The worker checks it for every row.
+  - A row with no count (its prompt has no steps) gets `null`, as before.
+  - The other values a new step changes belong to one row each:
+    - the previous step's next (its prev/next, its thread position, and where
+      its tools' results were delivered);
+    - a failed call's retry, when its next attempt lands.
+- **Which rows a run derives** (*v8*, `internal/drawer/incremental.go`). A
+  row is a function of its own call (its request row and its wire) and of
+  what its derivation reads of the key's other rows. It reads them only
+  through these lookups, and each records what it read:
+
+  | The row reads | Recorded as | An input is filed under it when it's |
+  |---|---|---|
+  | the events about it (`about`) that play a role in its facts: by its request or client request id (a tool use's request, its success, its tool events) | (session, id) | an event whose metadata's `requestId` (or a success's `clientRequestId`) is the id |
+  | its stall summary | (session, request id); every stall where its request id isn't a str | a stall summary, by its `request_id` |
+  | its query: the last `tengu_api_query` of its prompt in [t − 60 s, t + 2 s] | (session, prompt, 16 s bucket) for the window's buckets | a query, by its prompt and time |
+  | a failed call's retry: the nearest `tengu_api_retry` in [t, end + 30 s] | (session, prompt or none, 30 s bucket); a call with no prompt, (session, any, bucket) | a retry, by its prompt and time |
+  | its tools' bash runs | (session, tool use id) | a bash run, by its `tool_use_id` |
+  | its prompt's steps: its step number and lane prev up to itself, its lane next (or, with none, up to the end); a retry's next attempt | (session, prompt, a place in its steps) | the steps of a prompt, compared run to run: from the first place the lists differ (an appended step only moves "up to the end") |
+  | the message-id chain: its own entry, the step whose message is its previous one, the step whose previous one is its message, its next step's message | the chain key, the message id, the previous message id | any call with that correlation id, message id or previous message id; a step id that comes or goes also files the chain entries it keys |
+  | its prompt's number | (session, prompt id) | a typed prompt of that `cc_prompt_id` |
+  | an analytics call's batch session | the batch | an analytics row of the batch with a session; another key's part of it |
+  | a reported call's success (`find_report`) | its key | a success, under each key `find_report` matches it by |
+  | whether its session exists | the session | a session that came or went |
+  | the sandbox setting up to its time | (session, time) | a bash run at or before the time |
+  | its next step's place among all the session's steps ("delivered in step N") | (session, place) | the session's steps, from the first place the lists differ |
+
+  - **The run.** It files every input that changed since the warm memo's
+    render, under what it was (the memo keeps each input's filing) and what
+    it is:
+    - the state rows its records changed (its deltas, `RenderInput.Changed`);
+    - the events whose drawer id (their rank in the batch) or rendered event
+      row changed;
+    - the calls whose wire changed;
+    - the batches whose other keys' parts changed.
+
+    It then derives again the rows that are new, whose own call changed, or
+    that recorded something filed. Every other row is the memo's.
+    - Recorded keys are 64-bit hashes, and times are buckets, so a collision
+      or a bucket's edge only derives a row again.
+    - A cold load renders everything (its baseline), as before. The memo
+      lives with the warm state and is dropped with it.
+    - Events' metadata reads are cached in the memo, so an event is parsed
+      once while it's warm, not once per run.
+  - **Why it's exact.** An event in `about`'s result changes a row's output
+    only through a role: one of the facts picks it (its success, tool
+    events, tool use ids, stall, query, retry, bash runs), and each pick
+    records what it picks by. Events that play no role, and the order of the
+    others, change nothing. Every other read is one of the lookups above. A
+    changed input is filed under everything it plays or is indexed by, as it
+    was and as it is, so a row that read it recorded something filed.
+  - **What holds it to that:**
+    - every run of the render's layered tests, compared with a whole render
+      (`VerifyIncremental`): each order of the short sequences, generated
+      drawer sessions shuffled one record per run through a cold load, and
+      the worker's tests;
+    - a test that changes each kind of lookup alone, and fails when that
+      lookup isn't recorded;
+    - the real capture, drained one file per run with every run compared.
+  - **Cost.** Measured on the capture's heaviest session, replayed one in/
+    file per run (234 runs):
+    - render and diff per run: p50 966 → 204 ms, p95 1,450 → 319 ms;
+    - drawer rows derived: 462,726 → 14,069.
+
+    What's left per run is O(session) but cheap:
+    - the scope's indexes and the inputs' filing (~50 ms: every event's
+      drawer id and rendered event row);
+    - the session tables' render (~27 ms) and the rows' hashing (~43 ms),
+      which v7 accepted.
 - **What only the call's detail object holds** (headers, the whole `complete`
   row, body chunk times, retained bodies) is read once: the run GETs
   `calls/<id>.ndjson.gz` for each call that ended since, and keeps what the
@@ -685,7 +766,7 @@ sites get every column.
 | `/sessions/{id}` | its `session_rows` row; its accounts' title calls (the alone label); its children's edges | `live` |
 | `/sessions/{id}/timeline`, `/prompts`, `/events`, `/state` | as `/sessions/{id}`, plus the session's `prompt_rows`, `prompt_steps`, `session_marks`, `event_rows`, `presence_segments` and `session_tools` (the range pushed down when the request has one) | as today |
 | `/sessions/{id}/requests` | `session_rows`, `session_request_rows`, its `dim_session_credential` rows, the other keys' candidates (§4) | `stream_sql` over the candidates; the union; as today |
-| `/requests/{id}`, `/details` | one: the `drawer_requests` row by its primary key, with `/status`'s values | nothing: the row's JSON through today's model (§3.7) |
+| `/requests/{id}`, `/details` | one: the `drawer_requests` row by its primary key, with `/status`'s values (and, *v8*, its `drawer_step_counts` row, filled into `stepCount`) | nothing: the row's JSON through today's model (§3.7) |
 | `/requests/{id}/raw` | one: the row, and the call's `requests` row. Beside it: GET `calls/<id>.ndjson.gz` | the detail object's raw view, as today |
 | `/events/{id}` | one: the `drawer_events` row by its primary key, with `/status`'s values; beside it: GET `calls/<batch>.ndjson.gz` | the event's raw row |
 
@@ -854,7 +935,7 @@ Assumptions, at the capture's rates per person:
 |---|---|---|---|---|---|---|
 | Ingest | per record, as v5 | per-key buffers, the index journal | pods, on CPU | S3 PUT | none | ~350 PUTs/s at peak (key files ~100, call detail objects ~250), plus ~10 index objects |
 | The tail | per index object: GET; per pass: one transaction | its cursor row | one holder | S3, Postgres | ~1 transaction every 2 s, ~100 flags/s | 1 LIST every 2 s, ~10 GETs/s |
-| Worker run | per record: apply (#19). Per run: the whole session rendered and hashed, its drawer rows too (O(session) CPU, as v6), the changed rows written. A key with no input costs a key-row read, a LIST and a DELETE | the key's state (with each ended call's wire summary, a few KB) and a hash per rendered row, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak, ~100 rows each: ~8k rows/s at peak, ~2k/s on average, ~180M rows/day; one read of other keys' batch parts per run | ~4 per run, plus one GET per call that ended (its detail object, once): ~650/s at peak |
+| Worker run | per record: apply (#19). Per run: the whole session rendered and hashed (O(session) CPU, as v6); its drawer rows derived only where their inputs changed (§3.7, v8); the changed rows written. A key with no input costs a key-row read, a LIST and a DELETE | the key's state (with each ended call's wire summary, a few KB) and a hash per rendered row, while warm | key (advisory lock), heartbeat share | S3 LIST and GET, the commit | ~100 commits/s at peak, ~100 rows each: ~8k rows/s at peak, ~2k/s on average, ~180M rows/day; one read of other keys' batch parts per run | ~4 per run, plus one GET per call that ended (its detail object, once): ~650/s at peak |
 | Retention | per forgotten key: batched deletes | none | one holder | — | ~180M rows/day deleted at the target (Not now: partitions) | the forgotten keys' objects |
 | API | per request: a few statements, the rows of the entity and range; the drawer one primary-key lookup (§3.7) | none | pods, on CPU | Postgres; S3 GET (`/raw`, `/events/{id}`) | reads only | those GETs |
 | Postgres | — | the working set | one primary (vertical) | disk | ~110 GB/day; ~1.6 TB at 15 days | — |
@@ -1173,9 +1254,9 @@ From then on, `process.Derived` and the UI samples are the oracles.
   - the summary and details keep what the call's detail object held when the
     worker read it: an object the local raw cap deletes later leaves `/raw`
     unavailable, as today, but not the summary;
-  - the render's cost per commit is O(session): on the test datasets' largest
-    session (21k events, 1.7k calls) ~0.3 s for its drawer rows, ~0.1 s for
-    its 9 tables (Not now: an incremental render).
+  - the render's cost per commit: *v8* derives only the drawer rows whose
+    inputs changed (§3.7); the session tables are still rendered whole
+    (O(session)).
 - **A Codex thread's unthreaded calls and in-flight batch calls** are read from
   the other keys' transactions at request time, never copied.
 - **Calls that never end:** as built (#39), with data time from `keys`.
@@ -1223,7 +1304,9 @@ The inventory's quirks, each reproduced:
 - **A periodic full listing of `v1/keys/`,** to flag keys a lost node never
   indexed.
 - **The in-flight drawer** (a `pending` table), if the owner wants it back.
-- **An incremental render** (O(changed) CPU).
+- **An incremental render of the session tables, and warm drawer indexes**
+  (the drawer's rows are incremental since v8, §3.7, but its scope is
+  rebuilt each run: ~50 ms on the capture's heaviest session).
 - **Schema migrations.** Until then, each schema change is a fresh start.
 - **A size cap,** not just an age, for local raw data.
 - **Hot keys:** a shared API key used by thousands of people, or many people

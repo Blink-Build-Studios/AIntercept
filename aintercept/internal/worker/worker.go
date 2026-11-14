@@ -33,6 +33,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/drawer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
@@ -359,7 +360,14 @@ func (w *Worker) runKey(ctx context.Context, key string, clock int64) (res Resul
 
 	nowNS := w.now().UnixNano()
 	facts := rollup.FactsOf(key, st.Rows(), nowNS)
-	rendered, err := w.cfg.Render.Render(RenderInput{Key: key, State: st, Prev: row, Baseline: baseline, Day: facts.Day})
+	changed := drawer.Changed{}
+	for table, rows := range delta {
+		changed[table] = make(map[string]bool, len(rows))
+		for id := range rows {
+			changed[table][id] = true
+		}
+	}
+	rendered, err := w.cfg.Render.Render(RenderInput{Key: key, State: st, Prev: row, Baseline: baseline, Day: facts.Day, Changed: changed})
 	if err != nil {
 		return res, err
 	}
