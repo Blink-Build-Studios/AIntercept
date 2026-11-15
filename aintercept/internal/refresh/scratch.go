@@ -92,6 +92,9 @@ var checks = []struct{ table, rows, scratch string }{
 		"SELECT " + sessionNorm("t") + " FROM (" + sessionScratch(minuteNS) + ") s(" + scratchCols("t") + ")"},
 	{"session_hours", "SELECT " + sessionNorm("hour_ns") + " FROM session_hours WHERE " + nonZero,
 		"SELECT " + sessionNorm("t") + " FROM (" + sessionScratch(hourNS) + ") s(" + scratchCols("t") + ")"},
+	{"session_minute_keys", "SELECT session_id, minute_ns, kind, key, n FROM session_minute_keys",
+		"SELECT sid, " + bucket("at", minuteNS) + ", kind, key, count(*) FROM (" +
+			keyItems("e.session_id IS NOT NULL", "c.session_id IS NOT NULL") + ") k GROUP BY 1, 2, 3, 4"},
 	{"session_keys", "SELECT session_id, hour_ns, kind, key, n FROM session_keys",
 		"SELECT sid, " + bucket("at", hourNS) + ", kind, key, count(*) FROM (" +
 			keyItems("e.session_id IS NOT NULL", "c.session_id IS NOT NULL") + ") k GROUP BY 1, 2, 3, 4"},

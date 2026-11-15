@@ -33,6 +33,7 @@ _V9_UNTIL_ROLLUPS = {
     "ingest_files",
     "session_minutes",
     "session_hours",
+    "session_minute_keys",
     "session_keys",
     "missed_reports",
     "cred_minutes",

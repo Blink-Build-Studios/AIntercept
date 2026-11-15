@@ -95,7 +95,7 @@ func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
 		switch c.Kind {
 		case "minute":
 			at -= at % minuteNS
-			stmts = append(append(stmts, minuteMissed...), minuteRow)
+			stmts = append(append(append(stmts, minuteMissed...), minuteRow), minuteKeys...)
 			next = []mark{{"hour", key(id, at-at%hourNS)}}
 		case "hour":
 			at -= at % hourNS

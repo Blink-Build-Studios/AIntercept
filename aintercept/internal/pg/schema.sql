@@ -1094,8 +1094,19 @@ CREATE TABLE session_hours (
     PRIMARY KEY (session_id, hour_ns)
 );
 
--- The distinct things a session's hour holds, each with how often it occurs: a range's distinct
--- count is count(DISTINCT key) over its rows.
+-- The distinct things a session's minute holds, each with how often it occurs: what the
+-- minute's facts give, and what a bin under an hour reads (the timeline's top event names).
+CREATE TABLE session_minute_keys (
+    session_id text NOT NULL,
+    minute_ns bigint NOT NULL,
+    kind text NOT NULL,
+    key text NOT NULL,
+    n bigint NOT NULL,
+    PRIMARY KEY (session_id, minute_ns, kind, key)
+);
+
+-- The same for a session's hour: the sums of its minutes' rows. A range's distinct count is
+-- count(DISTINCT key) over its rows.
 CREATE TABLE session_keys (
     session_id text NOT NULL,
     hour_ns bigint NOT NULL,

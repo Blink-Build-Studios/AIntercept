@@ -80,6 +80,7 @@ var retained = []struct{ table, old string }{
 	{"missed_reports", "minute_ns < $1"},
 	{"session_minutes", "minute_ns < $1"},
 	{"session_hours", "hour_ns < $1"},
+	{"session_minute_keys", "minute_ns < $1"},
 	{"session_keys", "hour_ns < $1"},
 	{"cred_minutes", "minute_ns < $1"},
 	{"cred_hours", "hour_ns < $1"},

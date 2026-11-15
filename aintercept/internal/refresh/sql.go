@@ -252,7 +252,7 @@ var nullable = map[string]bool{
 	"context_sum": true, "tool_calls": true, "hook_ms_sum": true, "cache_5m": true, "cache_1h": true, "cost_usd": true,
 }
 
-// session_keys' rows of one (session $1, hour [$2, $3)) are each kind
+// session_minute_keys' rows of one (session $1, minute [$2, $3)) are each kind
 // of thing the session's pages count distinct, with its occurrences.
 //   - name, tool, mcp_tool, word, destructive, git, pr: the person summary's
 //     counted dimensions (pages.py _EVENT_DIMENSIONS over personmap.go
@@ -269,18 +269,18 @@ var nullable = map[string]bool{
 // keyItems is one row per occurrence: (session, its time, kind, key), over the
 // events and calls the filters keep.
 func keyItems(events, calls string) string {
-	return `SELECT e.session_id AS sid, e.ts_ns AS at, x.k AS kind, x.v AS key FROM events e,
-	LATERAL (SELECT e.name = 'tengu_tool_use_success' AND ` + pyTruthy(md("toolName")) + ` AS used,
+	return `SELECT e.session_id AS sid, e.ts_ns AS at, x.k AS kind, x.v AS key FROM events e
+	LEFT JOIN LATERAL (SELECT ` + pyTruthy(md("toolName")) + ` AS used,
 		` + jsonText(md("toolName")) + ` AS tool, ` + md("isMcp") + ` #>> '{}' = 'true' AS mcp,
 		coalesce(nullif(` + pyStr(md("mcpServerName")) + `, ''),
 			CASE WHEN starts_with(` + jsonText(md("toolName")) + `, 'mcp__') AND cardinality(string_to_array(` + jsonText(md("toolName")) + `, '__')) >= 3
-			     THEN split_part(` + jsonText(md("toolName")) + `, '__', 2) END, '') AS server) t,
-	LATERAL (VALUES
+			     THEN split_part(` + jsonText(md("toolName")) + `, '__', 2) END, '') AS server
+		WHERE e.name = 'tengu_tool_use_success') t ON true
+	CROSS JOIN LATERAL (VALUES
 		('name', e.name),
 		('head', e.head_sha),
 		('batch', e.batch_call_id),
-		(CASE WHEN ` + md("isMcp") + ` #>> '{}' = 'true' THEN 'mcp_tool' ELSE 'tool' END,
-		 CASE WHEN e.name = 'tengu_tool_use_success' THEN ` + jsonText(md("toolName")) + ` END),
+		(CASE WHEN t.mcp THEN 'mcp_tool' ELSE 'tool' END, t.tool),
 		('word', CASE WHEN e.name = 'tengu_bash_tool_command_executed' THEN ` + jsonText(md("bash_argv0")) + ` END),
 		('destructive', CASE WHEN e.name = 'tengu_bash_tool_command_executed' AND ` + jsonText(md("destructive_category")) + ` <> 'none'
 		 THEN ` + jsonText(md("destructive_category")) + ` END),
@@ -304,12 +304,21 @@ func keyItems(events, calls string) string {
 	WHERE ` + calls + ` AND c.end_ns IS NOT NULL AND jsonb_typeof(u) = 'object' AND u ->> 'tool' <> ''`
 }
 
-// hourKeys recomputes session_keys for one (session $1, hour [$2, $3)): a
-// thing the hour no longer holds leaves, so the hour's rows are replaced.
+// minuteKeys recomputes session_minute_keys for one (session $1, minute
+// [$2, $3)) from the minute's events and calls: a thing the minute no longer
+// holds leaves, so the minute's rows are replaced.
+var minuteKeys = []string{
+	`DELETE FROM session_minute_keys WHERE session_id = $1 AND minute_ns = $2`,
+	`INSERT INTO session_minute_keys (session_id, minute_ns, kind, key, n) SELECT $1, $2, kind, key, count(*) FROM (` +
+		keyItems("e.session_id = $1 AND e.ts_ns >= $2 AND e.ts_ns < $3", "c.session_id = $1 AND "+in) + `) k GROUP BY kind, key`,
+}
+
+// hourKeys recomputes session_keys for one (session $1, hour [$2, $3)): the
+// sums of its 60 minutes' key rows, replaced as the minutes' are.
 var hourKeys = []string{
 	`DELETE FROM session_keys WHERE session_id = $1 AND hour_ns = $2`,
-	`INSERT INTO session_keys (session_id, hour_ns, kind, key, n) SELECT $1, $2, kind, key, count(*) FROM (` +
-		keyItems("e.session_id = $1 AND e.ts_ns >= $2 AND e.ts_ns < $3", "c.session_id = $1 AND "+in) + `) k GROUP BY kind, key`,
+	`INSERT INTO session_keys (session_id, hour_ns, kind, key, n) SELECT $1, $2, kind, key, sum(n) FROM session_minute_keys
+	WHERE session_id = $1 AND minute_ns >= $2 AND minute_ns < $3 GROUP BY kind, key`,
 }
 
 // credMinute recomputes cred_minutes for one (credential $1, minute [$2, $3)):

@@ -220,8 +220,13 @@ func TestSessionKeys(t *testing.T) {
 		head,
 		ev("B", 5, "s", t0+5e9, "tengu_input_prompt", `{}`),
 		ev("B", 6, "s", t0+6e9, "tengu_session_linked_to_pr", `{"prNumber":12}`),
+		ev("B", 7, "s", t0+2*minute, "tengu_run_hook", `{"hookName":"pre"}`), // another minute of the hour
 	)
 	drain(t, db)
+	var minuteHooks int
+	if err := db.QueryRow(ctx(t), "SELECT n FROM session_minute_keys WHERE session_id = 's' AND minute_ns = $1 AND kind = 'hook'", t0).Scan(&minuteHooks); err != nil || minuteHooks != 1 {
+		t.Errorf("minute t0's hook count %d (%v), want 1", minuteHooks, err)
+	}
 	rows, err := db.Query(ctx(t), "SELECT kind || ' ' || key || ' ' || n FROM session_keys WHERE session_id = 's' AND hour_ns = $1 ORDER BY 1", t0)
 	if err != nil {
 		t.Fatal(err)
@@ -233,10 +238,10 @@ func TestSessionKeys(t *testing.T) {
 		got = append(got, s)
 	}
 	want := []string{
-		"batch B 6", "call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 1",
-		"event_builtin Read 1", `event_mcp ["gh", "mcp__gh__list"] 1`, "git commit 1", "head abc 1", "hook pre 1",
+		"batch B 7", "call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 1",
+		"event_builtin Read 1", `event_mcp ["gh", "mcp__gh__list"] 1`, "git commit 1", "head abc 1", "hook pre 2",
 		fmt.Sprintf("input_prompt input:%d 1", t0+5e9), "ip 10.0.0.1 1", "mcp_tool mcp__gh__list 1",
-		"name tengu_git_operation 1", "name tengu_input_prompt 1", "name tengu_run_hook 1",
+		"name tengu_git_operation 1", "name tengu_input_prompt 1", "name tengu_run_hook 2",
 		"name tengu_session_linked_to_pr 1", "name tengu_tool_use_success 2", "pr 12 1", "tool Read 1",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -589,7 +594,7 @@ func TestRetainDeletesOldFactsAndRollups(t *testing.T) {
 		t.Fatal(err)
 	}
 	for table, want := range map[string]int{"calls": 1, "events": 0, "missed_reports": 0, "session_minutes": 1, "session_hours": 1,
-		"session_keys": 2, "cred_minutes": 1, "cred_hours": 1} {
+		"session_minute_keys": 2, "session_keys": 2, "cred_minutes": 1, "cred_hours": 1} {
 		var n int
 		db.QueryRow(ctx(t), "SELECT count(*) FROM "+table).Scan(&n)
 		if n != want {
@@ -613,10 +618,9 @@ func TestLagCoversDirtyRows(t *testing.T) {
 // TestRefreshCostIsFlat times the refresh a flush causes (100 events, 5 model
 // calls and their reports landing in the session's newest minute: its
 // minute, hour and credential rows) when the session already has 1,000
-// events, then 50,000 (docs/PIPELINE.md §9: flat). The session's events come
-// at 1,000 an hour, so the newest hour holds the same in both: a refresh reads
-// one minute's and one hour's rows, never the session's. Timing: run on demand
-// with AINTERCEPT_REFRESH_COST=1.
+// events, then 50,000 (docs/PIPELINE.md §9: flat). A refresh reads one
+// minute's facts and an hour's 60 minute rows, never the session's. Timing: run
+// on demand with AINTERCEPT_REFRESH_COST=1.
 func TestRefreshCostIsFlat(t *testing.T) {
 	if os.Getenv("AINTERCEPT_REFRESH_COST") == "" {
 		t.Skip("set AINTERCEPT_REFRESH_COST=1 to time refreshes")
