@@ -7,7 +7,6 @@ from aintercept_api import claude_code as cc
 from aintercept_api import pages, ranges
 from aintercept_api.models.common import Agent, Meta, RequestKind
 from aintercept_api.models.people import (
-    CoverageResponse,
     OverviewResponse,
     PeopleResponse,
     PersonRequestsResponse,
@@ -131,7 +130,7 @@ def get_people(
     return PeopleResponse(data=got.rows, meta=meta)
 
 
-# --- header, summary, requests, coverage (M2) -------------------------------------------------
+# --- header, summary, requests (M2) -------------------------------------------------
 
 
 @router.get("/people/{personId}", response_model=PersonResponse)
@@ -195,19 +194,3 @@ def get_person_requests(
         kindCounts=got.kind_counts,
         hiddenCount=got.hidden_count,
     )
-
-
-@router.get("/coverage", response_model=CoverageResponse)
-def get_coverage(
-    request: Request,
-    personId: str = Query(..., description="The person whose coverage to check."),  # noqa: N803
-    sessionId: str | None = Query(None, description="Narrow to one of the person's sessions."),  # noqa: N803
-    from_: AwareDatetime | None = FROM,
-    to: AwareDatetime | None = TO,
-) -> CoverageResponse:
-    now_dt = request.app.state.clock()
-    lo, hi = ranges.given(from_, to)
-    with pages.read(request, "coverage") as reader:
-        detail, last = reader.coverage(personId, sessionId, lo, hi)
-    meta = Meta(asOf=now_dt, lastDataAt=ns_to_dt(last), from_=ns_to_dt(lo), to=ns_to_dt(hi))
-    return CoverageResponse(data=detail, meta=meta)

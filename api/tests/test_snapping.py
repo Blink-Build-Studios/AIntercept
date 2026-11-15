@@ -134,10 +134,6 @@ class _Recording(pages.SqlPages):
         self.seen.append(("person/requests", lo, hi))
         return super().person_requests(pid, lo, hi, *a)
 
-    def coverage(self, pid, sid, lo, hi):
-        self.seen.append(("coverage", lo, hi))
-        return super().coverage(pid, sid, lo, hi)
-
     def people(self, now_dt, lo, hi, *a):
         self.seen.append(("people", lo, hi))
         return super().people(now_dt, lo, hi, *a)
@@ -179,7 +175,6 @@ RANGED = {
     "person/timeline": "/api/v1/people/{p}/timeline",
     "person/summary": "/api/v1/people/{p}/summary",
     "person/requests": "/api/v1/people/{p}/requests",
-    "coverage": "/api/v1/coverage?personId={p}",
     "people": "/api/v1/people",
     "overview": "/api/v1/overview",
 }
@@ -268,11 +263,11 @@ def test_a_live_sessions_default_end_is_nows_minute(spied):
 
 
 def test_an_open_default_stays_open(spied):
-    # The request logs, a person's sessions, /coverage and the directory filter by a range only when
+    # The request logs, a person's sessions and the directory filter by a range only when
     # given one: their meta says so.
     client, store = spied
     pid = _person(client)
-    for page in ("session/requests", "person/sessions", "person/requests", "coverage", "people", "overview"):
+    for page in ("session/requests", "person/sessions", "person/requests", "people", "overview"):
         store.seen.clear()
         meta = client.get(_url(RANGED[page], pid, None, None)).json()["meta"]
         assert [x for x in store.seen if x[0] == page] == [(page, None, None)], (page, store.seen)

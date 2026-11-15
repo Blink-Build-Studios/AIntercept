@@ -4,25 +4,14 @@ tools/make_demo_fixture.py), so stories show real shapes and numbers."""
 import pytest
 
 from tests.builders import Dataset, load_fixture
-from tests.conftest import PgDataset, bounded_store, make_client, pg_admin
+from tests.conftest import PgDataset, make_client, pg_admin
 
 DEMO_ACCOUNT = "7d2e0000-0000-4000-8000-00000000a41c"
 
 
 @pytest.fixture(scope="module")
-def demo(tmp_path_factory):
-    """One client over the demo fixture, shared: these tests only read it."""
-    ds = Dataset(tmp_path_factory.mktemp("demo") / "data")
-    load_fixture(ds, "demo")
-    store = bounded_store(ds.write())
-    yield make_client(store)
-    store.close()
-
-
-@pytest.fixture(scope="module")
 def pg_demo(tmp_path_factory):
-    """The demo fixture in Postgres (conftest.PgDataset): the drawer's and the session pages' samples are
-    v9's (§6.2, §6.1)."""
+    """The demo fixture in Postgres (conftest.PgDataset): every page's samples are v9's (§6)."""
     ds = Dataset(tmp_path_factory.mktemp("pg-demo") / "data")
     load_fixture(ds, "demo")
     pg = PgDataset(pg_admin(), ds.write())
@@ -32,8 +21,8 @@ def pg_demo(tmp_path_factory):
     pg.close()
 
 
-def test_person_sessions_demo(demo, write_sample):
-    client = demo
+def test_person_sessions_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/sessions")
     write_sample(client, r, "demo")
     (s,) = r.json()["data"]
@@ -46,8 +35,8 @@ def test_person_sessions_demo(demo, write_sample):
     assert [w["count"] for w in cov["windows"]] == [37, 4, 3, 50, 1]
 
 
-def test_person_timeline_demo(demo, write_sample):
-    client = demo
+def test_person_timeline_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/timeline")
     write_sample(client, r, "demo")
     d = r.json()["data"]
@@ -56,34 +45,27 @@ def test_person_timeline_demo(demo, write_sample):
     assert sum(w["count"] for w in d["notCaptured"]) == 95
 
 
-def test_person_demo(demo, write_sample):
-    client = demo
+def test_person_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}")
     write_sample(client, r, "demo")
     p = r.json()["data"]
     assert p["live"] is True and p["posture"]["bypassPct"] == 99.7
 
 
-def test_person_summary_demo(demo, write_sample):
-    client = demo
+def test_person_summary_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/summary")
     write_sample(client, r, "demo")
     rb = r.json()["data"]["ribbon"]
     assert rb["modelCalls"] == 640 and rb["sessions"] == 1
 
 
-def test_person_requests_demo(demo, write_sample):
-    client = demo
+def test_person_requests_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/requests", params={"pageSize": 50})
     write_sample(client, r, "demo")
     assert r.json()["meta"]["total"] > 640
-
-
-def test_coverage_demo(demo, write_sample):
-    client = demo
-    r = client.get("/api/v1/coverage", params={"personId": DEMO_ACCOUNT})
-    write_sample(client, r, "demo")
-    assert r.json()["data"]["notCaptured"] == 95
 
 
 # --- the session page (M3): the main session, live at the frozen clock ------------------------------

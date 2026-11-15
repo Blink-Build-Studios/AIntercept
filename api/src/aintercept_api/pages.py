@@ -37,7 +37,6 @@ from aintercept_api.models.people import (
     CodeShipped,
     CommandWord,
     Cost,
-    CoverageDetail,
     Destructive,
     DeviceInfo,
     Failures,
@@ -141,9 +140,6 @@ class Pages(Protocol):
         self, pid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
         captured: bool | None, page: int, size: int, order: str, agent: Sequence[str] | None, hidden: bool,
     ) -> RequestsPage: ...  # fmt: skip
-    def coverage(
-        self, pid: str, sid: str | None, lo: int | None, hi: int | None
-    ) -> tuple[CoverageDetail, int | None]: ...
     def people(
         self, now_dt: datetime, lo: int | None, hi: int | None, sort: str, agent: Sequence[str] | None,
         q: str | None, page: int, size: int,
@@ -183,7 +179,6 @@ _ROUTES = [
     ("person/timeline", r"/people/[^/]+/timeline"),
     ("person/summary", r"/people/[^/]+/summary"),
     ("person/requests", r"/people/[^/]+/requests"),
-    ("coverage", r"/coverage"),
     ("request", r"/requests/[^/]+"),
     ("request/raw", r"/requests/[^/]+/raw"),
     ("request/details", r"/requests/[^/]+/details"),
@@ -243,7 +238,6 @@ WHERE kind = 'missed' AND session_id IN (SELECT unnest(?::VARCHAR[])) AND t_ns B
 # Claude Code's own latest counts up to the range's end (the MCP tools in its catalog, the skills it synced).
 _LATEST = """SELECT arg_max(count, (ts_ns, count)) FROM event_rows
 WHERE name = ? AND session_id IN (SELECT unnest(?::VARCHAR[])) AND ts_ns <= ?"""
-_WITHIN = "(?::BIGINT IS NULL OR t_ns >= ?) AND (?::BIGINT IS NULL OR t_ns <= ?)"
 
 
 def _short(x: str) -> str:
@@ -689,44 +683,6 @@ class SqlPages:
                              hidden)  # fmt: skip
         last = self.store.query("SELECT last_ns FROM person_last WHERE person_id = ?", [pid])
         return RequestsPage(got.hidden_count, got.total, got.kind_counts, got.rows, last[0][0] if last else None)
-
-    def coverage(self, pid: str, sid: str | None, lo: int | None, hi: int | None) -> tuple[CoverageDetail, int | None]:
-        store = self.store
-        sids = [s for s in ru.person_sessions(store, pid) if sid is None or s == sid]
-        span = [sids, lo, lo, hi, hi]
-        with_events, last = store.query(
-            """SELECT count(*) FILTER (WHERE events IS NOT NULL), max(last_ns) FROM session_rows
-               WHERE session_id IN (SELECT unnest(?::VARCHAR[]))""",
-            [sids],
-        )[0]
-        reported, missed, calls = store.query(
-            f"""SELECT count(*) FILTER (WHERE kind = 'reported'), count(*) FILTER (WHERE kind = 'missed'),
-                       count(*) FILTER (WHERE kind = 'call')
-                FROM session_marks WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND {_WITHIN}""",  # noqa: S608
-            span,
-        )[0]
-        # The missed calls' rows, as the person's request log has them (request_rows).
-        rows = store.query_dicts(
-            f"""SELECT * FROM request_rows WHERE person_id = ? AND request_id LIKE 'reported:%'
-                  AND session_id IN (SELECT unnest(?::VARCHAR[])) AND {_WITHIN.replace("t_ns", "ts_ns")}
-                ORDER BY ts_ns, session_id, request_id""",  # noqa: S608
-            [pid, *span],
-        )
-        wins = ru.windows(
-            store,
-            f"""SELECT 0 AS grp, t_ns AS t FROM session_marks
-                WHERE kind = 'missed' AND session_id IN (SELECT unnest(?::VARCHAR[])) AND {_WITHIN}""",  # noqa: S608
-            span,
-        )
-        reported = reported if with_events else None
-        detail = CoverageDetail(
-            reported=reported,
-            captured=(reported - missed) if reported is not None else calls,
-            notCaptured=missed,
-            windows=[CoverageWindow(from_=dt(a), to=dt(b), count=n) for _, a, b, n in wins],
-            calls=[request_row_from_table(r) for r in rows],
-        )
-        return detail, last
 
     # --- the directory ----------------------------------------------------------------------------
 

@@ -90,7 +90,6 @@ def endpoint_urls(client) -> list[str]:
             f"{base}/requests{_qs(**PERSON_BRUSH, kind=OTHER_KINDS, pageSize=20)}",
             f"{base}/requests{_qs(**PERSON_BRUSH, q='model', pageSize=20)}",
             f"{base}/requests{_qs(agent='codex', captured='false', hidden='true', pageSize=20)}",
-            f"/api/v1/coverage?personId={pid}",
         ]
         r = client.get(f"{base}/sessions?pageSize=100").json()
         sessions += [s["sessionId"] for s in r.get("data", [])]

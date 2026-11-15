@@ -71,10 +71,10 @@ def codex_work(ds, email=EMAIL):
     return root
 
 
-def test_people_link_accounts_by_email(dataset, client_for, write_sample):
+def test_people_link_accounts_by_email(dataset, pg_client_for, write_sample):
     claude_code_account(dataset)
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people")
     assert r.status_code == 200, r.text
     rows = r.json()["data"]
@@ -87,19 +87,19 @@ def test_people_link_accounts_by_email(dataset, client_for, write_sample):
     write_sample(client, r, "linked")
 
 
-def test_unlinked_accounts_stay_separate(dataset, client_for):
+def test_unlinked_accounts_stay_separate(dataset, pg_client_for):
     claude_code_account(dataset)
     codex_work(dataset, email="ada@personal.example")
-    rows = client_for(dataset).get("/api/v1/people").json()["data"]
+    rows = pg_client_for(dataset).get("/api/v1/people").json()["data"]
     assert sorted(r["agents"][0] for r in rows) == ["claude-code", "codex"]
     assert all(r["linkedBy"] is None for r in rows)
 
 
-def test_overview_lists_each_agents_fields_and_channels(dataset, client_for):
+def test_overview_lists_each_agents_fields_and_channels(dataset, pg_client_for):
     """Round 14 (handoff §11L): each product lists only the provider-specific fields it reports,
     and its own request channels; the Codex card's headline is its highest weekly limit."""
     codex_work(dataset)
-    data = client_for(dataset).get("/api/v1/overview").json()["data"]
+    data = pg_client_for(dataset).get("/api/v1/overview").json()["data"]
     cards = {a["agent"]: a for a in data["agents"]}
     assert cards["codex"]["people"] == 1
     assert cards["codex"]["sessions"] == 4
@@ -110,10 +110,10 @@ def test_overview_lists_each_agents_fields_and_channels(dataset, client_for):
     assert data["devices"] == 1
 
 
-def test_person_header_lists_accounts_and_limits(dataset, client_for, write_sample):
+def test_person_header_lists_accounts_and_limits(dataset, pg_client_for, write_sample):
     claude_code_account(dataset)
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/people/{CODEX_ACCOUNT}")
     assert r.status_code == 200, r.text
     h = r.json()["data"]
@@ -127,9 +127,9 @@ def test_person_header_lists_accounts_and_limits(dataset, client_for, write_samp
     write_sample(client, r, "linked_codex")
 
 
-def test_person_sessions_nest_subagent_threads(dataset, client_for, write_sample):
+def test_person_sessions_nest_subagent_threads(dataset, pg_client_for, write_sample):
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/people/{CODEX_ACCOUNT}/sessions")
     assert r.status_code == 200, r.text
     body = r.json()
@@ -375,11 +375,11 @@ def test_recorded_bodies_give_the_prompt_and_the_thread_title(dataset, pg_client
     }
 
 
-def test_person_requests_and_sessions_scope_to_an_agent(dataset, client_for):
+def test_person_requests_and_sessions_scope_to_an_agent(dataset, pg_client_for):
     """A linked person's AgentScope (handoff §11M 3.3) scopes the sessions table and All requests."""
     claude_code_account(dataset)
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     pid = client.get("/api/v1/people").json()["data"][0]["personId"]
     agents_of = lambda body: {x["agent"] for x in body["data"]}  # noqa: E731
     assert agents_of(client.get(f"/api/v1/people/{pid}/sessions?agent=codex").json()) == {"codex"}

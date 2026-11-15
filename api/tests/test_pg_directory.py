@@ -5,45 +5,22 @@ with the oracle.
   as PgStore loads them (the dimension rows of the keys whose day is from's day or later, plus every
   a: key's, through person_sql; those keys' sessions' rows, call-day folds and missed marks), equal
   the oracle's directory tables (quirk 1: exactly the rows v5's partitions held).
-- **Responses:** test_directory.py's tests, each request of /people and /overview answered by both
-  stores and held byte for byte: "old" the oracle's tables through the directory SQL as it was (every
-  call mark: tests/oracle/directory_sql.py), "new" PgStore. test_v1_pipeline.py holds every from
-  (presets, unaligned, none) on the mixed dataset.
+
+The pages read v9 now (docs/PIPELINE.md §6.4): test_person_pages.py holds them to a from-scratch
+computation. This holds v7's loader until step 8 deletes it.
 """
 
 import contextlib
-import json
 import pathlib
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
-from aintercept_api.buckets import LocalSource
 from aintercept_api.pgstore import PgStore
-from aintercept_api.raw import LocalRaw
 from tests import pgdb
-from tests.conftest import lay_out, make_client
-from tests.oracle.directory_sql import todays_sql
+from tests.conftest import lay_out
 from tests.oracle.harness import Layout, Oracle, Table, Tables, assert_same, extract
-from tests.oracle.store import OracleStore
-from tests.test_directory import (  # noqa: F401 (run here side by side; see SideBySide)
-    test_a_range_without_an_offset_is_rejected,
-    test_overview_counts_only_the_window,
-    test_overview_coverage_gap,
-    test_overview_demo,
-    test_overview_empty,
-    test_overview_many,
-    test_overview_one,
-    test_overview_unattributed,
-    test_people_are_named_from_their_account_profile,
-    test_people_demo,
-    test_people_empty,
-    test_people_filtered_agent,
-    test_people_in_a_range,
-    test_people_many_sorted_and_searched,
-    test_people_one,
-)
 from tests.test_v6_session_rows import _datasets, _without
 
 
@@ -75,8 +52,10 @@ def layouts(tmp_path_factory) -> Iterator[list[tuple[str, pathlib.Path, str]]]:
 
 
 def _directory_tables(store: PgStore, day: str | None) -> Tables:
-    loaded = store.load_for("/api/v1/people" + (f"?from={day}T00:00:00Z" if day else ""))
-    assert loaded is not None
+    from aintercept_api import pgstore_directory
+
+    params = {"from": [f"{day}T00:00:00Z"]} if day else {}
+    loaded = store._read("/api/v1/people", lambda run: pgstore_directory.load(run, overview=False, params=params))
     try:
         con = loaded.con
         spec = {t: "true" for t in (*_WHOLE, "accounts", "session_rows", "session_marks", "session_call_days")}
@@ -146,64 +125,3 @@ def test_the_directory_tables_equal_the_oracles_for_every_day(layouts):
     print("directory days compared:", compared, "rows:", rows)  # noqa: T201
     assert compared >= 6, compared
     assert all(rows.values()), rows  # not vacuous: every table holds rows somewhere
-
-
-# --- test_directory.py's tests, side by side -----------------------------------------------------
-
-
-def _directory(url: str) -> bool:
-    return url.split("?")[0] in ("/api/v1/people", "/api/v1/overview")
-
-
-class SideBySide:
-    """A client whose /people and /overview requests are answered by both stores and must agree
-    byte for byte (the Postgres answer is returned); anything else is the oracle's alone."""
-
-    def __init__(self, old: Any, new: Any) -> None:
-        self.old, self.new = old, new
-        self.app = new.app
-        self.held = 0
-
-    def get(self, url: str, **kwargs: Any) -> Any:
-        if not _directory(url):
-            return self.old.get(url, **kwargs)
-        with todays_sql():
-            a = self.old.get(url, **kwargs)
-        b = self.new.get(url, **kwargs)
-        assert b.status_code == a.status_code, (url, kwargs, a.status_code, b.status_code)
-        assert json.dumps(b.json(), sort_keys=True) == json.dumps(a.json(), sort_keys=True), (url, kwargs)
-        self.held += 1
-        return b
-
-
-@pytest.fixture
-def client_for():
-    """client_for(dataset): a SideBySide client over the dataset laid out once for each store."""
-    admin = _admin()
-    with contextlib.ExitStack() as stack:
-        clients: list[SideBySide] = []
-
-        def make(ds: Any, **kwargs: Any) -> SideBySide:
-            root = pathlib.Path(ds.write())
-            root.mkdir(parents=True, exist_ok=True)
-            dsn = stack.enter_context(pgdb.fresh_database(admin))
-            layout = lay_out(root, pg=dsn)
-            old = OracleStore(layout, prefix="sim/", raw=LocalRaw(root))
-            new = PgStore(dsn, source=LocalSource(layout), prefix="sim/", threads=1)
-            stack.callback(old.close)
-            stack.callback(new.close)
-            clients.append(SideBySide(make_client(old, **kwargs), make_client(new, **kwargs)))
-            return clients[-1]
-
-        yield make
-        assert sum(c.held for c in clients), "no directory request was held side by side"
-
-
-@pytest.fixture
-def write_sample():
-    """The samples are test_directory.py's to write: here only the status is checked."""
-
-    def check(client: Any, response: Any, scenario: str, status: int = 200) -> None:
-        assert response.status_code == status, response.text
-
-    return check

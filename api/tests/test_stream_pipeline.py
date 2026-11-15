@@ -38,8 +38,6 @@ def group(url: str) -> str:
         return "directory"
     if path.startswith("/api/v1/sessions/"):
         return "sessions"
-    if path.startswith("/api/v1/coverage"):
-        return "coverage"
     parts = path.split("/")
     if len(parts) == 5:  # /api/v1/people/{id}
         return "person"

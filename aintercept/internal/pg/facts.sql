@@ -536,12 +536,16 @@ CREATE TABLE sessions (
 );
 
 -- An account's activity in one UTC day, per agent (the directory's numbers, owner decision 2):
--- the sessions it appears on that were active that day, and their hours' sums in the day.
+-- the sessions it appears on that were active that day (and their ids: a window's distinct sessions
+-- are the distinct ids of its days; and the ids of those with a model call that day, which the
+-- overview's agent cards count), and their hours' sums in the day.
 CREATE TABLE account_days (
     account_id text NOT NULL,
     day_ns bigint NOT NULL,
     agent text NOT NULL,
     sessions bigint NOT NULL,
+    session_ids text[] NOT NULL,
+    call_session_ids text[] NOT NULL,
     sessions_with_events bigint NOT NULL,
     prompts bigint NOT NULL,
     model_calls bigint NOT NULL,
@@ -568,3 +572,15 @@ CREATE TABLE ingest_files (
 );
 -- The files still to load: what a worker claims from, oldest first, and /lag.
 CREATE INDEX ON ingest_files (key) WHERE loaded_at IS NULL;
+
+-- §6.3, §6.4 The person pages, the directory and /status. A person is an email group, resolved at read
+-- from accounts by lower(email); unattributed is the sessions with a visible call and no account; the
+-- overview's requests at a window's edge minutes are every credential's; /status's first call is the
+-- first start, else the first end of a call with none (a WebSocket turn), its waiting time the first
+-- probe's, and whether content is kept whether any call kept its detail.
+CREATE INDEX ON accounts (lower(email));
+CREATE INDEX ON sessions (start_ns) WHERE unattributed;
+CREATE INDEX ON cred_minutes (minute_ns);
+CREATE INDEX ON calls (start_ns) WHERE synthetic;
+CREATE INDEX ON calls (end_ns) WHERE start_ns IS NULL;
+CREATE INDEX ON calls (start_ns) WHERE detail IS NOT NULL;

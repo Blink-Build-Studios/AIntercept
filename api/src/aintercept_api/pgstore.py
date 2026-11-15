@@ -45,9 +45,10 @@ from typing import Any, TypeVar, cast
 import adbc_driver_postgresql.dbapi as pgdbapi
 import duckdb
 
-from aintercept_api import drawer, pages, ranges, sessionpages, state_sql, stream_sql
+from aintercept_api import directorypages, drawer, pages, personpages, ranges, sessionpages, state_sql, stream_sql
 from aintercept_api import request_detail as rd
 from aintercept_api import store as legacy
+from aintercept_api.models.people import Overview, PersonHeader, PersonSummary, SessionRow, Timeline
 from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
 from aintercept_api.models.sessions import BetweenItem, EventRow, PromptItem, SessionState, SessionTimeline
 from aintercept_api.reader import (
@@ -67,7 +68,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "8e9adde1bfda6204c88cdaf4b6e9dc6c01c5cebedac6fe37f7c5b850a04d4d36"
+SCHEMA_HASH = "31dc4fafa0c4916c96ea17d45672825d92bcdb2cc96f7970cdf4ae572c8c943b"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
@@ -219,15 +220,6 @@ UNION ALL
 }"""  # noqa: S608 (fixed names)
 # The Requests tab's statements after the session's row, in order.
 REQUESTS_TAB = ("session_request_rows", "other_keys")
-
-_STATUS = """SELECT
-    (SELECT min(first_request_ns) FROM keys WHERE first_request_ns > 0) AS first_request_ns,
-    (SELECT min(earliest_ns) FROM keys WHERE earliest_ns > 0) AS earliest_ns,
-    (SELECT max(newest_row_ns) FROM keys) AS newest_row_ns,
-    (SELECT max(last_ns) FROM ingest_pods WHERE at > now() - interval '10 minutes') AS pods_ns,
-    EXISTS (SELECT 1 FROM keys) AS any_key,
-    EXISTS (SELECT 1 FROM keys WHERE content_retained) AS retained"""
-
 
 # The drawer's lastDataAt (it's global, quirk 7): the newest record any observer pod sent (§6.4).
 _NEWEST = "SELECT max(last_ns) AS n FROM ingest_pods"
@@ -724,38 +716,17 @@ class PgPages:
     A page moves here (build steps 6 and 7) by adding its name to PAGES and its method, with
     pages.SqlPages' signature."""
 
-    PAGES = frozenset(
-        {
-            "status",
-            "request",
-            "request/raw",
-            "request/details",
-            "event",
-            "session",
-            "session/timeline",
-            "session/state",
-            "session/prompts",
-            "session/requests",
-            "session/events",
-        }
-    )
+    PAGES = frozenset(pages.PAGE_NAMES)
 
     def __init__(self, store: PgStore, snap: Snapshot) -> None:
         self.store, self.snap = store, snap
-        self._status: pages.StatusValues | None = None
         self._sessions = sessionpages.SessionReads(snap)
+        self._people = personpages.PersonReads(snap, self._sessions)
+        self._directory = directorypages.DirectoryReads(snap)
 
     def status(self) -> pages.StatusValues:
-        if self._status is None:
-            (row,) = self.snap.dicts("status", _STATUS, {})
-            found = [n for n in (row["newest_row_ns"], row["pods_ns"]) if n]
-            self._status = pages.StatusValues(
-                row["first_request_ns"] or None,
-                row["earliest_ns"] or None,
-                max(found) if found else None,
-                row["retained"] if row["any_key"] else None,
-            )
-        return self._status
+        s = self._directory.status()
+        return pages.StatusValues(s.first_request_ns, s.earliest_ns, s.newest_ns, s.content_retained)
 
     def newest_ns(self) -> int | None:
         (row,) = self.snap.dicts("newest", _NEWEST, {})
@@ -807,3 +778,48 @@ class PgPages:
         self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
     ) -> tuple[int, int, list[EventRow]]:
         return self._sessions.events(sid, lo, hi, internal, q, page, size)
+
+    # --- the person pages (v9: personpages.PersonReads, docs/PIPELINE.md §6.3) ------------------------
+
+    def person_sessions(
+        self, pid: str, now: int, lo: int | None, hi: int | None, page: int, size: int, agent: Sequence[str] | None
+    ) -> tuple[int, int | None, list[SessionRow]]:
+        return self._people.sessions_page(pid, now, lo, hi, page, size, agent)
+
+    def person_session_rows(self, pid: str, now: int) -> tuple[list[str], list[dict[str, Any]]]:
+        return self._people.session_rows(pid, now)
+
+    def person_timeline(
+        self, sids: list[str], rs: list[dict[str, Any]], now_dt: datetime, now: int, lo: int, hi: int, bin_s: int
+    ) -> Timeline:
+        return self._people.timeline(sids, rs, now_dt, now, lo, hi, bin_s)
+
+    def person(self, pid: str, now_dt: datetime) -> tuple[PersonHeader, datetime | None]:
+        return self._people.header(pid, now_dt)
+
+    def person_span(self, pid: str) -> tuple[list[str], int | None, int | None]:
+        return self._people.span(pid)
+
+    def person_summary(self, pid: str, sids: list[str], now: int, lo: int, hi: int) -> tuple[PersonSummary, int | None]:
+        return self._people.summary(pid, now, lo, hi)
+
+    def person_requests(
+        self, pid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
+        captured: bool | None, page: int, size: int, order: str, agent: Sequence[str] | None, hidden: bool,
+    ) -> pages.RequestsPage:  # fmt: skip
+        hidden_count, total, kinds, rows, last = self._people.requests(
+            pid, lo, hi, kind, q, captured, page, size, order, agent, hidden
+        )
+        return pages.RequestsPage(hidden_count, total, kinds, rows, last)
+
+    # --- the directory and the overview (v9: directorypages.DirectoryReads, docs/PIPELINE.md §6.4) -----
+
+    def people(
+        self, now_dt: datetime, lo: int | None, hi: int | None, sort: str, agent: Sequence[str] | None,
+        q: str | None, page: int, size: int,
+    ) -> pages.PeoplePage:  # fmt: skip
+        rows, total, last = self._directory.people(now_dt, lo, hi, sort, agent, q, page, size)
+        return pages.PeoplePage(rows, total, last)
+
+    def overview(self, now_dt: datetime, lo: int | None, hi: int | None) -> tuple[Overview, datetime | None]:
+        return self._directory.overview(now_dt, lo, hi)

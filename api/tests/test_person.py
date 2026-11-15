@@ -1,6 +1,7 @@
 """/people/{personId}, /summary, /requests and /coverage."""
 
-from tests.builders import ACCOUNT, ClaudeCode, account_call, limits_on_last_call
+from tests.builders import ACCOUNT, ClaudeCode, account_call, end_batches, limits_on_last_call
+from tests.test_session import error_on_query
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -68,9 +69,9 @@ def working_session(ds, sid=S1, hour=9, bypassed=0):
 # --- /people/{id} -------------------------------------------------------------------------------
 
 
-def test_person_identified(dataset, client_for, write_sample):
+def test_person_identified(dataset, pg_client_for, write_sample):
     working_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(BASE)
     write_sample(client, r, "identified")
     p = r.json()["data"]
@@ -81,28 +82,28 @@ def test_person_identified(dataset, client_for, write_sample):
     assert p["name"] is None and p["flags"]["total"] is None  # need body extraction (M7): unknown, never 0
 
 
-def test_person_unidentified(dataset, client_for, write_sample):
+def test_person_unidentified(dataset, pg_client_for, write_sample):
     """Calls with identity but no analytics: almost everything is unknown."""
     ClaudeCode(dataset, S1).call("2026-11-04T09:01:00")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(BASE)
     write_sample(client, r, "unidentified")
     p = r.json()["data"]
     assert p["plan"] is None and p["devices"] == [] and p["posture"]["bypassPct"] is None and p["lastSeenAt"]
 
 
-def test_person_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_person_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     write_sample(client, client.get(BASE), "error", status=500)
 
 
 # --- /summary -----------------------------------------------------------------------------------
 
 
-def test_summary_one_session(dataset, client_for, write_sample):
+def test_summary_one_session(dataset, pg_client_for, write_sample):
     working_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/summary")
     write_sample(client, r, "one_session")
     d = r.json()["data"]
@@ -119,10 +120,10 @@ def test_summary_one_session(dataset, client_for, write_sample):
     assert d["capabilities"]["hookOverheadMs"] == 50.0
 
 
-def test_summary_many_follows_the_range(dataset, client_for, write_sample):
+def test_summary_many_follows_the_range(dataset, pg_client_for, write_sample):
     working_session(dataset, S1, 9)
     working_session(dataset, S2, 14)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/summary")
     write_sample(client, r, "many")
     assert r.json()["data"]["ribbon"]["sessions"] == 2 and r.json()["data"]["ribbon"]["modelCalls"] == 8
@@ -130,36 +131,36 @@ def test_summary_many_follows_the_range(dataset, client_for, write_sample):
     assert morning.json()["data"]["ribbon"]["modelCalls"] == 4
 
 
-def test_summary_coverage_gap(dataset, client_for, write_sample):
+def test_summary_coverage_gap(dataset, pg_client_for, write_sample):
     working_session(dataset, bypassed=3)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/summary")
     write_sample(client, r, "coverage_gap")
     cov = r.json()["data"]["coverage"]
     assert cov["notCaptured"] == 4 and [w["count"] for w in cov["windows"]] == [4]  # req_x + 3 missed, one window
 
 
-def test_summary_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_summary_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/summary"), "error", status=500)
 
 
 # --- /requests ----------------------------------------------------------------------------------
 
 
-def test_requests_empty(dataset, client_for, write_sample):
-    client = client_for(dataset)
+def test_requests_empty(dataset, pg_client_for, write_sample):
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests")
     write_sample(client, r, "empty")
     assert r.json()["data"] == []
 
 
-def test_requests_one(dataset, client_for, write_sample):
+def test_requests_one(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     rid = cc.call("2026-11-04T09:01:00", stop_reason="end_turn", cache_read=40_000, content_encoding="gzip")
     cc.event("2026-11-04T09:01:05", "tengu_api_success", requestId=rid, ttftMs=1900, cache_creation_5m_input_tokens=0)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"kind": "model"})
     write_sample(client, r, "one")
     (row,) = r.json()["data"]
@@ -184,13 +185,13 @@ def test_requests_one(dataset, client_for, write_sample):
     assert row["error"] is None
 
 
-def test_requests_failed(dataset, client_for, write_sample):
+def test_requests_failed(dataset, pg_client_for, write_sample):
     """A connection reset mid-stream, a 500, and Anthropic's unregistered 529."""
     cc = ClaudeCode(dataset, S1)
     cc.call("2026-11-04T09:01:00", status=None, error="connection reset", bytes_down=2_048)
     cc.call("2026-11-04T09:02:00", status=500)
     cc.call("2026-11-04T09:03:00", status=529)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"order": "asc"})
     write_sample(client, r, "failed")
     reset, internal, overloaded = r.json()["data"]
@@ -207,9 +208,10 @@ def test_requests_failed(dataset, client_for, write_sample):
     assert overloaded["statusText"] is None and overloaded["error"]["message"] == "HTTP 529"
 
 
-def test_requests_many_newest_first_filtered_and_paged(dataset, client_for, write_sample):
+def test_requests_many_newest_first_filtered_and_paged(dataset, pg_client_for, write_sample):
     working_session(dataset)
-    client = client_for(dataset)
+    end_batches(dataset)  # an analytics post is its session's from its end (test_a_post_in_flight_…)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"pageSize": 50})
     write_sample(client, r, "many")
     rows = r.json()["data"]
@@ -219,7 +221,7 @@ def test_requests_many_newest_first_filtered_and_paged(dataset, client_for, writ
     batch = next(x for x in rows if x["kind"] == "analytics")
     assert batch["background"] is True and batch["detail"].endswith(" events") and batch["sessionId"] == S1
     assert batch["tokens"] is None and batch["stopReason"] is None  # model calls only
-    assert batch["statusText"] is None  # the batch's response wasn't captured: no status, no phrase
+    assert batch["statusText"] == "OK"  # the batch's answer
     model = [x for x in rows if x["kind"] == "model" and x["captured"]]
     assert [x["tokens"]["output"] for x in model] == [100, 200, 200, 200]  # newest first: the subagent call
     assert all(x["statusText"] == "OK" and x["tokens"]["output"] is not None for x in model)
@@ -228,9 +230,9 @@ def test_requests_many_newest_first_filtered_and_paged(dataset, client_for, writ
     assert client.get(f"{BASE}/requests", params={"q": "kind=account"}).json()["meta"]["total"] == 1
 
 
-def test_requests_not_captured(dataset, client_for, write_sample):
+def test_requests_not_captured(dataset, pg_client_for, write_sample):
     working_session(dataset, bypassed=2)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"captured": "false"})
     write_sample(client, r, "not_captured")
     rows = r.json()["data"]
@@ -243,54 +245,19 @@ def test_requests_not_captured(dataset, client_for, write_sample):
     assert {x["requestId"] for x in rows} >= {"reported:req_missed_0", "reported:req_missed_1"}
 
 
-def test_requests_account_calls(dataset, client_for, write_sample):
+def test_requests_account_calls(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     cc.call("2026-11-04T09:01:00")
     account_call(cc, "2026-11-04T09:00:30", "/api/oauth/organizations/x/skills/list-skills")
     account_call(cc, "2026-11-04T09:00:31", "/mcp-registry/v0/servers")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"kind": "account"})
     write_sample(client, r, "account_calls")
     rows = r.json()["data"]
     assert [x["detail"] for x in rows] == ["servers", "list-skills"] and all(x["sessionId"] is None for x in rows)
 
 
-def test_requests_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_requests_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/requests"), "error", status=500)
-
-
-# --- /coverage ----------------------------------------------------------------------------------
-
-
-def test_coverage_complete(dataset, client_for, write_sample):
-    cc = ClaudeCode(dataset, S1)
-    rid = cc.call("2026-11-04T09:01:00")
-    cc.reported("2026-11-04T09:01:05", rid)
-    client = client_for(dataset)
-    r = client.get("/api/v1/coverage", params={"personId": ACCOUNT})
-    write_sample(client, r, "complete")
-    assert r.json()["data"] == {"reported": 1, "captured": 1, "notCaptured": 0, "windows": [], "calls": []}
-
-
-def test_coverage_gap_lists_the_calls(dataset, client_for, write_sample):
-    working_session(dataset, bypassed=2)
-    working_session(dataset, S2, 14)
-    client = client_for(dataset)
-    r = client.get("/api/v1/coverage", params={"personId": ACCOUNT, "sessionId": S1})
-    write_sample(client, r, "gap")
-    d = r.json()["data"]
-    assert d["notCaptured"] == 3 and len(d["calls"]) == 3 and {c["sessionId"] for c in d["calls"]} == {S1}
-    assert [c["t"] for c in d["calls"]] == sorted(c["t"] for c in d["calls"])
-
-
-def test_coverage_requires_a_person(dataset, client_for):
-    r = client_for(dataset).get("/api/v1/coverage")
-    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_request"
-
-
-def test_coverage_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
-    write_sample(client, client.get("/api/v1/coverage", params={"personId": ACCOUNT}), "error", status=500)

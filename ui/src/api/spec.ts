@@ -4,23 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/coverage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Coverage */
-        get: operations["get_coverage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/events/{eventId}": {
         parameters: {
             query?: never;
@@ -604,24 +587,6 @@ export interface components {
             reported: number | null;
             /** Windows */
             windows: components["schemas"]["CoverageWindow"][];
-        };
-        /** CoverageDetail */
-        CoverageDetail: {
-            /** Calls */
-            calls: components["schemas"]["RequestRow"][];
-            /** Captured */
-            captured: number;
-            /** Notcaptured */
-            notCaptured: number;
-            /** Reported */
-            reported: number | null;
-            /** Windows */
-            windows: components["schemas"]["CoverageWindow"][];
-        };
-        /** CoverageResponse */
-        CoverageResponse: {
-            data: components["schemas"]["CoverageDetail"];
-            meta: components["schemas"]["Meta"];
         };
         /** CoverageWindow */
         CoverageWindow: {
@@ -2237,53 +2202,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_coverage: {
-        parameters: {
-            query: {
-                /** @description The person whose coverage to check. */
-                personId: string;
-                /** @description Narrow to one of the person's sessions. */
-                sessionId?: string | null;
-                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
-                from?: string | null;
-                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
-                to?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoverageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Query failed */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     get_event: {
         parameters: {
             query?: never;

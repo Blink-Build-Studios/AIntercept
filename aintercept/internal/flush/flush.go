@@ -220,6 +220,11 @@ func Collapse(recs []records.Record) Rows {
 					}
 				}
 			}
+			// A session's credentials are its visible calls' and those of the analytics posts that
+			// carried its Claude Code events (process/requestrows.go: callHashes, corrHashes).
+			if e.Source == canon.ProductClaudeCode && e.SessionID != "" && row.KeyHash != "" {
+				span(sessCreds, e.SessionID, row.KeyHash, ns)
+			}
 			if e.Source != canon.ProductClaudeCode || e.PersonID == "" {
 				continue
 			}
@@ -229,6 +234,9 @@ func Collapse(recs []records.Record) Rows {
 			}
 			if plan, ok := process.SubscriptionType(e.MetadataJSON); ok {
 				account(e.PersonID, ns).Plan.offer(plan, ns)
+			}
+			if e.OrgID != "" { // the org the person pages show (process/personmap.go acctEvents)
+				account(e.PersonID, ns).Org.offer(e.OrgID, ns)
 			}
 			if e.DeviceID != "" {
 				d := device(e.PersonID, e.DeviceID, ns)

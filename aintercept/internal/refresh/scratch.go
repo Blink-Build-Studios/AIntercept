@@ -232,7 +232,7 @@ func checkRecomputed(ctx context.Context, q DB) ([]Result, error) {
 // Code events per UTC day, by the session's agent (owner decision 2: the
 // directory sums activity inside the window).
 var dayCheck = struct{ table, rows, scratch string }{"account_days (facts)",
-	`SELECT account_id, day_ns, agent, sessions, sessions_with_events, prompts, model_calls, outputs_known, tokens_input,
+	`SELECT account_id, day_ns, agent, sessions, session_ids, call_session_ids, sessions_with_events, prompts, model_calls, outputs_known, tokens_input,
 		tokens_cache_read, tokens_cache_write, tokens_output, queries, bypassed, reported, missed, first_ns, last_ns FROM account_days`,
 	`WITH d AS (SELECT c.session_id AS sid, ` + at + ` - ` + at + ` % ` + fmt.Sprint(dayNS) + ` AS day, ` + at + ` AS t, true AS call, c.prompt_id AS prompt,
 			c.input_tokens, c.cache_read_tokens, c.cache_write_tokens, c.output_tokens, NULL::events AS e
@@ -252,7 +252,9 @@ var dayCheck = struct{ table, rows, scratch string }{"account_days (facts)",
 	ms AS (SELECT r.session_id AS sid, r.ts_ns - r.ts_ns % ` + fmt.Sprint(dayNS) + ` AS day, count(*) AS missed
 		FROM events r WHERE r.session_id IS NOT NULL AND ` + missedWhere + ` GROUP BY 1, 2)
 	SELECT a.account_id, sd.day, CASE WHEN agent.product = 'codex' THEN 'codex' ELSE 'claude-code' END,
-		count(*), count(*) FILTER (WHERE sd.events > 0), sum(sd.prompts), sum(sd.calls), sum(sd.outputs_known),
+		count(*), array_agg(a.session_id ORDER BY a.session_id COLLATE "C"),
+		coalesce(array_agg(a.session_id ORDER BY a.session_id COLLATE "C") FILTER (WHERE sd.calls > 0), '{}'),
+		count(*) FILTER (WHERE sd.events > 0), sum(sd.prompts), sum(sd.calls), sum(sd.outputs_known),
 		sum(sd.input_tokens), sum(sd.cache_read_tokens), sum(sd.cache_write_tokens), sum(sd.output_tokens),
 		sum(sd.queries), sum(sd.bypassed), sum(sd.reported), sum(coalesce(ms.missed, 0)), min(sd.first), max(sd.last)
 	FROM session_accounts a JOIN sd ON sd.sid = a.session_id LEFT JOIN agent ON agent.sid = a.session_id

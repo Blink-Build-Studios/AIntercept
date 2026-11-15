@@ -1,6 +1,7 @@
 """/overview and /people (handoff §5.2.1, §5.2.2): the People page."""
 
 from tests.builders import ACCOUNT, ClaudeCode, load_fixture
+from tests.test_session import error_on_query
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -30,8 +31,8 @@ def unattributed(ds, sid=S3, calls=3):
 # --- /overview ---------------------------------------------------------------------------------
 
 
-def test_overview_empty(dataset, client_for, write_sample):
-    client = client_for(dataset)
+def test_overview_empty(dataset, pg_client_for, write_sample):
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/overview")
     write_sample(client, r, "empty")
     o = r.json()["data"]
@@ -46,9 +47,9 @@ def test_overview_empty(dataset, client_for, write_sample):
     }
 
 
-def test_overview_one(dataset, client_for, write_sample):
+def test_overview_one(dataset, pg_client_for, write_sample):
     person(dataset, S1)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/overview")
     write_sample(client, r, "one")
     o = r.json()["data"]
@@ -67,20 +68,20 @@ def test_overview_one(dataset, client_for, write_sample):
     }
 
 
-def test_overview_many(dataset, client_for, write_sample):
+def test_overview_many(dataset, pg_client_for, write_sample):
     person(dataset, S1)
     person(dataset, S2, OTHER, hour=18, calls=1)  # active at 18:01, now is 18:05
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/overview")
     write_sample(client, r, "many")
     o = r.json()["data"]
     assert (o["people"], o["activeNow"], o["sessions"]) == (2, 1, 2)
 
 
-def test_overview_unattributed(dataset, client_for, write_sample):
+def test_overview_unattributed(dataset, pg_client_for, write_sample):
     person(dataset, S1)
     unattributed(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/overview")
     write_sample(client, r, "unattributed")
     u = r.json()["data"]["unattributed"]
@@ -88,35 +89,35 @@ def test_overview_unattributed(dataset, client_for, write_sample):
     assert r.json()["data"]["people"] == 1
 
 
-def test_overview_coverage_gap(dataset, client_for, write_sample):
+def test_overview_coverage_gap(dataset, pg_client_for, write_sample):
     cc = person(dataset, S1)
     for minute in (10, 12, 14):
         cc.reported(f"2026-11-04T09:{minute}:00", f"req_bypassed_{minute}")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/overview")
     write_sample(client, r, "coverage_gap")
     assert r.json()["data"]["notCaptured"] == 3
 
 
-def test_overview_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_overview_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     write_sample(client, client.get("/api/v1/overview"), "error", status=500)
 
 
 # --- /people -----------------------------------------------------------------------------------
 
 
-def test_people_empty(dataset, client_for, write_sample):
-    client = client_for(dataset)
+def test_people_empty(dataset, pg_client_for, write_sample):
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people")
     write_sample(client, r, "empty")
     assert r.json()["data"] == [] and r.json()["meta"]["total"] == 0
 
 
-def test_people_one(dataset, client_for, write_sample):
+def test_people_one(dataset, pg_client_for, write_sample):
     person(dataset, S1, calls=3)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people")
     write_sample(client, r, "one")
     (p,) = r.json()["data"]
@@ -132,11 +133,11 @@ def test_people_one(dataset, client_for, write_sample):
     ]
 
 
-def test_people_many_sorted_and_searched(dataset, client_for, write_sample):
+def test_people_many_sorted_and_searched(dataset, pg_client_for, write_sample):
     person(dataset, S1, calls=3)
     person(dataset, S2, OTHER, hour=18, calls=1, device="e" * 64)
     person(dataset, S3, THIRD, day="2026-11-01", calls=2, device="f" * 64, mode="default")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people")
     write_sample(client, r, "many")
     assert [p["personId"] for p in r.json()["data"]] == [OTHER, ACCOUNT, THIRD]  # newest first
@@ -150,10 +151,10 @@ def test_people_many_sorted_and_searched(dataset, client_for, write_sample):
     assert client.get("/api/v1/people", params={"sort": "name"}).json()["meta"]["total"] == 3
 
 
-def test_people_filtered_agent(dataset, client_for, write_sample):
+def test_people_filtered_agent(dataset, pg_client_for, write_sample):
     """Codex isn't parsed yet, so filtering to it finds nobody, even with people present."""
     person(dataset, S1)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people", params={"agent": "codex"})
     write_sample(client, r, "filtered_agent")
     assert r.json()["data"] == [] and r.json()["meta"]["total"] == 0
@@ -161,39 +162,41 @@ def test_people_filtered_agent(dataset, client_for, write_sample):
     assert [p["personId"] for p in both] == [ACCOUNT]
 
 
-def test_people_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_people_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     write_sample(client, client.get("/api/v1/people"), "error", status=500)
 
 
 # --- demo --------------------------------------------------------------------------------------
 
 
-def test_overview_demo(dataset, client_for, write_sample):
+def test_overview_demo(dataset, pg_client_for, write_sample):
     load_fixture(dataset, "demo")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/overview")
     write_sample(client, r, "demo")
     o = r.json()["data"]
+    # The window's activity (§8, difference 4): its one session, active on three days, counts once.
     assert (o["people"], o["activeNow"], o["sessions"], o["notCaptured"]) == (1, 1, 1, 95)
 
 
-def test_people_demo(dataset, client_for, write_sample):
+def test_people_demo(dataset, pg_client_for, write_sample):
     load_fixture(dataset, "demo")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people")
     write_sample(client, r, "demo")
     (p,) = r.json()["data"]
     assert p["personId"] == DEMO_ACCOUNT and p["live"] is True and p["bypassPct"] == 99.7
     assert p["coverage"]["notCaptured"] == 95 and p["agentInfo"][0]["agent"] == "claude-code"
+    assert p["sessions"] == 1  # one session, active on three days: counted once
 
 
-def test_people_in_a_range(dataset, client_for):
+def test_people_in_a_range(dataset, pg_client_for):
     """A window keeps the people with a session overlapping it; its counts come from those sessions."""
     person(dataset, S1, day="2026-11-02")
     person(dataset, S2, OTHER, day="2026-11-04")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     window = {"from": "2026-11-03T00:00:00Z", "to": "2026-11-04T23:59:59Z"}
     rows = client.get("/api/v1/people", params=window).json()
     assert [r["personId"] for r in rows["data"]] == [OTHER] and rows["meta"]["total"] == 1
@@ -206,11 +209,11 @@ def test_people_in_a_range(dataset, client_for):
 # --- /people/unattributed (§11G.C3) -----------------------------------------------------------
 
 
-def test_unattributed_traffic_is_a_person_like_page(dataset, client_for, write_sample):
+def test_unattributed_traffic_is_a_person_like_page(dataset, pg_client_for, write_sample):
     """The "view traffic" link opens /people/unattributed: the sessions no account appears on, as a person."""
     person(dataset, S1)
     unattributed(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/people/unattributed")
     write_sample(client, r, "unattributed")
     h = r.json()["data"]
@@ -225,14 +228,14 @@ def test_unattributed_traffic_is_a_person_like_page(dataset, client_for, write_s
 # --- names (Claude Code's account endpoints) ----------------------------------------------------
 
 
-def test_people_are_named_from_their_account_profile(dataset, client_for):
+def test_people_are_named_from_their_account_profile(dataset, pg_client_for):
     """/api/oauth/profile names the signed-in account: the People row and the person
     header show it, and search finds the person by it."""
     person(dataset, S1)
     cid = dataset.transaction("2026-11-04T09:00:30", method="GET", path="/api/oauth/profile")
     complete = next(r for r in dataset.rows if r["correlation_id"] == cid and r["phase"] == "complete")
     complete["auth"] = {"account_id": ACCOUNT, "email": "ada@example.com", "name": "Ada Lovelace", "org": "Example Co"}
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     row = client.get("/api/v1/people").json()["data"][0]
     assert (row["name"], row["email"]) == ("Ada Lovelace", "ada@example.com")
     header = client.get(f"/api/v1/people/{ACCOUNT}").json()["data"]
@@ -240,20 +243,20 @@ def test_people_are_named_from_their_account_profile(dataset, client_for):
     assert [r["personId"] for r in client.get("/api/v1/people?q=ada@example").json()["data"]] == [ACCOUNT]
 
 
-def test_overview_counts_only_the_window(dataset, client_for):
+def test_overview_counts_only_the_window(dataset, pg_client_for):
     """Every number on the overview is over the same window: the agent card's sessions
     and the request total agree with the people in range."""
     person(dataset, S1, day="2026-11-02")
     person(dataset, S2, day="2026-11-04")
-    o = client_for(dataset).get("/api/v1/overview?from=2026-11-04T00:00:00Z&to=2026-11-04T18:00:00Z").json()["data"]
+    o = pg_client_for(dataset).get("/api/v1/overview?from=2026-11-04T00:00:00Z&to=2026-11-04T18:00:00Z").json()["data"]
     assert (o["people"], o["sessions"], o["agents"][0]["sessions"]) == (1, 1, 1)
     assert o["requests"] == 2 + 3
 
 
-def test_a_range_without_an_offset_is_rejected(dataset, client_for):
+def test_a_range_without_an_offset_is_rejected(dataset, pg_client_for):
     """A naive time can't be compared with the data's: a 422 that says so, not a 500."""
     person(dataset, S1)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     for path in (f"/api/v1/people/{ACCOUNT}/requests", "/api/v1/overview", f"/api/v1/sessions/{S1}/requests"):
         r = client.get(f"{path}?from=2026-11-04T08:00:00")
         assert r.status_code == 422, (path, r.status_code)

@@ -7,20 +7,16 @@ derivation, frozen) over the same layout, and so must every entity's API-shaped 
 import json
 import pathlib
 import subprocess
-import urllib.parse
 from collections import Counter
 
 import pytest
 
 from aintercept_api.buckets import LocalSource
-from aintercept_api.pgstore import PgStore
 from aintercept_api.raw import LocalRaw
 from aintercept_api.v1 import V1Store
-from tests import pgdb
 from tests.builders import ClaudeCode, Dataset, cid_of, load_fixture
 from tests.conftest import aintercept_binary, few_per_group, lay_out, make_client
 from tests.endpoints import endpoint_urls as _urls
-from tests.oracle.directory_sql import todays_sql
 from tests.oracle.harness import KINDS, Layout, Oracle, assert_same, entity_tables
 from tests.oracle.store import OracleStore
 from tests.test_codex import claude_code_account, codex_work
@@ -212,162 +208,6 @@ def test_an_analytics_calls_session_is_its_batchs_earliest(spanning):
         assert client.get("/api/v1/requests/batch-span").json()["data"]["sessionId"] == SPAN_A
 
 
-# --- the Postgres store (docs/PIPELINE.md v7 build steps 5 and 7) -----------------------------------
-# "new" is the API's Postgres loader over the same dataset (v1layout -pg: the v7 worker's rows), for
-# the endpoints it serves so far: /status, the session pages, the drawer, /events/{id}, /people and
-# /overview.
-
-
-@pytest.fixture(scope="module")
-def pg_clients(laid_out):
-    root, layout, tmp = laid_out
-    admin = pgdb.admin_dsn()
-    if admin is None:
-        if pgdb.required():
-            pytest.fail("AINTERCEPT_TEST_PG isn't set (CI's service container should set it)")
-        pytest.skip("no test Postgres: set AINTERCEPT_TEST_PG (make check starts one: scripts/test-pg.sh)")
-    with pgdb.fresh_database(admin) as dsn:
-        lay_out(root, pg=dsn)
-        old = OracleStore(layout, prefix="sim/", raw=LocalRaw(root))
-        new = PgStore(dsn, source=LocalSource(layout), prefix="sim/", threads=1)
-        try:
-            yield make_client(old), make_client(new), dsn, layout
-        finally:
-            new.close()
-            old.close()
-
-
-@pytest.fixture(scope="module")
-def pg_urls(pg_clients):
-    """The gate's URLs of the person pages and /status, which the Postgres store serves from v7's tables."""
-    old, _, _, _ = pg_clients
-    urls = [u for u in _urls(old) if group(u) in ("status", *PERSON_GROUPS)]
-    return urls, set()
-
-
-def _differing(old, new, urls: list[str]) -> list[str]:
-    out = []
-    for url in urls:
-        a, b = old.get(url), new.get(url)
-        if b.status_code != a.status_code or json.dumps(b.json(), sort_keys=True) != json.dumps(
-            a.json(), sort_keys=True
-        ):
-            out.append(url)
-    return out
-
-
-# The session pages (/sessions/{id} and its tabs) read v9, which these databases don't hold:
-# test_session_pages.py holds them to the oracle's derivation on test_drawer's datasets.
-
-
-# --- the person pages (build step 6) ---------------------------------------------------------------
-
-PERSON_GROUPS = ("person", "person/sessions", "person/summary", "person/timeline", "person/requests", "coverage")
-
-
-def _person_of(url: str) -> str:
-    path, _, query = url.partition("?")
-    if path == "/api/v1/coverage":
-        return urllib.parse.parse_qs(query)["personId"][0]
-    return urllib.parse.unquote(path.split("/")[4])
-
-
-def _person_pages(pg_clients, pg_urls, *, every: bool) -> None:
-    old, new, _, layout = pg_clients
-    urls, _ = pg_urls
-    person_urls = [u for u in urls if group(u) in PERSON_GROUPS]
-    people = list(dict.fromkeys(_person_of(u) for u in person_urls))
-    if every:
-        chosen = person_urls
-    else:
-        with Oracle(Layout(layout)) as oracle:
-            sessions = {p: oracle.person(p)["person_sessions"].rows for p in people}
-            codex = [p for p in people if any(_titled(oracle, s) for _, s in sessions[p])]
-        keep = {people[0], max(people, key=lambda p: len(sessions[p])), *codex[:1], "unattributed", "nobody"}
-        chosen = [u for u in person_urls if _person_of(u) in keep]
-    assert len(people) >= 5 and len(chosen) >= 70, (len(people), len(chosen))
-    differing = _differing(old, new, chosen)
-    print("person URLs held:", len(chosen) - len(differing), "of", len(chosen))  # noqa: T201
-    assert not differing, (len(differing), differing[:5])
-
-
-def test_the_person_pages_match_the_oracle(pg_clients, pg_urls):
-    """make check: every person URL of the gate's set for three people (the first, the one with the
-    most sessions, a Codex one with titled threads), unattributed and nobody."""
-    _person_pages(pg_clients, pg_urls, every=False)
-
-
-@pytest.mark.full
-def test_every_person_url_matches_the_oracle(pg_clients, pg_urls):
-    _person_pages(pg_clients, pg_urls, every=True)
-
-
-def _titled(oracle: Oracle, sid: str) -> bool:
-    """A Codex thread a title thread names (its label comes from the account component)."""
-    sr = oracle.session(sid)["session_rows"]
-    return any(
-        r[sr.columns.index("label_source")] == "title" and r[sr.columns.index("product")] == "codex" for r in sr.rows
-    )
-
-
-def test_status_matches_the_oracle(pg_clients):
-    old, new, _, _ = pg_clients
-    assert new.get("/api/v1/status").json() == old.get("/api/v1/status").json()
-
-
-# The drawer (/requests/{id}, /details, /raw and /events/{id}) reads v9, which these databases don't
-# hold: test_drawer.py holds it to the oracle's derivation for every request id and event id of every
-# dataset.
-
-
-# --- the directory (build step 7) -------------------------------------------------------------------
-
-# Each day's from as the UI sends a preset's (on the hour) and as any other client might (unaligned),
-# and a closed range within the day.
-_DAY_QUERIES = ("from={d}T00:00:00.000Z", "from={d}T07:41:13.517Z", "from={d}T13:00:00Z&to={d}T23:59:59.999Z")
-
-
-def _directory_urls(old, layout: pathlib.Path, *, every: bool) -> list[str]:
-    """/people and /overview for every from: none (All), the People page's presets and filters
-    (endpoints.py), and on each day the merge has: on the hour, unaligned, and a closed range
-    (not every: one of the three per day, rotating)."""
-    urls = [u for u in _urls(old) if group(u) == "directory"]
-    with Oracle(Layout(layout)) as oracle:
-        days = oracle.store.merge_days()
-    assert len(days) >= 2, days
-    for i, d in enumerate(days):
-        for j, q in enumerate(_DAY_QUERIES):
-            if every or j == i % len(_DAY_QUERIES):
-                urls += [f"/api/v1/people?{q.format(d=d)}", f"/api/v1/overview?{q.format(d=d)}"]
-    return urls
-
-
-def _hold_directory(old, new, urls: list[str]) -> None:
-    """/people and /overview, byte for byte: "old" is the oracle's tables through the directory's SQL
-    as it was (every call mark), "new" Postgres's rows through today's (session_call_days)."""
-    differing = []
-    for url in urls:
-        with todays_sql():
-            a = old.get(url)
-        b = new.get(url)
-        assert a.status_code == 200, url
-        if b.status_code != a.status_code or json.dumps(b.json(), sort_keys=True) != json.dumps(
-            a.json(), sort_keys=True
-        ):
-            differing.append(url)
-    print("directory URLs held:", len(urls) - len(differing), "of", len(urls))  # noqa: T201
-    assert not differing, (len(differing), differing[:5])
-    # Not vacuous: the windows see different people and counts.
-    people = {len(old.get(u).json()["data"]) for u in urls if u.startswith("/api/v1/people")}
-    assert len(people) >= 2, people
-
-
-def test_the_directory_matches_the_oracle_for_every_from(pg_clients):
-    old, new, _, layout = pg_clients
-    _hold_directory(old, new, _directory_urls(old, layout, every=False))
-
-
-@pytest.mark.full
-def test_every_directory_url_matches_the_oracle(pg_clients):
-    old, new, _, layout = pg_clients
-    _hold_directory(old, new, _directory_urls(old, layout, every=True))
+# The Postgres store's pages all read v9 (docs/PIPELINE.md §6), which v7-only databases don't hold:
+# test_drawer.py, test_session_pages.py and test_person_pages.py hold them to the oracle's derivation on
+# test_drawer's datasets (the directory and the overview to a from-scratch computation, §8 difference 4).

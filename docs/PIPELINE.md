@@ -150,7 +150,10 @@ session's calls by their time, for its newest values) and partial
 (its calls with no prompt, and its hidden calls). For a step's exit codes (§5.2
 `steps`): GIN on `detail -> 'results'` and on `detail -> 'calls'` (the results a
 call carries back and the tool calls it made, by tool call id). For the label
-(§6.1): partial `(account_id, start_ns) WHERE hidden_kind = 'title'`.
+(§6.1): partial `(account_id, start_ns) WHERE hidden_kind = 'title'`. For
+`/status` (§6.4): partial `(end_ns) WHERE start_ns IS NULL` (a WebSocket turn has
+only an end), `(start_ns) WHERE synthetic` (the first probe) and
+`(start_ns) WHERE detail IS NOT NULL` (whether any call kept its content).
 
 ### 3.2 `events`: one row per analytics event
 
@@ -174,9 +177,9 @@ call carries back and the tool calls it made, by tool call id). For the label
 
 | Table | Row | Written |
 |---|---|---|
-| `accounts` | one per account: email, name, org, plan, codex plan, `seen_ns` | Upsert; the newest sighting wins |
+| `accounts` | one per account: email, name, org (its sightings' and its Claude Code events'), plan, codex plan, `seen_ns`. Index `(lower(email))` | Upsert; the newest sighting wins |
 | `session_accounts` | (session, account), first/last ns. Index `(account_id, start_ns)` | Upsert; `least`/`greatest` on the times |
-| `session_credentials` | (session, key_hash), first/last ns | Same |
+| `session_credentials` | (session, key_hash), first/last ns: its visible calls' credentials and those of the analytics posts that carried its Claude Code events | Same |
 | `account_devices` | (account, device): platform, terminal, shell, agent, version, first/last ns, seen on events | Same |
 | `session_edges` | (child session, parent session) | Insert if absent |
 | `ingest_pods` | one per observer pod: `last_ns` (its newest record) | Upsert per file |
@@ -258,12 +261,12 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 | `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id). This is where a call's step number lives. Exit codes come from the session's first call that carries each tool call's result back, which can be a later prompt's (the prompt after an interrupt): one lookup per tool call by its id, and a flush with such a call marks the prompt that made the tool call | One prompt's calls and events |
 | `prompt_items` | (session, seq) | The Prompts page's list: prompts in order (with what the session's other prompts decide: a Codex turn's number, the open tail, pastes and images, hidden calls), with the between rows interleaved (compactions, recaps, calls with no prompt) | The session's prompts (hundreds), and its compaction events and prompt-less calls |
 | `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox, env) by index lookup; coverage from `missed_reports`; `unattributed` (a visible call and no account). A page computes the rest from these: the agent, bypass %, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, and an index lookup per newest value |
-| `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none) | One minute's calls / 60 rows |
+| `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none). Indexes on the minute and the hour (the overview's window) | One minute's calls / 60 rows |
 
 Two values are read at the page instead (they're few, and a late record changes them):
 - **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
 - **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
-| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (and with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
+| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, the ids of those with a model call, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
 
 ### 5.3 Dirty kinds
 
@@ -346,13 +349,16 @@ tables and the Go drawer go.
 ### 6.3 Person pages
 
 A person's scope is their accounts (from `accounts` by email group), their
-sessions (`session_accounts` by account), and their credentials
-(`session_credentials` of those sessions).
+sessions (`session_accounts` by account; `unattributed`: the sessions with a
+visible call and no account, through a partial index on `sessions`), and their
+credentials (`session_credentials` of those sessions). Every person page reads
+the scope first: the group's account rows and the person's `sessions` rows, one
+per session within retention.
 
 | Page | Reads | Bound |
 |---|---|---|
-| `/people/{id}` | `accounts` of the group; devices from `account_devices`; lifetime sums (missed, bypass %, agent info) from `account_days` over all days kept; limits and posture from the newest `sessions` rows | A handful of accounts; their day rows (one per active day within retention) |
-| `/people/{id}/sessions` | a page of `sessions` via `session_accounts(account_id, start_ns)` in range, children nested; labels as §6.1 | One page |
+| `/people/{id}` | `accounts` of the group; devices from `account_devices`; lifetime sums (missed, bypass %, agent info) and the newest values (limits, posture, live) from the person's `sessions` rows | A handful of accounts and devices; one row per session |
+| `/people/{id}/sessions` | a page of the person's `sessions` rows in range, children nested (`session_parents`); labels as §6.1 | One page |
 | `/people/{id}/timeline` | lanes from `session_hours`/`session_minutes` over the person's sessions in range; bands from `sessions`; typed prompts from `prompts` in range | Cells in range: up to a few thousand for a 24-hour, 5-minute view; 14 days reads hour cells |
 | `/people/{id}/summary` | sums from `session_hours`; distinct counts from `session_keys`; latest values ≤ hi by index; account calls from `cred_hours` | Hour cells and keys in range |
 | `/people/{id}/requests` | a page of `calls` by `(key_hash, start_ns)` over the scope's credentials (a merge of a few index scans), with the scope's `missed_reports`; counts from `cred_minutes`/`cred_hours` | One page + cells |
@@ -361,13 +367,15 @@ sessions (`session_accounts` by account), and their credentials
 
 | Page | Reads | Bound |
 |---|---|---|
-| `/people` | each person's row sums their accounts' `account_days` in the window; the 14-day activity strip is the same rows; devices from `account_devices`; live and limits from each person's newest `sessions` row; sort, filter (`agent`, `q` on name, email, id, device) and page in SQL | ≤ 14 rows per account: about 21,000 small rows at 1,500 people, summed in one `GROUP BY` |
-| `/overview` | totals over the same rows; requests from `cred_hours`; unattributed from `sessions` | Same |
-| `/status` | first and last captured call by index; `lastDataAt` and pods from `ingest_pods` | Index endpoints + pods |
+| `/people` | each person's row sums their accounts' `account_days` on the UTC days the window touches; the 14-day activity strip is the last 14 days' rows; live is the newest day row's last activity; sort, filter (`agent`, `q` on name, email, id, device) and page in SQL. The page's rows then read their members (`accounts`), their devices seen in the window (`account_devices`), Codex limits (the newest Codex session's, through `session_accounts`) and, when they missed calls, their not-captured windows (`missed_reports`) | ≤ 14 rows per account: about 21,000 small rows at 1,500 people, summed in one `GROUP BY`; then one page |
+| `/overview` | totals over the same rows; requests from `cred_hours` (whole hours inside the window, `cred_minutes` at its edges); unattributed from `sessions`; an agent card's sessions are those with a model call in the window (the day rows' `call_session_ids`, and the unattributed sessions active in it) | Same |
+| `/status` | first captured call by index (its start, else its end), the first probe's while waiting, whether any call kept its content; `lastDataAt` from `ingest_pods` | Index endpoints + pods |
 
 **The directory sums activity inside the window** (owner decision 2), not the
-lifetime totals of the sessions active in it. **`/coverage` is deleted** (owner
-decision 3).
+lifetime totals of the sessions active in it. A day row's numbers are its
+sessions' activity that day, and it keeps their ids, so a person's sessions are
+the distinct ids of the window's day rows: a session active on several days
+counts once. **`/coverage` is deleted** (owner decision 3).
 
 ### 6.5 Features removed (owner decision 6)
 
