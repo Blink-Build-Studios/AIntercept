@@ -1,5 +1,6 @@
-# The exhaustive tests: Go's (`make test-full`: -tags full, more seeds and longer
-# captures than `make check` runs) and the API's (`make test-api-full`: every URL of
+# The exhaustive tests: Go's (`make test-full`, run here as test-full-rest and a
+# test-full-sim per N: -tags full, more seeds and longer captures than `make check`
+# runs) and the API's (`make test-api-full`: every URL of
 # the parity gates, the pipeline at full length; `make test-api-oracle`: every API test
 # on the v6 oracle's read path). Too slow for every PR, so nightly and on demand.
 name: full
@@ -23,7 +24,25 @@ jobs:
           go-version-file: aintercept/go.mod
           cache-dependency-path: |
             aintercept/go.sum
-      - run: make test-full
+      - run: make test-full-rest
+
+  # TestSimulateMatrix, a shard per N: the whole matrix under -race outran one job's timeout.
+  go-sim:
+    name: Go, simulation matrix N=${{ matrix.n }} (-tags full, -race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [1, 3, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: aintercept/go.mod
+          cache-dependency-path: |
+            aintercept/go.sum
+      - run: make test-full-sim N=${{ matrix.n }}
 
   api-full:
     name: API, exhaustive (every URL of the parity gates)
