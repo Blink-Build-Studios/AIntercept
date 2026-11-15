@@ -2,6 +2,7 @@ import json
 import logging
 
 from aintercept_api.logs import JSONFormatter
+from tests.test_session import error_on_query
 
 
 def records(caplog):
@@ -9,8 +10,8 @@ def records(caplog):
     return [json.loads(fmt.format(r)) for r in caplog.records if r.name == "aintercept_api"]
 
 
-def test_each_request_logs_one_structured_line(dataset, client_for, caplog):
-    client = client_for(dataset)
+def test_each_request_logs_one_structured_line(dataset, pg_client_for, caplog):
+    client = pg_client_for(dataset)
     with caplog.at_level(logging.INFO, logger="aintercept_api"):
         r = client.get("/api/v1/status")
     assert r.headers["X-Query-Id"] == "q_sample"
@@ -24,10 +25,9 @@ def test_each_request_logs_one_structured_line(dataset, client_for, caplog):
     assert isinstance(line["ms"], float)
 
 
-def test_failure_log_carries_the_same_query_id_as_the_error_body(dataset, client_for, caplog, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
-        monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0, raising=False)
+def test_failure_log_carries_the_same_query_id_as_the_error_body(dataset, pg_client_for, caplog, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     with caplog.at_level(logging.INFO, logger="aintercept_api"):
         r = client.get("/api/v1/status")
     qid = r.json()["error"]["queryId"]
@@ -37,10 +37,9 @@ def test_failure_log_carries_the_same_query_id_as_the_error_body(dataset, client
     assert r.headers["X-Query-Id"] == qid
 
 
-def test_failed_request_still_gets_its_request_line(dataset, client_for, caplog, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
-        monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0, raising=False)
+def test_failed_request_still_gets_its_request_line(dataset, pg_client_for, caplog, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     with caplog.at_level(logging.INFO):
         client.get("/api/v1/status")
     lines = records(caplog)
@@ -55,8 +54,8 @@ def test_failed_request_still_gets_its_request_line(dataset, client_for, caplog,
     ]
 
 
-def test_unknown_route_returns_error_shape(dataset, client_for, caplog):
-    client = client_for(dataset)
+def test_unknown_route_returns_error_shape(dataset, pg_client_for, caplog):
+    client = pg_client_for(dataset)
     with caplog.at_level(logging.INFO, logger="aintercept_api"):
         r = client.get("/api/v1/nope")
     assert r.status_code == 404
@@ -72,9 +71,9 @@ def test_fields_never_overwrite_fixed_keys():
     assert out["msg_"] == "spoof" and out["level_"] == "DEBUG" and out["n"] == 1
 
 
-def test_route_template_is_never_mangled(dataset, client_for, caplog):
+def test_route_template_is_never_mangled(dataset, pg_client_for, caplog):
     """Path values that also occur elsewhere in the path (review repro)."""
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
 
     @client.app.get("/api/v1/people/{personId}/sessions/{sessionId}", response_model=None, include_in_schema=True)
     def probe(personId: str, sessionId: str):  # noqa: N803 (mirrors the contract's camelCase params)

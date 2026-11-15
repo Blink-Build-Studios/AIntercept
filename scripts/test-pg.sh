@@ -21,7 +21,7 @@ if [[ "$(docker inspect -f '{{.State.Running}} {{.Config.Image}}' "$NAME" 2>/dev
     -e POSTGRES_HOST_AUTH_METHOD=trust \
     -e POSTGRES_INITDB_ARGS="--locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8" \
     --tmpfs /var/lib/postgresql/data \
-    "$IMAGE" -c max_locks_per_transaction=256 -c max_connections=200 -c fsync=off >/dev/null
+    "$IMAGE" -c max_connections=200 -c fsync=off >/dev/null
 fi
 for _ in $(seq 60); do
   docker exec "$NAME" pg_isready -q -h 127.0.0.1 -U postgres 2>/dev/null && { echo "$DSN"; exit 0; }

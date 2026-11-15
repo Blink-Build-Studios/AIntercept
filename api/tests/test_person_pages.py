@@ -1,16 +1,12 @@
-"""The person pages, the directory, the overview and /status on v9 (docs/PIPELINE.md §6.3, §6.4), side by
-side with the oracle: today's code over the oracle's tables.
+"""The person pages, the directory, the overview and /status (docs/PIPELINE.md §6.3, §6.4): from the facts
+and rollups through a few indexed statements (personpages.py, directorypages.py).
 
-Each dataset sits in a fresh Postgres holding v7's tables and v9's (conftest.PgDataset, as test_session_pages.py
-does). The API's Postgres store serves the person pages from v9's facts and rollups through a few indexed
-statements (personpages.py); the oracle derives them from every session of the person. Every response must be
-the same data, for every person of every dataset (and `unattributed`, and a person nobody has seen), at the
-URLs the pages are read with: the defaults, the UI's variants, ranges whose ends cut through a tick run, a
-batch, a prompt's calls, a not-captured window and a minute boundary (side_by_side.cuts), each timeline bin,
-and with `now` at FROZEN_NOW and at each session's live threshold.
+Each dataset sits in a fresh Postgres (conftest.PgDataset, as test_session_pages.py does). Across the
+datasets the person pages show every shape they have, and each page reads cells or a page of rows, through
+an index, whatever the person's history.
 
-The directory and the overview sum each account's activity inside the window (§8, difference 4), so they're
-held instead to a from-scratch computation over the facts (`from_scratch`): calls, events and who they
+The directory and the overview sum each account's activity inside the window (§8, difference 4), so
+they're held to a from-scratch computation over the facts (`from_scratch`): calls, events and who they
 name, never a rollup. /coverage is gone (difference 5)."""
 
 import contextlib
@@ -26,13 +22,9 @@ import pytest
 
 from aintercept_api import claude_code as cc
 from aintercept_api import ranges
-from aintercept_api.raw import LocalRaw
 from tests.builders import ClaudeCode, Dataset
-from tests.conftest import FROZEN_NOW, PgDataset, lay_out, make_client, pg_admin
-from tests.oracle.harness import Layout, Oracle
-from tests.oracle.store import OracleStore
-from tests.side_by_side import PERSON_PAGES, cuts, directory_ranges, instants, page_urls, range_query
-from tests.test_drawer import _first_diff
+from tests.conftest import FROZEN_NOW, PgDataset, make_client, pg_admin
+from tests.endpoints import BIN_LADDER, person_from, person_urls, window_from
 from tests.test_session import prompt
 from tests.test_session_pages import DATASETS as SESSION_DATASETS
 from tests.test_session_pages import ended
@@ -62,20 +54,15 @@ DATASETS = {**SESSION_DATASETS, "many sessions": many_sessions}
 
 
 class Side:
-    """One dataset in Postgres (v7's tables and v9's), the oracle over its layout, and two clients: the
-    oracle's and the Postgres store's."""
+    """One dataset in Postgres, and a client over it with the store's statements traced."""
 
     def __init__(self, name: str, root: pathlib.Path, pg: PgDataset) -> None:
-        self.name, self.layout, self.pg = name, lay_out(root), pg
-        self.oracle = Oracle(Layout(self.layout))
-        self.old_store = OracleStore(self.layout, prefix="sim/", raw=LocalRaw(root))
+        self.name, self.pg = name, pg
         self.store = pg.store(trace=True)
-        self.old, self.new = make_client(self.old_store), make_client(self.store)
+        self.new = make_client(self.store)
 
     def close(self) -> None:
         self.store.close()
-        self.old_store.close()
-        self.oracle.close()
 
     def query(self, sql: str, params: list[object] | None = None) -> list[tuple[Any, ...]]:
         import psycopg
@@ -84,18 +71,11 @@ class Side:
             return conn.execute(sql, params).fetchall()
 
     def at(self, now: datetime) -> None:
-        for c in (self.old, self.new):
-            c.app.state.clock = lambda: now  # type: ignore[attr-defined]
+        self.new.app.state.clock = lambda: now  # type: ignore[attr-defined]
 
     def people(self) -> list[str]:
         held = {a for (a,) in self.query("SELECT account_id FROM session_accounts")}
-        return sorted(set(self.oracle.person_ids()) | held) + ["unattributed", "nobody"]
-
-    def person_sessions(self, pid: str) -> list[str]:
-        if pid not in self.oracle.person_ids():
-            return []
-        t = self.oracle.person(pid)["person_sessions"]
-        return sorted({r[t.columns.index("session_id")] for r in t.rows})
+        return sorted(held) + ["unattributed", "nobody"]
 
 
 @pytest.fixture(scope="module")
@@ -119,63 +99,43 @@ def sides(tmp_path_factory) -> Iterator[dict[str, Side]]:
         yield out
 
 
-def person_urls(side: Side, pid: str, *, per_kind: int = 1) -> list[str]:
-    """A person's pages at the URLs the UI reads them with, and each with the ranges that cut its data."""
-    rs = cuts(instants(side.oracle, side.person_sessions(pid)), per_kind=per_kind) if side.person_sessions(pid) else []
-    out: list[str] = []
-    for page in PERSON_PAGES:
-        out += page_urls(page, pid, rs, every=False)
-    return out
+def page_urls(pid: str) -> list[str]:
+    """A person's pages at the URLs the UI reads them with, and the timeline at every bin."""
+    base = f"/api/v1/people/{urllib.parse.quote(pid, safe='')}"
+    return person_urls(urllib.parse.quote(pid, safe="")) + [f"{base}/timeline?bin={b}" for b in BIN_LADDER]
 
 
-def _hold(side: Side, urls: list[str]) -> Counter[str]:
-    held: Counter[str] = Counter()
-    differing = []
-    for url in urls:
-        a, b = side.old.get(url), side.new.get(url)
-        if a.status_code == b.status_code and a.json() == b.json():
-            held["same"] += 1
-        else:
-            differing.append((url, a.status_code, b.status_code, _first_diff(a.json(), b.json())))
-    for d in differing:
-        print("DIFF", d)  # noqa: T201
-    assert not differing, (side.name, len(differing), differing[:4])
-    return held
+Range = tuple[int | None, int | None]
 
 
-@pytest.mark.parametrize("name", list(DATASETS))
-def test_the_person_pages_match_the_oracle(sides, name):
-    side = sides[name]
-    side.at(FROZEN_NOW)
-    people = side.people()
-    urls = [u for pid in people for u in person_urls(side, pid)]
-    held = _hold(side, urls)
-    print(f"{name}: {len(people)} people, {len(urls)} URLs:", dict(held))  # noqa: T201
-    assert held["same"] == len(urls)
+def directory_ranges() -> list[Range]:
+    """The directory's froms: none, the People page's presets (on the hour), an unaligned one, a person
+    page's (now − span at ms) and a closed range."""
+
+    def ns_of(s: str) -> int:
+        return cc.to_ns(datetime.fromisoformat(s.replace("Z", "+00:00")))
+
+    now = cc.to_ns(FROZEN_NOW)
+    return [
+        (None, None),
+        *((ns_of(window_from(w)), None) for w in ("24h", "7d", "14d")),
+        (ns_of(person_from("7d")), None),
+        (now - 26 * 3600 * NS - 7_517_000, now - 3 * 3600 * NS + 13_000),
+    ]
+
+
+def range_query(r: Range, *, ms: bool = False) -> str:
+    """from= and to= at µs, or (ms) as the UI writes them (Date.toISOString())."""
+
+    def fmt(ns: int) -> str:
+        t = (datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=ns // 1000)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        return t[:-4] + "Z" if ms else t
+
+    return "&".join(f"{k}={fmt(v)}" for k, v in (("from", r[0]), ("to", r[1])) if v is not None)
 
 
 def _µs(ns: int) -> datetime:
     return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=ns // 1000)
-
-
-@pytest.mark.parametrize("name", ["drawer cases", "codex threads"])
-def test_the_person_pages_match_at_each_live_threshold(sides, name):
-    """`now` a µs either side of each session's live threshold (5 minutes after its last activity): live,
-    the sessions a range shows, and what's in flight follow it as today's do."""
-    side = sides[name]
-    try:
-        for (last,) in side.query("SELECT DISTINCT last_ns FROM sessions ORDER BY 1"):
-            for d in (-1000, 0, 1000):
-                side.at(_µs(last + cc.LIVE_WITHIN_NS + d))
-                urls = [u for pid in side.people() for u in person_urls(side, pid, per_kind=0)]
-                _hold(side, [u for u in urls if "bin=" not in u])
-    finally:
-        side.at(FROZEN_NOW)
-
-
-def test_status_matches_the_oracle(sides):
-    for side in sides.values():
-        _hold(side, ["/api/v1/status"])
 
 
 def test_coverage_is_gone(sides):
@@ -471,7 +431,7 @@ def test_every_person_statement_can_use_an_index(sides):
         side = sides[name]
         side.at(FROZEN_NOW)
         urls = ["/api/v1/status", "/api/v1/people", "/api/v1/overview", "/api/v1/people?from=2026-11-04T00:00:00Z"]
-        urls += [u for pid in side.people() for u in person_urls(side, pid, per_kind=0)]
+        urls += [u for pid in side.people() for u in page_urls(pid)]
         for url in urls:
             side.store.trace.clear()
             side.new.get(url)
@@ -480,24 +440,3 @@ def test_every_person_statement_can_use_an_index(sides):
             ]
     scans = [(n, p) for n, p in plans if "Seq Scan on" in p and p.split("Seq Scan on ")[1].split()[0] not in _SMALL]
     assert plans and not scans, scans[:5]
-
-
-def test_the_cuts_land_where_the_spec_says(sides):
-    """Not vacuous: the person's cuts fall in every place the spec names that its data has."""
-    side = sides["drawer cases"]
-    busiest = max(side.oracle.person_ids(), key=lambda p: (len(side.person_sessions(p)), p))
-    kinds = set(instants(side.oracle, side.person_sessions(busiest)))
-    mixed = sides["mixed"]
-    kinds |= {k for p in mixed.oracle.person_ids() for k in instants(mixed.oracle, mixed.person_sessions(p))}
-    want = {"inside a tick run", "between a batch's events", "between a batch's events across sessions",
-            "between a prompt's calls", "on and around a minute boundary", "before all data",
-            "after all data"}  # fmt: skip
-    assert want <= kinds, want - kinds
-
-
-def test_cuts_are_whole_ranges_and_open_ends():
-    found = {"a": [5, 1], "on and around a minute boundary": [10, 9, 11]}
-    rs = cuts(found)
-    assert (None, None) in rs and (1, None) in rs and (None, 11) in rs and (1, 11) in rs
-    assert all(lo is None or hi is None or lo <= hi for lo, hi in rs)
-    assert 5 not in {x for r in rs for x in r}  # one instant per kind (a boundary's all)

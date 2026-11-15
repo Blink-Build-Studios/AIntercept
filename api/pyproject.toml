@@ -7,13 +7,11 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "duckdb==2.0.0",
     "fastapi==0.159.1",
     "pydantic==2.14.1",
     "pyjwt==2.15.1",
     "cryptography==50.0.2",
     "uvicorn==0.54.0",
-    "adbc-driver-postgresql==1.12.0",
     "psycopg==3.3.6",
     "psycopg-binary==3.3.6",
 ]
@@ -56,10 +54,6 @@ strict = true
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
 files = ["src", "tests"]
-
-[[tool.mypy.overrides]]
-module = ["adbc_driver_postgresql.*"]  # ships no type information
-ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]

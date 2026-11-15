@@ -8,7 +8,6 @@ regenerates spec.ts first.
 """
 
 import atexit
-import hashlib
 import json
 import os
 import pathlib
@@ -16,8 +15,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import threading
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -25,12 +22,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aintercept_api.app import create_app
-from aintercept_api.buckets import LocalSource
-from aintercept_api.raw import LocalRaw
-from aintercept_api.v1 import V1Store
+from aintercept_api.objects import LocalSource
 from tests import pgdb
 from tests.builders import Dataset
-from tests.oracle.store import OracleStore
 
 SAMPLES_DIR = pathlib.Path(__file__).resolve().parents[2] / "ui" / "src" / "api" / "samples"
 
@@ -41,49 +35,21 @@ FROZEN_QUERY_ID = "q_sample"
 _written: dict[pathlib.Path, str] = {}  # sample path -> test that wrote it, per session
 
 
-# The full run (`make test-api-full`, nightly in CI): the tests marked `full` (every URL of the
-# parity gates, the memory churn) and the pipeline at full length. `make check` runs the rest,
-# and the parity gates over a few URLs of each endpoint group.
-FULL = os.environ.get("AINTERCEPT_TESTS_FULL") == "1"
-
-
 def pytest_addoption(parser):
     parser.addoption("--write-samples", action="store_true", help="write endpoint responses as UI sample files")
-
-
-def pytest_configure(config):
-    config.addinivalue_line("markers", "full: only in the full run (make test-api-full, nightly)")
 
 
 def pytest_collection_modifyitems(config, items):
     """While samples are being (re)written, only the tests that write them run (the write_sample
     fixture): the rest run in the normal test pass, and the requirements check would see a
-    half-written folder. The `full` tests run only in the full run."""
+    half-written folder."""
     if config.getoption("--write-samples"):
         items[:] = [i for i in items if "write_sample" in getattr(i, "fixturenames", ())]
-    if not FULL:
-        skip = pytest.mark.skip(reason="the full run only (make test-api-full)")
-        for item in items:
-            if "full" in item.keywords:
-                item.add_marker(skip)
-
-
-def few_per_group(urls: list[str], group: Callable[[str], str], n: int = 3) -> list[str]:
-    """The first n URLs of each endpoint group: what `make check` holds a parity gate to (the full
-    run holds every URL)."""
-    seen: dict[str, int] = {}
-    out = []
-    for url in urls:
-        g = group(url)
-        if seen.get(g, 0) < n:
-            seen[g] = seen.get(g, 0) + 1
-            out.append(url)
-    return out
 
 
 def make_client(store, **kwargs) -> TestClient:
-    """Ingests on every request (interval 0), so a test sees exactly the files it wrote."""
-    app = create_app(store=store, clock=lambda: FROZEN_NOW, query_id=lambda: FROZEN_QUERY_ID, ingest_interval_s=0)
+    """A client with the frozen clock and query id."""
+    app = create_app(store=store, clock=lambda: FROZEN_NOW, query_id=lambda: FROZEN_QUERY_ID)
     return TestClient(app, **kwargs)
 
 
@@ -123,102 +89,15 @@ def aintercept_binary() -> pathlib.Path:
     return _binary[0]
 
 
-def raw_digest(raw: pathlib.Path) -> str:
-    """The raw files' names and bytes, hashed: equal for two datasets the builders made alike."""
-    h = hashlib.sha256()
-    for p in sorted(raw.rglob("*.ndjson.gz")):
-        h.update(str(p.relative_to(raw)).encode() + b"\0" + p.read_bytes())
-    return h.hexdigest()
+_scratch: list[pathlib.Path] = []
 
 
-_laid_out: dict[str, pathlib.Path] = {}  # raw digest -> the v5 layout of it, this session
-_laid_out_dir: list[pathlib.Path] = []
-
-
-def _laid_out_root() -> pathlib.Path:
-    if not _laid_out_dir:
-        _laid_out_dir.append(pathlib.Path(tempfile.mkdtemp(prefix="aintercept-v1-")))
-        atexit.register(shutil.rmtree, _laid_out_dir[0], True)
-    return _laid_out_dir[0]
-
-
-def lay_out(raw: pathlib.Path, pg: str | None = None) -> pathlib.Path:
-    """The v5 pipeline over raw (docs/PIPELINE.md): `aintercept v1layout` runs the observer's own
-    code to records and calls/ detail objects, applies each key's records and commits it under
-    v1/keys/, and runs one merge into v1/merge/. Deterministic, so a dataset another test already
-    laid out is reused. With pg (a DSN), every key's rendered rows are also written into that
-    Postgres (v1layout -pg): in the same run when the dataset isn't laid out yet."""
-    digest = raw_digest(raw)
-    if digest not in _laid_out or pg is not None:
-        fresh = digest not in _laid_out
-        out = _laid_out_root() / digest if fresh else pathlib.Path(tempfile.mkdtemp(dir=_laid_out_root()))
-        subprocess.run(  # noqa: S603
-            [str(aintercept_binary()), "v1layout", "-src", str(raw), "-out", str(out), "-prefix", "sim"]
-            + (["-pg", pg] if pg is not None else []),
-            check=True,
-            capture_output=True,
-        )
-        if fresh:
-            _laid_out[digest] = out
-    return _laid_out[digest]
-
-
-# AINTERCEPT_TEST_STORE=oracle runs every API test on the v6 oracle's read path (tests/oracle/):
-# today's derivation, frozen, over the same layout (docs/PIPELINE.md build step 2's gate).
-ORACLE = os.environ.get("AINTERCEPT_TEST_STORE") == "oracle"
-
-
-class LaidOutStore:
-    """The API's v1 store over a test's dataset: whenever the test has written more raw files, the
-    dataset is laid out again by the v5 pipeline, so a test sees exactly the files it wrote. With
-    oracle, the oracle's store over the same layout."""
-
-    def __init__(self, root: pathlib.Path, *, oracle: bool = ORACLE, **kwargs):
-        self.root, self.kwargs, self.oracle = root, kwargs, oracle
-        self._listing: list[tuple[str, int]] | None = None
-        self._lock = threading.Lock()
-        self._store: Any = None
-        self._cache = pathlib.Path(tempfile.mkdtemp(prefix="aintercept-cache-"))
-
-    def _current(self) -> Any:
-        with self._lock:
-            listing = sorted((str(p), p.stat().st_size) for p in self.root.glob("dt=*/hour=*/instance=*/*.ndjson.gz"))
-            if self._store is None or listing != self._listing:
-                if self._store is not None:
-                    self._store.close()
-                layout, raw = lay_out(self.root), LocalRaw(self.root)
-                if self.oracle:
-                    self._store = OracleStore(layout, prefix="sim/", raw=raw, **self.kwargs)
-                else:
-                    self._store = V1Store(LocalSource(layout), self._cache, prefix="sim/", raw=raw, **self.kwargs)
-                self._listing = listing
-            return self._store
-
-    def maybe_ingest(self, min_interval_s: float) -> None:
-        self._current()
-
-    def ingest(self) -> int:
-        self._current()
-        return 0
-
-    def close(self) -> None:
-        if self._store is not None:
-            self._store.close()
-        shutil.rmtree(self._cache, ignore_errors=True)
-
-    @property
-    def data_dir(self) -> pathlib.Path:
-        return self.root
-
-    def __getattr__(self, name: str):
-        return getattr(self._current(), name)
-
-
-def bounded_store(root, **kwargs) -> Any:
-    """The v5 store over a dataset (the endpoints' Store interface), bounded like a small
-    machine, so a memory regression fails here, not in CI's runner."""
-    kwargs.setdefault("threads", 2)
-    return LaidOutStore(pathlib.Path(root), memory_limit="512MB", **kwargs)
+def _scratch_root() -> pathlib.Path:
+    """A directory for this session's raw files, removed at exit."""
+    if not _scratch:
+        _scratch.append(pathlib.Path(tempfile.mkdtemp(prefix="aintercept-v9-")))
+        atexit.register(shutil.rmtree, _scratch[0], True)
+    return _scratch[0]
 
 
 def load_v9(raw: pathlib.Path, dsn: str) -> pathlib.Path:
@@ -226,7 +105,7 @@ def load_v9(raw: pathlib.Path, dsn: str) -> pathlib.Path:
     raw files through the observer's writer, and `canon -load -refresh 1` loads them into dsn as the
     workers do (each call's member range on its row) with the rollups refreshed. Returns the raw files'
     root: a call's raw_key is relative to it."""
-    out = pathlib.Path(tempfile.mkdtemp(dir=_laid_out_root(), prefix="v9-"))
+    out = pathlib.Path(tempfile.mkdtemp(dir=_scratch_root(), prefix="v9-"))
     binary = str(aintercept_binary())
     subprocess.run([binary, "canon", "-src", str(raw), "-raw", str(out)], check=True, capture_output=True)  # noqa: S603
     subprocess.run(  # noqa: S603
@@ -236,16 +115,13 @@ def load_v9(raw: pathlib.Path, dsn: str) -> pathlib.Path:
 
 
 class PgDataset:
-    """A dataset in a fresh Postgres of its own, as the cluster holds it while both paths run (build
-    steps 3 to 8): v7's tables (`v1layout -pg`), which the session and person pages read until steps 6
-    and 7, and v9's facts and rollups (load_v9), which the drawer reads; the raw files the drawer's
-    ranged GETs read."""
+    """A dataset in a fresh Postgres of its own: its facts and rollups (load_v9), and the raw files the
+    drawer's ranged GETs read."""
 
     def __init__(self, admin: str, root: pathlib.Path) -> None:
         self._db = pgdb.fresh_database(admin)
         self.dsn = self._db.__enter__()
         try:
-            lay_out(root, pg=self.dsn)
             self.raw = load_v9(root, self.dsn)
         except BaseException:
             self._db.__exit__(None, None, None)
@@ -254,7 +130,6 @@ class PgDataset:
     def store(self, **kwargs: Any) -> Any:
         from aintercept_api.pgstore import PgStore
 
-        kwargs.setdefault("threads", 1)
         return PgStore(self.dsn, source=LocalSource(self.raw), **kwargs)
 
     def close(self) -> None:
@@ -274,7 +149,7 @@ def pg_admin() -> str:
 @pytest.fixture
 def pg_client_for():
     """pg_client_for(dataset) -> a TestClient with the frozen clock over that dataset in Postgres
-    (PgDataset): the API's default store, its drawer on v9."""
+    (PgDataset)."""
     opened: list[tuple[PgDataset, Any]] = []
 
     def make(ds: Dataset, **kwargs) -> TestClient:
@@ -288,22 +163,6 @@ def pg_client_for():
     for pg, store in opened:
         store.close()
         pg.close()
-
-
-@pytest.fixture
-def client_for():
-    """client_for(dataset) -> a TestClient over that dataset with the frozen clock."""
-    stores: list[LaidOutStore] = []
-
-    def make(ds: Dataset, **kwargs) -> TestClient:
-        root = ds.write()
-        root.mkdir(parents=True, exist_ok=True)
-        stores.append(bounded_store(root))
-        return make_client(stores[-1], **kwargs)
-
-    yield make
-    for s in stores:
-        s.close()
 
 
 def operation_for(app, method: str, path: str, status: int) -> tuple[str, str]:

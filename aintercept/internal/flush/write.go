@@ -196,14 +196,14 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 		", first_ns = least(account_devices.first_ns, excluded.first_ns), last_ns = greatest(account_devices.last_ns, excluded.last_ns)"
 	stmts = append(stmts, devs)
 
-	parents := &insert{table: "session_parents"}
+	parents := &insert{table: "session_edges"}
 	ps := r.Parents
 	col(parents, ps, "child_session_id", "text", func(p *Parent) string { return p.Child })
 	col(parents, ps, "parent_session_id", "text", func(p *Parent) string { return p.Parent })
 	col(parents, ps, "kind", "text", func(p *Parent) string { return p.Kind })
 	col(parents, ps, "first_ns", "bigint", func(p *Parent) int64 { return p.First })
 	parents.conflict = "ON CONFLICT (child_session_id, parent_session_id) DO UPDATE SET " +
-		"kind = least(session_parents.kind, excluded.kind), first_ns = least(session_parents.first_ns, excluded.first_ns)"
+		"kind = least(session_edges.kind, excluded.kind), first_ns = least(session_edges.first_ns, excluded.first_ns)"
 	stmts = append(stmts, parents)
 
 	// Each distinct environment once, before the events that point at it.
@@ -441,7 +441,7 @@ func jsonList(ss []string) *string {
 }
 
 // Tables are the tables a flush writes facts to, and the dirty list.
-var Tables = []string{"calls", "event_envs", "events", "accounts", "session_accounts", "session_credentials", "account_devices", "session_parents", "dirty"}
+var Tables = []string{"calls", "event_envs", "events", "accounts", "session_accounts", "session_credentials", "account_devices", "session_edges", "dirty"}
 
 // Summary is a table's row count, a checksum of its rows (independent of their
 // order: the sum of a hash of each row's text; dirty's of its kind and key

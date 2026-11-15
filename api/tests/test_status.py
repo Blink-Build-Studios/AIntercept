@@ -1,6 +1,5 @@
 import threading
 
-from tests.conftest import bounded_store, make_client
 from tests.test_session import error_on_query
 
 
@@ -54,16 +53,6 @@ def test_query_failure_returns_typed_error(dataset, pg_client_for, write_sample,
     r = client.get("/api/v1/status")
     write_sample(client, r, "error", status=500)
     assert r.json() == {"error": {"code": "internal", "message": "Query failed", "queryId": "q_sample"}}
-
-
-def test_data_dir_name_is_never_parsed_as_sql_or_glob(tmp_path):
-    from tests.builders import Dataset
-
-    ds = Dataset(tmp_path / "o'brien [1]? evil') UNION SELECT 1 --")
-    ds.transaction("2026-11-04T18:00:00")
-    r = make_client(bounded_store(ds.write())).get("/api/v1/status")
-    assert r.status_code == 200
-    assert r.json()["data"]["firstRequestAt"] == "2026-11-04T18:00:00Z"
 
 
 def test_concurrent_requests(dataset, pg_client_for):

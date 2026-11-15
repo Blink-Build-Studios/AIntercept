@@ -18,18 +18,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from aintercept_api.auth import OPEN_PATHS, AuthError, KeysUnavailable, Verifier, identity, verifier_from_env
 from aintercept_api.models.common import ErrorBody, ErrorResponse
+from aintercept_api.pages import PageStore
 from aintercept_api.routers import people, requests, sessions, status
-from aintercept_api.store import Store
 
 log = logging.getLogger("aintercept_api")
 
 # api/src/aintercept_api/app.py -> the repository root.
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+# The observer's local directory (make up), where the drawer reads raw files from by default.
 DEFAULT_DATA_DIR = REPO_ROOT / "data" / "telemetry"
-# `aintercept process` writes here from the raw partitions (docker compose runs it).
-DEFAULT_BUCKETS_DIR = REPO_ROOT / "data" / "v1"
-# Ingest new files at most this often; requests in between read the tables as they are.
-DEFAULT_INGEST_INTERVAL_S = 5.0
 
 # Every route can answer with this shape; it is in the OpenAPI spec, so the UI's
 # error states are typed from the contract like everything else.
@@ -41,56 +38,12 @@ def error_response(status: int, code: str, message: str, query_id: str) -> JSONR
     return JSONResponse(status_code=status, content=body.model_dump(), headers={"X-Query-Id": query_id})
 
 
-# DuckDB's share of the container's memory when no limit is set: the rest is Python,
-# responses being built, and DuckDB's own overhead outside its buffer manager.
-DUCKDB_MEMORY_SHARE = 0.6
-
-
-def duckdb_memory_limit(env: Mapping[str, str]) -> str | None:
-    """AINTERCEPT_MEMORY_LIMIT as given; else a share of AINTERCEPT_CONTAINER_MEMORY (the
-    container's limit in bytes, which the chart passes in), so the two can't drift apart."""
-    if env.get("AINTERCEPT_MEMORY_LIMIT"):
-        return env["AINTERCEPT_MEMORY_LIMIT"]
-    try:
-        container = int(env.get("AINTERCEPT_CONTAINER_MEMORY") or 0)
-    except ValueError:
-        return None
-    return f"{int(container * DUCKDB_MEMORY_SHARE) >> 20}MB" if container > 0 else None
-
-
-def bucket_store_from_env(env: Mapping[str, str], *, v1: bool = False) -> Any:
-    """A stateless read path, from a local directory (AINTERCEPT_BUCKETS_DIR) or the object
-    store (AINTERCEPT_S3_BUCKET, _PREFIX, _REGION, _ENDPOINT; AWS_* credentials): with v1, the
-    v5 pipeline's folders (v1.py, docs/PIPELINE.md §4), else the stream processor's bucketed
-    tables (buckets.py, docs/STREAMING_PIPELINE.md §5)."""
-    from aintercept_api.buckets import BucketStore, LocalSource, S3Source, Source
-    from aintercept_api.v1 import V1Store
-
-    source: Source
-    if env.get("AINTERCEPT_BUCKETS_DIR"):
-        source = LocalSource(pathlib.Path(env["AINTERCEPT_BUCKETS_DIR"]))
-    else:
-        source = S3Source(
-            env["AINTERCEPT_S3_BUCKET"], env["AINTERCEPT_S3_REGION"], endpoint=env.get("AINTERCEPT_S3_ENDPOINT")
-        )
-    prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
-    cache = pathlib.Path(env.get("AINTERCEPT_CACHE_DIR") or "/data/cache")
-    return (V1Store if v1 else BucketStore)(
-        source,
-        cache,
-        prefix=prefix + "/" if prefix else "",
-        cache_bytes=int(env.get("AINTERCEPT_CACHE_BYTES") or 2 << 30),
-        memory_limit=duckdb_memory_limit(env),
-        threads=int(env["AINTERCEPT_THREADS"]) if env.get("AINTERCEPT_THREADS") else None,
-    )
-
-
 def pg_store_from_env(env: Mapping[str, str]) -> Any:
-    """The Postgres read path (pgstore.py, docs/PIPELINE.md v7 §5): the API login's DSN from
-    AINTERCEPT_PG_DSN, or the file AINTERCEPT_PG_DSN_FILE names (the mounted Secret); the calls'
-    detail objects from the same bucket or directory as the v1 store's (AINTERCEPT_BUCKETS_DIR, or
-    AINTERCEPT_S3_*)."""
-    from aintercept_api.buckets import LocalSource, S3Source, Source
+    """The Postgres read path (pgstore.py, docs/PIPELINE.md §6): the API login's DSN from
+    AINTERCEPT_PG_DSN, or the file AINTERCEPT_PG_DSN_FILE names (the mounted Secret); the calls' raw
+    members from the observers' raw files, in a local directory (AINTERCEPT_BUCKETS_DIR) or the bucket
+    (AINTERCEPT_S3_BUCKET, _REGION, _ENDPOINT, _PREFIX; AWS_* credentials)."""
+    from aintercept_api.objects import LocalSource, S3Source, Source
     from aintercept_api.pgstore import PgStore
 
     dsn = env.get("AINTERCEPT_PG_DSN") or ""
@@ -99,30 +52,23 @@ def pg_store_from_env(env: Mapping[str, str]) -> Any:
     if not dsn:
         raise ValueError(
             "the API reads Postgres and has no URL for it: set AINTERCEPT_PG_DSN (the API login's DSN)"
-            " or AINTERCEPT_PG_DSN_FILE (a file holding it); AINTERCEPT_STORE=v1 reads the v5 folders instead"
+            " or AINTERCEPT_PG_DSN_FILE (a file holding it)"
         )
     source: Source
-    if env.get("AINTERCEPT_BUCKETS_DIR"):
-        source = LocalSource(pathlib.Path(env["AINTERCEPT_BUCKETS_DIR"]))
-    else:
+    if env.get("AINTERCEPT_S3_BUCKET"):
         source = S3Source(
             env["AINTERCEPT_S3_BUCKET"], env["AINTERCEPT_S3_REGION"], endpoint=env.get("AINTERCEPT_S3_ENDPOINT")
         )
+    else:
+        source = LocalSource(pathlib.Path(env.get("AINTERCEPT_BUCKETS_DIR") or DEFAULT_DATA_DIR))
     prefix = env.get("AINTERCEPT_S3_PREFIX", "").strip("/")
-    return PgStore(
-        dsn,
-        source=source,
-        prefix=prefix + "/" if prefix else "",
-        memory_limit=duckdb_memory_limit(env),
-        threads=int(env["AINTERCEPT_THREADS"]) if env.get("AINTERCEPT_THREADS") else None,
-    )
+    return PgStore(dsn, source=source, prefix=prefix + "/" if prefix else "")
 
 
 def create_app(
-    store: Store | None = None,
+    store: PageStore | None = None,
     clock: Callable[[], datetime] | None = None,
     query_id: Callable[[], str] | None = None,
-    ingest_interval_s: float = DEFAULT_INGEST_INTERVAL_S,
     auth: Verifier | None = None,
     ui_dir: pathlib.Path | None = None,
 ) -> FastAPI:
@@ -150,35 +96,18 @@ def create_app(
         openapi_url="/openapi.json" if explorer else None,
     )
     if store is None:
-        # Postgres (docs/PIPELINE.md v7 §5), with the calls' detail objects from the object store
-        # or a local directory laid out the same way (AINTERCEPT_BUCKETS_DIR, default data/v1 for
-        # local runs). It refuses to start without a DSN, or on a database whose schema isn't this
-        # build's. AINTERCEPT_STORE=v1 (the v5 folders) and buckets stay selectable: the tests and
-        # the oracle read them.
-        env = dict(os.environ)
-        if not env.get("AINTERCEPT_BUCKETS_DIR") and not env.get("AINTERCEPT_S3_BUCKET"):
-            env["AINTERCEPT_BUCKETS_DIR"] = str(DEFAULT_BUCKETS_DIR)
-        kind = env.get("AINTERCEPT_STORE") or "pg"
-        if kind not in ("pg", "v1", "buckets"):
-            raise ValueError(f"AINTERCEPT_STORE must be pg (the default), v1 or buckets, not {kind!r}")
+        # Postgres (docs/PIPELINE.md §6), with the calls' raw members from the object store or the
+        # observer's local directory. It refuses to start without a DSN, or on a database whose
+        # schema isn't this build's.
         try:
-            store = pg_store_from_env(env) if kind == "pg" else bucket_store_from_env(env, v1=kind == "v1")
+            store = pg_store_from_env(os.environ)
         except Exception as e:
-            log.critical("the API can't start", extra={"fields": {"store": kind, "reason": str(e)}})
+            log.critical("the API can't start", extra={"fields": {"reason": str(e)}})
             raise
     app.state.store = store
-    app.state.ingest_interval_s = ingest_interval_s
     app.state.clock = clock or (lambda: datetime.now(UTC))
     app.state.query_id = query_id or (lambda: f"q_{uuid.uuid4().hex[:12]}")
-    log.info(
-        "store ready",
-        extra={
-            "fields": {
-                "store": type(app.state.store).__name__,
-                "memoryLimit": app.state.store.memory_limit,
-            }
-        },
-    )
+    log.info("store ready", extra={"fields": {"store": type(app.state.store).__name__}})
 
     templates: list[tuple[re.Pattern[str], str]] = []
 
@@ -221,25 +150,10 @@ def create_app(
         qid = request.state.query_id = request.app.state.query_id()
         start = time.perf_counter()
         try:
-            # Loading runs in a thread (it reads Parquet; the event loop keeps serving).
-            # A failed load is logged and the request served from what's loaded.
-            await run_in_threadpool(request.app.state.store.maybe_ingest, request.app.state.ingest_interval_s)
-        except Exception:
-            log.exception("ingest failed", extra={"fields": {"queryId": qid}})
-        # A bucketed store (buckets.py) reads only the request's keys' buckets: fix them for it.
-        store = request.app.state.store
-        token = None
-        try:
-            if hasattr(store, "load_for"):
-                target = request.url.path + ("?" + request.url.query if request.url.query else "")
-                token = store.enter(await run_in_threadpool(store.load_for, target))
             response = await call_next(request)
         except Exception:
             log.exception("query failed", extra={"fields": {"queryId": qid, "path": request.url.path}})
             response = error_response(500, "internal", "Query failed", qid)
-        finally:
-            if token is not None:
-                store.leave(token)
         fields = {
             "queryId": qid,
             "method": request.method,
@@ -248,9 +162,6 @@ def create_app(
             "status": response.status_code,
             "ms": round((time.perf_counter() - start) * 1000, 1),
         }
-        skipped = len(request.app.state.store.skipped)
-        if skipped:
-            fields["skippedFiles"] = skipped
         # Who asked (the verified assertion), so access to per-person data is attributable.
         if who := getattr(request.state, "identity", None):
             fields["identity"] = who

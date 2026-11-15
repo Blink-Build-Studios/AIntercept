@@ -20,12 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
-      # An S3 emulator with conditional writes: the stream processor's store
-      # check (internal/stream TestStoreCheckAgainstS3) runs against it.
-      moto:
-        image: motoserver/moto:5.1.14@sha256:800719627036dc38dc699e9f314f624f2c98ac3d8bb754db078cb2698f08ee77
-        ports: ["5055:5000"]
-      # The tests' Postgres (docs/PIPELINE.md v7, Testing): the image docker-compose.yml pins
+      # The tests' Postgres (docs/PIPELINE.md §8): the image docker-compose.yml pins
       # (scripts/check-pins.py holds the two equal), trust auth, the built-in C.UTF-8 locale.
       postgres:
         image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -36,7 +31,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
-      STORECHECK_ENDPOINT: http://localhost:5055
       AINTERCEPT_TEST_PG: postgres://postgres@localhost:15433/postgres?sslmode=disable
       AINTERCEPT_TEST_PG_REQUIRED: "1"
     steps:
@@ -60,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
-      # The tests' Postgres (docs/PIPELINE.md v7, Testing): the image docker-compose.yml pins
+      # The tests' Postgres (docs/PIPELINE.md §8): the image docker-compose.yml pins
       # (scripts/check-pins.py holds the two equal), trust auth, the built-in C.UTF-8 locale.
       postgres:
         image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -75,8 +69,8 @@ jobs:
       AINTERCEPT_TEST_PG_REQUIRED: "1"
     steps:
       - uses: actions/checkout@v4
-      # The tests run the Go pipeline (the processor, the replay): go.mod's toolchain, with
-      # its build cache, rather than the runner's.
+      # The tests load their datasets through the Go binary (aintercept canon): go.mod's
+      # toolchain, with its build cache, rather than the runner's.
       - uses: actions/setup-go@v5
         with:
           go-version-file: aintercept/go.mod
@@ -127,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
-      # The tests' Postgres (docs/PIPELINE.md v7, Testing): the image docker-compose.yml pins
+      # The tests' Postgres (docs/PIPELINE.md §8): the image docker-compose.yml pins
       # (scripts/check-pins.py holds the two equal), trust auth, the built-in C.UTF-8 locale.
       postgres:
         image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193

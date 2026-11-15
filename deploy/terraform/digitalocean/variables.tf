@@ -45,6 +45,18 @@ variable "retention_days" {
   default     = 30
 }
 
+variable "prefix" {
+  description = "Object key prefix the observer writes under (the chart's objectStore.prefix)."
+  type        = string
+  default     = "aintercept"
+}
+
+variable "raw_retention_days" {
+  description = "Days to keep the observers' raw files (<prefix>/raw/): the chart's retention.days."
+  type        = number
+  default     = 15
+}
+
 variable "spaces_access_id" {
   description = "Spaces access key id with bucket-create rights (separate from the API token)."
   type        = string

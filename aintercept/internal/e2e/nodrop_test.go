@@ -1,6 +1,6 @@
 //go:build e2e
 
-// No-drop tests (docs/STREAMING_PIPELINE.md, phase 1): through the stack in
+// No-drop tests (docs/PIPELINE.md §2.1): through the stack in
 // test/interceptor, every request that goes through is recorded in object
 // storage exactly once, through an object-store outage, a hard kill of the
 // observer, and a full spool. They run after the Interceptor tests (file order)
@@ -30,6 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/wsframe"
 )
 
@@ -87,9 +88,8 @@ func stored(t *testing.T, c *s3.Client) []events.Event {
 			t.Fatalf("list: %v", err)
 		}
 		for _, o := range page.Contents {
-			// The raw log only: the canonical records (records/) and call detail
-			// objects (calls/) are other outputs of the same writer.
-			if !strings.Contains(*o.Key, "/dt=") || !strings.HasSuffix(*o.Key, ".ndjson.gz") {
+			// The raw files only (docs/PIPELINE.md §2.1).
+			if !strings.Contains(*o.Key, "/raw/") || !strings.HasSuffix(*o.Key, ".ndjson.gz") {
 				continue
 			}
 			obj, err := c.GetObject(context.Background(), &s3.GetObjectInput{Bucket: aws.String(bucket), Key: o.Key})
@@ -105,6 +105,9 @@ func stored(t *testing.T, c *s3.Client) []events.Event {
 			sc := bufio.NewScanner(gz)
 			sc.Buffer(make([]byte, 1<<20), 64<<20)
 			for sc.Scan() {
+				if records.IsRawRecordLine(sc.Bytes()) { // a record, not a row
+					continue
+				}
 				var e events.Event
 				if json.Unmarshal(sc.Bytes(), &e) == nil {
 					out = append(out, e)

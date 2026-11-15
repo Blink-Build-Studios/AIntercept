@@ -32,7 +32,7 @@ up: ## Everything, locally, one command: proxy (real upstream), observer, Postgr
 	@bash scripts/up.sh
 
 .PHONY: verify
-verify: ## Prove the local stack end to end: one request through the proxy, seen by the observer, committed to Postgres by a worker, lag settled, API up
+verify: ## Prove the local stack end to end: one request through the proxy, seen by the observer, loaded into Postgres by a worker, lag settled, on its pages
 	@bash scripts/verify.sh
 
 .PHONY: remote
@@ -108,8 +108,8 @@ AINTERCEPT_DATA_DIR ?= $(CURDIR)/data/telemetry
 export AINTERCEPT_DATA_DIR
 
 .PHONY: api
-api: ## Run the query API on :8787 over the local Postgres (make up starts it), the calls' detail objects from $AINTERCEPT_DATA_DIR (JSON logs on stdout)
-	cd api && . ../scripts/api-pg-dsn.sh && AINTERCEPT_STORE=pg AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" AINTERCEPT_CACHE_DIR="$(CURDIR)/.cache/api" \
+api: ## Run the query API on :8787 over the local Postgres (make up starts it), the calls' raw members from $AINTERCEPT_DATA_DIR (JSON logs on stdout)
+	cd api && . ../scripts/api-pg-dsn.sh && AINTERCEPT_BUCKETS_DIR="$(AINTERCEPT_DATA_DIR)" \
 		uv run python -m aintercept_api.serve --port 8787 --reload
 
 .PHONY: ui
@@ -145,7 +145,7 @@ check-generated: regen ## Fail if generated contract files differ from HEAD or d
 		|| { echo "Generated files are stale: run 'make regen' and commit."; exit 1; }
 	cd ui && pnpm typecheck
 
-# The tests' Postgres (docs/PIPELINE.md v7, Testing): CI's service container (AINTERCEPT_TEST_PG), or
+# The tests' Postgres (docs/PIPELINE.md §8): CI's service container (AINTERCEPT_TEST_PG), or
 # here the pinned image in a container scripts/test-pg.sh starts or reuses. Needs Docker; the tests
 # that use it fail rather than skip, as in CI.
 TEST_PG = AINTERCEPT_TEST_PG="$${AINTERCEPT_TEST_PG:-$$(bash $(CURDIR)/scripts/test-pg.sh)}" || exit 1; \
@@ -162,44 +162,10 @@ check-go: ## Go: gofmt clean, go vet, go test (with -race) in every module
 	@unformatted="$$(gofmt -l $(GO_MODULES))"; test -z "$$unformatted" || { echo "gofmt needed:"; echo "$$unformatted"; exit 1; }
 	for m in $(GO_MODULES); do (cd $$m && go vet ./...) || exit 1; done
 	$(TEST_PG) cd aintercept && go test -race -count=1 -timeout 10m ./...
-	@# The slow one-goroutine tests skip under -race (heavy(t)): run them here.
-	cd aintercept && go test -count=1 -timeout 10m ./internal/records/ ./internal/stream/...
-
-.PHONY: test-pipeline
-test-pipeline: ## Go: the end-to-end gate on a real capture's records (local only: AINTERCEPT_RECORDS=<aintercept canon -out dir>)
-	@test -n "$(AINTERCEPT_RECORDS)" || (echo "set AINTERCEPT_RECORDS to a records directory (aintercept canon -src <raw> -out <dir>)" && exit 1)
-	cd aintercept && AINTERCEPT_RECORDS=$(AINTERCEPT_RECORDS) go test -count=1 -timeout 120m -tags full \
-		-run 'TestPipelineRealCapture|TestRealData' -v ./internal/stream/...
-
-# Nightly CI runs test-full as parallel jobs: test-full-rest, and test-full-sim once per N
-# (the simulation matrix alone needs over 40 minutes under -race on a 4-CPU runner).
-.PHONY: test-full test-full-rest test-full-sim
-test-full: test-full-rest ## Go: the exhaustive variants too (-tags full: more seeds, longer captures); nightly in CI
-	$(MAKE) test-full-sim N=1
-	$(MAKE) test-full-sim N=3
-	$(MAKE) test-full-sim N=8
-
-test-full-rest: ## Go: test-full but TestSimulateMatrix; the memory test (one goroutine) without -race
-	cd aintercept && go test -race -count=1 -timeout 45m -tags full -skip '^TestSimulateMatrix$$' ./...
-	cd aintercept && go test -count=1 -timeout 15m -tags full -run '^TestReplicaMemoryFlatInHistory$$' ./internal/stream/
-
-test-full-sim: ## Go: TestSimulateMatrix's cases with N ingest pods (make test-full-sim N=3)
-	@test -n "$(N)" || (echo "set N to 1, 3 or 8" && exit 1)
-	cd aintercept && go test -race -count=1 -timeout 45m -tags full -run '^TestSimulateMatrix$$/^N$(N)_' -v ./internal/stream/
 
 .PHONY: check-api
 check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with a 90% coverage floor, requirements.json
 	$(TEST_PG) cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q --cov -n auto --dist loadfile
-
-.PHONY: test-api-full
-test-api-full: ## API: the full run too (every URL of the parity gates, the pipeline at full length, the memory churn); nightly in CI
-	@# In parallel, each test on any worker (--dist load: the gates' parameters spread out, a module's
-	@# fixtures set up on each worker that needs them): the Postgres gates are too slow for one.
-	cd api && AINTERCEPT_TESTS_FULL=1 uv run pytest -q -m full -n auto --dist load
-
-.PHONY: test-api-oracle
-test-api-oracle: ## API: every test on the v6 oracle's read path (api/tests/oracle: today's derivation, frozen); nightly in CI
-	cd api && AINTERCEPT_TEST_STORE=oracle uv run pytest -q -n auto --dist loadfile
 
 .PHONY: check-ui
 check-ui: ## UI: ESLint (story per component, formatting, a11y, ...), lint-ui (tokens, channels, copy), typecheck, tests, requirements.json

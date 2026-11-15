@@ -1,6 +1,6 @@
-// Package pg is the workers' Postgres (docs/PIPELINE.md v7): the connection
-// pool with the spec's settings, the schema (schema.sql, generated from
-// Tables) and its hash, and the two logins. Ingest never imports it.
+// Package pg is the workers' Postgres (docs/PIPELINE.md §3): the connection
+// pool with the spec's settings, the schema (schema.sql, hand-written) and its
+// hash, and the two logins. The observer never imports it.
 package pg
 
 import (

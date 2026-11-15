@@ -14,7 +14,7 @@ import (
 const HousekeepingLock int64 = 0x61696e7465720021
 
 // How long a call may wait for its end, in data time, before the sweep closes
-// it: today's (stream/state/expire.go ExpireAfter, ExpireAfterWS).
+// it: the old engine's (expire.go ExpireAfter, ExpireAfterWS, in git history).
 const (
 	SweepAfter   = 6 * time.Hour
 	SweepAfterWS = 7 * 24 * time.Hour
@@ -24,7 +24,7 @@ const (
 const batch = 5000
 
 // sweep closes up to batch open calls whose wait has passed in data time (the
-// newest record any pod sent, ingest_pods), as stream/state/expire.go does:
+// newest record any pod sent, ingest_pods), as the old engine did:
 // end_ns is the start plus the wait, swept is set (a real end still replaces
 // it: flush), and the rollup rows the call counts in are marked dirty as a
 // flush of it would mark them.

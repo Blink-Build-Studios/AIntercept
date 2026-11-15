@@ -20,6 +20,12 @@ variable "retention_days" {
   default     = 30
 }
 
+variable "raw_retention_days" {
+  description = "Days to keep the observers' raw files (<prefix>/raw/): the chart's retention.days."
+  type        = number
+  default     = 15
+}
+
 variable "cluster_oidc_provider_arn" {
   description = "ARN of the EKS cluster's IAM OIDC provider."
   type        = string

@@ -1,11 +1,11 @@
 package pg_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -86,41 +86,24 @@ func TestSchemaAppliesOnce(t *testing.T) {
 	if err := pg.Check(c, p); err != nil {
 		t.Fatalf("check after: %v", err)
 	}
-	// Every table has exactly its columns, in order, with their types.
-	for _, tb := range pg.Tables {
-		rows, err := p.Query(c, `SELECT attname, format_type(atttypid, atttypmod) FROM pg_attribute
-			WHERE attrelid = $1::text::regclass AND attnum > 0 AND NOT attisdropped ORDER BY attnum`, tb.Name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (string, error) {
-			var n, ty string
-			err := r.Scan(&n, &ty)
-			return n + " " + ty, err
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var want []string
-		for _, col := range tb.Columns {
-			ty, _, _ := strings.Cut(col.Type, " NOT NULL")
-			if ty == "timestamptz" {
-				ty = "timestamp with time zone"
-			}
-			want = append(want, col.Name+" "+ty)
-		}
-		if strings.Join(got, ",") != strings.Join(want, ",") {
-			t.Errorf("%s:\n got %v\nwant %v", tb.Name, got, want)
-		}
+	// The schema's tables, and nothing else.
+	var tables []string
+	if err := p.QueryRow(c, "SELECT array_agg(tablename::text ORDER BY tablename) FROM pg_tables WHERE schemaname = current_schema()").Scan(&tables); err != nil {
+		t.Fatal(err)
 	}
-	var lz4 string
-	if err := p.QueryRow(c, "SELECT attcompression FROM pg_attribute WHERE attrelid = 'drawer_requests'::regclass AND attname = 'details_vals'").Scan(&lz4); err != nil || lz4 != "l" {
-		t.Errorf("drawer_requests.details_vals compression %q, %v", lz4, err)
+	if got := strings.Join(tables, " "); got != strings.Join(schemaTables(), " ") {
+		t.Errorf("tables %s, want %s", got, strings.Join(schemaTables(), " "))
 	}
-	var tailRows int
-	if err := p.QueryRow(c, "SELECT count(*) FROM tail").Scan(&tailRows); err != nil || tailRows != 1 {
-		t.Errorf("tail has %d rows, %v", tailRows, err)
+}
+
+// schemaTables is the tables schema.sql creates, sorted.
+func schemaTables() []string {
+	var out []string
+	for _, m := range regexp.MustCompile(`(?m)^CREATE TABLE (\w+)`).FindAllStringSubmatch(pg.Schema, -1) {
+		out = append(out, m[1])
 	}
+	sort.Strings(out)
+	return out
 }
 
 func TestHashMismatchRefusesToStart(t *testing.T) {
@@ -148,53 +131,13 @@ func TestApplyNeedsAnEmptyDatabase(t *testing.T) {
 	}
 }
 
-func TestByteaIDsRoundTrip(t *testing.T) {
-	// The state's row ids join their parts with NUL: they're bytea, and come back byte for byte.
-	p := applied(t)
-	c := ctx(t)
-	long := bytes.Repeat([]byte("s\x00"), 300)
-	ids := [][]byte{[]byte("s1"), []byte("s1\x00p1"), []byte("s1\x00p2"), []byte("\x00"), []byte(""), long, []byte("é\x00\xff\xfe")}
-	for i, id := range ids {
-		if _, err := p.Exec(c, "INSERT INTO dim_session_visible (key, id, session_id) VALUES ('s:k', $1, $2)", id, string(rune('a'+i))); err != nil {
-			t.Fatalf("insert %q: %v", id, err)
-		}
-	}
-	rows, _ := p.Query(c, "SELECT id, session_id FROM dim_session_visible WHERE key = 's:k' ORDER BY session_id")
-	got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) ([]byte, error) {
-		var id []byte
-		var s string
-		return id, r.Scan(&id, &s)
-	})
-	if err != nil || len(got) != len(ids) {
-		t.Fatalf("read %d ids: %v", len(got), err)
-	}
-	for i := range ids {
-		if !bytes.Equal(got[i], ids[i]) {
-			t.Errorf("id %d: %q, want %q", i, got[i], ids[i])
-		}
-	}
-	// The ids are distinct keys: the same one again conflicts, by its bytes.
-	if _, err := p.Exec(c, "INSERT INTO dim_session_visible (key, id) VALUES ('s:k', $1)", []byte("s1\x00p1")); sqlState(err) != "23505" {
-		t.Errorf("a repeated id: %v, want a unique violation", err)
-	}
-	// And the upsert-by-unnest the workers write with keeps them apart too.
-	if _, err := p.Exec(c, `INSERT INTO dim_session_visible (key, id, session_id) SELECT 's:k', * FROM unnest($1::bytea[], $2::text[])
-		ON CONFLICT (key, id) DO UPDATE SET session_id = excluded.session_id`, [][]byte{[]byte("s1\x00p1"), []byte("s1\x00p3")}, []string{"x", "y"}); err != nil {
-		t.Fatal(err)
-	}
-	var n int
-	if err := p.QueryRow(c, "SELECT count(*) FROM dim_session_visible WHERE key = 's:k'").Scan(&n); err != nil || n != len(ids)+1 {
-		t.Errorf("%d rows after the upsert, %v", n, err)
-	}
-}
-
 func TestSanitizedTextIsStorable(t *testing.T) {
 	// Why canon cleans what it does: Postgres text refuses NUL, and an index
 	// entry over about 2.7 KB fails the insert. The cleaned values store.
 	p := applied(t)
 	c := ctx(t)
 	insert := func(callID, path string) error {
-		_, err := p.Exec(c, "INSERT INTO requests (key, id, call_id, path) VALUES ('s:k', $1, $2, $3)", []byte(callID), callID, path)
+		_, err := p.Exec(c, "INSERT INTO calls (call_id, correlation_id, kind, stream, synthetic, path) VALUES ($1, $1, 'model', false, false, $2)", callID, path)
 		return err
 	}
 	if err := insert("c1", "/v1/messages\x00"); err == nil {
@@ -209,21 +152,21 @@ func TestSanitizedTextIsStorable(t *testing.T) {
 	if err := insert("c2", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.Exec(c, "UPDATE requests SET call_id = $1 WHERE call_id = 'c2'", huge); err == nil {
+	if _, err := p.Exec(c, "UPDATE calls SET call_id = $1 WHERE call_id = 'c2'", huge); err == nil {
 		t.Error("an 8 KB indexed id was stored")
 	}
 	if err := insert(canon.CleanID(huge), ""); err != nil {
 		t.Errorf("the capped id: %v", err)
 	}
 	var got string
-	if err := p.QueryRow(c, "SELECT path FROM requests WHERE call_id = 'c1'").Scan(&got); err != nil || got != "/v1/messages\uFFFD" {
+	if err := p.QueryRow(c, "SELECT path FROM calls WHERE call_id = 'c1'").Scan(&got); err != nil || got != "/v1/messages\uFFFD" {
 		t.Errorf("read back %q, %v", got, err)
 	}
 }
 
 func TestCollationIsCodePointOrder(t *testing.T) {
 	// The built-in C.UTF-8 locale sorts by code point, which is UTF-8 byte
-	// order: Go's and DuckDB's, so min(name) and ORDER BY agree everywhere.
+	// order: Go's and Python's, so min(name) and ORDER BY agree everywhere.
 	p := applied(t)
 	c := ctx(t)
 	var provider, locale string
@@ -248,7 +191,7 @@ func TestCollationIsCodePointOrder(t *testing.T) {
 	if err := p.QueryRow(c, "SELECT min(w), max(w) FROM unnest($1::text[]) w", words).Scan(&lo, &hi); err != nil || lo != want[0] || hi != want[len(want)-1] {
 		t.Errorf("min %q max %q, want %q %q (%v)", lo, hi, want[0], want[len(want)-1], err)
 	}
-	// lower() is Unicode's simple case mapping (the API's tests check it against DuckDB's on every code point).
+	// lower() is Unicode's simple case mapping.
 	var l string
 	if err := p.QueryRow(c, "SELECT lower('ÀÉ İ Σ ẞ ǅ ABC')").Scan(&l); err != nil || l != "àé i σ ß ǆ abc" {
 		t.Errorf("lower: %q, %v", l, err)
@@ -287,7 +230,7 @@ func TestLogins(t *testing.T) {
 			t.Errorf("worker %s = %s, want %s", setting, got, want)
 		}
 	}
-	if _, err := worker.Exec(c, "INSERT INTO keys (key, n) VALUES ('s:1', 1)"); err != nil {
+	if _, err := worker.Exec(c, "INSERT INTO ingest_pods (incarnation) VALUES ('pod-1')"); err != nil {
 		t.Errorf("the worker writes: %v", err)
 	}
 	api := open(t, pgtest.WithUser(t, admin, pg.APILogin, "api pw")+ka)
@@ -299,12 +242,12 @@ func TestLogins(t *testing.T) {
 	if err := pg.Check(c, api); err != nil {
 		t.Errorf("the API checks the schema: %v", err)
 	}
-	for _, tb := range pg.Tables {
-		if _, err := api.Exec(c, "SELECT * FROM "+tb.Name+" LIMIT 1"); err != nil {
-			t.Errorf("the API reads %s: %v", tb.Name, err)
+	for _, tb := range schemaTables() {
+		if _, err := api.Exec(c, "SELECT * FROM "+tb+" LIMIT 1"); err != nil {
+			t.Errorf("the API reads %s: %v", tb, err)
 		}
 	}
-	if _, err := api.Exec(c, "INSERT INTO keys (key, n) VALUES ('s:2', 1)"); sqlState(err) != "42501" {
+	if _, err := api.Exec(c, "INSERT INTO ingest_pods (incarnation) VALUES ('pod-2')"); sqlState(err) != "42501" {
 		t.Errorf("the API wrote: %v", err)
 	}
 	if _, err := api.Exec(c, "CREATE TABLE x (y int)"); sqlState(err) != "42501" {

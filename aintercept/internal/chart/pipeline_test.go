@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// The v7 pipeline in the chart (docs/PIPELINE.md §6): the workers (`rollup`)
-// and the API read Postgres through a DSN each, from one Secret; Postgres runs
-// in the cluster on the DigitalOcean demo (postgres.inCluster) and is RDS in
+// The pipeline in the chart (docs/PIPELINE.md §1): the workers (`worker`) and
+// the API read Postgres through a DSN each, from one Secret; Postgres runs in
+// the cluster on the DigitalOcean demo (postgres.inCluster) and is RDS in
 // production; Redis is gone.
 
 func envOf(c map[string]any) map[string]any {
@@ -74,89 +74,12 @@ func TestNoRedis(t *testing.T) {
 
 func asList(v any) []any { l, _ := v.([]any); return l }
 
-// The workers (docs/PIPELINE.md §2): `aintercept rollup`, at least two
-// replicas, scaled by KEDA on GET /lag (oldest_unapplied_seconds), with a plain
-// HPA when KEDA is off. They get the worker login's DSN from the Postgres
-// Secret, and the retention settings.
-func TestRollupDeployment(t *testing.T) {
-	docs := render(t)
-	dep := find(docs, "Deployment", "rollup")
-	if dep == nil {
-		t.Fatal("no rollup Deployment")
-	}
-	c := container(docs, "Deployment", "rollup", "rollup")
-	if c == nil {
-		t.Fatal("no rollup container")
-	}
-	if a := fmt.Sprint(get(c, "args")); a != "[rollup]" {
-		t.Errorf("rollup args %s, want [rollup]", a)
-	}
-	env := envOf(c)
-	for name, want := range map[string]string{"ROLLUP_S3_BUCKET": "b", "ROLLUP_S3_REGION": "r",
-		"ROLLUP_RETENTION_DAYS": "15", "ROLLUP_RETENTION_RAW_DAYS": "0"} {
-		if fmt.Sprint(env[name]) != want {
-			t.Errorf("%s = %v, want %q", name, env[name], want)
-		}
-	}
-	if r := secretRef(c, "ROLLUP_POSTGRES_URL"); r != "aintercept-postgres/worker-url" {
-		t.Errorf("ROLLUP_POSTGRES_URL from %q, want the Secret's worker-url", r)
-	}
-	if p := get(c, "readinessProbe", "httpGet", "path"); p != "/healthz" {
-		t.Errorf("rollup readiness %v, want /healthz", p)
-	}
-	if p := get(c, "livenessProbe", "httpGet", "path"); p != "/healthz" {
-		t.Errorf("rollup liveness %v, want /healthz", p)
-	}
-	so := find(docs, "ScaledObject", "rollup")
-	if so == nil {
-		t.Fatal("no rollup ScaledObject")
-	}
-	if m, _ := get(so, "spec", "minReplicaCount").(int); m < 2 {
-		t.Errorf("rollup minReplicaCount %v, want >= 2", get(so, "spec", "minReplicaCount"))
-	}
-	if typ := get(so, "spec", "triggers", "0", "type"); typ != "metrics-api" {
-		t.Errorf("rollup trigger %v, want metrics-api", typ)
-	}
-	if u, _ := get(so, "spec", "triggers", "0", "metadata", "url").(string); !strings.HasSuffix(u, "/lag") {
-		t.Errorf("rollup trigger url %q, want .../lag", u)
-	}
-	if v := get(so, "spec", "triggers", "0", "metadata", "valueLocation"); v != "oldest_unapplied_seconds" {
-		t.Errorf("rollup valueLocation %v, want oldest_unapplied_seconds", v)
-	}
-	if find(docs, "Service", "rollup") == nil {
-		t.Error("no rollup Service for /lag")
-	}
-
-	docs = render(t, "rollup.autoscaling.keda=false")
-	if find(docs, "ScaledObject", "rollup") != nil {
-		t.Error("a ScaledObject with KEDA off")
-	}
-	hpa := find(docs, "HorizontalPodAutoscaler", "rollup")
-	if hpa == nil {
-		t.Fatal("no fallback HPA for the rollup with KEDA off")
-	}
-	if m, _ := get(hpa, "spec", "minReplicas").(int); m < 2 {
-		t.Errorf("rollup HPA minReplicas %v, want >= 2", get(hpa, "spec", "minReplicas"))
-	}
-
-	// Retention (§3.6) and the Secret's name are values.
-	docs = render(t, "retention.days=7", "retention.rawDays=3", "postgres.existingSecret=pg")
-	c = container(docs, "Deployment", "rollup", "rollup")
-	env = envOf(c)
-	if env["ROLLUP_RETENTION_DAYS"] != "7" || env["ROLLUP_RETENTION_RAW_DAYS"] != "3" {
-		t.Errorf("retention env %v %v, want 7 and 3", env["ROLLUP_RETENTION_DAYS"], env["ROLLUP_RETENTION_RAW_DAYS"])
-	}
-	if r := secretRef(c, "ROLLUP_POSTGRES_URL"); r != "pg/worker-url" {
-		t.Errorf("postgres.existingSecret: ROLLUP_POSTGRES_URL from %q, want pg/worker-url", r)
-	}
-}
-
-// v9's workers (docs/PIPELINE.md §2.2): `aintercept worker`, beside rollup
-// until step 8, scaled by KEDA on GET /lag (oldest_unloaded_seconds), with a
-// plain HPA when KEDA is off; the worker login's DSN and the bucket, as their
-// own ServiceAccount. The observer writes the raw files they load, at 8 MiB or
+// The workers (docs/PIPELINE.md §2.2): `aintercept worker`, scaled by KEDA on
+// GET /lag (oldest_unloaded_seconds), with a plain HPA when KEDA is off; the
+// worker login's DSN, the bucket and the retention, as their own
+// ServiceAccount. The observer writes the raw files they load, at 8 MiB or
 // 30 s.
-func TestV9Worker(t *testing.T) {
+func TestWorker(t *testing.T) {
 	docs := render(t)
 	c := container(docs, "Deployment", "worker", "worker")
 	if c == nil {
@@ -188,8 +111,20 @@ func TestV9Worker(t *testing.T) {
 	if v := get(so, "spec", "triggers", "0", "metadata", "valueLocation"); v != "oldest_unloaded_seconds" {
 		t.Errorf("worker valueLocation %v", v)
 	}
-	if find(docs, "Deployment", "rollup") == nil {
-		t.Error("rollup runs beside the worker until step 8")
+	if env["WORKER_RETENTION_DAYS"] != "15" {
+		t.Errorf("WORKER_RETENTION_DAYS = %v, want 15", env["WORKER_RETENTION_DAYS"])
+	}
+	docs = render(t, "retention.days=7", "postgres.existingSecret=pg")
+	c = container(docs, "Deployment", "worker", "worker")
+	if envOf(c)["WORKER_RETENTION_DAYS"] != "7" || secretRef(c, "WORKER_POSTGRES_URL") != "pg/worker-url" {
+		t.Errorf("retention.days and postgres.existingSecret: %v %v", envOf(c)["WORKER_RETENTION_DAYS"], secretRef(c, "WORKER_POSTGRES_URL"))
+	}
+	for _, kind := range []string{"Deployment", "Service", "ScaledObject", "HorizontalPodAutoscaler", "ServiceAccount"} {
+		for _, name := range []string{"rollup", "aintercept-rollup"} {
+			if find(render(t, "rollup.autoscaling.keda=false"), kind, name) != nil {
+				t.Errorf("%s %s: the old workers are gone", kind, name)
+			}
+		}
 	}
 	docs = render(t, "worker.autoscaling.keda=false")
 	if find(docs, "ScaledObject", "worker") != nil || find(docs, "HorizontalPodAutoscaler", "worker") == nil {
@@ -199,8 +134,14 @@ func TestV9Worker(t *testing.T) {
 		t.Error("worker.enabled=false still renders it")
 	}
 	obs := envOf(container(render(t), "Deployment", "envoy", "observer"))
-	if obs["OBSERVER_RAW"] != "true" || obs["OBSERVER_RAW_FLUSH_BYTES"] != "8388608" || obs["OBSERVER_RAW_FLUSH_SECONDS"] != "30" {
-		t.Errorf("observer raw files env: %v %v %v", obs["OBSERVER_RAW"], obs["OBSERVER_RAW_FLUSH_BYTES"], obs["OBSERVER_RAW_FLUSH_SECONDS"])
+	if obs["OBSERVER_RAW_FLUSH_BYTES"] != "8388608" || obs["OBSERVER_RAW_FLUSH_SECONDS"] != "30" {
+		t.Errorf("observer raw files env: %v %v", obs["OBSERVER_RAW_FLUSH_BYTES"], obs["OBSERVER_RAW_FLUSH_SECONDS"])
+	}
+	for _, gone := range []string{"OBSERVER_RAW", "OBSERVER_KEY_FLUSH_BYTES", "OBSERVER_KEY_FLUSH_SECONDS", "OBSERVER_KEY_BUFFER_MAX_BYTES",
+		"OBSERVER_S3_MAX_BYTES", "OBSERVER_S3_MAX_EVENTS"} {
+		if _, ok := obs[gone]; ok {
+			t.Errorf("observer env %s: the old path's", gone)
+		}
 	}
 }
 
@@ -209,7 +150,6 @@ func TestV9Worker(t *testing.T) {
 func TestEachPodGetsOnlyItsOwnDSN(t *testing.T) {
 	docs := render(t, "api.enabled=true", "postgres.inCluster.enabled=true")
 	for _, tc := range []struct{ kind, name, container, want string }{
-		{"Deployment", "rollup", "rollup", "aintercept-postgres/worker-url"},
 		{"Deployment", "worker", "worker", "aintercept-postgres/worker-url"},
 		{"Deployment", "api", "api", "aintercept-postgres/api-url"},
 		{"Deployment", "envoy", "observer", ""},
@@ -247,25 +187,15 @@ func TestObserverHasNoDatabase(t *testing.T) {
 	}
 }
 
-// The API reads Postgres (api.store pg, the default since build step 8); v1
-// (the v5 folders) stays selectable. It gets the API login's DSN either way,
-// and its readiness probe is /status, which reads Postgres.
+// The API reads Postgres, through the API login's DSN, and its readiness probe
+// is /status, which reads Postgres.
 func TestAPIStore(t *testing.T) {
-	for set, want := range map[string]string{"": "pg", "api.store=v1": "v1"} {
-		args := []string{"api.enabled=true"}
-		if set != "" {
-			args = append(args, set)
-		}
-		api := container(render(t, args...), "Deployment", "api", "api")
-		if v := envOf(api)["AINTERCEPT_STORE"]; v != want {
-			t.Errorf("%q: AINTERCEPT_STORE = %v, want %s", set, v, want)
-		}
-		if r := secretRef(api, "AINTERCEPT_PG_DSN"); r != "aintercept-postgres/api-url" {
-			t.Errorf("%q: AINTERCEPT_PG_DSN from %q, want the Secret's api-url", set, r)
-		}
-		if p := get(api, "readinessProbe", "httpGet", "path"); p != "/api/v1/status" {
-			t.Errorf("%q: api readiness %v, want /api/v1/status", set, p)
-		}
+	api := container(render(t, "api.enabled=true"), "Deployment", "api", "api")
+	if r := secretRef(api, "AINTERCEPT_PG_DSN"); r != "aintercept-postgres/api-url" {
+		t.Errorf("AINTERCEPT_PG_DSN from %q, want the Secret's api-url", r)
+	}
+	if p := get(api, "readinessProbe", "httpGet", "path"); p != "/api/v1/status" {
+		t.Errorf("api readiness %v, want /api/v1/status", p)
 	}
 }
 
@@ -312,10 +242,8 @@ func TestPostgresInCluster(t *testing.T) {
 		t.Error("postgres's root filesystem is writable, or it may escalate")
 	}
 	args := fmt.Sprint(get(c, "args"))
-	for _, want := range []string{"max_locks_per_transaction=256", "max_connections=200"} {
-		if !strings.Contains(args, want) {
-			t.Errorf("postgres args %s: want %s", args, want)
-		}
+	if !strings.Contains(args, "max_connections=200") || strings.Contains(args, "max_locks_per_transaction") {
+		t.Errorf("postgres args %s: want max_connections=200 and the default lock table", args)
 	}
 	env := envOf(c)
 	if v, _ := env["POSTGRES_INITDB_ARGS"].(string); !strings.Contains(v, "--locale-provider=builtin") || !strings.Contains(v, "--builtin-locale=C.UTF-8") {
@@ -396,7 +324,7 @@ func TestPostgresInCluster(t *testing.T) {
 	}
 }
 
-// Only the workers (rollup, and v9's worker) and the API may reach the in-cluster Postgres.
+// Only the workers and the API may reach the in-cluster Postgres.
 func TestPostgresNetworkPolicy(t *testing.T) {
 	if find(render(t), "NetworkPolicy", "postgres-restrict") != nil {
 		t.Error("a postgres NetworkPolicy without an in-cluster Postgres")
@@ -412,8 +340,8 @@ func TestPostgresNetworkPolicy(t *testing.T) {
 	for _, f := range asList(get(np, "spec", "ingress", "0", "from")) {
 		apps[get(f, "podSelector", "matchLabels", "app")] = true
 	}
-	if !apps["rollup"] || !apps["worker"] || !apps["api"] || len(apps) != 3 {
-		t.Errorf("postgres admits %v, want exactly rollup, worker and api", apps)
+	if !apps["worker"] || !apps["api"] || len(apps) != 2 {
+		t.Errorf("postgres admits %v, want exactly worker and api", apps)
 	}
 	if p := get(np, "spec", "ingress", "0", "ports", "0", "port"); p != 5432 {
 		t.Errorf("postgres port %v, want 5432", p)
@@ -424,14 +352,14 @@ func TestPostgresNetworkPolicy(t *testing.T) {
 // the workers and the API, which their DSNs name (sslrootcert).
 func TestPostgresCABundle(t *testing.T) {
 	for _, docs := range [][]map[string]any{render(t, "api.enabled=true")} {
-		for _, n := range []string{"rollup", "worker", "api"} {
+		for _, n := range []string{"worker", "api"} {
 			if _, ok := byName(get(find(docs, "Deployment", n), "spec", "template", "spec", "volumes"))["postgres-ca"]; ok {
 				t.Errorf("%s mounts a CA bundle that isn't configured", n)
 			}
 		}
 	}
 	docs := render(t, "api.enabled=true", "postgres.caConfigMap=rds-ca")
-	for _, n := range []string{"rollup", "worker", "api"} {
+	for _, n := range []string{"worker", "api"} {
 		spec := get(find(docs, "Deployment", n), "spec", "template", "spec")
 		if cm := get(byName(get(spec, "volumes"))["postgres-ca"], "configMap", "name"); cm != "rds-ca" {
 			t.Errorf("%s: CA volume from %v, want rds-ca", n, cm)
@@ -443,11 +371,12 @@ func TestPostgresCABundle(t *testing.T) {
 	}
 }
 
-// The old path is gone: no single processor, no bucketed processor, and the API
-// never copies data to local disk (no mirror sidecar, no table volumes).
+// The old path is gone: no single processor, no bucketed processor, no rollup
+// workers, and the API never copies data to local disk (no mirror sidecar, no
+// table or scratch volumes).
 func TestOldPathIsGone(t *testing.T) {
 	docs := render(t, "api.enabled=true")
-	for _, n := range []string{"process", "stream"} {
+	for _, n := range []string{"process", "stream", "rollup"} {
 		if find(docs, "Deployment", n) != nil {
 			t.Errorf("a %s Deployment still exists", n)
 		}
@@ -460,7 +389,7 @@ func TestOldPathIsGone(t *testing.T) {
 		t.Error("the api still has a mirror sidecar")
 	}
 	vols := byName(get(dep, "spec", "template", "spec", "volumes"))
-	for _, v := range []string{"shaped", "db", "work"} {
+	for _, v := range []string{"shaped", "db", "work", "cache"} {
 		if _, ok := vols[v]; ok {
 			t.Errorf("the api still has a %q volume", v)
 		}

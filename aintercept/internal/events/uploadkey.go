@@ -13,9 +13,7 @@ import (
 )
 
 // UploadMinute is the placeholder an object key template carries for the
-// minute the object is uploaded in (ResolveUploadKey). Records files are named
-// by it, because the bucketed processor reads each bucket's files by minute,
-// from its watermark minus a grace window (docs/STREAMING_PIPELINE.md §3.3).
+// minute the object is uploaded in (ResolveUploadKey).
 const UploadMinute = "{upload-minute}"
 
 // ResolveUploadKey fills a key template's UploadMinute with t's UTC minute.

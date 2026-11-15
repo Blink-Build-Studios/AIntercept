@@ -13,9 +13,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from aintercept_api import claude_code as cc
-from aintercept_api.store import Store
-
-BACKGROUND_CLASSES = {"auxiliary", "compaction"}
 
 
 def kind_of(path: str) -> str:
@@ -93,10 +90,6 @@ class Tx:
     def session(self) -> str | None:
         return self.session_id or self.batch_session
 
-    @property
-    def background(self) -> bool:
-        return self.kind in ("count", "analytics") or (self.request_class or "") in BACKGROUND_CLASSES
-
     def detail(self) -> str:
         k = self.kind
         if k == "model":
@@ -140,47 +133,3 @@ def nearest_retry[T](
         if ts <= at <= stop + RETRY_AFTER_NS and (prompt is None or pid in (None, prompt)):
             near.append((abs(at - stop), at, r))
     return min(near, key=lambda x: (x[0], x[1]))[2] if near else None
-
-
-@dataclass
-class Retry:
-    ts: int
-    session_id: str
-    prompt_id: str | None
-    attempt: int | None
-    delay_ms: float | None
-
-
-def retries(store: Store, session_ids: list[str]) -> dict[str, list[Retry]]:
-    """session id -> its tengu_api_retry events, oldest first."""
-    out: dict[str, list[Retry]] = {}
-    for ts, sid, pid, attempt, delay in store.query(
-        """SELECT ts, session_id, json_extract_string(md, '$.cc_prompt_id'),
-                  TRY_CAST(json_extract_string(md, '$.attempt') AS INT),
-                  TRY_CAST(json_extract_string(md, '$.delayMs') AS DOUBLE)
-           FROM cc_events WHERE name = 'tengu_api_retry' AND session_id IN (SELECT unnest(?::VARCHAR[]))
-           ORDER BY ts""",
-        [session_ids],
-    ):
-        out.setdefault(sid, []).append(Retry(ts, sid, pid, attempt, delay))
-    return out
-
-
-def prompt_indexes(store: Store, session_ids: list[str]) -> dict[str, int]:
-    """Prompt id -> the prompt's number in its session: Claude Code's from tengu_input_prompt, a
-    Codex turn's from its place in the thread."""
-    return {
-        pid: idx
-        for pid, idx in store.query(
-            """SELECT json_extract_string(md, '$.cc_prompt_id'),
-                      TRY_CAST(json_extract_string(md, '$.prompt_index') AS INT)
-               FROM cc_events WHERE name = 'tengu_input_prompt' AND session_id IN (SELECT unnest(?::VARCHAR[]))
-               UNION ALL
-               SELECT prompt_id, row_number() OVER (PARTITION BY session_id ORDER BY min(ts), prompt_id)
-               FROM cc_calls WHERE product = 'codex' AND prompt_id IS NOT NULL
-                 AND session_id IN (SELECT unnest(?::VARCHAR[]))
-               GROUP BY session_id, prompt_id""",
-            [session_ids, session_ids],
-        )
-        if pid and idx is not None
-    }

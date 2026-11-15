@@ -1,13 +1,8 @@
 package records
 
 import (
-	"bytes"
-	"compress/gzip"
-	"context"
-	"io"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
@@ -35,9 +30,6 @@ func TestDetailIsTheCallsRows(t *testing.T) {
 		if string(l) != string(line(rows[i])) {
 			t.Fatalf("line %d differs", i)
 		}
-	}
-	if k := DetailKey("p", "d1"); k != "p/calls/d1.ndjson.gz" {
-		t.Fatalf("key %q", k)
 	}
 }
 
@@ -94,75 +86,6 @@ func TestDetailBodiesStopAtTheCap(t *testing.T) {
 	if withBody != 0 || len(got[0].Lines) != len(big)+1 {
 		t.Fatalf("rows %d, with bodies %d", len(got[0].Lines), withBody)
 	}
-}
-
-// The sink writes each detail object once, gzipped, under calls/.
-func TestSinkWritesDetails(t *testing.T) {
-	put := &memPut{}
-	s := NewSink(SinkConfig{Putter: put, Prefix: "p", Incarnation: "i", Details: true, MaxAge: time.Hour,
-		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
-	for _, e := range []events.Event{hdr("c1", true, ccHeaders), complete("c1", ccClient)} {
-		s.Emit(e)
-	}
-	if err := s.Flush(); err != nil {
-		t.Fatal(err)
-	}
-	b, ok := put.objs["p/calls/c1.ndjson.gz"]
-	if !ok {
-		t.Fatalf("no detail object among %d", len(put.objs))
-	}
-	zr, err := gzip.NewReader(bytes.NewReader(b))
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, _ := io.ReadAll(zr)
-	if n := strings.Count(string(raw), "\n"); n != 2 {
-		t.Fatalf("%d lines", n)
-	}
-}
-
-// canon writes the same detail objects as the live sink.
-func TestCanonWritesTheSameDetails(t *testing.T) {
-	rows := sampleRows()
-	live := &memPut{}
-	s := NewSink(SinkConfig{Putter: live, Prefix: "p", Incarnation: "i", Details: true, MaxAge: time.Hour,
-		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }})
-	for _, e := range rows {
-		s.Emit(e)
-	}
-	s.Flush()
-	dir := t.TempDir()
-	writeRaw(t, dir, rows, 4)
-	off := &memPut{}
-	if _, err := CanonDirWith(context.Background(), dir, off, "p", CanonOptions{Details: true}); err != nil {
-		t.Fatal(err)
-	}
-	n := 0
-	for k, v := range live.objs {
-		if !strings.HasPrefix(k, "p/calls/") {
-			continue
-		}
-		n++
-		if !bytes.Equal(gunzip(t, off.objs[k]), gunzip(t, v)) {
-			t.Errorf("%s differs", k)
-		}
-	}
-	if n < 3 {
-		t.Fatalf("%d detail objects", n)
-	}
-}
-
-func gunzip(t *testing.T, b []byte) []byte {
-	t.Helper()
-	if b == nil {
-		return nil
-	}
-	zr, err := gzip.NewReader(bytes.NewReader(b))
-	if err != nil {
-		t.Fatal(err)
-	}
-	out, _ := io.ReadAll(zr)
-	return out
 }
 
 // A row after the call ended (a disconnect after its complete) isn't added to

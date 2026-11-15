@@ -480,7 +480,7 @@ func TestReloadAndShuffleGiveIdenticalTables(t *testing.T) {
 			t.Errorf("seed %d: shuffled order gave other tables:\n got %v\nwant %v", seed, got, want)
 		}
 	}
-	if n := count(t, db, "session_parents"); n != 1 {
+	if n := count(t, db, "session_edges"); n != 1 {
 		t.Errorf("%d session parents, want the Codex subagent's", n)
 	}
 }

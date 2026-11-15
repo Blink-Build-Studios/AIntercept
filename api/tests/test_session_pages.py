@@ -1,12 +1,10 @@
-"""The session pages on v9 (docs/PIPELINE.md §6.1), side by side with the oracle: today's session code over
-the oracle's tables.
+"""The session pages (docs/PIPELINE.md §6.1): /sessions/{id} and its five tabs, from the facts and rollups
+through a few indexed statements (sessionpages.py).
 
-Each dataset sits in a fresh Postgres holding v7's tables and v9's (conftest.PgDataset, as test_drawer.py's
-do). The API's Postgres store serves /sessions/{id} and its five tabs from v9's facts and rollups through
-a few indexed statements (sessionpages.py); the oracle derives them from the whole session. Every response
-must be the same data, for every session of every dataset, at the URLs the pages are read with: the
-defaults, a range, pages past the first, each filter and `q`, a prompt number, both orders, and bins under
-an hour and over one."""
+Each dataset sits in a fresh Postgres (conftest.PgDataset, as test_drawer.py's do). Across the datasets
+the pages show every shape they have, and each page reads cells or a page of rows, through an index,
+whatever the session's size, at the URLs the pages are read with: the defaults, a range, pages past the
+first, each filter and `q`, a prompt number, both orders, and bins under an hour and over one."""
 
 import contextlib
 import pathlib
@@ -20,7 +18,7 @@ from aintercept_api.timeutil import ns_to_dt
 from tests.builders import Codex, Dataset, end_batches
 from tests.conftest import PgDataset, pg_admin
 from tests.test_codex import codex_work
-from tests.test_drawer import SIDES, Side, _first_diff
+from tests.test_drawer import SIDES, Side
 
 PAGES = ("", "/timeline", "/state", "/prompts", "/requests", "/events")
 
@@ -84,7 +82,7 @@ def sides(tmp_path_factory) -> Iterator[dict[str, Side]]:
 
 
 def session_ids(side: Side) -> list[str]:
-    """Every session: the oracle's, and every one v9 holds a row for."""
+    """Every session: every one with a row, and every one an event names."""
     held = {s for (s,) in side.query("SELECT session_id FROM sessions")}
     held |= {s for (s,) in side.query("SELECT DISTINCT session_id FROM events WHERE session_id <> ''")}
     return sorted(held)
@@ -141,32 +139,6 @@ def session_urls(side: Side, sid: str) -> list[str]:
             f"{base}/events?{brush}&pageSize=5&page=2",
         ]
     return urls
-
-
-def _hold(side: Side, urls: list[str]) -> Counter[str]:
-    held: Counter[str] = Counter()
-    differing = []
-    for url in urls:
-        a, b = side.old.get(url), side.new.get(url)
-        if a.status_code == b.status_code and a.json() == b.json():
-            held["same"] += 1
-        else:
-            differing.append((url, a.status_code, b.status_code, _first_diff(a.json(), b.json())))
-    for d in differing:
-        print("DIFF", d)  # noqa: T201
-    assert not differing, (side.name, len(differing), differing[:4])
-    return held
-
-
-@pytest.mark.parametrize("name", list(DATASETS))
-def test_the_session_pages_match_the_oracle(sides, name):
-    side = sides[name]
-    sids = session_ids(side)
-    assert sids, name
-    urls = [u for sid in sids for u in session_urls(side, sid)] + ["/api/v1/sessions/no-such-session"]
-    held = _hold(side, urls)
-    print(f"{name}: {len(sids)} sessions, {len(urls)} URLs:", dict(held))  # noqa: T201
-    assert held["same"] == len(urls)
 
 
 def test_the_cases_are_all_there(sides):

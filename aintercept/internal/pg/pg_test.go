@@ -1,94 +1,10 @@
 package pg
 
 import (
-	"flag"
-	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
-
-var update = flag.Bool("update", false, "rewrite schema.sql from Tables")
-
-// TestSchemaFile holds schema.sql to Tables: the embedded file is exactly what
-// the Go row types generate, so a column added to a row type can't be missing
-// from Postgres. `go test ./internal/pg -run TestSchemaFile -update` rewrites it.
-func TestSchemaFile(t *testing.T) {
-	want := DDL()
-	if *update {
-		if err := os.WriteFile("schema.sql", []byte(want), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	if Schema != want {
-		t.Fatal("schema.sql is stale: go test ./internal/pg -run TestSchemaFile -update")
-	}
-}
-
-func TestSchemaShape(t *testing.T) {
-	cases := []struct {
-		table string
-		cols  []string // some of its columns, in order
-		pk    string
-	}{
-		// A stored input: (key, id bytea), then the state row's columns; a pick flattened.
-		{"dim_account_events", []string{"key", "id", "account_id", "org", "org_ns", "plan_v", "plan_ts", "plan_ok"}, "key, id"},
-		// A nested request row: row_<column>.
-		{"request_txs", []string{"key", "id", "call_id", "correlation_id", "key_hash", "own_session", "prompt_id"}, "key, id"},
-		{"request_missed", []string{"session_id", "event_key", "req_id", "client_req_id", "row_person_id", "row_request_id"}, "key, id"},
-		// The Requests tab's rows: the API's flat columns.
-		{"session_request_rows", []string{"scope_session_id", "seq", "person_id", "request_id", "ts_ns"}, "scope_session_id, seq"},
-		// Rendered rows keep today's columns, and their extras come last.
-		{"session_rows", []string{"session_id", "start_ns", "last_ns", "product", "agent", "client"}, "session_id"},
-		{"event_rows", []string{"session_id", "seq", "event_id"}, "session_id, seq"},
-		{"call_tool_uses", []string{"session_id", "ts_ns", "kind", "server", "tool"}, "session_id, ts_ns, kind, server, tool"},
-	}
-	for _, c := range cases {
-		tb := TableNamed(c.table)
-		if tb == nil {
-			t.Fatalf("no table %s", c.table)
-		}
-		var names []string
-		for _, col := range tb.Columns {
-			names = append(names, col.Name)
-		}
-		joined := strings.Join(names, ",")
-		if !strings.Contains(joined, strings.Join(c.cols, ",")) {
-			t.Errorf("%s: columns %s, want them to include %v in order", c.table, joined, c.cols)
-		}
-		if got := strings.Join(tb.PK, ", "); got != c.pk {
-			t.Errorf("%s: primary key (%s), want (%s)", c.table, got, c.pk)
-		}
-	}
-	for _, x := range []struct{ table, col string }{
-		{"session_rows", "title"},      // parquet "-"
-		{"call_tool_uses", "call_id"},  // the state's, not the API's
-		{"fact_pending", "start_ns"},   // not stored: the drawer 404s for a call in flight
-		{"batch_members", "event_key"}, // batch parts instead
-	} {
-		if tb := TableNamed(x.table); tb != nil {
-			if _, ok := tb.Column(x.col); ok {
-				t.Errorf("%s has %s", x.table, x.col)
-			}
-		}
-	}
-	extras := map[string][]string{
-		"session_rows": {"own_title", "prompt_last_ns", "key_day"},
-		"event_rows":   {"batch"},
-	}
-	for table, cols := range extras {
-		tb := TableNamed(table)
-		n := len(tb.Columns)
-		for i, c := range cols {
-			if got := tb.Columns[n-len(cols)+i]; got.Name != c || got.Field != nil {
-				t.Errorf("%s: extra %d is %s (field %v), want %s", table, i, got.Name, got.Field, c)
-			}
-		}
-	}
-}
 
 func TestParseConfigAppliesKeepalives(t *testing.T) {
 	cases := []struct {
@@ -138,10 +54,3 @@ func TestLoginsSQLFillsPasswords(t *testing.T) {
 // precomputed (/events/{id} reads drawer_events, a batch's other keys come
 // from batch_parts), so writing them only cost the database its largest
 // table (docs/PIPELINE.md §3.4).
-func TestFactEventsAreNotStored(t *testing.T) {
-	for _, tb := range Tables {
-		if tb.Name == "analytics" || tb.State == state.TableFactEvents {
-			t.Errorf("table %s stores %s", tb.Name, state.TableFactEvents)
-		}
-	}
-}

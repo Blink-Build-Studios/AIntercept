@@ -36,14 +36,20 @@ func (m *memberLog) Write(b []byte) error {
 }
 
 func rawSink(t *testing.T, raw *memberLog) *Sink {
-	return NewSink(SinkConfig{Putter: &memPut{}, Prefix: "p", Incarnation: "pod-a-1-ab", MaxAge: time.Hour,
-		KeySpoolDir: t.TempDir(), Raw: raw, Now: func() time.Time { return t1 }})
+	return NewSink(SinkConfig{Incarnation: "pod-a-1-ab", MaxAge: time.Hour, Raw: raw, Now: func() time.Time { return t1 }})
 }
 
 func TestRawFileHoldsEveryRecordTheSinkWrites(t *testing.T) {
 	raw := &memberLog{}
 	s := rawSink(t, raw)
-	put := s.cfg.Putter.(*memPut)
+	// What the sink's assembler makes of the same rows.
+	a := NewAssembler("pod-a-1-ab")
+	var want []Record
+	for _, e := range sampleRows() {
+		l, _ := json.Marshal(e.WithoutContent())
+		want = append(want, a.Apply(&e, l, "")...)
+	}
+	want = append(want, a.Flush()...)
 	for _, e := range sampleRows() {
 		if err := s.Emit(e); err != nil {
 			t.Fatal(err)
@@ -56,7 +62,6 @@ func TestRawFileHoldsEveryRecordTheSinkWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := put.records(t)
 	if len(got) == 0 || !reflect.DeepEqual(ids(got), ids(want)) {
 		t.Fatalf("the raw file's records %v, the sink's %v", ids(got), ids(want))
 	}

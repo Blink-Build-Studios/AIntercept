@@ -574,21 +574,15 @@ you can see exactly what enforcing would do.
 **Where verdicts are recorded:**
 - **Your own logs and metrics.** Log every non-Allow verdict with the
   `call_id`.
-- **AIntercept's raw stream.** Every non-Allow verdict, and every failure, is a
-  row with `"phase": "verdict"`, keyed by `correlation_id` (your `call_id`):
-  `callback`, `action`, `applied`, `mode`, `reason`, `annotations` and
-  `latency_ms`. The rows are in the object store under
-  `<prefix>/dt=YYYY-MM-DD/hour=HH/instance=<observer>/*.ndjson.gz`. For
-  example, with DuckDB:
-
-  ```sql
-  SELECT verdict.action, verdict.callback, count(*)
-  FROM read_json_auto('s3://<bucket>/<prefix>/dt=2026-11-10/**/*.ndjson.gz')
-  WHERE phase = 'verdict' GROUP BY ALL ORDER BY 3 DESC;
-  ```
-
+- **The observer's event stream.** Every non-Allow verdict, and every failure,
+  is a row with `"phase": "verdict"`, keyed by `correlation_id` (your
+  `call_id`): `callback`, `action`, `applied`, `mode`, `reason`, `annotations`
+  and `latency_ms`. The rows are in the observer's event output: its stdout
+  (one JSON row per line) and, when `OBSERVER_CAPTURE_FILE` is set, that file.
   Join to the call's other rows on `correlation_id`. Its `complete` row has the
-  host, path, model, client, identity and tokens.
+  host, path, model, client, identity and tokens. The call itself, with its
+  rows, is also in the raw files in the object store (`<prefix>/raw/`, gzip
+  NDJSON: lines starting `{"record":` are records, the rest are rows).
 - **`CallRecord.verdicts`.** Your own `OnCallComplete` receives them.
 
 **What to look for before enforcing:**

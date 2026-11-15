@@ -71,8 +71,6 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels: { app: rollup }
-        - podSelector:
             matchLabels: { app: worker }
         - podSelector:
             matchLabels: { app: api }

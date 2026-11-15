@@ -1,7 +1,7 @@
 {{- /*
 The observer container and its volumes, part of the Envoy pod: each ingress pod
 is the whole ingest stack, Envoy and the observer together, scaled as one
-(docs/STREAMING_PIPELINE.md, phase 1).
+(docs/PIPELINE.md §1).
 */ -}}
 {{- define "aintercept.spoolMaxBytes" -}}
 {{- $spool := .Values.observer.spool | default dict -}}
@@ -21,16 +21,11 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     - { name: OBSERVER_LOG_LEVEL, value: {{ .Values.observer.logLevel | default "info" | quote }} }
     # The preStop hook orders shutdown (Envoy exits first), so no delay.
     - { name: OBSERVER_SHUTDOWN_DELAY_SECONDS, value: "0" }
-    # ── The writer's spool (docs/STREAMING_PIPELINE.md, phase 1) ──
+    # ── The writer's spool (docs/PIPELINE.md §2.1) ──
     - { name: OBSERVER_SPOOL_DIR, value: /spool }
     - { name: OBSERVER_SPOOL_MAX_BYTES, value: {{ include "aintercept.spoolMaxBytes" . | quote }} }
-    # Per-key ingest buffers (docs/PIPELINE.md §1). Ingest has no Redis or Postgres:
-    # the workers' tail reads the recent index it writes to the bucket.
-    - { name: OBSERVER_KEY_FLUSH_BYTES, value: {{ .Values.observer.keyBuffers.flushBytes | int | quote }} }
-    - { name: OBSERVER_KEY_FLUSH_SECONDS, value: {{ .Values.observer.keyBuffers.flushSeconds | int | quote }} }
-    - { name: OBSERVER_KEY_BUFFER_MAX_BYTES, value: {{ .Values.observer.keyBuffers.maxBytes | int64 | quote }} }
-    # v9's raw files (docs/PIPELINE.md §2.1), beside the per-key files until step 8.
-    - { name: OBSERVER_RAW, value: {{ .Values.observer.rawFiles.enabled | quote }} }
+    # The raw files (docs/PIPELINE.md §2.1). Ingest has no Postgres: the workers
+    # list the files it writes to the bucket.
     - { name: OBSERVER_RAW_FLUSH_BYTES, value: {{ .Values.observer.rawFiles.flushBytes | int | quote }} }
     - { name: OBSERVER_RAW_FLUSH_SECONDS, value: {{ .Values.observer.rawFiles.flushSeconds | int | quote }} }
     - { name: OBSERVER_CLIENT_IP_HEADERS, value: {{ .Values.observer.clientIPHeaders | default list | join "," | quote }} }
@@ -79,8 +74,6 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     {{- end }}
     {{- end }}
     - { name: OBSERVER_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
-    - { name: OBSERVER_S3_MAX_BYTES, value: {{ .Values.objectStore.maxBytes | quote }} }
-    - { name: OBSERVER_S3_MAX_EVENTS, value: {{ .Values.objectStore.maxEvents | quote }} }
     - { name: OBSERVER_S3_MAX_AGE_SECONDS, value: {{ .Values.objectStore.maxAgeSeconds | quote }} }
     {{- if .Values.objectStore.endpoint }}
     - { name: OBSERVER_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }

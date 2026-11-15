@@ -10,7 +10,8 @@ import json
 import pathlib
 
 from aintercept_api.app import create_app
-from tests.conftest import SAMPLES_DIR, bounded_store
+from aintercept_api.openapi import NoStore
+from tests.conftest import SAMPLES_DIR
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 MANIFEST = json.loads((REPO / "docs" / "ui" / "requirements.json").read_text())
@@ -18,7 +19,7 @@ BY_PATH = {e["path"]: e for e in MANIFEST["endpoints"]}
 
 
 def implemented(tmp_path) -> dict[str, dict]:
-    spec = create_app(store=bounded_store(tmp_path)).openapi()
+    spec = create_app(store=NoStore()).openapi()
     return {path: ops["get"] for path, ops in spec["paths"].items() if "get" in ops}
 
 

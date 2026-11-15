@@ -2,7 +2,7 @@
 rollups through a few indexed statements in the request's snapshot, and shaped by today's code.
 
 - /sessions/{id}: its `sessions` row. What a page computes from the stored values: the agent, bypass %,
-  live, Codex's limits (agents.codex_limits of the stored headers), the children (`session_parents`,
+  live, Codex's limits (agents.codex_limits of the stored headers), the children (`session_edges`,
   §5.4) and the label (its own title, else the earliest title call of its accounts 0–5 minutes after
   its start).
 - /timeline: the model-call and analytics lanes from `session_minutes` (bins under an hour) or
@@ -197,7 +197,7 @@ def needs_title(s: Row) -> bool:
 
 
 def children_json(sid: str, kids: list[Row]) -> str | None:
-    """A session's children (§5.4) from its `session_parents` rows (_CHILDREN's), as today's row has them."""
+    """A session's children (§5.4) from its `session_edges` rows (_CHILDREN's), as today's row has them."""
     mine = [k for k in kids if k["kind"] in ("subagent", "review") and k["parent"] == sid]
     if not mine:
         return None
@@ -246,7 +246,7 @@ _SESSION = "SELECT * FROM sessions WHERE session_id = %(sid)s"
 # has it (its least kind and parent over all its lineage), a subagent's or a review's.
 _CHILDREN = """SELECT p.child_session_id AS sid, min(a.kind) AS kind, min(a.parent_session_id) AS parent,
     min(a.first_ns) AS first_ns
-FROM session_parents p JOIN session_parents a ON a.child_session_id = p.child_session_id
+FROM session_edges p JOIN session_edges a ON a.child_session_id = p.child_session_id
 WHERE p.parent_session_id = %(sid)s GROUP BY p.child_session_id"""
 # The label's title call (§6.1): a Codex thread with no title of its own takes the earliest title call
 # of its accounts in its first five minutes, of a thread with no visible call (a title thread's).

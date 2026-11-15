@@ -31,36 +31,3 @@ func TestRoutingKey(t *testing.T) {
 		}
 	}
 }
-
-// The bucket function is shared with the API (Python): these vectors pin it.
-func TestBucketVectors(t *testing.T) {
-	for key, want := range map[string]int{"": 50, "s:s1": 37, "c:k:2026-11-12": 60, "a:a1": 5} {
-		if got := BucketOf(key, DefaultBucketBits); got != want {
-			t.Errorf("BucketOf(%q) = %d, want %d", key, got, want)
-		}
-	}
-	for i := 0; i < 1000; i++ {
-		if b := BucketOf(string(rune('a'+i%26))+string(rune(i)), DefaultBucketBits); b < 0 || b >= 1<<DefaultBucketBits {
-			t.Fatalf("bucket %d out of range", b)
-		}
-	}
-}
-
-// One more hash bit splits each bucket in two, never reshuffling keys.
-func TestBucketsSplitCleanly(t *testing.T) {
-	for i := 0; i < 2000; i++ {
-		k := "s:" + string(rune(i)) + "x"
-		if BucketOf(k, 7)>>1 != BucketOf(k, 6) {
-			t.Fatalf("%q: 7-bit bucket %d isn't a half of 6-bit bucket %d", k, BucketOf(k, 7), BucketOf(k, 6))
-		}
-	}
-}
-
-func TestObjectKey(t *testing.T) {
-	at := time.Date(2026, 11, 12, 9, 7, 31, 0, time.UTC)
-	got := ObjectKey("ailogger", 5, at, "pod-1-ab", 42)
-	want := "ailogger/records/v1/bucket=05/minute=2026-11-12T09:07/pod-1-ab-000000000042.parquet"
-	if got != want {
-		t.Fatalf("%q, want %q", got, want)
-	}
-}

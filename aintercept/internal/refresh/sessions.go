@@ -7,7 +7,7 @@ package refresh
 // (process/promptrows.go rows) mean. Values a page computes from the stored
 // ones aren't stored: the agent (from product), bypass % (queries, bypassed),
 // durations (from their times), live, the label (§6.1) and the children
-// (session_parents, §5.4).
+// (session_edges, §5.4).
 
 // newestCall is the session's call c (cond) first by order (a SQL ORDER BY
 // over c): an index scan of the session's calls by time from either end. A

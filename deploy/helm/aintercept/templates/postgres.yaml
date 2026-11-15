@@ -50,7 +50,7 @@ spec:
         - name: postgres
           image: {{ include "aintercept.image" .Values.images.postgres }}
           imagePullPolicy: IfNotPresent
-          args: ["-c", "max_locks_per_transaction=256", "-c", "max_connections=200"]
+          args: ["-c", "max_connections=200"]
           env:
             - { name: POSTGRES_USER, value: postgres }
             - { name: POSTGRES_DB, value: aintercept }

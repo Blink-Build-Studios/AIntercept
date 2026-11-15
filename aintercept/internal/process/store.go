@@ -25,20 +25,16 @@ type Object struct {
 	Size int64
 }
 
-// Store is where raw partitions are read from and shaped tables written to: a
-// local directory or an S3-compatible bucket. Keys are slash-separated.
+// Store is where the workers list and read the raw files: a local directory or
+// an S3-compatible bucket. Keys are slash-separated.
 type Store interface {
 	List(ctx context.Context, prefix string) ([]Object, error)
 	// ListDirs returns the folders directly under prefix (which ends in "/"),
 	// each as a prefix ending in "/".
 	ListDirs(ctx context.Context, prefix string) ([]string, error)
-	// ListAfter returns the objects directly under prefix (a folder, ending in
-	// "/") whose keys sort after `after` (empty: all), in key order.
-	ListAfter(ctx context.Context, prefix, after string) ([]Object, error)
 	Get(ctx context.Context, key string) ([]byte, error)
 	// Put writes the whole object at once; readers never see a partial one.
 	Put(ctx context.Context, key string, b []byte) error
-	Delete(ctx context.Context, key string) error
 }
 
 // ErrNotFound is returned by Get for a missing key.
