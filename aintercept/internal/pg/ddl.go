@@ -1,9 +1,16 @@
 package pg
 
 import (
+	_ "embed"
 	"fmt"
 	"strings"
 )
+
+// factsSQL is the v9 fact tables (docs/PIPELINE.md §3), hand-written: DDL
+// appends it to the generated tables.
+//
+//go:embed facts.sql
+var factsSQL string
 
 // sections head each kind of table in schema.sql.
 var sections = map[Kind]string{
@@ -13,11 +20,12 @@ var sections = map[Kind]string{
 	Fold:         "§3.4-3.5, §3.7 Batch parts, the directory folds and the request drawer.",
 }
 
-// DDL is the schema as schema.sql holds it, generated from Tables.
+// DDL is the schema as schema.sql holds it: generated from Tables, then facts.sql.
 func DDL() string {
 	var b strings.Builder
 	b.WriteString(`-- The v7 schema (docs/PIPELINE.md §3). GENERATED from internal/pg/tables.go by
--- ` + "`go test ./internal/pg -run TestSchemaFile -update`" + `; do not edit. Applied by pg.Apply to an
+-- ` + "`go test ./internal/pg -run TestSchemaFile -update`" + `, then internal/pg/facts.sql
+-- verbatim; do not edit (edit facts.sql). Applied by pg.Apply to an
 -- empty database, which records this file's hash (SchemaHash) in schema_version. There are no
 -- migrations: a change to this file means a fresh database.
 `)
@@ -62,5 +70,6 @@ func DDL() string {
 			b.WriteString(t.Seed + ";\n")
 		}
 	}
+	b.WriteString("\n" + factsSQL)
 	return b.String()
 }

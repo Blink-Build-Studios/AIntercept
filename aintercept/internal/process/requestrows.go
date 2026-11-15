@@ -1126,6 +1126,10 @@ func usageMissing(t *rowCall) *string {
 	return ptr("streamCut")
 }
 
+// RequestKind is a request's channel by its path, as the Requests tab's filter
+// has it (kindOf). The v9 flush stores it at insert (docs/PIPELINE.md §3.1).
+func RequestKind(path string) string { return kindOf(path) }
+
 // kindOf is a request's channel, by its path (Codex's: model, analytics, metrics,
 // usage, catalog; Claude Code's: model, count, analytics, flags, account).
 func kindOf(path string) string {

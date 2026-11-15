@@ -63,6 +63,67 @@ type CanonOptions struct {
 
 // CanonDirWith is CanonDir with options.
 func CanonDirWith(ctx context.Context, dir string, put Putter, prefix string, opt CanonOptions) (Stats, error) {
+	pods, byPod, err := podFiles(dir)
+	if err != nil {
+		return Stats{}, err
+	}
+	st := Stats{Cases: map[string]int64{}}
+	for _, pod := range pods {
+		if err := canonPod(ctx, pod, byPod[pod], put, prefix, &st, opt); err != nil {
+			return st, err
+		}
+	}
+	return st, nil
+}
+
+// CanonDirRecords is CanonDir without a sink: each pod's files in order
+// through one assembler, as CanonDir reads them, handing the records each row
+// completes to emit (canon -load inserts them into Postgres).
+func CanonDirRecords(ctx context.Context, dir string, emit func([]Record) error) (Stats, error) {
+	pods, byPod, err := podFiles(dir)
+	if err != nil {
+		return Stats{}, err
+	}
+	st := Stats{Cases: map[string]int64{}}
+	for _, pod := range pods {
+		asm := NewAssembler("canon-" + pod)
+		var emitErr error
+		out := func(rs []Record) {
+			if emitErr == nil && len(rs) > 0 {
+				emitErr = emit(rs)
+			}
+		}
+		for _, f := range byPod[pod] {
+			if err := ctx.Err(); err != nil {
+				return st, err
+			}
+			n, bad, err := readRaw(f, func(e *events.Event, line []byte) { out(asm.Apply(e, line, "")) })
+			if err != nil {
+				return st, fmt.Errorf("%s: %w", f, err)
+			}
+			if emitErr != nil {
+				return st, emitErr
+			}
+			st.Files++
+			st.Rows += n
+			st.Bad += bad
+		}
+		out(asm.Flush())
+		if emitErr != nil {
+			return st, emitErr
+		}
+		for c, n := range asm.Cases() {
+			st.Cases[c] += n
+		}
+		st.Records += asm.seq
+	}
+	return st, nil
+}
+
+// podFiles is a directory's raw files by pod (…/instance=<pod>/…), each pod's
+// in upload order (a file is named by its batch start time and sequence), and
+// the pods sorted.
+func podFiles(dir string) ([]string, map[string][]string, error) {
 	byPod := map[string][]string{}
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".ndjson.gz") {
@@ -78,23 +139,15 @@ func CanonDirWith(ctx context.Context, dir string, put Putter, prefix string, op
 		return nil
 	})
 	if err != nil {
-		return Stats{}, err
+		return nil, nil, err
 	}
-	st := Stats{Cases: map[string]int64{}}
 	pods := make([]string, 0, len(byPod))
-	for p := range byPod {
+	for p, files := range byPod {
 		pods = append(pods, p)
+		sort.Slice(files, func(i, j int) bool { return filepath.Base(files[i]) < filepath.Base(files[j]) })
 	}
 	sort.Strings(pods)
-	for _, pod := range pods {
-		files := byPod[pod]
-		// Upload order: a file is named by its batch start time and sequence.
-		sort.Slice(files, func(i, j int) bool { return filepath.Base(files[i]) < filepath.Base(files[j]) })
-		if err := canonPod(ctx, pod, files, put, prefix, &st, opt); err != nil {
-			return st, err
-		}
-	}
-	return st, nil
+	return pods, byPod, nil
 }
 
 func canonPod(ctx context.Context, pod string, files []string, put Putter, prefix string, st *Stats, opt CanonOptions) error {
