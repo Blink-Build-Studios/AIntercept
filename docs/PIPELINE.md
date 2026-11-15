@@ -76,6 +76,12 @@ it completes, `client_event` (one per analytics event), `account` and
   members back to back; any gzip reader reads the whole file). So one call's
   data is addressable as (file, byte offset, length) and the drawer fetches it
   with one ranged GET.
+- **Lines:** a record is `{"record":…}`; any other line is a row as the raw
+  log has it. A completed call's member holds its call records, then its rows;
+  the other records (starts, events, sightings) go in members of their own.
+  The path's date and hour are when the file was uploaded (the writer names it
+  at each upload attempt), so a file that waited out a store outage lands
+  where the lister still looks.
 - **Full mode** writes the bodies; **content-free mode** doesn't. One stream
   either way.
 

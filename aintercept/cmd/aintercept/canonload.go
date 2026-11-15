@@ -9,12 +9,16 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/flush"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/ingest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
@@ -38,6 +42,13 @@ func canonLoad(src, dsn string, shuffle int64) {
 	defer db.Close()
 	if err := pg.Apply(ctx, db); err != nil {
 		fatalf("load: %v", err)
+	}
+	if fi, err := os.Stat(filepath.Join(src, "raw")); err == nil && fi.IsDir() {
+		if shuffle != 0 {
+			fatalf("load: -shuffle reads observer files, not raw files")
+		}
+		rawLoad(ctx, db, src, start)
+		return
 	}
 	var flushes int64
 	var flushTime time.Duration
@@ -166,4 +177,97 @@ func readPart(p string) ([]records.Record, error) {
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// rawLoad loads a directory of v9 raw files (<src>/raw/…) as the workers do
+// (docs/PIPELINE.md §2.2): listed into ingest_files, then each file loaded in
+// one transaction, four at a time.
+func rawLoad(ctx context.Context, db *pgxpool.Pool, src string, start time.Time) {
+	store := process.DirStore{Root: src}
+	listed, _, err := ingest.List(ctx, db, store, "")
+	if err != nil {
+		fatalf("load: list: %v", err)
+	}
+	var (
+		mu     sync.Mutex
+		loaded int
+		first  error
+		wg     sync.WaitGroup
+	)
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				key, err := ingest.LoadOne(ctx, db, store)
+				mu.Lock()
+				if err != nil && first == nil {
+					first = err
+				}
+				if key != "" {
+					loaded++
+				}
+				stop := err != nil || key == "" || first != nil
+				mu.Unlock()
+				if stop {
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if first != nil {
+		fatalf("load: %v", first)
+	}
+	fmt.Printf("load: %d raw files listed, %d loaded, %.1fs\n", listed, loaded, time.Since(start).Seconds())
+	if err := summarize(ctx, db); err != nil {
+		fatalf("load: %v", err)
+	}
+}
+
+// canonRaw is `aintercept canon -raw <dir>`: the capture's rows through the
+// observer's assembler and its writer (a members stream per pod, sealed at
+// 8 MiB), as v9 raw files under dir/raw/ (docs/PIPELINE.md §2.1).
+func canonRaw(src, out string) {
+	start := time.Now()
+	spool, err := os.MkdirTemp("", "aintercept-raw-spool-")
+	if err != nil {
+		fatalf("raw: %v", err)
+	}
+	defer os.RemoveAll(spool)
+	target, err := events.NewDirTarget("local", out)
+	if err != nil {
+		fatalf("raw: %v", err)
+	}
+	w, err := events.NewWriter(events.WriterConfig{SpoolDir: spool, SkipFsync: true, Targets: []events.Target{target},
+		NewTicker: func(time.Duration) (<-chan time.Time, func()) { return nil, func() {} }}) // sealed by size and at the end
+	if err != nil {
+		fatalf("raw: %v", err)
+	}
+	streams := map[string]*events.Stream{}
+	last := ""
+	st, err := records.CanonDirRaw(context.Background(), src, func(pod string) records.RawWriter {
+		s := streams[pod]
+		if s == nil {
+			if last != "" { // pods come one after another: seal the last one's file
+				if err := w.Flush(); err != nil {
+					fatalf("raw: %v", err)
+				}
+			}
+			last = pod
+			s = w.NewStream(events.StreamConfig{Target: "local", Key: records.RawKey("", pod), Members: true, AtUpload: true,
+				ContentType: "application/gzip", MaxBytes: 8 << 20, MaxAge: 30 * time.Second})
+			streams[pod] = s
+		}
+		return s
+	})
+	if err != nil {
+		fatalf("raw: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		fatalf("raw: %v", err)
+	}
+	ws := w.Stats()
+	fmt.Printf("raw: %d files, %d rows (%d bad), %d records, %d pods, %d raw files, %.1fs\n",
+		st.Files, st.Rows, st.Bad, st.Records, len(streams), ws.Uploads, time.Since(start).Seconds())
 }

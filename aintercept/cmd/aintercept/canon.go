@@ -24,20 +24,26 @@ import (
 // the live observer runs. With -verify it also checks, on the same rows, that
 // the records equal today's processor's request and event rows, and that the
 // live sink's records equal canon's. With -load it writes the records to
-// Postgres instead (canonload.go).
+// Postgres instead (canonload.go); a directory of v9 raw files (raw/…) is
+// loaded as the workers load them. With -raw it writes v9 raw files.
 func canonCmd() {
 	fs := flag.NewFlagSet("canon", flag.ExitOnError)
-	src := fs.String("src", "", "a directory of raw observer files (…/instance=<pod>/<file>.ndjson.gz)")
+	src := fs.String("src", "", "a directory of raw observer files (…/instance=<pod>/<file>.ndjson.gz), or with -load of v9 raw files (raw/…)")
 	out := fs.String("out", "", "the directory to write records to (records/v1/…); empty: don't write")
 	verify := fs.Bool("verify", false, "compare with today's processor and with the live sink, on the same rows")
 	content := fs.Bool("content", false, "the rows carry bodies (a full-interception capture/ prefix)")
 	details := fs.Bool("details", false, "also write each call's detail object (calls/<id>.ndjson.gz)")
 	load := fs.String("load", "", "a Postgres URL: write the records to the v9 fact tables (docs/PIPELINE.md §4) instead")
 	shuffle := fs.Int64("shuffle", 0, "with -load: write the records in a random order from this seed (the order-independence gate)")
+	raw := fs.String("raw", "", "a directory: write the capture there as v9 raw files (raw/…, docs/PIPELINE.md §2.1), through the observer's writer, instead")
 	fs.Parse(os.Args[2:])
 	if *src == "" {
 		fs.Usage()
 		os.Exit(2)
+	}
+	if *raw != "" {
+		canonRaw(*src, *raw)
+		return
 	}
 	if *load != "" {
 		canonLoad(*src, *load, *shuffle)

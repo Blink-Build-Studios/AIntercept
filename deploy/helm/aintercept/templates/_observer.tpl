@@ -29,6 +29,10 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     - { name: OBSERVER_KEY_FLUSH_BYTES, value: {{ .Values.observer.keyBuffers.flushBytes | int | quote }} }
     - { name: OBSERVER_KEY_FLUSH_SECONDS, value: {{ .Values.observer.keyBuffers.flushSeconds | int | quote }} }
     - { name: OBSERVER_KEY_BUFFER_MAX_BYTES, value: {{ .Values.observer.keyBuffers.maxBytes | int64 | quote }} }
+    # v9's raw files (docs/PIPELINE.md §2.1), beside the per-key files until step 8.
+    - { name: OBSERVER_RAW, value: {{ .Values.observer.rawFiles.enabled | quote }} }
+    - { name: OBSERVER_RAW_FLUSH_BYTES, value: {{ .Values.observer.rawFiles.flushBytes | int | quote }} }
+    - { name: OBSERVER_RAW_FLUSH_SECONDS, value: {{ .Values.observer.rawFiles.flushSeconds | int | quote }} }
     - { name: OBSERVER_CLIENT_IP_HEADERS, value: {{ .Values.observer.clientIPHeaders | default list | join "," | quote }} }
     - name: OBSERVER_INSTANCE
       valueFrom:

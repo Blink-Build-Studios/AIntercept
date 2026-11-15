@@ -183,6 +183,40 @@ rollup:
     requests: { cpu: "100m", memory: "256Mi" }
     limits: { cpu: "1", memory: "1Gi" }
 
+# ── v9 workers (docs/PIPELINE.md §2.2) ───────────────────────────────────────
+# `aintercept worker`: lists the observers' raw files (<prefix>/raw/) into
+# Postgres's ingest_files (one replica at a time, by advisory lock) and loads
+# each into the fact tables in one transaction (FOR UPDATE SKIP LOCKED). Runs
+# beside `rollup` until v9's step 8, which deletes rollup. Scaled on GET /lag:
+# the age of the oldest unloaded file.
+worker:
+  enabled: true
+  # worker's own ServiceAccount. On AWS its role needs list + get under
+  # <prefix>/raw/ (docs/PRODUCTION.md §7). create: false uses an existing one
+  # named name. roleArn is IRSA only.
+  serviceAccount:
+    create: true
+    name: aintercept-worker
+    roleArn: ""
+  loaders: 2           # files one replica loads at once
+  listSeconds: 5       # how often the lister lists
+  autoscaling:
+    keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
+    minReplicas: 1
+    maxReplicas: 10
+    lagTargetSeconds: 30
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
+  resources:
+    # A replica holds the files it's loading: up to 8 MiB each, ~10x unpacked.
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits: { cpu: "1", memory: "1Gi" }
+
 # ── Postgres (docs/PIPELINE.md §3, §6) ────────────────────────────────────────
 # The queryable data: the workers write it, the API reads it. RDS for
 # PostgreSQL 17 in production (created by the operator: docs/PRODUCTION.md), in
@@ -325,6 +359,13 @@ observer:
     flushBytes: 1048576     # 1 MiB
     flushSeconds: 30
     maxBytes: 67108864      # 64 MiB
+  # v9's raw files (docs/PIPELINE.md §2.1): one stream per pod under
+  # <prefix>/raw/, each file written at flushBytes or flushSeconds after its
+  # first record: one PUT per pod per file. The v9 workers load them.
+  rawFiles:
+    enabled: true
+    flushBytes: 8388608     # 8 MiB
+    flushSeconds: 30
   # Operational log level: debug | info | warn | error. Logs are structured JSON
   # on stderr (telemetry events go to stdout).
   logLevel: info

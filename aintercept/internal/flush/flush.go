@@ -41,6 +41,10 @@ type Call struct {
 	BatchEvents int64
 	BatchName   string
 	BatchOther  []string
+	// Raw is the call's member in the raw file being loaded (WriteTx; RawKey
+	// "": none).
+	RawKey            string
+	RawOffset, RawLen int64
 }
 
 // Event is an events row.

@@ -6,6 +6,7 @@
 //	aintercept replay     replays an existing capture through the stream processor with chaos and checks it (a tool; takes flags)
 //	aintercept canon      turns raw observer files into canonical records, through the observer's code (a tool; takes flags)
 //	aintercept rollup     the workers (docs/PIPELINE.md §2): claim flagged keys, apply their new ingest files, commit to Postgres; the tail, due calls and retention
+//	aintercept worker     v9's workers (docs/PIPELINE.md §2.2): list the observers' raw files and load each into the fact tables (beside rollup until step 8)
 //	aintercept v1layout   lays out a raw capture as the v5 pipeline would (keys and merge; a tool; takes flags)
 //	aintercept storecheck whether an object store has what the stream processor needs (a tool; takes flags)
 //
@@ -17,6 +18,7 @@ import (
 	"os"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/certsvc"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/ingest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/observer"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/worker"
 )
@@ -29,6 +31,7 @@ var modes = map[string]func(){
 	"storecheck": storecheck,
 	"v1layout":   v1layout,
 	"rollup":     worker.Run,
+	"worker":     ingest.Run,
 }
 
 func main() {
@@ -43,6 +46,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|rollup, or aintercept replay|canon|storecheck|v1layout -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|rollup|worker, or aintercept replay|canon|storecheck|v1layout -h")
 	os.Exit(2)
 }

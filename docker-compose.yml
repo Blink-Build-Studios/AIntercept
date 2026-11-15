@@ -118,6 +118,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # v9's workers (docs/PIPELINE.md §2.2): list the observer's raw files under
+  # ./data/telemetry/raw/ into Postgres's ingest_files and load each into the fact tables
+  # (calls, events, …). Beside rollup until v9's step 8.
+  worker:
+    build: *aintercept-build
+    image: aintercept/aintercept:dev
+    command: ["worker"]
+    environment:
+      WORKER_LOCAL_DIR: "/data/telemetry"
+      WORKER_POSTGRES_URL: "postgres://aintercept_worker:${AINTERCEPT_PG_WORKER_PASSWORD:-}@postgres:5432/aintercept?sslmode=disable&keepalives_idle=10&keepalives_interval=5&keepalives_count=3&tcp_user_timeout=30000"
+      WORKER_HTTP_LISTEN: "0.0.0.0:9005"
+    ports:
+      - "9005:9005" # /healthz, /lag, /metrics
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   fixture:
     build: ./fixture
     image: aintercept/fixture:dev

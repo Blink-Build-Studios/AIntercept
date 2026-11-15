@@ -35,6 +35,8 @@ func TestIngestHasNoDatabasePath(t *testing.T) {
 		mod + "pg",                      // the workers' Postgres
 		mod + "tail",                    // the workers' discovery
 		mod + "rollup",                  // the workers
+		mod + "ingest",                  // v9's workers (docs/PIPELINE.md §2.2)
+		mod + "flush",                   // v9's writes to Postgres
 	}
 	for _, d := range deps {
 		for _, b := range banned {

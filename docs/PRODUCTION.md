@@ -241,6 +241,12 @@ tables, and an HPA on CPU sets its replica count (`api.stateless`):
   `rollup.autoscaling.keda: false` a CPU HPA does. Never fewer than two
   replicas. Ingest never talks to Postgres: an outage only delays the pages,
   and the workers catch up from the bucket.
+- **v9 workers** (`worker.*`, docs/PIPELINE.md §2.2): the `worker` Deployment
+  lists the observers' raw files under `<prefix>/raw/` (one replica at a time)
+  and loads each into Postgres's fact tables in one transaction. It runs beside
+  `rollup` until v9's step 8. KEDA scales it on `GET /lag` (the oldest unloaded
+  file's age, target `worker.autoscaling.lagTargetSeconds`). Raw files expire
+  by a bucket lifecycle rule on `<prefix>/raw/`.
 - **Postgres: RDS for PostgreSQL 17** (`postgres.inCluster.enabled: false`, the
   default). You create it (the chart doesn't): gp3 with storage autoscaling,
   Multi-AZ as you choose; today's load needs the smallest class, and
@@ -397,11 +403,12 @@ Nothing in the chart provisions AWS resources; it consumes them.
 | observer | `s3:PutObject` on the telemetry prefix (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
 | certsvc | `kms:GetPublicKey`, `kms:Sign` on the intermediate's key | `certsvc.serviceAccount`, `certsvc.kms.keyId` |
 | rollup | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/v1/*` (with `retention.rawDays`, `s3:DeleteObject` on `<prefix>/*`); Postgres through the Secret's `worker-url` | `rollup.serviceAccount`, `postgres.*` |
+| worker | `s3:ListBucket` on the bucket (prefix `<prefix>/raw/`), `s3:GetObject` on `<prefix>/raw/*`; Postgres through the Secret's `worker-url` | `worker.serviceAccount`, `postgres.*` |
 | api | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`; Postgres through the Secret's `api-url` | `api.serviceAccount`, `postgres.*` |
 
 - **EKS Pod Identity:** associate each role with its ServiceAccount
   (`aintercept-observer`, `aintercept-certsvc`, `aintercept-rollup`,
-  `aintercept-api` in the release namespace) and leave
+  `aintercept-worker`, `aintercept-api` in the release namespace) and leave
   `roleArn` empty. **IRSA:** set `serviceAccount.roleArn` instead. Both use the
   standard AWS credential chain; no static keys.
 - **Key-hash salt from Secrets Manager:** set

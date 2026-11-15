@@ -208,3 +208,5 @@ CREATE TABLE ingest_files (
     listed_at timestamptz,
     loaded_at timestamptz
 );
+-- The files still to load: what a worker claims from, oldest first, and /lag.
+CREATE INDEX ON ingest_files (key) WHERE loaded_at IS NULL;

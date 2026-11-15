@@ -120,6 +120,19 @@ type StreamConfig struct {
 	// Gzip compresses each file (Content-Encoding: gzip).
 	Gzip        bool
 	ContentType string
+	// Members makes each Write one whole gzip member, appended as is: no
+	// newline, and the file isn't compressed again (v9's raw files,
+	// docs/PIPELINE.md §2.1). Any gzip reader reads the file whole; each member
+	// can also be read alone by its byte range.
+	Members bool
+	// MaxAge gives the stream its own schedule: it's sealed at MaxBytes, or on
+	// the first tick once its first write is MaxAge old, and by Flush and
+	// Close; never by the writer's tick or shared byte cap alone.
+	MaxAge time.Duration
+	// AtUpload makes Key a template the writer fills in at each upload attempt
+	// (ResolveUploadKey), so a file that waits out a store outage is named by
+	// when it lands.
+	AtUpload bool
 }
 
 // Stream writes lines to one key layout through the Writer.
@@ -421,7 +434,7 @@ func (w *Writer) loop() {
 			ob.bytes += len(it.obj.body)
 			buffered += len(it.obj.body)
 			if buffered >= w.cfg.MaxBufferBytes {
-				w.sealAll()
+				w.sealShared()
 				buffered = 0
 			}
 			return
@@ -431,17 +444,30 @@ func (w *Writer) loop() {
 		w.smu.Unlock()
 		if sb.count == 0 {
 			sb.start = nowFn()
+			if sb.cfg.MaxAge > 0 {
+				sb.start = w.now()
+			}
 		}
+		n := len(it.line)
 		sb.buf.Write(it.line)
-		sb.buf.WriteByte('\n')
+		if !sb.cfg.Members {
+			sb.buf.WriteByte('\n')
+			n++
+		}
 		sb.count++
-		buffered += len(it.line) + 1
+		if sb.cfg.MaxAge > 0 { // its own schedule: not in the shared byte cap
+			if sb.cfg.MaxBytes > 0 && sb.buf.Len() >= sb.cfg.MaxBytes {
+				w.seal(sb)
+			}
+			return
+		}
+		buffered += n
 		if (sb.cfg.MaxBytes > 0 && sb.buf.Len() >= sb.cfg.MaxBytes) || (sb.cfg.MaxEvents > 0 && sb.count >= sb.cfg.MaxEvents) {
 			buffered -= sb.buf.Len()
 			w.seal(sb)
 		}
 		if buffered >= w.cfg.MaxBufferBytes {
-			w.sealAll()
+			w.sealShared()
 			buffered = 0
 		}
 	}
@@ -456,7 +482,8 @@ func (w *Writer) loop() {
 			}
 			add(it)
 		case <-tick:
-			w.sealAll()
+			w.sealShared()
+			w.sealOld()
 			buffered = 0
 		case done := <-w.flushReq:
 			// Everything written before Flush is already in the channel: take
@@ -476,17 +503,44 @@ func (w *Writer) loop() {
 	}
 }
 
+// sealAll seals every buffer (Flush, Close).
 func (w *Writer) sealAll() {
+	w.sealShared()
+	for _, sb := range w.streamBufs() {
+		w.seal(sb)
+	}
+}
+
+// sealShared seals every buffer on the writer's own schedule: all but the
+// streams with a MaxAge.
+func (w *Writer) sealShared() {
 	w.smu.Lock()
-	streams := append([]*streamBuf(nil), w.streams...)
 	objs := append([]*objectBuf(nil), w.objStreams...)
 	w.smu.Unlock()
-	for _, sb := range streams {
-		w.seal(sb)
+	for _, sb := range w.streamBufs() {
+		if sb.cfg.MaxAge <= 0 {
+			w.seal(sb)
+		}
 	}
 	for _, ob := range objs {
 		w.sealObjects(ob)
 	}
+}
+
+// sealOld seals the streams with a MaxAge whose first write is that old.
+func (w *Writer) sealOld() {
+	now := w.now()
+	for _, sb := range w.streamBufs() {
+		if sb.cfg.MaxAge > 0 && sb.count > 0 && now.Sub(sb.start) >= sb.cfg.MaxAge {
+			w.seal(sb)
+		}
+	}
+}
+
+func (w *Writer) streamBufs() []*streamBuf {
+	w.smu.Lock()
+	defer w.smu.Unlock()
+	return append([]*streamBuf(nil), w.streams...)
 }
 
 // sealObjects writes an object stream's buffered objects to the spool as one
@@ -535,6 +589,9 @@ func (w *Writer) seal(sb *streamBuf) {
 		ce = "gzip"
 	}
 	hdr := spoolHeader{Target: sb.cfg.Target, Key: key, ContentType: sb.cfg.ContentType, ContentEncoding: ce}
+	if sb.cfg.AtUpload { // a bundle of one, named at upload (uploadkey.go)
+		hdr.Key, hdr.Bundle = "", []bundledEntry{{Key: key, Len: len(body), AtUpload: true}}
+	}
 	for attempt := 0; ; attempt++ {
 		path, size, err := w.spool(hdr, body)
 		if err == nil {
