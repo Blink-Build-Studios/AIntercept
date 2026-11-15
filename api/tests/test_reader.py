@@ -12,7 +12,7 @@ from aintercept_api import pages
 from aintercept_api.app import create_app
 from aintercept_api.pgstore import PgPages
 from aintercept_api.reader import BEGIN, Load, Reader
-from tests.side_by_side import DRAWER_PAGES, PAGES, SESSION_PAGES
+from tests.side_by_side import DIRECTORY_PAGES, DRAWER_PAGES, PAGES, PERSON_PAGES, SESSION_PAGES
 
 
 def _exec(dsn: str, *sql: str) -> None:
@@ -141,8 +141,10 @@ def test_every_route_is_a_page():
         assert name is not None, route
         names.append(name)
     assert sorted(names) == sorted(pages.PAGE_NAMES), (names, pages.PAGE_NAMES)
-    assert sorted([*(p.name for p in PAGES), *DRAWER_PAGES, *SESSION_PAGES]) == sorted(pages.PAGE_NAMES)
-    assert PgPages.PAGES <= set(pages.PAGE_NAMES)
+    walked = [*(p.name for p in PAGES), *(p.name for p in PERSON_PAGES), *DIRECTORY_PAGES]
+    walked += [*DRAWER_PAGES, *SESSION_PAGES]
+    assert sorted(walked) == sorted(pages.PAGE_NAMES)
+    assert PgPages.PAGES == set(pages.PAGE_NAMES)  # every page reads v9
     assert pages.page_of("/api/v1/nothing") is None and pages.page_of("/ui/index.html") is None
 
 

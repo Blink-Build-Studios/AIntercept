@@ -1,10 +1,11 @@
 import threading
 
 from tests.conftest import bounded_store, make_client
+from tests.test_session import error_on_query
 
 
-def test_waiting_for_traffic(dataset, client_for, write_sample):
-    client = client_for(dataset)
+def test_waiting_for_traffic(dataset, pg_client_for, write_sample):
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/status")
     write_sample(client, r, "waiting")
     d = r.json()["data"]
@@ -12,10 +13,10 @@ def test_waiting_for_traffic(dataset, client_for, write_sample):
     assert r.json()["meta"]["lastDataAt"] is None
 
 
-def test_probes_only_is_still_waiting(dataset, client_for, write_sample):
+def test_probes_only_is_still_waiting(dataset, pg_client_for, write_sample):
     dataset.transaction("2026-11-04T17:40:00", path="/", method="GET", synthetic=True)
     dataset.transaction("2026-11-04T18:00:00", path="/", method="GET", synthetic=True)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/status")
     write_sample(client, r, "probes_only")
     d = r.json()["data"]
@@ -25,10 +26,10 @@ def test_probes_only_is_still_waiting(dataset, client_for, write_sample):
     assert d["lastIngestAt"] == r.json()["meta"]["lastDataAt"] == "2026-11-04T18:00:00.002000Z"
 
 
-def test_receiving_traffic(dataset, client_for, write_sample):
+def test_receiving_traffic(dataset, pg_client_for, write_sample):
     dataset.transaction("2026-11-02T05:31:00")
     dataset.transaction("2026-11-04T18:04:30")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/status")
     write_sample(client, r, "receiving")
     d = r.json()["data"]
@@ -37,23 +38,19 @@ def test_receiving_traffic(dataset, client_for, write_sample):
     assert d["lastIngestAt"] == "2026-11-04T18:04:30.002000Z"
 
 
-def test_delayed(dataset, client_for, write_sample):
+def test_delayed(dataset, pg_client_for, write_sample):
     """Data stopped 20 minutes before "now": the UI shows DELAYED."""
     dataset.transaction("2026-11-04T17:45:00")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/status")
     write_sample(client, r, "delayed")
     assert r.json()["meta"]["lastDataAt"] == "2026-11-04T17:45:00.002000Z"
 
 
-def test_query_failure_returns_typed_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_query_failure_returns_typed_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
 
-    def boom(*a, **k):
-        raise RuntimeError("disk on fire")
-
-    for name in ("query", "status_stats"):  # /status's reads: a query, or the v1 store's merge
-        monkeypatch.setattr(client.app.state.store, name, boom, raising=False)
+    error_on_query(client, monkeypatch)
     r = client.get("/api/v1/status")
     write_sample(client, r, "error", status=500)
     assert r.json() == {"error": {"code": "internal", "message": "Query failed", "queryId": "q_sample"}}
@@ -69,10 +66,10 @@ def test_data_dir_name_is_never_parsed_as_sql_or_glob(tmp_path):
     assert r.json()["data"]["firstRequestAt"] == "2026-11-04T18:00:00Z"
 
 
-def test_concurrent_requests(dataset, client_for):
+def test_concurrent_requests(dataset, pg_client_for):
     for h in range(24):
         dataset.transaction(f"2026-11-04T{h:02d}:00:00")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     results = []
 
     def hit():
@@ -86,14 +83,14 @@ def test_concurrent_requests(dataset, client_for):
     assert results == ["2026-11-04T00:00:00Z"] * 16
 
 
-def test_retention_mode(dataset, client_for):
-    """`contentRetained` is the deployment's mode, as the processor saw it: body-stripped
-    rows (the default) say false; once a row carries a body's content, true."""
-    from tests.builders import body_chunks
+def test_retention_mode(tmp_path, pg_client_for):
+    """`contentRetained` is the deployment's mode, as the calls show it (§6.4): body-stripped rows (the
+    default) say false; once a call's recorded bodies gave its detail, true."""
+    from tests.builders import Dataset
+    from tests.test_requests import retained
 
-    cid = dataset.transaction("2026-11-04T18:00:00")
-    client = client_for(dataset)
-    assert client.get("/api/v1/status").json()["data"]["contentRetained"] is False
-    body_chunks(dataset, cid, "request_body_chunk", [b'{"model":"x"}'], start_ms=0.5, step_ms=0.1)
-    dataset.write()
-    assert client.get("/api/v1/status").json()["data"]["contentRetained"] is True
+    stripped, kept = Dataset(tmp_path / "stripped"), Dataset(tmp_path / "kept")
+    stripped.transaction("2026-11-04T18:00:00")
+    assert pg_client_for(stripped).get("/api/v1/status").json()["data"]["contentRetained"] is False
+    retained(kept)
+    assert pg_client_for(kept).get("/api/v1/status").json()["data"]["contentRetained"] is True

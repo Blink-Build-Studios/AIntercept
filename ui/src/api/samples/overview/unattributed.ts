@@ -11,7 +11,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "highestWeekPct": null,
         "missedCalls": 0,
         "people": 1,
-        "sessions": 2,
+        "sessions": 1,
         "shape": "sessions\u2192prompts\u2192steps",
         "tokenAccuracy": "exact"
       },

@@ -74,10 +74,8 @@ class Page:
 
 
 _OTHER_KINDS = "kind=flags&kind=count&kind=skills&kind=metrics&kind=catalog"  # the "other" chip
-PAGES = [
-    Page("status", "/status"),
-    # The session pages (/sessions/{id} and its tabs) read v9 (docs/PIPELINE.md §6.1), which these
-    # databases don't hold: test_session_pages.py holds them to the oracle on the same datasets.
+# The person pages, which test_person_pages.py walks against the oracle on v9 (docs/PIPELINE.md §6.3).
+PERSON_PAGES = [
     Page("person", "/people/{id}", "person"),
     Page("person/sessions", "/people/{id}/sessions", "person", ranged=True,
          variants=("page=1&pageSize=20", "agent=claude-code&page=1&pageSize=20", "pageSize=1&page=2",
@@ -88,17 +86,16 @@ PAGES = [
          variants=("pageSize=20&order=desc", "kind=model&pageSize=20", f"{_OTHER_KINDS}&pageSize=20",
                    "q=model&pageSize=20", "agent=codex&captured=false&hidden=true&pageSize=20",
                    "pageSize=5&page=3&order=asc", "pageSize=20&page=99")),
-    Page("coverage", "/coverage?personId={id}", "person", ranged=True),
-    Page("people", "/people", ranged=True,
-         variants=("", "sort=activity", "sort=name", "q=codex", "agent=claude-code&agent=codex",
-                   "q=codex&page=2&pageSize=1")),
-    Page("overview", "/overview", ranged=True),
-    # The drawer (/requests/{id}, /details, /raw, /events/{id}) reads v9 (docs/PIPELINE.md §6.2), which
-    # these databases don't hold: test_drawer.py holds it to the oracle on the same datasets.
 ]  # fmt: skip
+# Every page reads v9 (docs/PIPELINE.md §6), which v7-only databases don't hold: test_drawer.py,
+# test_session_pages.py and test_person_pages.py hold them to the oracle (the directory and the overview
+# to a from-scratch computation, §8 difference 4). What's left here is the walk's machinery.
+PAGES: list[Page] = []
 BY_NAME = {p.name: p for p in PAGES}
 # The drawer's pages, which test_drawer.py walks.
 DRAWER_PAGES = ("request", "request/details", "request/raw", "event")
+# The directory, the overview and /status (test_person_pages.py).
+DIRECTORY_PAGES = ("status", "people", "overview")
 # The session pages, which test_session_pages.py walks.
 SESSION_PAGES = (
     "session",

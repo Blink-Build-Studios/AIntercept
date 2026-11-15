@@ -148,6 +148,28 @@ func TestCollapseIdentity(t *testing.T) {
 	}
 }
 
+// A session's credentials are its visible calls' and those of the analytics posts that carried its
+// Claude Code events (process/requestrows.go callHashes, corrHashes): the person pages' scope.
+func TestSessionCredentialsOfItsEventsPosts(t *testing.T) {
+	ev := event("b1", 1, "e1", "s2", t0+minute)
+	ev.Call.KeyHash = "kh-post"
+	rows := Collapse([]records.Record{end("a", "s", t0, t0+1), ev})
+	want := []Span{{A: "s", B: "kh1", First: t0, Last: t0}, {A: "s2", B: "kh-post", First: t0 + minute, Last: t0 + minute}}
+	if !reflect.DeepEqual(rows.SessionCredentials, want) {
+		t.Errorf("session_credentials %+v, want %+v", rows.SessionCredentials, want)
+	}
+}
+
+// An account's org is its Claude Code events' (process/personmap.go acctEvents), the newest.
+func TestAccountOrgFromItsEvents(t *testing.T) {
+	a, b := event("b1", 1, "e1", "s", t0), event("b1", 2, "e2", "s", t0+minute)
+	a.Event.OrgID, b.Event.OrgID = "org-1", "org-2"
+	rows := Collapse([]records.Record{b, a, sighting("acct1", "x@example.com", "", t0)})
+	if len(rows.Accounts) != 1 || rows.Accounts[0].Org.V != "org-2" {
+		t.Errorf("accounts %+v, want org-2", rows.Accounts)
+	}
+}
+
 func TestCollapseDirty(t *testing.T) {
 	rows := Collapse([]records.Record{end("a", "s", t0+5, t0+minute+5), event("b1", 1, "e1", "s", t0+2*minute)})
 	var got []string

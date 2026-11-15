@@ -2,6 +2,7 @@
 
 from aintercept_api.timeline import BYPASS_CAUSE
 from tests.builders import ACCOUNT, ClaudeCode
+from tests.test_session import error_on_query
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -24,16 +25,16 @@ def a_session(ds, sid=S1, start_hour=9, calls=3):
 # --- sessions ---------------------------------------------------------------------------------
 
 
-def test_sessions_empty(dataset, client_for, write_sample):
-    client = client_for(dataset)
+def test_sessions_empty(dataset, pg_client_for, write_sample):
+    client = pg_client_for(dataset)
     r = client.get(SESSIONS)
     write_sample(client, r, "empty")
     assert r.json()["data"] == [] and r.json()["meta"]["total"] == 0
 
 
-def test_sessions_one(dataset, client_for, write_sample):
+def test_sessions_one(dataset, pg_client_for, write_sample):
     a_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(SESSIONS)
     write_sample(client, r, "one")
     (s,) = r.json()["data"]
@@ -43,10 +44,10 @@ def test_sessions_one(dataset, client_for, write_sample):
     assert s["capturedFromPrompt"] is None and s["fieldsMissing"] is False
 
 
-def test_sessions_many_newest_first_and_paged(dataset, client_for, write_sample):
+def test_sessions_many_newest_first_and_paged(dataset, pg_client_for, write_sample):
     for sid, hour in ((S1, 9), (S2, 11), (S3, 13)):
         a_session(dataset, sid, hour, calls=1)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(SESSIONS)
     write_sample(client, r, "many")
     assert [s["sessionId"] for s in r.json()["data"]] == [S3, S2, S1]
@@ -56,24 +57,24 @@ def test_sessions_many_newest_first_and_paged(dataset, client_for, write_sample)
     assert [s["sessionId"] for s in ranged["data"]] == [S2]
 
 
-def test_sessions_pre_parser(dataset, client_for, write_sample):
+def test_sessions_pre_parser(dataset, pg_client_for, write_sample):
     """Model calls without identity; the session is attributed through its analytics."""
     cc = ClaudeCode(dataset, S1)
     cc.call("2026-11-04T09:01:00", prompt=None, parsed=False)
     cc.event("2026-11-04T09:05:00", "tengu_turn_end")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(SESSIONS)
     write_sample(client, r, "pre_parser")
     (s,) = r.json()["data"]
     assert s["fieldsMissing"] is True and s["prompts"] is None and s["modelCalls"] == 1
 
 
-def test_sessions_coverage_gap(dataset, client_for, write_sample):
+def test_sessions_coverage_gap(dataset, pg_client_for, write_sample):
     """Claude Code reports calls the proxy never saw (the IPv6 bypass): one window."""
     cc = a_session(dataset, calls=2)
     for minute in (10, 12, 14):
         cc.reported(f"2026-11-04T09:{minute}:00", f"req_bypassed_{minute}")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(SESSIONS)
     write_sample(client, r, "coverage_gap")
     cov = r.json()["data"][0]["coverage"]
@@ -81,7 +82,7 @@ def test_sessions_coverage_gap(dataset, client_for, write_sample):
     assert cov["windows"] == [{"from": "2026-11-04T09:10:00Z", "to": "2026-11-04T09:14:00Z", "count": 3, "cause": None}]
 
 
-def test_sessions_live_with_friction(dataset, client_for, write_sample):
+def test_sessions_live_with_friction(dataset, pg_client_for, write_sample):
     """Activity within 5 minutes of now (18:05): live, no end. Friction and a mid-session capture start."""
     cc = ClaudeCode(dataset, S1)
     cc.event("2026-11-04T17:40:00", "tengu_input_prompt", prompt_index=12, is_negative=True)
@@ -90,7 +91,7 @@ def test_sessions_live_with_friction(dataset, client_for, write_sample):
     cc.event("2026-11-04T17:55:00", "tengu_bash_tool_command_executed", destructive_category="rm_recursive_force")
     cc.event("2026-11-04T17:56:00", "tengu_bash_tool_command_executed", destructive_category="none")
     cc.call("2026-11-04T18:03:00")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(SESSIONS)
     write_sample(client, r, "live")
     (s,) = r.json()["data"]
@@ -99,24 +100,24 @@ def test_sessions_live_with_friction(dataset, client_for, write_sample):
     assert s["capturedFromPrompt"] == 12
 
 
-def test_sessions_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_sessions_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     r = client.get(SESSIONS)
     write_sample(client, r, "error", status=500)
 
 
-def test_sessions_of_another_person_are_not_included(dataset, client_for):
+def test_sessions_of_another_person_are_not_included(dataset, pg_client_for):
     a_session(dataset, S1)
     ClaudeCode(dataset, S2, account="00000000-0000-4000-8000-0000000000b2").call("2026-11-04T10:00:00")
-    assert [s["sessionId"] for s in client_for(dataset).get(SESSIONS).json()["data"]] == [S1]
+    assert [s["sessionId"] for s in pg_client_for(dataset).get(SESSIONS).json()["data"]] == [S1]
 
 
 # --- timeline ---------------------------------------------------------------------------------
 
 
-def test_timeline_empty(dataset, client_for, write_sample):
-    client = client_for(dataset)
+def test_timeline_empty(dataset, pg_client_for, write_sample):
+    client = pg_client_for(dataset)
     r = client.get(TIMELINE)
     write_sample(client, r, "empty")
     d = r.json()["data"]
@@ -125,9 +126,9 @@ def test_timeline_empty(dataset, client_for, write_sample):
     assert d["sessions"] == [] and d["modelCalls"] == [] and d["binSeconds"] == 3600
 
 
-def test_timeline_one_session(dataset, client_for, write_sample):
+def test_timeline_one_session(dataset, pg_client_for, write_sample):
     a_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(TIMELINE, params={"from": "2026-11-04T08:00:00Z", "to": "2026-11-04T12:00:00Z"})
     write_sample(client, r, "one_session")
     d = r.json()["data"]
@@ -151,7 +152,7 @@ def test_timeline_one_session(dataset, client_for, write_sample):
     ]
 
 
-def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, client_for, write_sample):
+def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, pg_client_for, write_sample):
     a_session(dataset, S1, 9, calls=3)
     b = ClaudeCode(dataset, S2)  # overlaps S1
     b.call("2026-11-04T09:02:00")
@@ -169,7 +170,7 @@ def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, client_for, 
     b.event("2026-11-04T09:02:41", "tengu_bash_tool_command_executed", destructive_category="rm_force")
     b.call("2026-11-04T09:02:50", prompt="q4", request_class="subagent")
     b.call("2026-11-04T09:02:55", prompt=None, request_class="auxiliary")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(TIMELINE, params={"from": "2026-11-04T08:00:00Z", "to": "2026-11-04T12:00:00Z"})
     write_sample(client, r, "many")
     d = r.json()["data"]
@@ -187,11 +188,11 @@ def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, client_for, 
     assert first_bin["count"] == 6 and first_bin["byClass"] == {"main": 4, "subagent": 1, "auxiliary": 1}
 
 
-def test_timeline_coverage_gap(dataset, client_for, write_sample):
+def test_timeline_coverage_gap(dataset, pg_client_for, write_sample):
     cc = a_session(dataset, calls=1)
     cc.reported("2026-11-04T09:20:00", "req_bypassed")
     cc.call("2026-11-04T09:45:00")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(TIMELINE, params={"from": "2026-11-04T09:00:00Z", "to": "2026-11-04T10:00:00Z"})
     write_sample(client, r, "coverage_gap")
     d = r.json()["data"]
@@ -209,8 +210,8 @@ def test_timeline_coverage_gap(dataset, client_for, write_sample):
     assert (gap_bin["count"], gap_bin["notCaptured"], gap_bin["tokensIn"]) == (0, 1, None)
 
 
-def test_timeline_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
-    monkeypatch.setattr(client.app.state.store, "query", lambda *a, **k: 1 / 0)
+def test_timeline_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
+    error_on_query(client, monkeypatch)
     r = client.get(TIMELINE)
     write_sample(client, r, "error", status=500)

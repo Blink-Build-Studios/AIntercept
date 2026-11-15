@@ -210,16 +210,6 @@
       "demo": true
     },
     {
-      "path": "/api/v1/coverage",
-      "operationId": "get_coverage",
-      "scenarios": [
-        "complete",
-        "gap",
-        "error"
-      ],
-      "demo": true
-    },
-    {
       "path": "/api/v1/status",
       "operationId": "get_status",
       "scenarios": [

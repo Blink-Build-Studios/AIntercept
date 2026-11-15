@@ -10,7 +10,6 @@ from aintercept_api.models.common import (
     AgentLimits,
     CapabilityField,
     Coverage,
-    CoverageWindow,
     Envelope,
     Model,
     RequestKind,
@@ -504,19 +503,6 @@ class PersonRequestsResponse(Envelope[list[RequestRow]]):
     hiddenCount: int = 0
     """Hidden calls (Codex prewarm, title) matching the other filters: the hidden-calls checkbox.
     They're in `data` only with `hidden=true`."""
-
-
-class CoverageDetail(Model):
-    reported: int | None
-    captured: int
-    notCaptured: int
-    windows: list[CoverageWindow]
-    calls: list[RequestRow]
-    """The not-captured calls, oldest first."""
-
-
-class CoverageResponse(Envelope[CoverageDetail]):
-    pass
 
 
 # --- people page (handoff §5.2.1, §5.2.2) ---------------------------------------------------

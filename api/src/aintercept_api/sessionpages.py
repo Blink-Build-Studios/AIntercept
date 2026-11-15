@@ -191,6 +191,54 @@ def _span(sid: str, lo: int | None, hi: int | None) -> dict[str, Any]:
     return {"sid": sid, "hlo": hlo, "hhi": hhi, "lo": -_FAR if lo is None else lo, "hi": _FAR if hi is None else hi}
 
 
+def needs_title(s: Row) -> bool:
+    """Whether a session's label needs its title call (§6.1): a Codex thread with a call and no title of its own."""
+    return s["own_title"] is None and s["product"] == "codex" and s["model_calls"] > 0
+
+
+def children_json(sid: str, kids: list[Row]) -> str | None:
+    """A session's children (§5.4) from its `session_parents` rows (_CHILDREN's), as today's row has them."""
+    mine = [k for k in kids if k["kind"] in ("subagent", "review") and k["parent"] == sid]
+    if not mine:
+        return None
+    mine.sort(key=lambda k: (k["first_ns"], k["sid"]))
+    return json.dumps(
+        {
+            "subagent": sum(k["kind"] == "subagent" for k in mine),
+            "review": sum(k["kind"] != "subagent" for k in mine),
+            "sessionIds": [k["sid"] for k in mine],
+        }
+    )
+
+
+def session_row(s: Row, now: int, children: str | None, title_call: str | None) -> Row:
+    """A `sessions` row as today's session_rows has it (with `live` as of now): what a page computes from the
+    stored values (the agent, bypass %, live, Codex's limits), its children and its label (§6.1: its own
+    title, else its title call's)."""
+    r = dict(s)
+    sid = s["session_id"]
+    r["agent"] = agents.agent_of(s["product"])
+    r["origin_json"] = json.dumps(s["origin"]) if s["origin"] is not None else None
+    r["children_json"] = children
+    title = s["own_title"]
+    if title is None and needs_title(s):
+        title = title_call.strip().strip('"') if title_call is not None else None
+    text, source = (title, "title") if title else (f"Session {sid[:8]}", "none")
+    r["label_text"] = r["label_text_alone"] = text
+    r["label_source"] = r["label_source_alone"] = source
+    r["bypass_pct"] = _round1(100 * s["bypassed"] / s["queries"]) if s["queries"] else None
+    limits = None
+    if s["limits"] is not None and s["limits_ns"] is not None:
+        # As today's row has it: the time as Python's fromtimestamp reads a float (sessionrows.go
+        # pyFromTimestamp), not truncated.
+        at = datetime.fromtimestamp(s["limits_ns"] / 1e9, UTC)
+        got = agents.codex_limits(json.dumps(s["limits"]), at)
+        limits = got.model_dump_json(by_alias=True) if got else None
+    r["limits_json"] = limits
+    r["live"] = now - s["last_ns"] <= cc.LIVE_WITHIN_NS
+    return r
+
+
 # --- the reads ----------------------------------------------------------------------------------------
 
 _SESSION = "SELECT * FROM sessions WHERE session_id = %(sid)s"
@@ -624,48 +672,14 @@ class SessionReads:
         s = self.stored(sid)
         if s is None:
             return None
-        r = dict(s)
-        product = s["product"]
-        r["agent"] = agents.agent_of(product)
-        r["origin_json"] = json.dumps(s["origin"]) if s["origin"] is not None else None
-        r["children_json"] = self._children(sid)
-        title = s["own_title"]
-        if title is None and product == "codex" and s["model_calls"] > 0:
+        title = None
+        if needs_title(s):
             found = self.snap.rows(
                 "title", _TITLE, {"sid": sid, "lo": s["start_ns"], "hi": s["start_ns"] + TITLE_WITHIN_NS}
             )
-            title = found[0][0].strip().strip('"') if found else None
-        text, source = (title, "title") if title else (f"Session {sid[:8]}", "none")
-        r["label_text"] = r["label_text_alone"] = text
-        r["label_source"] = r["label_source_alone"] = source
-        r["bypass_pct"] = _round1(100 * s["bypassed"] / s["queries"]) if s["queries"] else None
-        limits = None
-        if s["limits"] is not None and s["limits_ns"] is not None:
-            # As today's row has it: the time as Python's fromtimestamp reads a float (sessionrows.go
-            # pyFromTimestamp), not truncated.
-            at = datetime.fromtimestamp(s["limits_ns"] / 1e9, UTC)
-            got = agents.codex_limits(json.dumps(s["limits"]), at)
-            limits = got.model_dump_json(by_alias=True) if got else None
-        r["limits_json"] = limits
-        r["live"] = now - s["last_ns"] <= cc.LIVE_WITHIN_NS
-        return r
-
-    def _children(self, sid: str) -> str | None:
-        kids = [
-            k
-            for k in self.snap.dicts("children", _CHILDREN, {"sid": sid})
-            if k["kind"] in ("subagent", "review") and k["parent"] == sid
-        ]
-        if not kids:
-            return None
-        kids.sort(key=lambda k: (k["first_ns"], k["sid"]))
-        return json.dumps(
-            {
-                "subagent": sum(k["kind"] == "subagent" for k in kids),
-                "review": sum(k["kind"] != "subagent" for k in kids),
-                "sessionIds": [k["sid"] for k in kids],
-            }
-        )
+            title = found[0][0] if found else None
+        kids = self.snap.dicts("children", _CHILDREN, {"sid": sid})
+        return session_row(s, now, children_json(sid, kids), title)
 
     def _live(self, sid: str, now: int) -> bool:
         s = self.stored(sid)
