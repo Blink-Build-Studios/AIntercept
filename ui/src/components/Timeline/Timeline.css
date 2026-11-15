@@ -138,9 +138,6 @@
     white-space: nowrap;
     color: var(--ink);
   }
-  .tl-nowrap {
-    white-space: nowrap;
-  }
   /* Session bands. */
   .tl-band {
     position: absolute;
@@ -181,38 +178,6 @@
   }
   .tl-band-single .tl-band-live {
     top: 9px;
-  }
-  /* State segments. */
-  .tl-state {
-    position: absolute;
-    top: 6px;
-    height: 18px;
-    overflow: hidden;
-    font: 400 10.5px/16px var(--font-mono);
-    padding-left: 4px;
-  }
-  .tl-state-permission,
-  .tl-state-network {
-    border: 1px solid var(--line-strong);
-  }
-  .tl-state-permission {
-    background: var(--surface-raised);
-    padding-left: 6px;
-  }
-  .tl-change {
-    position: absolute;
-    top: 4px;
-    height: 22px;
-    width: 3px;
-    background: var(--focus);
-  }
-  .tl-change-label {
-    position: absolute;
-    top: 6px;
-    font: 400 10.5px/18px var(--font-mono);
-    color: var(--focus);
-    background: var(--surface);
-    padding: 0 4px;
   }
   /* Markers. */
   .tl-tick {
@@ -379,7 +344,6 @@
   .tl-gap-label,
   .tl-bar-label,
   .tl-band-label,
-  .tl-change-label,
   .tl-mark-label {
     pointer-events: none;
   }
@@ -433,31 +397,6 @@
   .tl-band[data-force="focus"] {
     outline: 2px solid var(--focus);
     outline-offset: 1px;
-  }
-  /* State segments: a muted outline (danger and a pressed fill for a bypassed network). */
-  .tl-state.tl-mark {
-    top: 6px;
-  }
-  .tl-state:hover,
-  .tl-state[data-force="hover"] {
-    outline: 1px solid var(--ink-muted);
-    outline-offset: 0;
-  }
-  .tl-state-network:hover,
-  .tl-state-network[data-force="hover"] {
-    outline: none;
-    background: var(--skeleton);
-  }
-  .tl-state-network.tl-state-bypassed:hover,
-  .tl-state-network.tl-state-bypassed[data-force="hover"] {
-    border-color: var(--danger);
-  }
-  /* Permission change ticks widen 3 → 5px. */
-  .tl-change.tl-mark:hover,
-  .tl-change[data-force="hover"],
-  .tl-change[data-force="focus"] {
-    width: 5px;
-    margin-left: -1px;
   }
   /* Prompt ticks: a 13px hit box around the 1px tick (the guide snaps within 6px).
      Hover: 1 → 3px ink, 22px tall, centred, with the #N label in 600. */
@@ -611,20 +550,6 @@
     right: 0;
     height: 16px;
   }
-  .tl-rowbar {
-    position: absolute;
-    top: 3px;
-    height: 10px;
-  }
-  .tl-rowbar-ink {
-    background: var(--ink);
-  }
-  .tl-rowbar-muted {
-    background: var(--ink-muted);
-  }
-  .tl-rowbar-faint {
-    background: var(--ink-faint);
-  }
   /* Friction marks: mono 11px centred on their instant; a cluster is glyph + count at 600. */
   .tl-friction {
     position: absolute;
@@ -669,55 +594,5 @@
   .tl-sel-clear[data-force="focus"] {
     outline: 2px solid var(--ink);
     outline-offset: 1px;
-  }
-}
-@layer components {
-  /* A pointed row bar: a 1px outline in its own colour, 1px off (CompTimelineHover). */
-  .tl-rowbar.tl-mark:hover,
-  .tl-rowbar[data-force="hover"],
-  .tl-rowbar[data-force="linked"] {
-    outline: 1px solid var(--ink);
-    outline-offset: 1px;
-  }
-  .tl-rowbar-muted.tl-mark:hover,
-  .tl-rowbar-muted[data-force="hover"],
-  .tl-rowbar-muted[data-force="linked"] {
-    outline-color: var(--ink-muted);
-  }
-  .tl-rowbar-faint.tl-mark:hover,
-  .tl-rowbar-faint[data-force="hover"],
-  .tl-rowbar-faint[data-force="linked"] {
-    outline-color: var(--ink-faint);
-  }
-}
-@layer components {
-  /* A network segment's label (§11G.A3): its own mono 10.5/16 line, 4px in. */
-  .tl-state-text {
-    position: absolute;
-    left: 4px;
-    top: 0;
-    font: 400 10.5px/16px var(--font-mono);
-    white-space: nowrap;
-  }
-}
-@layer components {
-  /* Network (§11G.A3): one 18px row of outlined segments 5px down; labels in their own line. */
-  .tl-state.tl-state-network {
-    top: 5px;
-    padding-left: 0;
-    font: inherit;
-    color: inherit;
-    white-space: normal;
-  }
-  .tl-state-network.tl-state-bypassed {
-    border-color: var(--danger);
-  }
-  /* Approval (§11J, §11M 2.5): styled like Permission: --surface-raised fill, --line-strong
-     outline, 6px down a 30px lane, the label 6px in. */
-  .tl-state.tl-state-approval {
-    top: 6px;
-    border: 1px solid var(--line-strong);
-    background: var(--surface-raised);
-    padding-left: 6px;
   }
 }

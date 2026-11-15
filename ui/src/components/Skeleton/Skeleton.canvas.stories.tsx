@@ -1,8 +1,8 @@
 // Parity specimens: the canvas's own content for each Skeleton data-spec
-// (CompStates.dc.html), measured against the canvas by `make parity`.
+// (CompStates.dc.html, CompPersonTimeline.dc.html), measured against the canvas by `make parity`.
 import type { Meta, StoryObj } from "@storybook/react";
 import type { ReactNode } from "react";
-import { Skeleton } from "./Skeleton";
+import { PERSON_TIMELINE_LANES, SESSION_TIMELINE_LANES, Skeleton } from "./Skeleton";
 
 // `track` reproduces the canvas staging: each specimen is drawn at a fixed width.
 const P = ({ spec, track, children }: { spec: string; track?: number; children: ReactNode }) => (
@@ -21,6 +21,9 @@ export const Canvas: StoryObj = {
       <P spec="Skeleton/blockTile" track={180}><Skeleton shape="block" /></P>
       <P spec="Skeleton/row" track={462}><Skeleton shape="row" /></P>
       <P spec="Skeleton/lane" track={386}><Skeleton shape="lane" /></P>
+      {/* CompPersonTimeline */}
+      <P spec="Skeleton/personTimeline" track={1344}><Skeleton shape="timeline" lanes={PERSON_TIMELINE_LANES} /></P>
+      <P spec="Skeleton/sessionTimeline" track={1344}><Skeleton shape="timeline" lanes={SESSION_TIMELINE_LANES} /></P>
     </div>
   ),
 };

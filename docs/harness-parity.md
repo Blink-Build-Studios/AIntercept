@@ -54,9 +54,9 @@ images, interrupts and a second model. Last reviewed 2026-11-08.
 | Prompt (turn) | `x-claude-code-prompt-id` + index (analytics) | `turn_id`, `root_turn_id`, `turn_trigger` (`exec`, `user`); `codex_turn_event` (status, duration, sampling, tool counts, tokens, steers, interrupts) | mapped | shown / served (`turnReport`) |
 | Prompt text | request body (last user message) | `response.create` input, user `message` (with an `<environment_context>` block to strip) | mapped | shown / captured |
 | Repo | repo, branch, head sha, cwd (analytics, git env) | `workspaces` (path, `latest_git_commit_hash`, `has_changes`), cwd from the environment block | mapped (Codex has no branch) | shown / served (`repo`, `commit`, `facts.cwd`) |
-| Permission / sandbox | permission mode (analytics) | `approval_policy`, `sandbox_mode` / `sandbox_policy` | mapped | shown / served (`facts`) |
+| Permission / sandbox | permission mode (analytics) | `approval_policy`, `sandbox_mode` / `sandbox_policy` | mapped | shown (header: approvals bypassed) / served (`facts`); the timeline lanes are removed (§11Q) |
 | Friction | frustrated, interrupted, destructive (analytics) | interrupts (`response.interrupt` → `incomplete:interrupted`), steers, command exit codes; no frustration signal | mapped (partial) | shown / captured |
-| Presence (focus, sleep) | analytics | — | bespoke (Claude Code) | shown / — |
+| Presence (focus, sleep) | analytics | — | bespoke (Claude Code) | removed (handoff §11Q) / — |
 | Recaps | analytics | — | bespoke (Claude Code) | shown / — |
 | Experiments, flags | GrowthBook / Statsig | `x-codex-beta-features` (a list) | bespoke | shown / captured |
 

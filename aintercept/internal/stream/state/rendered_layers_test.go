@@ -617,9 +617,8 @@ func colOf(td render.TableDiff, name string) int {
 	panic(name)
 }
 
-// A new call renumbers no later mark block: its marks' rows are the call's own
-// (and the network lane's last segment), never a report's, friction's or
-// permission point's.
+// A new call renumbers no later mark block: its marks' rows are the call's own,
+// never a report's or friction's.
 func TestRenderedNewCallRenumbersNoLaterBlock(t *testing.T) {
 	state.ResetBatches()
 	c1 := state.WithIP(state.WithIDs(state.Step("c1", "s1", "p1", state.At(60_000)), "r1", "cr1"), "10.0.0.1")
@@ -627,13 +626,12 @@ func TestRenderedNewCallRenumbersNoLaterBlock(t *testing.T) {
 		state.TypedPrompt("s1", "p1", "1", state.At(1000)), state.CallEnd(c1),
 		state.Success("s1", state.At(70_000), "r1"), state.Success("s1", state.At(75_000), "r-missing"),
 		state.Pev("s1", "p1", "tengu_cancel", state.At(80_000), `{"cc_prompt_id":"p1"}`),
-		state.CCEvent("s1", "tengu_api_query", state.At(90_000), `{"permissionMode":"plan"}`),
 	})
 	kinds := map[string]bool{}
 	for _, row := range x.fake.Rows("session_marks") {
 		kinds[row[2].(string)] = true
 	}
-	for _, k := range []string{"call", "reported", "missed", "friction", "permission", "network"} {
+	for _, k := range []string{"call", "reported", "missed", "friction"} {
 		if !kinds[k] {
 			t.Fatalf("the setup has no %s mark: %v", k, kinds)
 		}
@@ -644,7 +642,7 @@ func TestRenderedNewCallRenumbersNoLaterBlock(t *testing.T) {
 	var got []string
 	for _, row := range td.Upserts {
 		got = append(got, fmt.Sprintf("%s@%d", row[kind], row[seq].(int64)>>32))
-		if k := row[kind]; k != "call" && k != "network" {
+		if k := row[kind]; k != "call" {
 			t.Errorf("a new call rewrote a %s mark: %v", k, row)
 		}
 	}

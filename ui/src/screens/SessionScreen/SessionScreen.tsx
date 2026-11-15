@@ -33,7 +33,7 @@ import { RequestRow, type RequestKind } from "../../components/RequestRow/Reques
 import { RequestFilters } from "../../components/RequestFilters/RequestFilters";
 import { RequestTable } from "../../components/RequestTable/RequestTable";
 import { SessionTabs } from "../../components/SessionTabs/SessionTabs";
-import { SkeletonBar } from "../../components/Skeleton/Skeleton";
+import { SESSION_TIMELINE_LANES, Skeleton, SkeletonBar } from "../../components/Skeleton/Skeleton";
 import { TextInput } from "../../components/TextInput/TextInput";
 import { ToggleChip } from "../../components/ToggleChip/ToggleChip";
 import { FilterChip } from "../../components/FilterChip/FilterChip";
@@ -43,9 +43,7 @@ import { laneInteractions, sessionInteractions } from "../../components/Timeline
 import { FrictionTrack, frictionRowLabels } from "../../components/Timeline/FrictionTrack";
 import { Lane, LANE_HEIGHT } from "../../components/Timeline/Lane";
 import { MarkerTrack } from "../../components/Timeline/MarkerTrack";
-import { RowTrack } from "../../components/Timeline/RowTrack";
 import { sessionLanes } from "../../components/Timeline/sessionLanes";
-import { StateTrack } from "../../components/Timeline/StateTrack";
 import { Timeline } from "../../components/Timeline/Timeline";
 import { LANE_DEFINITIONS, nowTip } from "../../components/Timeline/timelineTips";
 import { requestChannels, requestDetail, sessionTabs, sessionTitle, tabHint } from "./sessionView";
@@ -103,8 +101,8 @@ export type SessionScreenProps = {
   onRequestFilter: (f: { q: string; kinds: RequestKind[]; notCaptured: boolean; hidden?: boolean }) => void;
   /** A prompt's hidden-calls note: Requests with hidden calls shown, as one URL change. */
   onShowHiddenRequests?: () => void;
-  eventFilter: { q: string; internal: boolean; ticks: boolean };
-  onEventFilter: (f: { q: string; internal: boolean; ticks: boolean }) => void;
+  eventFilter: { q: string; internal: boolean };
+  onEventFilter: (f: { q: string; internal: boolean }) => void;
 
   /** Opens the drawer on a request (the row's data shows at once). */
   onOpenRequest: (requestId: string, seed?: Schemas["RequestRow"]) => void;
@@ -134,11 +132,8 @@ function SessionTimelinePanel({
   onOpenRequest,
   onJumpToPrompt,
   onListNotCaptured,
-  capabilities,
 }: {
   data: SessionTimeline;
-  /** The agent's own fields (§11L): a lane it doesn't report isn't drawn; unknown (loading) draws them all. */
-  capabilities?: readonly Capability[];
   selection: Range | null;
   following: boolean;
   onSelect: (r: Range | null) => void;
@@ -149,10 +144,6 @@ function SessionTimelinePanel({
   // The lanes are thousands of marks: built once per timeline payload, so a page
   // re-render (a poll's fetching flag, a tab) or the brush moving doesn't redo them.
   const l = useMemo(() => sessionLanes(data), [data]);
-  const has = (f: Capability) => !capabilities || capabilities.includes(f);
-  const permission = has("permission");
-  const focus = has("focus") || has("presence");
-  const device = has("device");
   const cb = useLatest({ onSelect, onOpenRequest, onJumpToPrompt, onListNotCaptured });
   const lanes = useMemo(() => {
     const actions = {
@@ -181,24 +172,12 @@ function SessionTimelinePanel({
         <Lane label="Context" sublabel="main thread" height={56} summary={`peak ${l.context.peak} tokens; ${l.context.labels.length} compactions`}>
           <BarTrack bins={l.context.bins} binSeconds={l.binSeconds} color="count" level labels={l.context.labels} interact={own.context} labelTip={own.compactionTip} />
         </Lane>
-        {permission && <Lane label="Permission" height={30} summary={`${l.permission.segments.length} modes; ${l.permission.changes.length} brief changes`}>
-          <StateTrack segments={l.permission.segments} changes={l.permission.changes} palette="permission" nowrap interact={own.permission} />
-        </Lane>}
-        {focus && <Lane label="Focus" height={LANE_HEIGHT.rows(2)} summary="this terminal: focused and blurred" rows={l.focusRows.map((r) => r.name)}>
-          <RowTrack rows={l.focusRows} interact={on.presence} />
-        </Lane>}
-        {device && <Lane label="Device" height={LANE_HEIGHT.rows(1)} summary={`${l.sleepRows[0]?.segments.length ?? 0} sleeps`} rows={l.sleepRows.map((r) => r.name)}>
-          <RowTrack rows={l.sleepRows} interact={on.presence} />
-        </Lane>}
-        <Lane label="Network" height={LANE_HEIGHT.single} summary={`${l.network.length} network segments`}>
-          <StateTrack segments={l.network} palette="network" nowrap interact={own.network} />
-        </Lane>
         <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
           <FrictionTrack marks={l.friction} interact={on.friction} />
         </Lane>
       </>
     );
-  }, [data, l, cb, permission, focus, device]);
+  }, [data, l, cb]);
   const header = (
     <>
       <span className="tl-key">Session timeline</span>
@@ -222,7 +201,7 @@ function SessionTimelinePanel({
   );
 }
 
-/** The four state panels (handoff §7.3): capabilities, repo, recaps, experiments, at the range's end or within it. */
+/** The four state panels (handoff §7.3): capabilities and experiments for the whole session (§11Q.4), repo and recaps within the range. */
 function StatePanels({ st, at }: { st: Schemas["SessionState"]; at: string }) {
   const c = st.capabilitiesAt;
   const tally = (t: Schemas["ToolTally"]) => (t.used === null ? null : t.total === null ? `${formatCount(t.used)} used` : `${formatCount(t.used)} of ${formatCount(t.total)} used`);
@@ -248,11 +227,10 @@ function StatePanels({ st, at }: { st: Schemas["SessionState"]; at: string }) {
     : [{ k: "Recaps", v: "none in range" }];
   const ex = st.experimentsAt;
   const exRows: KeyValueRow[] = ex === null ? [{ k: "Experiments", v: null, unknownReason: "not extracted yet" }] : ex.length ? ex.map((e) => ({ k: e.key, v: e.variation })) : [{ k: "Experiments", v: "none" }];
-  const atLabel = formatDayTime(at);
   return (
     <div className="session-panels">
       <KeyValueList
-        title={`Capabilities · at ${atLabel}`}
+        title="Capabilities"
         accent="skills"
         rows={caps}
         footer={c.poolChangesInRange ? `${formatCount(c.poolChangesInRange)} tool-pool changes in range` : undefined}
@@ -263,7 +241,7 @@ function StatePanels({ st, at }: { st: Schemas["SessionState"]; at: string }) {
         rows={recapRows}
       />
       <KeyValueList
-        title={`Experiments · at ${atLabel}`}
+        title="Experiments"
         accent="flags"
         rows={exRows}
         footer={
@@ -526,7 +504,7 @@ export function SessionScreen(p: SessionScreenProps) {
             p.timeline,
             "timeline",
             "the session timeline",
-            <div className="session-timeline-skeleton border border-line bg-surface" />,
+            <Skeleton shape="timeline" lanes={SESSION_TIMELINE_LANES} />,
             p.timeline.data && (
               <SessionTimelinePanel
                 data={p.timeline.data}
@@ -536,7 +514,6 @@ export function SessionScreen(p: SessionScreenProps) {
                 onOpenRequest={(id) => p.onOpenRequest(id)}
                 onJumpToPrompt={(index, t) => (p.onJumpToPrompt ? p.onJumpToPrompt(index, t) : p.onTab("prompts"))}
                 onListNotCaptured={() => p.onTab("requests")}
-                capabilities={s?.capabilities}
               />
             ),
           )}
@@ -658,7 +635,6 @@ export function SessionScreen(p: SessionScreenProps) {
                   pending={p.events.status === "refetching"}
                 />
                 <ToggleChip label="hide client internals" pressed={!p.eventFilter.internal} onChange={(on) => p.onEventFilter({ ...p.eventFilter, internal: !on })} />
-                <ToggleChip label="collapse ticks" pressed={p.eventFilter.ticks} onChange={(on) => p.onEventFilter({ ...p.eventFilter, ticks: on })} />
                 <span className="flex-1" />
                 {counts && p.events.data && (
                   <span className="type-data text-ink-faint">{`${formatCount(counts.events)} in range · ${formatCount(p.events.data.meta.total ?? p.events.data.data.length)} shown`}</span>
@@ -688,7 +664,7 @@ export function SessionScreen(p: SessionScreenProps) {
                     })}
                   </DataTable>
                 ),
-                <EmptyState compact title="No events match" actions={<Button onClick={() => p.onEventFilter({ q: "", internal: false, ticks: true })}>Clear filters</Button>} />,
+                <EmptyState compact title="No events match" actions={<Button onClick={() => p.onEventFilter({ q: "", internal: false })}>Clear filters</Button>} />,
               )}
             </>
           )}

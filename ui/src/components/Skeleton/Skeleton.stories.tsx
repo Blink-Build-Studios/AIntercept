@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { Skeleton } from "./Skeleton";
+import { PERSON_TIMELINE_LANES, Skeleton } from "./Skeleton";
 
 const meta = {
   title: "Components/Chrome/Skeleton",
@@ -14,3 +14,5 @@ export const Line: Story = { args: { shape: "line", lines: 2 } };
 export const Block: Story = { args: { shape: "block" } };
 export const Row: Story = { args: { shape: "row" } };
 export const Lane: Story = { args: { shape: "lane" } };
+/** The person timeline while it loads (§11Q): five lanes. */
+export const Timeline: Story = { args: { shape: "timeline", lanes: PERSON_TIMELINE_LANES } };

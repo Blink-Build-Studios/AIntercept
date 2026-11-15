@@ -1,6 +1,6 @@
 # Design parity report
 
-542 specimens · 542 pass · 0 fail · 24 illustrative (not measured)
+517 specimens · 517 pass · 0 fail · 24 illustrative (not measured)
 
 Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputCompositionBar, NotReportedLine, PageHeader, RequestDrawer, TabMark, TabTitle
 
@@ -86,7 +86,6 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ EmptyState/noFilterMatches
 - ✓ ErrorState/loadFailed
 - ✓ EventRow/default
-- ✓ EventRow/collapsedTicks
 - ✓ EventRow/marked
 - ✓ EventRow/selectedExpanded
 - ✓ EventRow/expandedJson
@@ -329,6 +328,8 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ SessionTabs/withHints
 - ✓ TabHint
 - ✓ TabHint/requests
+- ✓ Skeleton/personTimeline
+- ✓ Skeleton/sessionTimeline
 - ✓ Skeleton/line
 - ✓ Skeleton/blockTile
 - ✓ Skeleton/row
@@ -418,9 +419,6 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ ContextTrack/compactionLabelHover
 - ✓ DensityTrack/default (100 accepted deviations)
 - ✓ DensityTrack/hoverBin (100 accepted deviations)
-- ✓ DeviceRow/asleep (1 accepted deviation)
-- ✓ FocusRow/focused (1 accepted deviation)
-- ✓ FocusRow/blurred (1 accepted deviation)
 - ✓ FrictionRow/steered
 - ✓ FrictionRow/frustrated (1 accepted deviation)
 - ✓ FrictionRow/interrupted (1 accepted deviation)
@@ -428,43 +426,31 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ GapRow/merged (1 accepted deviation)
 - ✓ Lane/codexPrompts
 - ✓ Lane/codexModelCalls
-- ✓ Lane/approvalSandbox
-- ✓ Lane/codexNetwork
 - ✓ Lane/codexFriction
 - ✓ Lane/modelCalls24h (1 accepted deviation)
 - ✓ Lane/modelCalls7d (1 accepted deviation)
 - ✓ Lane/modelCalls14d (1 accepted deviation)
 - ✓ Lane/modelCallsWithGapRow (1 accepted deviation)
 - ✓ Lane/frictionSplit (1 accepted deviation)
-- ✓ Lane/presenceRows (1 accepted deviation)
-- ✓ Lane/focusRows (1 accepted deviation)
-- ✓ Lane/deviceSleepRow (1 accepted deviation)
-- ✓ Lane/networkRow (1 accepted deviation)
 - ✓ Lane/modelCallsGrid14d (1 accepted deviation)
 - ✓ Lane/modelCallsGrid24h (1 accepted deviation)
 - ✓ Lane/sessionsSnap
 - ✓ Lane/sessionsReadout
 - ✓ Lane/modelCallsEmptyBin
-- ✓ Lane/presenceReadout
 - ✓ Lane/modelCalls (79 accepted deviations)
 - ✓ Lane/analytics (104 accepted deviations)
 - ✓ Lane/sessions (1 accepted deviation)
-- ✓ Lane/permission (1 accepted deviation)
 - ✓ Lane/prompts (1 accepted deviation)
 - ✓ Lane/modelCallsUnderBrush (76 accepted deviations)
 - ✓ Lane/loading (1 accepted deviation)
 - ✓ Lane/promptsHoverGuide (1 accepted deviation)
 - ✓ Lane/modelCallsHover (48 accepted deviations)
 - ✓ Lane/analyticsHoverGuide (104 accepted deviations)
-- ✓ Lane/presenceHoverGuide (4 accepted deviations)
 - ✓ Lane/notCapturedHover (49 accepted deviations)
 - ✓ Lane/analyticsHover (104 accepted deviations)
 - ✓ Lane/sessionsHover (1 accepted deviation)
 - ✓ Lane/contextHover (4 accepted deviations)
 - ✓ Lane/contextLabelHover (4 accepted deviations)
-- ✓ Lane/presenceHover (4 accepted deviations)
-- ✓ Lane/permissionHover (1 accepted deviation)
-- ✓ Lane/networkHover (24 accepted deviations)
 - ✓ Lane/promptsHover (1 accepted deviation)
 - ✓ Lane/frictionHover (1 accepted deviation)
 - ✓ Lane/brushhoverHandleSelection (45 accepted deviations)
@@ -477,13 +463,6 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ MarkerTrack/hoverTick
 - ✓ MarkerTrack/hoverGlyph
 - ✓ NowLine/default
-- ✓ PresenceRow/focused (1 accepted deviation)
-- ✓ PresenceRow/away (1 accepted deviation)
-- ✓ PresenceRow/asleep (1 accepted deviation)
-- ✓ StateTrack/permission
-- ✓ StateTrack/hoverSegment
-- ✓ StateTrack/hoverTick
-- ✓ StateTrack/hoverNetwork (7 accepted deviations)
 - ✓ TimeAxis/codex
 - ✓ TimeAxis/ticks14d (33 accepted deviations)
 - ✓ TimeAxis/ticks24h (22 accepted deviations)
@@ -491,8 +470,8 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ TimeAxis/hoverReadout
 - ✓ Timeline/codex
 - ✓ Timeline/withBrush (105 accepted deviations)
-- ✓ Timeline/loading (4 accepted deviations)
-- ✓ Timeline/hoverGuide (189 accepted deviations)
+- ✓ Timeline/loading (3 accepted deviations)
+- ✓ Timeline/hoverGuide (185 accepted deviations)
 - ✓ ToggleChip/off
 - ✓ ToggleChip/on
 - ✓ ToggleChip/hover
@@ -508,7 +487,6 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Tooltip/sessionSnapped
 - ✓ Tooltip/laneReadout
 - ✓ Tooltip/emptyBin
-- ✓ Tooltip/stateReadout
 - ✓ Tooltip/updatedAgo
 - ✓ Tooltip/status
 - ✓ Tooltip/statusError
@@ -535,9 +513,6 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Tooltip/sessionBand
 - ✓ Tooltip/contextBar
 - ✓ Tooltip/compaction
-- ✓ Tooltip/stateSegment
-- ✓ Tooltip/permissionChanges
-- ✓ Tooltip/network
 - ✓ Tooltip/promptMarker
 - ✓ Tooltip/frictionMarker
 - ✓ Tooltip/nowLine

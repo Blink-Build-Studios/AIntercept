@@ -544,27 +544,6 @@
       ]
     },
     {
-      "name": "StateTrack",
-      "group": "Timeline",
-      "path": "src/components/Timeline/StateTrack.tsx",
-      "states": [
-        "permission",
-        "network",
-        "networkNarrow",
-        "approval"
-      ]
-    },
-    {
-      "name": "RowTrack",
-      "group": "Timeline",
-      "path": "src/components/Timeline/RowTrack.tsx",
-      "states": [
-        "presence",
-        "focus",
-        "sleep"
-      ]
-    },
-    {
       "name": "FrictionTrack",
       "group": "Timeline",
       "path": "src/components/Timeline/FrictionTrack.tsx",
@@ -746,7 +725,6 @@
       "group": "Rows",
       "states": [
         "default",
-        "collapsedTicks",
         "marked",
         "expanded",
         "compact",
@@ -988,7 +966,8 @@
         "line",
         "block",
         "row",
-        "lane"
+        "lane",
+        "timeline"
       ]
     },
     {

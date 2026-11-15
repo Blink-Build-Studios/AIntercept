@@ -25,7 +25,7 @@ body{margin:0;background:#0c0e0f}
 .comp{display:flex;flex-direction:column;gap:10px}
 </style>
 </helmet>
-<div style="width: 1440px; min-height: 1750px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
+<div style="width: 1440px; min-height: 1520px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 32px">
 <div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
 <span class="k">aintercept Wire · component library</span>
 <span style="font-size: 28px; line-height: 34px; font-weight: 600">Timeline</span>
@@ -52,25 +52,6 @@ body{margin:0;background:#0c0e0f}
 <div data-spec="BandTrack/preCaptureFade" style="position: absolute; top: 6px; height: 28px; left: 62%; width: 3%; background: linear-gradient(90deg, transparent, #1b1f22)"></div>
 <div data-spec="BandTrack/liveBand" style="position: absolute; top: 6px; height: 28px; left: 65%; width: 35%; background: #1b1f22; border-left: 2px solid #e8916f"><span class="m" style="position: absolute; left: 6px; top: 4px; font-size: 10.5px; line-height: 20px; white-space: nowrap">aintercept · partner-readiness · live</span><span style="position: absolute; right: 6px; top: 10px; width: 7px; height: 7px; border-radius: 999px; background: #57d68d"></span></div>
 </div></div></div></div>
-
-<div class="comp"><span class="cname">Lane + StateTrack</span><span class="props">segments[{start, end, state, label?}] · presence (focused | away | asleep | none), permission mode, network</span>
-<div class="frame">
-<div class="m" style="color: #a3a9ad; font-size: 12px; padding: 10px 12px; border: 1px dashed #60686d; width: 1100px; box-sizing: border-box">Presence, focus and device sleep are now one labelled row per state with no text inside segments: Timelines at density → Lane/presenceRows, Lane/focusRows, Lane/deviceSleepRow.</div>
-
-
-
-
-
-<div data-spec="Lane/permission" class="lane" style="height: 30px"><div class="lab"><div class="k">Permission</div></div><div data-spec="StateTrack/permission" class="track">
-<div class="m" style="position: absolute; top: 6px; height: 18px; left: 4%; right: 4%; background: #1b1f22; border: 1px solid #60686d; box-sizing: border-box; font-size: 10.5px; line-height: 16px; padding-left: 6px">bypassPermissions</div>
-<div style="position: absolute; top: 4px; height: 22px; width: 3px; background: #ffd36b; left: 58%"></div>
-<span class="m" style="position: absolute; top: 6px; font-size: 10.5px; line-height: 18px; color: #ffd36b; left: 58.4%; background: #131618; padding: 0 4px">→ default ×2 in 20 s</span>
-</div></div>
-<div class="m" style="color: #a3a9ad; font-size: 12px; padding: 10px 12px; border: 1px dashed #60686d; width: 1100px; box-sizing: border-box">Network: Timelines at density → Lane/networkRow (labels only when they fit).</div>
-
-
-
-</div></div>
 
 <div class="comp"><span class="cname">Lane + MarkerTrack</span><span class="props">markers[{t, glyph?, tone}], labels? · prompt ticks, friction glyphs</span>
 <div class="frame">
@@ -108,11 +89,11 @@ body{margin:0;background:#0c0e0f}
 
 <div class="comp"><span class="cname">Timeline · loading</span><span class="props">lanes keep their labels and heights; tracks show skeleton</span>
 <div data-spec="Timeline/loading" class="frame">
-<sc-for list="{{skel}}" as="s" hint-placeholder-count="4"><div data-spec="Lane/loading" class="lane" style="height: {{s.h}}"><div class="lab"><div class="k">{{s.n}}</div></div><div class="track" style="display: flex; align-items: center; padding: 0 8px"><div style="width: 100%; background: #20252a; opacity: .55; height: {{s.ih}}"></div></div></div></sc-for>
+<sc-for list="{{skel}}" as="s" hint-placeholder-count="3"><div data-spec="Lane/loading" class="lane" style="height: {{s.h}}"><div class="lab"><div class="k">{{s.n}}</div></div><div class="track" style="display: flex; align-items: center; padding: 0 8px"><div style="width: 100%; background: #20252a; opacity: .55; height: {{s.ih}}"></div></div></div></sc-for>
 </div></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1750}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1520}}'>
 class Component extends DCLogic {
   renderVals() {
     var seed = 5; var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
@@ -125,7 +106,7 @@ class Component extends DCLogic {
     [10.3, 13, 17, 20, 24, 27, 38, 41, 45, 49, 60.3, 63, 66, 70, 74, 79, 84, 88, 91, 94].forEach(function (t) { ticks.push({ l: t + '%' }); });
     return {
       bars: bars, dens: dens, ticks: ticks,
-      skel: [{ n: 'Prompts', h: '26px', ih: '10px' }, { n: 'Model calls', h: '60px', ih: '40px' }, { n: 'Analytics', h: '44px', ih: '28px' }, { n: 'Presence', h: '30px', ih: '14px' }]
+      skel: [{ n: 'Prompts', h: '26px', ih: '10px' }, { n: 'Model calls', h: '60px', ih: '40px' }, { n: 'Analytics', h: '44px', ih: '28px' }]
     };
   }
 }

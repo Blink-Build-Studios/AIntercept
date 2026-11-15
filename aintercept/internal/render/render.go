@@ -16,8 +16,8 @@
 //     keys render only the rows a run's state changes reach;
 //   - the drawer's memo (§3.7);
 //   - for the tables build steps 3 to 7 make incremental (event_rows,
-//     prompt_rows, prompt_steps, session_marks, presence_segments,
-//     session_rows, session_request_rows), the hashes of the rows last
+//     prompt_rows, prompt_steps, session_marks, session_rows,
+//     session_request_rows), the hashes of the rows last
 //     written: until then those render whole and write the rows whose hash
 //     changed.
 //
@@ -62,11 +62,11 @@ import (
 // whenever the same state renders other rows, so each key's next commit
 // rewrites its rendered rows whole (Rewrite) instead of diffing against rows
 // an older build wrote.
-const Version = 3
+const Version = 4
 
 // The tables a render writes, in the order a diff writes them.
 var tableNames = []string{
-	"session_rows", "prompt_rows", "prompt_steps", "session_marks", "event_rows", "presence_segments",
+	"session_rows", "prompt_rows", "prompt_steps", "session_marks", "event_rows",
 	"session_tools", "call_tool_uses", "session_request_rows",
 	"session_call_days", "agent_calls", "agent_call_hours", "batch_parts",
 	"drawer_requests", "drawer_step_counts", "drawer_events",
@@ -109,7 +109,7 @@ func OwnerColumn(table string) string {
 
 // The session_marks blocks, in the render's order: a new call renumbers no
 // later block.
-var markBlocks = map[string]int64{"call": 0, "reported": 1, "missed": 1, "friction": 2, "compaction": 3, "permission": 4, "network": 5}
+var markBlocks = map[string]int64{"call": 0, "reported": 1, "missed": 1, "friction": 2, "compaction": 3}
 
 // Rows is a key's render: the tables it rendered whole (hashed), the rules'
 // run, and the drawer's.
@@ -375,7 +375,6 @@ func sessionTables(sid string, rows state.Rows, others map[string]state.OtherPar
 		typed("prompt_steps", st.PromptSteps, nil),
 		typed("session_marks", st.SessionMarks, nil),
 		typed("event_rows", st.EventRows, eventExtra),
-		typed("presence_segments", st.PresenceSegments, nil),
 		typed("session_request_rows", st.SessionRequestRows, nil),
 	}, st.EventRows, nil
 }

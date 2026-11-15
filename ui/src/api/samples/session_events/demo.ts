@@ -4,22 +4,6 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["SessionEventsResponse"] = {
   "data": [
     {
-      "collapsedCount": 3,
-      "eventId": "demo-000317:1",
-      "internal": false,
-      "linkedTo": {
-        "id": "demo-000310",
-        "kind": "request",
-        "label": "main \u00b7 opus \u00b7 tool_use"
-      },
-      "marker": null,
-      "name": "tengu_tool_use_progress",
-      "promptIndex": null,
-      "summary": "isMcp false \u00b7 toolName Bash",
-      "t": "2026-11-02T14:57:59.647000Z"
-    },
-    {
-      "collapsedCount": null,
       "eventId": "demo-000317:4",
       "internal": false,
       "linkedTo": {
@@ -34,22 +18,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:01.741000Z"
     },
     {
-      "collapsedCount": 9,
-      "eventId": "demo-000317:5",
-      "internal": false,
-      "linkedTo": {
-        "id": "demo-000310",
-        "kind": "request",
-        "label": "main \u00b7 opus \u00b7 tool_use"
-      },
-      "marker": null,
-      "name": "tengu_tool_use_progress",
-      "promptIndex": null,
-      "summary": "isMcp false \u00b7 toolName Bash",
-      "t": "2026-11-02T14:58:02.648000Z"
-    },
-    {
-      "collapsedCount": null,
       "eventId": "demo-000317:14",
       "internal": false,
       "linkedTo": {
@@ -64,7 +32,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.207000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:15",
       "internal": false,
       "linkedTo": {
@@ -79,7 +46,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.208000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:16",
       "internal": false,
       "linkedTo": {
@@ -94,7 +60,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.208000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:17",
       "internal": false,
       "linkedTo": {
@@ -109,7 +74,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.208000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:18",
       "internal": false,
       "linkedTo": {
@@ -124,7 +88,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.208000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:19",
       "internal": false,
       "linkedTo": {
@@ -139,7 +102,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.208000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:20",
       "internal": false,
       "linkedTo": {
@@ -154,7 +116,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.246000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:21",
       "internal": false,
       "linkedTo": {
@@ -169,7 +130,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.246000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:22",
       "internal": false,
       "linkedTo": {
@@ -184,7 +144,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.254000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:23",
       "internal": false,
       "linkedTo": {
@@ -199,7 +158,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.254000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:26",
       "internal": false,
       "linkedTo": {
@@ -214,7 +172,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.261000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:27",
       "internal": false,
       "linkedTo": {
@@ -229,7 +186,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.261000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:28",
       "internal": false,
       "linkedTo": {
@@ -244,7 +200,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.262000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:29",
       "internal": false,
       "linkedTo": {
@@ -259,7 +214,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.263000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:30",
       "internal": false,
       "linkedTo": {
@@ -274,7 +228,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.281000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:34",
       "internal": false,
       "linkedTo": {
@@ -289,7 +242,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-02T14:58:11.281000Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "demo-000317:35",
       "internal": false,
       "linkedTo": {
@@ -302,6 +254,34 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "promptIndex": null,
       "summary": "",
       "t": "2026-11-02T14:58:11.318000Z"
+    },
+    {
+      "eventId": "demo-000317:36",
+      "internal": false,
+      "linkedTo": {
+        "id": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
+        "kind": "prompt",
+        "label": "prompt"
+      },
+      "marker": null,
+      "name": "tengu_feature_ok",
+      "promptIndex": null,
+      "summary": "",
+      "t": "2026-11-02T14:58:12.190000Z"
+    },
+    {
+      "eventId": "demo-000320:1",
+      "internal": false,
+      "linkedTo": {
+        "id": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
+        "kind": "prompt",
+        "label": "prompt"
+      },
+      "marker": null,
+      "name": "tengu_run_hook",
+      "promptIndex": null,
+      "summary": "hookName PreToolUse:d1e9567da9a8",
+      "t": "2026-11-02T14:58:36.103000Z"
     }
   ],
   "meta": {
@@ -310,7 +290,7 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
     "lastDataAt": "2026-11-04T18:02:49.146000Z",
     "page": 1,
     "pageSize": 20,
-    "shown": 14893,
+    "shown": 14139,
     "to": "2026-11-04T18:05:59.999999Z",
     "total": 21305
   }

@@ -346,9 +346,6 @@ type eventAgg struct {
 	// For the session marks (sessionmarks.go).
 	markEvs map[string][]*markEvent // session -> its markEventNames events
 
-	// For the presence segments (presence.go).
-	presence map[string]*presenceEvs // session -> its blur and sleep windows
-
 	// For the person tables (personmap.go).
 	accts map[string]*acctEvents // account -> what its events say about it
 
@@ -368,7 +365,7 @@ func newEventAgg() *eventAgg {
 		reports: map[string][]rowEvent{}, retries: map[string][]rowEvent{}, prompts: map[string][]rowEvent{},
 		promptEvs: map[string][]*promptEvent{}, turns: map[string][]codexTurn{},
 		keys: map[string][]batchKey{}, unnamed: map[string]bool{},
-		sess: map[string]*sessEvents{}, markEvs: map[string][]*markEvent{}, presence: map[string]*presenceEvs{},
+		sess: map[string]*sessEvents{}, markEvs: map[string][]*markEvent{},
 		accts: map[string]*acctEvents{},
 		ccEvs: map[string][]*listedEvent{}, ccBatches: map[string]bool{}, in: interner{},
 	}
@@ -426,10 +423,6 @@ func (a *eventAgg) merge(o *eventAgg) {
 	for s, evs := range o.markEvs {
 		a.markEvs[s] = append(a.markEvs[s], evs...)
 	}
-	for s, x := range o.presence {
-		p := a.presenceOf(s)
-		p.blur, p.sleep = append(p.blur, x.blur...), append(p.sleep, x.sleep...)
-	}
 	for s, evs := range o.ccEvs {
 		a.ccEvs[s] = append(a.ccEvs[s], evs...)
 	}
@@ -473,7 +466,6 @@ type Derived struct {
 	PromptSteps  []PromptStep
 	SessionRows  []SessionRow
 	SessionMarks []SessionMark
-	Presence     []PresenceSegment
 	EventRows    []EventRow
 	SessionTools []SessionTool
 	SessionReqs  []SessionRequestRow
@@ -676,9 +668,6 @@ func (d *eventAgg) add(e eventCols) {
 		me := newMarkEvent(e)
 		me.part, me.pos = d.part, pos
 		d.markEvs[s] = append(d.markEvs[s], me)
-	}
-	if presenceEventNames[e.Name] {
-		d.addPresence(s, e)
 	}
 	switch e.Name {
 	case "tengu_api_success":

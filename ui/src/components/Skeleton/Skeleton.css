@@ -33,6 +33,19 @@
     background: var(--surface);
     border: 1px solid var(--line);
   }
+  .sk-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .sk-timeline-lane {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
   .sk-lane-band {
     opacity: 0.55;
   }

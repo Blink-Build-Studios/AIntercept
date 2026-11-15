@@ -229,8 +229,9 @@ def get_session_events(
     from_: AwareDatetime | None = FROM,
     to: AwareDatetime | None = TO,
     q: str | None = Query(None, description="Substring of the event name or its summary."),
-    internal: bool = Query(False, description="Include client internals (tengu_tether_*, spinner_*, …)."),
-    collapseTicks: bool = Query(True, description="Fold consecutive tool-progress ticks into one row."),  # noqa: N803
+    internal: bool = Query(
+        False, description="Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, …)."
+    ),
     page: int = PAGE,
     pageSize: int = PAGE_SIZE,  # noqa: N803
 ) -> SessionEventsResponse:
@@ -238,7 +239,7 @@ def get_session_events(
     with pages.read(request, "session/events") as reader:
         r = _load(reader, sessionId, now)
         lo, hi = _range(r, from_, to, now)
-        total, shown, rows = reader.session_events(sessionId, lo, hi, internal, collapseTicks, q, page, pageSize)
+        total, shown, rows = reader.session_events(sessionId, lo, hi, internal, q, page, pageSize)
     meta = EventsMeta(
         asOf=now_dt,
         lastDataAt=ns_to_dt(r["last_ns"]),

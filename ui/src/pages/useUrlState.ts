@@ -15,9 +15,8 @@ export type UrlState = {
   kind: string[];
   agent: string[];
   page: number;
-  /** Events toggles: show client internals (default off), collapse ticks (default on). */
+  /** Events toggle: show client internals (default off). */
   internal: boolean;
-  ticks: boolean;
   /** The drawer: request id and tab. */
   req?: string;
   dtab?: string;
@@ -32,7 +31,6 @@ export type UrlState = {
 };
 
 const LISTS = ["kind", "agent"] as const;
-const FLAGS = ["ticks"] as const; // on unless "0"
 const OPT_IN = ["about", "internal", "hidden"] as const; // off unless "1"
 const RANGE = ["from", "to", "win"] as const;
 
@@ -49,7 +47,6 @@ export function parseUrlState(p: URLSearchParams): UrlState {
     agent: p.getAll("agent"),
     page: Math.max(1, Number(p.get("page") ?? 1) || 1),
     internal: p.get("internal") === "1",
-    ticks: p.get("ticks") !== "0",
     req: str("req"),
     dtab: str("dtab"),
     about: p.get("about") === "1",
@@ -66,9 +63,7 @@ export function patchUrlState(p: URLSearchParams, patch: Partial<UrlState>): URL
     next.delete(k);
     if (v === undefined || v === null || v === "") continue;
     if ((LISTS as readonly string[]).includes(k)) for (const x of v as string[]) next.append(k, x);
-    else if ((FLAGS as readonly string[]).includes(k)) {
-      if (v === false) next.set(k, "0");
-    } else if ((OPT_IN as readonly string[]).includes(k)) {
+    else if ((OPT_IN as readonly string[]).includes(k)) {
       if (v === true) next.set(k, "1");
     } else if (k === "page") {
       if (Number(v) > 1) next.set(k, String(v));

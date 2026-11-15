@@ -35,26 +35,6 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             "name": "tengu_api_success"
           }
         ]
-      },
-      {
-        "count": 1,
-        "t": "2026-11-04T09:30:00Z",
-        "top": [
-          {
-            "count": 1,
-            "name": "tengu_return_to_session"
-          }
-        ]
-      },
-      {
-        "count": 1,
-        "t": "2026-11-04T09:40:00Z",
-        "top": [
-          {
-            "count": 1,
-            "name": "tengu_event_loop_stall"
-          }
-        ]
       }
     ],
     "binSeconds": 300,
@@ -112,43 +92,6 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       }
     ],
     "now": null,
-    "presence": [
-      {
-        "from": "2026-11-04T09:00:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:25:00Z"
-      },
-      {
-        "from": "2026-11-04T09:25:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "away",
-        "to": "2026-11-04T09:30:00Z"
-      },
-      {
-        "from": "2026-11-04T09:30:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:38:00Z"
-      },
-      {
-        "from": "2026-11-04T09:38:00Z",
-        "label": null,
-        "source": "sleep",
-        "state": "asleep",
-        "to": "2026-11-04T09:40:00Z"
-      },
-      {
-        "from": "2026-11-04T09:40:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:45:00Z"
-      }
-    ],
     "prompts": [
       {
         "durationMs": null,

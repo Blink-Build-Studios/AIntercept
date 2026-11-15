@@ -223,7 +223,7 @@ func (f *Fake) Session(sid string) *state.SessionTables {
 
 // fieldOf is each session table's SessionTables field.
 var fieldOf = map[string]string{
-	"session_rows": "SessionRows", "presence_segments": "PresenceSegments", "session_tools": "SessionTools",
+	"session_rows": "SessionRows", "session_tools": "SessionTools",
 	"event_rows": "EventRows", "session_marks": "SessionMarks", "prompt_rows": "PromptRows", "prompt_steps": "PromptSteps",
 	"session_request_rows": "SessionRequestRows", "call_tool_uses": "CallToolUses",
 }

@@ -150,7 +150,6 @@ func buildTables() []Table {
 	rendered("session_marks", process.SessionMark{}, []string{"session_id", "seq"}, nil, "(session_id) WHERE kind = 'missed'")
 	rendered("event_rows", process.EventRow{}, []string{"session_id", "seq"}, []Column{col("batch", "text")},
 		"(session_id, name, ts_ns) WHERE name IN ('tengu_tool_search_mode_decision', 'tengu_skills_sync_success')")
-	rendered("presence_segments", process.PresenceSegment{}, []string{"session_id", "seq"}, nil)
 	rendered("session_tools", process.SessionTool{}, []string{"session_id", "kind", "server", "tool"}, nil)
 	rendered("call_tool_uses", process.CallToolUse{}, []string{"session_id", "ts_ns", "kind", "server", "tool"}, nil)
 	// The Requests tab's rows are the API's flat columns: the request row's aren't prefixed.

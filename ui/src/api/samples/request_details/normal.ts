@@ -14,7 +14,6 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
     },
     "events": [
       {
-        "collapsedCount": null,
         "eventId": "batch-11111111-2026-11-04T09:00:59:1",
         "internal": false,
         "linkedTo": {
@@ -29,7 +28,6 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
         "t": "2026-11-04T09:00:59Z"
       },
       {
-        "collapsedCount": null,
         "eventId": "batch-11111111-2026-11-04T09:01:09:1",
         "internal": false,
         "linkedTo": {
@@ -44,7 +42,6 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
         "t": "2026-11-04T09:01:09Z"
       },
       {
-        "collapsedCount": null,
         "eventId": "batch-11111111-2026-11-04T09:01:10:1",
         "internal": false,
         "linkedTo": {

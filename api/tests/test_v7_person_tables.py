@@ -10,8 +10,8 @@ equal the oracle's person tables (harness.PERSON_TABLES), seq by order:
   component, the alone label, the children), whatever the range;
 - the ranged tables, cut to the range exactly as the pages cut them: event_rows (the columns the
   pages read, with `batch` against the oracle's event_id prefix), session_marks, typed prompt_rows
-  and call_tool_uses of every person session (the timeline counts them all), presence_segments of
-  the sessions the range shows; request_rows (the request log's µs window) and person_last;
+  and call_tool_uses of every person session (the timeline counts them all); request_rows (the request
+  log's µs window) and person_last;
 - the summary's `_LATEST` values: each shown session's newest count of each name up to the range's end.
 
 Each kind of cut is spread over the person's history: 2 per kind per person in make check, 40 with
@@ -46,7 +46,7 @@ _BATCH = re.compile(r"^(.*):[0-9]+$")
 # reorder rows). request_rows' order is compared: the requests sort has no final tiebreaker (quirk 4).
 _UNORDERED = (
     "person_map", "person_sessions", "accounts", "account_facts", "account_devices", "session_rows", "event_rows",
-    "session_marks", "prompt_rows", "call_tool_uses", "presence_segments",
+    "session_marks", "prompt_rows", "call_tool_uses",
 )  # fmt: skip
 _SCOPE = ("person_map", "person_sessions", "accounts", "account_facts", "account_devices", "session_rows")
 
@@ -213,13 +213,6 @@ def comparable(want: Tables, got: Tables, lo: int | None, hi: int | None) -> tup
         side["session_marks"] = _cut(src["session_marks"], "t_ns", lo, hi)
         side["prompt_rows"] = _cut(src["prompt_rows"], "t_ns", lo, hi, flag="typed")
         side["call_tool_uses"] = _cut(src["call_tool_uses"], "ts_ns", lo, hi)
-        # presence: the shown sessions' segments overlapping the range (the timeline reads the bands')
-        t = src["presence_segments"]
-        sid, a, b = _col(t, "session_id"), _col(t, "from_ns"), _col(t, "to_ns")
-        side["presence_segments"] = Table(
-            t.columns,
-            [r for r in t.rows if r[sid] in shown and (hi is None or r[a] <= hi) and (lo is None or r[b] >= lo)],
-        )
         # request_rows: the request log's window, in µs
         t = src["request_rows"]
         ts, us = _col(t, "ts_ns"), (None if lo is None else lo // 1000, None if hi is None else hi // 1000)
@@ -269,7 +262,7 @@ def _compare(layouts, *, per_kind: int) -> dict[str, int]:
     print("person tables compared:", seen, "rows:", rows)  # noqa: T201 (the gate's coverage, in -s output)
     # Not vacuous: every table holds rows somewhere, and every kind of cut was made.
     assert all(rows.get(t) for t in (*_SCOPE, "event_rows", "session_marks", "prompt_rows", "call_tool_uses",
-                                      "presence_segments", "request_rows", "latest")), rows  # fmt: skip
+                                      "request_rows", "latest")), rows  # fmt: skip
     assert all(seen[f"cut:{k}"] for k in ("prompt", "batch", "session", "latest")), seen
     return seen
 

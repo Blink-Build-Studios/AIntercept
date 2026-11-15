@@ -2,7 +2,7 @@
 client serves, with the parameters the UI sends (ui/src/api/hooks/use*Page.ts, ui/src/lib/bins.ts):
 the People page's hour-aligned windows, a person page's unaligned now−span `from` and its brush,
 the ladder's bins, the requests' `order` and kinds (the "other" chip asks for its members), the Events
-tab's `collapseTicks` (always sent), and `q` with a range."""
+tab's internals toggle, and `q` with a range."""
 
 import urllib.parse
 from datetime import datetime, timedelta
@@ -118,9 +118,9 @@ def endpoint_urls(client) -> list[str]:
             f"{base}/requests{_qs(kind='model', pageSize=20)}",
             f"{base}/requests{_qs(kind=OTHER_KINDS, pageSize=20)}",
             f"{base}/events",
-            f"{base}/events?collapseTicks=true&pageSize=20",
-            f"{base}/events?q=tool&collapseTicks=true&pageSize=10",
-            f"{base}/events?internal=true&collapseTicks=false&pageSize=20",
+            f"{base}/events?pageSize=20",
+            f"{base}/events?q=tool&pageSize=10",
+            f"{base}/events?internal=true&pageSize=20",
         ]
         if brush:
             urls += [
@@ -128,7 +128,7 @@ def endpoint_urls(client) -> list[str]:
                 f"{base}/prompts{_qs(**brush, page=1, pageSize=20)}",
                 f"{base}/requests{_qs(**brush, pageSize=20)}",
                 f"{base}/requests{_qs(**brush, q='model', pageSize=20)}",
-                f"{base}/events{_qs(**brush, collapseTicks='true', pageSize=20)}",
-                f"{base}/events{_qs(**brush, q='tool', collapseTicks='true', pageSize=20)}",
+                f"{base}/events{_qs(**brush, pageSize=20)}",
+                f"{base}/events{_qs(**brush, q='tool', pageSize=20)}",
             ]
     return urls

@@ -34,7 +34,7 @@ type AtomicCase struct {
 // AtomicCases is every atomic case the render's layers run (TestRenderSessionAtomic's).
 func AtomicCases() []AtomicCase {
 	var out []AtomicCase
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases, factCases} {
+	for _, cs := range [][]atomicCase{spanCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases, factCases} {
 		for _, c := range cs {
 			out = append(out, AtomicCase{Name: c.name, Before: c.before, Rec: c.rec})
 		}

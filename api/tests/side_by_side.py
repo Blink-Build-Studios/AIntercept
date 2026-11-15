@@ -12,7 +12,7 @@ What it walks, generated from a dataset and the oracle's tables:
   it filters by a range (then it's walked with every cut) and takes a bin (then every ladder bin, with
   each cut when ranged, and 90: a 422 on both), and the other parameters the UI sends;
 - **cuts** (`cuts`): ranges whose ends fall inside a tick run, between two events of one batch (in one
-  session, and across two), between two calls of one prompt, inside a presence segment, inside a
+  session, and across two), between two calls of one prompt, inside a
   not-captured window, on a minute boundary and ±1 µs and ±1 ms around one, before and after all data,
   and open at either end;
 - **checkpoints** (`checkpoints`, `Side.at`): prefixes of the dataset's raw rows, cut at fixed points
@@ -87,9 +87,8 @@ PAGES = [
                    "order=desc&pageSize=20", "captured=false&hidden=true&pageSize=20", "pageSize=5&page=2",
                    "pageSize=20&page=99")),
     Page("session/events", "/sessions/{id}/events", "session", ranged=True,
-         variants=("collapseTicks=true&pageSize=20", "collapseTicks=true&q=tool&pageSize=10",
-                   "internal=true&collapseTicks=false&pageSize=20", "collapseTicks=true&pageSize=5&page=2",
-                   "collapseTicks=true&pageSize=20&page=99")),
+         variants=("pageSize=20", "q=tool&pageSize=10", "internal=true&pageSize=20", "pageSize=5&page=2",
+                   "pageSize=20&page=99")),
     Page("person", "/people/{id}", "person"),
     Page("person/sessions", "/people/{id}/sessions", "person", ranged=True,
          variants=("page=1&pageSize=20", "agent=claude-code&page=1&pageSize=20", "pageSize=1&page=2",
@@ -185,9 +184,6 @@ def instants(oracle: Oracle, sids: Iterable[str]) -> dict[str, list[int]]:
                 add("inside a not-captured window", _mid(a, b))
         for t in missed[:1]:
             add("inside a not-captured window", t)
-        for p in _rows(tables["presence_segments"]):
-            if p["to_ns"] is not None and p["to_ns"] > p["from_ns"]:
-                add("inside a presence segment", _mid(p["from_ns"], p["to_ns"]))
     for by in batch_sessions.values():
         if len(by) >= 2:
             a, b = sorted(by.values())[:2]

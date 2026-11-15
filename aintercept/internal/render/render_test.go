@@ -121,7 +121,7 @@ func TestTablesAndOwners(t *testing.T) {
 			t.Errorf("%s's owner %s, want %s", name, got, owner)
 		}
 	}
-	if len(Tables) != 16 {
+	if len(Tables) != 15 {
 		t.Errorf("%d tables", len(Tables))
 	}
 }

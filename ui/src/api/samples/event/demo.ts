@@ -3,17 +3,14 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["EventResponse"] = {
   "data": {
-    "eventId": "demo-000317:1",
-    "name": "tengu_tool_use_progress",
+    "eventId": "demo-000317:4",
+    "name": "tengu_feature_ok",
     "raw": {
       "account_uuid": "7d2e0000-0000-4000-8000-00000000a41c",
       "data": {
         "additional_metadata": {
           "cc_prompt_id": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
-          "isMcp": false,
-          "requestId": "req_demo_74bab2f9abe7eed57c01",
-          "subscription_type": "max",
-          "toolName": "Bash"
+          "subscription_type": "max"
         },
         "env": {
           "platform": "darwin",
@@ -23,14 +20,14 @@ const sample: components["schemas"]["EventResponse"] = {
         "head_sha": "b81e6e1c56b801e901fad5631be634f68628c90b"
       },
       "device_id": "5e8024215ed54d7fef870262205de55f82ac99815d210ca24bfc462a3208125b",
-      "name": "tengu_tool_use_progress",
+      "name": "tengu_feature_ok",
       "organization_uuid": "051f3708-80b9-4632-810e-ab3ca243b273",
       "session_id": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
       "source": "claude_code",
-      "timestamp": "2026-11-02T14:57:59.647Z"
+      "timestamp": "2026-11-02T14:58:01.741Z"
     },
     "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-    "t": "2026-11-02T14:57:59.647000Z"
+    "t": "2026-11-02T14:58:01.741000Z"
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

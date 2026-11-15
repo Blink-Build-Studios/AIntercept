@@ -28,29 +28,6 @@ func tableRows[T any](rows Rows, table string) []T {
 	return out
 }
 
-// PresenceOf is the stored presence rows in stored order: session, group, start.
-func PresenceOf(rows Rows) []Presence {
-	out := tableRows[Presence](rows, TablePresence)
-	sortPresence(out)
-	return out
-}
-
-// PresenceSegmentsOf is presence_segments as the API loads it: each session's
-// rows numbered by (group, start) from 0.
-func PresenceSegmentsOf(rows Rows) []process.PresenceSegment {
-	ps := PresenceOf(rows)
-	out := make([]process.PresenceSegment, len(ps))
-	n, last := int64(0), ""
-	for i, p := range ps {
-		if i == 0 || p.SessionID != last {
-			n, last = 0, p.SessionID
-		}
-		out[i] = process.PresenceSegment{SessionID: p.SessionID, Seq: n, FromNS: p.FromNS, ToNS: p.ToNS, State: p.State}
-		n++
-	}
-	return out
-}
-
 // The event rows and session tools, rebuilt the way the query does: the stored
 // rows numbered by (time, batch, number), joined to the request links, prompt
 // numbers and Codex turns (the SQL in the API does the same).
@@ -341,13 +318,6 @@ func PromptViewOf(rows Rows) ([]process.PromptRow, []process.PromptStep, []proce
 			m.SessionID, m.Seq = sid, int64(len(out))
 			out = append(out, m)
 		}
-		var calls []*MarkRow
-		var seg *process.SessionMark
-		flush := func() {
-			if seg != nil {
-				add(*seg)
-			}
-		}
 		for _, m := range ms {
 			x := m.Mark
 			if m.PromptRef != "" {
@@ -355,42 +325,8 @@ func PromptViewOf(rows Rows) ([]process.PromptRow, []process.PromptStep, []proce
 					x.PromptIndex = &n
 				}
 			}
-			switch m.Group {
-			case 0:
-				calls = append(calls, m)
-				add(x)
-			case 4:
-				if seg != nil && *seg.Mode == *x.Mode {
-					continue
-				}
-				var prev *string
-				if seg != nil {
-					ts := x.TNS
-					seg.ToNS, prev = &ts, seg.Mode
-					flush()
-				}
-				mode := *x.Mode
-				seg = &process.SessionMark{Kind: "permission", TNS: x.TNS, Mode: &mode, PrevMode: prev}
-			default:
-				add(x)
-			}
+			add(x)
 		}
-		flush()
-		seg = nil
-		for _, c := range calls {
-			if c.PointIP == "" || seg != nil && *seg.IP == c.PointIP {
-				continue
-			}
-			if seg != nil {
-				ts := c.Mark.TNS
-				seg.ToNS = &ts
-				flush()
-			}
-			ip := c.PointIP
-			v6 := strings.Contains(ip, ":") && !strings.HasPrefix(strings.ToLower(ip), "::ffff:")
-			seg = &process.SessionMark{Kind: "network", TNS: c.Mark.TNS, IP: &ip, IPv6: v6}
-		}
-		flush()
 		markRows = append(markRows, out...)
 	}
 	return prows, stepRows, markRows
@@ -852,17 +788,4 @@ func (v *rqView) sessionRows(sr process.SessionRow) []process.SessionRequestRow 
 		out[i] = process.SessionRequestRow{Scope: s, Seq: int64(i), Row: x}
 	}
 	return out
-}
-
-func sortPresence(p []Presence) {
-	sort.Slice(p, func(i, j int) bool {
-		a, b := p[i], p[j]
-		if a.SessionID != b.SessionID {
-			return a.SessionID < b.SessionID
-		}
-		if a.Group != b.Group {
-			return a.Group < b.Group
-		}
-		return a.FromNS < b.FromNS
-	})
 }

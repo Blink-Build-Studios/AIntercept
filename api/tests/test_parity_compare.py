@@ -73,3 +73,28 @@ def test_status_missing_responses_and_skipped_prefixes(tmp_path, capsys):
         "/api/v1/people/p @2: <missing in b>",
         "1 equal, 2 different",
     ]
+
+
+def test_dropped_fields_leave_every_depth_of_both_sides(tmp_path, capsys):
+    """A removed feature's field (here `presence` and `collapsedCount`) doesn't count wherever it is;
+    any other difference still does, and a dropped name is only an object key, never a value."""
+    a = write(
+        tmp_path / "a.jsonl",
+        [
+            rec("/t", {"data": {"presence": [1], "n": 1}}),
+            rec("/e", {"data": [{"name": "x", "collapsedCount": 2}, {"name": "presence"}]}),
+            rec("/f", {"data": {"presence": [], "n": 1}}),
+        ],
+    )
+    b = write(
+        tmp_path / "b.jsonl",
+        [
+            rec("/t", {"data": {"n": 1}}),
+            rec("/e", {"data": [{"name": "x"}, {"name": "presence"}]}),
+            rec("/f", {"data": {"n": 2}}),
+        ],
+    )
+    assert pc.main([a, b]) == 1
+    assert capsys.readouterr().out.splitlines()[-1] == "0 equal, 3 different"
+    assert pc.main([a, b, "--drop-field", "presence", "collapsedCount"]) == 1
+    assert capsys.readouterr().out.splitlines() == ["/f @1: .body.data.n", "2 equal, 1 different"]

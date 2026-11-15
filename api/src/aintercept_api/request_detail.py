@@ -1111,7 +1111,6 @@ def _event_rows(store: Store, sid: str | None, evs: list[ss.Event]) -> list[Even
             summary=ss._summary(e.md),
             marker=ss._marker(e),
             internal=ss.is_internal(e.name),
-            collapsedCount=None,
         )
         for e in evs
     ]

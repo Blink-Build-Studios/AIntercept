@@ -43,15 +43,6 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     ],
     "notCaptured": [],
     "now": null,
-    "presence": [
-      {
-        "from": "2026-11-04T09:00:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:03:05Z"
-      }
-    ],
     "prompts": [
       {
         "durationMs": null,

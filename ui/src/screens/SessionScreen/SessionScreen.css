@@ -26,9 +26,6 @@
     flex-direction: column;
     gap: 6px;
   }
-  .session-timeline-skeleton {
-    height: 360px;
-  }
   .session-panels {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

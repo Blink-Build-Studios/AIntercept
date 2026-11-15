@@ -62,8 +62,6 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "recap",
         "permission",
         "cost",
-        "presence",
-        "focus",
         "device",
         "analytics",
         "frustrated"

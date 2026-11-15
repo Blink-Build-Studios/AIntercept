@@ -50,8 +50,6 @@ const sample: components["schemas"]["PersonResponse"] = {
         "recap",
         "permission",
         "cost",
-        "presence",
-        "focus",
         "device",
         "analytics",
         "frustrated"

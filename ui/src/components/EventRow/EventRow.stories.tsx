@@ -9,7 +9,6 @@ import { EVENT_COLUMNS, EVENT_MIN_WIDTH, EventRow, type Event } from "./EventRow
 const events: Event[] = [...many.data, ...hidden.data, ...demo.data];
 const find = (p: (e: Event) => boolean) => events.find(p) ?? events[0]!;
 const plain = find((e) => e.name === "tengu_api_success");
-const ticks = find((e) => (e.collapsedCount ?? 0) > 1);
 const destructive = find((e) => e.marker === "destructive");
 const NOW = "2026-11-04T18:00:00";
 
@@ -30,8 +29,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-/** Consecutive tool-progress ticks folded into one row: dimmed, `×N`. */
-export const CollapsedTicks: Story = { args: { event: ticks } };
 /** A destructive command: ▲ in the marker column. */
 export const Marked: Story = { args: { event: destructive } };
 /**

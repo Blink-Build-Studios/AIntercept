@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { Schemas } from "../../api/types";
-import { formatCount, formatDuration } from "../../lib/format";
+import { formatDuration } from "../../lib/format";
 import { formatTime } from "../../lib/time";
 import { useRowLink } from "../../lib/linkedHover";
 import { fullText, timeTip } from "../../lib/tips";
@@ -91,8 +91,7 @@ const offset = (ms: number) => `${ms < 0 ? "−" : "+"}${formatDuration(Math.abs
 /**
  * One analytics event in the Events tab (handoff §6.5, §5.2.9). The event name is
  * the toggle, and its hit area covers the row, so clicking anywhere toggles a `<pre>` of the full JSON under
- * it; "Linked to" is its own control. Collapsed tool-progress ticks dim to 0.55
- * with `×N`; destructive and frustrated events carry their Marker.
+ * it; "Linked to" is its own control. Destructive and frustrated events carry their Marker.
  */
 export function EventRow({ event: e, expanded = false, onToggle, json, jsonError, onLink, now, "data-force": force, compact }: EventRowProps) {
   const jsonId = useId();
@@ -120,21 +119,19 @@ export function EventRow({ event: e, expanded = false, onToggle, json, jsonError
       </div>
     );
   }
-  const collapsedCount = e.collapsedCount !== null && e.collapsedCount > 1 ? e.collapsedCount : null;
   const link = linkText(e.linkedTo);
-  return <FullEventRow {...{ e, expanded, onToggle, json, jsonError, onLink, now, force, jsonId, collapsedCount, link }} />;
+  return <FullEventRow {...{ e, expanded, onToggle, json, jsonError, onLink, now, force, jsonId, link }} />;
 }
 
 type FullProps = Pick<EventRowProps, "expanded" | "onToggle" | "json" | "jsonError" | "onLink" | "now"> & {
   e: Event;
   force: EventRowProps["data-force"];
   jsonId: string;
-  collapsedCount: number | null;
   link: string;
 };
 
 // The table form, split out so its hooks don't run for the compact form.
-function FullEventRow({ e, expanded = false, onToggle, json, jsonError, onLink, now, force, jsonId, collapsedCount, link }: FullProps) {
+function FullEventRow({ e, expanded = false, onToggle, json, jsonError, onLink, now, force, jsonId, link }: FullProps) {
   const { linked, handlers } = useRowLink({ source: "table", ids: [e.eventId], t: e.t }, { id: e.eventId, t: e.t });
   const linkTip = { rows: [{ key: e.linkedTo.kind, value: e.linkedTo.id }] };
   return (
@@ -151,7 +148,7 @@ function FullEventRow({ e, expanded = false, onToggle, json, jsonError, onLink, 
           if (ev.key === "Enter" && ev.target === ev.currentTarget) onToggle(e);
         }}
         {...handlers}
-        className={`dt-row type-data ev-row text-ink ${collapsedCount !== null ? "dt-quiet" : ""}`}
+        className="dt-row type-data ev-row text-ink"
       >
         <Tooltip content={timeTip(e.t)}>
           <span role="cell" className="text-ink-faint">
@@ -172,7 +169,6 @@ function FullEventRow({ e, expanded = false, onToggle, json, jsonError, onLink, 
             className="ev-control ev-toggle text-ch-analytics"
           >
             {e.name}
-            {collapsedCount !== null ? ` ×${formatCount(collapsedCount)}` : ""}
           </button>
         </span>
         <span role="cell">

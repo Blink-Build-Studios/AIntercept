@@ -58,7 +58,6 @@ func DeriveRows(in RefInput) *Derived {
 	o.RequestRows, o.PersonLast = d.rows(sortedKeys(ids))
 	o.PromptRows, o.PromptSteps, o.SessionMarks = d.promptRows()
 	o.SessionRows = d.sessionRows(sessions)
-	o.Presence = d.presenceSegments(o.SessionRows)
 	o.EventRows, o.SessionTools = d.eventRows()
 	o.SessionReqs = d.sessionRequestRows(o.SessionRows)
 	pt := d.personTables(sortedKeys(ids))

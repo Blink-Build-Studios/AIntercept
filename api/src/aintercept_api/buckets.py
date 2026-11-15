@@ -121,7 +121,6 @@ ROUTING: dict[str, tuple[str, str]] = {
     "prompt_steps": ("s:", "session_id"),
     "session_rows": ("s:", "session_id"),
     "session_marks": ("s:", "session_id"),
-    "presence_segments": ("s:", "session_id"),
     "event_rows": ("s:", "session_id"),
     "session_tools": ("s:", "session_id"),
     "session_request_rows": ("s:", "scope_session_id"),

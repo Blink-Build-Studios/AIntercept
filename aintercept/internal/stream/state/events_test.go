@@ -281,7 +281,6 @@ func TestEventsGeneratedSequences(t *testing.T) {
 			o.apply(r)
 		}
 		checkEvents(t, fmt.Sprintf("seed %d", seed), rs, o)
-		checkPresence(t, fmt.Sprintf("seed %d", seed), rs, o)
 	}
 }
 

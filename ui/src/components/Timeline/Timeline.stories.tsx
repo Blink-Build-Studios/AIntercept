@@ -9,14 +9,12 @@ import sessionDemo from "../../api/samples/session_timeline/demo";
 import sessionMany from "../../api/samples/session_timeline/many";
 import sessionOnePrompt from "../../api/samples/session_timeline/one_prompt";
 import type { SessionTimeline as SessionTimelineData } from "../../api/types";
-import { analyticsBins, bands, callBins, d, friction, gaps, presenceRows, prompts, window } from "./demoData";
+import { analyticsBins, bands, callBins, d, friction, gaps, prompts, window } from "./demoData";
 import { DensityTrack } from "./DensityTrack";
 import { FrictionTrack, frictionRowLabels } from "./FrictionTrack";
 import { Lane, LANE_HEIGHT } from "./Lane";
 import { MarkerTrack } from "./MarkerTrack";
-import { RowTrack } from "./RowTrack";
 import { perBin, sessionLanes } from "./sessionLanes";
-import { StateTrack } from "./StateTrack";
 import { Timeline } from "./Timeline";
 import { laneInteractions, sessionInteractions, type TimelineActions } from "./interactions";
 import { LANE_DEFINITIONS, nowTip } from "./timelineTips";
@@ -40,13 +38,13 @@ function PersonTimeline({ loading }: { loading?: boolean }) {
       <Lane label="Sessions" height={40} summary={`${bands.length} session`} sunken>
         <BandTrack bands={bands} now={d.to} interact={on.bands} />
       </Lane>
-      <Lane label="Prompts" height={26} summary={`${prompts.length} prompts`}>
+      <Lane label="Prompts" height={24} summary={`${prompts.length} prompts`}>
         <MarkerTrack markers={prompts} interact={on.prompts} />
       </Lane>
       <Lane
         label="Model calls"
         sublabel={perBin(d.binSeconds)}
-        height={LANE_HEIGHT.barsWithGapRow}
+        height={LANE_HEIGHT.personBarsWithGapRow}
         summary={`peak ${Math.max(...callBins.map((b) => b.v))} per bin; ${gaps.length} gaps`}
         definition={LANE_DEFINITIONS.modelCalls}
         footer={gapRowLabel(gaps)}
@@ -55,9 +53,6 @@ function PersonTimeline({ loading }: { loading?: boolean }) {
       </Lane>
       <Lane label="Analytics" sublabel="events" height={44} summary={`${analyticsBins.length} active bins`} definition={LANE_DEFINITIONS.analytics}>
         <DensityTrack bins={analyticsBins} binSeconds={d.binSeconds} color="analytics" interact={on.analytics} />
-      </Lane>
-      <Lane label="Presence" height={LANE_HEIGHT.rows(3)} summary="focused, away and asleep" definition={LANE_DEFINITIONS.presence} rows={presenceRows.map((r) => r.name)}>
-        <RowTrack rows={presenceRows} interact={on.presence} />
       </Lane>
       <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${friction.length} marks`} rows={frictionRowLabels(friction)}>
         <FrictionTrack marks={friction} interact={on.friction} />
@@ -107,18 +102,6 @@ function SessionTimeline({ data, loading }: { data: SessionTimelineData; loading
       <Lane label="Context" sublabel="main thread" height={56} summary={`peak ${l.context.peak} tokens; ${l.context.labels.length} compactions`}>
         <BarTrack bins={l.context.bins} binSeconds={l.binSeconds} color="count" level labels={l.context.labels} interact={own.context} labelTip={own.compactionTip} />
       </Lane>
-      <Lane label="Permission" height={30} summary={`${l.permission.segments.length} modes; ${l.permission.changes.length} brief changes`}>
-        <StateTrack segments={l.permission.segments} changes={l.permission.changes} palette="permission" nowrap interact={own.permission} />
-      </Lane>
-      <Lane label="Focus" height={LANE_HEIGHT.rows(2)} summary="this terminal: focused and blurred" rows={l.focusRows.map((r) => r.name)}>
-        <RowTrack rows={l.focusRows} interact={on.presence} />
-      </Lane>
-      <Lane label="Device" height={LANE_HEIGHT.rows(1)} summary="sleeps" rows={l.sleepRows.map((r) => r.name)}>
-        <RowTrack rows={l.sleepRows} interact={on.presence} />
-      </Lane>
-      <Lane label="Network" height={LANE_HEIGHT.single} summary={`${l.network.length} network segments`}>
-        <StateTrack segments={l.network} palette="network" nowrap interact={own.network} />
-      </Lane>
       <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
         <FrictionTrack marks={l.friction} interact={on.friction} />
       </Lane>
@@ -129,17 +112,17 @@ function SessionTimeline({ data, loading }: { data: SessionTimelineData; loading
 const sessionArgs = (data: SessionTimelineData) => ({ from: data.from, to: data.to, label: "Session timeline", children: null });
 const sessionStory = (data: SessionTimelineData): Story => ({ args: sessionArgs(data), render: () => <SessionTimeline data={data} /> });
 
-/** The session page from the demo sample (real traffic, sanitized): live, three idle compactions, brief permission flips. */
+/** The session page from the demo sample (real traffic, sanitized): live, three idle compactions. */
 export const Session: Story = sessionStory(sessionDemo.data);
 /** Scenario one_prompt: one prompt, one call. */
 export const SessionOnePrompt: Story = sessionStory(sessionOnePrompt.data);
-/** Scenario many: three prompts, permission back and forth, a second (IPv6) network, away and asleep. */
+/** Scenario many: three prompts, with friction. */
 export const SessionMany: Story = sessionStory(sessionMany.data);
 /** Scenario compaction: an idle compaction (from → to, wait) and one with no result yet. */
 export const SessionCompaction: Story = sessionStory(sessionCompaction.data);
-/** Scenario coverage_gap: a not-captured window, so the network it overlaps is bypassed (danger). */
+/** Scenario coverage_gap: a not-captured window on the Model calls lane. */
 export const SessionCoverageGap: Story = sessionStory(sessionCoverageGap.data);
 export const SessionLoading: Story = { args: sessionArgs(sessionDemo.data), render: () => <SessionTimeline data={sessionDemo.data} loading /> };
 export const Loading: Story = { args: { ...window, label: "Activity", children: null }, render: () => <PersonTimeline loading /> };
-/** A Codex thread's lanes: Prompts · Model calls · Approval · Network · Friction (§11J). */
+/** A Codex thread's lanes: Prompts · Model calls · Friction (§11J). */
 export const Codex: Story = { args: { ...window, label: "Activity", children: null }, render: () => <CodexTimelineSheet /> };

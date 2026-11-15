@@ -195,27 +195,6 @@ func (o *streamOut) fold(key string, d Delta) {
 	}
 }
 
-// refPresence is the reference's presence rows in the stored shape. It checks
-// that the reference's seq is the (group, start) order the query numbers by.
-func refPresence(d *process.Derived) ([]Presence, error) {
-	var out []Presence
-	last := map[string]Presence{}
-	for _, r := range d.Presence {
-		g := int32(0)
-		if r.State == "asleep" {
-			g = 1
-		}
-		p := Presence{SessionID: r.SessionID, Group: g, FromNS: r.FromNS, ToNS: r.ToNS, State: r.State}
-		if prev, ok := last[r.SessionID]; ok && !(prev.Group < g || prev.Group == g && prev.FromNS < p.FromNS) {
-			return nil, fmt.Errorf("session %s: seq order isn't (group, start) at %+v", r.SessionID, p)
-		}
-		last[r.SessionID] = p
-		out = append(out, p)
-	}
-	sortPresence(out)
-	return out, nil
-}
-
 // shuffled is rs in a random order, some duplicated.
 func shuffled(rng *rand.Rand, rs []records.Record, dupes int) []records.Record {
 	out := append([]records.Record(nil), rs...)
@@ -234,4 +213,3 @@ func sessionRowsOf(o *streamOut) []process.SessionRow   { return TitledSessionRo
 func promptViewOf(o *streamOut) ([]process.PromptRow, []process.PromptStep, []process.SessionMark) {
 	return PromptViewOf(o.rows)
 }
-func (o *streamOut) presenceRows() []Presence { return PresenceOf(o.rows) }

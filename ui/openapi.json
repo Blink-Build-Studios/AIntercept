@@ -1398,17 +1398,6 @@
       "EventRow": {
         "additionalProperties": false,
         "properties": {
-          "collapsedCount": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collapsedcount"
-          },
           "eventId": {
             "title": "Eventid",
             "type": "string"
@@ -1468,8 +1457,7 @@
           "linkedTo",
           "summary",
           "marker",
-          "internal",
-          "collapsedCount"
+          "internal"
         ],
         "title": "EventRow",
         "type": "object"
@@ -2432,59 +2420,6 @@
         "title": "ModelCallBin",
         "type": "object"
       },
-      "NetworkSegment": {
-        "additionalProperties": false,
-        "properties": {
-          "address": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Address"
-          },
-          "bypassed": {
-            "title": "Bypassed",
-            "type": "boolean"
-          },
-          "from": {
-            "format": "date-time",
-            "title": "From",
-            "type": "string"
-          },
-          "ipv6": {
-            "title": "Ipv6",
-            "type": "boolean"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "notCaptured": {
-            "title": "Notcaptured",
-            "type": "integer"
-          },
-          "to": {
-            "format": "date-time",
-            "title": "To",
-            "type": "string"
-          }
-        },
-        "required": [
-          "from",
-          "to",
-          "label",
-          "ipv6",
-          "bypassed",
-          "address",
-          "notCaptured"
-        ],
-        "title": "NetworkSegment",
-        "type": "object"
-      },
       "Notice": {
         "additionalProperties": false,
         "properties": {
@@ -2579,8 +2514,6 @@
                   "origin",
                   "client",
                   "reasoning",
-                  "presence",
-                  "focus",
                   "device",
                   "analytics",
                   "frustrated",
@@ -2733,57 +2666,6 @@
         "title": "PeopleResponse",
         "type": "object"
       },
-      "PermissionChange": {
-        "additionalProperties": false,
-        "properties": {
-          "from": {
-            "title": "From",
-            "type": "string"
-          },
-          "t": {
-            "format": "date-time",
-            "title": "T",
-            "type": "string"
-          },
-          "to": {
-            "title": "To",
-            "type": "string"
-          }
-        },
-        "required": [
-          "t",
-          "from",
-          "to"
-        ],
-        "title": "PermissionChange",
-        "type": "object"
-      },
-      "PermissionSegment": {
-        "additionalProperties": false,
-        "properties": {
-          "from": {
-            "format": "date-time",
-            "title": "From",
-            "type": "string"
-          },
-          "mode": {
-            "title": "Mode",
-            "type": "string"
-          },
-          "to": {
-            "format": "date-time",
-            "title": "To",
-            "type": "string"
-          }
-        },
-        "required": [
-          "from",
-          "to",
-          "mode"
-        ],
-        "title": "PermissionSegment",
-        "type": "object"
-      },
       "PersonHeader": {
         "additionalProperties": false,
         "properties": {
@@ -2839,8 +2721,6 @@
                   "origin",
                   "client",
                   "reasoning",
-                  "presence",
-                  "focus",
                   "device",
                   "analytics",
                   "frustrated",
@@ -3468,57 +3348,6 @@
           "proxyDetected"
         ],
         "title": "Posture",
-        "type": "object"
-      },
-      "PresenceSegment": {
-        "additionalProperties": false,
-        "properties": {
-          "from": {
-            "format": "date-time",
-            "title": "From",
-            "type": "string"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "source": {
-            "enum": [
-              "focus",
-              "sleep"
-            ],
-            "title": "Source",
-            "type": "string"
-          },
-          "state": {
-            "enum": [
-              "focused",
-              "away",
-              "asleep"
-            ],
-            "title": "State",
-            "type": "string"
-          },
-          "to": {
-            "format": "date-time",
-            "title": "To",
-            "type": "string"
-          }
-        },
-        "required": [
-          "from",
-          "to",
-          "state",
-          "source"
-        ],
-        "title": "PresenceSegment",
         "type": "object"
       },
       "PromptData": {
@@ -5066,8 +4895,6 @@
                 "origin",
                 "client",
                 "reasoning",
-                "presence",
-                "focus",
                 "device",
                 "analytics",
                 "frustrated",
@@ -5875,7 +5702,7 @@
       },
       "SessionStateResponse": {
         "additionalProperties": false,
-        "description": "Capabilities and experiments are as of `to`; everything else is within [from, to].",
+        "description": "Capabilities and experiments are the whole session's; everything else is within [from, to].",
         "properties": {
           "data": {
             "$ref": "#/components/schemas/SessionState"
@@ -5939,13 +5766,6 @@
             "title": "Modelcalls",
             "type": "array"
           },
-          "network": {
-            "items": {
-              "$ref": "#/components/schemas/NetworkSegment"
-            },
-            "title": "Network",
-            "type": "array"
-          },
           "notCaptured": {
             "items": {
               "$ref": "#/components/schemas/GapWindow"
@@ -5964,27 +5784,6 @@
               }
             ],
             "title": "Now"
-          },
-          "permission": {
-            "items": {
-              "$ref": "#/components/schemas/PermissionSegment"
-            },
-            "title": "Permission",
-            "type": "array"
-          },
-          "permissionChanges": {
-            "items": {
-              "$ref": "#/components/schemas/PermissionChange"
-            },
-            "title": "Permissionchanges",
-            "type": "array"
-          },
-          "presence": {
-            "items": {
-              "$ref": "#/components/schemas/PresenceSegment"
-            },
-            "title": "Presence",
-            "type": "array"
           },
           "prompts": {
             "items": {
@@ -6016,20 +5815,15 @@
           "modelCalls",
           "analytics",
           "notCaptured",
-          "presence",
           "friction",
           "context",
-          "compactions",
-          "permission",
-          "permissionChanges",
-          "network"
+          "compactions"
         ],
         "title": "SessionTimeline",
         "type": "object"
       },
       "SessionTimelineResponse": {
         "additionalProperties": false,
-        "description": "`presence` holds this terminal's focus and the device's sleep: focus lane = focused/away, sleep lane = asleep.",
         "properties": {
           "data": {
             "$ref": "#/components/schemas/SessionTimeline"
@@ -6489,13 +6283,6 @@
             ],
             "title": "Now"
           },
-          "presence": {
-            "items": {
-              "$ref": "#/components/schemas/PresenceSegment"
-            },
-            "title": "Presence",
-            "type": "array"
-          },
           "prompts": {
             "items": {
               "$ref": "#/components/schemas/TimelinePrompt"
@@ -6526,7 +6313,6 @@
           "modelCalls",
           "analytics",
           "notCaptured",
-          "presence",
           "friction"
         ],
         "title": "Timeline",
@@ -8599,26 +8385,14 @@
             }
           },
           {
-            "description": "Include client internals (tengu_tether_*, spinner_*, \u2026).",
+            "description": "Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, \u2026).",
             "in": "query",
             "name": "internal",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Include client internals (tengu_tether_*, spinner_*, \u2026).",
+              "description": "Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, \u2026).",
               "title": "Internal",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Fold consecutive tool-progress ticks into one row.",
-            "in": "query",
-            "name": "collapseTicks",
-            "required": false,
-            "schema": {
-              "default": true,
-              "description": "Fold consecutive tool-progress ticks into one row.",
-              "title": "Collapseticks",
               "type": "boolean"
             }
           },

@@ -41,7 +41,6 @@ def test_person_timeline_demo(demo, write_sample):
     assert d["binSeconds"] == 3600 and len(d["sessions"]) == 1 and d["sessions"][0]["live"] is True
     assert sum(b["count"] for b in d["modelCalls"]) == 640
     assert sum(w["count"] for w in d["notCaptured"]) == 95
-    assert {p["state"] for p in d["presence"]} == {"focused", "away", "asleep"}
 
 
 def test_person_demo(demo, write_sample):
@@ -98,10 +97,6 @@ def test_session_timeline_demo(demo, write_sample):
     write_sample(client, r, "demo")
     d = r.json()["data"]
     assert sum(b["count"] for b in d["modelCalls"]) == 640 and sum(w["count"] for w in d["notCaptured"]) == 95
-    # DATA_ANSWERS §6: bypass → default → bypass, twice within 20 s on Nov 3.
-    assert [p["mode"] for p in d["permission"]] == ["bypassPermissions", "default"] * 2 + ["bypassPermissions"]
-    toggles = d["permission"][1:4]
-    assert all(p["from"].startswith("2026-11-03T16:51") for p in toggles)
     # Handoff §9: compaction from ~905k with a 71 s wait (the context after is the next call's, not the summary's).
     first = d["compactions"][0]
     assert len(d["compactions"]) == 3 and 900_000 < first["from"] < 910_000 and round(first["waitMs"] / 1000) == 71

@@ -29,10 +29,8 @@ const base: Event = {
   summary: "toolUseID toolu_…41",
   marker: null,
   internal: false,
-  collapsedCount: null,
 };
 const E = (over: Partial<Event>): Event => ({ ...base, ...over });
-const ticks = E({ t: "2026-11-04T10:02:10", name: "tengu_tool_progress", summary: "collapsed · client ticks", collapsedCount: 8 });
 const marked = E({ t: "2026-11-04T10:02:37", name: "tengu_bash_tool_command_executed", summary: "rm · exit 0 · destructive_category rm -rf", marker: "destructive" });
 const success = E({ name: "tengu_api_success", linkedTo: { kind: "request", id: "req_01H…a10", label: "…a10" }, summary: "costUSD 0.18 · ttftMs 2,104" });
 // CompTableHover "Linked to" hover: the row hovered, its link target underlined.
@@ -55,7 +53,6 @@ export const Canvas: StoryObj = {
   render: () => (
     <div className="flex flex-col items-start gap-3">
       <P spec="EventRow/default"><Row event={base} /></P>
-      <P spec="EventRow/collapsedTicks"><Row event={ticks} /></P>
       <P spec="EventRow/marked"><Row event={marked} /></P>
       <P spec="EventRow/selectedExpanded"><Row event={success} expanded /></P>
       <P spec="EventRow/expandedJson"><EventJson json={json} /></P>

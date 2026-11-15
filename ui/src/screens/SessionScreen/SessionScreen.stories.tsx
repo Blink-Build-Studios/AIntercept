@@ -39,7 +39,7 @@ function Screen({ initialTab = "prompts", openDrawer: drawer, ...over }: Partial
   const [tab, setTab] = useState<SessionTab>(initialTab);
   const [dtab, setDtab] = useState<DrawerTab>(drawer?.tab ?? "summary");
   const [rq, setRq] = useState({ q: "", kinds: [] as SessionScreenProps["requestFilter"]["kinds"], notCaptured: false });
-  const [ev, setEv] = useState({ q: "", internal: false, ticks: true });
+  const [ev, setEv] = useState({ q: "", internal: false });
   const [open, setOpen] = useState<string[]>([]);
   const props: SessionScreenProps = {
     sessionId: sessionDemo.data.sessionId,

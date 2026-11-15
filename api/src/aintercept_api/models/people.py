@@ -97,9 +97,6 @@ class PersonSessionsResponse(Envelope[list[SessionRow]]):
     """Newest first. Range-filtered by overlap with [from, to]; paged."""
 
 
-PresenceState = Literal["focused", "away", "asleep"]
-
-
 class TimelineSession(Model):
     sessionId: str
     start: datetime
@@ -196,15 +193,6 @@ class GapWindow(Model):
     """Why the calls bypassed the proxy; None until the coverage job attributes causes (§5.4)."""
 
 
-class PresenceSegment(Model):
-    from_: datetime = Field(alias="from")
-    to: datetime
-    state: PresenceState
-    label: str | None = None
-    source: Literal["focus", "sleep"]
-    """sleep: tengu_event_loop_stall likely_sleep; focus: tengu_return_to_session blur windows."""
-
-
 class FrictionMark(Model):
     t: datetime
     kind: Literal["frustrated", "interrupted", "destructive"]
@@ -228,7 +216,6 @@ class Timeline(Model):
     modelCalls: list[ModelCallBin]
     analytics: list[AnalyticsBin]
     notCaptured: list[GapWindow]
-    presence: list[PresenceSegment]
     friction: list[FrictionMark]
 
 
