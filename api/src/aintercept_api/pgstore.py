@@ -39,15 +39,17 @@ import urllib.parse
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, TypeVar, cast
 
 import adbc_driver_postgresql.dbapi as pgdbapi
 import duckdb
 
-from aintercept_api import drawer, pages, ranges, state_sql, stream_sql
+from aintercept_api import drawer, pages, ranges, sessionpages, state_sql, stream_sql
 from aintercept_api import request_detail as rd
 from aintercept_api import store as legacy
 from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
+from aintercept_api.models.sessions import BetweenItem, EventRow, PromptItem, SessionState, SessionTimeline
 from aintercept_api.reader import (
     BEGIN,
     POOL_SIZE,
@@ -65,7 +67,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "6e401ffc9cd1b09e41e14ca8916cf2c0efc1c02e12ce1b0bb638ac4beb150706"
+SCHEMA_HASH = "8e9adde1bfda6204c88cdaf4b6e9dc6c01c5cebedac6fe37f7c5b850a04d4d36"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
@@ -722,11 +724,26 @@ class PgPages:
     A page moves here (build steps 6 and 7) by adding its name to PAGES and its method, with
     pages.SqlPages' signature."""
 
-    PAGES = frozenset({"status", "request", "request/raw", "request/details", "event"})
+    PAGES = frozenset(
+        {
+            "status",
+            "request",
+            "request/raw",
+            "request/details",
+            "event",
+            "session",
+            "session/timeline",
+            "session/state",
+            "session/prompts",
+            "session/requests",
+            "session/events",
+        }
+    )
 
     def __init__(self, store: PgStore, snap: Snapshot) -> None:
         self.store, self.snap = store, snap
         self._status: pages.StatusValues | None = None
+        self._sessions = sessionpages.SessionReads(snap)
 
     def status(self) -> pages.StatusValues:
         if self._status is None:
@@ -758,3 +775,35 @@ class PgPages:
 
     def event(self, eid: str) -> EventDetail | None:
         return self._reads().event(eid)
+
+    # --- the session pages (v9: sessionpages.SessionReads, docs/PIPELINE.md §6.1) ---------------------
+
+    def session(self, sid: str, now: int) -> dict[str, Any] | None:
+        return self._sessions.session(sid, now)
+
+    def session_timeline(
+        self, sid: str, r: dict[str, Any], now_dt: datetime, now: int, lo: int, hi: int, bin_s: int
+    ) -> SessionTimeline:
+        return self._sessions.timeline(sid, r, now_dt, now, lo, hi, bin_s)
+
+    def session_state(self, sid: str, lo: int, hi: int, req_lo: int | None, req_hi: int | None) -> SessionState:
+        return self._sessions.state(sid, lo, hi, self._sessions.request_count(sid, req_lo, req_hi))
+
+    def session_prompts(
+        self, sid: str, now: int, lo: int, hi: int, page: int, size: int, prompt: int | None
+    ) -> tuple[list[PromptItem | BetweenItem], int, int]:
+        return self._sessions.prompts(sid, now, lo, hi, page, size, prompt)
+
+    def session_requests(
+        self, sid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
+        captured: bool | None, page: int, size: int, order: str, hidden: bool,
+    ) -> pages.RequestsPage:  # fmt: skip
+        hidden_count, total, kinds, rows = self._sessions.requests(
+            sid, lo, hi, kind, q, captured, page, size, order, hidden
+        )
+        return pages.RequestsPage(hidden_count, total, kinds, rows)
+
+    def session_events(
+        self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
+    ) -> tuple[int, int, list[EventRow]]:
+        return self._sessions.events(sid, lo, hi, internal, q, page, size)

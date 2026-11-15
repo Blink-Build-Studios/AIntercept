@@ -220,7 +220,8 @@ func TestSessionKeys(t *testing.T) {
 		head,
 		ev("B", 5, "s", t0+5e9, "tengu_input_prompt", `{}`),
 		ev("B", 6, "s", t0+6e9, "tengu_session_linked_to_pr", `{"prNumber":12}`),
-		ev("B", 7, "s", t0+2*minute, "tengu_run_hook", `{"hookName":"pre"}`), // another minute of the hour
+		ev("B", 7, "s", t0+2*minute, "tengu_run_hook", `{"hookName":"pre"}`),     // another minute of the hour
+		ev("B", 8, "s", t0+7e9, "tengu_tool_use_success", `{"toolName":"Glob"}`), // no isMcp: a built-in tool
 	)
 	drain(t, db)
 	var minuteHooks int
@@ -238,11 +239,11 @@ func TestSessionKeys(t *testing.T) {
 		got = append(got, s)
 	}
 	want := []string{
-		"batch B 7", "call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 1",
-		"event_builtin Read 1", `event_mcp ["gh", "mcp__gh__list"] 1`, "git commit 1", "head abc 1", "hook pre 2",
+		"batch B 8", "call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 1",
+		"event_builtin Glob 1", "event_builtin Read 1", `event_mcp ["gh", "mcp__gh__list"] 1`, "git commit 1", "head abc 1", "hook pre 2",
 		fmt.Sprintf("input_prompt input:%d 1", t0+5e9), "ip 10.0.0.1 1", "mcp_tool mcp__gh__list 1",
 		"name tengu_git_operation 1", "name tengu_input_prompt 1", "name tengu_run_hook 2",
-		"name tengu_session_linked_to_pr 1", "name tengu_tool_use_success 2", "pr 12 1", "tool Read 1",
+		"name tengu_session_linked_to_pr 1", "name tengu_tool_use_success 3", "pr 12 1", "tool Glob 1", "tool Read 1",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("keys:\n got %q\nwant %q", got, want)

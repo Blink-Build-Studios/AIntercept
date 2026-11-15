@@ -7,6 +7,7 @@ package flush
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -40,7 +41,12 @@ type Rows struct {
 	// by its prompt, so the prompts of their calls are marked dirty too (with
 	// the reports' ReportedIDs).
 	StepIDs, ToolUseIDs []string
-	LastNS              int64 // the newest time in the records
+	// ResultIDs are the tool call ids whose results the calls carry back
+	// (detail's results): a step's exit codes are its session's first result
+	// for each of its tool calls, which a later prompt's call can carry, so
+	// the prompts of the calls that made those tool calls are marked dirty too.
+	ResultIDs []string
+	LastNS    int64 // the newest time in the records
 }
 
 // Call is a calls row: the record's request, and what's derived at insert.
@@ -121,7 +127,7 @@ func Collapse(recs []records.Record) Rows {
 	parents := map[[2]string]*Parent{}
 	dirty := map[Dirty]bool{}
 	reports, reported := map[string]bool{}, map[string]bool{}
-	stepIDs, toolUseIDs := map[string]bool{}, map[string]bool{}
+	stepIDs, toolUseIDs, resultIDs := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	var last int64
 
 	account := func(id string, ns int64) *Account {
@@ -265,6 +271,11 @@ func Collapse(recs []records.Record) Rows {
 			if c.PromptID != "" {
 				dirty[Dirty{"prompt", c.PromptID}] = true
 			}
+			if c.SessionID != "" {
+				for _, id := range resultKeys(c.DetailJSON) {
+					resultIDs[id] = true
+				}
+			}
 			if row.Kind == "model" {
 				for _, id := range []string{c.RequestID, c.ClientRequestID} {
 					if id != "" {
@@ -336,6 +347,10 @@ func Collapse(recs []records.Record) Rows {
 		out.ToolUseIDs = append(out.ToolUseIDs, id)
 	}
 	slices.Sort(out.ToolUseIDs)
+	for id := range resultIDs {
+		out.ResultIDs = append(out.ResultIDs, id)
+	}
+	slices.Sort(out.ResultIDs)
 	return out
 }
 
@@ -362,5 +377,25 @@ func sortedBy[K comparable, T any](m map[K]*T, key func(*T) string) []T {
 		out = append(out, *v)
 	}
 	slices.SortFunc(out, func(a, b T) int { return strings.Compare(key(&a), key(&b)) })
+	return out
+}
+
+// resultKeys is the tool call ids a call's recorded detail carries results
+// for (events.CallDetail's results), in no order; none for a detail without
+// them.
+func resultKeys(detail string) []string {
+	if !strings.Contains(detail, `"results"`) {
+		return nil
+	}
+	var d struct {
+		Results map[string]json.RawMessage `json:"results"`
+	}
+	if json.Unmarshal([]byte(detail), &d) != nil {
+		return nil
+	}
+	out := make([]string, 0, len(d.Results))
+	for id := range d.Results {
+		out = append(out, id)
+	}
 	return out
 }

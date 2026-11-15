@@ -156,6 +156,35 @@ func TestLateEventsOfAnotherPromptRefreshTheStep(t *testing.T) {
 	checkScratch(t, db)
 }
 
+// A tool call's exit codes come from the session's first call that carries
+// its result back, which can be a later prompt's (the prompt after an
+// interrupt): in either order of arrival, the tool call's step gets them, and
+// a later carrier doesn't override the first.
+func TestResultCarriedByAnotherPromptsCall(t *testing.T) {
+	for _, order := range []string{"use first", "result first"} {
+		t.Run(order, func(t *testing.T) {
+			db := fresh(t)
+			use := pcall("a", "s", "p1", t0)
+			use.Call.DetailJSON = `{"calls":[{"id":"x1","tool":"Bash","commands":["make"]},{"id":"x2","tool":"Bash","commands":["ls"]}]}`
+			carry := pcall("b", "s", "p2", t0+5*sec)
+			carry.Call.DetailJSON = `{"results":{"x1":{"exit":[2]},"x2":{"error":true}}}`
+			later := pcall("c", "s", "p3", t0+9*sec)
+			later.Call.DetailJSON = `{"results":{"x1":{"exit":[7]}}}`
+			first, second := []records.Record{use}, []records.Record{carry, later}
+			if order == "result first" {
+				first, second = second, first
+			}
+			write(t, db, first...)
+			drain(t, db)
+			write(t, db, second...)
+			drain(t, db)
+			expect(t, row(t, db, "SELECT commands, exit_codes FROM steps WHERE call_id = 'a'"),
+				map[string]any{"commands": []any{"make", "ls"}, "exit_codes": []any{float64(2), float64(1)}})
+			checkScratch(t, db)
+		})
+	}
+}
+
 func TestPromptItems(t *testing.T) {
 	db := fresh(t)
 	main := func(id, p string, at, ctx int64) records.Record {

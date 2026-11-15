@@ -76,19 +76,8 @@ class Page:
 _OTHER_KINDS = "kind=flags&kind=count&kind=skills&kind=metrics&kind=catalog"  # the "other" chip
 PAGES = [
     Page("status", "/status"),
-    Page("session", "/sessions/{id}", "session"),
-    Page("session/timeline", "/sessions/{id}/timeline", "session", binned=True),
-    Page("session/state", "/sessions/{id}/state", "session", ranged=True),
-    Page("session/prompts", "/sessions/{id}/prompts", "session", ranged=True,
-         variants=("page=1&pageSize=20", "pageSize=2&page=2", "pageSize=20&prompt=2", "pageSize=2&prompt=3",
-                   "pageSize=20&prompt=999", "pageSize=20&page=99")),
-    Page("session/requests", "/sessions/{id}/requests", "session", ranged=True,
-         variants=("pageSize=20", "kind=model&pageSize=20", f"{_OTHER_KINDS}&pageSize=20", "q=model&pageSize=20",
-                   "order=desc&pageSize=20", "captured=false&hidden=true&pageSize=20", "pageSize=5&page=2",
-                   "pageSize=20&page=99")),
-    Page("session/events", "/sessions/{id}/events", "session", ranged=True,
-         variants=("pageSize=20", "q=tool&pageSize=10", "internal=true&pageSize=20", "pageSize=5&page=2",
-                   "pageSize=20&page=99")),
+    # The session pages (/sessions/{id} and its tabs) read v9 (docs/PIPELINE.md §6.1), which these
+    # databases don't hold: test_session_pages.py holds them to the oracle on the same datasets.
     Page("person", "/people/{id}", "person"),
     Page("person/sessions", "/people/{id}/sessions", "person", ranged=True,
          variants=("page=1&pageSize=20", "agent=claude-code&page=1&pageSize=20", "pageSize=1&page=2",
@@ -110,6 +99,15 @@ PAGES = [
 BY_NAME = {p.name: p for p in PAGES}
 # The drawer's pages, which test_drawer.py walks.
 DRAWER_PAGES = ("request", "request/details", "request/raw", "event")
+# The session pages, which test_session_pages.py walks.
+SESSION_PAGES = (
+    "session",
+    "session/timeline",
+    "session/state",
+    "session/prompts",
+    "session/requests",
+    "session/events",
+)
 
 
 def page_of(url: str) -> str:

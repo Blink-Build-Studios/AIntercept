@@ -274,7 +274,7 @@ var nullable = map[string]bool{
 func keyItems(events, calls string) string {
 	return `SELECT e.session_id AS sid, e.ts_ns AS at, x.k AS kind, x.v AS key FROM events e
 	LEFT JOIN LATERAL (SELECT ` + pyTruthy(md("toolName")) + ` AS used,
-		` + jsonText(md("toolName")) + ` AS tool, ` + md("isMcp") + ` #>> '{}' = 'true' AS mcp,
+		` + jsonText(md("toolName")) + ` AS tool, coalesce(` + md("isMcp") + ` #>> '{}' = 'true', false) AS mcp,
 		coalesce(nullif(` + pyStr(md("mcpServerName")) + `, ''),
 			CASE WHEN starts_with(` + jsonText(md("toolName")) + `, 'mcp__') AND cardinality(string_to_array(` + jsonText(md("toolName")) + `, '__')) >= 3
 			     THEN split_part(` + jsonText(md("toolName")) + `, '__', 2) END, '') AS server
