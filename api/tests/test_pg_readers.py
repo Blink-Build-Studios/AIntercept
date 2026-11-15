@@ -23,6 +23,7 @@ _WORKER_READS = {
 _V9_UNTIL_ROLLUPS = {
     "calls",
     "events",
+    "event_envs",
     "accounts",
     "session_accounts",
     "session_credentials",

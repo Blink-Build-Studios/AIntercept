@@ -119,7 +119,7 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	col(evs, es, "row_ns", "bigint", func(e *Event) int64 { return e.E.RowNS })
 	col(evs, es, "seq", "bigint", func(e *Event) int64 { return e.E.Seq })
 	col(evs, es, "metadata", "jsonb", func(e *Event) *string { return str(e.E.MetadataJSON) })
-	col(evs, es, "env", "jsonb", func(e *Event) *string { return str(e.E.EnvJSON) })
+	col(evs, es, "env_hash", "envhash", func(e *Event) *string { return str(e.E.EnvJSON) })
 	col(evs, es, "summary", "text", func(e *Event) string { return e.Summary })
 	col(evs, es, "internal", "boolean", func(e *Event) bool { return e.Internal })
 	col(evs, es, "marker", "text", func(e *Event) *string { return str(e.Marker) })
@@ -183,6 +183,14 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 		"kind = least(session_parents.kind, excluded.kind), first_ns = least(session_parents.first_ns, excluded.first_ns)"
 	stmts = append(stmts, parents)
 
+	// Each distinct environment once, before the events that point at it.
+	if envs := distinctEnvs(es); len(envs) > 0 {
+		if _, err := tx.Exec(ctx, `INSERT INTO event_envs (env_hash, env)
+			SELECT `+envHash("u.env")+`, u.env::jsonb FROM unnest($1::text[]) AS u(env) ORDER BY 1
+			ON CONFLICT (env_hash) DO NOTHING`, envs); err != nil {
+			return fmt.Errorf("flush: event_envs: %w", err)
+		}
+	}
 	for _, s := range stmts {
 		if s.n == 0 {
 			continue
@@ -294,14 +302,35 @@ func (in *insert) sql() string {
 	args, sel := make([]string, len(in.cols)), make([]string, len(in.cols))
 	for i, c := range in.cols {
 		sent, x := in.types[i], "u."+c
-		if sent == "jsonb" {
+		switch sent {
+		case "jsonb":
 			sent, x = "text", x+"::jsonb"
+		case "envhash": // JSON sent as text, stored as its event_envs key
+			sent, x = "text", envHash(x)
 		}
 		args[i], sel[i] = fmt.Sprintf("$%d::%s[]", i+1, sent), x
 	}
 	cols := strings.Join(in.cols, ", ")
 	return fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM unnest(%s) AS u(%s) %s",
 		in.table, cols, strings.Join(sel, ", "), strings.Join(args, ", "), cols, in.conflict)
+}
+
+// envHash is the event_envs key of JSON text: the sha256 of its canonical
+// form (jsonb's text), so equal environments written differently share a row.
+func envHash(text string) string {
+	return "sha256(convert_to((" + text + ")::jsonb::text, 'UTF8'))"
+}
+
+// distinctEnvs is the events' environments, each once.
+func distinctEnvs(es []Event) []string {
+	var out []string
+	for i := range es {
+		if es[i].E.EnvJSON != "" {
+			out = append(out, es[i].E.EnvJSON)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 func str(s string) *string {
@@ -328,7 +357,7 @@ func jsonList(ss []string) *string {
 }
 
 // Tables are the tables a flush writes facts to, and the dirty list.
-var Tables = []string{"calls", "events", "accounts", "session_accounts", "session_credentials", "account_devices", "session_parents", "dirty"}
+var Tables = []string{"calls", "event_envs", "events", "accounts", "session_accounts", "session_credentials", "account_devices", "session_parents", "dirty"}
 
 // Summary is a table's row count, a checksum of its rows (independent of their
 // order: the sum of a hash of each row's text; dirty's of its kind and key

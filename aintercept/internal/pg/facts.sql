@@ -80,6 +80,13 @@ CREATE INDEX ON calls (parent_message_id);
 CREATE INDEX ON calls (start_ns) WHERE end_ns IS NULL;
 CREATE INDEX ON calls (start_ns) WHERE NOT synthetic;
 
+-- An event's environment, stored once: keyed by the sha256 of its canonical JSON (jsonb's
+-- text), so equal environments share a row.
+CREATE TABLE event_envs (
+    env_hash bytea PRIMARY KEY,
+    env jsonb NOT NULL
+);
+
 -- §3.2 One row per analytics event, keyed <source>/<client event id> where the client sends
 -- one, else as canon keys it (corr/h<hash>). A resent batch lands on the same rows.
 CREATE TABLE events (
@@ -110,7 +117,7 @@ CREATE TABLE events (
     row_ns bigint NOT NULL,
     seq bigint NOT NULL,
     metadata jsonb,
-    env jsonb,
+    env_hash bytea REFERENCES event_envs,
     summary text NOT NULL,
     internal boolean NOT NULL,
     marker text

@@ -268,6 +268,30 @@ func TestResentAnalyticsBatchCountsOnce(t *testing.T) {
 	}
 }
 
+func TestEqualEnvsAreStoredOnce(t *testing.T) {
+	db := fresh(t)
+	a, b, c := event("b1", 1, "e1", "s", t0), event("b1", 2, "e2", "s", t0), event("b1", 3, "e3", "s", t0)
+	b.Event.EnvJSON = `{ "terminal": "x", "platform": "darwin" }` // a's, written otherwise
+	c.Event.EnvJSON = ""
+	write(t, db, a, b, c)
+	write(t, db, event("b2", 1, "e4", "s", t0)) // a later file with the same env
+	if n := count(t, db, "event_envs"); n != 1 {
+		t.Errorf("%d envs, want 1", n)
+	}
+	var shared, none int
+	if err := db.QueryRow(ctx(t), `SELECT count(*) FILTER (WHERE env_hash = (SELECT env_hash FROM event_envs)),
+		count(*) FILTER (WHERE env_hash IS NULL) FROM events`).Scan(&shared, &none); err != nil {
+		t.Fatal(err)
+	}
+	if shared != 3 || none != 1 {
+		t.Errorf("%d events point at the env and %d at none, want 3 and 1", shared, none)
+	}
+	var platform string
+	if err := db.QueryRow(ctx(t), "SELECT env->>'platform' FROM event_envs").Scan(&platform); err != nil || platform != "darwin" {
+		t.Errorf("env platform %q (%v)", platform, err)
+	}
+}
+
 func TestModelCallMarksItsReportsMinutes(t *testing.T) {
 	db := fresh(t)
 	rep := event("b1", 1, "e1", "s", t0+10*minute)
