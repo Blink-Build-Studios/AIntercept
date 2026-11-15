@@ -35,6 +35,7 @@ func canonCmd() {
 	details := fs.Bool("details", false, "also write each call's detail object (calls/<id>.ndjson.gz)")
 	load := fs.String("load", "", "a Postgres URL: write the records to the v9 fact tables (docs/PIPELINE.md §4) instead")
 	shuffle := fs.Int64("shuffle", 0, "with -load: write the records in a random order from this seed (the order-independence gate)")
+	refreshers := fs.Int("refresh", 0, "with -load: run this many rollup refreshers alongside the load, then sweep, drain and check every rollup against the facts from scratch (docs/PIPELINE.md §5)")
 	raw := fs.String("raw", "", "a directory: write the capture there as v9 raw files (raw/…, docs/PIPELINE.md §2.1), through the observer's writer, instead")
 	fs.Parse(os.Args[2:])
 	if *src == "" {
@@ -46,7 +47,7 @@ func canonCmd() {
 		return
 	}
 	if *load != "" {
-		canonLoad(*src, *load, *shuffle)
+		canonLoad(*src, *load, *shuffle, *refreshers)
 		return
 	}
 	start := time.Now()

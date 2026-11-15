@@ -231,20 +231,33 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	}
 
 	// A model call marks the minutes of its reports, so a report that came
-	// first stops counting as missed (§4.3).
+	// first stops counting as missed (§4.3); a report marks its calls' minutes,
+	// so a call whose report came later stops counting as unreported.
 	dirty := r.Dirty
-	if len(r.ReportIDs) > 0 {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT session_id || '/' || (ts_ns - ts_ns % 60000000000) FROM events
-			WHERE session_id IS NOT NULL AND (request_id = ANY($1) OR client_request_id = ANY($1))`, r.ReportIDs)
-		if err != nil {
-			return fmt.Errorf("flush: reports: %w", err)
-		}
-		keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
-		if err != nil {
-			return fmt.Errorf("flush: reports: %w", err)
-		}
-		for _, k := range keys {
-			dirty = append(dirty, Dirty{"minute", k})
+	if len(r.ReportIDs)+len(r.ReportedIDs) > 0 {
+		for _, q := range []struct {
+			ids []string
+			sql string
+		}{
+			{r.ReportIDs, `SELECT DISTINCT session_id || '/' || (ts_ns - ts_ns % 60000000000) FROM events
+				WHERE session_id IS NOT NULL AND (request_id = ANY($1) OR client_request_id = ANY($1))`},
+			{r.ReportedIDs, `SELECT DISTINCT session_id || '/' || (coalesce(start_ns, end_ns) - coalesce(start_ns, end_ns) % 60000000000)
+				FROM calls WHERE session_id IS NOT NULL AND (request_id = ANY($1) OR client_request_id = ANY($1))`},
+		} {
+			if len(q.ids) == 0 {
+				continue
+			}
+			rows, err := tx.Query(ctx, q.sql, q.ids)
+			if err != nil {
+				return fmt.Errorf("flush: reports: %w", err)
+			}
+			keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				return fmt.Errorf("flush: reports: %w", err)
+			}
+			for _, k := range keys {
+				dirty = append(dirty, Dirty{"minute", k})
+			}
 		}
 		slices.SortFunc(dirty, func(a, b Dirty) int {
 			if c := strings.Compare(a.Kind, b.Kind); c != 0 {

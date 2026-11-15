@@ -17,9 +17,9 @@ _WORKER_READS = {
     "tail": "tail/tail.go",
 }
 
-# The v9 fact tables, the dirty list and the raw files' list (docs/PIPELINE.md §2, §3, §5.1):
-# written by the flush (internal/flush) and ingest from steps 2 and 3, read by the rollups from
-# step 4 and the pages after.
+# The v9 fact tables, the dirty list and the raw files' list (docs/PIPELINE.md §2, §3, §5.1),
+# written by the flush (internal/flush) and ingest from steps 2 and 3, and the rollups the
+# refresher (internal/refresh) writes from step 4: read by the pages from step 5.
 _V9_UNTIL_ROLLUPS = {
     "calls",
     "events",
@@ -31,6 +31,13 @@ _V9_UNTIL_ROLLUPS = {
     "session_parents",
     "dirty",
     "ingest_files",
+    "session_minutes",
+    "session_hours",
+    "session_minute_keys",
+    "session_keys",
+    "missed_reports",
+    "cred_minutes",
+    "cred_hours",
 }
 
 

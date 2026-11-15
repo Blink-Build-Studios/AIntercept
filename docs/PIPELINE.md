@@ -242,22 +242,27 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 
 | Rollup | Grain | Computed from | Reads |
 |---|---|---|---|
-| `session_minutes` | (session, minute) | That minute's calls and events: calls by class and kind, hidden and captured; output tokens; context sum; event counts (all, and without internal events); missed reports; friction count and first prompt | One minute's rows |
+| `session_minutes` | (session, minute) | That minute's visible model calls (count, main and subagent, unreported, tokens, context sum, outputs known, tool calls) and hidden calls; its Claude Code events (all, and without internal events; frustrated, interrupted and destructive counts; queries and bypassed; reports; hook ms sum and count; cache 5m/1h; cost; outside-cwd commands); its missed reports; its Requests tab rows counted by kind and credential, hidden apart (a read keeps the session's credentials, as today's tab does) | One minute's rows |
 | `session_hours` | (session, hour) | Sum of that hour's `session_minutes` | 60 rows |
-| `session_keys` | (session, hour, kind, key) with count | Distinct things per hour: event names, tools, MCP tools and servers, hooks (with hook ms), skills, heads, PRs, IPs, batches, prompts, command words, destructive categories, git operations. Distinct counts over a range are `count(DISTINCT key)` over these rows | One minute's rows (it refreshes the minute's hour bucket by adding the minute's keys) |
+| `session_minute_keys` | (session, minute, kind, key) with count | Distinct things per minute: event names, tools and MCP tools, the session's tools from events and from calls' tool_use blocks, hooks, heads, PRs, IPs, batches, prompts (calls' and typed), command words, destructive categories, git operations. Also the timeline's top event names for a bin under an hour | One minute's rows |
+| `session_keys` | (session, hour, kind, key) with count | Sum of that hour's `session_minute_keys`. Distinct counts over a range are `count(DISTINCT key)` over these rows (minute rows at a range's partial hours) | 60 minutes' key rows |
 | `missed_reports` | one per Claude Code report with no captured call (by request id or client request id, within its session, as `requestrows.go:1093-1125` does) | That minute's reports, with an index lookup each on `calls` | One minute's rows |
 | `prompts` | prompt_id | Its number, steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report | One prompt's calls and events. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
 | `steps` | (prompt_id, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from the prompt's events. This is where a call's step number lives | One prompt's calls and events |
 | `prompt_items` | (session, seq) | The Prompts page's list: prompts in order, with compaction "between" rows interleaved | The session's prompts (hundreds) |
 | `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, limits, sandbox) by index lookup; coverage from `missed_reports`; Codex prompt numbers; `unattributed` (a visible call and no account) | The session's hour rows and prompts (hundreds) |
-| `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Counts for the person request log and the overview | One minute's calls / 60 rows |
+| `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none) | One minute's calls / 60 rows |
+
+Two values are read at the page instead (they're few, and a late record changes them):
+- **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
+- **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
 | `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active, prompts, model calls, tokens, devices, missed, bypassed and total queries, last seen | That account-day's hour rows and calls |
 
 ### 5.3 Dirty kinds
 
 | Kind | Marked by |
 |---|---|
-| `minute` (session, minute) | a flush with a call or event in that minute; a flush with a call whose report is in that minute |
+| `minute` (session, minute) | a flush with a call or event in that minute; a flush with a call whose report is in that minute; a flush with a report whose call is in that minute |
 | `hour` (session, hour) | a `minute` refresh |
 | `prompt` | a flush with a call or event of that prompt |
 | `session` | an `hour` or `prompt` refresh |
@@ -298,7 +303,7 @@ Ranges are snapped to whole minutes, as today (`ranges.py`).
 | Page | Reads | Bound |
 |---|---|---|
 | `/sessions/{id}` | its `sessions` row. Label: its own title, else the earliest title call from its accounts 0–5 min after its start (calls by account and time). Children by `session_edges` | One row + a few |
-| `/sessions/{id}/timeline` | lanes from `session_minutes` (bins under an hour) or `session_hours`; event names from `session_keys`; not-captured windows from `missed_reports`; friction from friction events (few); typed prompts from `prompts`; compactions from events by name; context points: one per main-thread call, from `calls` by `(session_id, start_ns)` | Cells and prompts of the session (hundreds). Context points are one per main-thread call, ~1,700 on the heaviest session: what the chart draws |
+| `/sessions/{id}/timeline` | lanes from `session_minutes` (bins under an hour) or `session_hours`; event names from `session_minute_keys` (bins under an hour) or `session_keys`; not-captured windows from `missed_reports`; friction from friction events (few); typed prompts from `prompts`; compactions from events by name; context points: one per main-thread call, from `calls` by `(session_id, start_ns)` | Cells and prompts of the session (hundreds). Context points are one per main-thread call, ~1,700 on the heaviest session: what the chart draws |
 | `/sessions/{id}/state` | counts from `session_minutes` in the brush; distinct heads and PRs from `session_keys` in the brush (minute grain at the edges); capabilities (tools used, MCP servers and tools, skills, hooks) for the whole session from the `sessions` row; recaps by name | Cells and keys in the brush + one row |
 | `/sessions/{id}/events` | a page of `events` by `(session_id, ts_ns)`, one row per event; prompt numbers by join to `prompts`; `linkedTo` by join on request id; totals from `session_minutes`' event counts | One page + cells |
 | `/sessions/{id}/requests` | a page of `calls` by `(scope_session_id, start_ns)` with `kind`, hidden and captured filters, unioned with the session's `missed_reports`; for a Codex thread also its client's sessionless Codex calls in its window by `(key_hash, start_ns)`; prompt and step numbers by join to `steps`; TTFT and cache by join to the report; counts from `session_minutes` | One page + cells |
@@ -401,7 +406,7 @@ Measured on `8f1c6b8`. Lines are code / tests.
 | The test oracle, `side_by_side.py`, `test_v8_*`, `test_oracle.py` | ~2,900 | One parity test (§8) |
 | DuckDB and ADBC, the API's 4 Gi scratch volume and DuckDB memory settings | — | No DuckDB |
 
-### Tables: 43 → 21
+### Tables: 43 → 22
 
 **Facts (9):** `calls` (replaces `requests`, `request_txs`, `request_reports`,
 `request_missed`, `session_last`, `prompt_index`, `codex_turns`,
@@ -409,7 +414,7 @@ Measured on `8f1c6b8`. Lines are code / tests.
 `accounts`, `session_accounts`, `session_credentials`, `account_devices`,
 `session_edges`, `ingest_pods`, `schema_version`.
 
-**Rollups (11) and the dirty list:** `session_minutes`, `session_hours`, `session_keys`,
+**Rollups (12) and the dirty list:** `session_minutes`, `session_hours`, `session_minute_keys`, `session_keys`,
 `missed_reports`, `prompts`, `steps`, `prompt_items`, `sessions`,
 `cred_minutes`, `cred_hours`,
 `account_days`, plus `dirty`.
