@@ -190,7 +190,6 @@ ORACLE_ONLY = {"filename", "env_json"}
         "prompt_steps",
         "session_marks",
         "event_rows",
-        "presence_segments",
         "session_tools",
         "call_tool_uses",
         "session_request_rows",

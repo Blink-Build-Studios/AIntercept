@@ -391,6 +391,13 @@ The query API was parsing raw JSON on every request: `/overview` and `/people` t
 - **Last sheet-against-sheet fixes (2026-11-10, handoff §11O; CompProviders, CompAgents):** every request table, both scopes, uses the canonical headings `Time · # · Kind · Meth · Path · detail · Status · Dur · Up · Down` (person scope swaps `#` for `Session`). An axis leaves a time at the window's left edge unlabelled; a date there keeps its label. `UpdatedAgo/peopleBar` is measured in UpdatedAgo's story.
   - The axis gutter is 132px plus its 1px rule (content-box), as every sheet draws it. CompAgents' `TimeAxis/codex` was redrawn with canonical tick order (all minor ticks, then the majors over them).
   - Parity: 542 of 542 (24 illustrative); nothing excepted.
+- **Four features removed (2026-11-15, handoff §11P, §11Q; docs/PIPELINE.md §6.5; CompPersonTimeline and ten updated sheets):** each needed recomputing across a whole session on every new record.
+  - Gone from the UI: the person page's Presence lane; the session page's Permission (Codex: Approval), Focus, Device and Network lanes; their tooltips, empty states and lane definition; `StateTrack` and `RowTrack`; the Events tab's `collapse ticks` chip and the folded `EventRow`.
+  - Gone from the API: `presence` on both timelines; `permission`, `permissionChanges` and `network` on the session timeline; `collapsedCount` and the `collapseTicks` parameter; the `presence` and `focus` capabilities. The processor no longer writes `presence_segments` or the permission and network marks.
+  - Tool-progress ticks (`tengu_tool_use_progress`) are client internals: hidden with `HIDE CLIENT INTERNALS`.
+  - The State tab's `Capabilities` and `Experiments` are the whole session's; their in-range footers still follow the brush.
+  - Timelines: person 298px (Prompts 24, Model calls 88 with 70px of bars), session 256px; both load as lane skeletons (`Skeleton shape="timeline"`).
+  - Parity: 517 of 517 (24 illustrative); nothing new excepted. `Lane/loading`'s one approved §11G.A3 entry now names the label the sheet measures (Analytics, was Presence).
 
 ## 10. Notes for later milestones
 

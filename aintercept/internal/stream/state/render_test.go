@@ -50,7 +50,6 @@ func refSession(ref *process.Derived, o *streamOut, sid string) *SessionTables {
 			st.SessionRows = append(st.SessionRows, r)
 		}
 	}
-	st.PresenceSegments = filter(ref.Presence, func(r process.PresenceSegment) bool { return r.SessionID == sid })
 	st.SessionTools = filter(ref.SessionTools, func(r process.SessionTool) bool { return r.SessionID == sid })
 	st.EventRows = filter(ref.EventRows, func(r process.EventRow) bool { return r.SessionID == sid })
 	st.PromptRows, st.PromptSteps, st.SessionMarks = refPrompts(ref)
@@ -84,7 +83,7 @@ func (t *SessionTables) normalized() *SessionTables {
 	return &c
 }
 
-var tableOrder = []string{"session_rows", "presence_segments", "session_tools", "event_rows", "session_marks",
+var tableOrder = []string{"session_rows", "session_tools", "event_rows", "session_marks",
 	"prompt_rows", "prompt_steps", "session_request_rows", "call_tool_uses"}
 
 // diff names the first table and row that differ (the same content: a nil list
@@ -224,7 +223,7 @@ func sameRender(a, b map[string]*SessionTables) bool {
 // rendered tables equal the reference's.
 func TestRenderSessionAtomic(t *testing.T) {
 	var all []atomicCase
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases, factCases} {
+	for _, cs := range [][]atomicCase{spanCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases, factCases} {
 		all = append(all, cs...)
 	}
 	for _, c := range all {

@@ -126,46 +126,6 @@ export function compactionTip(c: S["Compaction"]): TooltipContent {
   };
 }
 
-const STATE = { focused: "Focused", away: "Away", asleep: "Asleep" } as const;
-
-/** A presence segment: state, span, where it comes from. */
-export function presenceTip(p: S["PresenceSegment"]): TooltipContent {
-  return {
-    title: STATE[p.state],
-    rows: [
-      { key: "Span", value: span(p.from, p.to) },
-      { key: "Source", value: p.source === "sleep" ? "device sleep · this device" : "focus events · this session" },
-    ],
-  };
-}
-
-/** Brief permission changes, one row each. */
-export function permissionTip(changes: S["PermissionChange"][]): TooltipContent {
-  const first = changes[0];
-  const last = changes[changes.length - 1];
-  const within = first && last ? formatDuration(ms(last.t) - ms(first.t)) : "";
-  return {
-    title: `Permission changed ×${changes.length}${changes.length > 1 ? ` in ${within}` : ""}`,
-    rows: changes.map((c) => ({ key: formatTime(c.t, new Date(c.t), true), value: `${c.from} → ${c.to}` })),
-    hint: changes.length > 1 ? `Click to select these ${within}` : undefined,
-  };
-}
-
-/** A network segment; `name` is its lane name ("net 2"). */
-export function networkTip(n: S["NetworkSegment"], name: string): TooltipContent {
-  return {
-    title: `${name} · ${n.ipv6 ? "IPv6" : "IPv4"}`,
-    rows: [
-      { key: "Span", value: span(n.from, n.to) },
-      { key: "Address", value: n.address ?? unknownValue("not recorded yet") },
-      n.bypassed
-        ? { key: "Proxy", value: `▲ bypassed · ${formatExact(n.notCaptured)} calls not captured`, tone: "danger" }
-        : { key: "Proxy", value: "via proxy" },
-    ],
-    hint: "Click to select this span",
-  };
-}
-
 /** A prompt tick: its text when retained, else its shape. */
 export function promptTip(p: S["TimelinePrompt"]): TooltipContent {
   const n = p.index === null ? "Prompt" : `#${p.index}`;
@@ -229,5 +189,4 @@ export const brushTip = (from: string, to: string): TooltipContent => ({ body: s
 export const LANE_DEFINITIONS = {
   modelCalls: "Bars: calls the proxy captured, per bin. Hatched: calls Claude Code reported that the proxy didn’t capture.",
   analytics: "Claude Code analytics events per bin.",
-  presence: "Focus per session; sleep per device. Blank = no session open.",
 } as const;

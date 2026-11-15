@@ -41,16 +41,6 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         ]
       },
       {
-        "count": 1,
-        "t": "2026-11-04T09:30:00Z",
-        "top": [
-          {
-            "count": 1,
-            "name": "tengu_return_to_session"
-          }
-        ]
-      },
-      {
         "count": 4,
         "t": "2026-11-04T09:40:00Z",
         "top": [
@@ -65,16 +55,6 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           {
             "count": 1,
             "name": "tengu_bash_tool_command_executed"
-          }
-        ]
-      },
-      {
-        "count": 1,
-        "t": "2026-11-04T09:50:00Z",
-        "top": [
-          {
-            "count": 1,
-            "name": "tengu_event_loop_stall"
           }
         ]
       }
@@ -178,87 +158,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 100
       }
     ],
-    "network": [
-      {
-        "address": null,
-        "bypassed": false,
-        "from": "2026-11-04T09:01:00Z",
-        "ipv6": false,
-        "label": "192.0.2.10",
-        "notCaptured": 0,
-        "to": "2026-11-04T09:41:00Z"
-      },
-      {
-        "address": null,
-        "bypassed": false,
-        "from": "2026-11-04T09:41:00Z",
-        "ipv6": true,
-        "label": "2001:db8::7",
-        "notCaptured": 0,
-        "to": "2026-11-04T09:50:00Z"
-      }
-    ],
     "notCaptured": [],
     "now": null,
-    "permission": [
-      {
-        "from": "2026-11-04T09:01:00Z",
-        "mode": "bypassPermissions",
-        "to": "2026-11-04T09:21:00Z"
-      },
-      {
-        "from": "2026-11-04T09:21:00Z",
-        "mode": "default",
-        "to": "2026-11-04T09:41:00Z"
-      },
-      {
-        "from": "2026-11-04T09:41:00Z",
-        "mode": "bypassPermissions",
-        "to": "2026-11-04T09:50:00Z"
-      }
-    ],
-    "permissionChanges": [
-      {
-        "from": "bypassPermissions",
-        "t": "2026-11-04T09:21:00Z",
-        "to": "default"
-      },
-      {
-        "from": "default",
-        "t": "2026-11-04T09:41:00Z",
-        "to": "bypassPermissions"
-      }
-    ],
-    "presence": [
-      {
-        "from": "2026-11-04T09:00:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:25:00Z"
-      },
-      {
-        "from": "2026-11-04T09:25:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "away",
-        "to": "2026-11-04T09:30:00Z"
-      },
-      {
-        "from": "2026-11-04T09:30:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:46:00Z"
-      },
-      {
-        "from": "2026-11-04T09:46:00Z",
-        "label": null,
-        "source": "sleep",
-        "state": "asleep",
-        "to": "2026-11-04T09:50:00Z"
-      }
-    ],
     "prompts": [
       {
         "durationMs": null,
@@ -316,7 +217,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "branch": null,
         "capturedFromPrompt": null,
-        "end": "2026-11-04T09:50:00Z",
+        "end": "2026-11-04T09:42:00Z",
         "label": "Session 11111111",
         "live": false,
         "modelCalls": 3,
@@ -327,15 +228,15 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "start": "2026-11-04T09:00:00Z"
       }
     ],
-    "to": "2026-11-04T09:50:00Z"
+    "to": "2026-11-04T09:42:00Z"
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T09:00:00Z",
-    "lastDataAt": "2026-11-04T09:50:00Z",
+    "lastDataAt": "2026-11-04T09:42:00Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T09:50:00Z",
+    "to": "2026-11-04T09:42:00Z",
     "total": null
   }
 };

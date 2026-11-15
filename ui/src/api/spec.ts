@@ -758,8 +758,6 @@ export interface components {
         };
         /** EventRow */
         EventRow: {
-            /** Collapsedcount */
-            collapsedCount: number | null;
             /** Eventid */
             eventId: string;
             /** Internal */
@@ -1046,29 +1044,6 @@ export interface components {
             /** Tokensout */
             tokensOut: number | null;
         };
-        /** NetworkSegment */
-        NetworkSegment: {
-            /** Address */
-            address: string | null;
-            /** Bypassed */
-            bypassed: boolean;
-            /**
-             * From
-             * Format: date-time
-             */
-            from: string;
-            /** Ipv6 */
-            ipv6: boolean;
-            /** Label */
-            label: string;
-            /** Notcaptured */
-            notCaptured: number;
-            /**
-             * To
-             * Format: date-time
-             */
-            to: string;
-        };
         /** Notice */
         Notice: {
             /** Body */
@@ -1102,7 +1077,7 @@ export interface components {
             agents: components["schemas"]["AgentOverview"][];
             /** Capabilities */
             capabilities: {
-                [key: string]: ("bypass" | "missed" | "org" | "role" | "usingSince" | "limit7d" | "flags" | "plan" | "limits" | "credits" | "repoBranch" | "recap" | "permission" | "cost" | "workspace" | "cwd" | "shell" | "tz" | "approval" | "sandbox" | "origin" | "client" | "reasoning" | "presence" | "focus" | "device" | "analytics" | "frustrated" | "steered" | "hiddenCalls")[];
+                [key: string]: ("bypass" | "missed" | "org" | "role" | "usingSince" | "limit7d" | "flags" | "plan" | "limits" | "credits" | "repoBranch" | "recap" | "permission" | "cost" | "workspace" | "cwd" | "shell" | "tz" | "approval" | "sandbox" | "origin" | "client" | "reasoning" | "device" | "analytics" | "frustrated" | "steered" | "hiddenCalls")[];
             };
             /** Channels */
             channels: {
@@ -1146,33 +1121,6 @@ export interface components {
             data: components["schemas"]["PersonSummaryRow"][];
             meta: components["schemas"]["Meta"];
         };
-        /** PermissionChange */
-        PermissionChange: {
-            /** From */
-            from: string;
-            /**
-             * T
-             * Format: date-time
-             */
-            t: string;
-            /** To */
-            to: string;
-        };
-        /** PermissionSegment */
-        PermissionSegment: {
-            /**
-             * From
-             * Format: date-time
-             */
-            from: string;
-            /** Mode */
-            mode: string;
-            /**
-             * To
-             * Format: date-time
-             */
-            to: string;
-        };
         /** PersonHeader */
         PersonHeader: {
             /** Accountidshort */
@@ -1185,7 +1133,7 @@ export interface components {
             agentLimits: components["schemas"]["AgentLimits"][];
             /** Capabilities */
             capabilities: {
-                [key: string]: ("bypass" | "missed" | "org" | "role" | "usingSince" | "limit7d" | "flags" | "plan" | "limits" | "credits" | "repoBranch" | "recap" | "permission" | "cost" | "workspace" | "cwd" | "shell" | "tz" | "approval" | "sandbox" | "origin" | "client" | "reasoning" | "presence" | "focus" | "device" | "analytics" | "frustrated" | "steered" | "hiddenCalls")[];
+                [key: string]: ("bypass" | "missed" | "org" | "role" | "usingSince" | "limit7d" | "flags" | "plan" | "limits" | "credits" | "repoBranch" | "recap" | "permission" | "cost" | "workspace" | "cwd" | "shell" | "tz" | "approval" | "sandbox" | "origin" | "client" | "reasoning" | "device" | "analytics" | "frustrated" | "steered" | "hiddenCalls")[];
             };
             /** Customersince */
             customerSince: string | null;
@@ -1346,31 +1294,6 @@ export interface components {
             sandbox: ("on" | "off") | null;
             /** Tokenstorage */
             tokenStorage: string | null;
-        };
-        /** PresenceSegment */
-        PresenceSegment: {
-            /**
-             * From
-             * Format: date-time
-             */
-            from: string;
-            /** Label */
-            label?: string | null;
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "focus" | "sleep";
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "focused" | "away" | "asleep";
-            /**
-             * To
-             * Format: date-time
-             */
-            to: string;
         };
         /** PromptData */
         PromptData: {
@@ -1753,7 +1676,7 @@ export interface components {
             /** Bypasspct */
             bypassPct: number | null;
             /** Capabilities */
-            capabilities: ("bypass" | "missed" | "org" | "role" | "usingSince" | "limit7d" | "flags" | "plan" | "limits" | "credits" | "repoBranch" | "recap" | "permission" | "cost" | "workspace" | "cwd" | "shell" | "tz" | "approval" | "sandbox" | "origin" | "client" | "reasoning" | "presence" | "focus" | "device" | "analytics" | "frustrated" | "steered" | "hiddenCalls")[];
+            capabilities: ("bypass" | "missed" | "org" | "role" | "usingSince" | "limit7d" | "flags" | "plan" | "limits" | "credits" | "repoBranch" | "recap" | "permission" | "cost" | "workspace" | "cwd" | "shell" | "tz" | "approval" | "sandbox" | "origin" | "client" | "reasoning" | "device" | "analytics" | "frustrated" | "steered" | "hiddenCalls")[];
             /** Capturedfromprompt */
             capturedFromPrompt: number | null;
             /** Channels */
@@ -1937,7 +1860,7 @@ export interface components {
         };
         /**
          * SessionStateResponse
-         * @description Capabilities and experiments are as of `to`; everything else is within [from, to].
+         * @description Capabilities and experiments are the whole session's; everything else is within [from, to].
          */
         SessionStateResponse: {
             data: components["schemas"]["SessionState"];
@@ -1965,18 +1888,10 @@ export interface components {
             from: string;
             /** Modelcalls */
             modelCalls: components["schemas"]["ModelCallBin"][];
-            /** Network */
-            network: components["schemas"]["NetworkSegment"][];
             /** Notcaptured */
             notCaptured: components["schemas"]["GapWindow"][];
             /** Now */
             now: string | null;
-            /** Permission */
-            permission: components["schemas"]["PermissionSegment"][];
-            /** Permissionchanges */
-            permissionChanges: components["schemas"]["PermissionChange"][];
-            /** Presence */
-            presence: components["schemas"]["PresenceSegment"][];
             /** Prompts */
             prompts: components["schemas"]["TimelinePrompt"][];
             /** Sessions */
@@ -1987,10 +1902,7 @@ export interface components {
              */
             to: string;
         };
-        /**
-         * SessionTimelineResponse
-         * @description `presence` holds this terminal's focus and the device's sleep: focus lane = focused/away, sleep lane = asleep.
-         */
+        /** SessionTimelineResponse */
         SessionTimelineResponse: {
             data: components["schemas"]["SessionTimeline"];
             meta: components["schemas"]["Meta"];
@@ -2119,8 +2031,6 @@ export interface components {
             notCaptured: components["schemas"]["GapWindow"][];
             /** Now */
             now: string | null;
-            /** Presence */
-            presence: components["schemas"]["PresenceSegment"][];
             /** Prompts */
             prompts: components["schemas"]["TimelinePrompt"][];
             /** Sessions */
@@ -2960,10 +2870,8 @@ export interface operations {
                 to?: string | null;
                 /** @description Substring of the event name or its summary. */
                 q?: string | null;
-                /** @description Include client internals (tengu_tether_*, spinner_*, …). */
+                /** @description Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, …). */
                 internal?: boolean;
-                /** @description Fold consecutive tool-progress ticks into one row. */
-                collapseTicks?: boolean;
                 page?: number;
                 pageSize?: number;
             };

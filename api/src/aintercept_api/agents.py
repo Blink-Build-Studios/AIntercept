@@ -33,8 +33,6 @@ CAPABILITIES: dict[Agent, list[CapabilityField]] = {
         "recap",
         "permission",
         "cost",
-        "presence",
-        "focus",
         "device",
         "analytics",
         "frustrated",

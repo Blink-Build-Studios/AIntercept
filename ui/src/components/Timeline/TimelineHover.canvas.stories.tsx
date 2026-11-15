@@ -1,5 +1,5 @@
 // Parity specimens for timeline hover (CompTimelineHover.dc.html, handoff §6B.4):
-// every Lane/BarTrack/BandTrack/StateTrack/MarkerTrack/TimeAxis/Brush
+// every Lane/BarTrack/BandTrack/MarkerTrack/TimeAxis/Brush
 // hover, focus and pressed specimen, drawn with our components in forced
 // states and the sheet's own data (bar heights in px against the lane's
 // height; positions in % of the window). The sheet's tooltips are measured on
@@ -15,10 +15,7 @@ import { BarTrack, type Bin } from "./BarTrack";
 import { DensityTrack } from "./DensityTrack";
 import type { MarkForce } from "./TimelineGuide";
 import { Lane } from "./Lane";
-import { RowTrack, type StateRow } from "./RowTrack";
-import { LANE_HEIGHT } from "./Lane";
 import { MarkerTrack, type TimelineMark } from "./MarkerTrack";
-import { StateTrack } from "./StateTrack";
 import { Timeline } from "./Timeline";
 
 // The sheet's axis reads Nov 2 08:00 → Nov 4 00:00: 40h, in the viewer's zone.
@@ -106,12 +103,6 @@ const One = ({ width, sheet, children }: { width?: number; sheet?: string; child
 );
 const forceAt = (t: string, state: MarkForce) => ({ t, state });
 
-// The person page's presence rows (§11G.A2), as on the hover sheet.
-const presence: StateRow[] = [
-  { name: "focused", tone: "ink", segments: [{ from: at(4), to: at(34), state: "focused" }, { from: at(48), to: at(70), state: "focused" }] },
-  { name: "away", tone: "muted", segments: [{ from: at(34), to: at(48), state: "away" }] },
-  { name: "device asleep", tone: "faint", segments: [{ from: at(72), to: at(84), state: "asleep" }] },
-];
 // The person page's sessions lane, as on Main: one row of bands.
 const bands: Band[] = [
   { id: "a", from: at(10.2), to: at(11.9), label: "", row: 0, live: false },
@@ -125,9 +116,6 @@ const targets: ParityTarget[] = [
   { spec: "TimeAxis/withReadout", selector: "[data-sheet=guide] .tl-axis" },
   { spec: "TimeAxis/hoverReadout", selector: "[data-sheet=guide] .tl-readout" },
   { spec: "BandTrack/hoverBand", selector: "[data-sheet=bands] .tl-band[data-force]" },
-  { spec: "StateTrack/hoverSegment", selector: "[data-sheet=presence] .tl-rowbar[data-force]" },
-  { spec: "StateTrack/hoverTick", selector: "[data-sheet=permission] .tl-change[data-force]" },
-  { spec: "StateTrack/hoverNetwork", selector: "[data-sheet=network] .tl-state[data-force]" },
   { spec: "MarkerTrack/hoverTick", selector: "[data-sheet=prompts] .tl-hit[data-force] > .tl-tick" },
   { spec: "MarkerTrack/hoverGlyph", selector: "[data-sheet=friction] .tl-glyph[data-force]" },
   { spec: "BarTrack/contextHoverBar", selector: "[data-sheet=context] .tl-bar-hover" },
@@ -154,7 +142,7 @@ export function TimelineHoverSheet() {
       <Frame sheet="guide">
         <In spec="Timeline/hoverGuide">
           <Timeline {...W} label="Specimen" gridlines={false} guide={{ t: HOVER_CENTRE, readout: "Nov 3 10:15" }}>
-            {/* Lanes chained so each but the last has a following sibling (its bottom rule). */}
+            {/* Lanes chained so each has a following sibling (its bottom rule), as the sheet draws them. */}
             <In spec="Lane/promptsHoverGuide">
               <Lane label="Prompts" height={26} summary="prompts">
                 <MarkerTrack markers={ticksGuide.map((p): TimelineMark => ({ t: at(p) }))} />
@@ -169,11 +157,8 @@ export function TimelineHoverSheet() {
                   <Lane label="Analytics" sublabel="events" height={44} summary="analytics">
                     <DensityTrack bins={analyticsBins} binSeconds={ANALYTICS_BIN} color="analytics" maxV={44} />
                   </Lane>
-                  <In spec="Lane/presenceHoverGuide">
-                    <Lane label="Presence" height={LANE_HEIGHT.rows(3)} summary="presence" rows={presence.map((r) => r.name)}>
-                      <RowTrack rows={presence} />
-                    </Lane>
-                  </In>
+                  {/* The sheet keeps the last lane's bottom rule. */}
+                  <span hidden />
                 </In>
               </In>
             </In>
@@ -255,41 +240,6 @@ export function TimelineHoverSheet() {
                 forceLabel={forceAt(at(54.167), "hover")}
               />
             </In>
-          </Lane>
-        </In>
-      </One>
-
-      {/* State segments. */}
-      <One sheet="presence">
-        <In spec="Lane/presenceHover">
-          <Lane label="Presence" height={LANE_HEIGHT.rows(3)} summary="presence" rows={presence.map((r) => r.name)}>
-            <RowTrack rows={presence} interact={{ tip: none, force: { at: at(34), state: "hover" } }} />
-          </Lane>
-        </In>
-      </One>
-      <One sheet="permission">
-        <In spec="Lane/permissionHover">
-          <Lane label="Permission" height={30} summary="permission">
-            <StateTrack
-              palette="permission"
-              segments={[{ from: at(4), to: at(96), state: "bypassPermissions" }]}
-              changes={[{ t: at(58), label: "→ default ×2 in 20 s" }]}
-              interact={{ tip: none, changeTip: () => ({ body: "" }), force: { at: at(58), state: "hover" } }}
-            />
-          </Lane>
-        </In>
-      </One>
-      <One sheet="network">
-        <In spec="Lane/networkHover">
-          <Lane label="Network" height={30} summary="network">
-            <StateTrack
-              palette="network"
-              segments={[
-                { from: at(4), to: at(34), state: "ok", text: "net A · home" },
-                { from: at(34), to: at(74), state: "bypassed", text: "net B · has IPv6 → bypassed proxy" },
-              ]}
-              interact={{ tip: none, force: { at: at(34), state: "hover" } }}
-            />
           </Lane>
         </In>
       </One>

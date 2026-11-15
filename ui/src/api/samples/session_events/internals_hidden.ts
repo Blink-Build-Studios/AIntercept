@@ -4,7 +4,6 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["SessionEventsResponse"] = {
   "data": [
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:00:00:1",
       "internal": false,
       "linkedTo": {
@@ -17,21 +16,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "promptIndex": 1,
       "summary": "prompt_index 1",
       "t": "2026-11-04T09:00:00Z"
-    },
-    {
-      "collapsedCount": 4,
-      "eventId": "batch-11111111-2026-11-04T09:00:03:1",
-      "internal": false,
-      "linkedTo": {
-        "id": "p1",
-        "kind": "prompt",
-        "label": "#1"
-      },
-      "marker": null,
-      "name": "tengu_tool_use_progress",
-      "promptIndex": 1,
-      "summary": "toolName Bash",
-      "t": "2026-11-04T09:00:03Z"
     }
   ],
   "meta": {
@@ -40,7 +24,7 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
     "lastDataAt": "2026-11-04T09:00:08Z",
     "page": 1,
     "pageSize": 20,
-    "shown": 2,
+    "shown": 1,
     "to": "2026-11-04T09:00:59.999999Z",
     "total": 8
   }

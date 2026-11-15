@@ -7,7 +7,6 @@ import type { BinInteraction, BinSlot, Gap } from "./BarTrack";
 import type { FrictionInteraction } from "./FrictionTrack";
 import type { MarkLabel, MarkerInteraction } from "./MarkerTrack";
 import { ms } from "./scale";
-import type { StateInteraction } from "./StateTrack";
 import {
   analyticsBinTip,
   compactionTip,
@@ -16,9 +15,6 @@ import {
   gapTip,
   mergedGapTip,
   modelBinTip,
-  networkTip,
-  permissionTip,
-  presenceTip,
   promptTip,
   sessionBandTip,
 } from "./timelineTips";
@@ -46,7 +42,6 @@ export function laneInteractions(d: AnyTimeline, on: TimelineActions) {
   const events = byT(d.analytics);
   const prompts = byT(d.prompts);
   const gaps = new Map(d.notCaptured.map((g) => [ms(g.from), g]));
-  const presence = new Map(d.presence.map((p) => [ms(p.from), p]));
   const sessions = new Map(d.sessions.map((s) => [s.sessionId, s]));
   const selectBin = (s: BinSlot) => on.select({ from: s.from, to: s.to });
   return {
@@ -93,21 +88,13 @@ export function laneInteractions(d: AnyTimeline, on: TimelineActions) {
         if (index !== null && index !== undefined) on.jumpToPrompt?.(index);
       },
     } satisfies FrictionInteraction,
-    presence: {
-      tip: (s) => {
-        const p = presence.get(ms(s.from));
-        return p ? presenceTip(p) : null;
-      },
-      onSelect: (s) => on.select({ from: s.from, to: s.to }),
-    } satisfies StateInteraction,
   };
 }
 
-/** The session page's own lanes: context, compactions, permission changes, network. */
+/** The session page's own lanes: context and compactions. */
 export function sessionInteractions(d: SessionTimeline, on: TimelineActions) {
   const context = d.context.map((c) => ({ c, t: ms(c.t) })).sort((a, b) => a.t - b.t);
   const compactions = new Map(d.compactions.map((c) => [ms(c.t), c]));
-  const network = new Map(d.network.map((n) => [ms(n.from), n]));
   // The context bar of a bin is its last call's, carried forward through bins without calls:
   // the last point before the bin's end (a binary search; this runs for every bin's tooltip).
   const pointFor = (s: BinSlot) => {
@@ -137,20 +124,5 @@ export function sessionInteractions(d: SessionTimeline, on: TimelineActions) {
       const c = compactions.get(ms(l.t));
       return c ? compactionTip(c) : null;
     },
-    permission: {
-      tip: () => null,
-      changeTip: (c) => {
-        const within = d.permissionChanges.filter((x) => ms(x.t) >= ms(c.t) && ms(x.t) <= ms(c.to ?? c.t));
-        return within.length ? permissionTip(within) : null;
-      },
-      onChange: (c) => on.select({ from: c.t, to: c.to ?? c.t }),
-    } satisfies StateInteraction,
-    network: {
-      tip: (s) => {
-        const n = network.get(ms(s.from));
-        return n ? networkTip(n, (s.text ?? "").split(" · ")[0] ?? "") : null;
-      },
-      onSelect: (s) => on.select({ from: s.from, to: s.to }),
-    } satisfies StateInteraction,
   };
 }

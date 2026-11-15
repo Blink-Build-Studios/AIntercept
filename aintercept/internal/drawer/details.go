@@ -289,7 +289,7 @@ func (s *scope) eventRow(e *ev) Value {
 	r := s.rows[e.id]
 	return obj("eventId", StrV(e.id), "t", dt(e.ts), "name", StrV(e.name), "promptIndex", vInt(r.PromptIndex),
 		"linkedTo", obj("kind", StrV(r.LinkKind), "id", StrV(r.LinkID), "label", StrV(r.LinkLabel)),
-		"summary", StrV(r.Summary), "marker", optS(r.Marker), "internal", BoolV(r.Internal), "collapsedCount", None)
+		"summary", StrV(r.Summary), "marker", optS(r.Marker), "internal", BoolV(r.Internal))
 }
 
 // tool is session._tool's ToolCallData, the fields the drawer shows.

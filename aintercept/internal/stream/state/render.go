@@ -8,7 +8,7 @@ import (
 // key's rows by the query side (query.go): what the session's pages read, each
 // table in today's columns, order and seq. It's whole-session: every value
 // that crosses hours or prompts (link labels, prompt numbers and Codex turn
-// ranks, permission and network to_ns, open_tail, events_pending_if_live) is
+// ranks, open_tail, events_pending_if_live) is
 // computed over the whole session. How the rows are stored for the API is a
 // later step (docs/PIPELINE.md §3).
 //
@@ -18,7 +18,6 @@ import (
 // calls no thread names (the credential's c: key).
 type SessionTables struct {
 	SessionRows        []process.SessionRow // its own row
-	PresenceSegments   []process.PresenceSegment
 	SessionTools       []process.SessionTool
 	EventRows          []process.EventRow
 	SessionMarks       []process.SessionMark
@@ -64,7 +63,6 @@ func RenderSessionWith(sid string, rows Rows, others map[string]OtherParts) *Ses
 	prompts, steps, marks := PromptViewOf(rows)
 	return &SessionTables{
 		SessionRows:        filter(SessionRowsOf(rows), func(r process.SessionRow) bool { return own(r.SessionID) }),
-		PresenceSegments:   filter(PresenceSegmentsOf(rows), func(r process.PresenceSegment) bool { return own(r.SessionID) }),
 		SessionTools:       filter(SessionToolsOf(rows), func(r process.SessionTool) bool { return own(r.SessionID) }),
 		EventRows:          filter(EventRowsOf(rows), func(r process.EventRow) bool { return own(r.SessionID) }),
 		SessionMarks:       filter(marks, func(r process.SessionMark) bool { return own(r.SessionID) }),
@@ -79,7 +77,6 @@ func RenderSessionWith(sid string, rows Rows, others map[string]OtherParts) *Ses
 func (t *SessionTables) Tables() map[string]any {
 	return map[string]any{
 		"session_rows":         t.SessionRows,
-		"presence_segments":    t.PresenceSegments,
 		"session_tools":        t.SessionTools,
 		"event_rows":           t.EventRows,
 		"session_marks":        t.SessionMarks,

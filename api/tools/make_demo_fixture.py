@@ -26,7 +26,7 @@ from aintercept_api.store import Store
 
 DEMO_ACCOUNT = "7d2e0000-0000-4000-8000-00000000a41c"
 KEEP_MD = {
-    # coverage, presence, friction, prompts
+    # coverage, friction, prompts
     "requestId",
     "clientRequestId",
     "permissionMode",

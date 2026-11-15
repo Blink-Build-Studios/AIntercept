@@ -116,17 +116,6 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 100
       }
     ],
-    "network": [
-      {
-        "address": null,
-        "bypassed": true,
-        "from": "2026-11-04T09:01:00Z",
-        "ipv6": false,
-        "label": "192.0.2.10",
-        "notCaptured": 3,
-        "to": "2026-11-04T09:20:00Z"
-      }
-    ],
     "notCaptured": [
       {
         "captured": 0,
@@ -138,23 +127,6 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       }
     ],
     "now": null,
-    "permission": [
-      {
-        "from": "2026-11-04T09:01:00Z",
-        "mode": "bypassPermissions",
-        "to": "2026-11-04T09:20:00Z"
-      }
-    ],
-    "permissionChanges": [],
-    "presence": [
-      {
-        "from": "2026-11-04T09:00:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:20:00Z"
-      }
-    ],
     "prompts": [
       {
         "durationMs": null,

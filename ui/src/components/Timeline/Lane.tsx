@@ -30,6 +30,8 @@ export const LANE_HEIGHT = {
   singleWithSublabel: 44,
   bars: 60,
   barsWithGapRow: 76,
+  /** The person page's Model calls lane: 70px of bars over the gap row (§11P.1). */
+  personBarsWithGapRow: 88,
   rows: (n: number) => 6 + 14 + 16 * n + 6,
 };
 

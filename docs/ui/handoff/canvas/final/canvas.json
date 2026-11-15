@@ -237,7 +237,7 @@
    "x": 7600,
    "y": 0,
    "w": 1440,
-   "h": 1750,
+   "h": 1520,
    "title": "Timeline",
    "page": "components"
   },
@@ -285,7 +285,7 @@
    "x": 16720,
    "y": 0,
    "w": 1440,
-   "h": 5240,
+   "h": 4420,
    "title": "Timeline hover & keyboard",
    "page": "components"
   },
@@ -328,7 +328,7 @@
    "x": 19760,
    "y": 0,
    "w": 1440,
-   "h": 6800,
+   "h": 6160,
    "title": "Timelines at density · clickable states · round 10",
    "page": "components"
   },
@@ -336,7 +336,7 @@
    "x": 21280,
    "y": 0,
    "w": 1440,
-   "h": 5420,
+   "h": 5150,
    "title": "Brand, empty-space hover, headers · round 11",
    "page": "components"
   },
@@ -344,7 +344,7 @@
    "x": 22800,
    "y": 0,
    "w": 1440,
-   "h": 4420,
+   "h": 4360,
    "title": "Agents: Codex & provider-neutral · round 13",
    "page": "components"
   },
@@ -354,6 +354,14 @@
    "w": 1440,
    "h": 9600,
    "title": "Providers: screen by screen · round 14",
+   "page": "components"
+  },
+  "CompPersonTimeline.dc.html": {
+   "x": 25840,
+   "y": 0,
+   "w": 1440,
+   "h": 1960,
+   "title": "Timeline lanes · round 17",
    "page": "components"
   }
  },
@@ -396,7 +404,8 @@
   "CompDensity.dc.html",
   "CompR11.dc.html",
   "CompAgents.dc.html",
-  "CompProviders.dc.html"
+  "CompProviders.dc.html",
+  "CompPersonTimeline.dc.html"
  ],
  "notes": {
   "n1": {

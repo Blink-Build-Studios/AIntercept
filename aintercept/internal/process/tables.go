@@ -411,8 +411,6 @@ type SessionRow struct {
 //   - friction: friction_kind (frustrated, interrupted, destructive), its prompt's
 //     number and, for a destructive command, detail.
 //   - compaction: the prompt list's compaction between row.
-//   - permission, network: a state band's segment, from t_ns to to_ns (the next
-//     segment's start; null for the last, which ends where the timeline does).
 //
 // seq orders a session's marks of a kind.
 type SessionMark struct {
@@ -420,7 +418,6 @@ type SessionMark struct {
 	Seq       int64  `parquet:"seq"`
 	Kind      string `parquet:"kind"`
 	TNS       int64  `parquet:"t_ns"`
-	ToNS      *int64 `parquet:"to_ns,optional"`
 
 	RequestID    *string `parquet:"request_id,optional"`
 	RequestClass *string `parquet:"request_class,optional"`
@@ -443,19 +440,4 @@ type SessionMark struct {
 	TokensTo   *int64   `parquet:"tokens_to,optional"`
 	Idle       bool     `parquet:"idle"`
 	WaitMS     *float64 `parquet:"wait_ms,optional"`
-
-	Mode     *string `parquet:"mode,optional"`
-	PrevMode *string `parquet:"prev_mode,optional"`
-	IP       *string `parquet:"ip,optional"`
-	IPv6     bool    `parquet:"ipv6"`
-}
-
-// PresenceSegment is a presence_segments row (presence.go): a session's focused
-// or away span, or one of its sleep windows; [from_ns, to_ns).
-type PresenceSegment struct {
-	SessionID string `parquet:"session_id"`
-	Seq       int64  `parquet:"seq"`
-	FromNS    int64  `parquet:"from_ns"`
-	ToNS      int64  `parquet:"to_ns"`
-	State     string `parquet:"state"`
 }

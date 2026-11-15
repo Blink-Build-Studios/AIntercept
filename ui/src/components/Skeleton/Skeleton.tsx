@@ -16,10 +16,16 @@ export function SkeletonBar({ width, height = 12, faint, className = "" }: Skele
   return <span aria-hidden className={`sk ${width === undefined ? "sk-fill" : ""} ${faint ? "sk-faint" : ""} ${className}`} style={style} />;
 }
 
+/** The timelines' loading lanes (CompPersonTimeline, §11Q). */
+export const PERSON_TIMELINE_LANES = [30, 14, 60, 30, 48] as const;
+export const SESSION_TIMELINE_LANES = [14, 48, 44, 14] as const;
+
 export type SkeletonProps = {
-  shape: "line" | "block" | "row" | "lane";
+  shape: "line" | "block" | "row" | "lane" | "timeline";
   /** `line` only: more than one renders a paragraph; the last line is shorter and fainter. */
   lines?: number;
+  /** `timeline` only: each lane's band height, top to bottom (CompPersonTimeline). */
+  lanes?: readonly number[];
   className?: string;
 };
 
@@ -28,9 +34,10 @@ export type SkeletonProps = {
  * - line: a 12px text line (with `lines`, the last is 70% × 8px, faint);
  * - block: a 78px stat tile;
  * - row: a table row, 92 / 160 / rest;
- * - lane: a timeline lane, 90px label and a 32px band.
+ * - lane: a timeline lane, 90px label and a 32px band;
+ * - timeline: a timeline's lanes (§11Q): a 108px label and a band per lane, at `lanes`' heights.
  */
-export function Skeleton({ shape, lines = 1, className = "" }: SkeletonProps) {
+export function Skeleton({ shape, lines = 1, lanes = [], className = "" }: SkeletonProps) {
   if (shape === "line") {
     if (lines <= 1) return <SkeletonBar width="100%" className={className} />;
     return (
@@ -50,6 +57,18 @@ export function Skeleton({ shape, lines = 1, className = "" }: SkeletonProps) {
           <SkeletonBar width={160} />
           <SkeletonBar faint />
         </div>
+      </div>
+    );
+  }
+  if (shape === "timeline") {
+    return (
+      <div aria-busy className={`sk-timeline ${className}`}>
+        {lanes.map((h, i) => (
+          <div key={i} className="sk-timeline-lane">
+            <SkeletonBar width={108} />
+            <SkeletonBar height={h} className="sk-lane-band" />
+          </div>
+        ))}
       </div>
     );
   }

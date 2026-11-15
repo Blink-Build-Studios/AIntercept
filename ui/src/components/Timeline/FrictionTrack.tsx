@@ -4,9 +4,12 @@ import { formatCount } from "../../lib/format";
 import type { TooltipContent } from "../Tooltip/Tooltip";
 import { Mark, type MarkForce } from "./TimelineGuide";
 import { Track } from "./Lane";
-import { ROW_HEIGHT, ROWS_TOP } from "./RowTrack";
 import { ms, useTimeScale, useTrackWidth } from "./scale";
 import { readoutLine, rowZone, type TrackHover } from "./trackHover";
+
+/** Where a multi-row lane's first row starts: under the 6px padding and the 14px lane label. */
+export const ROWS_TOP = 20;
+export const ROW_HEIGHT = 16;
 
 /** A friction kind: the API's, and Codex's own `steered` (handoff §11J, a turn's steer count). */
 export type FrictionKind = Schemas["FrictionMark"]["kind"] | "steered";

@@ -4,7 +4,6 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["SessionEventsResponse"] = {
   "data": [
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:00:00:1",
       "internal": false,
       "linkedTo": {

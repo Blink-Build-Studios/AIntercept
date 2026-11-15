@@ -4,7 +4,7 @@ rollups are SQL over the processor's tables (rollups.py; docs/architecture.md, D
 which keep these rules.
 
 Every agent's sessions load the same way (cc_calls holds Claude Code's and Codex's
-model calls); the analytics-driven facts (coverage, presence, friction) come from
+model calls); the analytics-driven facts (coverage, friction) come from
 Claude Code's events, so a Codex session simply has none (agents.NOT_REPORTED).
 
 Rules (handoff §1.1, §5.2.5, §5.4; docs/ui/handoff/context/DATA_ANSWERS.md):
@@ -14,10 +14,6 @@ Rules (handoff §1.1, §5.2.5, §5.4; docs/ui/handoff/context/DATA_ANSWERS.md):
 - Coverage: each tengu_api_success should match a captured call by request id,
   else by client request id. Unmatched ones are calls that bypassed the proxy,
   grouped into windows split by gaps of 15 minutes or more.
-- Presence: focus is per session (tengu_return_to_session blur windows), sleep
-  per device (tengu_event_loop_stall likely_sleep). At each instant: asleep if
-  any device sleeps, else focused if any open session is focused, else away if
-  a session is open. The processor writes it (presence_segments, timeline.presence).
 """
 
 from dataclasses import dataclass, field
@@ -26,18 +22,14 @@ from datetime import datetime
 from aintercept_api.store import Store
 
 NS = 1_000_000_000
-MS = 1_000_000  # nanoseconds per millisecond (blurDurationMs, clock_jump_ms)
 LIVE_WITHIN_NS = 5 * 60 * NS  # handoff §10.5: live = activity in the last 5 minutes
 GAP_SPLIT_NS = 15 * 60 * NS  # coverage windows split at gaps of 15 minutes or more
 
 _EVENT_NAMES = (
     "tengu_api_success",
-    "tengu_api_query",
     "tengu_input_prompt",
     "tengu_cancel",
     "tengu_bash_tool_command_executed",
-    "tengu_return_to_session",
-    "tengu_event_loop_stall",
 )
 
 
@@ -72,12 +64,9 @@ class Ev:
     device: str | None
     request_id: str | None
     client_request_id: str | None
-    permission_mode: str | None
     is_negative: bool
     destructive: str | None
     prompt_index: int | None
-    blur_ms: int | None
-    sleep_ms: int | None
     prompt_id: str | None = None
     destructive_scope: str | None = None
 
@@ -228,15 +217,12 @@ def load_sessions(store: Store, sids: list[str]) -> dict[str, Session]:
     ):
         s = sessions[sid]
         s.event_count, s.first_event, s.last_event = n, lo, hi
-    for sid, ts, name, dev, rid, crid, mode, neg, destr, pidx, blur, sleep, jump, pid, scope in store.query(
+    for sid, ts, name, dev, rid, crid, neg, destr, pidx, pid, scope in store.query(
         """SELECT session_id, ts, name, device_id,
                   json_extract_string(md, '$.requestId'), json_extract_string(md, '$.clientRequestId'),
-                  json_extract_string(md, '$.permissionMode'), json_extract_string(md, '$.is_negative'),
+                  json_extract_string(md, '$.is_negative'),
                   json_extract_string(md, '$.destructive_category'),
                   TRY_CAST(json_extract_string(md, '$.prompt_index') AS INT),
-                  TRY_CAST(json_extract_string(md, '$.blurDurationMs') AS BIGINT),
-                  json_extract_string(md, '$.likely_sleep'),
-                  TRY_CAST(json_extract_string(md, '$.clock_jump_ms') AS BIGINT),
                   json_extract_string(md, '$.cc_prompt_id'), json_extract_string(md, '$.destructive_target_scope')
            FROM cc_events
            WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND name IN (SELECT unnest(?::VARCHAR[]))
@@ -250,12 +236,9 @@ def load_sessions(store: Store, sids: list[str]) -> dict[str, Session]:
                 dev,
                 rid,
                 crid,
-                mode,
                 neg == "true",
                 destr if destr not in (None, "none") else None,
                 pidx,
-                blur,
-                jump if sleep == "true" else None,
                 pid,
                 scope,
             )

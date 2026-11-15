@@ -103,46 +103,15 @@ class Compaction(Model):
     """Messages summarized; None until the compaction events' metadata is extracted (M7)."""
 
 
-class PermissionSegment(Model):
-    from_: datetime = Field(alias="from")
-    to: datetime
-    mode: str
-    """permissionMode as reported on tengu_api_query (bypassPermissions, default, plan, …)."""
-
-
-class PermissionChange(Model):
-    t: datetime
-    from_: str = Field(alias="from")
-    to: str
-
-
-class NetworkSegment(Model):
-    from_: datetime = Field(alias="from")
-    to: datetime
-    label: str
-    """The client IP the calls came from (there are no network names yet)."""
-    ipv6: bool
-    bypassed: bool
-    """A not-captured window overlaps this segment."""
-    address: str | None
-    """The address the bypassing calls went to; None until the coverage job records it (§5.4)."""
-    notCaptured: int
-    """Reported calls within the segment that the proxy never saw."""
-
-
 class SessionTimeline(Timeline):
     """The whole session (the brush is client-side), with the session-only lanes."""
 
     context: list[ContextPoint]
     compactions: list[Compaction]
-    permission: list[PermissionSegment]
-    permissionChanges: list[PermissionChange]
-    """One per permissionMode change (the boundaries between `permission` segments)."""
-    network: list[NetworkSegment]
 
 
 class SessionTimelineResponse(Envelope[SessionTimeline]):
-    """`presence` holds this terminal's focus and the device's sleep: focus lane = focused/away, sleep lane = asleep."""
+    pass
 
 
 # --- state (§5.2.8) ---------------------------------------------------------------------------
@@ -158,12 +127,12 @@ class ToolTally(Model):
 class CapabilitiesAt(Model):
     builtin: ToolTally
     mcpServers: list[McpServer]
-    """Servers whose tools were used up to `to` (the full list needs the M7 catalog)."""
+    """Servers whose tools the session used (the full list needs the M7 catalog)."""
     mcpTools: ToolTally
     skills: int | None
     """None until skills are extracted (M7)."""
     hooks: int | None
-    """Distinct hooks that ran up to `to`."""
+    """Distinct hooks that ran in the session."""
     poolChangesInRange: int | None
     """tengu_deferred_tools_pool_change events in the range."""
 
@@ -218,7 +187,7 @@ class SessionState(Model):
 
 
 class SessionStateResponse(Envelope[SessionState]):
-    """Capabilities and experiments are as of `to`; everything else is within [from, to]."""
+    """Capabilities and experiments are the whole session's; everything else is within [from, to]."""
 
 
 # --- prompts (§5.2.9) -------------------------------------------------------------------------
@@ -393,14 +362,12 @@ class EventRow(Model):
     """The event's metadata as "k v · k v" (ids left out)."""
     marker: Literal["destructive", "frustrated"] | None
     internal: bool
-    """A client internal (hidden by default)."""
-    collapsedCount: int | None
-    """How many consecutive tool-progress ticks this row stands for, when more than one."""
+    """A client internal (hidden by default): client bookkeeping, including tool-progress ticks."""
 
 
 class EventsMeta(Meta):
     shown: int
-    """Rows after hiding internals, the text filter and collapsing (what the pager pages)."""
+    """Events after hiding internals and the text filter (what the pager pages)."""
 
 
 class SessionEventsResponse(Envelope[list[EventRow]]):

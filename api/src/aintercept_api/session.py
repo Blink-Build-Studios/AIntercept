@@ -58,6 +58,7 @@ INTERNAL_NAMES = {
     "render_glyph_cardinality",
     "tree_sitter_parse_abort",
     "bash_ast_too_complex",
+    "tool_use_progress",  # tool-progress ticks (handoff §11Q.3)
 }
 INTERNAL_PREFIXES = ("tether_", "wire_", "reminder_fold_", "spinner_")
 TICK = "tengu_tool_use_progress"
@@ -283,33 +284,6 @@ def context_points(store: Store, session_id: str) -> list[dict[str, Any]]:
         """SELECT * FROM session_marks WHERE session_id = ? AND kind = 'call' AND request_class = 'main'
              AND context IS NOT NULL ORDER BY seq""",
         [session_id],
-    )
-
-
-def permission(store: Store, session_id: str, end: int) -> list[dict[str, Any]]:
-    """permissionMode as a state band: a segment per run of the same mode; the last one ends at `end`."""
-    return store.query_dicts(
-        """SELECT t_ns AS a, coalesce(to_ns, greatest(?, t_ns)) AS b, mode, prev_mode FROM session_marks
-           WHERE session_id = ? AND kind = 'permission' ORDER BY seq""",
-        [end, session_id],
-    )
-
-
-def networks(store: Store, session_id: str, end: int) -> list[dict[str, Any]]:
-    """A segment per run of calls from the same client IP; the last one ends at `end`. Bypassed: a
-    not-captured window overlaps it; notCaptured: the not-captured calls in it (segments share their
-    boundaries: the last one includes its end)."""
-    cte, params = gap_windows([session_id], None, None)
-    return store.query_dicts(
-        f"""WITH {cte},
-            s AS (SELECT seq, t_ns AS a, coalesce(to_ns, greatest(?, t_ns)) AS b, to_ns IS NULL AS last, ip, ipv6
-                  FROM session_marks WHERE session_id = ? AND kind = 'network')
-            SELECT a, b, ip, ipv6,
-                   EXISTS (SELECT 1 FROM windows w WHERE w.a <= s.b AND w.b >= s.a) AS bypassed,
-                   (SELECT count(*) FROM session_marks m WHERE m.session_id = ? AND m.kind = 'missed'
-                      AND m.t_ns >= s.a AND (m.t_ns < s.b OR s.last AND m.t_ns = s.b)) AS not_captured
-            FROM s ORDER BY seq""",  # noqa: S608 (fixed text; values are parameters)
-        [*params, end, session_id, session_id],
     )
 
 
@@ -606,13 +580,11 @@ def _marker(e: Event) -> str | None:
 
 # The Events tab is SQL over the processor's event_rows (its eventrows.go): the rows are stored
 # as shown, so a request only filters them (range, internals, `q` against the name and summary,
-# lowered as Python lowers them), folds consecutive tool-progress ticks and pages.
+# lowered as Python lowers them) and pages.
 _EVENTS = """
 WITH f AS (SELECT * FROM event_rows WHERE session_id = ? AND ts_ns BETWEEN ? AND ?),
-s AS (SELECT * FROM f WHERE (? OR NOT internal) AND (? = '' OR contains(name_lower, ?) OR contains(summary_lower, ?))),
-h AS (SELECT *, CASE WHEN ? AND name = 'tengu_tool_use_progress' AND lag(name) OVER (ORDER BY seq) = name
-                     THEN 0 ELSE 1 END AS head FROM s),
-g AS (SELECT *, sum(head) OVER (ORDER BY seq ROWS UNBOUNDED PRECEDING) AS grp FROM h)"""
+s AS (SELECT * FROM f WHERE (? OR NOT internal)
+      AND (? = '' OR contains(name_lower, ?) OR contains(summary_lower, ?)))"""
 
 
 def event_rows(
@@ -621,18 +593,14 @@ def event_rows(
     lo: int,
     hi: int,
     internal: bool,
-    collapse: bool,
     q: str | None,
     page: int,
     page_size: int,
 ) -> tuple[int, int, list[EventRow]]:
     """(events in range, rows to show, the page's rows)."""
     q = q.lower() if q else ""
-    params = [session_id, lo, hi, internal, q, q, q, collapse]
-    total, shown = store.query(
-        f"{_EVENTS} SELECT (SELECT count(*) FROM f), (SELECT coalesce(max(grp), 0) FROM g)",  # noqa: S608
-        params,
-    )[0]
+    params = [session_id, lo, hi, internal, q, q, q]
+    total, shown = store.query(f"{_EVENTS} SELECT (SELECT count(*) FROM f), (SELECT count(*) FROM s)", params)[0]  # noqa: S608
     out = [
         EventRow(
             eventId=r["event_id"],
@@ -643,12 +611,10 @@ def event_rows(
             summary=r["summary"],
             marker=r["marker"],
             internal=r["internal"],
-            collapsedCount=r["n"] if r["n"] > 1 else None,
         )
         for r in store.query_dicts(
-            f"""{_EVENTS} SELECT g.*, n FROM g JOIN (SELECT grp, count(*) AS n FROM g GROUP BY grp) USING (grp)
-                WHERE head = 1 AND grp > ? AND grp <= ? ORDER BY seq""",  # noqa: S608
-            [*params, (page - 1) * page_size, page * page_size],
+            f"{_EVENTS} SELECT * FROM s ORDER BY seq LIMIT ? OFFSET ?",  # noqa: S608
+            [*params, page_size, (page - 1) * page_size],
         )
     ]
     return total, shown, out
@@ -656,12 +622,12 @@ def event_rows(
 
 # --- state ------------------------------------------------------------------------------------
 
-# What the state readout counts of the session's events, as of `hi` (capabilities) or within
-# [lo, hi]: SQL over the processor's event_rows and session_tools.
+# What the state readout counts of the session's events, over the whole session (capabilities) or
+# within [lo, hi]: SQL over the processor's event_rows and session_tools.
 _STATE = """
 SELECT count(*) > 0,
        count(*) FILTER (WHERE ts_ns BETWEEN $2 AND $3),
-       count(DISTINCT hook) FILTER (WHERE ts_ns <= $3),
+       count(DISTINCT hook),
        count(*) FILTER (WHERE git_op = 'commit' AND ts_ns BETWEEN $2 AND $3),
        count(*) FILTER (WHERE git_op = 'push' AND ts_ns BETWEEN $2 AND $3),
        coalesce(list(DISTINCT pr ORDER BY pr) FILTER (WHERE pr IS NOT NULL AND ts_ns BETWEEN $2 AND $3), []),
@@ -669,8 +635,8 @@ SELECT count(*) > 0,
        count(*) FILTER (WHERE recap),
        coalesce(list(ts_ns ORDER BY seq) FILTER (WHERE recap AND ts_ns BETWEEN $2 AND $3), []),
        count(*) FILTER (WHERE name = 'tengu_deferred_tools_pool_change' AND ts_ns BETWEEN $2 AND $3),
-       arg_max(count, (ts_ns, count)) FILTER (WHERE name = 'tengu_tool_search_mode_decision' AND ts_ns <= $3),
-       arg_max(count, (ts_ns, count)) FILTER (WHERE name = 'tengu_skills_sync_success' AND ts_ns <= $3),
+       arg_max(count, (ts_ns, count)) FILTER (WHERE name = 'tengu_tool_search_mode_decision'),
+       arg_max(count, (ts_ns, count)) FILTER (WHERE name = 'tengu_skills_sync_success'),
        arg_min(head_sha, (ts_ns, head_sha)) FILTER (WHERE head_sha IS NOT NULL AND ts_ns BETWEEN $2 AND $3),
        arg_max(head_sha, (ts_ns, head_sha)) FILTER (WHERE head_sha IS NOT NULL AND ts_ns BETWEEN $2 AND $3),
        count(DISTINCT head_sha) FILTER (WHERE ts_ns BETWEEN $2 AND $3)
@@ -697,9 +663,9 @@ def state(store: Store, session_id: str, lo: int, hi: int, requests: int) -> Ses
         heads,
     ) = store.query(_STATE, [session_id, lo, hi])[0]
     tools = store.query(
-        """SELECT kind, server, count(DISTINCT tool) FROM session_tools WHERE session_id = ? AND first_ns <= ?
+        """SELECT kind, server, count(DISTINCT tool) FROM session_tools WHERE session_id = ?
            GROUP BY ALL ORDER BY kind, server""",
-        [session_id, hi],
+        [session_id],
     )
     builtin = next((n for kind, _, n in tools if kind == "builtin"), 0)
     mcp = [(server, n) for kind, server, n in tools if kind == "mcp"]

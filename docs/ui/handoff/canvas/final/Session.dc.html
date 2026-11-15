@@ -53,7 +53,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div style="flex: 1 1 500px; height: 36px; background: #20252a; opacity: .6"></div>
 </div>
 <div style="background: #131618; border: 1px solid #2a3034; padding: 12px; display: flex; flex-direction: column; gap: 8px">
-<sc-for list="{{skelLanes}}" as="x" hint-placeholder-count="8"><div data-spec="Skeleton/lane" style="display: flex; gap: 12px; align-items: center"><div style="width: 108px; height: 12px; background: #20252a"></div><div style="flex: 1; background: #20252a; opacity: .55; height: {{x.h}}"></div></div></sc-for>
+<sc-for list="{{skelLanes}}" as="x" hint-placeholder-count="4"><div data-spec="Skeleton/lane" style="display: flex; gap: 12px; align-items: center"><div style="width: 108px; height: 12px; background: #20252a"></div><div style="flex: 1; background: #20252a; opacity: .55; height: {{x.h}}"></div></div></sc-for>
 </div>
 <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
 <div style="height: 140px; background: #131618; border: 1px solid #2a3034"></div><div style="height: 140px; background: #131618; border: 1px solid #2a3034"></div><div style="height: 140px; background: #131618; border: 1px solid #2a3034"></div><div style="height: 140px; background: #131618; border: 1px solid #2a3034"></div>
@@ -131,28 +131,6 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <sc-for list="{{ctxMarks}}" as="c" hint-placeholder-count="2"><span class="m" style="position: absolute; top: 2px; font-size: 10.5px; white-space: nowrap; color: #e6e3db; left: {{c.l}}">{{c.t}}</span></sc-for>
 </div>
 </div>
-<div data-spec="Lane/permission" class="lane" style="height: 30px">
-<div class="lab"><div class="k">Permission</div></div>
-<div data-spec="StateTrack/permission" class="track">
-<div class="m" style="position: absolute; top: 6px; height: 18px; left: 4%; right: 0.5%; background: #1b1f22; border: 1px solid #60686d; box-sizing: border-box; font-size: 10.5px; line-height: 16px; padding-left: 6px; color: #e6e3db">bypassPermissions</div>
-<div style="position: absolute; top: 4px; height: 22px; width: 3px; background: #ffd36b; left: 58.9%"></div>
-<span class="m" style="position: absolute; top: 6px; font-size: 10.5px; line-height: 18px; color: #ffd36b; white-space: nowrap; left: 59.3%; background: #131618; padding: 0 4px">→ default ×2 in 20 s</span>
-</div>
-</div>
-<div data-spec="Lane/focusRows" class="lane" style="height: 58px">
-<div class="lab"><div class="k" style="height: 14px">Focus</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">focused</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">blurred</div></div>
-<div class="track"><div data-spec="FocusRow/focused" style="position: absolute; left: 0; right: 0; top: 20px; height: 16px"><sc-for list="{{focusF}}" as="p" hint-placeholder-count="6"><div style="position: absolute; top: 3px; height: 10px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: #e6e3db"></div></sc-for></div><div data-spec="FocusRow/blurred" style="position: absolute; left: 0; right: 0; top: 36px; height: 16px"><sc-for list="{{focusB}}" as="p" hint-placeholder-count="6"><div style="position: absolute; top: 3px; height: 10px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: #a3a9ad"></div></sc-for></div></div>
-</div>
-<div data-spec="Lane/deviceSleepRow" class="lane" style="height: 42px">
-<div class="lab"><div class="k" style="height: 14px">Device</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">asleep</div></div>
-<div class="track"><div data-spec="DeviceRow/asleep" style="position: absolute; left: 0; right: 0; top: 20px; height: 16px"><sc-for list="{{sleep}}" as="p" hint-placeholder-count="6"><div style="position: absolute; top: 3px; height: 10px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: #848c90"></div></sc-for></div></div>
-</div>
-<div data-spec="Lane/networkRow" class="lane" style="height: 28px">
-<div class="lab"><div class="k">Network</div></div>
-<div data-spec="StateTrack/network" class="track">
-<sc-for list="{{net}}" as="p" hint-placeholder-count="4"><div class="m" style="position: absolute; top: 5px; height: 18px; min-width: 2px; font-size: 10.5px; line-height: 16px; padding-left: 4px; box-sizing: border-box; border: 1px solid {{p.bd}}; white-space: nowrap; overflow: hidden; left: {{p.l}}; width: {{p.w}}; color: {{p.c}}">{{p.lt}}</div></sc-for>
-</div>
-</div>
 <div data-spec="Lane/frictionSplit" class="lane" style="height: 74px; border-bottom: 0">
 <div class="lab"><div class="k" style="height: 14px">Friction</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">↯ frustrated {{fN.f}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">✕ interrupted {{fN.i}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span style="color: #ff7a6b">▲ destructive {{fN.d}}</span></div></div>
 <div class="track"><div data-spec="FrictionRow/frustrated" style="position: absolute; left: 0; right: 0; top: 20px; height: 16px"><sc-for list="{{fricF}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div><div data-spec="FrictionRow/interrupted" style="position: absolute; left: 0; right: 0; top: 36px; height: 16px"><sc-for list="{{fricI}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div><div data-spec="FrictionRow/destructive" style="position: absolute; left: 0; right: 0; top: 52px; height: 16px"><sc-for list="{{fricD}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div></div>
@@ -176,7 +154,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <!-- session state panels, scoped to range -->
 <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
 <div data-spec="KeyValueList/capabilities" class="panel">
-<div class="ph"><span class="k" style="color: #e8916f">Capabilities · {{rng.at}}</span></div>
+<div class="ph"><span class="k" style="color: #e8916f">Capabilities</span></div>
 <sc-for list="{{caps}}" as="c" hint-placeholder-count="5"><div class="row m"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{c.k}}</span><span style="color: #a3a9ad">{{c.v}}</span></div></sc-for>
 <div class="m" style="padding: 4px 12px; color: #a3a9ad; font-size: 11px">2 tool-pool changes in range</div>
 </div>
@@ -194,7 +172,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div style="padding: 6px 12px"><span class="m" style="color: #848c90">{{rng.recapT}}</span> <span>{{rng.recapX}}</span></div>
 </div>
 <div data-spec="KeyValueList/experiments" class="panel">
-<div class="ph"><span class="k" style="color: #c9a3ec">Experiments · {{rng.at}}</span></div>
+<div class="ph"><span class="k" style="color: #c9a3ec">Experiments</span></div>
 <div class="m" style="padding: 6px 12px; display: flex; flex-direction: column">
 <span style="color: #c9a3ec">curried_trinket</span><span style="color: #a3a9ad">= no_scratchpad_capped</span>
 <span style="margin-top: 6px">1 flag fetch in range · 3 changed</span>
@@ -269,7 +247,6 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <label class="k" for="sevf">Filter</label>
 <input data-spec="TextInput/filter" id="sevf" class="inp" placeholder="event name, field=value…">
 <span data-spec="ToggleChip" class="chip" style="border-color: #2a3034; color: #a3a9ad">HIDE CLIENT INTERNALS ✓</span>
-<span data-spec="ToggleChip" class="chip" style="border-color: #2a3034; color: #a3a9ad">COLLAPSE TICKS ✓</span>
 <span style="flex: 1"></span>
 <span class="m" style="color: #848c90">2,412 in range · 1,503 shown after hiding internals</span>
 </div>
@@ -663,7 +640,6 @@ class Component extends DCLogic {
         1, '{\n  "requestId": "req_01H…a10",  "clientRequestId": "c3b0…7f",\n  "session_id": "4c1a…77e0",  "cc_prompt_id": "p_2b…09",\n  "model": "claude-opus-…",  "costUSD": 0.18,\n  "ttftMs": 2104,  "durationMs": 6120,  "permissionMode": "bypassPermissions",\n  "inputTokens": 388,  "cachedInputTokens": 301204,  "outputTokens": 214,\n  "env": { platform, terminal, shell, runtimes, … +45 fields }\n}'],
       ['10:02:09', '17', 'tengu_tool_use_start', 'tool Bash', 'toolUseID toolu_…41'],
       ['10:02:09', '17', 'tengu_run_hook', 'tool Bash', 'PreToolUse · 51 ms'],
-      ['10:02:10', '17', 'tengu_tool_progress ×8', 'tool Bash', 'collapsed · client ticks', '', '', 0.55],
       ['10:02:11', '17', 'tengu_bash_tool_command_executed', 'tool Bash', 'kubectl · exit 0 · stdout 3.1 KB · 1.4 s'],
       ['10:02:11', '17', 'tengu_tool_use_success', 'tool Bash', '1.5 s'],
       ['10:02:11', '17', 'tengu_api_query', 'req …a11', 'permissionMode bypassPermissions'],
@@ -687,7 +663,7 @@ class Component extends DCLogic {
       drawer: drawer,
       live: live, isLoading: st8 === 'loading', isError: st8 === 'error', showData: st8 === 'ready' || st8 === 'live',
       brush: brush, rng: rng,
-      skelLanes: [{ h: '14px' }, { h: '48px' }, { h: '44px' }, { h: '18px' }, { h: '18px' }, { h: '18px' }, { h: '18px' }, { h: '14px' }],
+      skelLanes: [{ h: '14px' }, { h: '48px' }, { h: '44px' }, { h: '14px' }],
       skelRows: [{ w: '40%' }, { w: '55%' }, { w: '30%' }, { w: '48%' }, { w: '36%' }, { w: '44%' }, { w: '52%' }, { w: '28%' }],
       dh: K.dh, ds: K.ds, dk: { wire: K.wire, noWire: !K.wire, rawMsg: K.rawMsg || '', allMsg: K.allMsg || '', ev: K.ev || [] },
       dtAllWire: dtab === 'all' && K.wire, dtAllNoWire: dtab === 'all' && !K.wire,

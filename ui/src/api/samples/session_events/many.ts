@@ -4,7 +4,6 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["SessionEventsResponse"] = {
   "data": [
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:00:00:1",
       "internal": false,
       "linkedTo": {
@@ -19,7 +18,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:00:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:00:10:1",
       "internal": false,
       "linkedTo": {
@@ -34,7 +32,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:00:10Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:01:00:1",
       "internal": false,
       "linkedTo": {
@@ -49,7 +46,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:01:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:01:00:2",
       "internal": false,
       "linkedTo": {
@@ -64,22 +60,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:01:00Z"
     },
     {
-      "collapsedCount": null,
-      "eventId": "batch-11111111-2026-11-04T09:01:00:3",
-      "internal": false,
-      "linkedTo": {
-        "id": "toolu_0001_0",
-        "kind": "tool",
-        "label": "Bash"
-      },
-      "marker": null,
-      "name": "tengu_tool_use_progress",
-      "promptIndex": 1,
-      "summary": "toolName Bash \u00b7 durationMs 120",
-      "t": "2026-11-04T09:01:00Z"
-    },
-    {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:01:00:4",
       "internal": false,
       "linkedTo": {
@@ -94,22 +74,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:01:00Z"
     },
     {
-      "collapsedCount": null,
-      "eventId": "batch-11111111-2026-11-04T09:01:00:5",
-      "internal": false,
-      "linkedTo": {
-        "id": "toolu_0001_1",
-        "kind": "tool",
-        "label": "mcp__github__create_pr"
-      },
-      "marker": null,
-      "name": "tengu_tool_use_progress",
-      "promptIndex": 1,
-      "summary": "toolName mcp__github__create_pr \u00b7 durationMs 120",
-      "t": "2026-11-04T09:01:00Z"
-    },
-    {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:01:00:6",
       "internal": false,
       "linkedTo": {
@@ -124,7 +88,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:01:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:01:30:1",
       "internal": false,
       "linkedTo": {
@@ -139,7 +102,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:01:30Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:03:00:1",
       "internal": false,
       "linkedTo": {
@@ -154,7 +116,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:03:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:10:00:1",
       "internal": false,
       "linkedTo": {
@@ -169,7 +130,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:10:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:10:30:1",
       "internal": false,
       "linkedTo": {
@@ -184,7 +144,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:10:30Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:10:30:2",
       "internal": false,
       "linkedTo": {
@@ -199,22 +158,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:10:30Z"
     },
     {
-      "collapsedCount": null,
-      "eventId": "batch-11111111-2026-11-04T09:10:30:3",
-      "internal": false,
-      "linkedTo": {
-        "id": "toolu_0004_0",
-        "kind": "tool",
-        "label": "Read"
-      },
-      "marker": null,
-      "name": "tengu_tool_use_progress",
-      "promptIndex": 2,
-      "summary": "toolName Read \u00b7 durationMs 120",
-      "t": "2026-11-04T09:10:30Z"
-    },
-    {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:10:30:4",
       "internal": false,
       "linkedTo": {
@@ -229,7 +172,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:10:30Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:11:00:1",
       "internal": false,
       "linkedTo": {
@@ -244,7 +186,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:11:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:11:05:1",
       "internal": false,
       "linkedTo": {
@@ -259,7 +200,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:11:05Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:12:00:1",
       "internal": false,
       "linkedTo": {
@@ -274,7 +214,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:12:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:13:00:1",
       "internal": false,
       "linkedTo": {
@@ -289,7 +228,6 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
       "t": "2026-11-04T09:13:00Z"
     },
     {
-      "collapsedCount": null,
       "eventId": "batch-11111111-2026-11-04T09:13:00:2",
       "internal": false,
       "linkedTo": {
@@ -310,7 +248,7 @@ const sample: components["schemas"]["SessionEventsResponse"] = {
     "lastDataAt": "2026-11-04T09:13:00Z",
     "page": 1,
     "pageSize": 50,
-    "shown": 20,
+    "shown": 17,
     "to": "2026-11-04T09:13:59.999999Z",
     "total": 20
   }

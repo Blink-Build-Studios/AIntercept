@@ -2,7 +2,7 @@
 oracle derives them from a dataset's v1 layout, and the comparison later steps hold the v6 views to.
 
 An entity is what a page's id names:
-- a session (`/sessions/{id}/*`): its session_rows row, prompts, steps, marks, events, presence,
+- a session (`/sessions/{id}/*`): its session_rows row, prompts, steps, marks, events,
   tools, call tool uses and its Requests tab's rows (session_request_rows), loaded as the session's
   endpoints load them (its account group, its own key's commit on top);
 - a person (`/people/{id}/*`, any account id of a group, and "unattributed"): person_map,
@@ -39,7 +39,6 @@ SESSION_TABLES = {
     "prompt_steps": _SESSION_OWN,
     "session_marks": _SESSION_OWN,
     "event_rows": _SESSION_OWN,
-    "presence_segments": _SESSION_OWN,
     "session_tools": _SESSION_OWN,
     "call_tool_uses": _SESSION_OWN,
     "session_request_rows": "scope_session_id = $id",
@@ -56,7 +55,6 @@ PERSON_TABLES = {
     "prompt_rows": _PERSONS_SESSIONS,
     "session_marks": _PERSONS_SESSIONS,
     "event_rows": _PERSONS_SESSIONS,
-    "presence_segments": _PERSONS_SESSIONS,
     "call_tool_uses": _PERSONS_SESSIONS,
 }
 REQUEST_TABLES = {

@@ -77,7 +77,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <sc-for list="{{skel6}}" as="x" hint-placeholder-count="6"><div data-spec="Skeleton/block" style="flex: 1 1 160px; height: 78px; background: #20252a"></div></sc-for>
 </div>
 <div style="background: #131618; border: 1px solid #2a3034; padding: 12px; display: flex; flex-direction: column; gap: 8px">
-<sc-for list="{{skelLanes}}" as="x" hint-placeholder-count="6"><div data-spec="Skeleton/lane" style="display: flex; gap: 12px; align-items: center"><div style="width: 108px; height: 12px; background: #20252a"></div><div style="flex: 1; background: #20252a; opacity: .55; height: {{x.h}}"></div></div></sc-for>
+<sc-for list="{{skelLanes}}" as="x" hint-placeholder-count="5"><div data-spec="Skeleton/lane" style="display: flex; gap: 12px; align-items: center"><div style="width: 108px; height: 12px; background: #20252a"></div><div style="flex: 1; background: #20252a; opacity: .55; height: {{x.h}}"></div></div></sc-for>
 </div>
 <div style="display: flex; flex-wrap: wrap; gap: 8px">
 <div style="flex: 1 1 520px; height: 200px; background: #131618; border: 1px solid #2a3034"></div>
@@ -174,9 +174,9 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <sc-for list="{{prompts}}" as="p" hint-placeholder-count="40"><div style="position: absolute; top: 5px; width: 1px; height: 14px; background: #e6e3db; left: {{p.l}}"></div></sc-for>
 </div>
 </div>
-<div data-spec="Lane/modelCalls" class="lane" style="height: 76px">
+<div data-spec="Lane/modelCalls" class="lane" style="height: 88px">
 <div class="lab" style="position: relative"><div class="k">Model calls</div><div class="m" style="font-size: 11px; line-height: 16px; color: #a3a9ad">per 1h</div><div class="m" style="position: absolute; left: 12px; bottom: 0; height: 16px; font-size: 10.5px; line-height: 16px; color: #ff7a6b; white-space: nowrap">▲ not captured {{gapTotal}}</div></div>
-<div data-spec="BarTrack/modelCalls" class="track"><div style="position: absolute; left: 0; right: 0; top: 0; height: 58px">
+<div data-spec="BarTrack/modelCalls" class="track"><div style="position: absolute; left: 0; right: 0; top: 0; height: 70px">
 <sc-for list="{{model}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #7db3ff; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
 </div><div data-spec="GapRow" style="position: absolute; left: 0; right: 0; bottom: 0; height: 16px; border-top: 1px solid #2a3034"><sc-for list="{{gaps}}" as="g" hint-placeholder-count="2"><div style="position: absolute; top: 3px; height: 10px; min-width: 3px; box-sizing: border-box; left: {{g.l}}; width: {{g.w}}; background: repeating-linear-gradient(135deg, rgba(255,122,107,.3) 0 4px, transparent 4px 8px); border-left: 1px solid #ff7a6b; border-right: 1px solid #ff7a6b"></div></sc-for></div></div>
 </div>
@@ -185,10 +185,6 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div data-spec="DensityTrack/analytics" class="track">
 <sc-for list="{{dens}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #f0b43c; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
 </div>
-</div>
-<div data-spec="Lane/presenceRows" class="lane" style="height: 74px">
-<div class="lab"><div class="k" style="height: 14px">Presence</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">focused</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">away</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">device asleep</div></div>
-<div class="track"><div data-spec="PresenceRow/focused" style="position: absolute; left: 0; right: 0; top: 20px; height: 16px"><sc-for list="{{presF}}" as="p" hint-placeholder-count="6"><div style="position: absolute; top: 3px; height: 10px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: #e6e3db"></div></sc-for></div><div data-spec="PresenceRow/away" style="position: absolute; left: 0; right: 0; top: 36px; height: 16px"><sc-for list="{{presA}}" as="p" hint-placeholder-count="6"><div style="position: absolute; top: 3px; height: 10px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: #a3a9ad"></div></sc-for></div><div data-spec="PresenceRow/asleep" style="position: absolute; left: 0; right: 0; top: 52px; height: 16px"><sc-for list="{{presS}}" as="p" hint-placeholder-count="6"><div style="position: absolute; top: 3px; height: 10px; min-width: 2px; left: {{p.l}}; width: {{p.w}}; background: #848c90"></div></sc-for></div></div>
 </div>
 <div data-spec="Lane/frictionSplit" class="lane" style="height: 74px; border-bottom: 0">
 <div class="lab"><div class="k" style="height: 14px">Friction</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">↯ frustrated {{fN.f}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">✕ interrupted {{fN.i}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span style="color: #ff7a6b">▲ destructive {{fN.d}}</span></div></div>
@@ -354,7 +350,7 @@ class Component extends DCLogic {
       if (mainActive(h + 0.5)) { calls = 10 + rnd() * 26; ev = 380 + rnd() * 420; }
       else if (h >= 274 && h < NOW) { ev = 20 + rnd() * 60; }
       if (inGap(h + 0.5)) calls = 0;
-      if (calls) model.push({ l: pct(h), w: 'calc(' + pct(1) + ' - 1px)', h: Math.min(58, 3 + calls * 0.55).toFixed(0) + 'px' });
+      if (calls) model.push({ l: pct(h), w: 'calc(' + pct(1) + ' - 1px)', h: Math.min(70, 3 + calls * 0.66).toFixed(0) + 'px' });
       if (ev) dens.push({ l: pct(h), w: 'calc(' + pct(1) + ' - 1px)', h: Math.min(42, 2 + ev * 0.05).toFixed(0) + 'px' });
     }
     var F = '#e6e3db', AW = '#2a3034', SL = '#848c90';
@@ -404,7 +400,7 @@ class Component extends DCLogic {
       showData: st8 === 'ready' || st8 === 'empty',
       bDelayed: banner === 'delayed' && (st8 === 'ready' || st8 === 'empty'), bError: banner === 'error' && (st8 === 'ready' || st8 === 'empty'),
       live: liveChip,
-      skel6: [1, 2, 3, 4, 5, 6], skelLanes: [{ h: '30px' }, { h: '14px' }, { h: '48px' }, { h: '36px' }, { h: '16px' }, { h: '14px' }],
+      skel6: [1, 2, 3, 4, 5, 6], skelLanes: [{ h: '30px' }, { h: '14px' }, { h: '60px' }, { h: '30px' }, { h: '48px' }],
       skelRows: [{ w: '40%' }, { w: '55%' }, { w: '30%' }, { w: '48%' }, { w: '36%' }, { w: '44%' }],
       waitSteps: [
         { g: '✓', gc: '#e6e3db', t: 'Proxy running', tc: '#e6e3db', d: 'TLS interception ready for api.anthropic.com · observer writing to storage' },
@@ -419,7 +415,6 @@ class Component extends DCLogic {
       nowFrac: (NOW / span).toFixed(4),
       sessions: sessions, prompts: prompts, model: model, dens: dens, person: person, fric: fric,
       ticks: ticks, tlabels: tlabels, grid: grid, gapTotal: '94',
-      presF: person.filter(function (p) { return p.bg === F; }), presA: person.filter(function (p) { return p.bg === AW; }), presS: person.filter(function (p) { return p.bg === SL; }),
       fricF: FS.f, fricI: FS.i, fricD: FS.d, fN: { f: cnt(FS.f), i: cnt(FS.i), d: cnt(FS.d) },
       gaps: gapsH.map(function (g) { return { l: pct(g.a), w: pct(g.b - g.a) }; }),
       ribbon: [

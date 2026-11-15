@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 )
 
@@ -17,7 +16,7 @@ type tsID struct {
 func lessTsID(a, b tsID) bool { return a.ts < b.ts || a.ts == b.ts && a.id < b.id }
 
 // session is the inputs every session table shares: the times its span is made
-// of, and its presence windows. A session's span runs from its first to its last
+// of. A session's span runs from its first to its last
 // visible model call or Claude Code event (process sessionRow).
 type session struct {
 	// span holds each visible call's time (by call id) and each Claude Code
@@ -27,10 +26,6 @@ type session struct {
 	span   *omap[tsID, bool]
 	callAt map[string]int64 // a visible call's time in span, by call id
 	ended  map[string]bool  // calls whose ending was applied: a start can't count again
-	blur   *spans
-	sleep  *spans
-	// before is the span as the presence rows were last written (exists, first, last).
-	before spanOf
 }
 
 type spanOf struct {
@@ -39,8 +34,7 @@ type spanOf struct {
 }
 
 func newSession() *session {
-	return &session{span: newOmap[tsID, bool](lessTsID), callAt: map[string]int64{}, ended: map[string]bool{},
-		blur: newSpans(), sleep: newSpans()}
+	return &session{span: newOmap[tsID, bool](lessTsID), callAt: map[string]int64{}, ended: map[string]bool{}}
 }
 
 // spanNow is the span as it stands.
@@ -59,35 +53,16 @@ func (s *session) lastTs() int64 {
 	return c[len(c)-1].k.ts
 }
 
-// changed is what one record changed in the session's inputs.
-type changed struct {
-	blur      []Span // merged blur windows a record made or grew
-	sleep     *Span  // the merged sleep window a record made or grew
-	sleepGone []Span // the sleep windows that merged into it
-}
-
-func (s *session) apply(r records.Record, d *Delta) changed {
-	var ch changed
+func (s *session) apply(r records.Record, d *Delta) {
 	switch {
 	case r.Kind == records.KindClientEvent && r.Event != nil:
 		e := r.Event
 		if e.Source != canon.ProductClaudeCode || e.SessionID == "" {
 			d.Cases = append(d.Cases, CaseEventNotSession)
-			return ch
+			return
 		}
 		s.span.Set(tsID{e.NS, "e:" + e.EventKey}, true)
 		d.Cases = append(d.Cases, CaseEventSpan)
-		blur, sleep, blurOK, sleepOK := process.EventWindows(e.Name, e.MetadataJSON, e.NS)
-		if blurOK {
-			d.Cases = append(d.Cases, CaseEventBlur)
-			if m, ok := s.blur.add(Span{blur[0], blur[1]}); ok {
-				ch.blur = append(ch.blur, m)
-			}
-		}
-		if sleepOK {
-			d.Cases = append(d.Cases, CaseEventSleep)
-			ch.sleepGone, ch.sleep = s.sleep.addTrack(Span{sleep[0], sleep[1]})
-		}
 	case r.Kind == records.KindCallEnd || r.Kind == records.KindWSConnection:
 		c := r.Call
 		s.ended[c.CallID] = true
@@ -112,7 +87,6 @@ func (s *session) apply(r records.Record, d *Delta) changed {
 	default:
 		d.Cases = append(d.Cases, CaseOtherRecord)
 	}
-	return ch
 }
 
 func (s *session) spanCall(id string, ts int64) {
@@ -167,4 +141,12 @@ func visibleStart(c *canon.Request) bool {
 		product = canon.ProductClaudeCode
 	}
 	return agentCall(product, c.Host, c.Method, c.Path, c.SessionID, 0, c.Synthetic)
+}
+
+// sessionOf is a session key's session id.
+func sessionOf(key string) string {
+	if len(key) > 2 && key[:2] == "s:" {
+		return key[2:]
+	}
+	return ""
 }

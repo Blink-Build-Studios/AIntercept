@@ -64,7 +64,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "ee6a8680a6f76dbce59c574d740a7c3cfe1819b2fb7b6ce39c7ff2d667f72689"
+SCHEMA_HASH = "107e0f3f36913124f4f32ea3a51b18ecb6ee2f82e92dee4c45f447e901bcfe41"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
@@ -109,7 +109,6 @@ _ORDER = {
     "prompt_steps": "session_id, seq, step",
     "session_marks": "session_id, kind, seq",
     "event_rows": "session_id, seq",
-    "presence_segments": "session_id, seq",
     "session_tools": "session_id, kind, server, tool",
     "call_tool_uses": "session_id, ts_ns, kind, server, tool",
     "session_request_rows": "scope_session_id, seq",
@@ -267,7 +266,7 @@ SELECT status.*, e.data, e.correlation_id, e.event_key FROM status LEFT JOIN LAT
 # What each session page reads after its row: the tables its endpoint code queries.
 SESSION_PAGES: dict[str, tuple[str, ...]] = {
     "": ("titles", "edges"),
-    "timeline": ("titles", "prompt_rows", "session_marks", "event_rows", "presence_segments"),
+    "timeline": ("titles", "prompt_rows", "session_marks", "event_rows"),
     "prompts": ("prompt_rows", "prompt_steps", "session_marks"),
     "events": ("event_rows",),
     "state": ("prompt_rows", "session_marks", "event_rows", "session_tools", *REQUESTS_TAB),
@@ -282,7 +281,6 @@ SESSION_PAGES[ENTITY] = (
     "prompt_steps",
     "session_marks",
     "event_rows",
-    "presence_segments",
     "session_tools",
     "call_tool_uses",
     *REQUESTS_TAB,
@@ -292,7 +290,6 @@ _SESSION_TABLES = (
     "prompt_steps",
     "session_marks",
     "event_rows",
-    "presence_segments",
     "session_tools",
     "call_tool_uses",
 )

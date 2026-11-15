@@ -7,25 +7,21 @@ import (
 
 // The session_marks snapshot: every session's timeline marks, one row per mark,
 // as the query API derived them (claude_code.py missed_calls, friction_marks and
-// prompt_index; session.py compactions, permission and networks; the session
-// timeline's context lane). Built with the prompt rows, from the same session
+// prompt_index; session.py compactions; the session timeline's context lane). Built with the prompt rows, from the same session
 // parts, so a compaction here is the prompt list's between row.
 //
 // The lanes that bin (model calls, friction) or window (not captured) are SQL
 // over these rows, since the bin, the range and the person's sessions are the
-// request's. What depends on now is left to the API: a segment's end is the
-// next one's start, and the last one's (to_ns null) is the timeline's end.
+// request's.
 
-// markEventNames is the Claude Code events the marks read: friction, prompt
-// numbers and the permission mode.
+// markEventNames is the Claude Code events the marks read: friction and prompt
+// numbers.
 var markEventNames = map[string]bool{
 	"tengu_input_prompt": true, "tengu_cancel": true, "tengu_bash_tool_command_executed": true,
-	"tengu_api_query": true,
 }
 
 // markEvent is one of a session's markEventNames events, with the fields the API
-// read: claude_code.py Ev's (json_extract_string, TRY_CAST) and, for the
-// permission mode, session.py's (_str of the parsed metadata).
+// read: claude_code.py Ev's (json_extract_string, TRY_CAST).
 type markEvent struct {
 	ts, seq, rowNS int64
 	corr, name     string
@@ -39,14 +35,11 @@ type markEvent struct {
 	negative    bool
 	destructive string // $.destructive_category, "" for none
 	scope       string
-	mode        *string // tengu_api_query's permissionMode
 }
 
 func newMarkEvent(e eventCols) *markEvent {
 	me := &markEvent{ts: e.NS, seq: e.Seq, rowNS: e.RowNS, corr: e.CorrelationID, name: e.Name, md: e.MetadataJSON}
 	switch e.Name {
-	case "tengu_api_query":
-		me.mode = pyStr(pyObject(e.MetadataJSON)["permissionMode"])
 	case "tengu_input_prompt":
 		md := jsonFields(e.MetadataJSON, "cc_prompt_id", "prompt_index", "is_negative")
 		me.promptID, _ = jsonString(md["cc_prompt_id"])
@@ -168,41 +161,5 @@ func (s *promptSession) marks(d *rowData, comps []compaction) []SessionMark {
 		add(SessionMark{Kind: "compaction", TNS: c.t, TokensFrom: c.from, TokensTo: c.to, Idle: c.idle, WaitMS: c.wait,
 			RequestID: nz(c.requestID)})
 	}
-
-	// State bands: a segment per run of the same permission mode (session.py
-	// permission), of the same client IP (networks). Each ends where the next
-	// starts; the last one's end is the request's.
-	var seg *SessionMark
-	flush := func() {
-		if seg != nil {
-			add(*seg)
-		}
-	}
-	for _, e := range evs {
-		if e.name != "tengu_api_query" || e.mode == nil || *e.mode == "" || seg != nil && *seg.Mode == *e.mode {
-			continue
-		}
-		var prev *string
-		if seg != nil {
-			seg.ToNS, prev = ptr(e.ts), seg.Mode
-			flush()
-		}
-		seg = &SessionMark{Kind: "permission", TNS: e.ts, Mode: e.mode, PrevMode: prev}
-	}
-	flush()
-	seg = nil
-	for _, x := range s.steps {
-		if x.ip == "" || seg != nil && *seg.IP == x.ip {
-			continue
-		}
-		if seg != nil {
-			seg.ToNS = ptr(x.ts)
-			flush()
-		}
-		ip := x.ip
-		v6 := strings.Contains(ip, ":") && !strings.HasPrefix(strings.ToLower(ip), "::ffff:")
-		seg = &SessionMark{Kind: "network", TNS: x.ts, IP: &ip, IPv6: v6}
-	}
-	flush()
 	return out
 }

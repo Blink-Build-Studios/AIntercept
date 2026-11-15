@@ -19,8 +19,6 @@ const sample: components["schemas"]["SessionResponse"] = {
       "recap",
       "permission",
       "cost",
-      "presence",
-      "focus",
       "device",
       "analytics",
       "frustrated"

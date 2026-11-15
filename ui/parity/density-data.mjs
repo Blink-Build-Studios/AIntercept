@@ -34,21 +34,11 @@ const prop = (st, name) => new RegExp(`(?:^|;)\\s*${name}:\\s*([^;]+)`).exec(st)
 /** Bars (bottom-anchored): [left, width, height]. */
 const bars = (seg) =>
   [...seg.matchAll(/<div style="position: absolute; bottom: 0px; left: ([\d.]+)px; width: ([\d.]+)px; height: ([\d.]+)px[^"]*">/g)].map((m) => [num(m[1]), num(m[2]), num(m[3])]);
-/** Row bars (10px tall from 3px): [left, width]. */
-const rowBars = (seg) => [...seg.matchAll(/top: 3px; height: 10px; left: ([\d.]+)px; width: ([\d.]+)px; background: #/g)].map((m) => [num(m[1]), num(m[2])]);
 /** Hatches: [left, width]. */
 const hatches = (seg) => [...seg.matchAll(/top: 3px; height: 10px; left: ([\d.]+)px; width: ([\d.]+)px; background: repeating/g)].map((m) => [num(m[1]), num(m[2])]);
 /** Friction marks: [left, text, weight]. */
 const marks = (seg) =>
   [...seg.matchAll(/<span class="m" style="([^"]*)">([^<]*)<\/span>/g)].map((m) => [num(prop(m[1], "left")), m[2], +prop(m[1], "font-weight")]);
-/** Network segments: [left, width, text | null, danger]. */
-const segments = (seg) =>
-  [...seg.matchAll(/<div style="position: absolute; top: 0; height: 18px; left: ([\d.]+)px; width: ([\d.]+)px; border: 1px solid (#\w+)[^"]*">(<span[^>]*>([^<]*)<\/span>)?/g)].map((m) => [
-    num(m[1]),
-    num(m[2]),
-    m[5] ?? null,
-    m[3] === "#ff7a6b",
-  ]);
 /** A row specimen inside a lane. */
 const row = (seg, spec) => {
   const i = seg.indexOf(`data-spec="${spec}"`);
@@ -57,20 +47,9 @@ const row = (seg, spec) => {
 };
 const sub = (seg) => /<div class="sub">([^<]*)</.exec(seg)?.[1] ?? null;
 
-const presence = specimen("Lane/presenceRows");
-const focus = specimen("Lane/focusRows");
-const device = specimen("Lane/deviceSleepRow");
 const friction = specimen("Lane/frictionSplit");
 const gapLane = specimen("Lane/modelCallsWithGapRow");
 const data = {
-  presence: {
-    focused: rowBars(row(presence, "PresenceRow/focused")),
-    away: rowBars(row(presence, "PresenceRow/away")),
-    asleep: rowBars(row(presence, "PresenceRow/asleep")),
-  },
-  focus: { focused: rowBars(row(focus, "FocusRow/focused")), blurred: rowBars(row(focus, "FocusRow/blurred")) },
-  device: { asleep: rowBars(row(device, "DeviceRow/asleep")) },
-  network: segments(specimen("Lane/networkRow")),
   friction: {
     frustrated: marks(row(friction, "FrictionRow/frustrated")),
     interrupted: marks(row(friction, "FrictionRow/interrupted")),

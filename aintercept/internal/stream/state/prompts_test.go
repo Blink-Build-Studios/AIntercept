@@ -228,12 +228,6 @@ var promptCases = []atomicCase{
 		},
 		func() records.Record { return callEnd(withClass(step("k1", "s1", "", 4500), "compaction")) },
 		[]string{CaseCompactionCall, CaseMarkCall}},
-	{"a permission mode", nil,
-		func() records.Record { return ccEvent("s1", "tengu_api_query", 1000, `{"permissionMode":"plan"}`) },
-		[]string{CaseMarkPermission}},
-	{"a call's client IP starts a network segment", nil,
-		func() records.Record { return callEnd(withIP(step("c1", "s1", "p1", 1000), "10.0.0.1")) },
-		[]string{CaseStepCall, CaseMarkCall}},
 }
 
 // promptCaseSet is the cases the prompt tests name.

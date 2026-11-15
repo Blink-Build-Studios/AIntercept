@@ -71,26 +71,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 300
       }
     ],
-    "network": [],
     "notCaptured": [],
     "now": null,
-    "permission": [
-      {
-        "from": "2026-11-04T09:01:00Z",
-        "mode": "bypassPermissions",
-        "to": "2026-11-04T09:04:00Z"
-      }
-    ],
-    "permissionChanges": [],
-    "presence": [
-      {
-        "from": "2026-11-04T09:00:00Z",
-        "label": null,
-        "source": "focus",
-        "state": "focused",
-        "to": "2026-11-04T09:04:00Z"
-      }
-    ],
     "prompts": [
       {
         "durationMs": 240000.0,

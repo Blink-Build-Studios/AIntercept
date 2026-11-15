@@ -14,9 +14,8 @@ request's DuckDB under today's names, and today's code runs over them unchanged:
   as buckets.py's title runs are; its alone label; its children;
 - the session tables in the range: the timeline's and /coverage's of every scope session (they count
   them all), the summary's only of the sessions the range can show (a superset of rollups.SHOWN:
-  started by its end, and active, or live, at its start; the summary keeps only those), as are the
-  timeline's presence segments (its bands'); and per shown session its newest event of each `_LATEST`
-  name before the range (the summary's carry);
+  started by its end, and active, or live, at its start; the summary keeps only those); and per shown
+  session its newest event of each `_LATEST` name before the range (the summary's carry);
 - request_rows and person_last: stream_sql over the request log's inputs for the range (§4): the
   scope's credentials' transactions in it, the other transactions of the same prompts (their step
   numbers), the reports of their ids, those prompts' numbers, the scope's Codex turns, its missed
@@ -269,13 +268,6 @@ SELECT c.* FROM ranged s, LATERAL (
       AND e."count" IS NOT NULL AND e.ts_ns < $2 ORDER BY e.ts_ns DESC, e."count" DESC LIMIT 1) c"""  # noqa: S608
         return sql
 
-    def presence(self) -> str:
-        where = "session_id IN (SELECT session_id FROM ranged)"
-        where += " AND ($3::bigint IS NULL OR from_ns <= $3) AND ($2::bigint IS NULL OR to_ns >= $2)"
-        return (
-            f"WITH {self.scope}, {_RANGED} SELECT {columns('presence_segments')} FROM presence_segments WHERE {where}"  # noqa: S608
-        )
-
     def request_log(self, what: str) -> str:
         """The request log's inputs for the range (§4), tagged by table. what: "all" (the log),
         "account" (the summary's count: the range's account calls), "missed" (/coverage: the
@@ -356,7 +348,7 @@ SELECT c.* FROM ranged s, LATERAL (
 PAGES: dict[str, tuple[str, ...]] = {
     "": ("dims", "sessions", "session_call_days"),
     "sessions": ("dims", "sessions", "labels"),
-    "timeline": ("dims", "sessions", "labels", "event_rows", "session_marks", "prompt_rows", "presence_segments"),
+    "timeline": ("dims", "sessions", "labels", "event_rows", "session_marks", "prompt_rows"),
     "summary": ("dims", "sessions", "event_rows+carry", "session_marks", "call_tool_uses", "request_log:account"),
     "requests": ("dims", "request_log:all"),
     "coverage": ("dims", "sessions", "session_marks", "request_log:missed"),
@@ -369,7 +361,6 @@ PAGES: dict[str, tuple[str, ...]] = {
         "session_marks",
         "prompt_rows",
         "call_tool_uses",
-        "presence_segments",
         "request_log:all",
     ),
 }
@@ -399,8 +390,8 @@ def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int
     ]
     # The summary keeps only the sessions its range shows (rollups.SHOWN), so it reads only theirs. The
     # timeline and /coverage count every session's rows in the range, so they read every scope
-    # session's, by its time alone (a row can lie outside its session's start_ns..last_ns: presence
-    # windows, hidden calls). The timeline's presence is the bands' (SHOWN's test), so always shown.
+    # session's, by its time alone (a row can lie outside its session's start_ns..last_ns: hidden
+    # calls).
     shown = page == "summary"
     got: dict[str, str] = {}
     for name in PAGES[page]:
@@ -421,8 +412,6 @@ def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int
             got[name] = run.fetch(name, sql.ranged(name, columns(name), "t_ns", " AND typed", shown=shown), ranged)
         elif name == "call_tool_uses":
             got[name] = run.fetch(name, sql.ranged(name, columns(name), "ts_ns", shown=shown), ranged)
-        elif name == "presence_segments":
-            got[name] = run.fetch(name, sql.presence(), ranged)
         elif name.startswith("request_log:"):
             got["request_log"] = run.fetch("request_log", sql.request_log(name.split(":", 1)[1]), ranged)
     _dimensions(con, got["dims"])
@@ -431,7 +420,7 @@ def load(store: PgStore, run: _Run, pid: str, page: str, lo: int | None, hi: int
     if "session_call_days" in got:
         days = got["session_call_days"]
         con.execute(f"CREATE TABLE session_call_days AS SELECT * FROM {days} ORDER BY session_id, day")  # noqa: S608
-    for name in ("session_marks", "presence_segments", "call_tool_uses"):
+    for name in ("session_marks", "call_tool_uses"):
         if name in got:
             store._into(con, name, f"SELECT * FROM {got[name]}")  # noqa: S608
     if "prompt_rows" in got:

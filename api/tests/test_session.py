@@ -159,15 +159,11 @@ def test_timeline_one_prompt(dataset, client_for, write_sample):
     (b,) = d["modelCalls"]
     assert b["byClass"] == {"main": 3, "subagent": 0, "auxiliary": 0} and b["tokensIn"] == p["tokensIn"]
     assert d["analytics"][0]["top"][0] == {"name": "tengu_api_query", "count": 3}
-    assert d["permissionChanges"] == []
-    assert d["permission"] == [
-        {"from": "2026-11-04T09:01:00Z", "to": "2026-11-04T09:04:00Z", "mode": "bypassPermissions"}
-    ]
-    assert d["compactions"] == [] and d["network"] == [] and d["notCaptured"] == []
+    assert d["compactions"] == [] and d["notCaptured"] == []
 
 
 def test_timeline_many(dataset, client_for, write_sample):
-    """Several prompts, a permission toggle, a network change to IPv6, focus and sleep."""
+    """Several prompts, with friction."""
     cc = ClaudeCode(dataset, S1)
     v4, v6 = "192.0.2.10", "2001:db8::7"
     plan = ((0, "bypassPermissions", v4), (20, "default", v4), (40, "bypassPermissions", v6))
@@ -182,30 +178,16 @@ def test_timeline_many(dataset, client_for, write_sample):
         destructive_category="rm_recursive_force",
         destructive_target_scope="outside_cwd",
     )
-    cc.event(f"{H}:30:00", "tengu_return_to_session", blurDurationMs=300_000)
-    cc.event(f"{H}:50:00", "tengu_event_loop_stall", likely_sleep="true", clock_jump_ms=240_000)
     client = client_for(dataset)
     r = client.get(f"{BASE}/timeline", params={"bin": 600})
     write_sample(client, r, "many")
     d = r.json()["data"]
     assert d["binSeconds"] == 600 and len(d["prompts"]) == 3
-    assert [p["mode"] for p in d["permission"]] == ["bypassPermissions", "default", "bypassPermissions"]
-    assert [(n["label"], n["ipv6"], n["bypassed"]) for n in d["network"]] == [
-        ("192.0.2.10", False, False),
-        ("2001:db8::7", True, False),
-    ]
-    assert {p["state"] for p in d["presence"]} == {"focused", "away", "asleep"}
-    assert {p["source"] for p in d["presence"] if p["state"] == "asleep"} == {"sleep"}
-    assert [(c["t"][11:16], c["from"], c["to"]) for c in d["permissionChanges"]] == [
-        ("09:21", "bypassPermissions", "default"),
-        ("09:41", "default", "bypassPermissions"),
-    ]
     assert [(f["kind"], f["promptIndex"], f["detail"], f["tool"]) for f in d["friction"]] == [
         ("frustrated", 2, "prompt flagged negative", None),
         ("interrupted", 2, "turn interrupted", None),
         ("destructive", 3, "rm_recursive_force · outside_cwd", "Bash"),
     ]
-    assert [n["address"] for n in d["network"]] == [None, None]  # until the coverage job (§5.4)
 
 
 def test_timeline_compaction(dataset, client_for, write_sample):
@@ -237,7 +219,7 @@ def test_timeline_compaction(dataset, client_for, write_sample):
 
 
 def test_timeline_coverage_gap(dataset, client_for, write_sample):
-    """Calls that bypassed the proxy: a hatched window, and the network segment it overlaps is marked."""
+    """Calls that bypassed the proxy: a hatched window."""
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:00", "p1", 1)
     step(cc, f"{H}:01:00", "p1", ip="192.0.2.10")
@@ -249,11 +231,9 @@ def test_timeline_coverage_gap(dataset, client_for, write_sample):
     write_sample(client, r, "coverage_gap")
     d = r.json()["data"]
     assert [w["count"] for w in d["notCaptured"]] == [3]
-    assert [n["bypassed"] for n in d["network"]] == [True]
     (gap,) = d["notCaptured"]
     # Nothing captured in the window while analytics were: a route around the proxy.
     assert (gap["reported"], gap["captured"], gap["cause"]) == (3, 0, BYPASS_CAUSE)
-    assert [n["notCaptured"] for n in d["network"]] == [3]
     gap_bin = next(b for b in d["modelCalls"] if b["t"] == "2026-11-04T09:10:00Z")
     assert (gap_bin["count"], gap_bin["notCaptured"]) == (0, 3)
 
@@ -305,7 +285,18 @@ def test_state_follows_the_range(dataset, client_for):
     client = client_for(dataset)
     d = client.get(f"{BASE}/state", params={"from": "2026-11-04T09:09:00Z"}).json()["data"]
     assert d["counts"]["prompts"] == 1 and d["repoInRange"]["commits"] == 0 and d["recapsInRange"] == []
-    assert d["capabilitiesAt"]["builtin"]["used"] == 1  # capabilities are as of `to`, from the session start
+    assert d["capabilitiesAt"]["builtin"]["used"] == 1
+
+
+def test_state_capabilities_are_the_whole_sessions(dataset, client_for):
+    """Capabilities don't follow the brush (handoff §11Q.4): a range that ends before any tool or hook
+    ran shows the whole session's; only the pool changes count within the range."""
+    state_session(dataset)
+    client = client_for(dataset)
+    whole = client.get(f"{BASE}/state").json()["data"]["capabilitiesAt"]
+    early = client.get(f"{BASE}/state", params={"to": "2026-11-04T08:00:00Z"}).json()["data"]["capabilitiesAt"]
+    assert early["poolChangesInRange"] == 0 and whole["poolChangesInRange"] == 1
+    assert {**early, "poolChangesInRange": 1} == whole
 
 
 def test_state_empty_range(dataset, client_for, write_sample):
@@ -513,7 +504,8 @@ def test_events_many(dataset, client_for, write_sample):
     write_sample(client, r, "many")
     rows = r.json()["data"]
     meta = r.json()["meta"]
-    assert meta["total"] == meta["shown"] == len(rows) == 20
+    # The three tool-progress ticks are client internals, hidden by default (handoff §11Q.3).
+    assert (meta["total"], meta["shown"], len(rows)) == (20, 17, 17)
     assert [x["t"] for x in rows] == sorted(x["t"] for x in rows)
     by_name: dict = {}
     for x in rows:
@@ -529,14 +521,15 @@ def test_events_many(dataset, client_for, write_sample):
     missed = [x for x in rows if x["linkedTo"]["id"] == "reported:req_bypassed_1"]
     assert [x["linkedTo"]["label"] for x in missed] == ["not captured"]
     assert len({x["eventId"] for x in rows}) == len(rows)
-    ticks = [x for x in rows if x["name"] == "tengu_tool_use_progress"]
-    assert [x["collapsedCount"] for x in ticks] == [None, None, None]  # each tick sits between other events
+    assert not [x for x in rows if x["name"] == "tengu_tool_use_progress"]
+    ticks = client.get(f"{BASE}/events", params={"pageSize": 50, "internal": "true"}).json()["data"]
+    assert [x["internal"] for x in ticks if x["name"] == "tengu_tool_use_progress"] == [True, True, True]
     found = client.get(f"{BASE}/events", params={"q": "rm_recursive"}).json()
     assert [x["name"] for x in found["data"]] == ["tengu_bash_tool_command_executed"] and found["meta"]["shown"] == 1
 
 
 def test_events_internals_hidden(dataset, client_for, write_sample):
-    """Client internals are hidden by default; consecutive tool-progress ticks fold into one row."""
+    """Client internals, tool-progress ticks among them, are hidden by default; one row per event."""
     cc = ClaudeCode(dataset, S1)
     cc.event(f"{H}:00:00", "tengu_input_prompt", cc_prompt_id="p1", prompt_index=1)
     cc.event(f"{H}:00:01", "tengu_tether_decision", decision="keep")
@@ -548,15 +541,15 @@ def test_events_internals_hidden(dataset, client_for, write_sample):
     r = client.get(f"{BASE}/events")
     write_sample(client, r, "internals_hidden")
     rows, meta = r.json()["data"], r.json()["meta"]
-    assert (meta["total"], meta["shown"]) == (8, 2)
-    assert [x["collapsedCount"] for x in rows] == [None, 4]
-    everything = client.get(f"{BASE}/events", params={"internal": "true", "collapseTicks": "false"}).json()
-    assert everything["meta"]["shown"] == 8 and sum(x["internal"] for x in everything["data"]) == 3
+    assert (meta["total"], meta["shown"]) == (8, 1)
+    assert [x["name"] for x in rows] == ["tengu_input_prompt"]
+    everything = client.get(f"{BASE}/events", params={"internal": "true"}).json()
+    assert everything["meta"]["shown"] == 8 and sum(x["internal"] for x in everything["data"]) == 7
 
 
-def test_events_fold_and_page_what_the_filters_leave(dataset, client_for):
-    """Ticks fold when nothing shown sits between them (a hidden internal doesn't), search is
-    case-insensitive over the name and summary, and pages count shown rows, not events."""
+def test_events_search_and_page_what_the_filters_leave(dataset, client_for):
+    """Search is case-insensitive over the name and summary, and pages count the events the filters
+    leave."""
     cc = ClaudeCode(dataset, S1)
     cc.event(f"{H}:00:00", "tengu_input_prompt", cc_prompt_id="p1", prompt_index=1)
     cc.event(f"{H}:00:01", "tengu_tool_use_progress", toolName="Bash")
@@ -566,18 +559,13 @@ def test_events_fold_and_page_what_the_filters_leave(dataset, client_for):
     cc.event(f"{H}:00:05", "tengu_tool_use_progress", toolName="Read")
     client = client_for(dataset)
     rows = client.get(f"{BASE}/events").json()["data"]
-    assert [(x["name"], x["collapsedCount"]) for x in rows] == [
-        ("tengu_input_prompt", None),
-        ("tengu_tool_use_progress", 2),
-        ("tengu_feature_ok", None),
-        ("tengu_tool_use_progress", None),
-    ]
+    assert [x["name"] for x in rows] == ["tengu_input_prompt", "tengu_feature_ok"]
     shown = client.get(f"{BASE}/events", params={"internal": "true"}).json()["meta"]["shown"]
-    assert shown == 6  # the internal now splits the ticks
+    assert shown == 6
     found = client.get(f"{BASE}/events", params={"q": "STATUSLINE"}).json()
     assert [x["name"] for x in found["data"]] == ["tengu_feature_ok"] and found["meta"]["total"] == 6
-    page = client.get(f"{BASE}/events", params={"pageSize": 1, "page": 2}).json()
-    assert [x["collapsedCount"] for x in page["data"]] == [2] and page["meta"]["shown"] == 4
+    page = client.get(f"{BASE}/events", params={"pageSize": 1, "page": 2, "internal": "true"}).json()
+    assert [x["name"] for x in page["data"]] == ["tengu_tool_use_progress"] and page["meta"]["shown"] == 6
 
 
 def test_events_error(dataset, client_for, write_sample, monkeypatch):

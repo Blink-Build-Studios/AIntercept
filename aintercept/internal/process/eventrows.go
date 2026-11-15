@@ -20,12 +20,12 @@ import (
 // Decision 4).
 //
 // What depends on the request stays SQL: the range, `q` (against the lowered
-// name and summary, lowered as Python lowers), hiding internals and folding
-// consecutive tool-progress ticks, which depend on what the filters left.
+// name and summary, lowered as Python lowers) and hiding internals.
 
 // Event row values, as session.py has them.
 var (
-	internalNames    = map[string]bool{"declared_tool_set_held": true, "render_glyph_cardinality": true, "tree_sitter_parse_abort": true, "bash_ast_too_complex": true}
+	internalNames = map[string]bool{"declared_tool_set_held": true, "render_glyph_cardinality": true, "tree_sitter_parse_abort": true, "bash_ast_too_complex": true,
+		"tool_use_progress": true} // tool-progress ticks (handoff §11Q.3)
 	internalPrefixes = []string{"tether_", "wire_", "reminder_fold_", "spinner_"}
 	summarySkip      = map[string]bool{
 		"requestId": true, "clientRequestId": true, "cc_prompt_id": true, "toolUseID": true, "tool_use_id": true,

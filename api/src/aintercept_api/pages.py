@@ -63,9 +63,6 @@ from aintercept_api.models.sessions import (
     Compaction,
     ContextPoint,
     EventRow,
-    NetworkSegment,
-    PermissionChange,
-    PermissionSegment,
     PromptItem,
     SessionState,
     SessionTimeline,
@@ -126,7 +123,7 @@ class Pages(Protocol):
         captured: bool | None, page: int, size: int, order: str, hidden: bool,
     ) -> RequestsPage: ...  # fmt: skip
     def session_events(
-        self, sid: str, lo: int, hi: int, internal: bool, collapse: bool, q: str | None, page: int, size: int
+        self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
     ) -> tuple[int, int, list[EventRow]]: ...
     def person_sessions(
         self, pid: str, now: int, lo: int | None, hi: int | None, page: int, size: int, agent: Sequence[str] | None
@@ -319,9 +316,8 @@ class SqlPages:
     def session_timeline(
         self, sid: str, r: Row, now_dt: datetime, now: int, lo: int, hi: int, bin_s: int
     ) -> SessionTimeline:
-        # SQL over the processor's session_marks and presence_segments (docs/architecture.md, Decision 4).
+        # SQL over the processor's session_marks (docs/architecture.md, Decision 4).
         store = self.store
-        perm = ss.permission(store, sid, hi)
         sids = [sid]
         return SessionTimeline(
             from_=dt(lo),
@@ -333,7 +329,6 @@ class SqlPages:
             modelCalls=tl.model_calls(store, sids, bin_s, None, None),
             analytics=tl.analytics(store, sids, bin_s, None, None),
             notCaptured=tl.gaps(store, sids, None, None),
-            presence=tl.presence(store, sids, now, None, None),
             friction=tl.friction(store, sids, bin_s, None, None),
             context=[
                 ContextPoint(
@@ -357,22 +352,6 @@ class SqlPages:
                     messages=None,
                 )
                 for c in ss.compactions(store, sid)
-            ],
-            permission=[PermissionSegment(from_=dt(p["a"]), to=dt(p["b"]), mode=p["mode"]) for p in perm],
-            permissionChanges=[
-                PermissionChange(t=dt(p["a"]), from_=p["prev_mode"], to=p["mode"]) for p in perm if p["prev_mode"]
-            ],
-            network=[
-                NetworkSegment(
-                    from_=dt(n["a"]),
-                    to=dt(n["b"]),
-                    label=n["ip"],
-                    ipv6=n["ipv6"],
-                    bypassed=n["bypassed"],
-                    address=None,  # the coverage job (§5.4)
-                    notCaptured=n["not_captured"],
-                )
-                for n in ss.networks(store, sid, hi)
             ],
         )
 
@@ -430,10 +409,10 @@ class SqlPages:
         return RequestsPage(hidden_count, total, kind_counts, [request_row_from_table(r) for r in page_rows])
 
     def session_events(
-        self, sid: str, lo: int, hi: int, internal: bool, collapse: bool, q: str | None, page: int, size: int
+        self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
     ) -> tuple[int, int, list[EventRow]]:
         # SQL over the processor's event_rows (docs/architecture.md, Decision 4).
-        return ss.event_rows(self.store, sid, lo, hi, internal, collapse, q, page, size)
+        return ss.event_rows(self.store, sid, lo, hi, internal, q, page, size)
 
     # --- person pages -----------------------------------------------------------------------------
 
@@ -500,7 +479,6 @@ class SqlPages:
             modelCalls=tl.model_calls(store, sids, bin_s, lo, hi),
             analytics=tl.analytics(store, sids, bin_s, lo, hi),
             notCaptured=tl.gaps(store, sids, lo, hi),
-            presence=tl.presence(store, [r["session_id"] for r in bands], now, lo, hi),
             friction=tl.friction(store, sids, bin_s, lo, hi),
         )
 

@@ -1,7 +1,7 @@
 import { AboutThisData, type AboutState } from "../../components/AboutThisData/AboutThisData";
 import { useMemo, useState, type ReactNode } from "react";
 import type { Schemas } from "../../api/types";
-import { anyReports, isNested, reports, threadFacts } from "../../lib/agents";
+import { isNested, reports, threadFacts } from "../../lib/agents";
 import { formatCount } from "../../lib/format";
 import { useLatest } from "../../lib/useLatest";
 import { slowNotice, type Region } from "../../lib/region";
@@ -29,7 +29,7 @@ import { AgentScope, type AgentScopeValue } from "../../components/AgentScope/Ag
 import type { Agent } from "../../components/AgentChip/AgentChip";
 import type { Channel } from "../../components/ChannelSwatch/ChannelSwatch";
 import { requestDetail, sharedChannel, sharedRequestChannels } from "../SessionScreen/sessionView";
-import { Skeleton } from "../../components/Skeleton/Skeleton";
+import { PERSON_TIMELINE_LANES, Skeleton } from "../../components/Skeleton/Skeleton";
 import { StatRibbon } from "../../components/StatRibbon/StatRibbon";
 import { Tabs } from "../../components/Tabs/Tabs";
 import { TextInput } from "../../components/TextInput/TextInput";
@@ -41,7 +41,6 @@ import { DensityTrack } from "../../components/Timeline/DensityTrack";
 import { laneInteractions, type TimelineActions } from "../../components/Timeline/interactions";
 import { Lane, LANE_HEIGHT } from "../../components/Timeline/Lane";
 import { MarkerTrack } from "../../components/Timeline/MarkerTrack";
-import { RowTrack } from "../../components/Timeline/RowTrack";
 import { perBin } from "../../components/Timeline/sessionLanes";
 import { Timeline } from "../../components/Timeline/Timeline";
 import { LANE_DEFINITIONS, nowTip } from "../../components/Timeline/timelineTips";
@@ -135,9 +134,6 @@ export type PersonScreenProps = {
 const RIBBON_LABELS = ["Model calls", "Analytics", "Account calls", "Reach", "Tokens out", "Cost est."];
 
 const err = (r: Region<unknown>, onRetry: () => void) => r.error && { message: r.error.message, queryId: r.error.queryId, onRetry };
-
-/** A panel-sized skeleton for a region's first load. */
-const Block = ({ height }: { height: number }) => <div className="person-skeleton-block border border-line bg-surface" style={{ height }} aria-hidden />;
 
 /**
  * The person page (handoff §7.2, Main.dc.html): app bar, banner, header and
@@ -237,8 +233,8 @@ export function PersonScreen(p: PersonScreenProps) {
           )}
         </RegionState>
 
-        <RegionState status={p.timeline.status} slow={slowNotice(p.timeline, "the timeline")} hasData={!!t} skeleton={<Block height={320} />} error={err(p.timeline, () => p.onRetry("timeline"))} label="the timeline">
-          {t && <PersonTimelinePanel d={t} presence={!person || unattributed || anyReports(person.capabilities, person.agentInfo.map((a) => a.agent), "presence")} range={p.range} onRange={p.onRange} sessionHref={p.sessionHref} onNotCaptured={() => p.onNotCaptured(true)} />}
+        <RegionState status={p.timeline.status} slow={slowNotice(p.timeline, "the timeline")} hasData={!!t} skeleton={<Skeleton shape="timeline" lanes={PERSON_TIMELINE_LANES} />} error={err(p.timeline, () => p.onRetry("timeline"))} label="the timeline">
+          {t && <PersonTimelinePanel d={t} range={p.range} onRange={p.onRange} sessionHref={p.sessionHref} onNotCaptured={() => p.onNotCaptured(true)} />}
         </RegionState>
 
         <div className="person-panels">
@@ -301,7 +297,7 @@ function around(t: string, r: Range): Range {
   return { from: new Date(c - half).toISOString(), to: new Date(c + half).toISOString() };
 }
 
-function PersonTimelinePanel({ d, presence, range, onRange, sessionHref, onNotCaptured }: { d: PersonTimeline; presence: boolean; range: Range | null; onRange: (r: Range | null) => void; sessionHref: (id: string) => string; onNotCaptured: () => void }) {
+function PersonTimelinePanel({ d, range, onRange, sessionHref, onNotCaptured }: { d: PersonTimeline; range: Range | null; onRange: (r: Range | null) => void; sessionHref: (id: string) => string; onNotCaptured: () => void }) {
   // The lanes are thousands of marks: built once per timeline payload, so a page
   // re-render (a poll's fetching flag) or the brush moving doesn't redo them.
   const l = useMemo(() => personLanes(d), [d]);
@@ -330,27 +326,21 @@ function PersonTimelinePanel({ d, presence, range, onRange, sessionHref, onNotCa
       <Lane label="Sessions" height={l.rows > 1 ? 6 + l.rows * 34 : 44} summary={`${l.bands.length} sessions`} sunken>
         <BandTrack bands={l.bands} now={d.now ?? d.to} interact={on.bands} />
       </Lane>
-      <Lane label="Prompts" height={26} summary={`${l.prompts.length} prompts`}>
+      <Lane label="Prompts" height={24} summary={`${l.prompts.length} prompts`}>
         <MarkerTrack markers={l.prompts} interact={on.prompts} />
       </Lane>
-      <Lane label="Model calls" sublabel={per} height={LANE_HEIGHT.barsWithGapRow} summary={`${l.gaps.length} gaps`} definition={LANE_DEFINITIONS.modelCalls} footer={gapRowLabel(l.gaps)}>
+      <Lane label="Model calls" sublabel={per} height={LANE_HEIGHT.personBarsWithGapRow} summary={`${l.gaps.length} gaps`} definition={LANE_DEFINITIONS.modelCalls} footer={gapRowLabel(l.gaps)}>
         <BarTrack bins={l.callBins} binSeconds={d.binSeconds} color="model" gaps={l.gaps} gapRow interact={on.modelCalls} gapTip={on.gapTip} onGap={on.onGap} />
       </Lane>
       <Lane label="Analytics" sublabel="events" height={44} summary="analytics events" definition={LANE_DEFINITIONS.analytics}>
         <DensityTrack bins={l.analyticsBins} binSeconds={d.binSeconds} color="analytics" interact={on.analytics} />
       </Lane>
-      {/* Presence is Claude Code's (§11L field audit): absent when none of the person's agents reports it. */}
-      {presence && (
-        <Lane label="Presence" height={LANE_HEIGHT.rows(3)} summary="focused, away and asleep" definition={LANE_DEFINITIONS.presence} rows={l.presenceRows.map((r) => r.name)}>
-          <RowTrack rows={l.presenceRows} interact={on.presence} />
-        </Lane>
-      )}
       <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
         <FrictionTrack marks={l.friction} interact={on.friction} />
       </Lane>
       </>
     );
-  }, [d, l, per, cb, presence]);
+  }, [d, l, per, cb]);
   return (
     <Timeline {...l.window} label="Activity" header={header} selection={range} onSelect={onRange} brushMode="range" nowTip={d.now ? nowTip(d.now, true) : undefined}>
       {lanes}

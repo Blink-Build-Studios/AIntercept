@@ -234,7 +234,6 @@ CREATE TABLE session_marks (
     seq bigint,
     kind text,
     t_ns bigint,
-    to_ns bigint,
     request_id text,
     request_class text,
     model text,
@@ -252,10 +251,6 @@ CREATE TABLE session_marks (
     tokens_to bigint,
     idle boolean,
     wait_ms double precision,
-    mode text,
-    prev_mode text,
-    ip text,
-    ipv6 boolean,
     PRIMARY KEY (session_id, seq)
 );
 CREATE INDEX ON session_marks (session_id) WHERE kind = 'missed';
@@ -299,15 +294,6 @@ CREATE TABLE event_rows (
     PRIMARY KEY (session_id, seq)
 );
 CREATE INDEX ON event_rows (session_id, name, ts_ns) WHERE name IN ('tengu_tool_search_mode_decision', 'tengu_skills_sync_success');
-
-CREATE TABLE presence_segments (
-    session_id text,
-    seq bigint,
-    from_ns bigint,
-    to_ns bigint,
-    state text,
-    PRIMARY KEY (session_id, seq)
-);
 
 CREATE TABLE session_tools (
     session_id text,

@@ -13,7 +13,6 @@ from aintercept_api.models.people import (
     FrictionMark,
     GapWindow,
     ModelCallBin,
-    PresenceSegment,
     TimelinePrompt,
     TimelineSession,
 )
@@ -127,39 +126,6 @@ BYPASS_CAUSE = (
     "Model calls went around the proxy: none was captured in this window while Claude Code's "
     "analytics were (a direct route, e.g. over IPv6)"
 )
-
-
-PRESENCE_SQL = """
-    WITH s AS (SELECT session_id, last_ns, ? - last_ns <= ? AS live FROM session_rows
-               WHERE session_id IN (SELECT unnest(?::VARCHAR[]))),
-         seg AS (SELECT p.from_ns AS a, CASE WHEN s.live AND p.state <> 'asleep' THEN least(p.to_ns, ?)
-                                            ELSE p.to_ns END AS b, p.state
-                 FROM presence_segments p JOIN s USING (session_id)
-                 UNION ALL SELECT last_ns, ?, 'focused' FROM s WHERE live AND ? > last_ns),
-         cuts AS (SELECT a AS t FROM seg UNION SELECT b FROM seg),
-         pairs AS (SELECT t AS a, lead(t) OVER (ORDER BY t) AS b FROM cuts),
-         st AS (SELECT p.a, p.b, CASE WHEN bool_or(seg.state = 'asleep') THEN 'asleep'
-                                      WHEN bool_or(seg.state = 'focused') THEN 'focused' ELSE 'away' END AS state
-                FROM pairs p JOIN seg ON seg.a <= p.a AND p.a < seg.b
-                WHERE p.b IS NOT NULL GROUP BY p.a, p.b HAVING bool_or(seg.state <> 'asleep')),
-         runs AS (SELECT a, b, state, sum(CASE WHEN prev_b = a AND prev_state = state THEN 0 ELSE 1 END)
-                                         OVER (ORDER BY a) AS k
-                  FROM (SELECT *, lag(b) OVER (ORDER BY a) AS prev_b, lag(state) OVER (ORDER BY a) AS prev_state
-                        FROM st)),
-         merged AS (SELECT min(a) AS a, max(b) AS b, any_value(state) AS state FROM runs GROUP BY k)
-    SELECT greatest(a, ?), least(b, ?), state FROM merged WHERE b > ? AND a < ? ORDER BY a"""
-
-
-def presence(store: Store, sids: list[str], now: int, lo: int | None, hi: int | None) -> list[PresenceSegment]:
-    """Focused, away and asleep over the sessions shown, from their presence_segments rows (asleep
-    where any sleeps, else focused where any open one is, else away where one is open), cut to the
-    range. A live session is open, and focused, until now."""
-    lo_, hi_ = lo if lo is not None else -(2**63), hi if hi is not None else 2**63 - 1
-    rows = store.query(PRESENCE_SQL, [now, cc.LIVE_WITHIN_NS, sids, now, now, now, lo_, hi_, lo_, hi_])
-    return [
-        PresenceSegment(from_=dt(a), to=dt(b), state=st, source="sleep" if st == "asleep" else "focus")
-        for a, b, st in rows
-    ]
 
 
 def friction(store: Store, sids: list[str], bin_s: int, lo: int | None, hi: int | None) -> list[FrictionMark]:

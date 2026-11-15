@@ -20,7 +20,6 @@ describe("URL state (handoff §7)", () => {
       kind: ["model", "count"],
       page: 3,
       internal: false,
-      ticks: true,
       req: "r1",
       dtab: "raw",
     });

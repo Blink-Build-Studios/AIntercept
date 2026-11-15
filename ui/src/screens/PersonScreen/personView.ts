@@ -11,8 +11,6 @@ import { lastSeenValue, missedValue, type PersonStatData } from "../../component
 import type { Band } from "../../components/Timeline/BandTrack";
 import type { Gap } from "../../components/Timeline/BarTrack";
 import type { TimelineMark } from "../../components/Timeline/MarkerTrack";
-import type { StateRow } from "../../components/Timeline/RowTrack";
-import type { Segment } from "../../components/Timeline/StateTrack";
 import type { KeyValueRow } from "../../components/KeyValueList/KeyValueList";
 import type { StatTileProps } from "../../components/StatTile/StatTile";
 
@@ -206,18 +204,6 @@ export function personLanes(d: PersonTimeline) {
     analyticsBins: d.analytics.map((b) => ({ t: b.t, v: b.count })),
     gaps: d.notCaptured.map((g): Gap => ({ from: g.from, to: g.to, count: g.count })),
     bands: d.sessions.map((s): Band => ({ id: s.sessionId, from: s.start, to: s.end, label: s.label, row: s.row, live: s.live, preCapture: s.capturedFromPrompt !== null, capturedFrom: s.capturedFromPrompt })),
-    // Rows (§11G.A2): focused, away, device asleep.
-    presenceRows: (
-      [
-        ["focused", "focused", "ink"],
-        ["away", "away", "muted"],
-        ["asleep", "device asleep", "faint"],
-      ] as const
-    ).map(([state, name, tone]): StateRow => ({
-      name,
-      tone,
-      segments: d.presence.filter((p) => p.state === state).map((p): Segment => ({ from: p.from, to: p.to, state: p.state, label: p.label })),
-    })),
     prompts: d.prompts.map((p): TimelineMark => ({ t: p.t, id: p.promptId, hoverLabel: p.index === null ? undefined : `#${p.index}` })),
     friction: d.friction,
     rows: Math.max(1, ...d.sessions.map((s) => s.row + 1)),

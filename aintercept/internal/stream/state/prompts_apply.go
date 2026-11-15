@@ -1075,7 +1075,7 @@ func (s *KeyState) writeCallMark(d *Delta, sid string, c *pCall) {
 		Model: nzS(sc.Model()), Context: c.ctx, Output: nzI(sc.Output()), Input: nzI(sc.Input()), CacheRead: nzI(sc.CacheRead()),
 		CacheWrite: nzI(sc.CacheWrite()), PromptID: nzS(sc.Prompt()),
 		Unreported: !(sc.ReqID() != "" && ps.reported["r:"+sc.ReqID()] > 0) && !(sc.ClientReqID() != "" && ps.reported["c:"+sc.ClientReqID()] > 0)}
-	s.rows.put(d, TableMarks, "c:"+c.key.id, MarkRow{Mark: m, Group: 0, OrdKey: c.key.id, PromptRef: sc.Prompt(), PointIP: sc.IP()})
+	s.rows.put(d, TableMarks, "c:"+c.key.id, MarkRow{Mark: m, Group: 0, OrdKey: c.key.id, PromptRef: sc.Prompt()})
 }
 
 // stepIDs1 counts a step's ids in or out, and writes the missed marks of the
@@ -1203,13 +1203,6 @@ func (s *KeyState) markEvent(d *Delta, sid string, e *canon.Event) {
 				Detail: ptrS(strings.Join(parts, " · "))}
 			base.PromptRef = mf.PromptID
 			s.rows.put(d, TableMarks, "f:"+o.key, base)
-		}
-	case "tengu_api_query":
-		if mf.Mode != nil && *mf.Mode != "" {
-			d.Cases = append(d.Cases, CaseMarkPermission)
-			base.Group = 4
-			base.Mark = process.SessionMark{SessionID: sid, Kind: "permission", TNS: e.NS, Mode: mf.Mode}
-			s.rows.put(d, TableMarks, "pm:"+o.key, base)
 		}
 	}
 }

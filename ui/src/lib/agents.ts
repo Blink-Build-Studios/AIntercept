@@ -18,10 +18,6 @@ export function reports(capabilities: Capabilities | undefined, agent: Agent, fi
   return !!capabilities?.[agent]?.includes(field);
 }
 
-/** Whether any of `agents` reports `field` (a mixed table keeps the column; the other rows leave the cell empty). */
-export const anyReports = (capabilities: Capabilities | undefined, agents: readonly Agent[], field: Capability) =>
-  agents.some((a) => reports(capabilities, a, field));
-
 type Session = Schemas["SessionRow"];
 
 /** A thread id as rows show it ("3b9a…"). */

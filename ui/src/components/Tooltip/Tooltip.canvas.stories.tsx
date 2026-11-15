@@ -155,36 +155,6 @@ export const Canvas: StoryObj = {
         }}
       />
       <P
-        spec="Tooltip/stateSegment"
-        kind="mark"
-        content={{ title: "Away", rows: [{ key: "Span", value: "Nov 3 12:40 → 14:20 · 1h 40m" }, { key: "Source", value: "focus events · this session" }] }}
-      />
-      <P
-        spec="Tooltip/permissionChanges"
-        kind="mark"
-        content={{
-          title: "Permission changed ×2 in 20 s",
-          rows: [
-            { key: "15:22:08", value: "bypassPermissions → default" },
-            { key: "15:22:28", value: "default → bypassPermissions" },
-          ],
-          hint: "Click to select these 20 s",
-        }}
-      />
-      <P
-        spec="Tooltip/network"
-        kind="mark"
-        content={{
-          title: "net B · has IPv6",
-          rows: [
-            { key: "Span", value: "Nov 3 15:02 → 18:40 · 3h 38m" },
-            { key: "Address", value: "2a01:4b00:…:7c1" },
-            { key: "Proxy", value: "▲ bypassed · 57 calls not captured", tone: "danger" },
-          ],
-          hint: "Click to select this span",
-        }}
-      />
-      <P
         spec="Tooltip/promptMarker"
         kind="mark"
         content={{
@@ -350,7 +320,6 @@ export const Canvas: StoryObj = {
       <P spec="Tooltip/sessionSnapped" kind="mark" content={sessionBandTip(snapSession)} />
       <P spec="Tooltip/laneReadout" kind="mark" content={readoutLine(new Date(2026, 10, 3, 14, 20).getTime(), "no session open", "nearest: 7a1e… starts 4h 10m later").content} />
       <P spec="Tooltip/emptyBin" kind="mark" content={modelBinTip(new Date(2026, 10, 3, 14).toISOString(), new Date(2026, 10, 3, 15).toISOString(), undefined, 3600)} />
-      <P spec="Tooltip/stateReadout" kind="mark" content={readoutLine(new Date(2026, 10, 4, 21, 10).getTime(), "no session open", "last: device asleep until 20:40").content} />
       <P spec="Tooltip/updatedAgo" kind="cell" content={updatedAgoTip("2026-11-08T11:32:05Z", Date.parse("2026-11-08T11:32:17Z"))} />
       <P spec="Tooltip/rangeChip" content={{ body: "Selected range · 2h 30m", hint: "× or Esc clears it" }} />
       <P

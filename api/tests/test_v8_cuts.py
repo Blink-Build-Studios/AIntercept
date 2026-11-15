@@ -1,11 +1,11 @@
 """Every cut (docs/PIPELINE.md v8, Testing; build step 1): each ranged page for one session and one
 person, with ranges whose ends fall inside a tick run, between two events of one batch (in one session,
-and across two), between two calls of one prompt, inside a presence segment, on a minute boundary and
+and across two), between two calls of one prompt, on a minute boundary and
 ±1 µs and ±1 ms around one, before and after all data, and open at either end; each timeline bin with
 three of them, and bin 90 (a 422 on both). The oracle's reader against PgStore's through one router: both get
 the same snapped range, and every response must be the oracle's bytes.
 
-The session is the mixed dataset's busiest (its tick runs, prompts and presence); the person is the
+The session is the mixed dataset's busiest (its tick runs and prompts); the person is the
 drawer cases' busiest (its batch spanning two of its sessions). The full run walks every session and
 person of every dataset (test_v8_side_by_side.py)."""
 
@@ -33,7 +33,6 @@ def test_the_cuts_land_where_the_spec_says(laid_out):
         "between a batch's events",
         "between a batch's events across sessions",
         "between a prompt's calls",
-        "inside a presence segment",
         "on and around a minute boundary",
         "before all data",
         "after all data",

@@ -1,5 +1,5 @@
 // Parity specimens from CompAgents.dc.html (handoff §11J, round 13): a Codex thread's
-// timeline, its lanes (Prompts · Model calls · Approval · Network · Friction with `↻ steered`).
+// timeline, its lanes (Prompts · Model calls · Friction with `↻ steered`).
 // Drawn on a 1210px track over 170 bins of 15 s; the marks are the sheet's, fed back as times.
 import type { Meta, StoryObj } from "@storybook/react";
 import type { ReactNode } from "react";
@@ -9,7 +9,6 @@ import { DENSITY } from "./densityData";
 import { CODEX_FRICTION_KINDS, FrictionTrack, frictionRowLabels, type Friction } from "./FrictionTrack";
 import { Lane, LANE_HEIGHT } from "./Lane";
 import { MarkerTrack, type TimelineMark } from "./MarkerTrack";
-import { StateTrack } from "./StateTrack";
 import { Timeline } from "./Timeline";
 
 const TRACK = 1210;
@@ -49,23 +48,6 @@ export function CodexTimelineSheet() {
             <In spec="Lane/codexModelCalls">
               <Lane label="Model calls" sublabel={DENSITY.codexModelCalls.sub ?? undefined} height={LANE_HEIGHT.bars} summary="model calls">
                 <BarTrack bins={bins} binSeconds={BIN_S} color="model" maxV={LANE_HEIGHT.bars} />
-              </Lane>
-            </In>
-            <In spec="Lane/approvalSandbox">
-              <Lane label="Approval" height={30} summary="approval policy and sandbox mode">
-                <StateTrack palette="approval" segments={[{ from: range.from, to: iso(at(TRACK * 0.995)), state: "on-request", text: "on-request · workspace-write" }]} />
-              </Lane>
-            </In>
-            <In spec="Lane/codexNetwork">
-              <Lane label="Network" height={LANE_HEIGHT.single} summary="network">
-                <StateTrack
-                  palette="network"
-                  segments={[
-                    { from: range.from, to: iso(at(750)), state: "ok", text: "net A · home" },
-                    { from: iso(at(750)), to: range.to, state: "ok", text: "net C · office" },
-                  ]}
-                  nowrap
-                />
               </Lane>
             </In>
             <In spec="Lane/codexFriction">

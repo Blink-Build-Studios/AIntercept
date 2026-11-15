@@ -13,9 +13,7 @@ import (
 )
 
 // The tables a key's rows go to.
-const (
-	TablePresence = "presence_segments"
-)
+const ()
 
 // Change is one row of a Delta: Row is the row to upsert under ID, or nil to
 // remove the row stored under ID. Old is the row it replaces (nil: none), so
@@ -41,7 +39,6 @@ type KeyState struct {
 	Key  string
 	seen map[string]bool // record ids applied: a duplicate is a no-op
 	ses  *session
-	segs *omap[int64, Presence] // the span's focused and away segments, by start
 	ev   *eventsState
 	dm   *dimsState
 	pr   *promptsState
@@ -119,8 +116,7 @@ func (s *KeyState) setExt(id string, v any) {
 
 // New is an empty state for key.
 func New(key string) *KeyState {
-	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(), ext: map[string]any{}, facts: newRunFacts(), strs: map[string]string{},
-		segs: newOmap[int64, Presence](lessInt64)}
+	return &KeyState{Key: key, seen: map[string]bool{}, ses: newSession(), ev: newEventsState(), dm: newDimsState(), pr: newPromptsState(), rq: newReqState(), sr: newSesRows(), rows: rowSet{}, open: newOpenCalls(), ext: map[string]any{}, facts: newRunFacts(), strs: map[string]string{}}
 }
 
 // Apply folds one record in and says which rows changed.
@@ -133,8 +129,7 @@ func (s *KeyState) Apply(r records.Record) Delta {
 	s.journal = append(s.journal, r)
 	defer process.HoldFields(jsonOf(&r)...)()
 	var d Delta
-	ch := s.ses.apply(r, &d)
-	s.presence(&d, ch)
+	s.ses.apply(r, &d)
 	s.events(r, &d)
 	s.dims(r, &d)
 	s.prompts(r, &d)
@@ -294,7 +289,7 @@ func (s *KeyState) Rows() map[string]map[string]any { return s.rows }
 
 // RowTypes is every stored row type: each field has a snake_case parquet tag
 // (rowtypes_test.go), so table files name their columns.
-var RowTypes = []any{Presence{}, Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
+var RowTypes = []any{Event{}, RequestLink{}, PromptIndex{}, CodexTurn{}, process.SessionTool{},
 	process.Account{}, SessionAccount{}, SessionVisible{}, SessionPerson{}, PersonDevice{}, SessionCredential{},
 	AccountEvents{}, AccountDevice{}, CodexPlan{},
 	PromptItem{}, StepRow{}, StepToolsRow{}, PromptSession{}, MarkRow{}, MarkPromptIndex{},

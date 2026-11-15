@@ -22,7 +22,6 @@ from tests.oracle import tables as legacy
 
 # Every table the stream state writes (state.TableTypes).
 STATE_TABLES = (
-    "presence_segments",
     "event_rows",
     "session_tools",
     "session_request_links",
@@ -84,7 +83,6 @@ STATE_SCHEMA: dict[str, str] = {
     "dim_session_visible": "session_id VARCHAR",
     "event_rows": "session_id VARCHAR, seq BIGINT, event_id VARCHAR, ts_ns BIGINT, name VARCHAR, name_lower VARCHAR, internal BOOLEAN, summary VARCHAR, summary_lower VARCHAR, marker VARCHAR, link_kind VARCHAR, link_id VARCHAR, link_label VARCHAR, prompt_index BIGINT, head_sha VARCHAR, hook VARCHAR, git_op VARCHAR, pr BIGINT, recap_key BOOLEAN, recap BOOLEAN, count BIGINT, unnamed BOOLEAN, tool_name VARCHAR, is_mcp BOOLEAN, hook_ms DOUBLE, argv0 VARCHAR, category VARCHAR, outside_cwd BOOLEAN, hook_name VARCHAR, operation VARCHAR, pr_number VARCHAR, cache_5m BIGINT, cache_1h BIGINT, cost_usd DOUBLE, batch_id VARCHAR, n BIGINT, prompt_id VARCHAR, ev_seq BIGINT, row_ns BIGINT, order_md VARCHAR, event_key VARCHAR",  # noqa: E501
     "mark_prompt_index": "session_id VARCHAR, prompt_id VARCHAR, prompt_index BIGINT",
-    "presence_segments": "session_id VARCHAR, grp INTEGER, from_ns BIGINT, to_ns BIGINT, state VARCHAR",
     "prompt_index": "session_id VARCHAR, prompt_id VARCHAR, prompt_index BIGINT, ts_ns BIGINT, event_key VARCHAR",
     "prompt_items": "\"row\" STRUCT(session_id VARCHAR, seq BIGINT, t_ns BIGINT, \"type\" VARCHAR, typed BOOLEAN, session_last_ns BIGINT, prompt_id VARCHAR, prompt_index BIGINT, duration_turn_ms DOUBLE, duration_report_ms DOUBLE, open_tail BOOLEAN, unfinished_max_ns BIGINT, text_retained BOOLEAN, \"text\" VARCHAR, text_chars BIGINT, pasted_bytes BIGINT, images BIGINT, steps BIGINT, tokens_in BIGINT, tokens_out BIGINT, tool_counts_json VARCHAR, frustrated BOOLEAN, interrupted BOOLEAN, destructive BIGINT, turn_report_json VARCHAR, hidden_json VARCHAR, between_kind VARCHAR, detail VARCHAR, request_id VARCHAR, tokens_from BIGINT, tokens_to BIGINT, wait_ms DOUBLE), \"group\" INTEGER, ord_corr VARCHAR, ord_seq BIGINT, ord_row_ns BIGINT, ord_name VARCHAR, ord_md VARCHAR, ord_key VARCHAR, has_input BOOLEAN, has_turn_end BOOLEAN, report_status BOOLEAN",  # noqa: E501
     "prompt_session": "session_id VARCHAR, product VARCHAR, last_ns BIGINT, has_prompt_event BOOLEAN, last_prompt_event_ns BIGINT",  # noqa: E501
@@ -97,7 +95,7 @@ STATE_SCHEMA: dict[str, str] = {
     "session_devices": "session_id VARCHAR, device_id VARCHAR",
     "session_edges": "parent_session_id VARCHAR, child_session_id VARCHAR, kind VARCHAR, child_first_ns BIGINT",
     "session_last": "session_id VARCHAR, last_ns BIGINT",
-    "session_marks": "mark STRUCT(session_id VARCHAR, seq BIGINT, kind VARCHAR, t_ns BIGINT, to_ns BIGINT, request_id VARCHAR, request_class VARCHAR, model VARCHAR, context BIGINT, output BIGINT, prompt_index BIGINT, \"input\" BIGINT, cache_read BIGINT, cache_write BIGINT, prompt_id VARCHAR, unreported BOOLEAN, friction_kind VARCHAR, detail VARCHAR, tokens_from BIGINT, tokens_to BIGINT, idle BOOLEAN, wait_ms DOUBLE, \"mode\" VARCHAR, prev_mode VARCHAR, ip VARCHAR, ipv6 BOOLEAN), \"group\" INTEGER, sub INTEGER, ord_corr VARCHAR, ord_seq BIGINT, ord_row_ns BIGINT, ord_name VARCHAR, ord_md VARCHAR, ord_key VARCHAR, prompt_ref VARCHAR, point_ip VARCHAR",  # noqa: E501
+    "session_marks": "mark STRUCT(session_id VARCHAR, seq BIGINT, kind VARCHAR, t_ns BIGINT, request_id VARCHAR, request_class VARCHAR, model VARCHAR, context BIGINT, output BIGINT, prompt_index BIGINT, \"input\" BIGINT, cache_read BIGINT, cache_write BIGINT, prompt_id VARCHAR, unreported BOOLEAN, friction_kind VARCHAR, detail VARCHAR, tokens_from BIGINT, tokens_to BIGINT, idle BOOLEAN, wait_ms DOUBLE), \"group\" INTEGER, sub INTEGER, ord_corr VARCHAR, ord_seq BIGINT, ord_row_ns BIGINT, ord_name VARCHAR, ord_md VARCHAR, ord_key VARCHAR, prompt_ref VARCHAR",  # noqa: E501
     "session_missed": "session_id VARCHAR, ts_ns BIGINT, event_key VARCHAR",
     "session_prompt_ids": "session_id VARCHAR, prompt_id VARCHAR",
     "session_request_links": "session_id VARCHAR, request_id VARCHAR, call_id VARCHAR, label VARCHAR",
@@ -135,7 +133,6 @@ STATE_ROUTING: dict[str, tuple[str, str]] = {
 
 # The stored tables whose names are also the API's (they're rebuilt into the API's shape).
 _SHARED_NAMES = {
-    "presence_segments",
     "event_rows",
     "session_tools",
     "prompt_steps",
@@ -169,7 +166,6 @@ _ORDER = {
     "request_rows": "person_id, ts_ns, request_id",
     "prompt_rows": "session_id, seq",
     "session_marks": "session_id, kind, seq",
-    "presence_segments": "session_id, seq",
     "prompt_steps": "session_id, seq, step",
     "event_rows": "session_id, seq",
     "session_tools": "session_id",
@@ -251,13 +247,7 @@ LEFT JOIN _prompt_numbers pi ON pi.session_id = e.session_id AND pi.prompt_id = 
 
 
 def session_tables(con: duckdb.DuckDBPyConnection) -> None:
-    """presence_segments, session_tools, and the prompt list's and marks' tables (sql/prompts.sql)."""
-    _insert(
-        con,
-        "presence_segments",
-        "SELECT session_id, row_number() OVER (PARTITION BY session_id ORDER BY grp, from_ns) - 1 AS seq, "
-        "from_ns, to_ns, state FROM st_presence_segments",
-    )
+    """session_tools, and the prompt list's and marks' tables (sql/prompts.sql)."""
     _insert(con, "session_tools", "SELECT session_id, kind, server, tool, first_ns FROM st_session_tools")
     con.execute(_PROMPTS_ON_STORED)
     for view, table in (

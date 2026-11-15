@@ -41,8 +41,8 @@ const qs = (params: Record<string, string | number | boolean | string[] | undefi
  */
 /** The Events tab's filters as query parameters. Client internals are hidden unless
  * asked for (the API's default), so showing them is the one that needs a parameter. */
-export function eventFilterParams(q: string | undefined, internal: boolean, ticks: boolean) {
-  return { q, internal: internal ? true : undefined, collapseTicks: ticks };
+export function eventFilterParams(q: string | undefined, internal: boolean) {
+  return { q, internal: internal ? true : undefined };
 }
 
 export function useSessionPage(sessionId: string): SessionScreenProps {
@@ -107,7 +107,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
   );
   const requestsQ = useQuery(scopedQuery<Schemas["SessionRequestsResponse"]>("requests", "requests", { ...pageParams, kind: kinds, q: typedQ, captured: url.captured, hidden: url.hidden || undefined }, tab === "requests"));
   const eventsQ = useQuery(
-    scopedQuery<Schemas["SessionEventsResponse"]>("events", "events", { ...pageParams, ...eventFilterParams(typedQ, url.internal, url.ticks) }, tab === "events"),
+    scopedQuery<Schemas["SessionEventsResponse"]>("events", "events", { ...pageParams, ...eventFilterParams(typedQ, url.internal) }, tab === "events"),
   );
 
   const slow = {
@@ -201,8 +201,8 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
         ? setUrl({ tab: "requests", q: f.q || undefined, kind: f.kinds, captured: "false" })
         : setUrl({ q: f.q, kind: f.kinds, captured: f.notCaptured ? "false" : undefined, hidden: !!f.hidden }, { replace: true }),
     onShowHiddenRequests: () => setUrl({ tab: "requests", hidden: true }),
-    eventFilter: { q: url.q ?? "", internal: url.internal, ticks: url.ticks },
-    onEventFilter: (f) => setUrl({ q: f.q, internal: f.internal, ticks: f.ticks }, { replace: true }),
+    eventFilter: { q: url.q ?? "", internal: url.internal },
+    onEventFilter: (f) => setUrl({ q: f.q, internal: f.internal }, { replace: true }),
     onOpenRequest: (id, seed) => {
       if (seed) seeds.current.set(id, seed);
       setUrl({ req: id, dtab: undefined });

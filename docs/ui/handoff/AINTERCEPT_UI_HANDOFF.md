@@ -2316,6 +2316,104 @@ The manifest gains an `illustrative` map. Specimens listed there are sketches or
    - CompProviders' session-scope headings are corrected (I had written `Method · Detail · Duration · Sent · Received`).
    - §11M 1.5 is amended.
 
+## 11P. Person timeline without presence (canvas: CompPersonTimeline, Main)
+
+Presence is recorded per session, so it lives only on the session timeline. Merging it across sessions on the person page is costly, and the result changes with the window, so it is removed there. **The session page's Focus rows, Device row and their hover and readout are unchanged.**
+
+1. **Person timeline lanes** (Main.dc.html redrawn):
+
+   | Lane | Height | Change |
+   |---|---|---|
+   | Sessions | 44 (grows with stacking, §11I.2) | unchanged |
+   | Prompts | 24 | unchanged |
+   | Model calls | **88** (bars 70 + gap row 16 + 2) | was 76 (bars 58). Bar scale 0.66 px per call, max 70 |
+   | Analytics | 44 | unchanged |
+   | Presence | — | **removed** (was 74) |
+   | Friction | 74 | unchanged; now directly under Analytics |
+   | Time axis | 24 | unchanged |
+
+   - The timeline is 62px shorter (298 with one session row; it was 360), so the sessions table moves up by that much.
+   - There is no placeholder lane.
+   - The empty-space readout (§11H.2) no longer lists presence.
+2. **Per-session hint. Withdrawn in §11Q.1.** The session band tooltip on the person timeline gains a **Presence** row, last after Status (`Tooltip/sessionBandPresence*`, `PresenceSummary/*`).
+   - **Content:** a 96px proportion bar over `focused 1h 52m · away 31m · asleep 7m`.
+     - The bar is 8px tall: focused `--ink`, away `--ink-muted`, asleep `--ink-faint`, with 1px gaps.
+     - Zero states are left out of both the bar and the text.
+   - **Source:** per-session precomputed totals, `session.presence{focusedMs, awayMs, asleepMs}`. They're summed when the session's presence is materialised, never merged across sessions, and they don't depend on the window. **This is the only new field**, and it's per session. If it can't be served, drop the row; the click-through still works.
+   - **Live session:** the totals run to the last presence event, followed by `· so far` in `--ink-faint`.
+   - **No presence:** a product without presence (Codex) gets no row (P2).
+   - **Not computed yet:** `—` unknown, with the reason `presence not summarised yet`.
+   - **Click-through:**
+     - Clicking opens the session as today.
+     - The hint adds `· presence is on its timeline` when the session has presence.
+     - There's no new deep link.
+   - **Not chosen:** hover shading inside bands. It needs a per-session fetch on hover, and at 1h bins most bands are too narrow to read.
+3. **States, help and copy:**
+   - **Loading:** the skeleton has 5 lanes (30 · 14 · 60 · 30 · 48), as in Main's `skelLanes` (`Skeleton/personTimeline`).
+   - **Empty and waiting states:** unchanged; they never mentioned presence.
+   - **Legend and About this data:** neither has presence copy.
+   - **CompIndex:** StateRows and StateTrack are now session-page only, and BandTrack notes the presence totals.
+   - **CompProviders audit:** presence, focus and device are marked "session page only".
+   - **CompDensity:** `Lane/presenceRows` and `PresenceRow/*` are now **illustrative**.
+   - **Still parity targets:** `Lane/presenceHover` and `Lane/presenceHoverGuide` on CompTimelineHover, and `Lane/presenceReadout` on CompR11. They specify row-lane hover and readout, which the session page's Focus and Device rows use.
+
+## 11Q. Four features removed (canvas: Session, CompTimeline, CompTimelineHover, CompDensity, CompR11, CompAgents, CompPersonTimeline, CompIndex, CompRows, CompControls, CompProviders)
+
+These four features need recomputation across a whole session whenever new data arrives, so they are removed. The space they used is closed up, with no other copy or layout changes. **CompPersonTimeline ("Timeline lanes") is now the single source for both timelines' lanes and heights.**
+
+1. **Presence, focus and device:** removed from both timelines.
+   - **Session page:** the Focus (58) and Device (42) lanes are removed.
+   - **Person page:** the Presence lane was already removed in §11P.
+   - **Removed with them:**
+     - their tooltips (`Tooltip/stateSegment`);
+     - the lane definition ("Focus per session; sleep per device…");
+     - the readout rule for row lanes;
+     - every `PresenceRow`, `FocusRow` and `DeviceRow` specimen;
+     - `Lane/presenceRows`, `Lane/focusRows`, `Lane/deviceSleepRow`, `Lane/presenceHover`, `Lane/presenceHoverGuide` and `Lane/presenceReadout`;
+     - the `StateRows` component.
+   - **§11P.2 is withdrawn:** there is no Presence row in the session band tooltip, and no `PresenceSummary`. `session.presence` is not needed.
+   - **Kept:** live indicators.
+2. **Permission, Approval and Network lanes:** removed.
+   - **Removed with them:**
+     - `StateTrack`: the component and every specimen (`StateTrack/permission`, `network`, `hoverSegment`, `hoverTick`, `hoverNetwork`);
+     - `Lane/permission`, `Lane/permissionHover`, `Lane/networkRow`, `Lane/networkHover`;
+     - Codex's `Lane/approvalSandbox` and `Lane/codexNetwork`;
+     - the permission-changes and network tooltips;
+     - the empty states "no permission mode recorded", "no approval policy recorded" and "no network recorded".
+   - **Keyboard:** ←/→ now moves between bins, markers (prompts, friction) and bands only.
+   - **Kept:**
+     - "Approvals bypassed · N% of calls" and "N networks" in the session header;
+     - Codex approval and sandbox in its session facts;
+     - not-captured hatches on Model calls, which is where bypassed calls still show;
+     - friction.
+3. **Events "collapse ticks":** removed.
+   - The chip and the folded `EventRow` state (0.55 opacity, `×N`) are gone; every event is its own row.
+   - "Showing X of Y" and paging count events.
+   - **Open point, answered: yes**, class tool-progress ticks as internal. They hide with the existing `HIDE CLIENT INTERNALS` toggle (on by default), and its label stays as is. Its tooltip lists what counts as internal: "client bookkeeping: event-loop stalls, tool progress ticks, …".
+4. **Capabilities and Experiments:**
+   - They are retitled `Capabilities` and `Experiments`, with no "· at …".
+   - Their values are whole-session and don't follow the brush.
+   - Their in-range footers, `Repo · in range`, `Recaps · in range` and the range readout still follow the brush.
+
+**Timelines now** (heights in px):
+
+| Timeline | Lanes | Total |
+|---|---|---|
+| Person | Sessions 44 · Prompts 24 · Model calls 88 · Analytics 44 · Friction 74 · axis 24 | 298 |
+| Session | Prompts 26 · Model calls 76 · Context 56 · Friction 74 · axis 24 | 256 (was 414) |
+
+- **Loading skeletons:** person 5 lanes (30 · 14 · 60 · 30 · 48), session 4 lanes (14 · 48 · 44 · 14).
+- **Sheet heights:**
+
+  | Sheet | Height |
+  |---|---|
+  | CompTimeline | 1520 |
+  | CompTimelineHover | 4420 |
+  | CompDensity | 6160 |
+  | CompR11 | 5150 |
+  | CompAgents | 4360 |
+  | CompPersonTimeline | 1960 |
+
 ## 12. Acceptance checklist (whole project)
 
 - [ ] `tokens.css` generated; no hex literals outside it (lint rule `stylelint-declaration-strict-value`).

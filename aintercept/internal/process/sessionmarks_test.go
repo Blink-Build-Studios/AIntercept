@@ -18,55 +18,6 @@ func marksOf(marks []SessionMark, kind string) []SessionMark {
 	return out
 }
 
-// State bands: a segment per run of the same mode or IP, each ending where the
-// next starts and the last one open; IPv4 mapped into IPv6 isn't IPv6. Events at
-// the same time order by their place in the batch, not by table order.
-func TestSessionMarksSegments(t *testing.T) {
-	a := ccCall("a", "s", "acct", "k", 1000*msNS)
-	a.ip = "::ffff:10.0.0.1"
-	b := ccCall("b", "s", "acct", "k", 2000*msNS)
-	b.ip = "::ffff:10.0.0.1"
-	c := ccCall("c", "s", "acct", "k", 3000*msNS)
-	c.ip = "2001:db8::1"
-	q := func(seq int64, ts int64, mode string) eventCols {
-		e := ccEvent("b1", "s", "acct", "tengu_api_query", ts, `{"permissionMode":`+mode+`}`)
-		e.Seq = seq
-		return e
-	}
-	evs := []eventCols{
-		q(3, 1000*msNS, `"plan"`), // later in the batch than the next one, at the same time
-		q(2, 1000*msNS, `"default"`),
-		q(4, 1500*msNS, `"plan"`),
-		q(5, 1600*msNS, `""`), // no mode: skipped
-		q(6, 1700*msNS, `true`),
-	}
-	_, _, marks := buildMarks([]rowCall{a, b, c}, evs)
-
-	type seg struct {
-		from int64
-		to   *int64
-		v    string
-		prev *string
-	}
-	var perm []seg
-	for _, m := range marksOf(marks, "permission") {
-		perm = append(perm, seg{m.TNS, m.ToNS, *m.Mode, m.PrevMode})
-	}
-	want := []seg{
-		{1000 * msNS, ptr(int64(1000 * msNS)), "default", nil},
-		{1000 * msNS, ptr(int64(1700 * msNS)), "plan", ptr("default")},
-		{1700 * msNS, nil, "True", ptr("plan")}, // the API's str() of the parsed value
-	}
-	if !reflect.DeepEqual(perm, want) {
-		t.Errorf("permission %+v, want %+v", perm, want)
-	}
-
-	nets := marksOf(marks, "network")
-	if len(nets) != 2 || *nets[0].ToNS != 3000*msNS || nets[0].IPv6 || nets[1].ToNS != nil || !nets[1].IPv6 {
-		t.Errorf("network %+v", nets)
-	}
-}
-
 // Coverage: every tengu_api_success is reported; one no captured call matches
 // (by request id, else client request id) is missed. A session with no Claude
 // Code events has neither.
@@ -97,7 +48,7 @@ func TestSessionMarksCoverage(t *testing.T) {
 		t.Errorf("missed %v, want %v", g, w)
 	}
 	for _, m := range marks {
-		if m.SessionID == "quiet" && m.Kind != "call" && m.Kind != "network" {
+		if m.SessionID == "quiet" && m.Kind != "call" {
 			t.Errorf("a session with no events has a %s mark", m.Kind)
 		}
 	}

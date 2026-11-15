@@ -240,7 +240,7 @@ def demo(tmp_path_factory):
 # The statements each session page runs (BEGIN and COMMIT aside), whatever the session's size.
 SESSION_STATEMENTS = {
     "": ["session", "titles", "edges"],
-    "/timeline": ["session", "titles", "prompt_rows", "session_marks", "event_rows", "presence_segments"],
+    "/timeline": ["session", "titles", "prompt_rows", "session_marks", "event_rows"],
     "/prompts": ["session", "prompt_rows", "prompt_steps", "session_marks"],
     "/events": ["session", "event_rows"],
     "/state": ["session", "prompt_rows", "session_marks", "event_rows", "session_tools", *pgstore.REQUESTS_TAB],
@@ -275,7 +275,7 @@ def test_every_session_page_runs_a_fixed_set_of_statements_on_one_connection(dem
 PERSON_STATEMENTS = {
     "": ["dims", "sessions", "session_call_days"],
     "/sessions": ["dims", "sessions", "labels"],
-    "/timeline": ["dims", "sessions", "labels", "event_rows", "session_marks", "prompt_rows", "presence_segments"],
+    "/timeline": ["dims", "sessions", "labels", "event_rows", "session_marks", "prompt_rows"],
     "/summary": ["dims", "sessions", "event_rows", "session_marks", "call_tool_uses", "request_log"],
     "/requests": ["dims", "request_log"],
     "coverage": ["dims", "sessions", "session_marks", "request_log"],

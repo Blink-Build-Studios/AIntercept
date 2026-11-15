@@ -51,7 +51,7 @@ func TestRealData(t *testing.T) {
 	}
 	sort.Strings(names)
 	covered := map[string]bool{CaseDuplicate: true}
-	for _, cs := range [][]atomicCase{presenceCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases} {
+	for _, cs := range [][]atomicCase{spanCases, eventCases, dimCases, promptCases, requestCases, sessionCases, callToolCases} {
 		for _, c := range cs {
 			for _, x := range c.cases {
 				covered[x] = true
@@ -66,13 +66,6 @@ func TestRealData(t *testing.T) {
 	}
 
 	ref := reference(rs)
-	want, err := refPresence(ref)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := o.presenceRows(); !reflect.DeepEqual(got, want) {
-		t.Errorf("presence: %d rows, want %d; first difference %s", len(got), len(want), firstDiff(got, want))
-	}
 	gotEv, wantEv := eventRowsOf(o), ref.EventRows
 	if !reflect.DeepEqual(gotEv, wantEv) {
 		ids, other := 0, 0
@@ -149,7 +142,7 @@ func TestRealData(t *testing.T) {
 	} else {
 		t.Logf("session rows: %d, equal", len(wantSes))
 	}
-	t.Logf("presence %d rows, event rows %d, session tools %d: compared", len(want), len(wantEv), len(wantTools))
+	t.Logf("event rows %d, session tools %d: compared", len(wantEv), len(wantTools))
 }
 
 func firstDiff[T any](got, want []T) string {

@@ -10,7 +10,6 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "modelCalls": [],
     "notCaptured": [],
     "now": "2026-11-04T18:05:00Z",
-    "presence": [],
     "prompts": [],
     "sessions": [],
     "to": "2026-11-04T18:05:59.999999Z"

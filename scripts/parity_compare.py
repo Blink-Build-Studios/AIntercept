@@ -4,7 +4,10 @@ formatting and key order never count, only data does.
 A recording is JSON lines, one per response: {"now": ..., "url": ..., "status": ..., "body": ...}, the body
 a JSON text (or plain text when the response wasn't JSON). Responses pair up by (now, url).
 
-  python3 scripts/parity_compare.py <a.jsonl> <b.jsonl> [--skip /api/v1/coverage ...]
+  python3 scripts/parity_compare.py <a.jsonl> <b.jsonl> [--skip /api/v1/coverage ...] [--drop-field presence ...]
+
+--drop-field leaves out every object key of that name, at any depth of either body: a field one side
+no longer has (a removed feature's) doesn't count.
 
 Prints the count equal, the count different, and per different response the path to its first
 differing field. Exits 1 if any differ.
@@ -27,6 +30,15 @@ def load(path: str) -> dict[tuple[Any, str], Any]:
                 body = r["body"]
             out[(r["now"], r["url"])] = {"status": r["status"], "body": body}
     return out
+
+
+def drop(v: Any, names: frozenset[str]) -> Any:
+    """v without the object keys in names, at any depth."""
+    if isinstance(v, dict):
+        return {k: drop(x, names) for k, x in v.items() if k not in names}
+    if isinstance(v, list):
+        return [drop(x, names) for x in v]
+    return v
 
 
 def first_diff(a: Any, b: Any, path: str = "") -> str | None:
@@ -72,8 +84,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("a")
     p.add_argument("b")
     p.add_argument("--skip", nargs="*", default=[], help="URL prefixes to leave out")
+    p.add_argument("--drop-field", nargs="*", default=[], help="object keys to leave out, at any depth")
     args = p.parse_args(argv)
     a, b = load(args.a), load(args.b)
+    if args.drop_field:
+        names = frozenset(args.drop_field)
+        a, b = ({k: drop(r, names) for k, r in x.items()} for x in (a, b))
     diffs = compare(a, b, args.skip)
     total = sum(1 for _, url in a.keys() | b.keys() if not any(url.startswith(p) for p in args.skip))
     for label, path in diffs:

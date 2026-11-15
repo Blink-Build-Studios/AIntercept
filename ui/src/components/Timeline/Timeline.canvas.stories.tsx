@@ -15,7 +15,6 @@ import { HoverR11Sheet } from "./HoverR11.canvas.stories";
 import { Lane } from "./Lane";
 import { MarkerTrack, type TimelineMark } from "./MarkerTrack";
 import { ScaleContext, makeScale } from "./scale";
-import { StateTrack } from "./StateTrack";
 import { ParityTags } from "../../test/ParityTag";
 import { NowLine, Timeline } from "./Timeline";
 import { TimelineHoverSheet } from "./TimelineHover.canvas.stories";
@@ -113,15 +112,6 @@ export function TimelineCanvasSheet() {
         </In>
       </Frame>
       <Frame>
-        <In spec="Lane/permission" rule>
-          <Lane label="Permission" height={30} summary="permission mode">
-            <In spec="StateTrack/permission">
-              <StateTrack palette="permission" segments={[{ from: at(4), to: at(96), state: "bypassPermissions" }]} changes={[{ t: at(58), label: "→ default ×2 in 20 s" }]} />
-            </In>
-          </Lane>
-        </In>
-      </Frame>
-      <Frame>
         <In spec="Lane/prompts" rule>
           <Lane label="Prompts" height={26} summary="prompts">
             <In spec="MarkerTrack/ticks">
@@ -164,9 +154,8 @@ export function TimelineCanvasSheet() {
         <Timeline {...W} loading label="Specimen" gridlines={false}>
           <Lane label="Prompts" height={26} summary="prompts" />
           <Lane label="Model calls" height={60} summary="model calls" />
-          <Lane label="Analytics" height={44} summary="analytics" />
           <In spec="Lane/loading">
-            <Lane label="Presence" height={30} summary="presence" />
+            <Lane label="Analytics" height={44} summary="analytics" />
           </In>
         </Timeline>
       </P>

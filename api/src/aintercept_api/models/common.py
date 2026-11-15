@@ -38,8 +38,6 @@ CapabilityField = Literal[
     "client",
     "reasoning",
     # Timeline lanes
-    "presence",
-    "focus",
     "device",
     "analytics",
     "frustrated",

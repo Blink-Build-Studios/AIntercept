@@ -94,13 +94,11 @@ const (
 )
 
 // MarkRow is a mark (process.SessionMark) as stored. Seq is the query's, by
-// (group, then the group's order). The permission and network lanes are the
-// query's too: a segment per run of one mode (from the permission points) or IP
-// (from the call marks' PointIP), each ending where the next starts.
+// (group, then the group's order).
 type MarkRow struct {
 	Mark process.SessionMark `parquet:"mark"`
 	// Group: 0 a call, 1 a report (Sub 0 reported, 1 missed), 2 friction, 3 a
-	// compaction, 4 a permission point.
+	// compaction.
 	Group    int32  `parquet:"group"`
 	Sub      int32  `parquet:"sub"`
 	OrdCorr  string `parquet:"ord_corr"`
@@ -112,7 +110,6 @@ type MarkRow struct {
 	// PromptRef is the prompt whose number the mark shows (joined from
 	// mark_prompt_index); a frustrated prompt's is its own (PromptIndex).
 	PromptRef string `parquet:"prompt_ref"`
-	PointIP   string `parquet:"point_ip"` // a call's client IP, for the network lane
 }
 
 // MarkPromptIndex is a prompt's number as the marks show it: its newest input

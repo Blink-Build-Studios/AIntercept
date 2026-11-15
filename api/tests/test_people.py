@@ -134,15 +134,6 @@ def test_timeline_one_session(dataset, client_for, write_sample):
     assert d["binSeconds"] == 300 and d["now"] is None
     assert [b["count"] for b in d["modelCalls"]] == [3] and d["modelCalls"][0]["tokens"] == 300
     assert d["sessions"][0]["row"] == 0 and len(d["prompts"]) == 1
-    assert d["presence"] == [
-        {
-            "from": "2026-11-04T09:00:00Z",
-            "to": "2026-11-04T09:03:05Z",
-            "state": "focused",
-            "label": None,
-            "source": "focus",
-        }
-    ]
     # Tooltip fields (handoff §6B.10): everything the hover shows ships with the payload.
     band = d["sessions"][0]
     assert (band["prompts"], band["modelCalls"], band["repo"], band["branch"]) == (1, 3, None, None)
@@ -196,13 +187,9 @@ def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, client_for, 
     assert first_bin["count"] == 6 and first_bin["byClass"] == {"main": 4, "subagent": 1, "auxiliary": 1}
 
 
-def test_timeline_coverage_gap_and_presence(dataset, client_for, write_sample):
+def test_timeline_coverage_gap(dataset, client_for, write_sample):
     cc = a_session(dataset, calls=1)
     cc.reported("2026-11-04T09:20:00", "req_bypassed")
-    cc.event("2026-11-04T09:30:00", "tengu_return_to_session", blurDurationMs=300_000)  # away 09:25-09:30
-    cc.event(
-        "2026-11-04T09:40:00", "tengu_event_loop_stall", likely_sleep=True, clock_jump_ms=120_000
-    )  # asleep 09:38-09:40
     cc.call("2026-11-04T09:45:00")
     client = client_for(dataset)
     r = client.get(TIMELINE, params={"from": "2026-11-04T09:00:00Z", "to": "2026-11-04T10:00:00Z"})
@@ -220,53 +207,6 @@ def test_timeline_coverage_gap_and_presence(dataset, client_for, write_sample):
     ]
     gap_bin = next(b for b in d["modelCalls"] if b["t"] == "2026-11-04T09:20:00Z")
     assert (gap_bin["count"], gap_bin["notCaptured"], gap_bin["tokensIn"]) == (0, 1, None)
-    assert {(p["state"], p["source"]) for p in d["presence"]} == {
-        ("focused", "focus"),
-        ("away", "focus"),
-        ("asleep", "sleep"),
-    }
-    states = [(p["from"][11:16], p["to"][11:16], p["state"]) for p in d["presence"]]
-    assert states == [
-        ("09:00", "09:25", "focused"),
-        ("09:25", "09:30", "away"),
-        ("09:30", "09:38", "focused"),
-        ("09:38", "09:40", "asleep"),
-        ("09:40", "09:45", "focused"),
-    ]
-
-
-def test_timeline_presence_combines_the_sessions_shown(dataset, client_for):
-    one = ClaudeCode(dataset, S1)
-    one.call("2026-11-04T09:00:00")
-    one.call("2026-11-04T09:10:00")
-    two = ClaudeCode(dataset, S2)
-    two.call("2026-11-04T11:00:00")
-    # The device slept from 09:05 (two hours before the stall was noticed, in the later session).
-    two.event("2026-11-04T11:05:00", "tengu_event_loop_stall", likely_sleep=True, clock_jump_ms=7_200_000)
-    client = client_for(dataset)
-
-    def states(**window):
-        d = client.get(TIMELINE, params=window).json()["data"]
-        return [(p["from"][11:16], p["to"][11:16], p["state"]) for p in d["presence"]]
-
-    # Asleep wherever a shown session is open, whichever session reported the sleep.
-    assert states() == [("09:00", "09:05", "focused"), ("09:05", "09:10", "asleep"), ("11:00", "11:05", "asleep")]
-    # A range that ends before the later session starts doesn't show it, nor its sleep.
-    assert states(to="2026-11-04T10:00:00Z") == [("09:00", "09:10", "focused")]
-    assert states(**{"from": "2026-11-04T09:07:00Z"}) == [("09:07", "09:10", "asleep"), ("11:00", "11:05", "asleep")]
-
-
-def test_timeline_presence_of_a_live_session_runs_to_now(dataset, client_for):
-    cc = ClaudeCode(dataset, S1)
-    cc.call("2026-11-04T18:00:00")
-    cc.event("2026-11-04T18:03:00", "tengu_return_to_session", blurDurationMs=60_000)  # away 18:02-18:03
-    d = client_for(dataset).get(TIMELINE).json()["data"]
-    assert d["now"] == "2026-11-04T18:05:00Z"
-    assert [(p["from"][11:16], p["to"][11:16], p["state"]) for p in d["presence"]] == [
-        ("18:00", "18:02", "focused"),
-        ("18:02", "18:03", "away"),
-        ("18:03", "18:05", "focused"),
-    ]
 
 
 def test_timeline_error(dataset, client_for, write_sample, monkeypatch):

@@ -287,7 +287,6 @@ type MarkEventFacts struct {
 	Index              *int64 // $.prompt_index
 	Negative           bool
 	Destructive, Scope string
-	Mode               *string // tengu_api_query's permissionMode
 }
 
 // IsMarkEvent says whether the marks read an event of this name.
@@ -296,7 +295,7 @@ func IsMarkEvent(name string) bool { return markEventNames[name] }
 func MarkEventOf(e Event) MarkEventFacts {
 	me := newMarkEvent(eventColsOf(e))
 	return MarkEventFacts{PromptID: me.promptID, Index: me.index, Negative: me.negative, Destructive: me.destructive,
-		Scope: me.scope, Mode: me.mode}
+		Scope: me.scope}
 }
 
 // ReportIDsOf is a tengu_api_success's request and client request ids as the
