@@ -305,7 +305,14 @@ static_resources:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config:
-            http2_protocol_options: {}
+            http2_protocol_options:
+              # SDS is one long-lived stream that sits idle between renewals
+              # (hours). Ping it so a connection dropped silently by the
+              # network is noticed and re-opened, and the current leaf is
+              # fetched again; without this Envoy served an expired leaf.
+              connection_keepalive: { interval: 30s, timeout: 10s }
+      upstream_connection_options:
+        tcp_keepalive: { keepalive_time: 60, keepalive_interval: 20, keepalive_probes: 3 }
       load_assignment:
         cluster_name: certsvc
         endpoints:
