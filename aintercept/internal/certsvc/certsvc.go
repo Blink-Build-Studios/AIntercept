@@ -29,6 +29,7 @@ import (
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	serverv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
@@ -116,7 +117,7 @@ func Run() {
 	defer cancel()
 
 	srv := serverv3.NewServer(ctx, cache, callbacks)
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(serverOptions()...)
 	secretv3.RegisterSecretDiscoveryServiceServer(grpcServer, srv)
 
 	// Background renewer: re-mint leaves before they expire and push them to Envoy
@@ -362,3 +363,26 @@ func envDuration(key string, def time.Duration) time.Duration {
 	}
 	return def
 }
+
+// serverOptions keep Envoy's SDS streams honest. A stream sits idle for hours
+// between renewals, and one the network dropped silently never gets the next
+// push, so Envoy kept serving a leaf after it expired. Envoy pings every 30s
+// (its certsvc cluster's connection_keepalive), which the enforcement policy
+// must allow; the server pings too; and each connection is closed after
+// maxConnAge, so Envoy reconnects and fetches the current leaves even if a
+// push was missed. Envoy keeps serving its secrets while it reconnects.
+func serverOptions() []grpc.ServerOption {
+	return []grpc.ServerOption{
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:                  30 * time.Second,
+			Timeout:               10 * time.Second,
+			MaxConnectionAge:      maxConnAge,
+			MaxConnectionAgeGrace: time.Minute,
+		}),
+	}
+}
+
+// maxConnAge is well under renewBefore (leafTTL/4, 90 min by default), so a
+// missed push is caught by a reconnect before the leaf it replaced expires.
+const maxConnAge = 30 * time.Minute
