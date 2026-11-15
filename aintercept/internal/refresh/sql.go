@@ -17,8 +17,7 @@ const (
 // unnamed is whether call c names no session today though it has one here:
 // a Codex call that never really ended. Today's row of a call still waiting
 // is read from its headers alone, and Codex names its thread only in what
-// ingest adds at the end (process/requestrows.go callFromPending); one the
-// sweep closed is the same row (stream/state/expire.go todaysRow).
+// ingest adds at the end; one the sweep closed is the same row.
 const unnamed = `(c.source = 'codex' AND (c.end_ns IS NULL OR c.swept))`
 
 // modelCall is the API's agent_calls view over calls c: a coding agent's

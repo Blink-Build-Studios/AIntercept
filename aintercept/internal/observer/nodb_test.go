@@ -9,10 +9,9 @@ import (
 	"testing"
 )
 
-// Ingest has no database path (docs/PIPELINE.md §1 step 4): no Postgres
+// Ingest has no database path (docs/PIPELINE.md §1, §2): no Postgres
 // connection, DSN or login, and no Redis. An outage of either can't touch
-// traffic or lose a flag; the workers' tail discovers new files from the
-// recent index in S3.
+// traffic; the workers list the raw files the observer writes to S3.
 //
 // The observer's whole import graph (what an ingest pod runs) holds no
 // database client and none of the packages that hold one. The aintercept
@@ -33,10 +32,9 @@ func TestIngestHasNoDatabasePath(t *testing.T) {
 		"github.com/redis/",             // go-redis
 		"github.com/alicebob/miniredis", // Redis in tests
 		mod + "pg",                      // the workers' Postgres
-		mod + "tail",                    // the workers' discovery
-		mod + "rollup",                  // the workers
-		mod + "ingest",                  // v9's workers (docs/PIPELINE.md §2.2)
-		mod + "flush",                   // v9's writes to Postgres
+		mod + "ingest",                  // the workers (docs/PIPELINE.md §2.2)
+		mod + "flush",                   // their writes to Postgres
+		mod + "refresh",                 // their rollups
 	}
 	for _, d := range deps {
 		for _, b := range banned {
@@ -51,7 +49,7 @@ func TestIngestHasNoDatabasePath(t *testing.T) {
 // in the source of the packages an ingest pod runs.
 func TestIngestReadsNoDatabaseSetting(t *testing.T) {
 	setting := regexp.MustCompile(`"[A-Z0-9_]*(REDIS|POSTGRES|_PG|PGHOST|DSN|DATABASE_URL)[A-Z0-9_]*"`)
-	for _, dir := range []string{".", "../keyflag", "../records", "../events", "../extproc"} {
+	for _, dir := range []string{".", "../records", "../events", "../extproc"} {
 		files, _ := filepath.Glob(filepath.Join(dir, "*.go"))
 		for _, f := range files {
 			if strings.HasSuffix(f, "_test.go") {

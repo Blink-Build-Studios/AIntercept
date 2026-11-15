@@ -30,17 +30,18 @@ func (m *memTarget) Put(_ context.Context, o events.Object) error {
 	return nil
 }
 
-// Records and call detail objects reach the store only through the observer's
-// single writer: a records sink wired to its object streams uploads both, and
-// no file in this package uploads by itself.
+// Records and calls' rows reach the store only through the observer's single
+// writer: a records sink wired to its raw stream uploads them, and no file in
+// this package uploads by itself.
 func TestRecordsUploadOnlyThroughTheWriter(t *testing.T) {
 	tgt := &memTarget{}
 	w, err := events.NewWriter(events.WriterConfig{SpoolDir: t.TempDir(), SkipFsync: true, Targets: []events.Target{tgt}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := NewSink(SinkConfig{Putter: WriterPutter(w, "store"), Prefix: "p", Incarnation: "i", Details: true,
-		MaxAge: time.Hour})
+	raw := w.NewStream(events.StreamConfig{Target: "store", Key: RawKey("p", "pod-a"), Members: true, AtUpload: true,
+		ContentType: "application/gzip", MaxBytes: 8 << 20, MaxAge: time.Hour})
+	s := NewSink(SinkConfig{Raw: raw, Incarnation: "i", MaxAge: time.Hour})
 	for _, e := range sampleRows() {
 		if err := s.Emit(e); err != nil {
 			t.Fatal(err)
@@ -52,38 +53,33 @@ func TestRecordsUploadOnlyThroughTheWriter(t *testing.T) {
 	if err := w.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	var recs, details int
+	var files int
 	for k, o := range tgt.objs {
-		switch {
-		case strings.HasPrefix(k, "p/v1/keys/"):
-			recs++
-			if o.ContentType != "application/vnd.apache.parquet" {
-				t.Errorf("%s content type %q", k, o.ContentType)
-			}
-		case strings.HasPrefix(k, "p/calls/"):
-			details++
-			if o.ContentEncoding != "gzip" {
-				t.Errorf("%s encoding %q", k, o.ContentEncoding)
-			}
-		default:
-			t.Errorf("unexpected object %s", k)
+		if !strings.HasPrefix(k, "p/raw/") || o.ContentType != "application/gzip" {
+			t.Errorf("unexpected object %s (%q)", k, o.ContentType)
+			continue
 		}
+		rs, ranges, err := ReadRawFile(o.Body)
+		if err != nil || len(rs) == 0 || len(ranges) < 3 {
+			t.Errorf("%s: %d records, %d call members, %v", k, len(rs), len(ranges), err)
+		}
+		files++
 	}
-	if recs == 0 || details < 3 {
-		t.Fatalf("records objects %d, detail objects %d", recs, details)
+	if files == 0 {
+		t.Fatal("no raw file uploaded")
 	}
 	_ = w.Close()
 
 	// Structural guard: nothing here talks to object storage directly.
-	files, _ := filepath.Glob("*.go")
+	files2, _ := filepath.Glob("*.go")
 	direct := regexp.MustCompile(`PutObject|aws-sdk-go|S3Sink|s3\.`)
-	for _, f := range files {
+	for _, f := range files2 {
 		if strings.HasSuffix(f, "_test.go") {
 			continue
 		}
 		src, _ := os.ReadFile(f)
 		if direct.Match(src) {
-			t.Errorf("%s uploads by itself; records go through the observer's writer (WriterPutter)", f)
+			t.Errorf("%s uploads by itself; records go through the observer's writer", f)
 		}
 	}
 }

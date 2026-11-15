@@ -106,7 +106,7 @@ type Device struct {
 	First, Last                               int64
 }
 
-// Parent is a session_parents row: a session and the one it came from.
+// Parent is a session_edges row: a session and the one it came from.
 type Parent struct {
 	Child, Parent, Kind string
 	First               int64

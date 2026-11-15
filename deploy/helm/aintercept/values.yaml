@@ -10,10 +10,10 @@ cloud: digitalocean
 #   content-free → metadata only: headers, token counts, timings, model and tool
 #                  names, the agents' own analytics. No request or response body.
 #   full         → everything above plus every request and response body. The
-#                  observer writes the stream with bodies under
-#                  <objectStore.prefix>/capture, and the processor and the API
-#                  read it, so the UI shows prompt text, commands, patches and
-#                  exit codes. Far more data: size the object store for it.
+#                  observer writes the raw files with bodies, and the workers
+#                  and the API read them, so the UI shows prompt text, commands,
+#                  patches and exit codes. Far more data: size the object store
+#                  for it.
 # Independent of the interceptor (below): whether a customer's Interceptor sees
 # bodies is its own setting.
 interceptionMode: content-free
@@ -127,11 +127,9 @@ objectStore:
   # empty for native AWS S3.
   endpoint: ""            # e.g. https://nyc3.digitaloceanspaces.com
   forcePathStyle: false   # true for MinIO and some S3-compatible stores
-  # Flush thresholds (a batch is sealed on whichever trips first). The writer
-  # seals every batch at least every maxAgeSeconds: that's the most a hard kill
-  # of the observer can lose (sealed batches survive in its spool).
-  maxBytes: 5242880       # 5 MiB
-  maxEvents: 10000
+  # The writer seals what it holds at least every maxAgeSeconds: that's the most
+  # a hard kill of the observer can lose (sealed files survive in its spool).
+  # The raw files' own thresholds are observer.rawFiles.
   maxAgeSeconds: 10
   # Static credentials (DigitalOcean / MinIO only). On AWS leave blank and use
   # IRSA via serviceAccount.roleArn.
@@ -147,50 +145,13 @@ objectStore:
   accessKeyId: ""
   secretAccessKey: ""
 
-# ── Workers (docs/PIPELINE.md §2) ─────────────────────────────────────────────
-# `aintercept rollup`: claims flagged keys (Postgres's dirty_keys), applies
-# each key's new ingest files under <prefix>/v1/keys/<key>/in/ and commits its
-# rows to Postgres; one of them also tails the recent index (v1/recent/), flags
-# calls due to expire and runs retention. Scaled on lag; never below two.
-rollup:
-  enabled: true
-  # rollup's own ServiceAccount (never the observer's). On AWS its role needs
-  # list + get + put + delete under <prefix>/v1/ (docs/PRODUCTION.md §7), and
-  # with retention.rawDays, delete on the raw and calls/ objects too.
-  # create: false uses an existing one named name. roleArn is IRSA only.
-  serviceAccount:
-    create: true
-    name: aintercept-rollup
-    roleArn: ""
-  parallel: 8          # keys one replica runs at once
-  # The warm states' memory cap per replica (bytes): keys stay warm until 60 min
-  # idle, least recently fed out first over it. Keep it under the memory limit
-  # below (a warm key is ~7 KB per record held; the capture's heaviest, 400 MB).
-  warmBytes: 536870912
-  autoscaling:
-    keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
-    minReplicas: 2     # never fewer: the tail and the singletons always have a holder
-    maxReplicas: 20
-    lagTargetSeconds: 30
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  topologySpreadConstraints: []
-  podDisruptionBudget:
-    enabled: false
-    maxUnavailable: 1
-  resources:
-    requests: { cpu: "100m", memory: "256Mi" }
-    limits: { cpu: "1", memory: "1Gi" }
-
-# ── v9 workers (docs/PIPELINE.md §2.2) ───────────────────────────────────────
+# ── Workers (docs/PIPELINE.md §2.2) ──────────────────────────────────────────
 # `aintercept worker`: lists the observers' raw files (<prefix>/raw/) into
 # Postgres's ingest_files (one replica at a time, by advisory lock) and loads
 # each into the fact tables in one transaction (FOR UPDATE SKIP LOCKED), then
 # refreshes the dirty rollup rows (§5.1); one replica at a time sweeps open
-# calls and runs retention (retention.days, §5.5). Runs beside `rollup` until
-# v9's step 8, which deletes rollup. Scaled on GET /lag: the age of the oldest
-# unloaded file or dirty rollup row.
+# calls and runs retention (retention.days, §5.5). Scaled on GET /lag: the age
+# of the oldest unloaded file or dirty rollup row.
 worker:
   enabled: true
   # worker's own ServiceAccount. On AWS its role needs list + get under
@@ -248,17 +209,16 @@ postgres:
       requests: { cpu: "250m", memory: "1Gi" }
       limits: { cpu: "2", memory: "2Gi" }
 
-# ── Retention (docs/PIPELINE.md §3.6) ─────────────────────────────────────────
-# Every hour one worker forgets the keys whose day is older than `days`: their
-# rows in Postgres, then their state and applied ingest files. "All" in the UI
-# is this window.
+# ── Retention (docs/PIPELINE.md §5.5) ─────────────────────────────────────────
+# Every hour one worker deletes the facts older than `days`, and their rollup
+# rows. "All" in the UI is this window. The raw files expire by the bucket's
+# lifecycle rule on <prefix>/raw/ (deploy/terraform: raw_retention_days).
 retention:
-  days: 15                    # keys whose day is older are forgotten (0: never)
-  rawDays: 0                  # raw/, applied in/ (0: off; in the cloud, bucket lifecycle rules expire raw and calls/)
+  days: 15                    # facts older than this are deleted (0: never)
 
 # The query API (api/), inside the cluster: stateless, it reads Postgres (the
-# API login's DSN, postgres.existingSecret's api-url) and a call's calls/<id>
-# object (docs/PIPELINE.md §5).
+# API login's DSN, postgres.existingSecret's api-url) and a call's raw member
+# (docs/PIPELINE.md §6).
 # ClusterIP only, with a NetworkPolicy admitting no pod: reach it with
 # `kubectl port-forward svc/api 8787` (`make remote` does).
 api:
@@ -280,25 +240,13 @@ api:
   podDisruptionBudget:
     enabled: false
     maxUnavailable: 1
-  # DuckDB's memory limit: empty = 60% of the container's memory limit (the rest is
-  # Python and the responses being built); or a size like "900MB".
-  memoryLimit: ""
-  threads: 2             # DuckDB's threads (its default is the node's cores, not the CPU limit)
-  # Which store the API reads: pg (Postgres, through postgres.existingSecret's
-  # api-url; docs/PIPELINE.md v7 §5). It refuses to start without the DSN or on
-  # a schema that isn't its build's. v1 (the v5 folders, which the workers no
-  # longer write) stays selectable until the v5 code is deleted.
-  store: pg
   resources:
     # Memory request = limit: the scheduler reserves all of it, and the pod is the
     # last evicted when a node runs short (docs/INTERCEPTION_ISSUES.md P5).
     requests: { cpu: "500m", memory: "1536Mi" }
     limits: { cpu: "2", memory: "1536Mi" }
-  # The read path keeps nothing but scratch space (DuckDB's spill), and an HPA on
-  # CPU sets the replica count.
+  # The read path keeps nothing, and an HPA on CPU sets the replica count.
   stateless:
-    cacheSizeLimit: 4Gi
-    cacheBytes: "3221225472"   # the scratch space's own cap, under cacheSizeLimit
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilization: 70
@@ -344,7 +292,7 @@ observer:
   # drain time + flushSeconds, and never less than terminationGracePeriodSeconds.
   flushSeconds: 100
   terminationGracePeriodSeconds: 300
-  # The writer's on-disk spool (docs/STREAMING_PIPELINE.md, phase 1): sealed
+  # The writer's on-disk spool (docs/PIPELINE.md §2.1): sealed
   # files wait here until the object store accepts them, so an outage or a
   # restart loses nothing. An emptyDir, so it survives container restarts.
   # Past 95% of maxBytes the spool is full: observed (async) traffic keeps
@@ -354,19 +302,10 @@ observer:
   spool:
     sizeLimit: 10Gi
     maxBytes: 9663676416   # 9 GiB
-  # v5 per-key ingest buffers (docs/PIPELINE.md §1): each routing key's records
-  # flush as one file under v1/keys/<key>/in/ at flushBytes or flushSeconds after
-  # the buffer's first record (±10%, at most 60). Over maxBytes across all
-  # buffers, the oldest flush first. Buffers live in the spool volume.
-  keyBuffers:
-    flushBytes: 1048576     # 1 MiB
-    flushSeconds: 30
-    maxBytes: 67108864      # 64 MiB
-  # v9's raw files (docs/PIPELINE.md §2.1): one stream per pod under
+  # The raw files (docs/PIPELINE.md §2.1): one stream per pod under
   # <prefix>/raw/, each file written at flushBytes or flushSeconds after its
-  # first record: one PUT per pod per file. The v9 workers load them.
+  # first record: one PUT per pod per file. The workers load them.
   rawFiles:
-    enabled: true
     flushBytes: 8388608     # 8 MiB
     flushSeconds: 30
   # Operational log level: debug | info | warn | error. Logs are structured JSON

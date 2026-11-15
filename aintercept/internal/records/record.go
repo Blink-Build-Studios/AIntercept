@@ -1,20 +1,14 @@
-// Package records is the observer's canonical output (docs/STREAMING_PIPELINE.md
-// §3): each finished or started call, each analytics event and each account
-// sighting as one record, routed by key into a bucket, written as Parquet
-// under records/v1/bucket=NN/minute=<upload minute>/. The bucketed processor
-// reads only these. The raw log is written as before, beside them.
+// Package records is the observer's canonical output (docs/PIPELINE.md §2.1):
+// each finished or started call, each analytics event and each account
+// sighting as one record, written with each completed call's rows to the raw
+// files the workers load.
 package records
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/zcodec"
-	"strconv"
 	"time"
-
-	"github.com/parquet-go/parquet-go"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
 )
@@ -87,49 +81,4 @@ func NewIncarnation(pod string) string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return fmt.Sprintf("%019d-%s-%s", time.Now().UnixNano(), hex.EncodeToString(b), pod)
-}
-
-// newestRowKey is the Parquet metadata key holding the newest raw row time the
-// writing pod had seen (its clock: "newest data", even rows that complete no
-// record, such as an in-flight stream's chunks).
-const newestRowKey = "aintercept.newest_row_ns"
-
-// Encode is records as a Parquet file (zstd).
-func Encode(rs []Record) ([]byte, error) { return EncodeWithNewest(rs, 0) }
-
-// EncodeWithNewest is Encode, carrying the newest raw row time (0: none).
-func EncodeWithNewest(rs []Record, newestRowNS int64) ([]byte, error) {
-	var buf bytes.Buffer
-	w := parquet.NewGenericWriter[Record](&buf, parquet.Compression(zcodec.Shared))
-	if newestRowNS > 0 {
-		w.SetKeyValueMetadata(newestRowKey, strconv.FormatInt(newestRowNS, 10))
-	}
-	if _, err := w.Write(rs); err != nil {
-		return nil, err
-	}
-	if err := w.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-// Decode reads a records file.
-func Decode(b []byte) ([]Record, error) {
-	return parquet.Read[Record](bytes.NewReader(b), int64(len(b)))
-}
-
-// DecodeWithNewest is Decode, with the file's newest raw row time (0: none).
-func DecodeWithNewest(b []byte) ([]Record, int64, error) {
-	f, err := parquet.OpenFile(bytes.NewReader(b), int64(len(b)))
-	if err != nil {
-		return nil, 0, err
-	}
-	var newest int64
-	if v, ok := f.Lookup(newestRowKey); ok {
-		if newest, err = strconv.ParseInt(v, 10, 64); err != nil {
-			return nil, 0, fmt.Errorf("records: %s: %w", newestRowKey, err)
-		}
-	}
-	rs, err := Decode(b)
-	return rs, newest, err
 }

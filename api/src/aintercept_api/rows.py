@@ -1,25 +1,21 @@
 """Row builders shared by the person and session routers (handoff §4 SessionRowData,
 RequestRowData; §5.2.6-5.2.7), so both pages show the same row for the same thing."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import datetime
 from http import HTTPStatus
 from typing import Any
 
-from aintercept_api import claude_code as cc
 from aintercept_api import person as pp
 from aintercept_api.models.common import Coverage, CoverageWindow, UsageMissing
 from aintercept_api.models.people import (
     Friction,
-    RequestError,
-    RequestRow,
     SessionLabel,
     SessionOrigin,
     SessionRow,
     ThreadChildren,
     TokenCount,
 )
-from aintercept_api.store import Store
 from aintercept_api.timeutil import ns_to_dt
 
 # The observer parsed at most this much of a response before P6 (docs/INTERCEPTION_ISSUES.md):
@@ -52,19 +48,6 @@ def dt(ns: int) -> datetime:
     if d is None:  # only reachable if a caller passes None despite the type
         raise ValueError("timestamp required")
     return d
-
-
-SESSION_ROWS = "SELECT *, ? - last_ns <= ? AS live FROM session_rows"
-
-
-def session_rows(store: Store, now: int, ids: Sequence[str] | None = None) -> list[dict[str, Any]]:
-    """The sessions' rows (every session's without `ids`), by id."""
-    if ids is None:
-        return store.query_dicts(f"{SESSION_ROWS} ORDER BY session_id", [now, cc.LIVE_WITHIN_NS])
-    return store.query_dicts(
-        f"{SESSION_ROWS} WHERE session_id IN (SELECT unnest(?::VARCHAR[])) ORDER BY session_id",
-        [now, cc.LIVE_WITHIN_NS, list(ids)],
-    )
 
 
 def session_row_from_table(r: Mapping[str, Any], alone: bool = False) -> SessionRow:
@@ -131,101 +114,3 @@ def _tokens(t: pp.Tx, rep: pp.Reported | None) -> TokenCount | None:
 
 def failed(t: pp.Tx) -> bool:
     return t.status is None and t.end_ts is not None or t.status is not None and t.status >= 400
-
-
-def request_row_from_table(r: Mapping[str, Any]) -> RequestRow:
-    """A row of the processor's request_rows table (columns as in aintercept/internal/process/tables.go
-    RequestRow) as the API's RequestRow: field copies only. The processor wrote every value already
-    as shown; status, tokens and error are spread over columns (see RequestRow there)."""
-    tokens = None
-    if r["tokens_accuracy"] is not None:
-        tokens = TokenCount(
-            input=r["tokens_input"],
-            cacheRead=r["tokens_cache_read"],
-            cacheWrite=r["tokens_cache_write"],
-            cacheWrite5m=r["tokens_cache_write_5m"],
-            cacheWrite1h=r["tokens_cache_write_1h"],
-            output=r["tokens_output"],
-            accuracy=r["tokens_accuracy"],
-        )
-    error = None
-    if r["error_message"] is not None:
-        error = RequestError(
-            message=r["error_message"],
-            afterMs=r["error_after_ms"],
-            bytesReceived=r["error_bytes_received"],
-            retries=r["error_retries"],
-            retrySucceededAt=ns_to_dt(r["error_retry_succeeded_ns"]),
-        )
-    return RequestRow(
-        requestId=r["request_id"],
-        t=dt(r["ts_ns"]),
-        kind=r["kind"],
-        agent=r["agent"],
-        client=r["client"],
-        hiddenKind=r["hidden_kind"],
-        sessionId=r["session_id"],
-        sessionLabel=r["session_label"],
-        promptIndex=r["prompt_index"],
-        method=r["method"],
-        path=r["path"],
-        detail=r["detail"],
-        status="ERR" if r["status_err"] else r["status"],
-        durationMs=r["duration_ms"],
-        retries=r["retries"],
-        bytesUp=r["bytes_up"],
-        bytesDown=r["bytes_down"],
-        background=r["background"],
-        captured=r["captured"],
-        statusText=r["status_text"],
-        stopReason=r["stop_reason"],
-        ttftMs=r["ttft_ms"],
-        tokens=tokens,
-        contentEncoding=r["content_encoding"],
-        error=error,
-        model=r["model"],
-        effort=r["effort"],
-        stepIndex=r["step_index"],
-        toolCalls=list(r["tool_calls"]),
-        usageMissing=r["usage_missing"],
-        text=r["text"],
-    )
-
-
-def request_filter(
-    scope: str,
-    value: str,
-    lo_ns: int | None,
-    hi_ns: int | None,
-    q: str | None,
-    captured: bool | None,
-    agent: Sequence[str] | None = None,
-) -> tuple[str, list[object]]:
-    """The WHERE clause for a request log's stored rows (`scope` = `value`: a person's request_rows,
-    a session's session_request_rows): the window [lo_ns, hi_ns] (each None: open; rows' times are
-    compared at the microseconds they're shown with), captured, agent and `q` as `matches` reads it.
-    Fixed text with every value a parameter."""
-    lo = lo_ns // 1000 if lo_ns is not None else None
-    hi = hi_ns // 1000 if hi_ns is not None else None
-    where = [
-        f"{scope} = ?",
-        "(?::BIGINT IS NULL OR ts_ns // 1000 >= ?)",
-        "(?::BIGINT IS NULL OR ts_ns // 1000 <= ?)",
-        "(?::BOOLEAN IS NULL OR captured = ?)",
-        "(? OR agent IN (SELECT unnest(?::VARCHAR[])))",
-    ]
-    params: list[object] = [value, lo, lo, hi, hi, captured, captured, not agent, list(agent or [])]
-    if q and "=" in q:
-        k, _, v = q.partition("=")
-        field = {
-            "kind": "kind",
-            "session": "coalesce(session_id, '')",
-            # str() of the shown status: a number, ERR, or None when there's none
-            "status": "CASE WHEN status_err THEN 'ERR' WHEN status IS NULL THEN 'None' ELSE status::VARCHAR END",
-        }.get(k.strip())
-        where.append(f"contains({field}, ?)" if field else "false")
-        params += [v.strip()] if field else []
-    elif q:
-        where.append("(contains(lower(path), ?) OR contains(lower(detail), ?))")
-        params += [q.lower(), q.lower()]
-    return " AND ".join(where), params

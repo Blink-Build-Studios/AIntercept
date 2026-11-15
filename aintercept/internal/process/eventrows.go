@@ -4,23 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
-	"sort"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
-// The event_rows and session_tools snapshots: every session's Claude Code
-// analytics events as its Events tab lists them (session.py event_rows: the
-// row's id, summary, marker, link and prompt number), with the columns the state
-// readout counts (session.py state), and the tools each session's calls and
-// events used. Built from the same event parts as the other derived tables, and
-// held equal to the API's rows by the same parity test (docs/architecture.md,
-// Decision 4).
-//
-// What depends on the request stays SQL: the range, `q` (against the lowered
-// name and summary, lowered as Python lowers) and hiding internals.
+// An event's facts (EventFactsOf): what the flush stores of a Claude Code
+// event at insert (docs/PIPELINE.md §3.2): its summary, marker and internal
+// flag, and what the rollups count of it.
 
 // Event row values, as session.py has them.
 var (
@@ -49,7 +40,6 @@ type listedEvent struct {
 	md             string // kept only until its batch is numbered
 	part           string // the events part it came from, and its place among
 	pos            int32  // the part's Claude Code events (to number a batch two parts hold)
-	n              int32  // its number in its batch (the API's event id)
 	marker         uint8  // markerNone, markerDestructive, markerFrustrated
 
 	device, prompt, head string
@@ -302,28 +292,6 @@ func finalSigma(rs []rune, i int) bool {
 	return true
 }
 
-// numberEvents numbers each event of a part's batches as the API's event id does:
-// row_number() over the batch's Claude Code events by seq, row time, time, name and
-// metadata (identical events in table order, the API's being arbitrary among them).
-func (d *eventAgg) numberEvents() {
-	for _, keys := range d.keys {
-		sort.Slice(keys, func(i, j int) bool { return keys[i].less(keys[j]) })
-	}
-	taken := map[string]map[int]int{}
-	for _, ce := range d.ccAll {
-		keys := d.keys[ce.corr]
-		me := batchKey{ce.seq, ce.rowNS, ce.ts, ce.name, ce.md}
-		lb := sort.Search(len(keys), func(i int) bool { return !keys[i].less(me) })
-		if taken[ce.corr] == nil {
-			taken[ce.corr] = map[int]int{}
-		}
-		ce.n = int32(lb + 1 + taken[ce.corr][lb])
-		taken[ce.corr][lb]++
-		ce.md = ""
-	}
-	d.ccAll = nil
-}
-
 // EventRow is an event_rows row: one of a session's Claude Code analytics events
 // as its Events tab lists it (session.py event_rows, whose rows only the page's
 // filters change), with the values the state readout counts (session.py state).
@@ -369,199 +337,6 @@ type EventRow struct {
 	CostUSD    *float64 `parquet:"cost_usd,optional"`  // costUSD
 }
 
-// SessionTool is a session_tools row: a tool a session's calls (their responses'
-// tool_use blocks) or Claude Code events (tengu_tool_use_success) used, first at
-// first_ns. kind is "mcp" (with its server) or "builtin" (server "").
-type SessionTool struct {
-	SessionID string `parquet:"session_id"`
-	Kind      string `parquet:"kind"`
-	Server    string `parquet:"server"`
-	Tool      string `parquet:"tool"`
-	FirstNS   int64  `parquet:"first_ns"`
-}
-
-// toolUse is one entry of a call's tool_uses_json, as from_json reads it.
-type toolUse struct{ server, tool, kind string }
-
-func readToolUses(s string, in interner) []toolUse {
-	if s == "" {
-		return nil
-	}
-	var raw []map[string]json.RawMessage
-	if json.Unmarshal([]byte(s), &raw) != nil {
-		return nil
-	}
-	out := make([]toolUse, 0, len(raw))
-	for _, u := range raw {
-		server, _ := jsonString(u["server"])
-		tool, _ := jsonString(u["tool"])
-		kind, _ := jsonString(u["kind"])
-		out = append(out, toolUse{in.of(server), in.of(tool), in.of(kind)})
-	}
-	return out
-}
-
-// eventRows builds every session's event rows and tools.
-func (d *rowData) eventRows() ([]EventRow, []SessionTool) {
-	steps := map[string]map[string]*rowCall{} // session -> request id -> its newest-ordered visible call
-	var cc []*rowCall
-	for _, c := range d.calls {
-		if c.ccCall() {
-			cc = append(cc, c)
-		}
-	}
-	sort.SliceStable(cc, func(i, j int) bool { return cc[i].ts < cc[j].ts || cc[i].ts == cc[j].ts && cc[i].id < cc[j].id })
-	for _, c := range cc {
-		if c.reqID == "" {
-			continue
-		}
-		if steps[c.session] == nil {
-			steps[c.session] = map[string]*rowCall{}
-		}
-		steps[c.session][c.reqID] = c
-	}
-
-	tools := map[SessionTool]bool{}
-	first := map[SessionTool]int64{}
-	use := func(s, kind, server, tool string, ts int64) {
-		k := SessionTool{SessionID: s, Kind: kind, Server: server, Tool: tool}
-		if cur, ok := first[k]; !ok || ts < cur {
-			first[k] = ts
-		}
-		tools[k] = true
-	}
-	for _, c := range d.calls {
-		if c.ended && c.session != "" {
-			for _, u := range c.toolUses {
-				switch {
-				case u.kind == "mcp" && u.server != "" && u.tool != "":
-					use(c.session, "mcp", u.server, u.tool, c.ts)
-				case u.tool != "":
-					use(c.session, "builtin", "", u.tool, c.ts)
-				}
-			}
-		}
-	}
-
-	total := 0
-	for _, evs := range d.ccEvs {
-		total += len(evs)
-	}
-	rows := make([]EventRow, 0, total)
-	for _, s := range sortedKeyList(d.ccEvs) {
-		evs := d.ccEvs[s]
-		sort.SliceStable(evs, func(i, j int) bool {
-			a, b := evs[i], evs[j]
-			switch {
-			case a.ts != b.ts:
-				return a.ts < b.ts
-			case a.corr != b.corr:
-				return a.corr < b.corr
-			}
-			return a.n < b.n
-		})
-		index := d.promptIndex(s)
-		for i, ce := range evs {
-			r := EventRow{
-				SessionID: s, Seq: int64(i), EventID: ce.corr + ":" + strconv.Itoa(int(ce.n)), TsNS: ce.ts,
-				Name: ce.name, NameLower: pyLower(ce.name), Internal: isInternal(ce.name),
-				Summary: ce.summary, SummaryLower: pyLower(ce.summary), Marker: markerNames[ce.marker],
-				HeadSHA: ce.head,
-			}
-			if st := ce.state; st != nil {
-				r.Hook, r.GitOp, r.PR, r.RecapKey, r.Recap, r.Count = st.hook, st.gitOp, st.pr, st.recapKey, st.recap, st.count
-				if st.used != "" {
-					switch {
-					case st.server != "":
-						use(s, "mcp", st.server, st.used, ce.ts)
-					case !st.isMCP:
-						use(s, "builtin", "", st.used, ce.ts)
-					}
-				}
-			}
-			r.Unnamed = ce.unnamed
-			if x := ce.sums; x != nil {
-				r.ToolName, r.IsMCP, r.HookMS = x.tool, x.mcp, x.hookMS
-				r.Argv0, r.Category, r.OutsideCwd = x.argv0, x.category, x.outside
-				r.HookName, r.Operation, r.PRNumber = x.hook, x.gitOp, x.pr
-				r.Cache5m, r.Cache1h, r.CostUSD = x.cache5m, x.cache1h, x.costUSD
-			}
-			if ce.prompt != "" {
-				if n, ok := index[ce.prompt]; ok {
-					r.PromptIndex = ptr(n)
-				}
-			}
-			r.LinkKind, r.LinkID, r.LinkLabel = d.link(ce, s, steps[s], index)
-			rows = append(rows, r)
-		}
-	}
-	out := make([]SessionTool, 0, len(tools))
-	for k := range tools {
-		k.FirstNS = first[k]
-		out = append(out, k)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.SessionID != b.SessionID {
-			return a.SessionID < b.SessionID
-		}
-		if a.Kind != b.Kind {
-			return a.Kind < b.Kind
-		}
-		if a.Server != b.Server {
-			return a.Server < b.Server
-		}
-		return a.Tool < b.Tool
-	})
-	return rows, out
-}
-
-// link is session.py _link: what an event row points to.
-func (d *rowData) link(ce *listedEvent, s string, steps map[string]*rowCall, index map[string]int64) (string, string, string) {
-	switch rid := ce.reqID; {
-	case ce.name == "tengu_event_loop_stall" && ce.device != "":
-		return "device", ce.device, "device"
-	case ce.tool != "":
-		return "tool", ce.tool, firstStr(ce.toolName, "tool")
-	case rid != "":
-		if c := steps[rid]; c != nil {
-			return "request", c.id, firstStr(c.class, "—") + " · " + modelFamily(c.model) + " · " + firstStr(c.stop, "—")
-		}
-		return "request", "reported:" + rid, "not captured"
-	case ce.prompt != "":
-		if n, ok := index[ce.prompt]; ok {
-			return "prompt", ce.prompt, "#" + strconv.FormatInt(n, 10)
-		}
-		return "prompt", ce.prompt, "prompt"
-	}
-	return "session", s, "session"
-}
-
-// promptIndex is person.py prompt_indexes for one session: each prompt's number,
-// Claude Code's from tengu_input_prompt, a Codex turn's from its place in the
-// thread (the later wins, as the API's dict does).
-func (d *rowData) promptIndex(s string) map[string]int64 {
-	index := map[string]int64{}
-	for _, e := range d.prompts[s] {
-		if e.promptID != "" && e.index != nil {
-			index[e.promptID] = *e.index
-		}
-	}
-	for pid, n := range d.codexPrompt[s] {
-		index[pid] = n
-	}
-	return index
-}
-
-func sortedKeyList[T any](m map[string]T) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
 // EventFacts is what one Claude Code event's row reads of the event itself:
 // everything but its place, its prompt's number and what its link resolves to.
 // The streaming processor builds its event rows from it (one parsing, so the
@@ -599,33 +374,58 @@ func EventFactsOf(e Event) EventFacts {
 	return f
 }
 
-// CallLabel is a request link's label: the call's class, model family and stop
-// reason (session.py _link).
-func CallLabel(class, model, stop string) string {
-	return firstStr(class, "—") + " · " + modelFamily(model) + " · " + firstStr(stop, "—")
+// eventSums is what the person summary sums or counts of an event, read as the
+// API's SQL read it (json_extract_string, then TRY_CAST): nil for the events it
+// reads nothing of.
+type eventSums struct {
+	tool     *string // tengu_tool_use_success: toolName
+	mcp      bool    // … isMcp is 'true'
+	hookMS   *float64
+	argv0    *string // tengu_bash_tool_command_executed: bash_argv0,
+	category *string // destructive_category,
+	outside  bool    // destructive_target_scope is 'outside_cwd'
+	hook     *string // tengu_run_hook: hookName
+	gitOp    *string // tengu_git_operation: operation
+	pr       *string // tengu_session_linked_to_pr: prNumber
+	cache5m  *int64  // tengu_api_success: cache_creation_5m_input_tokens,
+	cache1h  *int64  // cache_creation_1h_input_tokens,
+	costUSD  *float64
+	sandbox  *string // tengu_bash_tool_command_executed: sandbox_enabled
+	gzipCA   bool    // tengu_api_success: gzipSkipReason is 'custom_ca'
 }
 
-// ToolUses is a call's tool_uses_json as the session tools read it: kind,
-// server and tool of each.
-func ToolUses(toolUsesJSON string) [][3]string {
-	var out [][3]string
-	for _, u := range readToolUses(toolUsesJSON, interner{}) {
-		out = append(out, [3]string{u.kind, u.server, u.tool})
+// jsonText is json_extract_string: nil for null or absent.
+func jsonText(v json.RawMessage) *string {
+	if s, ok := jsonString(v); ok {
+		return &s
 	}
-	return out
+	return nil
 }
 
-// PromptIndexOf is a tengu_input_prompt's prompt id and number as the prompt
-// index reads them (cc_prompt_id, prompt_index), and whether it has both.
-func PromptIndexOf(e Event) (string, int64, bool) {
-	if e.Name != "tengu_input_prompt" {
-		return "", 0, false
+func newEventSums(name, md string) *eventSums {
+	switch name {
+	case "tengu_tool_use_success":
+		f := jsonFields(md, "toolName", "isMcp", "preToolHookDurationMs")
+		mcp, _ := jsonString(f["isMcp"])
+		return &eventSums{tool: jsonText(f["toolName"]), mcp: mcp == "true", hookMS: jsonDouble(f["preToolHookDurationMs"])}
+	case "tengu_bash_tool_command_executed":
+		f := jsonFields(md, "bash_argv0", "destructive_category", "destructive_target_scope", "sandbox_enabled")
+		scope, _ := jsonString(f["destructive_target_scope"])
+		return &eventSums{argv0: jsonText(f["bash_argv0"]), category: jsonText(f["destructive_category"]),
+			outside: scope == "outside_cwd", sandbox: jsonText(f["sandbox_enabled"])}
+	case "tengu_run_hook":
+		return &eventSums{hook: jsonText(jsonFields(md, "hookName")["hookName"])}
+	case "tengu_git_operation":
+		return &eventSums{gitOp: jsonText(jsonFields(md, "operation")["operation"])}
+	case "tengu_session_linked_to_pr":
+		return &eventSums{pr: jsonText(jsonFields(md, "prNumber")["prNumber"])}
+	case "tengu_api_success":
+		f := jsonFields(md, "cache_creation_5m_input_tokens", "cache_creation_1h_input_tokens", "costUSD", "gzipSkipReason")
+		gz, _ := jsonString(f["gzipSkipReason"])
+		return &eventSums{
+			cache5m: jsonInt(f["cache_creation_5m_input_tokens"], math.MinInt64, math.MaxInt64),
+			cache1h: jsonInt(f["cache_creation_1h_input_tokens"], math.MinInt64, math.MaxInt64),
+			costUSD: jsonDouble(f["costUSD"]), gzipCA: gz == "custom_ca"}
 	}
-	md := jsonFields(e.MetadataJSON, "cc_prompt_id", "prompt_index")
-	pid, _ := jsonString(md["cc_prompt_id"])
-	n := jsonInt(md["prompt_index"], math.MinInt32, math.MaxInt32)
-	if pid == "" || n == nil {
-		return "", 0, false
-	}
-	return pid, *n, true
+	return nil
 }

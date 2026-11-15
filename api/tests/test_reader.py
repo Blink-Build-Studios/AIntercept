@@ -1,6 +1,5 @@
-"""The API's psycopg reader (docs/PIPELINE.md v8 §5.1, §5.7; build step 1): the pool, one READ ONLY,
-REPEATABLE READ snapshot per request, its statements, the trace; and the router's page-reader seam
-that picks each page's reader."""
+"""The API's psycopg reader (docs/PIPELINE.md §6): the pool, one READ ONLY, REPEATABLE READ snapshot
+per request, its statements, the trace; and the routes' pages."""
 
 import re
 import time
@@ -10,9 +9,8 @@ import pytest
 
 from aintercept_api import pages
 from aintercept_api.app import create_app
-from aintercept_api.pgstore import PgPages
+from aintercept_api.openapi import NoStore
 from aintercept_api.reader import BEGIN, Load, Reader
-from tests.side_by_side import DIRECTORY_PAGES, DRAWER_PAGES, PAGES, PERSON_PAGES, SESSION_PAGES
 
 
 def _exec(dsn: str, *sql: str) -> None:
@@ -24,11 +22,11 @@ def _exec(dsn: str, *sql: str) -> None:
 @pytest.fixture
 def db(pg_dsn):
     yield pg_dsn
-    _exec(pg_dsn, "DELETE FROM keys")
+    _exec(pg_dsn, "DELETE FROM ingest_pods")
 
 
 def _key(dsn: str, key: str) -> None:
-    _exec(dsn, f"INSERT INTO keys (key, n) VALUES ('{key}', 1)")  # noqa: S608 (a test's literal)
+    _exec(dsn, f"INSERT INTO ingest_pods (incarnation, last_ns) VALUES ('{key}', 1)")  # noqa: S608 (a test's literal)
 
 
 def test_a_request_reads_one_snapshot(db):
@@ -38,16 +36,16 @@ def test_a_request_reads_one_snapshot(db):
     reader.between = lambda i: _key(db, "s:late") if i == 0 else None
     try:
         with reader.snapshot("/x") as snap:
-            assert snap.rows("before", "SELECT count(*) FROM keys") == [(0,)]
-            assert snap.rows("after", "SELECT count(*) FROM keys WHERE key = %s", ["s:late"]) == [(0,)]
+            assert snap.rows("before", "SELECT count(*) FROM ingest_pods") == [(0,)]
+            assert snap.rows("after", "SELECT count(*) FROM ingest_pods WHERE incarnation = %s", ["s:late"]) == [(0,)]
         (load,) = trace
         assert load.path == "/x" and load.begin == BEGIN and load.connections == 1
         assert [(s.name, s.rows, s.params) for s in load.statements] == [("before", 1, []), ("after", 1, ["s:late"])]
         reader.between = None
         with reader.snapshot("/y") as snap:
-            assert snap.dicts("again", "SELECT count(*) AS n FROM keys WHERE key = %(k)s", {"k": "s:late"}) == [
-                {"n": 1}
-            ]
+            assert snap.dicts(
+                "again", "SELECT count(*) AS n FROM ingest_pods WHERE incarnation = %(k)s", {"k": "s:late"}
+            ) == [{"n": 1}]
         assert trace[-1].statements[0].params == {"k": "s:late"}
     finally:
         reader.close()
@@ -57,7 +55,7 @@ def test_the_snapshot_is_read_only(db):
     reader = Reader(db)
     try:
         with pytest.raises(psycopg.errors.ReadOnlySqlTransaction), reader.snapshot("/x") as snap:
-            snap.rows("write", "INSERT INTO keys (key, n) VALUES ('s:x', 1) RETURNING key")
+            snap.rows("write", "INSERT INTO ingest_pods (incarnation, last_ns) VALUES ('s:x', 1) RETURNING incarnation")
     finally:
         reader.close()
 
@@ -115,9 +113,9 @@ def test_explain_reads_a_statements_plan_on_its_own_connection(db):
     reader = Reader(db, trace=trace)
     try:
         with reader.snapshot("/x") as snap:
-            snap.rows("by key", "SELECT n FROM keys WHERE key = %(k)s", {"k": "s:a"})
+            snap.rows("by key", "SELECT last_ns FROM ingest_pods WHERE incarnation = %(k)s", {"k": "s:a"})
         plan = reader.explain(trace[0].statements[0])
-        assert any("keys_pkey" in line for line in plan), plan
+        assert any("ingest_pods_pkey" in line for line in plan), plan
         assert reader.pool.opened == 1  # the explain's connection was its own, and closed
     finally:
         reader.close()
@@ -127,12 +125,8 @@ def test_explain_reads_a_statements_plan_on_its_own_connection(db):
 
 
 def test_every_route_is_a_page():
-    """Each API route maps to one reader page (pages.page_of), and the harness walks every page."""
-
-    class _Store:
-        memory_limit = None
-
-    app = create_app(store=_Store(), auth=None)  # type: ignore[arg-type]
+    """Each API route maps to one reader page (pages.page_of)."""
+    app = create_app(store=NoStore(), auth=None)
     routes = [r for r in app.openapi()["paths"] if r.startswith("/api/v1/")]
     names: list[str] = []
     for route in routes:
@@ -141,21 +135,4 @@ def test_every_route_is_a_page():
         assert name is not None, route
         names.append(name)
     assert sorted(names) == sorted(pages.PAGE_NAMES), (names, pages.PAGE_NAMES)
-    walked = [*(p.name for p in PAGES), *(p.name for p in PERSON_PAGES), *DIRECTORY_PAGES]
-    walked += [*DRAWER_PAGES, *SESSION_PAGES]
-    assert sorted(walked) == sorted(pages.PAGE_NAMES)
-    assert PgPages.PAGES == set(pages.PAGE_NAMES)  # every page reads v9
     assert pages.page_of("/api/v1/nothing") is None and pages.page_of("/ui/index.html") is None
-
-
-def test_a_store_without_a_picker_reads_every_page_with_todays_sql():
-    class _App:
-        class state:  # noqa: N801
-            store = object()
-
-    class _Request:
-        app = _App
-        url = None
-
-    with pages.read(_Request(), "status") as reader:  # type: ignore[arg-type]
-        assert isinstance(reader, pages.SqlPages)

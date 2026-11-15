@@ -1,26 +1,10 @@
-"""The request drawer on v9 (docs/PIPELINE.md §6.2), side by side with the oracle: today's
-request_detail.py over the oracle's tables.
+"""The request drawer (docs/PIPELINE.md §6.2): rendered when it opens, from the call's `calls` row, one
+ranged GET of its raw member and a few indexed lookups.
 
-For each dataset, a fresh Postgres holds what the cluster holds while both paths run (conftest.PgDataset):
-v7's tables, and v9's facts and rollups loaded from v9 raw files as the workers load them. The API's
-Postgres store renders a drawer when it opens, from the call's `calls` row, one ranged GET of its raw
-member and a few indexed lookups; the oracle derives it from its whole session. Every response must be
-the same data:
-- every request id (the request logs' ids, WebSocket turns and `reported:` ids among them, and every
-  call v9 holds), its /requests/{id}, /details and /raw;
-- every event id (every session's events, and every Claude Code event v9 holds), its /events/{id}.
-
-The differences, each by name:
-- "Delivered in step N" is the next call's step within its prompt (§8, difference 7); today's counts
-  every call of the session. It's checked against the next call's own step.
-- A call that hasn't ended has no raw member yet (its rows are written with its end, §2.1): its drawer
-  comes from its row, as a WebSocket turn's does, and an event of a batch that hasn't ended has no raw
-  row yet. (The Go drawer had no row for either.)
-
-`make check` holds a representative subset of each dataset (a request id of each kind, every tenth, and a
-few events per batch); the full run (AINTERCEPT_TESTS_FULL=1) holds every one.
-
-An ended analytics batch spanning sessions is here too: the call is its earliest event's session's."""
+For each dataset, a fresh Postgres holds its facts and rollups, loaded from raw files as the workers load
+them (conftest.PgDataset). Every kind of drawer is drawn (a WebSocket turn from its row, `reported:` ids,
+an ended batch spanning sessions), and what a drawer reads stays a few rows and at most one ranged GET,
+whatever the session's size, through an index."""
 
 import contextlib
 import pathlib
@@ -33,16 +17,12 @@ import psycopg
 import pytest
 
 from aintercept_api import drawer
-from aintercept_api.raw import LocalRaw
-from tests.builders import INSTANCE, ClaudeCode, Dataset, load_fixture, ns
-from tests.conftest import PgDataset, lay_out, make_client, pg_admin
-from tests.oracle.harness import Layout, Oracle
-from tests.oracle.store import OracleStore
+from tests.builders import INSTANCE, ClaudeCode, Dataset, load_fixture, ns, one_stream_one_id
+from tests.conftest import PgDataset, make_client, pg_admin
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_requests import failed_then_retried, retained
 from tests.test_session import H, prompt
-from tests.test_stream_pipeline import one_stream_one_id
 
 SPAN_A, SPAN_B = "aaaaaaaa-0000-4000-8000-0000000000a1", "bbbbbbbb-0000-4000-8000-0000000000b2"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -146,23 +126,20 @@ def big_prompt(ds: Dataset) -> None:
 
 
 DATASETS = {"drawer cases": drawer_cases, "mixed": mixed, "spanning in flight": spanning_in_flight}
-# This file's: the CI datasets (side_by_side.py and others read DATASETS), and one big prompt.
+# This file's: the CI datasets (the session and person pages' tests read them too), and one big prompt.
 SIDES = {**DATASETS, "big prompt": big_prompt}
 
 
 class Side:
-    """One dataset in Postgres (v7's tables and v9's), and two clients over it: the oracle's and the
-    Postgres store's."""
+    """One dataset in Postgres, and a client over it with the store's statements traced."""
 
     def __init__(self, name: str, root: pathlib.Path, pg: PgDataset) -> None:
-        self.name, self.layout, self.pg = name, lay_out(root), pg
-        self.old_store = OracleStore(self.layout, prefix="sim/", raw=LocalRaw(root))
+        self.name, self.pg = name, pg
         self.store = pg.store(trace=True)
-        self.old, self.new = make_client(self.old_store), make_client(self.store)
+        self.new = make_client(self.store)
 
     def close(self) -> None:
         self.store.close()
-        self.old_store.close()
 
     def query(self, sql: str, params: list[object] | None = None) -> list[tuple[Any, ...]]:
         with psycopg.connect(self.pg.dsn) as conn:
@@ -190,97 +167,19 @@ def _q(rid: str) -> str:
     return urllib.parse.quote(rid, safe="")
 
 
-def _delivered(side: Side, url: str, a, b) -> bool:
-    """Difference 7: "delivered in step N" is the next call's step within its prompt. b holds that, a
-    today's number; with the rows made alike, the two are the same data."""
-    if not url.endswith("/details") or a.status_code != 200 or b.status_code != 200:
-        return False
-    x, y = a.json(), b.json()
-    for tx, ty in zip(x["data"]["tool"], y["data"]["tool"], strict=False):
-        for rx, ry in zip(tx["result"], ty["result"], strict=False):
-            if rx["k"] == ry["k"] == "delivered in" and rx["note"] == ry["note"]:
-                nxt = rx["note"]
-                step = side.query("SELECT step FROM steps WHERE call_id = %s", [nxt.replace("~", "#")]) if nxt else []
-                assert ry["v"] == (f"step {step[0][0]}" if step else None), (url, ry, step)
-                rx["v"] = ry["v"]
-    return bool(x == y)
-
-
-def _unended(side: Side, url: str, a, b) -> bool:
-    """A call or batch that hasn't ended has no raw member yet: the call's drawer comes from its row (its
-    headers as the row keeps them, no bodies); its batch's events have no raw row."""
-    if a.status_code != 200 or b.status_code != 200:
-        return False
-    x, y = a.json()["data"], b.json()["data"]
-    if url.startswith("/api/v1/events/"):
-        batch = urllib.parse.unquote(url.removeprefix("/api/v1/events/")).rpartition(":")[0]
-        member = side.query("SELECT raw_key FROM calls WHERE call_id = %s", [batch])
-        return bool(not (member and member[0][0]) and y.pop("raw") == {} and x.pop("raw") is not None and x == y)
-    rid = urllib.parse.unquote(url.removeprefix("/api/v1/requests/").split("/")[0])
-    member = side.query("SELECT raw_key, end_ns FROM calls WHERE call_id = %s", [rid.replace("~", "#")])
-    if not member or member[0][0] is not None:
-        return False
-    if url.endswith("/raw"):
-        return bool(y["unavailable"] is not None and x["requestLine"] == y["requestLine"])
-    return bool(x["requestId"] == y["requestId"] and x["t"] == y["t"] and x["sessionId"] == y["sessionId"])
-
-
-def _first_diff(a: object, b: object, path: str = "") -> str | None:
-    """Where two responses first differ (scripts/parity_compare.py's first_diff), with the two values."""
-    if isinstance(a, dict) and isinstance(b, dict):
-        for k in sorted(a.keys() | b.keys()):
-            d = _first_diff(a.get(k), b.get(k), f"{path}.{k}")
-            if d is not None:
-                return d
-        return None
-    if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
-        for i, (x, y) in enumerate(zip(a, b, strict=True)):
-            d = _first_diff(x, y, f"{path}[{i}]")
-            if d is not None:
-                return d
-        return None
-    return None if a == b else f"{path}: {str(a)[:200]} != {str(b)[:200]}"
-
-
-def _hold(side: Side, urls: list[str]) -> Counter[str]:
-    """Each URL's two responses are the same data (or one of the named differences)."""
-    held: Counter[str] = Counter()
-    differing = []
-    for url in urls:
-        a, b = side.old.get(url), side.new.get(url)
-        if a.status_code == b.status_code and a.json() == b.json():
-            held["same"] += 1
-        elif _delivered(side, url, a, b):
-            held["delivered in"] += 1
-        elif _unended(side, url, a, b):
-            held["not ended"] += 1
-        else:
-            differing.append((url, a.status_code, b.status_code, _first_diff(a.json(), b.json())))
-    assert not differing, (side.name, len(differing), differing[:3])
-    return held
-
-
 def request_ids(side: Side) -> list[str]:
-    """Every request id: the logs' (the oracle's), every call v9 holds and every missed report."""
-    with Oracle(Layout(side.layout)) as oracle:
-        listed = set(oracle.request_ids())
+    """Every request id: every call held and every missed report."""
     held = side.query(
         """SELECT replace(call_id, '#', '~') FROM calls
            UNION SELECT 'reported:' || coalesce(request_id, client_request_id, ts_ns::text) FROM missed_reports"""
     )
-    return sorted(listed | {r for (r,) in held})
+    return sorted(r for (r,) in held)
 
 
 def event_ids(side: Side) -> list[str]:
-    """Every event id: each session's events (the oracle's) and every Claude Code event v9 holds."""
-    with Oracle(Layout(side.layout)) as oracle:
-        listed = set()
-        for sid in oracle.session_ids():
-            t = oracle.session(sid)["event_rows"]
-            listed |= {r[t.columns.index("event_id")] for r in t.rows}
-            oracle._memo.clear()
+    """Every Claude Code event's id."""
     held = side.query("SELECT batch_call_id || ':' || batch_cc_n FROM events WHERE source = 'claude_code'")
-    return sorted(listed | {e for (e,) in held})
+    return sorted(e for (e,) in held)
 
 
 def _subset(rids: list[str]) -> list[str]:
@@ -299,34 +198,6 @@ def _event_subset(eids: list[str]) -> list[str]:
     for e in eids:
         by_batch.setdefault(e.rpartition(":")[0], []).append(e)
     return sorted({e for es in by_batch.values() for e in es[:2]} | set(eids[::10]))
-
-
-def _drawer_urls(rids: list[str]) -> list[str]:
-    return [f"/api/v1/requests/{_q(r)}{sub}" for r in rids for sub in ("", "/details", "/raw")]
-
-
-def _hold_drawers(side: Side, *, every: bool) -> Counter[str]:
-    rids, eids = request_ids(side), event_ids(side)
-    assert rids and eids, side.name
-    chosen, events = (rids, eids) if every else (_subset(rids), _event_subset(eids))
-    held = _hold(side, _drawer_urls(chosen))
-    held += _hold(side, [f"/api/v1/events/{_q(e)}" for e in events])
-    print(f"{side.name}: request ids {len(chosen)} of {len(rids)}, events {len(events)} of {len(eids)}:", dict(held))  # noqa: T201
-    assert held["same"] >= 3 * len(chosen) // 2, held
-    return held
-
-
-@pytest.mark.parametrize("name", list(SIDES))
-def test_the_drawers_match_the_oracle(sides, name):
-    """make check: a request id of each kind and every tenth, a few events per batch."""
-    _hold_drawers(sides[name], every=False)
-
-
-@pytest.mark.full
-@pytest.mark.parametrize("name", list(SIDES))
-def test_every_drawer_matches_the_oracle(sides, name):
-    """The full run: every request id's /requests/{id}, /details and /raw, every event's /events/{id}."""
-    _hold_drawers(sides[name], every=True)
 
 
 def test_the_cases_are_all_there(sides):
@@ -351,22 +222,22 @@ def test_the_cases_are_all_there(sides):
         shapes["matched"] += d["crossCheck"]["matched"]
     wanted = ("normal", "failed", "notCaptured", "retained", "retry", "stepped", "matched")
     assert all(shapes[k] for k in wanted), shapes
-    # And the differences are exercised: a call delivered in a later step, a call that hasn't ended.
-    held = _hold_drawers(side, every=True)
-    assert held["delivered in"] and held["not ended"], held
+    for rid in rids:
+        for sub in ("/details", "/raw"):
+            assert side.new.get(f"/api/v1/requests/{_q(rid)}{sub}").status_code == 200, (rid, sub)
+    for eid in event_ids(side):
+        assert side.new.get(f"/api/v1/events/{_q(eid)}").status_code == 200, eid
 
 
 def test_a_websocket_turn_is_drawn_from_its_row(sides):
     """A Codex WebSocket turn has no member of its own: its frames are in its connection's (§2.1), which
-    no calls row points at. As today, its drawer is built from its row and /raw says why: no range, no
-    GET."""
+    no calls row points at. Its drawer is built from its row and /raw says why: no range, no GET."""
     side = sides["drawer cases"]
     turns = side.query("SELECT call_id, raw_key FROM calls WHERE ws_turn IS NOT NULL ORDER BY 1")
     assert turns and all(key is None for _, key in turns), turns
     rid = turns[0][0].replace("#", "~")
     for sub in ("", "/details", "/raw"):
-        a, b = side.old.get(f"/api/v1/requests/{_q(rid)}{sub}"), side.new.get(f"/api/v1/requests/{_q(rid)}{sub}")
-        assert a.status_code == b.status_code == 200 and a.json() == b.json(), (sub, a.text[:300], b.text[:300])
+        assert side.new.get(f"/api/v1/requests/{_q(rid)}{sub}").status_code == 200, sub
     raw = side.new.get(f"/api/v1/requests/{_q(rid)}/raw").json()["data"]
     assert raw["unavailable"].startswith("This is one turn of a WebSocket connection")
 

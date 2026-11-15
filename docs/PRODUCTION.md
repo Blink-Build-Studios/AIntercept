@@ -99,7 +99,7 @@ attempt HTTP/3 (QUIC), which the proxy does not intercept.
 
 - Deploy every image by digest: `images.<name>.digest` renders
   `repository@digest`. Envoy ships pinned (`v1.39.6` by digest).
-- Build the `aintercept` image (observer, certsvc and rollup) with the stock
+- Build the `aintercept` image (observer, certsvc and worker) with the stock
   Dockerfile. One image serves both interception modes.
 - The in-cluster Postgres (`postgres.inCluster`, the DigitalOcean demo only) is
   the stock upstream image, pinned by digest (`images.postgres`), the same pin
@@ -113,7 +113,7 @@ AIntercept records, per deployment:
 | Mode | Recorded |
 |---|---|
 | `content-free` (default) | Metadata only: headers (credentials redacted), token counts, timings, model and tool names with counts per call, and the agents' own analytics events as sent. No request or response body. |
-| `full` | Everything above, plus every request and response body. The observer writes a second stream with bodies under `<prefix>/capture/`, and the processor and API read it, so the UI shows prompt text, commands, patches and exit codes. |
+| `full` | Everything above, plus every request and response body. The observer's raw files (`<prefix>/raw/`) carry the bodies, and the workers and the API read them, so the UI shows prompt text, commands, patches and exit codes. |
 
 Full interception records far more data, and that data includes everything
 people send to AI tools. Size the object store, set its retention, and restrict
@@ -174,7 +174,7 @@ answered by the real provider.
 ## 5a. Ingest pods: capacity, data completeness, shutdown
 
 Each `envoy` pod is the whole ingest stack: Envoy plus the observer, its
-ext_proc server, over localhost (docs/STREAMING_PIPELINE.md, phase 1). They
+ext_proc server, over localhost (docs/PIPELINE.md §1, §2.1). They
 scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 `observer.resources` for the traffic one Envoy pod carries.
 
@@ -184,7 +184,8 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
   pod's memory limit. `GOMEMLIMIT` defaults to 90% of the limit. `/stats`
   shows `memory.held_bytes`, `peak_bytes`, `limit_bytes`, `utilization`.
 - **Nothing captured is dropped.** All output goes through one writer, which
-  seals batches every `objectStore.maxAgeSeconds` (10 s) or at its byte cap
+  seals what it holds every `objectStore.maxAgeSeconds` (10 s), and each raw
+  file at `observer.rawFiles.flushBytes` (8 MiB) or `flushSeconds` (30 s),
   into an on-disk spool (an emptyDir, `observer.spool`) and uploads from there,
   retrying each file until the store accepts it. A full event buffer makes the
   observer wait rather than drop. `/stats` shows `writer.spool_files`,
@@ -212,47 +213,41 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 
 ## 5b. Query API capacity
 
-The API (`api.enabled`) is stateless (docs/PIPELINE.md §5): each request reads
+The API (`api.enabled`) is stateless (docs/PIPELINE.md §6): each request reads
 its rows from Postgres in one snapshot, through the API login (the Secret's
-`api-url`, `api.store: pg`), and a call's `calls/<id>` object, so it keeps no
-tables, and an HPA on CPU sets its replica count (`api.stateless`):
+`api-url`), and the drawer reads a call's raw member with one ranged GET of its
+raw file, so it keeps nothing, and an HPA on CPU sets its replica count
+(`api.stateless`):
 - **Startup and readiness:** the API checks the schema's hash at start and
   refuses to start on a mismatch or without its DSN (a schema change needs a
   fresh database, and the workers apply it first). Its readiness probe,
   `/api/v1/status`, reads Postgres, so a pod that can't reach it leaves the
   Service.
 - **Memory:** request = limit (`api.resources`, 1.5 Gi), so the scheduler
-  reserves all of it and the pod is the last evicted. DuckDB gets 60% of it
-  unless `api.memoryLimit` says otherwise.
-- **Disk:** only scratch space for DuckDB's spill (`api.stateless.cacheSizeLimit`).
+  reserves all of it and the pod is the last evicted. A page reads tens to a
+  few hundred rows (docs/PIPELINE.md §6).
+- **Disk:** none: the root filesystem is read-only and the pod mounts no volume.
 - **Size the nodes for the requests:** a node runs short when the pods on it
   use more than it has, and the kubelet then evicts whichever pod is furthest
   over its request. See `docs/INTERCEPTION_ISSUES.md` P5.
 
 ## 5b2. Workers and Postgres (docs/PIPELINE.md §2, §6)
 
-- **Workers** (`rollup.*`): the `rollup` Deployment claims the keys with new
-  ingest files (Postgres's `dirty_keys`), applies each key's files under
-  `<prefix>/v1/keys/<key>/in/` and commits its rows to Postgres in one
-  transaction. One replica at a time also tails the recent index
-  (`<prefix>/v1/recent/`) into the flags, flags calls due to expire and runs
-  retention. KEDA scales it on `GET /lag` (the oldest flag's wait or the tail's,
-  target `rollup.autoscaling.lagTargetSeconds`); with
-  `rollup.autoscaling.keda: false` a CPU HPA does. Never fewer than two
-  replicas. Ingest never talks to Postgres: an outage only delays the pages,
-  and the workers catch up from the bucket.
-- **v9 workers** (`worker.*`, docs/PIPELINE.md §2.2): the `worker` Deployment
-  lists the observers' raw files under `<prefix>/raw/` (one replica at a time)
-  and loads each into Postgres's fact tables in one transaction. It runs beside
-  `rollup` until v9's step 8. KEDA scales it on `GET /lag` (the oldest unloaded
-  file's age, target `worker.autoscaling.lagTargetSeconds`). Raw files expire
-  by a bucket lifecycle rule on `<prefix>/raw/`.
+- **Workers** (`worker.*`, docs/PIPELINE.md §2.2, §5): the `worker` Deployment
+  lists the observers' raw files under `<prefix>/raw/` (one replica at a time),
+  loads each into Postgres's fact tables in one transaction, and refreshes the
+  rollup rows the load marked dirty. One replica at a time also sweeps calls
+  that never ended and runs retention. KEDA scales it on `GET /lag` (the age of
+  the oldest unloaded file or dirty rollup row, target
+  `worker.autoscaling.lagTargetSeconds`); with `worker.autoscaling.keda: false`
+  a CPU HPA does. Ingest never talks to Postgres: an outage only delays the
+  pages, and the workers catch up from the bucket.
 - **Postgres: RDS for PostgreSQL 17** (`postgres.inCluster.enabled: false`, the
   default). You create it (the chart doesn't): gp3 with storage autoscaling,
   Multi-AZ as you choose; today's load needs the smallest class, and
   docs/PIPELINE.md's scaling budget sizes it for 1,500 people.
-  1. **Parameter group:** `max_locks_per_transaction = 256`,
-     `max_connections` ≥ 200 (each warm key holds an advisory lock).
+  1. **Parameter group:** `max_connections` ≥ 200 (the chart's in-cluster
+     setting).
   2. **The database,** with the built-in `C.UTF-8` locale (text sorts and
      lowercases as the code expects), as the master user:
      `CREATE DATABASE aintercept LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8' TEMPLATE template0;`
@@ -277,13 +272,11 @@ tables, and an HPA on CPU sets its replica count (`api.stateless`):
   Secret, which `deploy/digitalocean-bootstrap.sh` makes (docs/DEPLOY_DOKS.md).
   Only the workers and the API may connect (NetworkPolicy `postgres-restrict`).
   Its data is the demo's: it isn't backed up.
-- **Retention** (`retention.*`, docs/PIPELINE.md §3.6): every hour the workers
-  forget the keys whose day is older than `retention.days` (15): their rows,
-  then their state and applied ingest files. "All" in the UI is that window.
-  The raw capture (`<prefix>/dt=…/`, `<prefix>/capture/dt=…/`) and the calls'
-  detail objects (`<prefix>/calls/`) aren't the workers' to delete in the
-  cloud: give the bucket **lifecycle rules** that expire them (for example
-  after 15 days, to match). `retention.rawDays` (0, off) is the local cap.
+- **Retention** (`retention.*`, docs/PIPELINE.md §5.5): every hour one worker
+  deletes the facts older than `retention.days` (15), and their rollup rows.
+  "All" in the UI is that window. The raw files (`<prefix>/raw/`) aren't the
+  workers' to delete: a bucket **lifecycle rule** on `<prefix>/raw/` expires
+  them (`deploy/terraform`: `raw_retention_days`, 15 by default, to match).
 
 ## 5c. Rollouts, disruption and placement
 
@@ -402,13 +395,12 @@ Nothing in the chart provisions AWS resources; it consumes them.
 |---|---|---|
 | observer | `s3:PutObject` on the telemetry prefix (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
 | certsvc | `kms:GetPublicKey`, `kms:Sign` on the intermediate's key | `certsvc.serviceAccount`, `certsvc.kms.keyId` |
-| rollup | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`, `s3:PutObject` + `s3:DeleteObject` on `<prefix>/v1/*` (with `retention.rawDays`, `s3:DeleteObject` on `<prefix>/*`); Postgres through the Secret's `worker-url` | `rollup.serviceAccount`, `postgres.*` |
 | worker | `s3:ListBucket` on the bucket (prefix `<prefix>/raw/`), `s3:GetObject` on `<prefix>/raw/*`; Postgres through the Secret's `worker-url` | `worker.serviceAccount`, `postgres.*` |
-| api | `s3:ListBucket` on the bucket (prefix `<prefix>/`), `s3:GetObject` on `<prefix>/*`; Postgres through the Secret's `api-url` | `api.serviceAccount`, `postgres.*` |
+| api | `s3:GetObject` on `<prefix>/raw/*` (a call's raw member, one ranged GET); Postgres through the Secret's `api-url` | `api.serviceAccount`, `postgres.*` |
 
 - **EKS Pod Identity:** associate each role with its ServiceAccount
-  (`aintercept-observer`, `aintercept-certsvc`, `aintercept-rollup`,
-  `aintercept-worker`, `aintercept-api` in the release namespace) and leave
+  (`aintercept-observer`, `aintercept-certsvc`, `aintercept-worker`,
+  `aintercept-api` in the release namespace) and leave
   `roleArn` empty. **IRSA:** set `serviceAccount.roleArn` instead. Both use the
   standard AWS credential chain; no static keys.
 - **Key-hash salt from Secrets Manager:** set
@@ -441,6 +433,8 @@ for now, analyze, then tighten.
 - **`metadata.user_id` is stored raw** alongside its parsed device, account
   and session IDs.
 - **The DO demo cluster runs in full interception mode**
-  (`interceptionMode: full`), writing complete request/response bodies to
-  `aintercept/capture/` in the bucket. Switch it to `content-free` and delete
-  `capture/` if traffic that shouldn't be recorded is going to pass through it.
+  (`interceptionMode: full`), writing complete request/response bodies into
+  its raw files (`aintercept/raw/`) in the bucket. Switch it to `content-free`
+  if traffic that shouldn't be recorded is going to pass through it; the files
+  already written expire by the bucket's lifecycle rule on `raw/`, or delete
+  them.

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from aintercept_api.app import create_app
 from aintercept_api.auth import AuthConfig, Verifier
-from tests.conftest import FROZEN_NOW, FROZEN_QUERY_ID, bounded_store
+from tests.conftest import FROZEN_NOW, FROZEN_QUERY_ID, PgDataset, pg_admin
 
 AUDIENCE = "aud-123"
 ISSUER = "https://team.example-access.com"
@@ -23,15 +23,15 @@ HEADER = "Cf-Access-Jwt-Assertion"
 def store(dataset):
     root = dataset.write()
     root.mkdir(parents=True, exist_ok=True)
-    s = bounded_store(root)
+    pg = PgDataset(pg_admin(), root)
+    s = pg.store()
     yield s
     s.close()
+    pg.close()
 
 
 def app_client(store, **kwargs) -> TestClient:
-    app = create_app(
-        store=store, clock=lambda: FROZEN_NOW, query_id=lambda: FROZEN_QUERY_ID, ingest_interval_s=0, **kwargs
-    )
+    app = create_app(store=store, clock=lambda: FROZEN_NOW, query_id=lambda: FROZEN_QUERY_ID, **kwargs)
     return TestClient(app)
 
 

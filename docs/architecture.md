@@ -23,7 +23,7 @@ upstream cluster (verified TLS, real SNI)
 ```
 
 The Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc`,
-`aintercept observer`, `aintercept rollup`), one mode per process and per pod.
+`aintercept observer`, `aintercept worker`), one mode per process and per pod.
 
 - **certsvc** (Go): an Envoy SDS v3 gRPC server. Holds the issuing intermediate
   key. On each SDS request, the requested resource name *is* the SNI hostname;
@@ -31,17 +31,15 @@ The Go services are one binary, `aintercept`, run in a mode (`aintercept certsvc
   short-lived leaf. Fails closed for empty/disallowed names.
 - **observer** (Go): an Envoy ext_proc v3 gRPC server. Acks every message
   immediately and tees observations onto a bounded in-memory buffer drained by a
-  separate goroutine into a `Sink`.
-- **rollup** (Go): the workers, the data pipeline after ingest
-  ([PIPELINE.md](PIPELINE.md)). The observer writes each routing key's records to
-  `v1/keys/<key>/in/` and names the key in its recent index (`v1/recent/`); one
-  worker tails the index into Postgres's flags, and the workers claim the flagged
-  keys, apply their new files with the per-key state engine and commit each key's
-  rows to Postgres in one transaction. Raw data stays in the bucket (a directory
-  locally); the queryable rows are in Postgres.
-- **query API** (Python, `api/`): stateless; reads a page's rows from Postgres
-  into DuckDB and runs the endpoint's SQL over them, and each call's detail
-  object from the bucket for the raw view.
+  separate goroutine into a `Sink`. It streams what it records to the bucket as
+  raw files (`<prefix>/raw/`, a directory locally), and never touches a database.
+- **worker** (Go): the data pipeline after ingest ([PIPELINE.md](PIPELINE.md)).
+  The workers list the raw files, load each into Postgres's fact tables in one
+  transaction, and refresh the rollup rows it touched with SQL. Raw data stays
+  in the bucket; the queryable rows are in Postgres.
+- **query API** (Python, `api/`): stateless; each page does indexed reads of
+  Postgres's facts and rollups, and the drawer reads a call's raw member from
+  the bucket with one ranged GET.
 - **fixture** (Go): an HTTPS origin with a recognizable synthetic marker, used
   by M1 to prove MITM without real credentials.
 - **Envoy**: TLS termination, per-SNI cert selection, HTTP forwarding, upstream
@@ -181,11 +179,9 @@ The processor doesn't only append for these tables. It takes only what's new
 (delta in) and updates just the rows each new record affects. It never
 rebuilds a session, a person or a table from all of history, so its cost
 follows traffic, not stored data. The tables still always equal one pass over
-all the raw data so far. How that runs at scale (canonical records at ingest,
-a processor sharded by key bucket and scaled on lag, a stateless API) is in
-`docs/STREAMING_PIPELINE.md` (proposed). The first implementation of these tables
-rebuilds every derived table each run. Its memory grows with history, so it
-isn't deployed: it's the reference and the API contract the pipeline must match.
+all the raw data so far. How that runs at scale (raw files at ingest, workers
+that load them into Postgres and refresh rollups with SQL, scaled on lag, a
+stateless API) is `docs/PIPELINE.md`.
 
 **How a table moves from the API to the processor: proven equal first.** Each
 table moves on its own, behind a parity test:
@@ -194,9 +190,9 @@ table moves on its own, behind a parity test:
 3. Compute it from the processor's new table.
 4. Require them to be identical, field for field.
 
-The check runs at many points while the capture is replayed in pieces
-(`aintercept replay`), not only at the end, because a running session and late
-data are where bugs hide. The API code it replaces is deleted only after the
+The check runs on the capture loaded in a shuffled order
+(`aintercept canon -load -shuffle`), not only in order, because a running
+session and late data are where bugs hide. The API code it replaces is deleted only after the
 test passes.
 
 **Enrichment goes in the processor too.** Looking up a credential's owner
@@ -207,7 +203,7 @@ fact rows. A new lookup then changes one row, not history.
 ## Scaling and statelessness (forward-looking)
 
 The data path behind the observers (processing, storage and queries) scales the
-same way: see `docs/STREAMING_PIPELINE.md` (proposed).
+same way: see `docs/PIPELINE.md`.
 
 The observer is designed to run as many replicas with **no sticky routing**:
 

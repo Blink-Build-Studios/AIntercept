@@ -16,8 +16,8 @@
 #   bash deploy/digitalocean-bootstrap.sh postgres-secret
 #
 # creates only the in-cluster Postgres's Secret (docs/PIPELINE.md §6), in the current kubectl
-# context: what an existing deployment needs before the `helm upgrade` that brings Postgres in
-# (docs/DEPLOY_DOKS.md, "Upgrading to Postgres").
+# context: what an existing deployment without one needs before a `helm upgrade` that brings
+# Postgres in (docs/DEPLOY_DOKS.md).
 set -euo pipefail
 
 PG_SECRET="${PG_SECRET:-aintercept-postgres}"

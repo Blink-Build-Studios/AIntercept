@@ -42,7 +42,6 @@ from aintercept_api.models.requests import (
     CrossCheck,
     DetailRow,
     DetailSection,
-    EventDetail,
     FieldEntry,
     HeaderEntry,
     KeyStrip,
@@ -57,7 +56,6 @@ from aintercept_api.models.requests import (
     ToolCallDetail,
 )
 from aintercept_api.models.sessions import EventRow
-from aintercept_api.store import Store
 
 REPORTED = "reported:"
 MARKER = "<redacted>"  # the observer's marker for a credential header (aintercept/internal/events)
@@ -100,7 +98,6 @@ COMPLETE_FIELDS = (
     "provider_org_id",
 )
 CONTENT_KEYS = {"body_b64", "body_preview", "headers"}
-REQUEST_EVENTS = ("tengu_api_success", "tengu_api_query", "tengu_api_retry", "tengu_streaming_stall_summary")
 
 
 def redact(text: str) -> str:
@@ -206,30 +203,6 @@ _BATCH_SESSION = """SELECT session_id FROM analytics WHERE correlation_id = ? AN
                     ORDER BY ns, session_id LIMIT 1"""
 
 
-# A request row's columns, as the wire is built from it (wire_from_row).
-ROW_COLUMNS = (
-    "ts, method, path, ip, key_hash, status, response_start_ns, end_ts, client_json, provider_json, model, "
-    "stop_reason, message_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, request_bytes, "
-    "response_bytes, error, session_id, device_id, ext_json"
-)
-
-
-def _wire_from_tables(store: Store, cid: str) -> Wire | None:
-    """The transaction from its request row, when its raw files can't be read
-    (not synced, or the object store unreachable): what the drawer can still say."""
-    found = store.query_dicts(
-        f"SELECT {ROW_COLUMNS} FROM calls WHERE call_id = replace(?, '~', '#') ORDER BY ts LIMIT 1",  # noqa: S608
-        [cid],
-    )
-    if not found:
-        return None
-    w = wire_from_row(cid, found[0])
-    if w.kind == "analytics":
-        sid = store.query(_BATCH_SESSION, [cid])
-        w.batch_session = sid[0][0] if sid else None
-    return w
-
-
 def wire_from_row(cid: str, r: dict[str, Any]) -> Wire:
     """The transaction from its request row (ROW_COLUMNS; its JSON columns as text): its headers as the
     processor keeps them, no bodies or stream."""
@@ -280,34 +253,6 @@ def _json_obj(text: str | None) -> dict[str, str]:
 
 _WIRES: dict[tuple[int, str, object], Wire | None] = {}
 _WIRES_LOCK = threading.Lock()  # the drawer's tabs and prefetches load in parallel threads
-
-
-def load_wire(store: Store, cid: str) -> Wire | None:
-    """The transaction as the observer recorded it: its raw rows, read from the
-    files its lineage names (the shaped tables keep no headers or bodies).
-    Cached per commit: the drawer's tabs read the same request's raw files."""
-    key = (id(store), cid, store.commit)
-    with _WIRES_LOCK:
-        if key in _WIRES:
-            return _WIRES[key]
-    w = _load_wire(store, cid)
-    with _WIRES_LOCK:
-        while len(_WIRES) >= 8:  # bodies can be MBs in capture mode
-            _WIRES.pop(next(iter(_WIRES)))
-        _WIRES[key] = w
-    return w
-
-
-def _load_wire(store: Store, cid: str) -> Wire | None:
-    if WS_TURN in cid:  # one turn of a WebSocket: its row says what the drawer shows
-        return _wire_from_tables(store, cid)
-    w = wire_from_rows(cid, store.raw_rows(cid))
-    if w is None:  # no raw rows, or its request headers are in a file the lineage doesn't reach
-        return _wire_from_tables(store, cid)
-    if w.kind == "analytics":
-        sid = store.query(_BATCH_SESSION, [cid])
-        w.batch_session = sid[0][0] if sid else None
-    return w
 
 
 def wire_from_rows(cid: str, raw_rows: list[dict[str, Any]]) -> Wire | None:
@@ -623,54 +568,6 @@ class Position:
     """The step its tool results are delivered in: the next call's."""
 
 
-def position(store: Store, s: cc.Session | None, w: Wire) -> Position:
-    """The call's place in its prompt and thread: steps by prompt; prev/next by the message-id chain, else
-    the neighbouring call of the same prompt and request class."""
-    if s is None or w.kind != "model":
-        return Position()
-    steps = ss.steps(store, s.id)
-    index = cc.prompt_index(s)
-    chain = {
-        cid: (mid, prev)
-        for cid, mid, prev in store.query(
-            """SELECT correlation_id, message_id, previous_message_id
-               FROM calls WHERE correlation_id IN (SELECT unnest(?::VARCHAR[]))""",
-            [[x.correlation_id for x in steps]],
-        )
-    }
-    mid, prev_mid = chain.get(w.cid, (None, None))
-    by_mid = {m: cid for cid, (m, _) in chain.items() if m}
-    by_prev = {p: cid for cid, (_, p) in chain.items() if p}
-    same = [x for x in steps if x.prompt_id == w.prompt_id] if w.prompt_id else []
-    lane = [x for x in same if x.request_class == w.request_class]
-    at = next((i for i, x in enumerate(lane) if x.correlation_id == w.cid), None)
-    prev = by_mid.get(prev_mid or "") or (lane[at - 1].correlation_id if at else None)
-    nxt = by_prev.get(mid or "") if mid else None
-    if nxt is None and at is not None and at + 1 < len(lane):
-        nxt = lane[at + 1].correlation_id
-    step = next((i + 1 for i, x in enumerate(same) if x.correlation_id == w.cid), None)
-    # Today's "delivered in": the next call's place among the session's calls (§8, difference 7).
-    delivered = next((i + 1 for i, x in enumerate(steps) if x.correlation_id == nxt), None)
-    return Position(
-        prompt_index=index.get(w.prompt_id or ""),
-        step_index=step,
-        step_count=len(same) or None,
-        prev=prev,
-        next=nxt,
-        prev_message=prev_mid,
-        next_message=chain.get(nxt or "", (None, None))[0],
-        delivered=delivered,
-    )
-
-
-def next_attempt(store: Store, sid: str, w: Wire) -> ss.Step | None:
-    """The first call after w of its prompt and request class: what a failed call's retry was."""
-    for x in ss.steps(store, sid):
-        if x.ts > w.ts and x.prompt_id == w.prompt_id and x.request_class == w.request_class:
-            return x
-    return None
-
-
 def _retry_info(reads: "Reads", sid: str | None, w: Wire, f: Facts) -> RetryInfo | None:
     if f.retry is None:
         return None
@@ -868,45 +765,6 @@ class Reads(Protocol):
     def prompt_index(self, sid: str, prompt_id: str | None) -> int | None: ...
 
 
-class StoreReads:
-    """Today's stores' reads: SQL over the tables the store loaded, a call's raw rows from its lineage."""
-
-    def __init__(self, store: Store) -> None:
-        self.store = store
-
-    def wire(self, cid: str) -> Wire | None:
-        return load_wire(self.store, cid)
-
-    def call_events(self, sid: str, w: Wire | None, ids: list[str]) -> list[ss.Event]:
-        return ss.events(self.store, sid, about=(w.prompt_id if w else None, ids, []))
-
-    def tool_events(self, sid: str, tool_ids: list[str]) -> list[ss.Event]:
-        return ss.events(self.store, sid, about=(None, [], tool_ids))
-
-    def position(self, sid: str | None, w: Wire) -> Position:
-        return position(self.store, cc.load_session(self.store, sid) if sid else None, w)
-
-    def next_attempt(self, sid: str, w: Wire) -> ss.Step | None:
-        return next_attempt(self.store, sid, w)
-
-    def event_rows(self, sid: str, evs: list[ss.Event]) -> list[EventRow]:
-        return _event_rows(self.store, sid, evs)
-
-    def sandbox(self, sid: str, until_ns: int) -> str | None:
-        sandbox = None
-        for e in ss.events(self.store, sid, ["tengu_bash_tool_command_executed"]):
-            if e.ts <= until_ns:
-                sandbox = ss._str(e.md.get("sandbox_enabled")) or sandbox
-        return sandbox
-
-    def report(self, key: str) -> tuple[str, ss.Event] | None:
-        return find_report(self.store, key)
-
-    def prompt_index(self, sid: str, prompt_id: str | None) -> int | None:
-        s = cc.load_session(self.store, sid)
-        return (cc.prompt_index(s) if s else {}).get(prompt_id or "")
-
-
 # --- RequestDetail ------------------------------------------------------------------------------
 
 
@@ -1001,24 +859,6 @@ def _draw(reads: Reads, cid: str) -> _Drawn | None:
         contentRetained=retained,
     )
     return _Drawn(d, sid, w, f, pos)
-
-
-def find_report(store: Store, key: str) -> tuple[str, ss.Event] | None:
-    """A report's key (`reported:<requestId | clientRequestId | ts>`'s) -> (session id, its tengu_api_success)."""
-    found = store.query(
-        """SELECT session_id FROM cc_events WHERE name = 'tengu_api_success'
-             AND (json_extract_string(md, '$.requestId') = ? OR json_extract_string(md, '$.clientRequestId') = ?
-                  OR CAST(ts AS VARCHAR) = ?)
-           LIMIT 1""",
-        [key, key, key],
-    )
-    if not found or not found[0][0]:
-        return None
-    sid = found[0][0]
-    for e in ss.events(store, sid, ["tengu_api_success"]):
-        if key in (ss._str(e.md.get("requestId")), ss._str(e.md.get("clientRequestId")), str(e.ts)):
-            return sid, e
-    return None
 
 
 def reported_detail(reads: Reads, cid: str) -> _Drawn | None:
@@ -1211,24 +1051,6 @@ def _limit(h: dict[str, str] | None, name: str) -> str | None:
 def _pct(v: str | None) -> float | None:
     f = ss._float(v)
     return round(f * 100, 1) if f is not None else None
-
-
-def _event_rows(store: Store, sid: str, evs: list[ss.Event]) -> list[EventRow]:
-    steps = {x.request_id: x for x in ss.steps(store, sid) if x.request_id}
-    index = pp.prompt_indexes(store, [sid])
-    return [
-        EventRow(
-            eventId=e.id,
-            t=rows.dt(e.ts),
-            name=e.name,
-            promptIndex=index.get(e.prompt_id) if e.prompt_id else None,
-            linkedTo=ss._link(e, sid, steps, index),
-            summary=ss._summary(e.md),
-            marker=ss._marker(e),
-            internal=ss.is_internal(e.name),
-        )
-        for e in evs
-    ]
 
 
 def _flatten(prefix: str, v: Any, out: list[FieldEntry]) -> None:
@@ -1492,28 +1314,3 @@ def _codex_section(w: Wire) -> DetailSection:
 
 
 # --- one event -------------------------------------------------------------------------------
-
-
-def event(store: Store, event_id: str) -> EventDetail | None:
-    """`<batch correlation id>:<n>`, the event's position in its whole batch (as session.events numbers it)."""
-    cid, _, n = event_id.rpartition(":")
-    if not cid or not n.isdigit():
-        return None
-    found = store.query(
-        """SELECT ts, name, session_id, event_key, source_file FROM (
-             SELECT ts, coalesce(name, '(unnamed)') AS name, session_id, event_key, source_file,
-                    -- Its stored rank: the batch can span sessions this scope doesn't hold.
-                    coalesce(batch_n, row_number() OVER (
-                        PARTITION BY correlation_id ORDER BY seq, row_ts, ts, name, md::VARCHAR, event_key)) AS n
-             FROM cc_events WHERE correlation_id = ?)
-           WHERE n = ?""",
-        [cid, int(n)],
-    )
-    if not found:
-        return None
-    ts, name, sid, key, source = found[0]
-    body = store.raw_event(cid, key, source) or {}
-    ev = body.get("client_event") if isinstance(body, dict) else None
-    return EventDetail(
-        eventId=event_id, t=rows.dt(ts), name=name, sessionId=sid, raw=_scrub(ev if isinstance(ev, dict) else {})
-    )

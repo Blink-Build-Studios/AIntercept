@@ -4,14 +4,14 @@
 
 AIntercept sits in front of an organization's AI calls: Anthropic, OpenAI, Gemini, the ChatGPT and Codex backend, and claude.ai. It terminates TLS under a trust root you control, forwards each request to the genuine upstream, and tees every request and response to a horizontally scaled Go observer.
 
-- **See it:** a processor turns the observations into tables, and a query API and web UI show who uses which AI tool, how, and at what cost: people, sessions, prompts, the steps inside each prompt, and every call on the wire.
+- **See it:** workers load the observations into Postgres, and a query API and web UI show who uses which AI tool, how, and at what cost: people, sessions, prompts, the steps inside each prompt, and every call on the wire.
 - **Act on it:** the **Interceptor** interface lets your own control plane react to every call. It can record, redact or refuse.
 
 ```
 client ──TLS──> Envoy (leaf cert minted on the fly) ──verified TLS──> real api.anthropic.com / chatgpt.com / …
                   │  ext_proc: observe (async copy) or enforce (inline, opt-in per host/path)
                   ▼
-               observer ──> object store ──> processor ──> Parquet tables ──> query API ──> web UI
+               observer ──> object store (raw files) ──> workers ──> Postgres ──> query API ──> web UI
                   │  ▲
                   │  certsvc (SDS: mints + renews short-lived leaf certs)
                   ▼
@@ -61,7 +61,7 @@ A client reaches its ordinary hostname (`api.anthropic.com`), but DNS, scoped to
 - **Observe mode:** Envoy sends a copy and never waits, so a slow or failed observer can't stall real traffic.
 - **Enforce mode:** Envoy forwards only what the observer returns.
 
-The observer writes observations to an S3-compatible store. The **rollups** fold each routing key's records into Parquet tables, shaped into one common schema across providers with per-provider extensions, and merge the org-level rows. The **query API** (Python, FastAPI and DuckDB) serves those tables, and the **UI** (React) reads the API.
+The observer streams what it records to an S3-compatible store as raw files. The **workers** load each file into Postgres, in one common schema across providers with per-provider extensions, and refresh the rollups the pages read. The **query API** (Python, FastAPI over Postgres) serves the pages, and the **UI** (React) reads the API.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale (telemetry mechanism, dynamic certs, DNS isolation, scaling model). [`docs/harness-parity.md`](docs/harness-parity.md) covers what each coding agent sends and how it maps onto the common schema, and [`docs/limitations.md`](docs/limitations.md) is an honest account of what is tested versus assumed.
 
@@ -72,8 +72,8 @@ See [`docs/architecture.md`](docs/architecture.md) for the design rationale (tel
 The whole thing on one machine, with your own Claude Code traffic flowing through it: follow [`docs/SETUP.md`](docs/SETUP.md). It's written so a coding agent can follow it step by step.
 
 ```bash
-make up       # proxy, observer and processor in Docker; the API and UI on this machine
-make verify   # one request through the proxy, seen by the observer, processor and API
+make up       # proxy, observer, Postgres and workers in Docker; the API and UI on this machine
+make verify   # one request through the proxy, seen by the observer, the workers and the API
 make down     # stop it (captured data stays in data/, which is gitignored)
 ```
 
@@ -98,14 +98,14 @@ make clean            # DESTRUCTIVE: also delete generated CA keys (prompts firs
 | Path | What |
 |---|---|
 | `envoy/` | Envoy configs (single-host, multi-provider). TLS termination, per-SNI cert selection, `ext_proc`, verified upstreams. |
-| `aintercept/` | Go, one binary in three roles: `certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `observer` (`ext_proc` in observe and enforce modes, provider-aware extractors, pluggable sinks, the Interceptor client) and `rollup` (per-key rollups and the merge, [docs/PIPELINE.md](docs/PIPELINE.md)). Also `schemareport`, which turns unrecognized-shape samples into a structure-only report. |
+| `aintercept/` | Go, one binary in three roles: `certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `observer` (`ext_proc` in observe and enforce modes, provider-aware extractors, the raw files, the Interceptor client) and `worker` (loads the raw files into Postgres and refreshes the rollups, [docs/PIPELINE.md](docs/PIPELINE.md)). Also `canon` (a tool: a capture as raw files, or loaded into Postgres) and `schemareport`, which turns unrecognized-shape samples into a structure-only report. |
 | `aintercept/interceptor/v1/` | The Interceptor gRPC contract and generated Go code. |
 | `aintercept/examples/redact/`, `aintercept/examples/python-redact/` | Example Interceptors, in Go and Python. |
-| `api/` | The query API (FastAPI and DuckDB) over the rollups' tables. Its Pydantic models are the contract; the UI's types and samples are generated from them (`make regen`). |
+| `api/` | The query API (FastAPI over Postgres): the facts and the rollups. Its Pydantic models are the contract; the UI's types and samples are generated from them (`make regen`). |
 | `ui/` | The web UI (React, Vite, Tailwind), with Storybook stories for every component and state. Design in `docs/ui/`. |
 | `fixture/` | A local HTTPS origin with synthetic content, for the end-to-end tests. |
 | `extractor/` | Offline schema extraction and the sanitizer that makes committable fixtures. |
-| `deploy/helm/aintercept/` | Helm chart: Envoy, observer, certsvc, processor and API. One chart, `cloud: aws \| digitalocean`. |
+| `deploy/helm/aintercept/` | Helm chart: Envoy, observer, certsvc, workers, Postgres and API. One chart, `cloud: aws \| digitalocean`. |
 | `deploy/terraform/` | Terraform for AWS (EKS, S3/IRSA) and DigitalOcean (DOKS, Spaces). |
 | `deploy/kubernetes/` | Plain manifests (reference). |
 | `test/interceptor/` | The Interceptor end-to-end stack (`make test-interceptor`). |
@@ -128,7 +128,7 @@ certsvc **fails closed**: a handshake for a host not on the allowlist gets no ce
 
 ## Deploying
 
-- **Kubernetes (Helm):** `deploy/helm/aintercept/` packages Envoy, observer, certsvc, processor and API. It includes:
+- **Kubernetes (Helm):** `deploy/helm/aintercept/` packages Envoy, observer, certsvc, the workers, Postgres (in the cluster, for the demo) and the API. It includes:
   - HPA/KEDA autoscaling;
   - zero-downtime rolling drains: Envoy brings a new pod to Ready before draining in-flight streaming turns, for up to 180 s;
   - per-cloud object-store wiring;

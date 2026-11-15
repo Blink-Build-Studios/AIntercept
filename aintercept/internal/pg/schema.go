@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Schema is the schema (§3.1): one embedded file, generated from Tables.
+// Schema is the schema (§3): one embedded, hand-written file.
 //
 //go:embed schema.sql
 var Schema string

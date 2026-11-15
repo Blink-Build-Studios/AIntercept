@@ -1,5 +1,5 @@
-"""`demo` scenarios: one person's real Claude Code traffic (sanitized; see
-tools/make_demo_fixture.py), so stories show real shapes and numbers."""
+"""`demo` scenarios: one person's real Claude Code traffic (sanitized: tests/fixtures/demo.ndjson.gz),
+so stories show real shapes and numbers."""
 
 import pytest
 

@@ -19,8 +19,8 @@ import (
 	"time"
 )
 
-// Writer is the observer's one way to object storage
-// (docs/STREAMING_PIPELINE.md, phase 1). Every sink is a Stream of it; nothing
+// Writer is the observer's one way to object storage (docs/PIPELINE.md §2.1).
+// Every sink is a Stream of it; nothing
 // else uploads.
 //
 // One goroutine (Run's loop) owns the buffers. It selects over incoming

@@ -20,7 +20,7 @@ func as(alias, pred string) string {
 }
 
 // realEnd is a call's end as today's row has it: none for one still open or
-// one the sweep closed (stream/state/expire.go todaysRow: the start alone).
+// one the sweep closed (the start alone).
 const realEnd = `(CASE WHEN c.swept THEN NULL ELSE c.end_ns END)`
 
 // callOrder is today's order of a session's calls: time, then id with '#'

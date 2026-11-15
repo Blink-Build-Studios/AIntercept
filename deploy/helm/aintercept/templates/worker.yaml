@@ -2,9 +2,9 @@
 # v9's workers (docs/PIPELINE.md §2.2): `aintercept worker`. One replica at a
 # time (an advisory lock) lists the observers' raw files under <prefix>/raw/
 # into Postgres's ingest_files; every replica claims unloaded files (FOR UPDATE
-# SKIP LOCKED) and loads each into the fact tables in one transaction. Runs
-# beside `rollup` until step 8. KEDA scales it on GET /lag: the age of the
-# oldest unloaded file.
+# SKIP LOCKED) and loads each into the fact tables in one transaction, then
+# refreshes the dirty rollup rows. KEDA scales it on GET /lag: the age of the
+# oldest unloaded file or dirty rollup row.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

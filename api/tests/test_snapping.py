@@ -5,9 +5,8 @@ lo to its minute's start, hi to its minute's last ns; an open bound stays open. 
 snapped bounds (…:00Z, …:59.999999Z). The session header and timeline don't filter by a range and
 don't snap. A timeline's bin must be a multiple of 60 s.
 
-Every reader gets these bounds from the one router (pages.py), so the oracle and v8 see the same
-range: held here on the oracle's reader (a recording SqlPages), and side by side with PgStore's in
-test_v8_side_by_side.py."""
+Every reader gets these bounds from the one router (pages.py): held here on PgStore's reader,
+recording what each ranged page is handed."""
 
 import contextlib
 from datetime import UTC, datetime, timedelta
@@ -18,7 +17,7 @@ import pytest
 from aintercept_api import claude_code as cc
 from aintercept_api import pages, ranges
 from tests.builders import ClaudeCode, ns
-from tests.conftest import FROZEN_NOW, bounded_store, make_client
+from tests.conftest import FROZEN_NOW, PgDataset, make_client, pg_admin
 from tests.test_session import LIVE, S1, H, prompt
 
 NS = cc.NS
@@ -95,52 +94,54 @@ def _dataset(ds):
     b.call(f"{LIVE}:02:07.25", prompt="q1")
 
 
-class _Recording(pages.SqlPages):
-    """The oracle's reader, recording the bounds each ranged page gets."""
+class _Recording:
+    """A page reader, recording the bounds each ranged page gets."""
 
-    def __init__(self, store: Any, seen: list[tuple[str, Any, Any]]) -> None:
-        super().__init__(store)
-        self.seen = seen
+    def __init__(self, inner: pages.Pages, seen: list[tuple[str, Any, Any]]) -> None:
+        self.inner, self.seen = inner, seen
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
 
     def session_state(self, sid, lo, hi, req_lo, req_hi):
         self.seen += [("session/state", lo, hi), ("session/state (requests)", req_lo, req_hi)]
-        return super().session_state(sid, lo, hi, req_lo, req_hi)
+        return self.inner.session_state(sid, lo, hi, req_lo, req_hi)
 
     def session_prompts(self, sid, now, lo, hi, *a):
         self.seen.append(("session/prompts", lo, hi))
-        return super().session_prompts(sid, now, lo, hi, *a)
+        return self.inner.session_prompts(sid, now, lo, hi, *a)
 
     def session_requests(self, sid, lo, hi, *a):
         self.seen.append(("session/requests", lo, hi))
-        return super().session_requests(sid, lo, hi, *a)
+        return self.inner.session_requests(sid, lo, hi, *a)
 
     def session_events(self, sid, lo, hi, *a):
         self.seen.append(("session/events", lo, hi))
-        return super().session_events(sid, lo, hi, *a)
+        return self.inner.session_events(sid, lo, hi, *a)
 
     def person_sessions(self, pid, now, lo, hi, *a):
         self.seen.append(("person/sessions", lo, hi))
-        return super().person_sessions(pid, now, lo, hi, *a)
+        return self.inner.person_sessions(pid, now, lo, hi, *a)
 
     def person_timeline(self, sids, rs, now_dt, now, lo, hi, bin_s):
         self.seen.append(("person/timeline", lo, hi))
-        return super().person_timeline(sids, rs, now_dt, now, lo, hi, bin_s)
+        return self.inner.person_timeline(sids, rs, now_dt, now, lo, hi, bin_s)
 
     def person_summary(self, pid, sids, now, lo, hi):
         self.seen.append(("person/summary", lo, hi))
-        return super().person_summary(pid, sids, now, lo, hi)
+        return self.inner.person_summary(pid, sids, now, lo, hi)
 
     def person_requests(self, pid, lo, hi, *a):
         self.seen.append(("person/requests", lo, hi))
-        return super().person_requests(pid, lo, hi, *a)
+        return self.inner.person_requests(pid, lo, hi, *a)
 
     def people(self, now_dt, lo, hi, *a):
         self.seen.append(("people", lo, hi))
-        return super().people(now_dt, lo, hi, *a)
+        return self.inner.people(now_dt, lo, hi, *a)
 
     def overview(self, now_dt, lo, hi):
         self.seen.append(("overview", lo, hi))
-        return super().overview(now_dt, lo, hi)
+        return self.inner.overview(now_dt, lo, hi)
 
 
 class _Spy:
@@ -153,17 +154,20 @@ class _Spy:
     def __getattr__(self, name: str) -> Any:
         return getattr(self.inner, name)
 
+    @contextlib.contextmanager
     def page_reader(self, page: str, path: str):
-        return contextlib.nullcontext(_Recording(self.inner, self.seen))
+        with self.inner.page_reader(page, path) as reader:
+            yield _Recording(reader, self.seen)
 
 
 @pytest.fixture
 def spied(dataset):
     _dataset(dataset)
-    root = dataset.write()
-    store = _Spy(bounded_store(root))
+    pg = PgDataset(pg_admin(), dataset.write())
+    store = _Spy(pg.store())
     yield make_client(store), store
     store.inner.close()
+    pg.close()
 
 
 RANGED = {

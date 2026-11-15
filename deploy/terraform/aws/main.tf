@@ -38,6 +38,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "telemetry" {
       days = var.retention_days
     }
   }
+
+  # The observers' raw files (docs/PIPELINE.md §2.1, §5.5): the workers load each within seconds,
+  # and Postgres keeps the facts for the chart's retention.days; a rebuild reloads what's left.
+  rule {
+    id     = "expire-raw-files"
+    status = "Enabled"
+    filter {
+      prefix = "${var.prefix}/raw/"
+    }
+    expiration {
+      days = var.raw_retention_days
+    }
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "telemetry" {

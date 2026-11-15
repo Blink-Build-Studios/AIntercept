@@ -1,4 +1,4 @@
-"""The API's Postgres reader (docs/PIPELINE.md v8 §5.1, §5.7; build step 1), on psycopg 3.
+"""The API's Postgres reader (docs/PIPELINE.md §6), on psycopg 3.
 
 For each request a page reads in one snapshot:
 1. it takes one pooled connection and opens one READ ONLY, REPEATABLE READ transaction at its first
@@ -11,9 +11,6 @@ A pooled connection the server dropped (a restart, an idle timeout) fails at BEG
 request's statements ran: it's closed and the snapshot opens on a fresh one. Each request's
 statements (their SQL, parameters, rows and time) can be traced, for the tests' statement counts and
 plans.
-
-v7's loader (pgstore.py, which reads Arrow into DuckDB through ADBC) uses this module's pool and
-trace too, until build step 11 removes it.
 """
 
 import contextlib
@@ -51,7 +48,6 @@ class Statement:
     params: Any  # psycopg's: a list or a dict; v7's loader's: (value, DuckDB type) pairs
     rows: int = 0
     ms: float = 0.0
-    via: str = "psycopg"  # or "adbc": v7's loader
 
 
 @dataclass

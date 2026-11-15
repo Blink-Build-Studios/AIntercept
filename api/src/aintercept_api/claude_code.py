@@ -19,8 +19,6 @@ Rules (handoff §1.1, §5.2.5, §5.4; docs/ui/handoff/context/DATA_ANSWERS.md):
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from aintercept_api.store import Store
-
 NS = 1_000_000_000
 LIVE_WITHIN_NS = 5 * 60 * NS  # handoff §10.5: live = activity in the last 5 minutes
 GAP_SPLIT_NS = 15 * 60 * NS  # coverage windows split at gaps of 15 minutes or more
@@ -49,12 +47,6 @@ class Call:
     product: str | None = None
     client: str | None = None
     client_version: str | None = None
-
-    @property
-    def context(self) -> int | None:
-        """The context the call sent: input + cache read + cache write; None without usage."""
-        parts = (self.input_tokens, self.cache_read, self.cache_write)
-        return None if all(p is None for p in parts) else sum(p or 0 for p in parts)
 
 
 @dataclass
@@ -135,145 +127,10 @@ def to_ns(dt: datetime) -> int:
 UNATTRIBUTED = "unattributed"
 
 
-def linked_accounts(store: Store, person_id: str) -> list[str]:
-    """The person's accounts: this one, and every account with the same email (handoff §11J.5;
-    nothing weaker than an email links accounts). Sorted; the first is the person's id."""
-    rows = store.query(
-        """SELECT account_id FROM accounts
-           WHERE email IS NOT NULL AND email <> ''
-             AND lower(email) = (SELECT lower(any_value(email)) FROM accounts WHERE account_id = ?)""",
-        [person_id],
-    )
-    return sorted({person_id, *(r[0] for r in rows)})
-
-
-def person_sessions(store: Store, accounts: list[str]) -> list[str]:
-    """Every session any of the accounts appears on (a call or an event)."""
-    return [
-        r[0]
-        for r in store.query(
-            """SELECT session_id FROM cc_calls WHERE account_uuid IN (SELECT unnest(?::VARCHAR[]))
-               UNION SELECT session_id FROM cc_events
-               WHERE account_uuid IN (SELECT unnest(?::VARCHAR[])) AND session_id IS NOT NULL""",
-            [accounts, accounts],
-        )
-    ]
-
-
-def load_session(store: Store, session_id: str) -> Session | None:
-    """One session by id, whoever it belongs to; None when nothing carries the id.
-    Once per commit (every session endpoint starts here)."""
-
-    def build() -> Session | None:
-        s = load_sessions(store, [session_id])[session_id]
-        return s if s.calls or s.first_event is not None else None
-
-    return store.memo(("session", session_id), build)
-
-
-def load_sessions(store: Store, sids: list[str]) -> dict[str, Session]:
-    """The sessions' calls, event counts and the events rollups need."""
-    sessions = {sid: Session(sid) for sid in sids}
-    if not sessions:
-        return sessions
-    for sid, ts, prompt, rid, crid, acct, dev, out, cls, inp, read, write, prod, client, ver in store.query(
-        """SELECT session_id, ts, prompt_id, request_id, client_request_id, account_uuid, device_id, output_tokens,
-                  request_class, input_tokens, cache_read_tokens, cache_write_tokens, product, client, client_version
-           FROM cc_calls WHERE session_id IN (SELECT unnest(?::VARCHAR[])) ORDER BY ts""",
-        [sids],
-    ):
-        sessions[sid].calls.append(
-            Call(ts, prompt, rid, crid, acct, dev, out, cls, inp, read, write, prod, client, ver)
-        )
-    for sid, ts, kind, said in store.query(
-        """SELECT session_id, ts, hidden_kind, json_extract_string(detail_json, '$.text') FROM hidden_calls
-           WHERE session_id IN (SELECT unnest(?::VARCHAR[])) ORDER BY ts""",
-        [sids],
-    ):
-        s = sessions[sid]
-        s.hidden[kind] = s.hidden.get(kind, 0) + 1
-        s.hidden_ts.append((ts, kind))
-        if kind == "title" and said:
-            s.title = said.strip().strip('"')
-    for sid, kind, src, turn_id, turn, init, name in store.query(
-        """SELECT session_id, coalesce(origin_kind, CASE WHEN init = 'cold_resume' THEN 'resume' END),
-                  origin_session_id, origin_turn_id, origin_turn, init, agent_name
-           FROM sessions WHERE session_id IN (SELECT unnest(?::VARCHAR[]))
-             AND (origin_kind IS NOT NULL OR init = 'cold_resume')""",
-        [sids],
-    ):
-        sessions[sid].origin = Origin(kind, src, turn_id, turn, init, name)
-    for parent, sid, kind in store.query(
-        """SELECT origin_session_id, session_id, origin_kind FROM sessions
-           WHERE origin_kind IN ('subagent', 'review') AND origin_session_id IN (SELECT unnest(?::VARCHAR[]))
-           ORDER BY first_ns, session_id""",
-        [sids],
-    ):
-        sessions[parent].children.append((sid, kind))
-    for sid, n, lo, hi in store.query(
-        """SELECT session_id, count(*), min(ts), max(ts) FROM cc_events
-           WHERE session_id IN (SELECT unnest(?::VARCHAR[])) GROUP BY 1""",
-        [sids],
-    ):
-        s = sessions[sid]
-        s.event_count, s.first_event, s.last_event = n, lo, hi
-    for sid, ts, name, dev, rid, crid, neg, destr, pidx, pid, scope in store.query(
-        """SELECT session_id, ts, name, device_id,
-                  json_extract_string(md, '$.requestId'), json_extract_string(md, '$.clientRequestId'),
-                  json_extract_string(md, '$.is_negative'),
-                  json_extract_string(md, '$.destructive_category'),
-                  TRY_CAST(json_extract_string(md, '$.prompt_index') AS INT),
-                  json_extract_string(md, '$.cc_prompt_id'), json_extract_string(md, '$.destructive_target_scope')
-           FROM cc_events
-           WHERE session_id IN (SELECT unnest(?::VARCHAR[])) AND name IN (SELECT unnest(?::VARCHAR[]))
-           ORDER BY ts""",
-        [sids, list(_EVENT_NAMES)],
-    ):
-        sessions[sid].events.append(
-            Ev(
-                ts,
-                name,
-                dev,
-                rid,
-                crid,
-                neg == "true",
-                destr if destr not in (None, "none") else None,
-                pidx,
-                pid,
-                scope,
-            )
-        )
-    _attach_titles(store, sessions)
-    return sessions
-
-
 # Codex names a thread with a call in a thread of its own, made just after the named thread's
 # first turn; nothing in the call links the two. So a title-only thread is matched to the same
 # account's thread that started last before it, within this window.
 TITLE_WITHIN_NS = 5 * 60 * NS
-
-
-def _attach_titles(store: Store, sessions: dict[str, Session]) -> None:
-    """Each Codex thread's generated title (recorded bodies only), from its title thread."""
-    codex = [s for s in sessions.values() if s.product == "codex" and s.title is None and s.calls]
-    accounts = sorted({c.account for s in codex for c in s.calls if c.account})
-    if not codex or not accounts:
-        return
-    for ts, acct, said in store.query(
-        """SELECT ts, account_uuid, json_extract_string(detail_json, '$.text') FROM hidden_calls
-           WHERE hidden_kind = 'title' AND detail_json LIKE '%"text"%'
-             AND account_uuid IN (SELECT unnest(?::VARCHAR[]))
-             AND session_id NOT IN (SELECT DISTINCT session_id FROM cc_calls)
-           ORDER BY ts""",
-        [accounts],
-    ):
-        named = [
-            s
-            for s in codex
-            if s.title is None and any(c.account == acct for c in s.calls) and 0 <= ts - s.start <= TITLE_WITHIN_NS
-        ]
-        if named and said:
-            max(named, key=lambda s: s.start).title = said.strip().strip('"')
 
 
 # --- coverage ---------------------------------------------------------------------------------

@@ -128,8 +128,6 @@ type Assembler struct {
 	Budget  *membudget.Budget
 	lines   map[string]*detailLines
 	details []Detail
-	marked  map[string]map[string]bool // each call's keys marked so far (KeepDetail)
-	marks   []KeyMark
 }
 
 // heldBatch is an analytics batch being read: its request's call_end (when
@@ -152,11 +150,6 @@ type Detail struct {
 type detailLines struct {
 	lines [][]byte
 	bytes int
-}
-
-// DetailKey is where a call's detail object is written.
-func DetailKey(prefix, correlationID string) string {
-	return withSlash(prefix) + "calls/" + correlationID + ".ndjson.gz"
 }
 
 // FlushDetails completes the detail object of every call still in flight, with
@@ -218,7 +211,6 @@ func (a *Assembler) charge(n int64) {
 
 // dropLines forgets a call's held rows and releases their budget.
 func (a *Assembler) dropLines(id string) *detailLines {
-	delete(a.marked, id)
 	d := a.lines[id]
 	if d != nil {
 		delete(a.lines, id)
@@ -265,7 +257,6 @@ func (a *Assembler) record(r Record, instance string) Record {
 		r.RoutingKey = RoutingKey(&r)
 	}
 	r.Bucket = int32(BucketOf(r.RoutingKey, DefaultBucketBits))
-	a.mark(&r)
 	return r
 }
 

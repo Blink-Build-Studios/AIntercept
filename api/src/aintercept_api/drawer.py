@@ -3,7 +3,7 @@ Postgres and S3 when the drawer opens instead of from a loaded session.
 
 - The call: its `calls` row, by its primary key.
 - The raw data: one ranged GET of the call's gzip member in its raw file (raw_key, raw_offset, raw_len),
-  decoded as today (store.rows_of over its lines). A WebSocket turn has no member of its own (its frames
+  decoded as today (rows_of over its lines). A WebSocket turn has no member of its own (its frames
   are in its connection's), and a call that hasn't ended has none yet: their drawer is built from the
   row, as today's is.
 - Step N of M: the call's `steps` row and its prompt's `prompts` row.
@@ -19,19 +19,70 @@ Each is an indexed lookup that reads a few rows, whatever the session's size: on
 a few statements. Nothing is cached between requests.
 """
 
+import gzip
+import hashlib
+import json
+import re
 from collections.abc import Callable
 from typing import Any
 
 from aintercept_api import claude_code as cc
 from aintercept_api import person as pp
-from aintercept_api import raw as rawfile
 from aintercept_api import request_detail as rd
 from aintercept_api import rows
 from aintercept_api import session as ss
-from aintercept_api import store as legacy
 from aintercept_api.models.requests import EventDetail
 from aintercept_api.models.sessions import EventRow
 from aintercept_api.reader import Snapshot
+
+# A repeat of an identical event row is keyed <hash>-2, -3 (the observer's eventCopies).
+_COPY = re.compile(r"^(h[0-9a-f]{16})-\d+$")
+
+
+def lines(gz: bytes | None) -> list[bytes]:
+    """A raw member's non-empty lines (none when it's missing or truncated)."""
+    if gz is None:
+        return []
+    try:
+        return [ln.strip() for ln in gzip.decompress(gz).split(b"\n") if ln.strip()]
+    except (OSError, EOFError):
+        return []
+
+
+def rows_of(lines: list[bytes], correlation_id: str) -> list[dict[str, Any]]:
+    """The raw rows among lines that are the transaction's."""
+    out = []
+    for line in lines:
+        if correlation_id.encode() not in line:
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if r.get("correlation_id") == correlation_id:
+            out.append(r)
+    return out
+
+
+def event_row(lines: list[bytes], correlation_id: str, event_key: str) -> dict[str, Any] | None:
+    """The client_event row among lines that event_key names."""
+    want = event_key.split("/", 1)[1] if "/" in event_key else ""
+    # A repeat of an identical row is keyed <hash>-2, -3 (the processor's eventCopies):
+    # any of the identical rows is it.
+    want = _COPY.sub(r"\1", want)
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if r.get("correlation_id") != correlation_id or r.get("phase") != "client_event":
+            continue
+        ce = r.get("client_event") or {}
+        ident = ce.get("id") or ("h" + hashlib.sha256(line).hexdigest()[:16])
+        if ident == want and isinstance(r, dict):
+            return r
+    return None
+
 
 # A ranged GET of (key, offset, length); None when the object can't be read.
 ReadRange = Callable[[str, int, int], bytes | None]
@@ -208,7 +259,7 @@ class PgReads:
         """The lines of a call's gzip member in its raw file: one ranged GET (none when it has no member)."""
         if row["raw_key"] is None:
             return []
-        return rawfile.lines(self.read_range(row["raw_key"], row["raw_offset"], row["raw_len"]))
+        return lines(self.read_range(row["raw_key"], row["raw_offset"], row["raw_len"]))
 
     def wire(self, cid: str) -> rd.Wire | None:
         row = self._call(cid)
@@ -216,7 +267,7 @@ class PgReads:
             return None
         w = None
         if rd.WS_TURN not in cid:  # a turn's frames are its connection's: its row says what the drawer shows
-            w = rd.wire_from_rows(cid, legacy.rows_of(self.member(row), row["correlation_id"]))
+            w = rd.wire_from_rows(cid, rows_of(self.member(row), row["correlation_id"]))
         if w is None:  # no member yet (it hasn't ended), or it couldn't be read
             w = rd.wire_from_row(cid, row)
         if w.kind == "analytics":
@@ -340,7 +391,7 @@ class PgReads:
         if not found:
             return None
         r = found[0]
-        body = legacy.event_row(self.member(r), batch, r["event_key"]) or {}
+        body = event_row(self.member(r), batch, r["event_key"]) or {}
         ev = body.get("client_event")
         return EventDetail(
             eventId=eid,

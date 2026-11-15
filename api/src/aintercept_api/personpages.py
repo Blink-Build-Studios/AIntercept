@@ -10,7 +10,7 @@ page reads the scope first: the group's account rows, and the person's `sessions
   the agents (first seen, versions) and the newest values (limits, posture, live) from the person's
   `sessions` rows, as today's header rolls them up.
 - /sessions: a page of the person's `sessions` rows in range (the range and the nesting are over the rows
-  the scope read), with their children (`session_parents`) and labels (§6.1).
+  the scope read), with their children (`session_edges`) and labels (§6.1).
 - /timeline: lanes from the sessions' `session_minutes` (bins under an hour) or `session_hours` (hours
   inside the range, minutes at its edges), event names from their key rollups; bands from `sessions`; typed
   prompts from `prompt_items` and `prompts` in range; not-captured windows from `missed_reports`; friction
@@ -100,7 +100,7 @@ _CREDENTIALS = (
 
 _CHILDREN = """SELECT p.parent_session_id AS of, p.child_session_id AS sid, min(a.kind) AS kind,
     min(a.parent_session_id) AS parent, min(a.first_ns) AS first_ns
-FROM session_parents p JOIN session_parents a ON a.child_session_id = p.child_session_id
+FROM session_edges p JOIN session_edges a ON a.child_session_id = p.child_session_id
 WHERE p.parent_session_id = ANY(%(sids)s) GROUP BY p.parent_session_id, p.child_session_id"""
 _TITLES = f"""SELECT x.sid, t.text FROM unnest(%(sids)s::text[], %(los)s::bigint[]) x(sid, lo), LATERAL (
   SELECT c.detail ->> 'text' AS text FROM calls c

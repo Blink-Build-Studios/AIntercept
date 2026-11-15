@@ -590,3 +590,12 @@ def end_batches(ds: Dataset) -> None:
                 "phase": "response_headers", "status": 200, "direction": "outbound", "headers": {}})  # fmt: skip
         ds.add({**base, "seq": last["seq"] + 2, "timestamp_ns": last["timestamp_ns"] + 1_000_000_001,
                 "phase": "complete", "status": 200, "end_of_stream": True})  # fmt: skip
+
+
+def one_stream_one_id(ds: Dataset) -> None:
+    """The observer gives every ext_proc stream its own correlation id; the Codex builder names a
+    WebSocket connection by its thread id's first 8 characters, which the root, its subagent, its
+    review and its fork share. Make the ids what the observer writes (the samples keep theirs)."""
+    for r in ds.rows:
+        if "-ws-" in r["correlation_id"] and r.get("session_id"):
+            r["correlation_id"] += "-" + r["session_id"][-6:]

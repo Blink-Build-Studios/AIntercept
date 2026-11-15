@@ -1,4 +1,4 @@
-"""The test Postgres (docs/PIPELINE.md v7, Testing): a fresh database with the schema applied, per
+"""The test Postgres (docs/PIPELINE.md §8): a fresh database with the schema applied, per
 test session (each xdist worker its own), on the server AINTERCEPT_TEST_PG names (an admin DSN: CI's
 service container, or the container `make check` starts with scripts/test-pg.sh).
 
@@ -15,8 +15,7 @@ import urllib.parse
 from collections.abc import Iterator
 from typing import Any
 
-import adbc_driver_postgresql.dbapi as pgdbapi
-import duckdb
+import psycopg
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCHEMA = REPO / "aintercept" / "internal" / "pg" / "schema.sql"
@@ -37,22 +36,18 @@ def with_database(dsn: str, name: str) -> str:
 
 
 def connect(dsn: str, *, autocommit: bool = True) -> Any:
-    return pgdbapi.connect(dsn, autocommit=autocommit)
+    return psycopg.connect(dsn, autocommit=autocommit)
 
 
 def execute(conn: Any, *sql: str) -> None:
-    """Runs statements that return no rows, closing their cursor (a connection with one open can't close)."""
-    cur = conn.cursor()
-    try:
-        for s in sql:
-            cur.execute(s)
-    finally:
-        cur.close()
+    """Runs statements that return no rows."""
+    for s in sql:
+        conn.execute(s)
 
 
 def statements(sql: str) -> list[str]:
-    """schema.sql's statements. ADBC prepares each statement, and a prepared statement is one
-    command; the file is plain DDL (no function bodies), one statement per `;` at a line's end."""
+    """schema.sql's statements: the file is plain DDL (no function bodies), one statement per `;` at a
+    line's end."""
     out = []
     for chunk in sql.split(";\n"):
         body = "\n".join(line for line in chunk.splitlines() if not line.lstrip().startswith("--")).strip()
@@ -91,16 +86,3 @@ def fresh_database(admin: str) -> Iterator[str]:
     finally:
         execute(conn, f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
         conn.close()
-
-
-def load(con: duckdb.DuckDBPyConnection, pg: Any, name: str, sql: str) -> duckdb.DuckDBPyRelation:
-    """sql's rows from Postgres, as DuckDB table name: ADBC's Arrow stream (binary COPY), read by DuckDB
-    directly (`__arrow_c_stream__`), with no pyarrow. The stream is read once, while its statement is
-    open, so the rows are copied into the table."""
-    cur = pg.cursor()
-    try:
-        cur.execute(sql)
-        con.from_arrow(cur.fetch_arrow()).create(name)
-    finally:
-        cur.close()
-    return con.table(name)

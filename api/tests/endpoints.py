@@ -43,91 +43,28 @@ OTHER_KINDS = ["flags", "count", "skills", "metrics", "catalog"]
 PERSON_BRUSH = {"from": "2026-11-03T21:13:07.250Z", "to": "2026-11-04T16:41:59.875Z"}
 
 
-def _brush(start: str | None, end: str | None) -> dict[str, str] | None:
-    """A brush over a session's middle third (its header's start and end), at ms precision."""
-    if not start:
-        return None
-    a = datetime.fromisoformat(start.replace("Z", "+00:00"))
-    b = datetime.fromisoformat(end.replace("Z", "+00:00")) if end else FROZEN_NOW
-    third = (b - a) / 3
-    lo, hi = a + third + timedelta(milliseconds=137), a + 2 * third + timedelta(milliseconds=421)
-    return {"from": _iso(lo), "to": _iso(hi)}
-
-
-def endpoint_urls(client) -> list[str]:
-    urls = ["/api/v1/status", "/api/v1/overview", "/api/v1/people", "/api/v1/people?q=codex"]
-    for win in _SPANS:
-        window = _qs(**{"from": window_from(win)})
-        urls += [f"/api/v1/overview{window}", f"/api/v1/people{window}"]
-    urls += [
-        f"/api/v1/people{_qs(**{'from': window_from('7d'), 'agent': ['claude-code', 'codex']})}",
-        f"/api/v1/people{_qs(**{'from': window_from('14d'), 'q': 'codex', 'page': 2})}",
-        f"/api/v1/people{_qs(sort='activity')}",
-        f"/api/v1/people{_qs(sort='name')}",
+def person_urls(pid: str) -> list[str]:
+    """A person's pages at the URLs the UI reads them with."""
+    base = f"/api/v1/people/{pid}"
+    day, week = person_from("24h"), person_from("7d")
+    return [
+        base,
+        f"{base}/summary",
+        f"{base}/summary{_qs(**{'from': day})}",
+        f"{base}/summary{_qs(**PERSON_BRUSH)}",
+        f"{base}/sessions",
+        f"{base}/sessions?pageSize=1&page=2",
+        f"{base}/sessions{_qs(**{'from': week, 'agent': 'claude-code', 'page': 1, 'pageSize': 20})}",
+        f"{base}/sessions{_qs(**PERSON_BRUSH, pageSize=20)}",
+        f"{base}/timeline",
+        f"{base}/timeline{_qs(**{'from': day, 'bin': 300})}",
+        f"{base}/timeline{_qs(**{'from': week, 'bin': 3600})}",
+        f"{base}/timeline{_qs(**{'from': person_from('14d'), 'bin': 3600})}",
+        f"{base}/requests",
+        f"{base}/requests?pageSize=5&page=3&order=asc",
+        f"{base}/requests?q=model",
+        f"{base}/requests{_qs(**{'from': day, 'pageSize': 20, 'order': 'desc'})}",
+        f"{base}/requests{_qs(**PERSON_BRUSH, kind=OTHER_KINDS, pageSize=20)}",
+        f"{base}/requests{_qs(**PERSON_BRUSH, q='model', pageSize=20)}",
+        f"{base}/requests{_qs(agent='codex', captured='false', hidden='true', pageSize=20)}",
     ]
-    people = [p["personId"] for p in client.get("/api/v1/people").json()["data"]] + ["unattributed", "nobody"]
-    sessions: list[str] = []
-    for pid in people:
-        base = f"/api/v1/people/{pid}"
-        day, week = person_from("24h"), person_from("7d")
-        urls += [
-            base,
-            f"{base}/summary",
-            f"{base}/summary{_qs(**{'from': day})}",
-            f"{base}/summary{_qs(**PERSON_BRUSH)}",
-            f"{base}/sessions",
-            f"{base}/sessions?pageSize=1&page=2",
-            f"{base}/sessions{_qs(**{'from': week, 'agent': 'claude-code', 'page': 1, 'pageSize': 20})}",
-            f"{base}/sessions{_qs(**PERSON_BRUSH, pageSize=20)}",
-            f"{base}/timeline",
-            f"{base}/timeline{_qs(**{'from': day, 'bin': 300})}",
-            f"{base}/timeline{_qs(**{'from': week, 'bin': 3600})}",
-            f"{base}/timeline{_qs(**{'from': person_from('14d'), 'bin': 3600})}",
-            f"{base}/requests",
-            f"{base}/requests?pageSize=5&page=3&order=asc",
-            f"{base}/requests?q=model",
-            f"{base}/requests{_qs(**{'from': day, 'pageSize': 20, 'order': 'desc'})}",
-            f"{base}/requests{_qs(**PERSON_BRUSH, kind=OTHER_KINDS, pageSize=20)}",
-            f"{base}/requests{_qs(**PERSON_BRUSH, q='model', pageSize=20)}",
-            f"{base}/requests{_qs(agent='codex', captured='false', hidden='true', pageSize=20)}",
-        ]
-        r = client.get(f"{base}/sessions?pageSize=100").json()
-        sessions += [s["sessionId"] for s in r.get("data", [])]
-        reqs = client.get(f"{base}/requests?pageSize=3").json().get("data", [])
-        for q in reqs:
-            urls += [f"/api/v1/requests/{q['requestId']}", f"/api/v1/requests/{q['requestId']}/details"]
-    for sid in [*sessions, "no-such-session"]:
-        base = f"/api/v1/sessions/{sid}"
-        for e in client.get(f"{base}/events?pageSize=3").json().get("data", []):
-            if e.get("eventId"):
-                urls.append(f"/api/v1/events/{e['eventId']}")
-        header = client.get(base).json().get("data") or {}
-        brush = _brush(header.get("start"), header.get("end"))
-        urls += [
-            base,
-            f"{base}/timeline",
-            *(f"{base}/timeline?bin={b}" for b in BIN_LADDER),
-            f"{base}/state",
-            f"{base}/prompts",
-            f"{base}/prompts?pageSize=2&page=2",
-            f"{base}/prompts?pageSize=20&prompt=2",
-            f"{base}/requests",
-            f"{base}/requests?order=desc&pageSize=20",
-            f"{base}/requests?captured=false&hidden=true&pageSize=20",
-            f"{base}/requests{_qs(kind='model', pageSize=20)}",
-            f"{base}/requests{_qs(kind=OTHER_KINDS, pageSize=20)}",
-            f"{base}/events",
-            f"{base}/events?pageSize=20",
-            f"{base}/events?q=tool&pageSize=10",
-            f"{base}/events?internal=true&pageSize=20",
-        ]
-        if brush:
-            urls += [
-                f"{base}/state{_qs(**brush)}",
-                f"{base}/prompts{_qs(**brush, page=1, pageSize=20)}",
-                f"{base}/requests{_qs(**brush, pageSize=20)}",
-                f"{base}/requests{_qs(**brush, q='model', pageSize=20)}",
-                f"{base}/events{_qs(**brush, pageSize=20)}",
-                f"{base}/events{_qs(**brush, q='tool', pageSize=20)}",
-            ]
-    return urls

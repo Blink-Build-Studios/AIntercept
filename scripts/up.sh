@@ -6,10 +6,8 @@
 #                  gitignored .env) and the workers (docs/PIPELINE.md)
 #   this machine:  the query API (:8787) and the UI (:5173), in the background,
 #                  logs and pids in .cache/run/
-# The API reads Postgres (AINTERCEPT_STORE=pg, the default) through the API login, with the calls'
-# detail objects from data/telemetry. `AINTERCEPT_STORE=v1 make up` reads the v5 folders instead
-# (which the workers no longer write: the tests and the oracle still use that reader).
-# Safe to re-run: whatever is already up stays up (make down first to switch the API's store).
+# The API reads Postgres through the API login, with the calls' raw members from data/telemetry.
+# Safe to re-run: whatever is already up stays up.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,7 +45,7 @@ bold "1/3  Proxy, observer, Postgres and workers (Docker; the first build takes 
 make -s -C "$ROOT" ca >/dev/null
 bash "${ROOT}/scripts/pg-env.sh" # Postgres's passwords, once, into the gitignored .env
 (cd "$ROOT" && COMPOSE_FILE=docker-compose.yml:docker-compose.m2.yml docker compose up -d --build --quiet-pull \
-  certsvc observer postgres rollup worker envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
+  certsvc observer postgres worker envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
 
 wait_for() { # name url log [pid name: give up early once that process has exited]
   for _ in $(seq 90); do
@@ -68,8 +66,7 @@ done
 (cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null \
   || fail "Postgres didn't come up (docker compose logs postgres)"
 wait_for "the observer" http://127.0.0.1:9001/healthz compose.log
-wait_for "the workers" http://127.0.0.1:9004/healthz compose.log
-wait_for "the v9 workers" http://127.0.0.1:9005/healthz compose.log
+wait_for "the workers" http://127.0.0.1:9005/healthz compose.log
 
 # --- the API and UI (this machine) -----------------------------------------------------------
 port_free() { # port name: fail unless nothing listens there (ours is checked by alive first)
@@ -78,26 +75,20 @@ port_free() { # port name: fail unless nothing listens there (ours is checked by
   [[ -z "$pid" ]] && return 0
   fail "port $1 (the $2) is in use by pid ${pid} ($(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')): stop it, or 'make down' in that checkout"
 }
-STORE="${AINTERCEPT_STORE:-pg}"
-[[ "$STORE" == "v1" || "$STORE" == "pg" ]] || fail "AINTERCEPT_STORE must be v1 or pg, not ${STORE}"
-bold "2/3  Query API on :8787 (store: ${STORE})"
+bold "2/3  Query API on :8787"
 if ! alive api; then
   port_free 8787 API
   (cd "${ROOT}/api" && uv sync --locked -q)
-  # The stateless API (docs/PIPELINE.md §5): pg, Postgres through the API login (its DSN from .env,
-  # handed over in the environment, never printed), with the calls' detail objects from
-  # data/telemetry; v1, the v5 folders under data/telemetry.
+  # The stateless API (docs/PIPELINE.md §6): Postgres through the API login (its DSN from .env,
+  # handed over in the environment, never printed), with the calls' raw members from data/telemetry.
   (
     cd "${ROOT}/api" || exit 1
-    export AINTERCEPT_STORE="$STORE" AINTERCEPT_BUCKETS_DIR="${ROOT}/data/telemetry" AINTERCEPT_CACHE_DIR="${ROOT}/.cache/api"
-    if [[ "$STORE" == "pg" ]]; then
-      # shellcheck source=scripts/api-pg-dsn.sh
-      source "${ROOT}/scripts/api-pg-dsn.sh"
-    fi
+    export AINTERCEPT_BUCKETS_DIR="${ROOT}/data/telemetry"
+    # shellcheck source=scripts/api-pg-dsn.sh
+    source "${ROOT}/scripts/api-pg-dsn.sh"
     nohup uv run python -m aintercept_api.serve --port 8787 >"${RUN}/api.log" 2>&1 </dev/null &
     echo $! >"${RUN}/api.pid"
   )
-  echo "$STORE" >"${RUN}/api.store"
 fi
 bold "3/3  UI on :5173"
 if ! alive ui; then
@@ -113,7 +104,7 @@ echo
 bold "Up."
 echo "  UI           http://localhost:5173"
 echo "  API          http://localhost:8787/api/v1/status"
-echo "  Logs         .cache/run/api.log, .cache/run/ui.log; docker compose logs -f observer rollup worker postgres"
+echo "  Logs         .cache/run/api.log, .cache/run/ui.log; docker compose logs -f observer worker postgres"
 echo "  Check it     make verify      (one request through the proxy, end to end)"
 echo "  Route Claude Code through it (needs sudo; edits /etc/hosts, undo with 'revert'):"
 echo "               sudo scripts/route-claude-through-proxy.sh setup 127.0.0.1"

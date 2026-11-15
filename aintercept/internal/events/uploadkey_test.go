@@ -9,7 +9,7 @@ import (
 )
 
 // Records files are named by the minute they're uploaded in, at each upload
-// attempt, and never written twice (docs/STREAMING_PIPELINE.md §3.3).
+// attempt, and never written twice.
 
 const tmplKey = "records/v1/bucket=03/minute=" + UploadMinute + "/pod-1-000000000001.parquet"
 

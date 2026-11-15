@@ -68,7 +68,7 @@ topologySpreadConstraints:
 {{- end }}
 {{- end -}}
 
-{{/* ServiceAccount name for rollup, worker or api: serviceAccount.name, else aintercept-<component>. */}}
+{{/* ServiceAccount name for worker or api: serviceAccount.name, else aintercept-<component>. */}}
 {{- define "aintercept.readerServiceAccountName" -}}
 {{- $sa := .c.serviceAccount | default dict -}}
 {{ $sa.name | default (printf "aintercept-%s" .component) }}

@@ -40,6 +40,17 @@ resource "digitalocean_spaces_bucket" "telemetry" {
       days = var.retention_days
     }
   }
+
+  # The observers' raw files (docs/PIPELINE.md §2.1, §5.5): the workers load each within seconds,
+  # and Postgres keeps the facts for the chart's retention.days; a rebuild reloads what's left.
+  lifecycle_rule {
+    id      = "expire-raw-files"
+    enabled = true
+    prefix  = "${var.prefix}/raw/"
+    expiration {
+      days = var.raw_retention_days
+    }
+  }
 }
 
 # ── DOKS cluster ─────────────────────────────────────────────────────────────

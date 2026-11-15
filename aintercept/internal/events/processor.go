@@ -12,7 +12,7 @@ import (
 // background goroutine drains the buffer into the Sink, whose writer spools to
 // disk and never waits on the object store.
 //
-// Backpressure policy (docs/STREAMING_PIPELINE.md §1.4–1.5): nothing is
+// Backpressure policy: nothing is
 // dropped while the writer's spool has room. When the buffer is full, Offer
 // waits for room, which pushes back through gRPC flow control instead of
 // shedding data. Only once the spool is full (Full reports true) does Offer

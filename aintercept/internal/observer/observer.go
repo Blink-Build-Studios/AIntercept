@@ -37,7 +37,6 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/extproc"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/keyflag"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
@@ -74,12 +73,11 @@ func Run() {
 	}
 
 	// Build the sink topology. Two tiers:
-	//   bodyStripped — receive Event.ForStdout() (no bodies): stdout and the
-	//                  content-free stream (S3/Spaces, local dir). Written in
-	//                  both interception modes.
+	//   bodyStripped — receive Event.ForStdout() (no bodies): stdout, and the
+	//                  raw files in content-free mode.
 	//   full         — receive the complete event, including BodyB64 in full
-	//                  interception mode: the capture file and the capture/
-	//                  stream.
+	//                  interception mode: the capture file, and the raw files
+	//                  in full mode.
 	stdoutSink := events.NewStdoutSink(os.Stdout)
 	var sink events.Sink = stdoutSink
 
@@ -93,44 +91,26 @@ func Run() {
 			fatal("capture file open failed", "path", captureFile, "err", err)
 		}
 		fileSink = fs
-		full = append(full, fileSink) // the ONLY sink that may receive full bodies
+		full = append(full, fileSink) // the ONLY sink besides the raw files that may receive full bodies
 		slog.Info("capturing full-fidelity events to file", "path", captureFile)
 	}
 
-	// The writer: the one way to object storage (or the local directory). Every
-	// durable sink below is a stream of it. It seals on a ticker and a byte cap
-	// into an on-disk spool and uploads from there, retrying until the store
-	// accepts each file (docs/STREAMING_PIPELINE.md, phase 1).
+	// The writer: the one way to object storage (or the local directory). It
+	// seals on a ticker and a byte cap into an on-disk spool and uploads from
+	// there, retrying until the store accepts each file (docs/PIPELINE.md §2.1).
 	bucket := os.Getenv("OBSERVER_S3_BUCKET")
 	localDir := os.Getenv("OBSERVER_LOCAL_DIR")
 	var writer *events.Writer
 	var targets []events.Target
-	// Per-key ingest files (below) go to the bucket, else the local directory.
-	recordsOn := os.Getenv("OBSERVER_RECORDS") != "false"
-	recordsTarget, recordsPrefix := "", ""
+	// The raw files go to the bucket, else the local directory.
+	rawTarget, rawPrefix := "", ""
 	switch {
 	case bucket != "":
-		recordsTarget, recordsPrefix = "s3", os.Getenv("OBSERVER_S3_PREFIX")
+		rawTarget, rawPrefix = "s3", os.Getenv("OBSERVER_S3_PREFIX")
 	case localDir != "":
-		recordsTarget = "local"
+		rawTarget = "local"
 	}
 	spoolDir := envDefault("OBSERVER_SPOOL_DIR", filepath.Join(os.TempDir(), "aintercept-spool"))
-	inc := records.NewIncarnation(instanceID)
-	// The recent index (keyflag, docs/PIPELINE.md §1 step 4): each ingest
-	// file's key is journaled in the spool before its upload and indexed once it
-	// lands; the index goes out every 5 s. Opened before the writer, so files a
-	// previous process left in the spool are indexed as they land, and its
-	// journal's leftovers go into the first index object.
-	var index *keyflag.Index
-	var recentStream *events.ObjectStream
-	if recordsOn && recordsTarget != "" {
-		x, err := keyflag.Open(keyflag.Config{Dir: filepath.Join(spoolDir, "recent"), Prefix: recordsPrefix, Incarnation: inc,
-			Put: func(tmpl string, body []byte) error { return recentStream.PutAtUploadDurable(tmpl, body, "") }})
-		if err != nil {
-			fatal("recent index journal open failed", "dir", filepath.Join(spoolDir, "recent"), "err", err)
-		}
-		index = x
-	}
 	if bucket != "" {
 		// On AWS, leave the keys unset to use IRSA or Pod Identity; on
 		// DigitalOcean Spaces (or MinIO), set OBSERVER_S3_ENDPOINT + static keys.
@@ -146,6 +126,10 @@ func Run() {
 			fatal("s3 target init failed", "err", err)
 		}
 		targets = append(targets, t)
+		slog.Info("object store enabled",
+			"bucket", bucket,
+			"region", os.Getenv("OBSERVER_S3_REGION"),
+			"endpoint", os.Getenv("OBSERVER_S3_ENDPOINT"))
 	}
 	if localDir != "" {
 		t, err := events.NewDirTarget("local", localDir)
@@ -153,19 +137,15 @@ func Run() {
 			fatal("local target init failed", "dir", localDir, "err", err)
 		}
 		targets = append(targets, t)
+		slog.Info("local directory enabled", "dir", localDir)
 	}
 	if len(targets) > 0 {
-		var onUploaded func(target, key string)
-		if index != nil {
-			onUploaded = index.Landed // each landed ingest file's key goes into the next index object
-		}
 		w, err := events.NewWriter(events.WriterConfig{
 			SpoolDir:      spoolDir,
 			SpoolMaxBytes: int64(envInt("OBSERVER_SPOOL_MAX_BYTES", 0)),
 			FlushEvery:    time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
 			UploadTimeout: time.Duration(envInt("OBSERVER_UPLOAD_TIMEOUT_SECONDS", 0)) * time.Second,
 			Targets:       targets,
-			OnUploaded:    onUploaded,
 		})
 		if err != nil {
 			fatal("writer init failed", "spool", spoolDir, "err", err)
@@ -173,105 +153,36 @@ func Run() {
 		writer = w
 		slog.Info("writer enabled", "spool", spoolDir, "flush_every_seconds", envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10))
 	}
-	streamCfg := func(target, prefix string) events.S3Config {
-		return events.S3Config{
-			Target:     target,
-			Prefix:     prefix,
-			InstanceID: instanceID,
-			MaxBytes:   envInt("OBSERVER_S3_MAX_BYTES", 0),
-			MaxEvents:  envInt("OBSERVER_S3_MAX_EVENTS", 0),
-		}
-	}
 
-	// The content-free stream in object storage. ALWAYS body-stripped.
-	var s3Sink *events.S3Sink
-	if bucket != "" {
-		s3Sink = events.NewS3Sink(writer, streamCfg("s3", os.Getenv("OBSERVER_S3_PREFIX")))
-		bodyStripped = append(bodyStripped, s3Sink) // body-stripped tier: never full content
-		slog.Info("durable S3 sink enabled",
-			"bucket", bucket,
-			"region", os.Getenv("OBSERVER_S3_REGION"),
-			"endpoint", os.Getenv("OBSERVER_S3_ENDPOINT"))
-	}
-
-	// Local partitioned sink (a stack on one machine; docs/ui/BUILD_PLAN.md §5):
-	// the S3 sink's key layout in a directory instead of a bucket, so the query
-	// API reads it like object storage. ALWAYS body-stripped.
-	var localSink *events.S3Sink
-	if localDir != "" {
-		localSink = events.NewS3Sink(writer, streamCfg("local", ""))
-		bodyStripped = append(bodyStripped, localSink)
-		slog.Info("local partitioned sink enabled", "dir", localDir)
-	}
-
-	// Full interception (INTERCEPTION_MODE=full). Full events go to the capture
-	// file and, when the S3 or local sink is configured, under <prefix>/capture/,
-	// which the processor reads in this mode. The content-free stream is written
-	// alongside it either way.
-	if captureFullBodies {
-		if captureFile == "" && s3Sink == nil && localSink == nil {
-			fatal("INTERCEPTION_MODE=full needs OBSERVER_CAPTURE_FILE, the S3 sink or OBSERVER_LOCAL_DIR to write bodies to; never stdout")
-		}
-		if localSink != nil {
-			cfg := streamCfg("local", "capture")
-			cfg.IncludeContent = true
-			full = append(full, events.NewS3Sink(writer, cfg))
-			slog.Info("full interception: request and response bodies are recorded locally", "dir", filepath.Join(localDir, "capture"))
-		}
-		if s3Sink != nil {
-			cfg := streamCfg("s3", strings.Trim(os.Getenv("OBSERVER_S3_PREFIX")+"/capture", "/"))
-			cfg.IncludeContent = true
-			full = append(full, events.NewS3Sink(writer, cfg))
-			slog.Info("full interception: request and response bodies are recorded to object storage", "bucket", bucket, "prefix", cfg.Prefix)
-		}
-	}
-
-	// Canonical records, per routing key (docs/PIPELINE.md §1): each key's
-	// records are buffered (a spool file per key) and written as ingest files
-	// under v1/keys/<key>/in/, beside the raw log, through the same bucket or
-	// directory; each file's key goes into the recent index (keyflag). From
-	// the full rows when bodies are recorded (a call's detail is read from
-	// them), else from the body-stripped ones.
+	// The raw files (docs/PIPELINE.md §2.1): every record and each completed
+	// call's rows (with bodies only in full mode), one stream per pod under
+	// <prefix>/raw/, written at 8 MiB or every 30 s; the workers load them.
+	// From the full rows when bodies are recorded, else from the body-stripped
+	// ones.
 	budget := setupMemory()
 	var recordsSink *records.Sink
-	if index != nil {
-		target, prefix := recordsTarget, recordsPrefix
-		put := records.WriterPutter(writer, target)
-		recentStream = writer.NewObjectStream(events.ObjectStreamConfig{Target: target, ContentType: "application/json"})
-		if err := index.Flush(); err != nil { // at start: whatever a crash left in the journal
-			slog.Error("recent index upload failed at start; retrying in 5 s", "err", err)
-		}
-		go index.Run()
-		// v9's raw files (docs/PIPELINE.md §2.1): every record and each completed
-		// call's rows (with bodies only in full mode), one stream per pod under
-		// <prefix>/raw/, written at 8 MiB or every 30 s; the v9 workers load them.
-		// Beside the per-key files until step 8.
-		var raw records.RawWriter
-		if os.Getenv("OBSERVER_RAW") != "false" {
-			raw = writer.NewStream(events.StreamConfig{Target: target, Key: records.RawKey(prefix, instanceID),
-				Members: true, AtUpload: true, ContentType: "application/gzip",
-				MaxBytes: envInt("OBSERVER_RAW_FLUSH_BYTES", 8<<20),
-				MaxAge:   time.Duration(envInt("OBSERVER_RAW_FLUSH_SECONDS", 30)) * time.Second})
-			slog.Info("raw files enabled", "prefix", records.RawPrefix(prefix),
-				"flush_bytes", envInt("OBSERVER_RAW_FLUSH_BYTES", 8<<20), "flush_seconds", envInt("OBSERVER_RAW_FLUSH_SECONDS", 30))
-		}
-		recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget, Raw: raw,
-			Incarnation: inc, Content: captureFullBodies, Details: true,
-			MaxAge:         time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
-			KeySpoolDir:    filepath.Join(spoolDir, "keys"),
-			KeyObject:      func(key string, seq int64) string { return keyflag.InTemplate(prefix, key, inc, seq) },
-			Journal:        index.Journal,
-			FlushBytes:     envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20),
-			FlushAge:       time.Duration(envInt("OBSERVER_KEY_FLUSH_SECONDS", 30)) * time.Second,
-			MaxBufferBytes: int64(envInt("OBSERVER_KEY_BUFFER_MAX_BYTES", 64<<20))})
+	if writer != nil {
+		raw := writer.NewStream(events.StreamConfig{Target: rawTarget, Key: records.RawKey(rawPrefix, instanceID),
+			Members: true, AtUpload: true, ContentType: "application/gzip",
+			MaxBytes: envInt("OBSERVER_RAW_FLUSH_BYTES", 8<<20),
+			MaxAge:   time.Duration(envInt("OBSERVER_RAW_FLUSH_SECONDS", 30)) * time.Second})
+		slog.Info("raw files enabled", "prefix", records.RawPrefix(rawPrefix),
+			"flush_bytes", envInt("OBSERVER_RAW_FLUSH_BYTES", 8<<20), "flush_seconds", envInt("OBSERVER_RAW_FLUSH_SECONDS", 30))
+		recordsSink = records.NewSink(records.SinkConfig{Raw: raw, Budget: budget,
+			Incarnation: records.NewIncarnation(instanceID), Content: captureFullBodies,
+			MaxAge: time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second})
 		if captureFullBodies {
 			full = append(full, recordsSink)
 		} else {
 			bodyStripped = append(bodyStripped, recordsSink)
 		}
 		go recordsSink.Run(context.Background())
-		slog.Info("per-key ingest files enabled", "prefix", prefix,
-			"flush_bytes", envInt("OBSERVER_KEY_FLUSH_BYTES", 1<<20), "flush_seconds", envInt("OBSERVER_KEY_FLUSH_SECONDS", 30))
+	}
+	if captureFullBodies && fileSink == nil && recordsSink == nil {
+		fatal("INTERCEPTION_MODE=full needs OBSERVER_CAPTURE_FILE, OBSERVER_S3_BUCKET or OBSERVER_LOCAL_DIR to write bodies to; never stdout")
+	}
+	if captureFullBodies && recordsSink != nil {
+		slog.Info("full interception: request and response bodies are recorded in the raw files")
 	}
 
 	if len(full) > 0 || len(bodyStripped) > 1 {
@@ -284,7 +195,7 @@ func Run() {
 	// prefix — apart from normal telemetry so a new provider/schema is easy to find
 	// and process without touching the main stream. Fingerprints carry no content.
 	var schemaSink *events.S3Sink
-	schemaSamplingOn := s3Sink != nil && os.Getenv("OBSERVER_SCHEMA_SAMPLING") != "false"
+	schemaSamplingOn := bucket != "" && os.Getenv("OBSERVER_SCHEMA_SAMPLING") != "false"
 	if schemaSamplingOn {
 		basePrefix := strings.Trim(os.Getenv("OBSERVER_S3_PREFIX"), "/")
 		samplePrefix := "schema-samples"
@@ -301,7 +212,7 @@ func Run() {
 	// salt: an unsalted key_hash is a reversible sha256(key). Defense-in-depth
 	// alongside the Helm chart's install-time guard.
 	keyHashSalt := loadKeyHashSalt()
-	if s3Sink != nil && keyHashSalt == "" {
+	if bucket != "" && keyHashSalt == "" {
 		fatal("a key-hash salt (OBSERVER_KEY_HASH_SALT or OBSERVER_KEY_HASH_SALT_SECRET_ID) is required when the S3 sink is enabled — without it key_hash is a reversible sha256(key); set a strong random salt")
 	}
 
@@ -436,16 +347,6 @@ func Run() {
 	if fileSink != nil {
 		if err := fileSink.Close(); err != nil {
 			slog.Error("capture file close error", "err", err)
-		}
-	}
-	if index != nil && writer != nil {
-		// Every key buffer is in the spool now (proc.Close flushed the records
-		// sink): upload it, then the recent index naming those files.
-		if err := writer.Flush(); err != nil {
-			slog.Error("writer flush error", "err", err)
-		}
-		if err := index.Close(); err != nil {
-			slog.Error("recent index upload failed at shutdown; the journal keeps the keys for the next start", "err", err)
 		}
 	}
 	if writer != nil {
