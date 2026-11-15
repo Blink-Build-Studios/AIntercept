@@ -174,6 +174,7 @@ test-pipeline: ## Go: the end-to-end gate on a real capture's records (local onl
 .PHONY: test-full
 test-full: ## Go: the exhaustive variants too (-tags full: more seeds, longer captures); nightly in CI
 	cd aintercept && go test -race -count=1 -timeout 45m -tags full ./...
+	cd aintercept && go test -count=1 -timeout 15m -tags full -run '^TestReplicaMemoryFlatInHistory$$' ./internal/stream/
 
 .PHONY: check-api
 check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with a 90% coverage floor, requirements.json

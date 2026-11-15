@@ -19,7 +19,15 @@ import (
 // history in its bucket (on disk, as in S3), its peak heap while it processes
 // the same new batch on a cold cache (every key loaded back), and while it
 // compacts, stays within 15% of the 1× run's. Its key-state cache is capped.
+//
+// It is one goroutine's work, so -race checks nothing here and slows it tenfold
+// (about 15 minutes on a CI runner, which pushed the package past its timeout),
+// and the detector's instrumentation skews the heap it measures: under -race it
+// skips, and make test-full runs it again without -race.
 func TestReplicaMemoryFlatInHistory(t *testing.T) {
+	if raceOn {
+		t.Skip("one goroutine, slow under -race: make test-full runs it without -race")
+	}
 	type peaks struct{ cycle, compact uint64 }
 	run := func(history int) peaks {
 		dir := t.TempDir()
