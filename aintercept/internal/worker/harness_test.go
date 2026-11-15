@@ -49,7 +49,7 @@ type env struct {
 }
 
 // Every run's drawer render is held to a whole render (§3.7's incremental render).
-func init() { drawer.VerifyIncremental = true }
+func init() { drawer.VerifyIncremental, render.VerifyIncremental = true, true }
 
 func newEnv(t testing.TB) *env {
 	t.Helper()

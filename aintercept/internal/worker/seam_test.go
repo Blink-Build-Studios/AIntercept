@@ -3,6 +3,7 @@ package worker
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
-	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/tail"
 )
 
@@ -57,23 +57,18 @@ func TestTailFlagsAndRunsConsume(t *testing.T) {
 }
 
 // recRender is a renderer that writes one session_rows row per run (its
-// events count) and counts the runs it saw with and without a baseline.
+// events count) and records the warm state each run was given: its warm
+// state is the number of the commit that wrote it.
 type recRender struct {
-	warm, cold int
-	fail       bool
+	warms []any
+	fail  bool
 }
-
-func (r *recRender) Baseline(string, *state.KeyState, string) (any, error) { return nil, nil }
 
 func (r *recRender) Render(in RenderInput) (RenderOutput, error) {
 	if r.fail {
 		return RenderOutput{}, errors.New("render failed")
 	}
-	if in.Baseline == nil {
-		r.cold++
-	} else {
-		r.warm++
-	}
+	r.warms = append(r.warms, in.Warm)
 	tb := pg.TableNamed("session_rows")
 	row := make([]any, len(tb.Columns))
 	for i, c := range tb.Columns {
@@ -84,7 +79,7 @@ func (r *recRender) Render(in RenderInput) (RenderOutput, error) {
 			row[i] = int64(len(in.State.Rows()["fact_events"]))
 		}
 	}
-	return RenderOutput{Changes: []pg.Changes{{Table: "session_rows", Upserts: [][]any{row}}}, Baseline: in.Prev.N + 1, RenderVersion: 7}, nil
+	return RenderOutput{Changes: []pg.Changes{{Table: "session_rows", Upserts: [][]any{row}}}, Warm: in.Prev.N + 1, RenderVersion: 7}, nil
 }
 
 func TestRenderSeam(t *testing.T) {
@@ -107,8 +102,8 @@ func TestRenderSeam(t *testing.T) {
 	e.clock.Advance(time.Second)
 	e.ingest("a", 4)
 	e.drain(w)
-	if events() != 6 || r.cold != 1 || r.warm != 1 {
-		t.Fatalf("events %d; renders cold %d warm %d (want 6, 1, 1)", events(), r.cold, r.warm)
+	if events() != 6 || !reflect.DeepEqual(r.warms, []any{nil, int64(1)}) {
+		t.Fatalf("events %d; warm states %v (want 6, [nil 1])", events(), r.warms)
 	}
 	// A failed render commits nothing: no key row, no stored inputs, no rendered rows.
 	r.fail = true
@@ -118,11 +113,15 @@ func TestRenderSeam(t *testing.T) {
 	if events() != 6 || e.keyRow(key).N != 2 || e.flagOf(key).failures != 1 {
 		t.Fatalf("after a failed render: events %d, n %d, flag %+v", events(), e.keyRow(key).N, e.flagOf(key))
 	}
-	// The warm state went with it: the next render starts cold.
+	// The warm state went with it: the next run loads cold, and its render
+	// gets the warm state commit 2 wrote, decoded from the key's snapshot.
+	if w.Warm(key) {
+		t.Fatal("a failed run kept its warm state")
+	}
 	r.fail = false
 	e.drain(w)
-	if events() != 9 || r.cold != 2 {
-		t.Fatalf("events %d, cold renders %d", events(), r.cold)
+	if events() != 9 || !reflect.DeepEqual(r.warms, []any{nil, int64(1), int64(2)}) {
+		t.Fatalf("events %d, warm states %v", events(), r.warms)
 	}
 	e.storedOnly = true
 	e.check()
@@ -148,8 +147,8 @@ func TestKeyRowFacts(t *testing.T) {
 }
 
 // A key whose rendered rows another render version wrote has them all
-// rewritten by its next commit; a cold load renders its baseline from the
-// state, and stays exact.
+// rewritten by its next commit; a cold load decodes its snapshot, and stays
+// exact.
 func TestRenderVersionRewritesTheSession(t *testing.T) {
 	e := newEnv(t)
 	key := sessionKey("a")

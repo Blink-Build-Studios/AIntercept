@@ -86,7 +86,9 @@ func Render(in Inputs) ([]Request, []Event, []StepCount) { return RenderNext(in,
 // renders every row. prev is consumed: a memo is the next render's once.
 func RenderNext(in Inputs, prev *Memo, changed Changed) *Memo {
 	if prev == nil {
-		return whole(in)
+		m := whole(in)
+		m.settle()
+		return m
 	}
 	if prev.used || changed == nil {
 		panic("drawer: a memo rendered from twice, or no changes given")
@@ -136,7 +138,25 @@ func RenderNext(in Inputs, prev *Memo, changed Changed) *Memo {
 	if VerifyIncremental {
 		verify(in, &m)
 	}
+	m.settle()
 	return &m
+}
+
+// settle ends a render: what the next one sets again (the run's Part, the
+// change tracking) goes, so the memo is plain data a snapshot holds; and the
+// events' parsed metadata goes, keeping what was read of it (mdFields): a
+// parsed tree is several times its JSON, which the state keeps, and a later
+// render parses again only an event it reads a new key of.
+func (m *Memo) settle() {
+	s := m.scope
+	if s == nil {
+		return
+	}
+	s.part, s.ch, s.rec = nil, nil, nil
+	for _, e := range s.parsed {
+		e.md = nil
+	}
+	s.parsed = nil
 }
 
 // whole is every row of the key, from a scope built whole.

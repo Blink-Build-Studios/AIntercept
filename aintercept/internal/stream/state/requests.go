@@ -445,7 +445,8 @@ func (s *KeyState) txRow(d *Delta, callID string) {
 
 // putEq is put for a row that holds slices (compared deeply).
 func (rs rowSet) putEq(d *Delta, table, id string, row any) {
-	if cur, ok := rs[table][id]; ok && reflect.DeepEqual(cur, row) {
+	cur, ok := rs[table][id]
+	if ok && reflect.DeepEqual(cur, row) {
 		return
 	}
 	t := rs[table]
@@ -454,7 +455,7 @@ func (rs rowSet) putEq(d *Delta, table, id string, row any) {
 		rs[table] = t
 	}
 	t[id] = row
-	d.Changes = append(d.Changes, Change{Table: table, ID: id, Row: row})
+	d.Changes = append(d.Changes, Change{Table: table, ID: id, Row: row, Old: cur})
 }
 
 // pendingOfStart is a call's start as the processor holds a call in flight:

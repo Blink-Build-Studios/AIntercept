@@ -22,7 +22,7 @@ type Span struct{ A, B int64 }
 type spans struct{ m *omap[int64, int64] }
 
 func newSpans() *spans {
-	return &spans{m: newOmap[int64, int64](func(a, b int64) bool { return a < b })}
+	return &spans{m: newOmap[int64, int64](lessInt64)}
 }
 
 // add merges w in: the merged window it made or grew, or false when w was

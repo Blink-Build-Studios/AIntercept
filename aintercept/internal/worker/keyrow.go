@@ -15,11 +15,18 @@ import (
 type KeyRow struct {
 	Key         string
 	N           int64
-	State       []string // the state chunks, oldest first (relative to the key's folder)
+	State       []string // the state chunks (the journal), oldest first (relative to the key's folder)
 	StateLevels []int    // each chunk's compaction tier
-	LastApplied string   // the newest in/ name applied
-	Grace       []string // in/ names applied within the grace window
-	Garbage     []rollup.Garbage
+	// StateRecords is each chunk's records (v8: a load skips the chunks its
+	// snapshot holds; a row from before has none: every chunk is read).
+	StateRecords []int64
+	// Snapshot is the key's newest snapshot ("": none), holding the journal's
+	// first SnapshotRecords records (v8, §2).
+	Snapshot        string
+	SnapshotRecords int64
+	LastApplied     string   // the newest in/ name applied
+	Grace           []string // in/ names applied within the grace window
+	Garbage         []rollup.Garbage
 	// RenderVersion is the version of the render that wrote the key's rendered rows.
 	RenderVersion int
 	UpdatedNS     int64
@@ -36,6 +43,16 @@ type KeyRow struct {
 	// Render is the key's flag's render (dirty_keys.render, not a keys column):
 	// the run renders and commits even with no new file (§3.7).
 	Render bool
+	// Inputs are the key's dirty_inputs (not a keys column): what changed for
+	// its render, which the run re-reads and its commit consumes.
+	Inputs []DirtyInput
+}
+
+// DirtyInput is a dirty_inputs row: an input of the key's render another
+// key's commit changed (kind "parts": a batch's parts), at its seq.
+type DirtyInput struct {
+	Kind, ID string
+	Seq      int64
 }
 
 // Querier is a pool or a transaction.
@@ -46,21 +63,31 @@ type Querier interface {
 const keyColumns = `coalesce(k.n, 0), coalesce(k.state, '{}'), coalesce(k.state_levels, '{}'), coalesce(k.last_applied, ''),
 	coalesce(k.grace, '{}'), coalesce(k.garbage, '[]'), coalesce(k.render_version, 0), coalesce(k.updated_ns, 0),
 	coalesce(k.newest_row_ns, 0), coalesce(k.expires_ns, 0), coalesce(k.day, ''), coalesce(k.first_request_ns, 0),
-	coalesce(k.earliest_ns, 0), coalesce(k.content_retained, false)`
+	coalesce(k.earliest_ns, 0), coalesce(k.content_retained, false), coalesce(k.state_records, '{}'),
+	coalesce(k.snapshot, ''), coalesce(k.snapshot_records, 0)`
 
-// readRow is key's row and its flag's seq in one round (§2 Run 1): with no
-// row, N is 0; with no flag, seq is 0.
+// readRow is key's row, its flag's seq and its dirty inputs in one round
+// (§2 Run 1): with no row, N is 0; with no flag, seq is 0.
 func readRow(ctx context.Context, q Querier, key string) (KeyRow, int64, error) {
 	row := KeyRow{Key: key}
 	var seq int64
 	var levels []int32
 	var garbage []byte
-	err := q.QueryRow(ctx, `SELECT coalesce(d.seq, 0), coalesce(d.render, false), `+keyColumns+`
-		FROM (SELECT $1::text AS key) q LEFT JOIN keys k ON k.key = q.key LEFT JOIN dirty_keys d ON d.key = q.key`, key).Scan(
+	var kinds, ids []string
+	var seqs []int64
+	err := q.QueryRow(ctx, `SELECT coalesce(d.seq, 0), coalesce(d.render, false), `+keyColumns+`,
+		coalesce(i.kinds, '{}'), coalesce(i.ids, '{}'), coalesce(i.seqs, '{}')
+		FROM (SELECT $1::text AS key) q LEFT JOIN keys k ON k.key = q.key LEFT JOIN dirty_keys d ON d.key = q.key
+		LEFT JOIN LATERAL (SELECT array_agg(kind ORDER BY kind, id) AS kinds, array_agg(id ORDER BY kind, id) AS ids,
+		  array_agg(seq ORDER BY kind, id) AS seqs FROM dirty_inputs WHERE key = q.key) i ON true`, key).Scan(
 		&seq, &row.Render, &row.N, &row.State, &levels, &row.LastApplied, &row.Grace, &garbage, &row.RenderVersion, &row.UpdatedNS,
-		&row.NewestRowNS, &row.ExpiresNS, &row.Day, &row.FirstRequestNS, &row.EarliestNS, &row.ContentRetained)
+		&row.NewestRowNS, &row.ExpiresNS, &row.Day, &row.FirstRequestNS, &row.EarliestNS, &row.ContentRetained, &row.StateRecords,
+		&row.Snapshot, &row.SnapshotRecords, &kinds, &ids, &seqs)
 	if err != nil {
 		return row, 0, err
+	}
+	for i := range kinds {
+		row.Inputs = append(row.Inputs, DirtyInput{kinds[i], ids[i], seqs[i]})
 	}
 	for _, l := range levels {
 		row.StateLevels = append(row.StateLevels, int(l))
@@ -87,17 +114,24 @@ func guard(ctx context.Context, tx pgx.Tx, prev, next KeyRow) (bool, error) {
 	for i, l := range next.StateLevels {
 		levels[i] = int32(l)
 	}
+	records := next.StateRecords
+	if records == nil {
+		records = []int64{}
+	}
 	args := []any{next.Key, prev.N, next.State, levels, next.LastApplied, next.Grace, string(garbage), next.RenderVersion,
-		next.UpdatedNS, next.NewestRowNS, next.ExpiresNS, next.Day, next.FirstRequestNS, next.EarliestNS, next.ContentRetained}
+		next.UpdatedNS, next.NewestRowNS, next.ExpiresNS, next.Day, next.FirstRequestNS, next.EarliestNS, next.ContentRetained,
+		records, next.Snapshot, next.SnapshotRecords}
 	var sql string
 	if prev.N == 0 {
 		sql = `INSERT INTO keys (key, n, state, state_levels, last_applied, grace, garbage, render_version, updated_ns,
-			newest_row_ns, expires_ns, day, first_request_ns, earliest_ns, content_retained)
-			VALUES ($1, $2 + 1, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15) ON CONFLICT (key) DO NOTHING`
+			newest_row_ns, expires_ns, day, first_request_ns, earliest_ns, content_retained, state_records, snapshot, snapshot_records)
+			VALUES ($1, $2 + 1, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+			ON CONFLICT (key) DO NOTHING`
 	} else {
 		sql = `UPDATE keys SET n = n + 1, state = $3, state_levels = $4, last_applied = $5, grace = $6, garbage = $7::jsonb,
 			render_version = $8, updated_ns = $9, newest_row_ns = $10, expires_ns = $11, day = $12, first_request_ns = $13,
-			earliest_ns = $14, content_retained = $15 WHERE key = $1 AND n = $2`
+			earliest_ns = $14, content_retained = $15, state_records = $16, snapshot = $17, snapshot_records = $18
+			WHERE key = $1 AND n = $2`
 	}
 	tag, err := tx.Exec(ctx, sql, args...)
 	if err != nil {

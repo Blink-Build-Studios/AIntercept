@@ -24,6 +24,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/render/rendertest"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/snap"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/stream/state"
 )
 
@@ -55,14 +56,14 @@ func colIndex(t *pg.Table, name string) int {
 type runner struct {
 	o       *state.Stream
 	fake    *rendertest.Fake
-	base    map[string]*render.Baseline
+	base    map[string]*render.Warm
 	pgRuns  func(*render.Diff) // also writes each diff to Postgres (nil: the fake only)
 	writes  int                // rows upserted or deleted
 	derived int                // drawer rows derived (the rest were the memo's)
 }
 
 func newRunner() *runner {
-	return &runner{o: state.NewStream(nil), fake: rendertest.New(), base: map[string]*render.Baseline{}}
+	return &runner{o: state.NewStream(nil), fake: rendertest.New(), base: map[string]*render.Warm{}}
 }
 
 func renderKey(t *testing.T, key string, s *state.KeyState) *render.Rows {
@@ -80,7 +81,7 @@ func (x *runner) run(t *testing.T, key string) {
 	r := renderKey(t, key, x.o.States()[key])
 	d := r.Diff(x.base[key])
 	x.write(t, d)
-	x.base[key] = r.Baseline()
+	x.base[key] = r.Warm()
 }
 
 func (x *runner) write(t *testing.T, d *render.Diff) {
@@ -110,24 +111,17 @@ func (x *runner) plant(t *testing.T, table string, row []any) {
 func (x *runner) apply(t *testing.T, r records.Record) {
 	t.Helper()
 	d := x.o.Apply(r)
-	changed := drawer.Changed{}
-	for _, c := range d.Changes {
-		if changed[c.Table] == nil {
-			changed[c.Table] = map[string]bool{}
-		}
-		changed[c.Table][c.ID] = true
-	}
 	key := r.RoutingKey
-	rows, err := render.RenderNext(key, x.o.States()[key].Rows(), nil, day, x.base[key], changed, nil)
+	rows, err := render.RenderNext(key, x.o.States()[key].Rows(), nil, day, x.base[key], d.Changes, nil)
 	if err != nil {
 		t.Fatalf("render %s: %v", key, err)
 	}
 	x.derived += rows.DrawerDerived()
 	x.write(t, rows.Diff(x.base[key]))
-	x.base[key] = rows.Baseline()
+	x.base[key] = rows.Warm()
 }
 
-func init() { drawer.VerifyIncremental = true }
+func init() { drawer.VerifyIncremental, render.VerifyIncremental = true, true }
 
 // onePass is the fake holding one pass's render over rs, every key written whole.
 func onePass(t *testing.T, rs []records.Record) *rendertest.Fake {
@@ -403,8 +397,9 @@ func TestRenderedShortSequencesEveryOrder(t *testing.T) {
 }
 
 // Generated sequences: shuffled, duplicated, late across hours and days, and
-// reloaded cold halfway. A cold load's baseline, the render of the replayed
-// state, is the warm one, so with nothing new it writes nothing. A changed
+// reloaded cold halfway. A cold load decodes the key's snapshot: the state
+// and the render's warm state as they were, so with nothing new it writes
+// nothing. A changed
 // render_version rewrites a key's rows whole, an older render's included.
 func TestRenderedGeneratedSequences(t *testing.T) {
 	state.Heavy(t)
@@ -430,29 +425,106 @@ func TestRenderedGeneratedSequences(t *testing.T) {
 	}
 }
 
-// coldLoad reloads every key from its checkpoint: its baseline is the render of
-// the replayed state, which is the warm one, and a run with nothing new writes
-// nothing.
+// A cold load after a crash: the key's snapshot, then journal chunks whose
+// records were committed after it (their rows written). The render catches
+// its warm state up to them, writing nothing, so the next run's diff is from
+// what Postgres holds: a row a tail commit wrote and the next run removes is
+// deleted. Generated sequences, shuffled (late records renumber), a third
+// before the snapshot, a third in the tail, a third after the load.
+func TestRenderedColdLoadsCatchUpTheTail(t *testing.T) {
+	state.Heavy(t)
+	for seed := int64(1); seed <= 8/state.SeedFrac+1; seed++ {
+		rng := rand.New(rand.NewSource(seed))
+		state.ResetBatches()
+		rs := state.GenerateHours(rng, 2, 90)
+		in := state.Shuffled(rng, rs, 10)
+		x := newRunner()
+		third := len(in) / 3
+		for _, r := range in[:third] {
+			x.apply(t, r)
+		}
+		snaps := map[string][]byte{}
+		for k, s := range x.o.States() {
+			if _, err := state.Encode(s); err != nil {
+				t.Fatal(err)
+			}
+			b, err := state.EncodeSnapshot(s, x.base[k])
+			if err != nil {
+				t.Fatal(err)
+			}
+			snaps[k] = b
+		}
+		tails := map[string][][]byte{}
+		for _, r := range in[third : 2*third] {
+			x.apply(t, r)
+			b, err := state.Encode(x.o.States()[r.RoutingKey])
+			if err != nil {
+				t.Fatal(err)
+			}
+			tails[r.RoutingKey] = append(tails[r.RoutingKey], b)
+		}
+		for k := range x.o.States() {
+			if snaps[k] == nil {
+				continue // a key the tail made: it stays warm
+			}
+			l, err := state.Load(snaps[k], 0, tails[k]...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := snap.Equal(x.o.States()[k], l.State); err != nil {
+				t.Fatalf("seed %d key %s: the loaded state isn't the warm one: %v", seed, k, err)
+			}
+			x.o.States()[k] = l.State
+			caught, err := render.RenderNext(k, l.State.Rows(), nil, day, l.Warm.(*render.Warm), l.Changes, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			x.base[k] = caught.Warm()
+		}
+		for _, r := range in[2*third:] {
+			x.apply(t, r)
+		}
+		label := fmt.Sprintf("seed %d", seed)
+		if d := x.fake.Diff(onePass(t, rs)); d != "" {
+			t.Fatalf("%s: the fake isn't one pass's render: %s", label, d)
+		}
+		checkReference(t, label, rs, x.o, x.fake)
+	}
+}
+
+// coldLoad reloads every key from its snapshot (v8): the decoded state and
+// warm state are the warm ones (every index, every running value), and a run
+// with nothing new writes nothing. Nothing is rendered to load it.
 func coldLoad(t *testing.T, x *runner) {
 	t.Helper()
 	for k, s := range x.o.States() {
-		b, err := state.Encode(s)
+		if _, err := state.Encode(s); err != nil { // the run's journal chunk
+			t.Fatal(err)
+		}
+		b, err := state.EncodeSnapshot(s, x.base[k])
 		if err != nil {
 			t.Fatal(err)
 		}
-		cold, err := state.Decode(b)
+		l, err := state.Load(b, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		x.o.States()[k] = cold
-		r := renderKey(t, k, cold)
-		if !r.Baseline().Equal(x.base[k]) {
-			t.Fatalf("key %s: the cold load's baseline isn't what the last commit wrote", k)
+		if err := snap.Equal(s, l.State); err != nil {
+			t.Fatalf("key %s: the decoded state isn't the warm one: %v", k, err)
 		}
-		if d := r.Diff(r.Baseline()); !d.Empty() {
+		warm, _ := l.Warm.(*render.Warm)
+		if err := snap.Equal(x.base[k], warm); err != nil {
+			t.Fatalf("key %s: the decoded warm state isn't the warm one: %v", k, err)
+		}
+		x.o.States()[k] = l.State
+		r, err := render.RenderNext(k, l.State.Rows(), nil, day, warm, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d := r.Diff(warm); !d.Empty() {
 			t.Fatalf("key %s: a cold load with nothing new writes %d tables", k, len(d.Tables))
 		}
-		x.base[k] = r.Baseline()
+		x.base[k] = r.Warm()
 	}
 }
 
@@ -492,7 +564,7 @@ func rewriteOne(t *testing.T, x *runner, rng *rand.Rand) {
 	}
 	r := renderKey(t, key, x.o.States()[key])
 	x.write(t, r.Rewrite())
-	x.base[key] = r.Baseline()
+	x.base[key] = r.Warm()
 	for _, tb := range render.Tables {
 		for _, row := range x.fake.Rows(tb.Name) {
 			for _, v := range row {
@@ -523,7 +595,7 @@ func lastDiff(t *testing.T, x *runner, r records.Record) *render.Diff {
 	rows := renderKey(t, r.RoutingKey, x.o.States()[r.RoutingKey])
 	d := rows.Diff(x.base[r.RoutingKey])
 	x.write(t, d)
-	x.base[r.RoutingKey] = rows.Baseline()
+	x.base[r.RoutingKey] = rows.Warm()
 	return d
 }
 

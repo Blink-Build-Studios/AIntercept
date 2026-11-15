@@ -111,6 +111,9 @@ func buildTables() []Table {
 		col("last_applied", "text"), col("grace", "text[]"), col("garbage", "jsonb"), col("render_version", "integer"),
 		col("updated_ns", "bigint"), col("newest_row_ns", "bigint"), col("expires_ns", "bigint"), col("day", "text"),
 		col("first_request_ns", "bigint"), col("earliest_ns", "bigint"), col("content_retained", "boolean"),
+		// v8 (§2): the state chunks' record counts, and the key's newest snapshot (its warm
+		// state: a cold load decodes it) with how many of the journal's records it holds.
+		col("state_records", "bigint[]"), col("snapshot", "text"), col("snapshot_records", "bigint"),
 	}, Indexes: []string{
 		"(day)", "(newest_row_ns)", "(expires_ns) WHERE expires_ns > 0", "(first_request_ns) WHERE first_request_ns > 0",
 		"(earliest_ns) WHERE earliest_ns > 0", "(content_retained) WHERE content_retained",
@@ -122,6 +125,12 @@ func buildTables() []Table {
 		// rows show, or a detail object it waits for may have landed: §3.7).
 		{Name: "render", Type: "boolean NOT NULL DEFAULT false"},
 	}, Indexes: []string{"(since)"}})
+	// dirty_inputs (§2, v8): what changed for a reader, written with its render flag in the
+	// same statement; the reader's run re-reads just those inputs (kind "parts": one batch's
+	// parts) and consumes the rows it read (by seq: a row written again mid-run stays).
+	add(Table{Name: "dirty_inputs", PK: []string{"key", "kind", "id"}, Columns: []Column{
+		notNull("key", "text"), notNull("kind", "text"), notNull("id", "text"), notNull("seq", "bigint"),
+	}})
 	add(Table{Name: "workers", PK: []string{"worker"}, Columns: []Column{notNull("worker", "text"), notNull("seen", "timestamptz")}})
 	add(Table{Name: "tail", Columns: []Column{col("last_name", "text"), col("grace", "text[]"), col("checked_at", "timestamptz")},
 		Seed: "INSERT INTO tail (last_name, grace) VALUES ('', '{}')"}) // its one row; never checked yet

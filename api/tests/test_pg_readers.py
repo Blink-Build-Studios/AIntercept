@@ -12,6 +12,7 @@ _GO = pathlib.Path(__file__).resolve().parents[2] / "aintercept" / "internal"
 # The tables only the worker reads, and the Go file whose statement does.
 _WORKER_READS = {
     "dirty_keys": "worker/claim.go",
+    "dirty_inputs": "worker/keyrow.go",
     "workers": "worker/claim.go",
     "tail": "tail/tail.go",
 }

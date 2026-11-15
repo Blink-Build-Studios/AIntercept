@@ -35,7 +35,7 @@ type Changed map[string]map[string]bool
 
 // Memo is a render's scope and rows, and what the next render needs to tell
 // which rows its changes can reach. It's kept with the warm state
-// (render.Baseline) and consumed by the next RenderNext: never use one twice.
+// (render.Warm) and consumed by the next RenderNext: never use one twice.
 type Memo struct {
 	used     bool
 	derived  int // the request rows this render derived
@@ -249,7 +249,7 @@ func fileEvent(e *canon.Event, x *ev) *filed {
 	return f
 }
 
-func eventRowHash(r process.EventRow, ok bool) uint64 {
+func eventRowHash(r evRow, ok bool) uint64 {
 	if !ok {
 		return 0
 	}
@@ -341,9 +341,10 @@ func (m *Memo) apply(in Inputs, changed Changed) *dirty {
 			d.file(f)
 		}
 	}
-	for _, r := range in.EventRowsChanged { // the session's rendered event rows that changed
-		s.rows[r.EventID] = r
-		for _, e := range s.evByID[r.EventID] {
+	for _, row := range in.EventRowsChanged { // the session's rendered event rows that changed
+		r := evRowOf(row)
+		s.rows[row.EventID] = r
+		for _, e := range s.evByID[row.EventID] {
 			if f := m.evIn[e.rowKey]; f != nil {
 				if h := eventRowHash(r, true); h != f.rowHash {
 					f.rowHash = h

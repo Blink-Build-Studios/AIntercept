@@ -138,7 +138,8 @@ func (w *Worker) forget(ctx context.Context, key string, n int64, cutoff string)
 	row.Key = key
 	err = tx.QueryRow(ctx, `SELECT `+keyColumns+` FROM keys k WHERE key = $1 AND n = $2 AND day <> '' AND day < $3 FOR UPDATE`,
 		key, n, cutoff).Scan(&row.N, &row.State, &levels, &row.LastApplied, &row.Grace, &garbage, &row.RenderVersion,
-		&row.UpdatedNS, &row.NewestRowNS, &row.ExpiresNS, &row.Day, &row.FirstRequestNS, &row.EarliestNS, &row.ContentRetained)
+		&row.UpdatedNS, &row.NewestRowNS, &row.ExpiresNS, &row.Day, &row.FirstRequestNS, &row.EarliestNS, &row.ContentRetained,
+		&row.StateRecords, &row.Snapshot, &row.SnapshotRecords)
 	if errors.Is(err, pgx.ErrNoRows) || lockTimeout(err) {
 		return row, false, nil
 	}
@@ -175,6 +176,9 @@ func (w *Worker) forget(ctx context.Context, key string, n int64, cutoff string)
 			}
 		}
 	}
+	if _, err := tx.Exec(ctx, "DELETE FROM dirty_inputs WHERE key = $1", key); err != nil {
+		return row, false, err
+	}
 	if _, err := tx.Exec(ctx, "DELETE FROM keys WHERE key = $1", key); err != nil {
 		return row, false, err
 	}
@@ -187,8 +191,8 @@ func (w *Worker) forget(ctx context.Context, key string, n int64, cutoff string)
 	return row, true, nil
 }
 
-// deleteNamed deletes what a forgotten key row named: its state chunks, its
-// garbage, and its in/ files up to its last applied. A failure leaves an
+// deleteNamed deletes what a forgotten key row named: its state chunks and
+// snapshot, its garbage, and its in/ files up to its last applied. A failure leaves an
 // orphan, never a key missing its state: the row is already gone.
 func (w *Worker) deleteNamed(ctx context.Context, row KeyRow) int {
 	dir := rollup.KeyDir(w.cfg.Prefix, row.Key)
@@ -200,6 +204,9 @@ func (w *Worker) deleteNamed(ctx context.Context, row KeyRow) int {
 	}
 	for _, c := range row.State {
 		del(dir + c)
+	}
+	if row.Snapshot != "" {
+		del(dir + row.Snapshot)
 	}
 	for _, g := range row.Garbage {
 		del(dir + g.Path)

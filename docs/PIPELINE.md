@@ -412,6 +412,21 @@ hashes every row and diffs against a baseline. v8 replaces that:
 - There's no baseline and no hashing of every row. `Tables.Baseline`, which
   rendered a whole key after a cold load, goes. A key's very first run, and a
   run after a `render_version` change, render every row once.
+- *As built (step 2):*
+  - Each change carries the row it replaced (`state.Change.Old`), and a run
+    keeps each (table, id)'s first `Old` and last `Row`: a rule takes the old
+    row's part out and puts the new one's in.
+  - The rules are `render/rules.go`'s: `session_tools`, `call_tool_uses`,
+    `session_call_days`, `agent_calls`, `agent_call_hours`, `batch_parts`.
+    The dimensions were already written from the deltas (§3.4). A rule's
+    whole render is its incremental one from nothing, so the two can't
+    disagree.
+  - The tables steps 3 to 7 make incremental (`event_rows`, `prompt_rows`,
+    `prompt_steps`, `session_marks`, `presence_segments`, `session_rows`,
+    `session_request_rows`) still render whole every run and write the rows
+    whose hash changed. Their hashes are part of the warm state and its
+    snapshot, so nothing renders them to load a key: only their own render is
+    O(session) until their step.
 - **Running values come from deltas too.** v7 recomputes these every run:
   - `FactsOf`: the key row's `day`, first request, earliest and newest row
     times;
@@ -419,9 +434,19 @@ hashes every row and diffs against a baseline. v8 replaces that:
   - `refreshWires`: the detail objects of calls that ended.
 
   v8 keeps each as a running value, updated by the run's deltas.
+  - *As built (step 2):* the state keeps them as its rows change. The facts
+    are multisets (a row that leaves takes its time with it); the batches a
+    key holds are counts by batch; the ended calls with no wire yet are a set.
+    A run reads the detail object of each of those, and the other keys' parts
+    of the batches its changes or its dirty inputs name (every batch it holds
+    only with no warm state).
 - **`dirty_inputs`** (key, kind, id) names exactly what changed for a reader.
   It's written with the flag, in the same statement. The reader re-reads just
   those inputs (one batch's parts, one call's wire), never all of its batches.
+  - *As built (step 2):* (key, kind, id, seq). A writer bumps the seq of a
+    row it writes again; the reader's commit deletes the rows it read at the
+    seq it read, so one written mid-run stays for the next run. Kind `parts`
+    is the one kind.
 - **The drawer's rows follow the same rule** (§3.7, the worker's incremental
   drawer).
 
@@ -445,6 +470,35 @@ hashes every row and diffs against a baseline. v8 replaces that:
   - **Warm bytes per key, measured:** ~7 KB of heap per record held, for
     the state and its render baseline together. The capture's heaviest
     session is 402 MB warm (57,874 records); the next is 199 MB.
+  - *Step 2, measured on the heaviest session.* The ~7 KB above undercounted
+    the state: its measurement freed the key's 114 MB journal chunk inside
+    its window. Measured with the chunk held throughout, main after #61 holds
+    11.7 KB a record. Its drawer memo kept every event's metadata parsed.
+
+    | Per record held | Main | Step 2, built by runs | Step 2, decoded |
+    |---|---|---|---|
+    | the state | 5.1 KB | 4.2 KB | 3.7 KB |
+    | the render's warm state (main: its baseline) | 6.6 KB | 2.4 KB | 2.2 KB |
+    | **total** | 11.7 KB | **6.6 KB** | **5.9 KB** |
+
+    What each part keeps alive alone (built; decoded in brackets): the
+    state's rows 1.5 KB (1.4: analytics rows 0.47, event rows 0.77, batch
+    members 0.12); the state's indexes 0.88 KB (0.71: prompts 0.46, span
+    0.15, record ids 0.11, requests 0.08, session rows 0.07); the running
+    values 0.03; the calls' wires 0.89 (0.73); the whole tables' hashes 0.09;
+    the rules 0.09; the drawer's memo 2.2 (2.0: its events' copies 0.97,
+    their read fields 0.34, its event rows 0.34, its request rows and their
+    lookups 0.27, its token index 0.13, its filed inputs 0.13, the event rows
+    it reads 0.15). Shared by two or more (an event's metadata held by its
+    analytics row, its event row and the drawer): ~0.9 KB. No minute cells
+    yet (step 6).
+
+    Cut: the drawer keeps what it read of an event's metadata, not the parsed
+    tree, and of a batch's rows and the event rows only the fields it reads;
+    the state interns the strings a session's events repeat; zstd's pooled
+    decoders no longer keep their last output alive (up to a key's journal or
+    snapshot, ~100 MB, per decoder). A decoded state is ~10% smaller (its
+    strings are stored once). The worker estimates 7,000 bytes a record.
   - **The replay gate isn't met on v7.** Records replayed by cold loads, ×
     the 1.12M applied, at the capture's real gaps. This is simulated per key,
     a run per in/ file at its S3 time, with one worker holding every key:
@@ -467,6 +521,48 @@ hashes every row and diffs against a baseline. v8 replaces that:
   - It also writes one when its delta chunks hold as many records as the
     snapshot does, so a load replays at most that tail.
   - The CPU gate's bound: replayed ≤ 1× applied.
+  - *As built (step 2):*
+    - **The journal stays the checkpoint; the snapshot sits beside it.** A
+      snapshot is the warm state's object graph (`internal/snap`: every
+      field, sharing kept), so a build whose types differ can't read one. It
+      holds a fingerprint of its types, and a key whose snapshot doesn't
+      match loads from its journal and renders whole. So a snapshot is never
+      a key's only copy. `keys.snapshot` names it, `keys.snapshot_records` is
+      the journal's records it holds, and `keys.state_records` each chunk's,
+      so a load reads only the chunks after it.
+    - **A cold load catches up.** The journal's records after the snapshot
+      were committed: a render applies them to the decoded warm state and
+      writes nothing, so the run's diff is from what Postgres holds. (Without
+      it, a row a tail commit wrote and the run removes stays.)
+    - **Going cold writes one only for a quarter tail:** when the journal
+      holds a quarter of the key's records or more since its snapshot. A
+      smaller tail costs less to apply (41 µs a record) than a snapshot to
+      write (12.8 µs a record held). That left out the catch-up render (~90
+      µs a tail record): priced in, a tenth costs less (below).
+    - **Costs, the heaviest session (57,874 records):** a snapshot is 28 MB
+      (480 bytes a record); it encodes in 0.74 s (13 µs a record held) and
+      decodes in 0.33 s (6 µs). v7's cold load replayed in 2.4 s (41 µs a
+      record) and rendered its baseline in 1.6 s.
+    - **The worst cold load** under the quarter rule (a tail of a quarter
+      of the records, the heaviest session): decode and replay 0.81 s, the
+      catch-up render 1.3 s (the drawer 1.1 s, the whole tables 0.15 s):
+      2.1 s, ~36 µs a record held. A key that goes cold again before its
+      tail reaches a quarter pays its tail again on every load.
+    - **The replay gate, simulated as v7's** (a run per in/ file at its S3
+      time, one worker), at 6,600 bytes a record held. The cost of decodes,
+      tail replays with their catch-up (~90 µs a tail record, measured) and
+      snapshot writes, × the replay of the 1.12M applied:
+
+      | Idle 60 min | No cap | 4 GiB | 2 GiB | 1 GiB | 512 MiB |
+      |---|---|---|---|---|---|
+      | quarter rule (as built) | 0.91× | 0.92× | 1.18× | 2.06× | **5.16×** (v7: 10.2×) |
+      | a snapshot for any tail | 1.09× | — | 1.33× | 2.11× | 4.89× |
+      | a snapshot for a tenth | 0.93× | — | 1.09× | 1.72× | 3.55× |
+
+      **Not met at 512 MiB**: the heaviest key alone is ~380 MB warm, and
+      at that cap the heaviest keys evict each other (4,281 loads). The
+      bytes per record are the bound; the threshold only moves the cost
+      between tails and writes.
   - This builds on #57's smaller checkpoints (merged): zstd chunks, and
     compaction that keeps each external input's last value once.
 - **Measured, why:** one cold load of the capture's heaviest session replays
@@ -513,6 +609,13 @@ There is now one kind of cross-key render read:
 - **The holder's side** (a key holding a batch call reads the parts to give the
   call its session and detail). A commit that inserts or changes a batch call's
   row takes that batch's lock, and re-checks the parts its render read.
+  - *As built (step 2):* this lands with step 2, not 7. v7 read every batch's
+    parts on every run, which hid the race; step 2 reads a batch's parts only
+    when something names it, and the side-by-side drawer tests caught a
+    credential's key that never saw a session's part. The writer finds a
+    batch's holders by their analytics `request_txs` row (as
+    `state.HoldsBatch` counts them), not their fact row: a key whose call is
+    a copy has none.
 - **Everything else another key writes is read at read time:**
   - a session's children (`session_edges` by parent) and its label (the title
     calls of its accounts in its first 5 minutes): index lookups, §3.10;
@@ -583,8 +686,9 @@ There is now one kind of cross-key render read:
 
 | Table | Columns | Primary key; indexes |
 |---|---|---|
-| `keys` | key, n, state `text[]`, state_levels `int[]`, last_applied, grace `text[]`, garbage `jsonb`, render_version, updated_ns, newest_row_ns, expires_ns, day, first_request_ns, earliest_ns, content_retained | key; (day); (newest_row_ns); partial (expires_ns) where > 0, (first_request_ns) and (earliest_ns) where > 0, (content_retained) where true |
+| `keys` | key, n, state `text[]`, state_levels `int[]`, last_applied, grace `text[]`, garbage `jsonb`, render_version, updated_ns, newest_row_ns, expires_ns, day, first_request_ns, earliest_ns, content_retained; v8: state_records `bigint[]`, snapshot, snapshot_records | key; (day); (newest_row_ns); partial (expires_ns) where > 0, (first_request_ns) and (earliest_ns) where > 0, (content_retained) where true |
 | `dirty_keys` | key, seq, since `timestamptz`, failures, last_error, failed_at `timestamptz`, render | key; (since) |
+| `dirty_inputs` (v8) | key, kind, id, seq | (key, kind, id) |
 | `workers` | worker, seen `timestamptz` | worker |
 | `tail` | one row: last_name, grace `text[]`, checked_at `timestamptz` | — |
 | `ingest_pods` | incarnation, last_ns, at (the index object's S3 time) | incarnation |
@@ -1279,6 +1383,16 @@ read everything.
   released (SIGTERM), so the next holder decodes it.
 
 The CPU gate holds all of this, cold loads included (Testing).
+
+*As built (step 2):* the rules of `session_tools`, `call_tool_uses`,
+`session_call_days`, `agent_calls`, `agent_call_hours` and `batch_parts`
+(`render/rules.go`), each tested alone (`rules_test.go`: a change of each
+input, and the rows written). On the capture's heaviest session, replayed a
+file per run at its real gaps, step 2's path (apply, the running values, the
+rules, their diff, the journal chunk) costs 47 to 51 µs a record from its
+first events to its last, a 250- to 500-record run ~17 ms either way; the
+tables steps 3 to 7 own still render whole (3 ms a run at 1k events, 131 ms
+at 53k).
 
 ### 3.12 Every table: writer, readers, size
 

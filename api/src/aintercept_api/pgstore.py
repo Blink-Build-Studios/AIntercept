@@ -64,7 +64,7 @@ T = TypeVar("T")
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "6c398638f39a0175e60b6f838d0ecd314465558c134514c36dc0ae06e63eedd5"
+SCHEMA_HASH = "ee6a8680a6f76dbce59c574d740a7c3cfe1819b2fb7b6ce39c7ff2d667f72689"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 

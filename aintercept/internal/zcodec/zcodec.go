@@ -62,5 +62,21 @@ func (c *Codec) Decode(dst, src []byte) ([]byte, error) {
 		}
 	}
 	defer func() { c.dec <- d }()
-	return d.DecodeAll(src, dst[:0])
+	out, err := d.DecodeAll(src, dst[:0])
+	// zstd's decoder keeps its frame's last block output (its sequence
+	// decoder's) until it starts another frame, so a pooled decoder would
+	// hold the largest thing it decoded alive (a key's snapshot: ~100 MB).
+	// Starting a tiny frame lets it go.
+	_, _ = d.DecodeAll(tinyFrame, nil)
+	return out, err
 }
+
+// tinyFrame is a frame of one byte.
+var tinyFrame = func() []byte {
+	e, err := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1))
+	if err != nil {
+		panic(err)
+	}
+	defer e.Close()
+	return e.EncodeAll([]byte{0}, nil)
+}()

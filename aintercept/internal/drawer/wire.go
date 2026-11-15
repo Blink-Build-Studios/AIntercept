@@ -6,6 +6,7 @@ import (
 	"compress/zlib"
 	"encoding/base64"
 	"encoding/gob"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/snap"
 	"io"
 	"regexp"
 	"sort"
@@ -67,6 +68,7 @@ func init() {
 	gob.Register(&Wire{})
 	gob.Register(Missing{})
 	gob.Register(BatchParts{})
+	snap.Register(&Wire{}, Missing{})
 }
 
 // C is w.c(key): the complete row's value.

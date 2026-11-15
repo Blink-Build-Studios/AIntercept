@@ -123,3 +123,24 @@ func fieldPath(t reflect.Type, col string) []int {
 	}
 	return nil
 }
+
+// FactsFrom is FactsOf from the state's running facts (state.Facts): the same
+// values, without reading the rows.
+func FactsFrom(key string, f state.Facts, updatedNS int64) KeyFacts {
+	out := KeyFacts{FirstRequestNS: f.First, EarliestNS: f.Earliest, RawNewestNS: f.RawNewest, ContentRetained: f.Content}
+	switch {
+	case strings.HasPrefix(key, "a:"):
+		return out
+	case strings.HasPrefix(key, "c:"), strings.HasPrefix(key, "ip:"):
+		if d := keyDay(key); d != "" {
+			out.Day = d
+			return out
+		}
+	}
+	ns := f.Newest
+	if ns == 0 {
+		ns = updatedNS
+	}
+	out.Day = time.Unix(0, ns).UTC().Format("2006-01-02")
+	return out
+}
