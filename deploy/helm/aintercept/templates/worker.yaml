@@ -60,7 +60,9 @@ spec:
               valueFrom:
                 secretKeyRef: { name: {{ .Values.postgres.existingSecret }}, key: worker-url }
             - { name: WORKER_LOADERS, value: {{ .Values.worker.loaders | quote }} }
+            - { name: WORKER_REFRESHERS, value: {{ .Values.worker.refreshers | quote }} }
             - { name: WORKER_LIST_SECONDS, value: {{ .Values.worker.listSeconds | quote }} }
+            - { name: WORKER_RETENTION_DAYS, value: {{ .Values.retention.days | int | quote }} }
             - { name: WORKER_HTTP_LISTEN, value: "0.0.0.0:9005" }
             - name: GOMEMLIMIT
               valueFrom:

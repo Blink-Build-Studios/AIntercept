@@ -9,9 +9,14 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
@@ -20,6 +25,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/refresh"
 )
 
 // loadChunk is how many records a flush writes, as the observer flushes (§2.2).
@@ -31,17 +37,22 @@ const loadChunk = 1000
 // empty database. With shuffle (a seed, nonzero), the records are written in a
 // random order instead (the order-independence gate): spooled to a temp
 // directory in random parts, then each part shuffled and written, the parts in
-// random order.
-func canonLoad(src, dsn string, shuffle int64) {
+// random order. With refreshers, that many rollup refreshers run alongside
+// the load as the workers' do, then the open calls are swept, the rest drained
+// and every rollup checked against the facts from scratch (refreshLoad).
+func canonLoad(src, dsn string, shuffle int64, refreshers int) {
 	ctx := context.Background()
 	start := time.Now()
-	db, err := pg.Open(ctx, dsn, 4)
+	db, err := pg.Open(ctx, dsn, int32(4+refreshers))
 	if err != nil {
 		fatalf("load: %v", err)
 	}
 	defer db.Close()
 	if err := pg.Apply(ctx, db); err != nil {
 		fatalf("load: %v", err)
+	}
+	if refreshers > 0 {
+		defer refreshLoad(ctx, db, refreshers)()
 	}
 	if fi, err := os.Stat(filepath.Join(src, "raw")); err == nil && fi.IsDir() {
 		if shuffle != 0 {
@@ -87,6 +98,137 @@ func canonLoad(src, dsn string, shuffle int64) {
 	if err := summarize(ctx, db); err != nil {
 		fatalf("load: %v", err)
 	}
+}
+
+// refreshLoad starts n refreshers (and the sweep, every 5 s) and returns
+// what ends them: it stops them, sweeps, drains and checks every rollup
+// against the facts from scratch, printing what each took.
+func refreshLoad(ctx context.Context, db *pgxpool.Pool, n int) func() {
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var refreshed atomic.Int64
+	run := func(f func() error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				if err := f(); err != nil {
+					fatalf("refresh: %v", err)
+				}
+				select {
+				case <-stop:
+					return
+				case <-time.After(100 * time.Millisecond):
+				}
+			}
+		}()
+	}
+	for i := 0; i < n; i++ {
+		run(func() error { k, err := refresh.Drain(ctx, db); refreshed.Add(int64(k)); return err })
+	}
+	run(func() error { _, err := refresh.Sweep(ctx, db); time.Sleep(5 * time.Second); return err })
+	return func() {
+		close(stop)
+		wg.Wait()
+		during := refreshed.Load()
+		t := time.Now()
+		swept, err := refresh.Sweep(ctx, db)
+		if err != nil {
+			fatalf("refresh: sweep: %v", err)
+		}
+		var drained atomic.Int64
+		var dg sync.WaitGroup
+		for i := 0; i < n; i++ {
+			dg.Add(1)
+			go func() {
+				defer dg.Done()
+				k, err := refresh.Drain(ctx, db)
+				if err != nil {
+					fatalf("refresh: %v", err)
+				}
+				drained.Add(int64(k))
+			}()
+		}
+		dg.Wait()
+		fmt.Printf("refresh: %d rows refreshed during the load; then %d calls swept and %d rows drained in %.1fs\n",
+			during, swept, drained.Load(), time.Since(t).Seconds())
+		t = time.Now()
+		res, err := refresh.Check(ctx, db)
+		if err != nil {
+			fatalf("refresh: check: %v", err)
+		}
+		fmt.Printf("  %-16s %10s %10s %8s %8s %24s  (from scratch in %.1fs)\n", "rollup", "rows", "scratch", "missing", "extra", "checksum", time.Since(t).Seconds())
+		for _, r := range res {
+			mark := "equal"
+			if !r.Equal() {
+				mark = "DIFFERENT"
+			}
+			fmt.Printf("  %-16s %10d %10d %8d %8d %24s  %s\n", r.Table, r.Rows, r.Scratch, r.Missing, r.Extra, r.Checksum, mark)
+		}
+		timeRefreshes(ctx, db)
+	}
+}
+
+// timeRefreshes refreshes every rollup row once more, one at a time, and
+// prints what a refresh of each kind costs on this data (§5.1: one over 50 ms
+// goes back to the owner).
+func timeRefreshes(ctx context.Context, db *pgxpool.Pool) {
+	fmt.Printf("  %-12s %8s %9s %9s %9s %9s  %s\n", "refresh", "rows", "mean ms", "p99 ms", "max ms", "over 50", "slowest")
+	for _, k := range []struct{ kind, sql string }{
+		{"minute", "SELECT session_id || '/' || minute_ns FROM session_minutes"},
+		{"hour", "SELECT session_id || '/' || hour_ns FROM session_hours"},
+		{"cred_minute", "SELECT DISTINCT key_hash || '/' || minute_ns FROM cred_minutes"},
+		{"cred_hour", "SELECT DISTINCT key_hash || '/' || hour_ns FROM cred_hours"},
+	} {
+		rows, err := db.Query(ctx, k.sql)
+		if err != nil {
+			fatalf("refresh: time: %v", err)
+		}
+		keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			fatalf("refresh: time: %v", err)
+		}
+		ds := make([]time.Duration, 0, len(keys))
+		var total time.Duration
+		slowest := ""
+		for _, key := range keys {
+			t := time.Now()
+			if err := refresh.Refresh(ctx, db, refresh.Claim{Kind: k.kind, Key: key}); err != nil {
+				fatalf("refresh: time: %v", err)
+			}
+			d := time.Since(t)
+			if len(ds) == 0 || d > slices.Max(ds) {
+				slowest = key
+			}
+			ds = append(ds, d)
+			total += d
+		}
+		if len(ds) == 0 {
+			continue
+		}
+		slices.Sort(ds)
+		over := len(ds) - sort.Search(len(ds), func(i int) bool { return ds[i] > 50*time.Millisecond })
+		ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
+		fmt.Printf("  %-12s %8d %9.2f %9.2f %9.2f %9d  %s\n", k.kind, len(ds), ms(total/time.Duration(len(ds))),
+			ms(ds[len(ds)*99/100]), ms(ds[len(ds)-1]), over, slowestShape(ctx, db, k.kind, slowest))
+	}
+	if _, err := refresh.Drain(ctx, db); err != nil { // what the timing marked
+		fatalf("refresh: %v", err)
+	}
+}
+
+// slowestShape is the size of the slowest refresh's input, not its key (keys
+// are real identifiers).
+func slowestShape(ctx context.Context, db *pgxpool.Pool, kind, key string) string {
+	i := strings.LastIndexByte(key, '/')
+	if i < 0 || kind != "hour" {
+		return ""
+	}
+	var events, calls int64
+	_ = db.QueryRow(ctx, `SELECT (SELECT count(*) FROM events WHERE session_id = $1 AND ts_ns >= $2::bigint AND ts_ns < $2::bigint + 3600000000000),
+		(SELECT count(*) FROM calls WHERE session_id = $1 AND start_ns >= $2::bigint AND start_ns < $2::bigint + 3600000000000)`,
+		key[:i], key[i+1:]).Scan(&events, &calls)
+	return fmt.Sprintf("(an hour of %d events, %d calls)", events, calls)
 }
 
 func summarize(ctx context.Context, db *pgxpool.Pool) error {

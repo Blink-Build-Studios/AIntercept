@@ -18,19 +18,24 @@ import (
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/refresh"
 )
 
-// Run is `aintercept worker`: v9's workers (docs/PIPELINE.md §2.2). Every
+// Run is `aintercept worker`: v9's workers (docs/PIPELINE.md §2.2, §5). Every
 // second each replica lists new raw files (when it holds the listing's lock
-// and ListEvery has passed) and loads unloaded files until none is left.
+// and ListEvery has passed), loads unloaded files until none is left,
+// refreshes dirty rollup rows until none is left to claim, and runs the
+// housekeeping when it's due and the replica holds its lock.
 // Configured by environment:
 //
-//	WORKER_POSTGRES_URL   the worker login's DSN (required)
-//	WORKER_LOCAL_DIR      a local directory as the store (development), or
+//	WORKER_POSTGRES_URL    the worker login's DSN (required)
+//	WORKER_LOCAL_DIR       a local directory as the store (development), or
 //	WORKER_S3_BUCKET, _REGION, _ENDPOINT, _PREFIX, _ACCESS_KEY_ID, _SECRET_ACCESS_KEY, _FORCE_PATH_STYLE
-//	WORKER_LOADERS        files loaded at once (default 2)
-//	WORKER_LIST_SECONDS   how often to list (default 5)
-//	WORKER_HTTP_LISTEN    /healthz, /lag and /metrics (default 0.0.0.0:9005)
+//	WORKER_LOADERS         files loaded at once (default 2)
+//	WORKER_REFRESHERS      rollup rows refreshed at once (default 2)
+//	WORKER_LIST_SECONDS    how often to list (default 5)
+//	WORKER_RETENTION_DAYS  facts older than this are deleted (default 15; 0: never)
+//	WORKER_HTTP_LISTEN     /healthz, /lag and /metrics (default 0.0.0.0:9005)
 func Run() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -47,8 +52,8 @@ func Run() {
 	if err != nil {
 		fail("store", err)
 	}
-	loaders := envInt("WORKER_LOADERS", 2)
-	db, err := pg.Open(ctx, dsn, int32(loaders+2))
+	loaders, refreshers := envInt("WORKER_LOADERS", 2), envInt("WORKER_REFRESHERS", 2)
+	db, err := pg.Open(ctx, dsn, int32(loaders+refreshers+2))
 	if err != nil {
 		fail("Postgres", err)
 	}
@@ -66,16 +71,23 @@ func Run() {
 			slog.Error("worker: http", "err", err)
 		}
 	}()
-	slog.Info("worker: running", "loaders", loaders, "prefix", prefix)
-	Loop(ctx, db, store, prefix, loaders, time.Duration(envInt("WORKER_LIST_SECONDS", 5))*time.Second)
+	days := 15
+	if n, err := strconv.Atoi(os.Getenv("WORKER_RETENTION_DAYS")); err == nil && n >= 0 {
+		days = n
+	}
+	slog.Info("worker: running", "loaders", loaders, "refreshers", refreshers, "retention_days", days, "prefix", prefix)
+	hk := &refresh.Housekeeper{SweepEvery: 30 * time.Second, RetainEvery: time.Hour, RetentionDays: days}
+	Loop(ctx, db, store, prefix, loaders, refreshers, hk, time.Duration(envInt("WORKER_LIST_SECONDS", 5))*time.Second)
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(sctx)
 }
 
-// Loop lists and loads until ctx ends. A failure (Postgres or the store down)
-// is logged and retried on the next tick.
-func Loop(ctx context.Context, db *pgxpool.Pool, store process.Store, prefix string, loaders int, listEvery time.Duration) {
+// Loop lists, loads, refreshes and keeps house until ctx ends. A failure
+// (Postgres or the store down) is logged and retried on the next tick. hk nil:
+// no housekeeping.
+func Loop(ctx context.Context, db *pgxpool.Pool, store process.Store, prefix string, loaders, refreshers int,
+	hk *refresh.Housekeeper, listEvery time.Duration) {
 	var listed time.Time
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -111,6 +123,21 @@ func Loop(ctx context.Context, db *pgxpool.Pool, store process.Store, prefix str
 			}()
 		}
 		wg.Wait()
+		for i := 0; i < refreshers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, err := refresh.Drain(ctx, db); err != nil && ctx.Err() == nil {
+					slog.Warn("worker: refresh", "err", err)
+				}
+			}()
+		}
+		wg.Wait()
+		if hk != nil {
+			if err := hk.Run(ctx, db); err != nil && ctx.Err() == nil {
+				slog.Warn("worker: housekeeping", "err", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -119,8 +146,9 @@ func Loop(ctx context.Context, db *pgxpool.Pool, store process.Store, prefix str
 	}
 }
 
-// Handler serves /healthz, /lag ({"oldest_unloaded_seconds": s}) and
-// /metrics. With Postgres unreachable /lag errors, and KEDA holds the count.
+// Handler serves /healthz, /lag ({"oldest_unloaded_seconds": s}: the oldest
+// unloaded file or dirty rollup row) and /metrics. With Postgres unreachable
+// /lag errors, and KEDA holds the count.
 func Handler(db *pgxpool.Pool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(rw http.ResponseWriter, _ *http.Request) { _, _ = rw.Write([]byte("ok\n")) })

@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/flush"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/refresh"
 )
 
 // ListLock is the listing's advisory lock ("aintercept" in ASCII, then a
@@ -161,14 +161,8 @@ func LoadTx(ctx context.Context, tx pgx.Tx, key string, b []byte) error {
 	return nil
 }
 
-// Lag is the age of the oldest unloaded file (0: none): /lag
-// (docs/PIPELINE.md §5.5; the dirty rows join it with the rollups, step 4).
+// Lag is the age of the oldest unloaded file or dirty rollup row (0: none):
+// /lag (docs/PIPELINE.md §5.5, refresh.Lag).
 func Lag(ctx context.Context, db *pgxpool.Pool) (time.Duration, error) {
-	var secs float64
-	err := db.QueryRow(ctx, `SELECT coalesce(extract(epoch FROM now() - min(listed_at)), 0)::float8
-		FROM ingest_files WHERE loaded_at IS NULL`).Scan(&secs)
-	if err != nil {
-		return 0, err
-	}
-	return time.Duration(math.Round(max(secs, 0)*1e6)) * time.Microsecond, nil
+	return refresh.Lag(ctx, db)
 }

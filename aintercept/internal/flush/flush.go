@@ -31,7 +31,11 @@ type Rows struct {
 	// ReportIDs are the model calls' request and client request ids: the
 	// minutes of their reports are marked dirty too (§4.3).
 	ReportIDs []string
-	LastNS    int64 // the newest time in the records
+	// ReportedIDs are the reports' (Claude Code's tengu_api_success) request
+	// and client request ids: the minutes of their calls are marked dirty too,
+	// so a call whose report came later stops counting as unreported.
+	ReportedIDs []string
+	LastNS      int64 // the newest time in the records
 }
 
 // Call is a calls row: the record's request, and what's derived at insert.
@@ -111,7 +115,7 @@ func Collapse(recs []records.Record) Rows {
 	devs := map[[2]string]*Device{}
 	parents := map[[2]string]*Parent{}
 	dirty := map[Dirty]bool{}
-	reports := map[string]bool{}
+	reports, reported := map[string]bool{}, map[string]bool{}
 	var last int64
 
 	account := func(id string, ns int64) *Account {
@@ -181,6 +185,13 @@ func Collapse(recs []records.Record) Rows {
 			if e.PromptID != "" {
 				dirty[Dirty{"prompt", e.PromptID}] = true
 			}
+			if e.Source == canon.ProductClaudeCode && e.Name == "tengu_api_success" {
+				for _, id := range []string{e.RequestID, e.ClientRequestID} {
+					if id != "" {
+						reported[id] = true
+					}
+				}
+			}
 			if e.Source != canon.ProductClaudeCode || e.PersonID == "" {
 				continue
 			}
@@ -226,7 +237,9 @@ func Collapse(recs []records.Record) Rows {
 			if row.Scope != c.SessionID {
 				minute("minute", row.Scope, at)
 			}
-			minute("cred_minute", c.KeyHash, at)
+			if agentCall(c) { // the credential rollups count coding agents' calls (refresh: agentCalls)
+				dirty[Dirty{"cred_minute", fmt.Sprintf("%s/%d", c.KeyHash, at-at%minuteNS)}] = true
+			}
 			if c.PromptID != "" {
 				dirty[Dirty{"prompt", c.PromptID}] = true
 			}
@@ -289,7 +302,22 @@ func Collapse(recs []records.Record) Rows {
 		out.ReportIDs = append(out.ReportIDs, id)
 	}
 	slices.Sort(out.ReportIDs)
+	for id := range reported {
+		out.ReportedIDs = append(out.ReportedIDs, id)
+	}
+	slices.Sort(out.ReportedIDs)
 	return out
+}
+
+// agentCall is whether a call is Claude Code's or Codex's and not a probe (the
+// API's agent_calls: render/rules.go agentCall), a call to Anthropic's API with
+// no product being Claude Code's.
+func agentCall(c *canon.Request) bool {
+	p := c.Product
+	if p == "" && c.Host == "api.anthropic.com" {
+		p = canon.ProductClaudeCode
+	}
+	return !c.Synthetic && (p == canon.ProductClaudeCode || p == canon.ProductCodex)
 }
 
 // eventBefore is whether a is an earlier copy of an event than b: a resent

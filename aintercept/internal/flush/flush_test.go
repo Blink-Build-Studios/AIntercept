@@ -311,6 +311,43 @@ func TestModelCallMarksItsReportsMinutes(t *testing.T) {
 	}
 }
 
+func TestReportMarksItsCallsMinutes(t *testing.T) {
+	db := fresh(t)
+	write(t, db, end("a", "s", t0, t0+5))
+	if _, err := db.Exec(ctx(t), "DELETE FROM dirty"); err != nil {
+		t.Fatal(err)
+	}
+	rep := event("b1", 1, "e1", "s", t0+10*minute)
+	rep.Event.Name, rep.Event.RequestID = "tengu_api_success", "req-a"
+	write(t, db, rep)
+	var n int
+	if err := db.QueryRow(ctx(t), "SELECT count(*) FROM dirty WHERE kind = 'minute' AND key = $1",
+		fmt.Sprintf("s/%d", t0)).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Error("the reported call's minute isn't marked dirty")
+	}
+}
+
+// The credential rollups count coding agents' calls, with or without a
+// credential; other calls mark none.
+func TestCollapseMarksCredentialsOfAgentCalls(t *testing.T) {
+	bare := end("b", "s", t0, t0+5)
+	bare.Call.KeyHash = ""
+	web := end("w", "", t0, t0+5)
+	web.Call.Product, web.Call.Host = "", "example.com"
+	var got []string
+	for _, d := range Collapse([]records.Record{bare, web}).Dirty {
+		if d.Kind == "cred_minute" {
+			got = append(got, d.Key)
+		}
+	}
+	if want := []string{fmt.Sprintf("/%d", t0)}; !reflect.DeepEqual(got, want) {
+		t.Errorf("cred_minute %v, want %v", got, want)
+	}
+}
+
 func TestDirtyIsMarkedAgain(t *testing.T) {
 	db := fresh(t)
 	write(t, db, start("a", "s", t0))
