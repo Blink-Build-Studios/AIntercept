@@ -266,7 +266,7 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 Two values are read at the page instead (they're few, and a late record changes them):
 - **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
 - **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
-| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (and with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
+| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
 
 ### 5.3 Dirty kinds
 
@@ -373,8 +373,9 @@ per session within retention.
 
 **The directory sums activity inside the window** (owner decision 2), not the
 lifetime totals of the sessions active in it. A day row's numbers are its
-sessions' activity that day, so a session active on two days of the window
-counts on each. **`/coverage` is deleted** (owner decision 3).
+sessions' activity that day, and it keeps their ids, so a person's sessions are
+the distinct ids of the window's day rows: a session active on several days
+counts once. **`/coverage` is deleted** (owner decision 3).
 
 ### 6.5 Features removed (owner decision 6)
 

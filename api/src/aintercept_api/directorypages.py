@@ -13,8 +13,8 @@
   probe's while waiting);
   whether any call kept its content; `lastDataAt` from `ingest_pods`.
 
-A day row's numbers are its sessions' activity that day (refresh/days.go): a session active on two days of
-the window counts on each.
+A day row's numbers are its sessions' activity that day (refresh/days.go); a row's sessions are the distinct
+ids of its days' sessions, so a session active on several days of the window counts once.
 """
 
 from collections import Counter, defaultdict
@@ -72,8 +72,11 @@ _PEOPLE = f"""WITH win AS (
   strip AS (
     SELECT g.pid, sum(d.model_calls) AS n FROM account_days d JOIN grp g USING (account_id)
     WHERE d.day_ns >= %(strip)s GROUP BY g.pid),
+  sess AS (
+    SELECT g.pid, count(DISTINCT x.sid) AS sessions FROM win w JOIN grp g USING (account_id),
+      unnest(w.session_ids) x(sid) GROUP BY g.pid),
   rows AS (
-    SELECT g.pid, sum(w.sessions)::bigint AS sessions, sum(w.sessions_with_events)::bigint AS with_events,
+    SELECT g.pid, sum(w.sessions_with_events)::bigint AS with_events,
       sum(w.prompts)::bigint AS prompts, sum(w.model_calls)::bigint AS calls,
       sum(w.outputs_known)::bigint AS outputs_known, sum(w.tokens_output)::bigint AS tokens_out,
       sum(w.queries)::bigint AS queries, sum(w.bypassed)::bigint AS bypassed,
@@ -84,7 +87,7 @@ _PEOPLE = f"""WITH win AS (
   named AS (
     SELECT r.*, coalesce(s.n, 0) AS activity, coalesce(%(now)s - rc.last <= {cc.LIVE_WITHIN_NS}, false) AS live,
       m.name, m.email
-    FROM rows r LEFT JOIN strip s USING (pid) LEFT JOIN recent rc USING (pid)
+    FROM (SELECT * FROM rows JOIN sess USING (pid)) r LEFT JOIN strip s USING (pid) LEFT JOIN recent rc USING (pid)
     LEFT JOIN LATERAL (
       SELECT (array_agg(b.name ORDER BY b.account_id COLLATE "C") FILTER (WHERE b.name <> ''))[1] AS name,
              (array_agg(b.email ORDER BY b.account_id COLLATE "C") FILTER (WHERE b.email <> ''))[1] AS email
@@ -349,11 +352,11 @@ class DirectoryReads:
         )
 
     def _sessions_by(self, now: int, lo: int | None, hi: int | None) -> dict[str, int]:
-        """Each agent's sessions in the window: its day rows' sessions."""
+        """Each agent's sessions in the window: the distinct sessions of its day rows."""
         got = self.snap.rows(
             "sessions_by",
-            "SELECT agent, sum(sessions)::bigint FROM account_days WHERE day_ns >= %(dlo)s AND day_ns <= %(dhi)s"
-            " GROUP BY agent",
+            "SELECT d.agent, count(DISTINCT s.sid) FROM account_days d, unnest(d.session_ids) s(sid)"
+            " WHERE d.day_ns >= %(dlo)s AND d.day_ns <= %(dhi)s GROUP BY d.agent",
             {"dlo": -_FAR if lo is None else _day_of(lo), "dhi": _FAR if hi is None else hi},
         )
         return {a: int(n) for a, n in got}

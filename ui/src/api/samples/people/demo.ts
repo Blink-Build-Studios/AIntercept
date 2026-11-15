@@ -124,7 +124,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "orgKind": "unknown",
       "personId": "7d2e0000-0000-4000-8000-00000000a41c",
       "prompts": 43,
-      "sessions": 3,
+      "sessions": 1,
       "tokensAccuracy": "estimated",
       "tokensOut": 694376
     }

@@ -1343,12 +1343,14 @@ CREATE TABLE sessions (
 );
 
 -- An account's activity in one UTC day, per agent (the directory's numbers, owner decision 2):
--- the sessions it appears on that were active that day, and their hours' sums in the day.
+-- the sessions it appears on that were active that day (and their ids: a window's distinct sessions
+-- are the distinct ids of its days), and their hours' sums in the day.
 CREATE TABLE account_days (
     account_id text NOT NULL,
     day_ns bigint NOT NULL,
     agent text NOT NULL,
     sessions bigint NOT NULL,
+    session_ids text[] NOT NULL,
     sessions_with_events bigint NOT NULL,
     prompts bigint NOT NULL,
     model_calls bigint NOT NULL,

@@ -11,7 +11,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "highestWeekPct": null,
         "missedCalls": 95,
         "people": 1,
-        "sessions": 3,
+        "sessions": 1,
         "shape": "sessions\u2192prompts\u2192steps",
         "tokenAccuracy": "estimated"
       },
@@ -105,7 +105,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
     "notCaptured": 95,
     "people": 1,
     "requests": 1903,
-    "sessions": 3,
+    "sessions": 1,
     "unattributed": {
       "firstSeen": "2026-11-02T05:31:43.390999Z",
       "modelCalls": 1,

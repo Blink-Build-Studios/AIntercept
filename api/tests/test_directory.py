@@ -177,8 +177,8 @@ def test_overview_demo(dataset, pg_client_for, write_sample):
     r = client.get("/api/v1/overview")
     write_sample(client, r, "demo")
     o = r.json()["data"]
-    # The window's activity (§8, difference 4): the demo session was active on three days, a day row each.
-    assert (o["people"], o["activeNow"], o["sessions"], o["notCaptured"]) == (1, 1, 3, 95)
+    # The window's activity (§8, difference 4): its one session, active on three days, counts once.
+    assert (o["people"], o["activeNow"], o["sessions"], o["notCaptured"]) == (1, 1, 1, 95)
 
 
 def test_people_demo(dataset, pg_client_for, write_sample):
@@ -189,6 +189,7 @@ def test_people_demo(dataset, pg_client_for, write_sample):
     (p,) = r.json()["data"]
     assert p["personId"] == DEMO_ACCOUNT and p["live"] is True and p["bypassPct"] == 99.7
     assert p["coverage"]["notCaptured"] == 95 and p["agentInfo"][0]["agent"] == "claude-code"
+    assert p["sessions"] == 1  # one session, active on three days: counted once
 
 
 def test_people_in_a_range(dataset, pg_client_for):

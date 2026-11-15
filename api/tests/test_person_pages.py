@@ -261,7 +261,8 @@ WHERE e.source = 'claude_code' AND e.name = 'tengu_api_success' AND e.session_id
 
 def from_scratch(side: Side, lo: int | None, hi: int | None, now: int) -> dict[str, dict[str, Any]]:
     """Each person's directory numbers for the window [lo, hi], from the facts: the UTC days the window
-    touches, each (account, day) its sessions active that day, summed (owner decision 2)."""
+    touches, each (account, day) its sessions active that day, summed (owner decision 2); its sessions are
+    the distinct sessions active on any of those days."""
     groups: dict[str, str] = {}
     emails = {a: (e or "").lower() for a, e in side.query("SELECT account_id, email FROM accounts")}
     accounts = sorted({a for (a,) in side.query("SELECT DISTINCT account_id FROM session_accounts")})
@@ -277,7 +278,8 @@ def from_scratch(side: Side, lo: int | None, hi: int | None, now: int) -> dict[s
         if (first_day is not None and day < first_day) or (hi is not None and day > hi):
             continue
         p = out.setdefault(groups[acct], Counter(sessions=0))
-        p["sessions"] += 1
+        p.setdefault("sids", set()).add(sid)
+        p["sessions"] = len(p["sids"])
         p["with_events"] += bool(ev)
         p["calls"] += calls
         p["known"] += known

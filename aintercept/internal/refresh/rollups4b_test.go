@@ -337,12 +337,13 @@ func TestAccountDays(t *testing.T) {
 	seen.Event.PersonID = "acct"
 	write(t, db, seen)
 	drain(t, db)
-	days := row(t, db, `SELECT jsonb_object_agg(day_ns::text, jsonb_build_object('agent', agent, 'sessions', sessions, 'with_events', sessions_with_events,
+	days := row(t, db, `SELECT jsonb_object_agg(day_ns::text, jsonb_build_object('agent', agent, 'sessions', sessions, 'ids', session_ids, 'with_events', sessions_with_events,
 		'prompts', prompts, 'calls', model_calls, 'out', tokens_output, 'queries', queries, 'bypassed', bypassed, 'first', first_ns, 'last', last_ns)) AS d
 		FROM account_days WHERE account_id = 'acct'`)["d"].(map[string]any)
-	expect(t, days[fmt.Sprint(day)].(map[string]any), map[string]any{"agent": "claude-code", "sessions": 1, "with_events": 1, "prompts": 1,
+	expect(t, days[fmt.Sprint(day)].(map[string]any), map[string]any{"agent": "claude-code", "sessions": 1, "ids": []any{"s"}, "with_events": 1, "prompts": 1,
 		"calls": 1, "out": 5, "queries": 0, "first": float64(late), "last": float64(late)})
-	expect(t, days[fmt.Sprint(day+dayNS)].(map[string]any), map[string]any{"sessions": 1, "with_events": 1, "prompts": 1, "calls": 1,
+	// The session is in both days' ids: a window over both counts it once (the directory's distinct sessions).
+	expect(t, days[fmt.Sprint(day+dayNS)].(map[string]any), map[string]any{"sessions": 1, "ids": []any{"s"}, "with_events": 1, "prompts": 1, "calls": 1,
 		"queries": 1, "bypassed": 1, "first": float64(day + dayNS + 30*sec), "last": float64(day + dayNS + 40*sec)})
 	checkScratch(t, db)
 }
