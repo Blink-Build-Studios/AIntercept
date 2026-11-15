@@ -27,7 +27,6 @@ from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_session import H, prompt
 from tests.test_stream_pipeline import group, one_stream_one_id
-from tests.test_v6_session_rows import differs_across_keys
 
 SPAN_A, SPAN_B = "aaaaaaaa-0000-4000-8000-0000000000a1", "bbbbbbbb-0000-4000-8000-0000000000b2"
 
@@ -240,35 +239,10 @@ def pg_clients(laid_out):
 
 @pytest.fixture(scope="module")
 def pg_urls(pg_clients):
-    """The gate's URLs of the endpoints the Postgres store serves, and the sessions whose pages
-    carry cross-key values."""
-    old, _, _, layout = pg_clients
-    urls = [u for u in _urls(old) if group(u) in ("status", "sessions", "drawer", *PERSON_GROUPS)]
-    with Oracle(Layout(layout)) as oracle:
-        crossing = {sid for sid in oracle.session_ids() if differs_across_keys(oracle.session(sid), sid)}
-    return urls, crossing
-
-
-def _page(url: str) -> str:
-    """A session URL's page: '' (the header), timeline, prompts, events, state, requests."""
-    parts = url.split("?")[0].split("/")
-    return parts[5] if len(parts) > 5 else ""
-
-
-def _session_of(url: str) -> str:
-    return urllib.parse.unquote(url.split("?")[0].split("/")[4])
-
-
-# The pages with read-time joins: every URL in make check; three of each other page.
-_JOINED_PAGES = ("", "requests", "state")
-
-
-def _session_urls(urls: list[str], *, every: bool) -> list[str]:
-    sessions = [u for u in urls if group(u) == "sessions"]
-    if every:
-        return sessions
-    joined = [u for u in sessions if _page(u) in _JOINED_PAGES]
-    return joined + few_per_group([u for u in sessions if _page(u) not in _JOINED_PAGES], _page)
+    """The gate's URLs of the person pages and /status, which the Postgres store serves from v7's tables."""
+    old, _, _, _ = pg_clients
+    urls = [u for u in _urls(old) if group(u) in ("status", *PERSON_GROUPS)]
+    return urls, set()
 
 
 def _differing(old, new, urls: list[str]) -> list[str]:
@@ -282,40 +256,8 @@ def _differing(old, new, urls: list[str]) -> list[str]:
     return out
 
 
-def _session_pages(pg_clients, pg_urls, *, every: bool) -> None:
-    old, new, _, _ = pg_clients
-    urls, crossing = pg_urls
-    chosen = _session_urls(urls, every=every)
-    assert len(chosen) >= 50 and crossing, (len(chosen), crossing)
-    differing = _differing(old, new, chosen)
-    print("session URLs held:", len(chosen) - len(differing), "of", len(chosen))  # noqa: T201
-    assert not differing, (len(differing), differing[:5])
-
-
-def test_the_session_pages_match_the_oracle(pg_clients, pg_urls):
-    _session_pages(pg_clients, pg_urls, every=False)
-
-
-@pytest.mark.full
-def test_every_session_url_matches_the_oracle(pg_clients, pg_urls):
-    _session_pages(pg_clients, pg_urls, every=True)
-
-
-def _cross_key_session_pages(pg_clients, pg_urls, *, every: bool) -> None:
-    old, new, _, _ = pg_clients
-    urls, crossing = pg_urls
-    chosen = [u for u in urls if group(u) == "sessions" and _session_of(u) in crossing]
-    differing = _differing(old, new, chosen if every else few_per_group(chosen, _page, 6))
-    assert not differing, (len(differing), differing[:5])
-
-
-def test_the_cross_key_session_pages_match_the_oracle(pg_clients, pg_urls):
-    _cross_key_session_pages(pg_clients, pg_urls, every=False)
-
-
-@pytest.mark.full
-def test_every_cross_key_session_url_matches_the_oracle(pg_clients, pg_urls):
-    _cross_key_session_pages(pg_clients, pg_urls, every=True)
+# The session pages (/sessions/{id} and its tabs) read v9, which these databases don't hold:
+# test_session_pages.py holds them to the oracle's derivation on test_drawer's datasets.
 
 
 # --- the person pages (build step 6) ---------------------------------------------------------------

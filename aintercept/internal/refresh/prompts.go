@@ -146,18 +146,25 @@ var stepReport = `LEFT JOIN LATERAL (SELECT true AS found, ` + jsonTrunc(f("rm",
 // detailCalls is call c's recorded tool calls (promptrows.go readDetail: calls).
 const detailCalls = `(CASE jsonb_typeof(c.detail -> 'calls') WHEN 'array' THEN c.detail -> 'calls' ELSE '[]' END)`
 
-// results is the exit codes the prompt's calls carry back, by tool call id
-// (promptrows.go joins.results: the first step, in order, with a result for
-// the id that has codes or is an error). Today it's the session's first; a
-// result carried by another prompt's call isn't read (7 of 4,398 in the
-// capture), so a refresh reads one prompt's calls, each once.
-var results = `res AS MATERIALIZED (SELECT DISTINCT ON (c.session_id, r.k) c.session_id, r.k,
-		CASE WHEN jsonb_typeof(r.v -> 'exit') = 'array' AND jsonb_array_length(r.v -> 'exit') > 0
-		THEN ARRAY(SELECT jsonb_array_elements_text(r.v -> 'exit')::bigint) ELSE ARRAY[1::bigint] END AS codes
-	FROM pc c, jsonb_each(CASE jsonb_typeof(c.detail -> 'results') WHEN 'object' THEN c.detail -> 'results' ELSE '{}' END) r(k, v)
-	WHERE %s
-	  AND (jsonb_typeof(r.v -> 'exit') = 'array' AND jsonb_array_length(r.v -> 'exit') > 0 OR r.v -> 'error' = 'true')
-	ORDER BY c.session_id, r.k, ` + callOrder + `)`
+// results is the exit codes of the prompt's recorded tool calls, by tool
+// call id: for each, the session's first visible call, in order, that carries
+// its result back with codes or as an error (promptrows.go joins.results, the
+// session's steps). That call can be a later prompt's (the prompt after an
+// interrupt), so it's found through the index on detail's results, one lookup
+// per tool call (OFFSET 0 keeps the planner from mixing in the session's
+// index), and its flush marks this prompt (flush: ResultIDs).
+var results = `res AS MATERIALIZED (SELECT ids.session_id, ids.k, r.codes
+	FROM (SELECT DISTINCT c.session_id, x ->> 'id' AS k FROM pc c, jsonb_array_elements(` + detailCalls + `) x
+		WHERE x ->> 'id' IS NOT NULL) ids
+	CROSS JOIN LATERAL (SELECT CASE WHEN jsonb_typeof(v -> 'exit') = 'array' AND jsonb_array_length(v -> 'exit') > 0
+			THEN ARRAY(SELECT jsonb_array_elements_text(v -> 'exit')::bigint) ELSE ARRAY[1::bigint] END AS codes
+		FROM (SELECT c.detail -> 'results' -> ids.k AS v
+			FROM (SELECT * FROM calls c WHERE c.detail -> 'results' ? ids.k OFFSET 0) c
+			WHERE c.session_id = ids.session_id AND ` + visible + `
+			  AND (jsonb_typeof(c.detail -> 'results' -> ids.k -> 'exit') = 'array'
+			       AND jsonb_array_length(c.detail -> 'results' -> ids.k -> 'exit') > 0
+			    OR c.detail -> 'results' -> ids.k -> 'error' = 'true')
+			ORDER BY ` + callOrder + ` LIMIT 1) r) r)`
 
 // resultCodes is detail call x's exit codes (results).
 const resultCodes = `LEFT JOIN res ON res.session_id = c.session_id AND res.k = x ->> 'id'`
@@ -225,7 +232,7 @@ const stepCols = `prompt_id, session_id, step, call_id, t_ns, end_ns, kind, mode
 // promptrows.go rows: steps by time and id).
 func stepSelect(where string) string {
 	return `WITH pc AS MATERIALIZED (SELECT * FROM calls c WHERE ` + where + ` AND c.prompt_id IS NOT NULL AND ` + visible + `),
-` + fmt.Sprintf(results, "true") + `
+` + results + `
 SELECT c.prompt_id, c.session_id,
 	row_number() OVER (PARTITION BY c.prompt_id, c.session_id ORDER BY ` + callOrder + `),
 	c.call_id, ` + at + `, ` + realEnd + `,
@@ -323,6 +330,10 @@ LEFT JOIN LATERAL (SELECT jsonb_object_agg(n, k) AS counts FROM (
 // and place): its steps, then its prompts row from them. Both are replaced,
 // since a prompt's calls can renumber and its rows can leave.
 var promptRefresh = []string{
+	// The planner prices the results lookup by GIN's default selectivity, which
+	// puts a large prompt's statement over JIT's threshold; compiling it costs
+	// seconds, running it milliseconds.
+	`SET LOCAL jit = off`,
 	`DELETE FROM steps WHERE prompt_id = $1`,
 	`DELETE FROM prompts WHERE prompt_id = $1`,
 	`INSERT INTO steps (` + stepCols + `) ` + stepSelect(`c.prompt_id = $1`),

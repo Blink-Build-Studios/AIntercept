@@ -1,11 +1,10 @@
 """The API's Postgres store (docs/PIPELINE.md v7 §5, v8 §5.7): per request one connection and one READ
 ONLY, REPEATABLE READ snapshot, the page's statements in order. v8's reader (psycopg) serves /status
-(the key rows and the pods' index times) and the drawer; v7's loader the rest, its rows as Arrow into
-the request's DuckDB under today's table names. The startup refuses a database whose schema isn't
-this build's.
+(the key rows and the pods' index times), the drawer and the session pages (v9: test_drawer.py and
+test_session_pages.py hold what they read); v7's loader the rest, its rows as Arrow into the request's
+DuckDB under today's table names. The startup refuses a database whose schema isn't this build's.
 
-What a session page reads (its statements, their count, their plans) is held here; what it serves is
-held to the oracle in test_v1_pipeline.py (responses) and test_v6_session_rows.py (tables)."""
+What a person page and the directory read (their statements, their count, their plans) is held here."""
 
 import contextlib
 import pathlib
@@ -127,15 +126,14 @@ def test_a_request_reads_one_snapshot(db):
 
     store.between = commit_meanwhile
     with contextlib.closing(store):
-        loaded = store.load_for(f"/api/v1/sessions/{sid}/events")
-        assert loaded is not None
+        loaded = store.session_entity(sid)
         assert loaded.con.sql("SELECT count(*) FROM session_rows").fetchall() == [(1,)]
         assert loaded.con.sql("SELECT count(*) FROM event_rows").fetchall() == [(0,)]
         (load,) = store.trace
         assert load.begin == "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" and load.connections == 1
         store.between = None
-        again = store.load_for(f"/api/v1/sessions/{sid}/events")
-        assert again is not None and again.con.sql("SELECT count(*) FROM event_rows").fetchall() == [(1,)]
+        again = store.session_entity(sid)
+        assert again.con.sql("SELECT count(*) FROM event_rows").fetchall() == [(1,)]
 
 
 def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
@@ -143,7 +141,7 @@ def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
     with contextlib.closing(store):
         opened = store.opened  # the schema check's
         for _ in range(5):
-            assert store.load_for(f"/api/v1/sessions/x/events?from={_iso(T0)}") is not None
+            assert store.session_entity("x") is not None
         assert store.opened == opened + 1
         # A connection the server dropped (a restart, a timeout) is discarded and the request retried.
         # Only this test's database: the test server is shared with concurrent runs.
@@ -153,7 +151,7 @@ def test_connections_are_pooled_and_a_broken_one_is_replaced(db):
             " WHERE application_name = 'aintercept_api' AND datname = current_database()",
         )
         time.sleep(0.2)
-        assert store.load_for("/api/v1/sessions/x/events") is not None
+        assert store.session_entity("x") is not None
         assert store.opened == opened + 2
         # v8's reader's too: its pooled connection, dropped, is replaced before the request reads.
         client = make_client(store)
@@ -177,7 +175,7 @@ def test_the_pool_holds_at_most_its_size_and_explain_never_joins_it(db):
     store = PgStore(db, pool_size=2, trace=True)
     with contextlib.closing(store):
         assert make_client(store).get("/api/v1/status").status_code == 200
-        assert store.load_for("/api/v1/sessions/x/events") is not None
+        assert store.session_entity("x") is not None
         statements = [s for load in store.trace for s in load.statements]
         assert {s.via for s in statements} == {"psycopg", "adbc"}
         for _ in range(5):
@@ -210,7 +208,15 @@ def test_a_path_no_page_serves_reads_nothing(db):
     with contextlib.closing(PgStore(db)) as store:
         assert store.load_for("/ui/index.html") is None
         # v8's reader's pages load nothing ahead: they read in their own snapshot.
-        for path in ("/api/v1/status", "/api/v1/requests/x", "/api/v1/requests/x/raw", "/api/v1/events/b:1"):
+        for path in (
+            "/api/v1/status",
+            "/api/v1/requests/x",
+            "/api/v1/requests/x/raw",
+            "/api/v1/events/b:1",
+            "/api/v1/sessions/x",
+            "/api/v1/sessions/x/timeline",
+            "/api/v1/sessions/x/requests?page=2",
+        ):
             assert store.load_for(path) is None, path
         # Paths no person page serves read nothing (the router 404s or 422s them).
         assert store.load_for("/api/v1/people/x/nothing") is None
@@ -235,38 +241,6 @@ def demo(tmp_path_factory):
     codex_work(ds)
     with pgdb.fresh_database(admin) as dsn:
         yield lay_out(pathlib.Path(ds.write()), pg=dsn), dsn
-
-
-# The statements each session page runs (BEGIN and COMMIT aside), whatever the session's size.
-SESSION_STATEMENTS = {
-    "": ["session", "titles", "edges"],
-    "/timeline": ["session", "titles", "prompt_rows", "session_marks", "event_rows"],
-    "/prompts": ["session", "prompt_rows", "prompt_steps", "session_marks"],
-    "/events": ["session", "event_rows"],
-    "/state": ["session", "prompt_rows", "session_marks", "event_rows", "session_tools", *pgstore.REQUESTS_TAB],
-    "/requests": ["session", *pgstore.REQUESTS_TAB],
-}
-
-
-def test_every_session_page_runs_a_fixed_set_of_statements_on_one_connection(demo):
-    layout, dsn = demo
-    with Oracle(Layout(layout)) as oracle:
-        sids = oracle.session_ids()
-    assert len(sids) >= 5
-    store = PgStore(dsn, trace=True)
-    with contextlib.closing(store):
-        for sid in sids:
-            for sub, names in SESSION_STATEMENTS.items():
-                store.trace.clear()
-                assert store.load_for(f"/api/v1/sessions/{sid}{sub}?from=2026-11-04T00:00:00Z") is not None
-                (load,) = store.trace
-                assert load.connections == 1, (sid, sub)
-                assert [s.name for s in load.statements] == names, (sid, sub)
-                assert len(load.statements) <= 8
-        # An unknown session stops at its row: every page 404s.
-        store.trace.clear()
-        store.load_for("/api/v1/sessions/no-such-session/timeline")
-        assert [s.name for s in store.trace[0].statements] == ["session"]
 
 
 # The statements each person page runs (BEGIN and COMMIT aside), whatever the person's size: the
@@ -358,43 +332,6 @@ def test_status_runs_one_statement(demo):
             )
 
 
-def test_the_events_tab_reads_only_its_range(demo):
-    # A range given is pushed down as the router snaps it (whole minutes), widened by a millisecond each
-    # side; without one the tab is the session's whole span.
-    _, dsn = demo
-    store = PgStore(dsn, trace=True)
-    with contextlib.closing(store):
-        sid = _busiest(dsn)
-        everything = store.load_for(f"/api/v1/sessions/{sid}/events")
-        assert everything is not None
-        ts = sorted(t for (t,) in everything.con.sql("SELECT ts_ns FROM event_rows").fetchall())
-        assert len(ts) >= 4
-        lo, hi = ts[1], ts[-2]
-        some = store.load_for(f"/api/v1/sessions/{sid}/events?from={_iso(lo)}&to={_iso(hi)}")
-        assert some is not None
-        got = sorted(t for (t,) in some.con.sql("SELECT ts_ns FROM event_rows").fetchall())
-        snapped = ranges.snap(lo // 1000 * 1000, hi // 1000 * 1000)
-        assert snapped[0] is not None and snapped[1] is not None
-        a, b = snapped[0] - pgstore._WIDEN_NS, snapped[1] + pgstore._WIDEN_NS
-        assert got == [t for t in ts if a <= t <= b] and len(got) < len(ts)
-
-
-def _iso(ns: int) -> str:
-    from datetime import UTC, datetime
-
-    return datetime.fromtimestamp(ns // 1000 / 1e6, UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-
-def _busiest(dsn: str) -> str:
-    con, pg = duckdb.connect(), pgdb.connect(dsn)
-    try:
-        q = "SELECT session_id FROM event_rows GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT 1"
-        return str(pgdb.load(con, pg, "b", q).fetchall()[0][0])
-    finally:
-        con.close()
-        pg.close()
-
-
 # The tables a page's statements may read whole (tiny): every other read must be able to use an index.
 _SMALL = {"schema_version", "tail", "ingest_pods", "workers"}
 
@@ -406,11 +343,6 @@ def test_every_statement_can_use_an_index(demo):
     store = PgStore(dsn, trace=True)
     plans: list[tuple[str, str]] = []
     with contextlib.closing(store):
-        for sid in [_busiest(dsn), "no-such-session"]:
-            for sub in SESSION_STATEMENTS:
-                store.trace.clear()
-                store.load_for(f"/api/v1/sessions/{sid}{sub}")
-                plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
         client = make_client(store)
         for url in STATUS_STATEMENTS:
             store.trace.clear()
@@ -492,105 +424,6 @@ def test_overviews_request_count_is_exact_on_and_off_the_hours(calls):
                 want = sum(1 for t in times if (a is None and b is None) or (
                     t is not None and (a is None or t >= a) and (b is None or t <= b)))  # fmt: skip
                 assert got == want, (lo, hi)
-
-
-# --- what other keys hold, joined at load (§4) ---------------------------------------------------
-# The datasets' cross-key values need build step 2's stored inputs (test_v6_session_rows.py holds
-# them to the oracle once they're written); these rows, written by hand, hold the joins meanwhile.
-
-CODEX, CC = "cx-thread-0001", "cc-session-0002"
-
-
-@pytest.fixture
-def joined(pg_dsn):
-    """A Codex thread with a title thread's calls and two children, and a Claude Code session with
-    an analytics batch in flight in its credential's c: key."""
-    _exec(
-        pg_dsn,
-        f"""INSERT INTO session_rows (session_id, start_ns, last_ns, product, client, own_title, model_calls,
-              call_accounts, label_text_alone, label_source_alone) VALUES
-            ('{CODEX}', {T0}, {T0 + 10 * NS}, 'codex', 'exec', NULL, 2, ARRAY['acct-1'], 'Session cx-threa', 'none'),
-            ('{CC}', {T0}, {T0 + 30 * NS}, 'claude_code', 'cli', NULL, 1, ARRAY['acct-2'],
-             'Session cc-sessi', 'none')""",  # noqa: S608
-        f"""INSERT INTO session_title_calls (key, id, session_id, ts_ns, call_id, account_id, title) VALUES
-            ('s:title-thread', '\\x01', 'title-thread', {T0 + 2 * NS}, 'call-b', 'acct-1', 'Second'),
-            ('s:title-thread', '\\x02', 'title-thread', {T0 + 1 * NS}, 'call-a', 'acct-1', 'First'),
-            ('s:title-thread', '\\x03', 'title-thread', {T0 + 400 * NS}, 'call-c', 'acct-1', 'Too late'),
-            ('s:other', '\\x04', 'other', {T0 + 1 * NS - 1}, 'call-0', 'acct-9', 'Another account')""",  # noqa: S608
-        f"""INSERT INTO session_edges (key, id, parent_session_id, child_session_id, kind, child_first_ns) VALUES
-            ('s:kid-b', '\\x01', '{CODEX}', 'kid-b', 'review', {T0 + 5 * NS}),
-            ('s:kid-a', '\\x01', '{CODEX}', 'kid-a', 'subagent', {T0 + 3 * NS})""",  # noqa: S608
-        f"""INSERT INTO dim_session_credential (key, id, session_id, key_hash) VALUES
-            ('s:{CODEX}', '\\x01', '{CODEX}', 'kh-1'), ('s:{CC}', '\\x01', '{CC}', 'kh-2')""",  # noqa: S608
-        # The CC session's own rendered row: a model call at T0 + 1 s.
-        f"""INSERT INTO session_request_rows (scope_session_id, seq, person_id, request_id, ts_ns, kind, agent,
-              client, session_id, tool_calls, method, path, background, captured, detail)
-            VALUES ('{CC}', 0, '', 'own-call', {T0 + NS}, 'model', 'claude-code', 'cli', '{CC}', '{{}}', 'POST',
-                    '/v1/messages', false, true, 'a call')""",  # noqa: S608
-        f"""INSERT INTO batch_parts (batch_id, key, n, min_name, first_ns, first_session) VALUES
-            ('batch-1', 's:{CC}', 2, 'tengu_b', {T0 + 2 * NS}, '{CC}'),
-            ('batch-1', 's:elsewhere', 3, 'tengu_a', {T0 + 3 * NS}, 'elsewhere')""",  # noqa: S608
-        # In the credentials' c: keys: the thread's client calls (one in its window, one a minute and
-        # more after its end, one model call) and the batch's call, in flight.
-        f"""INSERT INTO request_txs (key, id, call_id, correlation_id, key_hash, own_session, prompt_id, req_id,
-              client_req_id, kind, hidden_kind, product, is_tx, row_request_id, row_ts_ns, row_kind, row_agent,
-              row_client, row_session_id, row_detail, row_tool_calls,
-              row_method, row_path, row_background, row_captured) VALUES
-            ('c:kh-1:d', '\\x01', 'flags-1', 'flags-1', 'kh-1', '', '', '', '', 'flags', '', 'codex', true,
-             'flags-1', {T0 + 5 * NS}, 'flags', 'codex', 'exec', NULL, 'GET /flags', '{{}}', 'GET', '/x', false, true),
-            ('c:kh-1:d', '\\x02', 'flags-2', 'flags-2', 'kh-1', '', '', '', '', 'flags', '', 'codex', true,
-             'flags-2', {T0 + 71 * NS}, 'flags', 'codex', 'exec', NULL, 'GET /flags', '{{}}', 'GET', '/x', false, true),
-            ('c:kh-1:d', '\\x03', 'model-1', 'model-1', 'kh-1', '', '', '', '', 'model', '', 'codex', true,
-             'model-1', {T0 + 6 * NS}, 'model', 'codex', 'exec', NULL, 'responses', '{{}}', 'GET', '/x', false, true),
-            ('c:kh-2:d', '\\x01', 'batch-1', 'batch-1', 'kh-2', '', '', '', '', 'analytics', '', 'claude_code', true,
-             'batch-1', {T0 + 20 * NS}, 'analytics', 'claude-code', 'cli', NULL, NULL, '{{}}', 'POST', '/x',
-             true, true)""",  # noqa: S608
-    )
-    yield pg_dsn
-    _exec(
-        pg_dsn,
-        *(
-            f"DELETE FROM {t}"  # noqa: S608
-            for t in (
-                "session_rows",
-                "session_title_calls",
-                "session_edges",
-                "dim_session_credential",
-                "session_request_rows",
-                "batch_parts",
-                "request_txs",
-            )
-        ),
-    )
-
-
-def test_a_threads_alone_label_and_children_come_from_other_keys(joined):
-    with contextlib.closing(PgStore(joined)) as store:
-        loaded = store.load_for(f"/api/v1/sessions/{CODEX}")
-        assert loaded is not None
-        got = loaded.con.execute(
-            "SELECT label_text_alone, label_source_alone, children_json FROM session_rows"
-        ).fetchall()
-    assert got == [("First", "title", '{"subagent":1,"review":1,"sessionIds":["kid-a","kid-b"]}')]
-
-
-def test_a_requests_tab_joins_the_rows_other_keys_hold(joined):
-    with contextlib.closing(PgStore(joined)) as store:
-        codex = store.load_for(f"/api/v1/sessions/{CODEX}/requests")
-        assert codex is not None
-        # Its client's call in [start, last + 60 s] that no thread names; not the later one, not a model call.
-        assert codex.con.execute(
-            "SELECT seq, request_id, session_id, scope_session_id, person_id FROM session_request_rows"
-        ).fetchall() == [(0, "flags-1", None, CODEX, "")]
-        cc = store.load_for(f"/api/v1/sessions/{CC}/requests")
-        assert cc is not None
-        # The batch in flight: its session is its earliest part's, its count and name the parts'.
-        assert cc.con.execute(
-            "SELECT seq, request_id, session_id, detail FROM session_request_rows ORDER BY seq"
-        ).fetchall() == [(0, "own-call", CC, "a call"), (1, "batch-1", CC, "5 events")]
-        client = make_client(store)
-        body = client.get(f"/api/v1/sessions/{CC}/requests?order=desc").json()
-        assert [r["requestId"] for r in body["data"]] == ["batch-1", "own-call"] and body["meta"]["total"] == 2
 
 
 def test_the_app_reads_postgres_by_default(pg_dsn, tmp_path, monkeypatch):

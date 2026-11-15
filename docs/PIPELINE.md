@@ -147,7 +147,10 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 For the session refresh (§5.2): `(session_id, coalesce(start_ns, end_ns))` (a
 session's calls by their time, for its newest values) and partial
 `(session_id, start_ns) WHERE prompt_id IS NULL OR hidden_kind IS NOT NULL`
-(its calls with no prompt, and its hidden calls).
+(its calls with no prompt, and its hidden calls). For a step's exit codes (§5.2
+`steps`): GIN on `detail -> 'results'` and on `detail -> 'calls'` (the results a
+call carries back and the tool calls it made, by tool call id). For the label
+(§6.1): partial `(account_id, start_ns) WHERE hidden_kind = 'title'`.
 
 ### 3.2 `events`: one row per analytics event
 
@@ -252,7 +255,7 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 | `session_keys` | (session, hour, kind, key) with count | Sum of that hour's `session_minute_keys`. Distinct counts over a range are `count(DISTINCT key)` over these rows (minute rows at a range's partial hours) | 60 minutes' key rows |
 | `missed_reports` | one per Claude Code report with no captured call (by request id or client request id, within its session, as `requestrows.go:1093-1125` does) | That minute's reports, with an index lookup each on `calls` | One minute's rows |
 | `prompts` | (prompt_id, session) | Its number (its input's), steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report. A typed prompt with no prompt id is keyed `input:<batch>:<n>`, as today | One prompt's calls and events, and its calls' reports and tool events by request id. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
-| `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id). This is where a call's step number lives. Exit codes come from the prompt's calls' recorded results (today: the session's; 7 of 4,398 results in the capture are carried by another prompt's call) | One prompt's calls and events |
+| `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id). This is where a call's step number lives. Exit codes come from the session's first call that carries each tool call's result back, which can be a later prompt's (the prompt after an interrupt): one lookup per tool call by its id, and a flush with such a call marks the prompt that made the tool call | One prompt's calls and events |
 | `prompt_items` | (session, seq) | The Prompts page's list: prompts in order (with what the session's other prompts decide: a Codex turn's number, the open tail, pastes and images, hidden calls), with the between rows interleaved (compactions, recaps, calls with no prompt) | The session's prompts (hundreds), and its compaction events and prompt-less calls |
 | `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox, env) by index lookup; coverage from `missed_reports`; `unattributed` (a visible call and no account). A page computes the rest from these: the agent, bypass %, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, and an index lookup per newest value |
 | `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none) | One minute's calls / 60 rows |
@@ -268,7 +271,7 @@ Two values are read at the page instead (they're few, and a late record changes 
 |---|---|
 | `minute` (session, minute) | a flush with a call or event in that minute; a flush with a call whose report is in that minute; a flush with a report whose call is in that minute |
 | `hour` (session, hour) | a `minute` refresh |
-| `prompt` | a flush with a call or event of that prompt; a flush with a report, tool or Bash event of one of its calls (by request id and tool use id: a subagent's events can name another prompt) |
+| `prompt` | a flush with a call or event of that prompt; a flush with a report, tool or Bash event of one of its calls (by request id and tool use id: a subagent's events can name another prompt); a flush with a call that carries back the result of one of its calls' tool calls (by tool call id) |
 | `session` | an `hour` or `prompt` refresh |
 | `cred_minute`, `cred_hour` | a flush with a call of that credential; a `cred_minute` refresh |
 | `account_day` | a `session` refresh, for each account of the session and each day it has hours (so an account seen on a session late still gets its earlier days) |
@@ -308,7 +311,7 @@ Ranges are snapped to whole minutes, as today (`ranges.py`).
 
 | Page | Reads | Bound |
 |---|---|---|
-| `/sessions/{id}` | its `sessions` row. Label: its own title, else the earliest title call from its accounts 0–5 min after its start (calls by account and time). Children by `session_edges` | One row + a few |
+| `/sessions/{id}` | its `sessions` row. Label: its own title, else the earliest title call from its accounts 0–5 min after its start (calls by account and time). Children by `session_edges` (named `session_parents` until step 8) | One row + a few |
 | `/sessions/{id}/timeline` | lanes from `session_minutes` (bins under an hour) or `session_hours`; event names from `session_minute_keys` (bins under an hour) or `session_keys`; not-captured windows from `missed_reports`; friction from friction events (few); typed prompts from `prompts`; compactions from events by name; context points: one per main-thread call, from `calls` by `(session_id, start_ns)` | Cells and prompts of the session (hundreds). Context points are one per main-thread call, ~1,700 on the heaviest session: what the chart draws |
 | `/sessions/{id}/state` | counts from `session_minutes` in the brush; distinct heads and PRs from `session_keys` in the brush (minute grain at the edges); capabilities (tools used, MCP servers and tools, skills, hooks) for the whole session from the `sessions` row; recaps by name | Cells and keys in the brush + one row |
 | `/sessions/{id}/events` | a page of `events` by `(session_id, ts_ns)`, one row per event; prompt numbers by join to `prompts`; `linkedTo` by join on request id; totals from `session_minutes`' event counts | One page + cells |

@@ -1,9 +1,10 @@
-"""/sessions/{sessionId}, /timeline, /state, /prompts, /requests and /events."""
+"""/sessions/{sessionId}, /timeline, /state, /prompts, /requests and /events, on the Postgres store: the
+session pages read v9's facts and rollups (docs/PIPELINE.md §6.1)."""
 
 import pytest
 
 from aintercept_api.timeline import BYPASS_CAUSE
-from tests.builders import ACCOUNT, DEVICE, ClaudeCode, account_call
+from tests.builders import ACCOUNT, DEVICE, ClaudeCode, account_call, end_batches
 
 S1 = "11111111-1111-4111-8111-111111111111"
 BASE = f"/api/v1/sessions/{S1}"
@@ -91,9 +92,9 @@ def error_on_query(client, monkeypatch):
 # --- /sessions/{id} -----------------------------------------------------------------------------
 
 
-def test_session_ended(dataset, client_for, write_sample):
+def test_session_ended(dataset, pg_client_for, write_sample):
     ended_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(BASE)
     write_sample(client, r, "ended")
     h = r.json()["data"]
@@ -104,21 +105,21 @@ def test_session_ended(dataset, client_for, write_sample):
     assert h["repo"] is None and h["branch"] is None  # M7 extraction: unknown, never ""
 
 
-def test_session_live(dataset, client_for, write_sample):
+def test_session_live(dataset, pg_client_for, write_sample):
     live_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(BASE)
     write_sample(client, r, "live")
     h = r.json()["data"]
     assert h["live"] is True and h["end"] is None and h["networks"] is None
 
 
-def test_session_pre_parser(dataset, client_for, write_sample):
+def test_session_pre_parser(dataset, pg_client_for, write_sample):
     """Calls from before the identity parser, with no analytics: almost everything is unknown."""
     cc = ClaudeCode(dataset, S1)
     cc.call(f"{H}:01:00", prompt=None, parsed=False)
     cc.call(f"{H}:02:00", prompt=None, parsed=False)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(BASE)
     write_sample(client, r, "pre_parser")
     h = r.json()["data"]
@@ -126,13 +127,13 @@ def test_session_pre_parser(dataset, client_for, write_sample):
     assert h["events"] is None and h["notCaptured"] is None and h["coverage"]["reported"] is None
 
 
-def test_session_unknown_is_a_typed_404(dataset, client_for):
-    r = client_for(dataset).get("/api/v1/sessions/nope")
+def test_session_unknown_is_a_typed_404(dataset, pg_client_for):
+    r = pg_client_for(dataset).get("/api/v1/sessions/nope")
     assert r.status_code == 404 and r.json()["error"]["code"] == "http_404"
 
 
-def test_session_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_session_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(BASE), "error", status=500)
 
@@ -140,13 +141,13 @@ def test_session_error(dataset, client_for, write_sample, monkeypatch):
 # --- /timeline ----------------------------------------------------------------------------------
 
 
-def test_timeline_one_prompt(dataset, client_for, write_sample):
+def test_timeline_one_prompt(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:00", "p1", 1)
     for minute, ctx in ((1, 50_000), (2, 60_000), (3, 70_000)):
         step(cc, f"{H}:0{minute}:00", "p1", ctx=ctx)
     cc.event(f"{H}:04:00", "tengu_turn_end", cc_prompt_id="p1")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/timeline")
     write_sample(client, r, "one_prompt")
     d = r.json()["data"]
@@ -167,7 +168,7 @@ def test_timeline_one_prompt(dataset, client_for, write_sample):
     assert d["compactions"] == [] and d["notCaptured"] == []
 
 
-def test_timeline_many(dataset, client_for, write_sample):
+def test_timeline_many(dataset, pg_client_for, write_sample):
     """Several prompts, with friction."""
     cc = ClaudeCode(dataset, S1)
     v4, v6 = "192.0.2.10", "2001:db8::7"
@@ -183,7 +184,7 @@ def test_timeline_many(dataset, client_for, write_sample):
         destructive_category="rm_recursive_force",
         destructive_target_scope="outside_cwd",
     )
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/timeline", params={"bin": 600})
     write_sample(client, r, "many")
     d = r.json()["data"]
@@ -195,7 +196,7 @@ def test_timeline_many(dataset, client_for, write_sample):
     ]
 
 
-def test_timeline_compaction(dataset, client_for, write_sample):
+def test_timeline_compaction(dataset, pg_client_for, write_sample):
     """Idle compaction: fired → attempt → compaction call → succeeded; context 900k → 30k."""
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:00", "p1", 1)
@@ -207,7 +208,7 @@ def test_timeline_compaction(dataset, client_for, write_sample):
     prompt(cc, f"{H}:40:00", "p2", 2)
     step(cc, f"{H}:40:10", "p2", ctx=30_000)
     cc.event(f"{H}:50:00", "tengu_reactive_compact_succeeded", cc_prompt_id="p2")  # no attempt seen: no wait
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/timeline")
     write_sample(client, r, "compaction")
     first, second = r.json()["data"]["compactions"]
@@ -223,7 +224,7 @@ def test_timeline_compaction(dataset, client_for, write_sample):
     assert first["messages"] is None  # until the compaction events' metadata is extracted (M7)
 
 
-def test_timeline_coverage_gap(dataset, client_for, write_sample):
+def test_timeline_coverage_gap(dataset, pg_client_for, write_sample):
     """Calls that bypassed the proxy: a hatched window."""
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:00", "p1", 1)
@@ -231,7 +232,7 @@ def test_timeline_coverage_gap(dataset, client_for, write_sample):
     for minute in (10, 12, 14):
         cc.reported(f"{H}:{minute}:00", f"req_bypassed_{minute}")
     step(cc, f"{H}:20:00", "p1", ip="192.0.2.10")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/timeline")
     write_sample(client, r, "coverage_gap")
     d = r.json()["data"]
@@ -243,8 +244,8 @@ def test_timeline_coverage_gap(dataset, client_for, write_sample):
     assert (gap_bin["count"], gap_bin["notCaptured"]) == (0, 3)
 
 
-def test_timeline_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_timeline_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/timeline"), "error", status=500)
 
@@ -263,9 +264,10 @@ def state_session(ds):
     return cc
 
 
-def test_state_default(dataset, client_for, write_sample):
+def test_state_default(dataset, pg_client_for, write_sample):
     state_session(dataset)
-    client = client_for(dataset)
+    end_batches(dataset)  # an analytics post is its session's from its end (test_a_post_in_flight_…)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/state")
     write_sample(client, r, "default")
     d = r.json()["data"]
@@ -285,36 +287,36 @@ def test_state_default(dataset, client_for, write_sample):
     assert tabs == {"requests": d["counts"]["requests"], "events": d["counts"]["events"]}
 
 
-def test_state_follows_the_range(dataset, client_for):
+def test_state_follows_the_range(dataset, pg_client_for):
     state_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     d = client.get(f"{BASE}/state", params={"from": "2026-11-04T09:09:00Z"}).json()["data"]
     assert d["counts"]["prompts"] == 1 and d["repoInRange"]["commits"] == 0 and d["recapsInRange"] == []
     assert d["capabilitiesAt"]["builtin"]["used"] == 1
 
 
-def test_state_capabilities_are_the_whole_sessions(dataset, client_for):
+def test_state_capabilities_are_the_whole_sessions(dataset, pg_client_for):
     """Capabilities don't follow the brush (handoff §11Q.4): a range that ends before any tool or hook
     ran shows the whole session's; only the pool changes count within the range."""
     state_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     whole = client.get(f"{BASE}/state").json()["data"]["capabilitiesAt"]
     early = client.get(f"{BASE}/state", params={"to": "2026-11-04T08:00:00Z"}).json()["data"]["capabilitiesAt"]
     assert early["poolChangesInRange"] == 0 and whole["poolChangesInRange"] == 1
     assert {**early, "poolChangesInRange": 1} == whole
 
 
-def test_state_empty_range(dataset, client_for, write_sample):
+def test_state_empty_range(dataset, pg_client_for, write_sample):
     state_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/state", params={"from": "2026-11-04T12:00:00Z", "to": "2026-11-04T13:00:00Z"})
     write_sample(client, r, "empty_range")
     d = r.json()["data"]
     assert set(d["counts"].values()) == {0} and d["repoInRange"]["headFrom"] is None
 
 
-def test_state_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_state_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/state"), "error", status=500)
 
@@ -322,15 +324,15 @@ def test_state_error(dataset, client_for, write_sample, monkeypatch):
 # --- /prompts -----------------------------------------------------------------------------------
 
 
-def test_prompts_empty(dataset, client_for, write_sample):
+def test_prompts_empty(dataset, pg_client_for, write_sample):
     ended_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/prompts", params={"from": "2026-11-04T12:00:00Z"})
     write_sample(client, r, "empty")
     assert r.json()["data"] == [] and r.json()["meta"]["total"] == 0
 
 
-def test_prompts_one(dataset, client_for, write_sample):
+def test_prompts_one(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:10", "p1", 1)
     rid = step(cc, f"{H}:01:00", "p1", tools=[("Bash", True)])
@@ -343,7 +345,7 @@ def test_prompts_one(dataset, client_for, write_sample):
         exit_code=1,
     )
     cc.event(f"{H}:02:00", "tengu_turn_end", cc_prompt_id="p1")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/prompts")
     write_sample(client, r, "one")
     ((item,),) = [r.json()["data"]]
@@ -358,9 +360,9 @@ def test_prompts_one(dataset, client_for, write_sample):
     assert tool["destructive"] == {"category": "rm_force", "scope": None} and tool["target"] is None
 
 
-def test_prompts_many(dataset, client_for, write_sample):
+def test_prompts_many(dataset, pg_client_for, write_sample):
     ended_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/prompts")
     write_sample(client, r, "many")
     data = r.json()["data"]
@@ -381,9 +383,9 @@ def test_prompts_many(dataset, client_for, write_sample):
     assert client.get(f"{BASE}/prompts", params={"pageSize": 2, "prompt": 9}).json()["meta"]["page"] == 1
 
 
-def test_prompts_in_flight(dataset, client_for, write_sample):
+def test_prompts_in_flight(dataset, pg_client_for, write_sample):
     live_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/prompts")
     write_sample(client, r, "in_flight")
     done, running = (i["prompt"] for i in r.json()["data"])
@@ -393,7 +395,7 @@ def test_prompts_in_flight(dataset, client_for, write_sample):
     assert [(t["name"], t["status"]) for t in s["tools"]] == [("Bash", "running")]
 
 
-def test_prompts_between_rows(dataset, client_for):
+def test_prompts_between_rows(dataset, pg_client_for):
     """Compactions and recaps sit between prompts; a compaction keeps its call (drawer) and sizes."""
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:00", "p1", 1)
@@ -403,7 +405,7 @@ def test_prompts_between_rows(dataset, client_for):
     cc.event(f"{H}:21:00", "tengu_reactive_compact_succeeded", cc_prompt_id="p1")
     cc.event(f"{H}:25:00", "tengu_return_to_session", blurDurationMs=60_000, hadRecap=True)
     step(cc, f"{H}:30:00", "p1", ctx=20_000)
-    data = client_for(dataset).get(f"{BASE}/prompts").json()["data"]
+    data = pg_client_for(dataset).get(f"{BASE}/prompts").json()["data"]
     kinds = [i["between"]["kind"] for i in data if i["type"] == "between"]
     assert kinds == ["compaction", "recap"]
     comp = data[1]["between"]
@@ -411,8 +413,8 @@ def test_prompts_between_rows(dataset, client_for):
     assert comp["requestId"] and comp["detail"] == "compaction · context 801k → 21k tokens"
 
 
-def test_prompts_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_prompts_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/prompts"), "error", status=500)
 
@@ -420,28 +422,29 @@ def test_prompts_error(dataset, client_for, write_sample, monkeypatch):
 # --- /requests ----------------------------------------------------------------------------------
 
 
-def test_requests_empty(dataset, client_for, write_sample):
+def test_requests_empty(dataset, pg_client_for, write_sample):
     ended_session(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"from": "2026-11-04T12:00:00Z"})
     write_sample(client, r, "empty")
     assert r.json()["data"] == []
 
 
-def test_requests_one(dataset, client_for, write_sample):
+def test_requests_one(dataset, pg_client_for, write_sample):
     ClaudeCode(dataset, S1).call(f"{H}:01:00")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests")
     write_sample(client, r, "one")
     (row,) = r.json()["data"]
     assert row["kind"] == "model" and row["sessionId"] == S1 and row["captured"] is True
 
 
-def test_requests_many_oldest_first_and_session_only(dataset, client_for, write_sample):
+def test_requests_many_oldest_first_and_session_only(dataset, pg_client_for, write_sample):
     cc = ended_session(dataset)
     account_call(cc, f"{H}:00:30")  # the person's, but no session: not on the session page
     ClaudeCode(dataset, "22222222-2222-4222-8222-222222222222").call(f"{H}:05:00")
-    client = client_for(dataset)
+    end_batches(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"pageSize": 50})
     write_sample(client, r, "many")
     rows = r.json()["data"]
@@ -457,22 +460,22 @@ def test_requests_many_oldest_first_and_session_only(dataset, client_for, write_
     assert newest[0]["t"] == "2026-11-04T09:10:30Z"
 
 
-def test_requests_not_captured(dataset, client_for, write_sample):
+def test_requests_not_captured(dataset, pg_client_for, write_sample):
     cc = ended_session(dataset)
     cc.reported(f"{H}:20:00", "req_bypassed_1")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"captured": "false"})
     write_sample(client, r, "not_captured")
     (row,) = r.json()["data"]
     assert row["requestId"] == "reported:req_bypassed_1" and row["method"] is None and row["status"] is None
 
 
-def test_requests_unknown_session(dataset, client_for):
-    assert client_for(dataset).get("/api/v1/sessions/nope/requests").status_code == 404
+def test_requests_unknown_session(dataset, pg_client_for):
+    assert pg_client_for(dataset).get("/api/v1/sessions/nope/requests").status_code == 404
 
 
-def test_requests_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_requests_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/requests"), "error", status=500)
 
@@ -480,18 +483,18 @@ def test_requests_error(dataset, client_for, write_sample, monkeypatch):
 # --- /events ------------------------------------------------------------------------------------
 
 
-def test_events_empty(dataset, client_for, write_sample):
+def test_events_empty(dataset, pg_client_for, write_sample):
     """A pre-parser session: model calls, but no analytics at all."""
     ClaudeCode(dataset, S1).call(f"{H}:01:00", prompt=None, parsed=False)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/events")
     write_sample(client, r, "empty")
     assert r.json()["data"] == [] and r.json()["meta"]["total"] == 0 and r.json()["meta"]["shown"] == 0
 
 
-def test_events_one(dataset, client_for, write_sample):
+def test_events_one(dataset, pg_client_for, write_sample):
     ClaudeCode(dataset, S1).event(f"{H}:00:00", "tengu_feature_ok", env=ENV, feature="statusline", enabled=True)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/events")
     write_sample(client, r, "one")
     (e,) = r.json()["data"]
@@ -499,12 +502,12 @@ def test_events_one(dataset, client_for, write_sample):
     assert e["linkedTo"] == {"kind": "session", "id": S1, "label": "session"} and e["internal"] is False
 
 
-def test_events_many(dataset, client_for, write_sample):
+def test_events_many(dataset, pg_client_for, write_sample):
     ended_session(dataset)
     cc = ClaudeCode(dataset, S1)
     cc.event(f"{H}:12:00", "tengu_event_loop_stall", likely_sleep="true", clock_jump_ms=60_000)
     cc.reported(f"{H}:13:00", "req_bypassed_1")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/events", params={"pageSize": 50})
     write_sample(client, r, "many")
     rows = r.json()["data"]
@@ -533,7 +536,7 @@ def test_events_many(dataset, client_for, write_sample):
     assert [x["name"] for x in found["data"]] == ["tengu_bash_tool_command_executed"] and found["meta"]["shown"] == 1
 
 
-def test_events_internals_hidden(dataset, client_for, write_sample):
+def test_events_internals_hidden(dataset, pg_client_for, write_sample):
     """Client internals, tool-progress ticks among them, are hidden by default; one row per event."""
     cc = ClaudeCode(dataset, S1)
     cc.event(f"{H}:00:00", "tengu_input_prompt", cc_prompt_id="p1", prompt_index=1)
@@ -542,7 +545,7 @@ def test_events_internals_hidden(dataset, client_for, write_sample):
     for s in range(3, 7):
         cc.event(f"{H}:00:0{s}", "tengu_tool_use_progress", cc_prompt_id="p1", toolName="Bash")
     cc.event(f"{H}:00:08", "tengu_bash_ast_too_complex")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"{BASE}/events")
     write_sample(client, r, "internals_hidden")
     rows, meta = r.json()["data"], r.json()["meta"]
@@ -552,7 +555,7 @@ def test_events_internals_hidden(dataset, client_for, write_sample):
     assert everything["meta"]["shown"] == 8 and sum(x["internal"] for x in everything["data"]) == 7
 
 
-def test_events_search_and_page_what_the_filters_leave(dataset, client_for):
+def test_events_search_and_page_what_the_filters_leave(dataset, pg_client_for):
     """Search is case-insensitive over the name and summary, and pages count the events the filters
     leave."""
     cc = ClaudeCode(dataset, S1)
@@ -562,7 +565,7 @@ def test_events_search_and_page_what_the_filters_leave(dataset, client_for):
     cc.event(f"{H}:00:03", "tengu_tool_use_progress", toolName="Bash")
     cc.event(f"{H}:00:04", "tengu_feature_ok", feature="StatusLine")
     cc.event(f"{H}:00:05", "tengu_tool_use_progress", toolName="Read")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     rows = client.get(f"{BASE}/events").json()["data"]
     assert [x["name"] for x in rows] == ["tengu_input_prompt", "tengu_feature_ok"]
     shown = client.get(f"{BASE}/events", params={"internal": "true"}).json()["meta"]["shown"]
@@ -573,19 +576,19 @@ def test_events_search_and_page_what_the_filters_leave(dataset, client_for):
     assert [x["name"] for x in page["data"]] == ["tengu_tool_use_progress"] and page["meta"]["shown"] == 6
 
 
-def test_events_error(dataset, client_for, write_sample, monkeypatch):
-    client = client_for(dataset, raise_server_exceptions=False)
+def test_events_error(dataset, pg_client_for, write_sample, monkeypatch):
+    client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"{BASE}/events"), "error", status=500)
 
 
 @pytest.mark.parametrize("path", ["", "/timeline", "/state", "/prompts", "/events"])
-def test_every_session_endpoint_404s_on_an_unknown_session(dataset, client_for, path):
-    r = client_for(dataset).get(f"/api/v1/sessions/nope{path}")
+def test_every_session_endpoint_404s_on_an_unknown_session(dataset, pg_client_for, path):
+    r = pg_client_for(dataset).get(f"/api/v1/sessions/nope{path}")
     assert r.status_code == 404 and r.json()["error"]["queryId"]
 
 
-def test_capabilities_name_mcp_tools_the_analytics_redact(dataset, client_for):
+def test_capabilities_name_mcp_tools_the_analytics_redact(dataset, pg_client_for):
     """Claude Code reports most MCP tool uses as "mcp_tool" (isMcp: true); the response's
     tool_use blocks name them. Skills and the MCP catalog come from Claude Code's own counts."""
     cc = ClaudeCode(dataset, S1)
@@ -612,17 +615,32 @@ def test_capabilities_name_mcp_tools_the_analytics_redact(dataset, client_for):
     cc.event(f"{H}:01:30", "tengu_tool_use_success", env=ENV, toolName="mcp_tool", isMcp=True)
     cc.event(f"{H}:00:20", "tengu_skills_sync_success", env=ENV, total=14)
     cc.event(f"{H}:00:30", "tengu_tool_search_mode_decision", env=ENV, mcpToolCount=358)
-    cap = client_for(dataset).get(f"{BASE}/state").json()["data"]["capabilitiesAt"]
+    cap = pg_client_for(dataset).get(f"{BASE}/state").json()["data"]["capabilitiesAt"]
     assert [(m["name"], m["toolsUsed"]) for m in cap["mcpServers"]] == [("playwright", 2)]
     assert cap["mcpTools"] == {"total": 358, "used": 2}
     assert cap["builtin"]["used"] == 1  # Bash; "mcp_tool" isn't a built-in
     assert cap["skills"] == 14
 
 
-def test_steps_name_commands_from_claude_codes_analytics(dataset, client_for):
+def test_steps_name_commands_from_claude_codes_analytics(dataset, pg_client_for):
     """Without recorded bodies a step still shows what its call carries: Claude Code's Bash
     events name each command's program and exit code (handoff §11M part 3.1)."""
     ended_session(dataset)
-    data = client_for(dataset).get(f"/api/v1/sessions/{S1}/prompts").json()["data"]
+    data = pg_client_for(dataset).get(f"/api/v1/sessions/{S1}/prompts").json()["data"]
     first = next(x for x in data if x["type"] == "prompt")["steps"][0]
     assert (first["commands"], first["exitCodes"], first["patches"], first["text"]) == (["rm"], [0], [], None)
+
+
+def test_a_post_in_flight_is_its_sessions_once_it_ends(dataset, pg_client_for):
+    """An analytics post's session is its batch's (its earliest event's), which v9 learns when the post
+    ends (docs/PIPELINE.md §3.1, scope_session_id): until then the post is no session's, so its session's
+    Requests tab lists it once it has ended. Its events are the session's from the start."""
+    cc = ClaudeCode(dataset, S1)
+    prompt(cc, f"{H}:00:10", "p1", 1)
+    cc.call(f"{H}:01:00", prompt="p1")
+    client = pg_client_for(dataset)
+    body = client.get(f"{BASE}/requests").json()
+    assert body["kindCounts"] == {"model": 1} and client.get(f"{BASE}/events").json()["meta"]["total"] == 1
+    end_batches(dataset)
+    body = pg_client_for(dataset).get(f"{BASE}/requests").json()
+    assert body["kindCounts"] == {"analytics": 1, "model": 1}

@@ -151,9 +151,9 @@ def test_person_sessions_nest_subagent_threads(dataset, client_for, write_sample
     write_sample(client, r, "codex_threads")
 
 
-def test_codex_session_header_facts_and_limits(dataset, client_for, write_sample):
+def test_codex_session_header_facts_and_limits(dataset, pg_client_for, write_sample):
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/sessions/{ROOT}")
     assert r.status_code == 200, r.text
     h = r.json()["data"]
@@ -171,9 +171,9 @@ def test_codex_session_header_facts_and_limits(dataset, client_for, write_sample
     write_sample(client, r, "codex")
 
 
-def test_codex_prompts_carry_turn_report_and_hidden_calls(dataset, client_for, write_sample):
+def test_codex_prompts_carry_turn_report_and_hidden_calls(dataset, pg_client_for, write_sample):
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/sessions/{ROOT}/prompts")
     assert r.status_code == 200, r.text
     prompts = [x for x in r.json()["data"] if x["type"] == "prompt"]
@@ -189,9 +189,9 @@ def test_codex_prompts_carry_turn_report_and_hidden_calls(dataset, client_for, w
     write_sample(client, r, "codex")
 
 
-def test_codex_requests_mark_hidden_calls(dataset, client_for, write_sample):
+def test_codex_requests_mark_hidden_calls(dataset, pg_client_for, write_sample):
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     assert client.get(f"/api/v1/sessions/{ROOT}/requests").json()["hiddenCount"] == 2  # out unless asked
     r = client.get(f"/api/v1/sessions/{ROOT}/requests?hidden=true")
     assert r.status_code == 200, r.text
@@ -220,7 +220,7 @@ def test_codex_turn_opens_in_the_drawer(dataset, pg_client_for):
     assert raw.status_code == 200, raw.text
 
 
-def test_codex_session_requests_carry_its_other_calls(dataset, client_for, write_sample):
+def test_codex_session_requests_carry_its_other_calls(dataset, pg_client_for, write_sample):
     """A Codex thread's Requests tab has every call on the wire (handoff §11L.6): its model
     calls by thread id, and its client's usage and catalog calls by time; model calls carry
     their step, tool calls and, without usage, why."""
@@ -232,7 +232,7 @@ def test_codex_session_requests_carry_its_other_calls(dataset, client_for, write
     root.other("2026-11-04T15:55:00", "/backend-api/wham/usage")
     root.other("2026-11-04T15:55:01", "/backend-api/ps/plugins/list")
     root.other("2026-11-04T17:00:00", "/backend-api/wham/usage")  # after the thread: not its
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/sessions/{ROOT}/requests")
     assert r.status_code == 200, r.text
     body = r.json()
@@ -283,7 +283,7 @@ def test_org_kind_needs_the_customer_org_ids(monkeypatch):
     assert agents.org_kind("org-a") == "customer" and agents.org_kind("org-z") == "outside"
 
 
-def test_recorded_bodies_show_commands_text_and_exit_codes(dataset, client_for):
+def test_recorded_bodies_show_commands_text_and_exit_codes(dataset, pg_client_for):
     """Full interception: the bodies are recorded, so a step shows its commands, patch and
     first words, and the exit codes the next request carried back (handoff §11L.7)."""
     t = Codex(dataset, CHILD)
@@ -319,7 +319,7 @@ def test_recorded_bodies_show_commands_text_and_exit_codes(dataset, client_for):
             }
         ],
     )
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     prompts = [x for x in client.get(f"/api/v1/sessions/{CHILD}/prompts").json()["data"] if x["type"] == "prompt"]
     first, second = prompts[0]["steps"]
     assert first["commands"] == ["npm test"] and first["exitCodes"] == [1]
@@ -329,7 +329,7 @@ def test_recorded_bodies_show_commands_text_and_exit_codes(dataset, client_for):
     assert [r["text"] for r in rows if r["kind"] == "model"] == [None, "Fixed the flaky test."]
 
 
-def test_recorded_bodies_give_the_prompt_and_the_thread_title(dataset, client_for):
+def test_recorded_bodies_give_the_prompt_and_the_thread_title(dataset, pg_client_for):
     """With bodies recorded, a prompt shows what it said, and a Codex thread its generated
     title (the answer to its title call); without, the label is untitled (handoff §11M 3.4)."""
     t = Codex(dataset, CHILD)
@@ -360,7 +360,7 @@ def test_recorded_bodies_give_the_prompt_and_the_thread_title(dataset, client_fo
         ],
         source="thread_title",
     )
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     prompt = next(x for x in client.get(f"/api/v1/sessions/{CHILD}/prompts").json()["data"] if x["type"] == "prompt")
     assert prompt["prompt"]["text"] == {
         "retained": True,
@@ -390,7 +390,7 @@ def test_person_requests_and_sessions_scope_to_an_agent(dataset, client_for):
     assert {"claude-code", "codex"} <= agents_of(both)
 
 
-def test_a_title_thread_names_the_thread_it_follows(dataset, client_for):
+def test_a_title_thread_names_the_thread_it_follows(dataset, pg_client_for):
     """Codex titles a thread from a thread of its own, just after the first turn: the title
     goes to the same account's thread that started last before it (handoff §11M 3.4)."""
     t = Codex(dataset, CHILD)
@@ -407,7 +407,7 @@ def test_a_title_thread_names_the_thread_it_follows(dataset, client_for):
         ],
         source="thread_title",
     )
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     assert client.get(f"/api/v1/sessions/{CHILD}").json()["data"]["label"] == {
         "text": "Fix flaky timer test",
         "source": "title",

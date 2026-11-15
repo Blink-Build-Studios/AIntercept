@@ -21,7 +21,8 @@ def demo(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def pg_demo(tmp_path_factory):
-    """The demo fixture in Postgres (conftest.PgDataset): the drawer's samples are v9's (§6.2)."""
+    """The demo fixture in Postgres (conftest.PgDataset): the drawer's and the session pages' samples are
+    v9's (§6.2, §6.1)."""
     ds = Dataset(tmp_path_factory.mktemp("pg-demo") / "data")
     load_fixture(ds, "demo")
     pg = PgDataset(pg_admin(), ds.write())
@@ -93,8 +94,8 @@ SESSION = f"/api/v1/sessions/{DEMO_SESSION}"
 BRIEF_WINDOW = {"from": "2026-11-03T14:20:00Z", "to": "2026-11-03T22:40:00Z"}
 
 
-def test_session_demo(demo, write_sample):
-    client = demo
+def test_session_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(SESSION)
     write_sample(client, r, "demo")
     h = r.json()["data"]
@@ -103,8 +104,8 @@ def test_session_demo(demo, write_sample):
     assert h["networks"] == 3  # client IPs, faked one-for-one by the fixture
 
 
-def test_session_timeline_demo(demo, write_sample):
-    client = demo
+def test_session_timeline_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"{SESSION}/timeline")
     write_sample(client, r, "demo")
     d = r.json()["data"]
@@ -115,8 +116,8 @@ def test_session_timeline_demo(demo, write_sample):
     assert max(c["tokens"] for c in d["context"]) == first["from"]
 
 
-def test_session_state_demo(demo, write_sample):
-    client = demo
+def test_session_state_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"{SESSION}/state")
     write_sample(client, r, "demo")
     c = r.json()["data"]["counts"]
@@ -124,8 +125,8 @@ def test_session_state_demo(demo, write_sample):
     assert c["requests"] == client.get(f"{SESSION}/requests").json()["meta"]["total"]
 
 
-def test_session_prompts_demo(demo, write_sample):
-    client = demo
+def test_session_prompts_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"{SESSION}/prompts", params={**BRIEF_WINDOW, "pageSize": 10})
     write_sample(client, r, "demo")
     assert r.json()["meta"]["total"] == 30  # prompts and between rows, recaps included
@@ -136,8 +137,8 @@ def test_session_prompts_demo(demo, write_sample):
     assert steps + len(outside) == 640  # every captured call is a step or a between row, exactly once
 
 
-def test_session_requests_demo(demo, write_sample):
-    client = demo
+def test_session_requests_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"{SESSION}/requests")
     write_sample(client, r, "demo")
     assert r.json()["meta"]["total"] > 640 + 95
@@ -145,8 +146,8 @@ def test_session_requests_demo(demo, write_sample):
     assert missed == 95
 
 
-def test_session_events_demo(demo, write_sample):
-    client = demo
+def test_session_events_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"{SESSION}/events")
     write_sample(client, r, "demo")
     meta = r.json()["meta"]
@@ -201,9 +202,9 @@ def test_event_demo(pg_demo, write_sample):
     assert d["name"] == first["name"] and d["sessionId"] == DEMO_SESSION and d["raw"]["name"] == first["name"]
 
 
-def test_prompt_counts_agree(demo):
+def test_prompt_counts_agree(pg_demo):
     """The session's prompt count (its row, its header) is the Prompts tab's: every typed prompt."""
-    client = demo
+    client = pg_demo
     (row,) = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/sessions").json()["data"]
     header = client.get(SESSION).json()["data"]
     tab, page = 0, 1
@@ -216,9 +217,9 @@ def test_prompt_counts_agree(demo):
     assert row["prompts"] == header["prompts"] == tab == 43
 
 
-def test_kind_counts_follow_the_other_filters(demo):
+def test_kind_counts_follow_the_other_filters(pg_demo):
     """The kind chips' counts: every filter but kind applies (handoff §11E.2: MODEL 94, the others 0)."""
-    client = demo
+    client = pg_demo
     base = f"/api/v1/people/{DEMO_ACCOUNT}/requests"
     everything = client.get(base).json()
     assert sum(everything["kindCounts"].values()) == everything["meta"]["total"]

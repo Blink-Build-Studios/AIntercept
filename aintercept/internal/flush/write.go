@@ -278,6 +278,25 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 			dirty = append(dirty, Dirty{"prompt", p})
 		}
 	}
+	// A call carrying back tool calls' results marks the prompts of the calls
+	// that made them: a step's exit codes are its session's first result for
+	// each of its tool calls, and that can be a later prompt's call (§5.2
+	// steps). One lookup per id through the index on detail's calls.
+	if len(r.ResultIDs) > 0 {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT c.prompt_id FROM unnest($1::text[]) k,
+			LATERAL (SELECT c.prompt_id FROM calls c WHERE c.detail -> 'calls' @> jsonb_build_array(jsonb_build_object('id', k)) OFFSET 0) c
+			WHERE c.prompt_id IS NOT NULL`, r.ResultIDs)
+		if err != nil {
+			return fmt.Errorf("flush: results: %w", err)
+		}
+		pids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return fmt.Errorf("flush: results: %w", err)
+		}
+		for _, p := range pids {
+			dirty = append(dirty, Dirty{"prompt", p})
+		}
+	}
 	if len(dirty) > len(r.Dirty) {
 		slices.SortFunc(dirty, func(a, b Dirty) int {
 			if c := strings.Compare(a.Kind, b.Kind); c != 0 {

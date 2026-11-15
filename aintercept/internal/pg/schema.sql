@@ -998,6 +998,8 @@ CREATE TABLE session_parents (
     first_ns bigint NOT NULL,
     PRIMARY KEY (child_session_id, parent_session_id)
 );
+-- A session's children (§5.4), by its id.
+CREATE INDEX ON session_parents (parent_session_id);
 
 -- §5.1 The rollup rows to recompute. seq changes each time a row is marked again; since is
 -- when it was first marked, or marked again during its refresh (a busy row's refresh waits for
@@ -1166,6 +1168,18 @@ CREATE INDEX ON calls (session_id, start_ns) WHERE prompt_id IS NULL OR hidden_k
 -- the session and day refreshes' newest values and first and last calls.
 CREATE INDEX ON calls (session_id, (coalesce(start_ns, end_ns)));
 
+-- A call's recorded tool calls (detail's calls, by id) and the results it carries back (detail's
+-- results, keyed by tool call id): a step's exit codes are its session's first result for each
+-- of its tool calls, which a later prompt's call can carry (the prompt after an interrupt). The
+-- prompt refresh finds that result, and the flush the prompt to mark, one lookup per id. Without
+-- GIN's pending list (fastupdate), so a lookup never scans one.
+CREATE INDEX ON calls USING gin ((detail -> 'results')) WITH (fastupdate = off);
+CREATE INDEX ON calls USING gin ((detail -> 'calls') jsonb_path_ops) WITH (fastupdate = off);
+
+-- A Codex thread's label (§6.1): with no title of its own, the earliest title call of its accounts
+-- in its first five minutes, by account and time.
+CREATE INDEX ON calls (account_id, start_ns) WHERE hidden_kind = 'title';
+
 -- One per prompt of a session (process/promptrows.go rows): a tengu_input_prompt, or a prompt
 -- id seen only on visible model calls; an input with no prompt id is keyed input:<batch>:<n>.
 -- What the session's other prompts decide (its place, the Codex number, open tail, pastes and
@@ -1256,6 +1270,9 @@ CREATE TABLE prompt_items (
     PRIMARY KEY (session_id, seq)
 );
 CREATE INDEX ON prompt_items (session_id, prompt_id);
+-- The Prompts page's range: a session's items by time (seq follows time, so a range is a run of
+-- seqs).
+CREATE INDEX ON prompt_items (session_id, t_ns);
 
 -- One per session with a visible model call or a Claude Code event: today's session row
 -- (process/sessionrows.go sessionRow). Sums from session_hours, distinct counts from
