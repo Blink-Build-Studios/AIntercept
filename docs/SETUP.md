@@ -8,9 +8,10 @@ What runs where:
 |---|---|---|---|
 | Envoy | Docker | 443 | Terminates TLS for `api.anthropic.com` with a certificate from the local dev CA, forwards to the real upstream |
 | certsvc | Docker | — | Mints those certificates (`aintercept certsvc`) |
-| observer | Docker | 9001 | Records each request and response, body-stripped, to `data/telemetry/`: the raw log, and each routing key's ingest files under `v1/keys/<key>/in/` (`aintercept observer`) |
+| observer | Docker | 9001 | Records each request and response, body-stripped, to `data/telemetry/`: the raw log, each routing key's ingest files under `v1/keys/<key>/in/`, and v9's raw files under `raw/` (`aintercept observer`) |
 | Postgres | Docker | 15432 (this machine only) | The queryable data ([PIPELINE.md](PIPELINE.md)): the workers write it, the API reads it. `make up` generates its passwords into the gitignored `.env` |
 | workers | Docker | 9004 | Tail the observer's recent index (`data/telemetry/v1/recent/`), apply each key's new files and commit its rows to Postgres; retention every hour (`aintercept rollup`) |
+| v9 workers | Docker | 9005 | List the observer's raw files (`data/telemetry/raw/`) and load each into Postgres's fact tables (`calls`, `events`, …), beside the workers until v9's step 8 (`aintercept worker`, [PIPELINE.md](PIPELINE.md) §2.2) |
 | API | this machine | 8787 | Serves the pages (`api/`) from Postgres, through the API login (its DSN built from `.env`), and each call's detail object from `data/telemetry/`. It starts once the workers have applied the schema, and refuses to start on a schema that isn't its build's |
 | UI | this machine | 5173 | The app (`ui/`) |
 

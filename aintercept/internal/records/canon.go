@@ -80,6 +80,36 @@ func CanonDirWith(ctx context.Context, dir string, put Putter, prefix string, op
 // through one assembler, as CanonDir reads them, handing the records each row
 // completes to emit (canon -load inserts them into Postgres).
 func CanonDirRecords(ctx context.Context, dir string, emit func([]Record) error) (Stats, error) {
+	return canonDirSteps(ctx, dir, false, func(_ string, rs []Record, _ []Detail) error {
+		if len(rs) == 0 {
+			return nil
+		}
+		return emit(rs)
+	})
+}
+
+// CanonDirRaw is CanonDirRecords writing v9's raw files instead (raw.go): each
+// pod's records and completed calls' rows, as the live sink writes them, to
+// raw(pod) (the writer's members stream for that pod).
+func CanonDirRaw(ctx context.Context, dir string, raw func(pod string) RawWriter) (Stats, error) {
+	return canonDirSteps(ctx, dir, true, func(pod string, rs []Record, ds []Detail) error {
+		ms, err := RawMembers(rs, ds)
+		if err != nil || len(ms) == 0 {
+			return err
+		}
+		w := raw(pod)
+		for _, m := range ms {
+			if err := w.Write(m); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// canonDirSteps runs each pod's files in order through one assembler, handing
+// emit what each row completes (and, with details, the calls' rows).
+func canonDirSteps(ctx context.Context, dir string, details bool, emit func(pod string, rs []Record, ds []Detail) error) (Stats, error) {
 	pods, byPod, err := podFiles(dir)
 	if err != nil {
 		return Stats{}, err
@@ -87,10 +117,12 @@ func CanonDirRecords(ctx context.Context, dir string, emit func([]Record) error)
 	st := Stats{Cases: map[string]int64{}}
 	for _, pod := range pods {
 		asm := NewAssembler("canon-" + pod)
+		asm.KeepDetail = details
 		var emitErr error
 		out := func(rs []Record) {
-			if emitErr == nil && len(rs) > 0 {
-				emitErr = emit(rs)
+			ds := asm.TakeDetails()
+			if emitErr == nil && (len(rs) > 0 || len(ds) > 0) {
+				emitErr = emit(pod, rs, ds)
 			}
 		}
 		for _, f := range byPod[pod] {

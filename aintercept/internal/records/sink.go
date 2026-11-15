@@ -68,6 +68,9 @@ type SinkConfig struct {
 	Content bool
 	// Details writes each call's detail object (DetailKey) when it ends.
 	Details bool
+	// Raw, when set, also gets every record and each completed call's rows as
+	// v9's raw file members (raw.go, docs/PIPELINE.md §2.1).
+	Raw RawWriter
 	// Budget is charged for the rows held for detail objects.
 	Budget *membudget.Budget
 	Now    func() time.Time
@@ -110,7 +113,7 @@ func NewSink(cfg SinkConfig) *Sink {
 		cfg.MaxAge = 10 * time.Second
 	}
 	s := &Sink{cfg: cfg, asm: NewAssembler(cfg.Incarnation)}
-	s.asm.KeepDetail, s.asm.Budget = cfg.Details, cfg.Budget
+	s.asm.KeepDetail, s.asm.Budget = cfg.Details || cfg.Raw != nil, cfg.Budget
 	s.initKeyed()
 	return s
 }
@@ -135,10 +138,18 @@ func (s *Sink) Emit(e events.Event) error {
 
 func (s *Sink) add(rs []Record) {
 	for _, m := range s.asm.TakeKeyMarks() {
-		s.putMark(m)
+		if s.cfg.Details {
+			s.putMark(m)
+		}
 	}
-	for _, d := range s.asm.TakeDetails() {
-		s.putDetail(d)
+	ds := s.asm.TakeDetails()
+	if s.cfg.Raw != nil {
+		s.putRaw(rs, ds)
+	}
+	if s.cfg.Details {
+		for _, d := range ds {
+			s.putDetail(d)
+		}
 	}
 	if len(rs) > 0 {
 		s.bufferAll(rs)
@@ -171,6 +182,22 @@ func PutBucketFile(ctx context.Context, put Putter, prefix string, bucket int, i
 		return up.PutAtUpload(ctx, ObjectKeyTemplate(prefix, bucket, incarnation, seq), body)
 	}
 	return put.Put(ctx, ObjectKey(prefix, bucket, now, incarnation, seq), body)
+}
+
+// putRaw writes records and details to the raw stream. Called with mu held.
+func (s *Sink) putRaw(rs []Record, ds []Detail) {
+	ms, err := RawMembers(rs, ds)
+	if err == nil {
+		for _, m := range ms {
+			if err = s.cfg.Raw.Write(m); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		s.errs = append(s.errs, err)
+		slog.Error("ALARM raw file write failed", "err", err)
+	}
 }
 
 // putDetail writes one call's detail object, gzipped. Called with mu held.

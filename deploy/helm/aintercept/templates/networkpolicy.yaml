@@ -73,6 +73,8 @@ spec:
         - podSelector:
             matchLabels: { app: rollup }
         - podSelector:
+            matchLabels: { app: worker }
+        - podSelector:
             matchLabels: { app: api }
       ports:
         - { protocol: TCP, port: 5432 }

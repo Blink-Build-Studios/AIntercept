@@ -1,0 +1,162 @@
+{{- if .Values.worker.enabled }}
+# v9's workers (docs/PIPELINE.md §2.2): `aintercept worker`. One replica at a
+# time (an advisory lock) lists the observers' raw files under <prefix>/raw/
+# into Postgres's ingest_files; every replica claims unloaded files (FOR UPDATE
+# SKIP LOCKED) and loads each into the fact tables in one transaction. Runs
+# beside `rollup` until step 8. KEDA scales it on GET /lag: the age of the
+# oldest unloaded file.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app: worker
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.worker "component" "worker" "root" $) }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      # A file being loaded when the pod stops is rolled back and loaded again.
+      terminationGracePeriodSeconds: 30
+      {{- if .Values.postgres.caConfigMap }}
+      volumes:
+        # The RDS CA bundle the DSN's sslrootcert names (docs/PRODUCTION.md).
+        - name: postgres-ca
+          configMap: { name: {{ .Values.postgres.caConfigMap }} }
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      {{- with (include "aintercept.scheduling" .Values.worker) }}{{ . | nindent 6 }}{{ end }}
+      containers:
+        - name: worker
+          image: {{ include "aintercept.ainterceptImage" . }}
+          imagePullPolicy: {{ .Values.images.aintercept.pullPolicy }}
+          args: ["worker"]
+          env:
+            - { name: WORKER_S3_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: WORKER_S3_PREFIX, value: {{ .Values.objectStore.prefix | quote }} }
+            - { name: WORKER_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
+            {{- if .Values.objectStore.endpoint }}
+            - { name: WORKER_S3_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            {{- end }}
+            {{- if .Values.objectStore.forcePathStyle }}
+            - { name: WORKER_S3_FORCE_PATH_STYLE, value: "true" }
+            {{- end }}
+            # The worker login's DSN (docs/PIPELINE.md §6), and nothing else of the Secret's.
+            - name: WORKER_POSTGRES_URL
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.existingSecret }}, key: worker-url }
+            - { name: WORKER_LOADERS, value: {{ .Values.worker.loaders | quote }} }
+            - { name: WORKER_LIST_SECONDS, value: {{ .Values.worker.listSeconds | quote }} }
+            - { name: WORKER_HTTP_LISTEN, value: "0.0.0.0:9005" }
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef: { resource: limits.memory, divisor: "1" }
+            {{- if eq .Values.cloud "digitalocean" }}
+            - name: WORKER_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: accessKeyId }
+            - name: WORKER_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 9005 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9005 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9005 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          {{- if .Values.postgres.caConfigMap }}
+          volumeMounts:
+            - { name: postgres-ca, mountPath: /etc/aintercept/postgres-ca, readOnly: true }
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+# /lag for KEDA.
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+  labels:
+    app: worker
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  selector: { app: worker }
+  ports:
+    - { name: http, port: 9005, targetPort: 9005 }
+{{- if .Values.worker.autoscaling.keda }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+  labels:
+    app: worker
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: worker
+  minReplicaCount: {{ .Values.worker.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.worker.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: worker
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 600
+  triggers:
+    - type: metrics-api
+      # Value: replicas = ceil(oldest_unloaded_seconds / targetValue), within min and max.
+      metricType: Value
+      metadata:
+        url: "http://worker.{{ .Release.Namespace }}.svc.cluster.local:9005/lag"
+        valueLocation: oldest_unloaded_seconds
+        targetValue: "{{ .Values.worker.autoscaling.lagTargetSeconds }}"
+{{- else }}
+---
+# KEDA off: a plain HPA on CPU.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker
+  labels:
+    app: worker
+    {{- include "aintercept.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: {{ .Values.worker.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.worker.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+{{- end }}
+{{- end }}

@@ -47,7 +47,7 @@ bold "1/3  Proxy, observer, Postgres and workers (Docker; the first build takes 
 make -s -C "$ROOT" ca >/dev/null
 bash "${ROOT}/scripts/pg-env.sh" # Postgres's passwords, once, into the gitignored .env
 (cd "$ROOT" && COMPOSE_FILE=docker-compose.yml:docker-compose.m2.yml docker compose up -d --build --quiet-pull \
-  certsvc observer postgres rollup envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
+  certsvc observer postgres rollup worker envoy >"${RUN}/compose.log" 2>&1) || { tail -20 "${RUN}/compose.log" >&2; fail "docker compose up failed (log: .cache/run/compose.log)"; }
 
 wait_for() { # name url log [pid name: give up early once that process has exited]
   for _ in $(seq 90); do
@@ -69,6 +69,7 @@ done
   || fail "Postgres didn't come up (docker compose logs postgres)"
 wait_for "the observer" http://127.0.0.1:9001/healthz compose.log
 wait_for "the workers" http://127.0.0.1:9004/healthz compose.log
+wait_for "the v9 workers" http://127.0.0.1:9005/healthz compose.log
 
 # --- the API and UI (this machine) -----------------------------------------------------------
 port_free() { # port name: fail unless nothing listens there (ours is checked by alive first)
@@ -112,7 +113,7 @@ echo
 bold "Up."
 echo "  UI           http://localhost:5173"
 echo "  API          http://localhost:8787/api/v1/status"
-echo "  Logs         .cache/run/api.log, .cache/run/ui.log; docker compose logs -f observer rollup postgres"
+echo "  Logs         .cache/run/api.log, .cache/run/ui.log; docker compose logs -f observer rollup worker postgres"
 echo "  Check it     make verify      (one request through the proxy, end to end)"
 echo "  Route Claude Code through it (needs sudo; edits /etc/hosts, undo with 'revert'):"
 echo "               sudo scripts/route-claude-through-proxy.sh setup 127.0.0.1"

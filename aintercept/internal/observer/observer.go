@@ -242,7 +242,20 @@ func Run() {
 			slog.Error("recent index upload failed at start; retrying in 5 s", "err", err)
 		}
 		go index.Run()
-		recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget,
+		// v9's raw files (docs/PIPELINE.md §2.1): every record and each completed
+		// call's rows (with bodies only in full mode), one stream per pod under
+		// <prefix>/raw/, written at 8 MiB or every 30 s; the v9 workers load them.
+		// Beside the per-key files until step 8.
+		var raw records.RawWriter
+		if os.Getenv("OBSERVER_RAW") != "false" {
+			raw = writer.NewStream(events.StreamConfig{Target: target, Key: records.RawKey(prefix, instanceID),
+				Members: true, AtUpload: true, ContentType: "application/gzip",
+				MaxBytes: envInt("OBSERVER_RAW_FLUSH_BYTES", 8<<20),
+				MaxAge:   time.Duration(envInt("OBSERVER_RAW_FLUSH_SECONDS", 30)) * time.Second})
+			slog.Info("raw files enabled", "prefix", records.RawPrefix(prefix),
+				"flush_bytes", envInt("OBSERVER_RAW_FLUSH_BYTES", 8<<20), "flush_seconds", envInt("OBSERVER_RAW_FLUSH_SECONDS", 30))
+		}
+		recordsSink = records.NewSink(records.SinkConfig{Putter: put, Prefix: prefix, Budget: budget, Raw: raw,
 			Incarnation: inc, Content: captureFullBodies, Details: true,
 			MaxAge:         time.Duration(envInt("OBSERVER_S3_MAX_AGE_SECONDS", 10)) * time.Second,
 			KeySpoolDir:    filepath.Join(spoolDir, "keys"),

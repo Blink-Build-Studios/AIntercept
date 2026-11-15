@@ -21,6 +21,23 @@ func Write(ctx context.Context, db *pgxpool.Pool, pod string, recs []records.Rec
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error { return rows.write(ctx, tx, pod) })
 }
 
+// WriteTx is Write inside tx, for a worker loading one raw file and marking it
+// loaded in the same transaction (docs/PIPELINE.md §2.2): key is the file, and
+// ranges are its completed calls' members, written onto their calls rows.
+func WriteTx(ctx context.Context, tx pgx.Tx, pod string, recs []records.Record, key string, ranges []records.RawRange) error {
+	rows := Collapse(recs)
+	at := make(map[string]records.RawRange, len(ranges))
+	for _, r := range ranges {
+		at[r.CallID] = r
+	}
+	for i := range rows.Calls {
+		if r, ok := at[rows.Calls[i].R.CallID]; ok {
+			rows.Calls[i].RawKey, rows.Calls[i].RawOffset, rows.Calls[i].RawLen = key, r.Offset, r.Len
+		}
+	}
+	return rows.write(ctx, tx, pod)
+}
+
 func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	var stmts []*insert
 
@@ -83,10 +100,16 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	col(calls, cs, "batch_events", "bigint", func(c *Call) *int64 { return num(c.BatchEvents) })
 	col(calls, cs, "batch_name", "text", func(c *Call) *string { return str(c.BatchName) })
 	col(calls, cs, "batch_other_sessions", "jsonb", func(c *Call) *string { return jsonList(c.BatchOther) })
+	col(calls, cs, "raw_key", "text", func(c *Call) *string { return str(c.RawKey) })
+	col(calls, cs, "raw_offset", "bigint", func(c *Call) *int64 { return rawNum(c.RawKey, c.RawOffset) })
+	col(calls, cs, "raw_len", "bigint", func(c *Call) *int64 { return rawNum(c.RawKey, c.RawLen) })
 	// A start fills in nothing once there's an end; an end replaces a start, a
-	// swept end, or an earlier end, keeping the start's time if it has none.
-	calls.conflict = "ON CONFLICT (call_id) DO UPDATE SET " + calls.excluded("call_id", "start_ns") +
+	// swept end, or an earlier end, keeping the start's time if it has none,
+	// and its place in a raw file if it names none.
+	calls.conflict = "ON CONFLICT (call_id) DO UPDATE SET " + calls.excluded("call_id", "start_ns", "raw_key", "raw_offset", "raw_len") +
 		", start_ns = coalesce(excluded.start_ns, calls.start_ns), swept = false" +
+		", raw_key = coalesce(excluded.raw_key, calls.raw_key), raw_offset = coalesce(excluded.raw_offset, calls.raw_offset)" +
+		", raw_len = coalesce(excluded.raw_len, calls.raw_len)" +
 		" WHERE excluded.end_ns IS NOT NULL AND (calls.end_ns IS NULL OR calls.swept OR excluded.end_ns > calls.end_ns)"
 	stmts = append(stmts, calls)
 
@@ -340,6 +363,15 @@ func str(s string) *string {
 	return &s
 }
 
+// rawNum is a raw range's offset or length, NULL without a raw file (an
+// offset of 0 is a real one).
+func rawNum(key string, n int64) *int64 {
+	if key == "" {
+		return nil
+	}
+	return &n
+}
+
 func num(n int64) *int64 {
 	if n == 0 {
 		return nil
@@ -374,8 +406,11 @@ func Summarize(ctx context.Context, q pg.Querier) ([]Summary, error) {
 	var out []Summary
 	for _, t := range Tables {
 		row := "t::text"
-		if t == "dirty" {
+		switch t {
+		case "dirty":
 			row = "t.kind || '/' || t.key"
+		case "calls": // a call's place in its raw file is a pointer, not a fact: loads of the same calls from other files agree
+			row = "(to_jsonb(t) - 'raw_key' - 'raw_offset' - 'raw_len')::text"
 		}
 		s := Summary{Table: t}
 		err := q.QueryRow(ctx, fmt.Sprintf(`SELECT count(*), coalesce(sum(('x' || substr(md5(%s), 1, 15))::bit(60)::bigint), 0)::text,

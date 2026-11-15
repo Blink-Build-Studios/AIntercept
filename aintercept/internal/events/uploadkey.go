@@ -21,8 +21,14 @@ const UploadMinute = "{upload-minute}"
 // ResolveUploadKey fills a key template's UploadMinute with t's UTC minute.
 func ResolveUploadKey(tmpl string, t time.Time) string {
 	k := strings.ReplaceAll(tmpl, UploadMinute, t.UTC().Format("2006-01-02T15:04"))
+	k = strings.ReplaceAll(k, UploadHour, t.UTC().Format("2006-01-02/15"))
 	return strings.ReplaceAll(k, UploadTime, t.UTC().Format(UploadTimeFormat))
 }
+
+// UploadHour is the placeholder for the UTC date and hour an object is
+// uploaded in, as two folders (YYYY-MM-DD/HH): v9's raw files
+// (docs/PIPELINE.md §2.1), which the workers list by hour.
+const UploadHour = "{upload-hour}"
 
 // Exister is a Target that can say whether an object exists (S3 HEAD). The
 // writer needs it to name an object by its upload minute without ever writing

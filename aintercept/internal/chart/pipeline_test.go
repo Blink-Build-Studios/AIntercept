@@ -151,12 +151,66 @@ func TestRollupDeployment(t *testing.T) {
 	}
 }
 
+// v9's workers (docs/PIPELINE.md §2.2): `aintercept worker`, beside rollup
+// until step 8, scaled by KEDA on GET /lag (oldest_unloaded_seconds), with a
+// plain HPA when KEDA is off; the worker login's DSN and the bucket, as their
+// own ServiceAccount. The observer writes the raw files they load, at 8 MiB or
+// 30 s.
+func TestV9Worker(t *testing.T) {
+	docs := render(t)
+	c := container(docs, "Deployment", "worker", "worker")
+	if c == nil {
+		t.Fatal("no worker Deployment")
+	}
+	if a := fmt.Sprint(get(c, "args")); a != "[worker]" {
+		t.Errorf("worker args %s, want [worker]", a)
+	}
+	env := envOf(c)
+	if env["WORKER_S3_BUCKET"] == nil || env["WORKER_HTTP_LISTEN"] != "0.0.0.0:9005" || env["WORKER_LOADERS"] != "2" {
+		t.Errorf("worker env %v", env)
+	}
+	if r := secretRef(c, "WORKER_POSTGRES_URL"); r != "aintercept-postgres/worker-url" {
+		t.Errorf("WORKER_POSTGRES_URL from %q, want the Secret's worker-url", r)
+	}
+	if sa := get(find(docs, "Deployment", "worker"), "spec", "template", "spec", "serviceAccountName"); sa != "aintercept-worker" {
+		t.Errorf("worker ServiceAccount %v", sa)
+	}
+	if find(docs, "ServiceAccount", "aintercept-worker") == nil {
+		t.Error("no worker ServiceAccount")
+	}
+	so := find(docs, "ScaledObject", "worker")
+	if so == nil {
+		t.Fatal("no worker ScaledObject")
+	}
+	if u := get(so, "spec", "triggers", "0", "metadata", "url"); !strings.HasSuffix(fmt.Sprint(u), ":9005/lag") {
+		t.Errorf("worker trigger url %v", u)
+	}
+	if v := get(so, "spec", "triggers", "0", "metadata", "valueLocation"); v != "oldest_unloaded_seconds" {
+		t.Errorf("worker valueLocation %v", v)
+	}
+	if find(docs, "Deployment", "rollup") == nil {
+		t.Error("rollup runs beside the worker until step 8")
+	}
+	docs = render(t, "worker.autoscaling.keda=false")
+	if find(docs, "ScaledObject", "worker") != nil || find(docs, "HorizontalPodAutoscaler", "worker") == nil {
+		t.Error("KEDA off: want a CPU HPA for the worker, no ScaledObject")
+	}
+	if find(render(t, "worker.enabled=false"), "Deployment", "worker") != nil {
+		t.Error("worker.enabled=false still renders it")
+	}
+	obs := envOf(container(render(t), "Deployment", "envoy", "observer"))
+	if obs["OBSERVER_RAW"] != "true" || obs["OBSERVER_RAW_FLUSH_BYTES"] != "8388608" || obs["OBSERVER_RAW_FLUSH_SECONDS"] != "30" {
+		t.Errorf("observer raw files env: %v %v %v", obs["OBSERVER_RAW"], obs["OBSERVER_RAW_FLUSH_BYTES"], obs["OBSERVER_RAW_FLUSH_SECONDS"])
+	}
+}
+
 // Each pod gets only its own component's DSN: the workers the worker login's,
 // the API the API login's, ingest (the observer) and certsvc none.
 func TestEachPodGetsOnlyItsOwnDSN(t *testing.T) {
 	docs := render(t, "api.enabled=true", "postgres.inCluster.enabled=true")
 	for _, tc := range []struct{ kind, name, container, want string }{
 		{"Deployment", "rollup", "rollup", "aintercept-postgres/worker-url"},
+		{"Deployment", "worker", "worker", "aintercept-postgres/worker-url"},
 		{"Deployment", "api", "api", "aintercept-postgres/api-url"},
 		{"Deployment", "envoy", "observer", ""},
 		{"Deployment", "envoy", "envoy", ""},
@@ -342,7 +396,7 @@ func TestPostgresInCluster(t *testing.T) {
 	}
 }
 
-// Only the workers and the API may reach the in-cluster Postgres.
+// Only the workers (rollup, and v9's worker) and the API may reach the in-cluster Postgres.
 func TestPostgresNetworkPolicy(t *testing.T) {
 	if find(render(t), "NetworkPolicy", "postgres-restrict") != nil {
 		t.Error("a postgres NetworkPolicy without an in-cluster Postgres")
@@ -358,8 +412,8 @@ func TestPostgresNetworkPolicy(t *testing.T) {
 	for _, f := range asList(get(np, "spec", "ingress", "0", "from")) {
 		apps[get(f, "podSelector", "matchLabels", "app")] = true
 	}
-	if !apps["rollup"] || !apps["api"] || len(apps) != 2 {
-		t.Errorf("postgres admits %v, want exactly rollup and api", apps)
+	if !apps["rollup"] || !apps["worker"] || !apps["api"] || len(apps) != 3 {
+		t.Errorf("postgres admits %v, want exactly rollup, worker and api", apps)
 	}
 	if p := get(np, "spec", "ingress", "0", "ports", "0", "port"); p != 5432 {
 		t.Errorf("postgres port %v, want 5432", p)
@@ -370,14 +424,14 @@ func TestPostgresNetworkPolicy(t *testing.T) {
 // the workers and the API, which their DSNs name (sslrootcert).
 func TestPostgresCABundle(t *testing.T) {
 	for _, docs := range [][]map[string]any{render(t, "api.enabled=true")} {
-		for _, n := range []string{"rollup", "api"} {
+		for _, n := range []string{"rollup", "worker", "api"} {
 			if _, ok := byName(get(find(docs, "Deployment", n), "spec", "template", "spec", "volumes"))["postgres-ca"]; ok {
 				t.Errorf("%s mounts a CA bundle that isn't configured", n)
 			}
 		}
 	}
 	docs := render(t, "api.enabled=true", "postgres.caConfigMap=rds-ca")
-	for _, n := range []string{"rollup", "api"} {
+	for _, n := range []string{"rollup", "worker", "api"} {
 		spec := get(find(docs, "Deployment", n), "spec", "template", "spec")
 		if cm := get(byName(get(spec, "volumes"))["postgres-ca"], "configMap", "name"); cm != "rds-ca" {
 			t.Errorf("%s: CA volume from %v, want rds-ca", n, cm)
