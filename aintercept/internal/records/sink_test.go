@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -178,6 +179,38 @@ func TestCanonMatchesTheLiveSink(t *testing.T) {
 	a, b := canonicalSet(live.records(t)), canonicalSet(off.records(t))
 	if strings.Join(a, "\n") != strings.Join(b, "\n") {
 		t.Fatalf("canon differs from the live sink:\nlive\n%s\ncanon\n%s", strings.Join(a, "\n"), strings.Join(b, "\n"))
+	}
+}
+
+// CanonDirRecords (canon -load) hands over exactly the records CanonDir writes.
+func TestCanonDirRecordsMatchesCanonDir(t *testing.T) {
+	rows := sampleRows()
+	dir := t.TempDir()
+	writeRaw(t, dir, rows, 4)
+	files := &memPut{}
+	want, err := CanonDir(context.Background(), dir, files, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []Record
+	st, err := CanonDirRecords(context.Background(), dir, func(rs []Record) error {
+		got = append(got, rs...)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Rows != want.Rows || st.Records != want.Records || !reflect.DeepEqual(st.Cases, want.Cases) {
+		t.Errorf("stats %+v, want %+v", st, want)
+	}
+	for i := range got { // a Parquet round trip reads an empty list as one
+		if got[i].BatchOtherSessions == nil {
+			got[i].BatchOtherSessions = []string{}
+		}
+	}
+	a, b := canonicalSet(files.records(t)), canonicalSet(got)
+	if strings.Join(a, "\n") != strings.Join(b, "\n") {
+		t.Fatalf("records differ:\nCanonDir\n%s\nCanonDirRecords\n%s", strings.Join(a, "\n"), strings.Join(b, "\n"))
 	}
 }
 

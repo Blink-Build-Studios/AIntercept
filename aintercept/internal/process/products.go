@@ -46,6 +46,21 @@ func lineageOf(ext string) codexLineage {
 	}
 }
 
+// CodexLineage is the session a Codex call's thread came from (ext_json) and
+// how: "subagent", "review" or "fork" ("" and "": none), as addLineage reads it.
+func CodexLineage(ext string) (kind, parent string) {
+	switch l := lineageOf(ext); {
+	case l.ParentThreadID != "":
+		if l.SubagentKind == "review" {
+			return "review", l.ParentThreadID
+		}
+		return "subagent", l.ParentThreadID
+	case l.ForkedFrom != "":
+		return "fork", l.ForkedFrom
+	}
+	return "", ""
+}
+
 // addLineage folds a call's lineage into its session. Every field is a min or
 // a max, so the order calls arrive in doesn't matter.
 func (ss *Session) addLineage(l codexLineage) {
