@@ -21,8 +21,8 @@ doesn't get built without the owner's yes, asked as its own question.
 
 - **Postgres and S3 hold the data; processes don't.** The only things held in
   memory are what the observer needs to assemble traffic it's still seeing (a
-  call's rows until it ends, an analytics batch until it's released) and about
-  a second of rows waiting to be inserted. No state engine, journal, snapshot,
+  call's rows until it ends, an analytics batch until it's released), its
+  write buffer, and the one file a worker is loading. No state engine, journal, snapshot,
   warm cache, byte cap or per-key ownership.
 - **One row per fact.** No copies of a fact in a second table. Rollups are
   results computed from facts, stored in their own tables.
@@ -43,48 +43,74 @@ doesn't get built without the owner's yes, asked as its own question.
 
 | Workload | What it does | Scales on |
 |---|---|---|
-| `envoy` pod (Envoy + observer), unchanged deployment | Envoy hands each transaction to the Go observer over ext_proc. The observer parses it, writes raw data to S3, and inserts rows into Postgres | CPU (as today) |
+| `envoy` pod (Envoy + observer), unchanged deployment | Envoy hands each transaction to the Go observer over ext_proc. The observer redacts it and streams it to S3 in buffered files. No database connection | CPU (as today) |
 | `certsvc`, unchanged | Leaf certificates for interception | — |
-| `rollup` Deployment (same binary, mode `rollup`) | Refreshes dirty rollup rows with SQL; one of them also runs the open-call sweep and retention | Age of the oldest dirty row (KEDA) |
+| `worker` Deployment (same binary; replaces `rollup`) | Lists new raw files, loads each into Postgres in one transaction, refreshes dirty rollup rows; one of them also lists files, sweeps open calls and runs retention | Age of the oldest unloaded file or dirty row (KEDA) |
 | `api` Deployment (Python), unchanged deployment | Pages: indexed reads plus today's response shaping | CPU (as today) |
 | `postgres` StatefulSet, unchanged | The data | — |
 
 No new services and no new binaries. The `tail` singleton, the per-key claim
 and the warm worker are gone.
 
-## 2. Ingest
+## 2. Ingest: stream to S3, then load into Postgres
+
+Two stages, and only the second touches the database:
+1. **Ingest writes to S3.** The observer streams everything it captures into
+   S3, buffered.
+2. **Workers load S3 into Postgres.** They read new files, batch-upsert the
+   rows, and refresh the rollups.
+
+### 2.1 Stage 1: the observer writes raw files
 
 The observer already assembles traffic into records (`records/assemble.go`):
-`call_start`, `call_end`, `client_event` (one per analytics event), `account`
-and `ws_connection`. v9 keeps that code and changes where records go.
+`call_start` when a request has been sent, `call_end` with the call's rows when
+it completes, `client_event` (one per analytics event), `account` and
+`ws_connection`. v9 keeps that and writes them to one stream of files per pod:
 
-### 2.1 Raw data in S3: two copies
+- **Path:** `<prefix>/raw/<YYYY-MM-DD>/<HH>/<pod>/<ns>-<seq>.ndjson.gz`, so
+  names sort by time.
+- **Buffered, as today:** a file is written when the buffer reaches 8 MiB or
+  every 30 seconds, whichever comes first (the existing writer, spool and retry
+  in `events/writer.go`). One PUT per pod per file instead of one per call.
+- **Each completed call is its own gzip member** inside the file (gzip allows
+  members back to back; any gzip reader reads the whole file). So one call's
+  data is addressable as (file, byte offset, length) and the drawer fetches it
+  with one ranged GET.
+- **Full mode** writes the bodies; **content-free mode** doesn't. One stream
+  either way.
 
-- **The ingest files,** written as traffic arrives: per pod, in time order.
-  With bodies in full mode, without them in content-free mode, so one set per
-  mode. (Today full mode writes both a with-bodies set, `capture/`, and a
-  stripped set, `dt=…`.) These are the record of everything captured, and
-  `aintercept canon` rebuilds Postgres from them (`cmd/aintercept/canon.go`).
-- **One object per call,** `<prefix>/calls/<call_id>.ndjson.gz`: every row of
-  the call in order (`records/assemble.go:158`). `calls.raw_key` points to it,
-  and the drawer reads it.
+**Before anything is written, the observer does only what has to happen in
+the pod:**
+- **Redaction:** credentials, keys and cookies are removed or hashed
+  (`events/events.go:457-545`), so secrets never reach S3.
+- **Facts inside bodies:** model, token counts and Claude Code's analytics
+  events are pulled out of bodies (`events.ExtractDeferred`), because
+  content-free mode drops the bodies. This code exists today.
 
-The per-key Parquet record files under `v1/keys/` stop being written.
+**One copy in S3.** These files are the only raw data. They replace today's
+`capture/`, `dt=…`, `calls/<id>` objects and the per-key Parquet files under
+`v1/keys/`. They are also what a rebuild reloads.
 
-### 2.2 Rows to Postgres
+**Goes from the observer:** the Postgres writes it never gets, per-key routing
+(`records/route.go`), the keyed spool (`records/keyed.go`), keymarks, the
+`keyflag` index, the per-call `calls/` objects, Parquet record files, and
+`zcodec`.
 
-The observer collects records and flushes every second, or at 1,000 records,
-in one transaction (§4). If Postgres is unavailable, the flush stays on the
-pod's local spool (one file per flush, oldest first) and is retried.
+### 2.2 Stage 2: workers load files into Postgres
 
-**Stays in the observer:** parsing (`events/`), redaction of headers, query
-parameters and keys before anything is written (`events/events.go:457-545`),
-call assembly, the analytics batch hold (`assemble.go:484-523`), and both S3
-copies.
-
-**Goes from the observer:** per-key routing (`records/route.go`), the keyed
-spool (`records/keyed.go`), keymarks, the `keyflag` index, Parquet record
-files, and `zcodec`.
+- **Listing:** one worker at a time (`pg_try_advisory_lock`) lists `raw/` after
+  a cursor every few seconds, going back 5 minutes for late uploads, and
+  inserts new keys into `ingest_files(key, listed_at, loaded_at)` with
+  `ON CONFLICT DO NOTHING`.
+- **Loading:** any worker claims an unloaded file (`FOR UPDATE SKIP LOCKED`),
+  reads it, and writes all its records in one transaction (§4), setting
+  `loaded_at` in the same transaction. Each `calls` row gets its
+  `(raw_key, raw_offset, raw_len)`.
+- **Safe to repeat:** every write is a keyed upsert, so a file loaded twice
+  (after a crash, or a rebuild) changes nothing.
+- **Rebuild:** clear `ingest_files` and the tables; the workers reload every
+  file. `aintercept canon -load` does the same for one directory of files, for
+  tests and fixtures.
 
 ## 3. Facts
 
@@ -106,7 +132,7 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 | `hidden_kind`, `synthetic` | From the record |
 | `request_id`, `client_request_id`, `message_id`, `parent_message_id` | For joins with analytics and prev/next |
 | `batch_events`, `batch_name` | On an analytics post |
-| `raw_key` | `calls/<call_id>.ndjson.gz` |
+| `raw_key`, `raw_offset`, `raw_len` | The raw file and the byte range of this call's gzip member (§2.1) |
 
 **Indexes:** `(scope_session_id, start_ns)`, `(session_id, start_ns)`,
 `(prompt_id, start_ns)`, `(key_hash, start_ns)`, `(request_id)`,
@@ -140,7 +166,8 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 | `session_credentials` | (session, key_hash), first/last ns | Same |
 | `account_devices` | (account, device): platform, terminal, shell, agent, version, first/last ns, seen on events | Same |
 | `session_edges` | (child session, parent session) | Insert if absent |
-| `ingest_pods` | one per observer pod: `last_ns` | Upsert per flush |
+| `ingest_pods` | one per observer pod: `last_ns` (its newest record) | Upsert per file |
+| `ingest_files` | one per raw file: key, listed, loaded | §2.2 |
 | `schema_version` | one row | Migrations |
 
 A person is an email group: the accounts that share an email, keyed by the
@@ -183,7 +210,7 @@ everything that depends on order is a rollup computed after the flush commits.
 
 `dirty(kind, key, seq, claimed_at)` lists rollup rows that need recomputing.
 
-A `rollup` worker loops:
+A worker loops:
 1. **Claim** a few dirty rows in a short transaction: set `claimed_at` on rows
    that are unclaimed (or whose claim is stale), `FOR UPDATE SKIP LOCKED`, and
    commit. No lock is held while refreshing, so flushes never wait on workers.
@@ -240,16 +267,17 @@ call's TTFT and cache-write values from its report, a session's children (by
 
 ### 5.5 Housekeeping
 
-Run by whichever `rollup` worker holds a `pg_try_advisory_lock`, so only one
+Run by whichever worker holds a `pg_try_advisory_lock`, so only one
 runs it at a time.
 
 - **Open-call sweep** (every 30 s): a call with no end 6 hours after its last
   data (7 days for a WebSocket), in data time as `stream/state/expire.go` does
   today, is closed: `end_ns` set and `swept` true, its rows marked dirty.
 - **Retention** (hourly): delete facts older than the window in batches by
-  time, and their rollup rows. Raw objects expire by an S3 lifecycle rule.
+  time, and their rollup rows. Raw files expire by an S3 lifecycle rule on `raw/`.
 
-`/lag` is the age of the oldest dirty row. KEDA scales `rollup` on it.
+`/lag` is the age of the oldest unloaded file or dirty row, whichever is
+older. KEDA scales `worker` on it.
 
 ## 6. Pages
 
@@ -280,7 +308,7 @@ Rendered when opened, by today's `request_detail.py`, with its inputs read from
 Postgres and S3 instead of a loaded session:
 
 - **The call:** its `calls` row.
-- **The raw data:** one GET of `calls.raw_key`, decoded as today (unzip,
+- **The raw data:** one ranged GET of the call's member in its raw file, decoded as today (unzip,
   reassemble the stream, redact, pick out the new messages).
 - **Step N of M:** the call's `steps` row and its prompt's step count.
 - **Previous and next:** by `message_id`/`parent_message_id`, else by step.
@@ -456,7 +484,7 @@ seam (`pages.py`) in its own step; the old path is deleted only in step 8.
 | 1 | **Baseline and parity test.** Record the 4,248 responses from today's main. A test that compares parsed JSON | The baseline compares equal to a fresh run of today's main |
 | 1b | **Remove the four features** (§6.5) per handoff §11Q: import the handoff, delete the UI components and the API fields, class tick events internal, rerun UI parity | UI parity green against §11Q's 572 specimens; the baseline comparison passes with the removed fields skipped |
 | 2 | **Facts and the loader.** Migrations for §3, the flush (§4) as a Go package, `canon -load` | The real capture loads; reloading it, or loading it in shuffled order, gives the same rows; flush cost flat; database bytes per person-day reported |
-| 3 | **Ingest writes Postgres** alongside the old path | `make up && make verify`: a request through the proxy appears in `calls` and `events` |
+| 3 | **Ingest streams raw files to S3; workers load them** (§2), alongside the old path until step 8 | `make up && make verify`: a request through the proxy appears in `calls` and `events`; the observer has no Postgres connection; S3 PUTs per pod are one per 8 MiB or 30 s |
 | 4 | **Rollups** (§5) | Every rollup equals a from-scratch computation over the facts, after loading the capture in shuffled order; refresh cost flat |
 | 5 | **The drawer** reads v9 (§6.2); its tests and samples move to the Postgres fixture | 1,804 drawer URLs equal |
 | 6 | **Session pages** read v9 (§6.1), with their tests and samples | 1,440 + 244 URLs equal |
@@ -475,16 +503,17 @@ re-checked against real progress after step 4.
 
 ## 10. Owner decisions (2026-11-14)
 
-1. **The observer inserts into Postgres directly** (§2). Envoy hands each
-   transaction to the Go observer over ext_proc, as today; the observer parses
-   it, writes raw data to S3 and inserts rows. No intermediate files, no queue.
+1. **Ingest writes only to S3; workers load S3 into Postgres** (§2). The
+   observer streams raw files, buffered by size and time, and never touches
+   the database. (This replaces the earlier decision that the observer insert
+   into Postgres directly.)
 2. **The directory sums activity inside the window,** from a per-(account,
    day) rollup.
 3. **`/coverage` is deleted.**
 4. **Analytics events are upserted on their own unique id,** so a resent batch
    counts once.
-5. **Two raw copies in S3:** the ingest files as they arrive, and one object
-   per call that Postgres points to.
+5. **One raw copy in S3:** the ingest files. Each call is a gzip member
+   inside its file, so Postgres points to it by file, offset and length.
 6. **Four features are removed from the UI** (§6.5): presence, the permission,
    approval and network lanes, collapse ticks, and capabilities "at" the brush
    end. Claude Design updates the designs.
