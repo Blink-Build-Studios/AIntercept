@@ -131,6 +131,7 @@ func refreshLoad(ctx context.Context, db *pgxpool.Pool, n int) func() {
 		close(stop)
 		wg.Wait()
 		during := refreshed.Load()
+		refresh.Coalesce = 0 // the load is over: drain the coalesced rows too, without waiting
 		t := time.Now()
 		swept, err := refresh.Sweep(ctx, db)
 		if err != nil {
@@ -179,6 +180,9 @@ func timeRefreshes(ctx context.Context, db *pgxpool.Pool) {
 		{"hour", "SELECT session_id || '/' || hour_ns FROM session_hours"},
 		{"cred_minute", "SELECT DISTINCT key_hash || '/' || minute_ns FROM cred_minutes"},
 		{"cred_hour", "SELECT DISTINCT key_hash || '/' || hour_ns FROM cred_hours"},
+		{"prompt", "SELECT DISTINCT prompt_id FROM prompts"},
+		{"session", "SELECT session_id FROM sessions"},
+		{"account_day", "SELECT DISTINCT account_id || '/' || day_ns FROM account_days"},
 	} {
 		rows, err := db.Query(ctx, k.sql)
 		if err != nil {
@@ -220,6 +224,17 @@ func timeRefreshes(ctx context.Context, db *pgxpool.Pool) {
 // slowestShape is the size of the slowest refresh's input, not its key (keys
 // are real identifiers).
 func slowestShape(ctx context.Context, db *pgxpool.Pool, kind, key string) string {
+	switch kind {
+	case "prompt":
+		var steps int64
+		_ = db.QueryRow(ctx, `SELECT count(*) FROM steps WHERE prompt_id = $1`, key).Scan(&steps)
+		return fmt.Sprintf("(a prompt of %d steps)", steps)
+	case "session":
+		var events, calls int64
+		_ = db.QueryRow(ctx, `SELECT (SELECT count(*) FROM events WHERE session_id = $1), (SELECT count(*) FROM calls WHERE session_id = $1)`,
+			key).Scan(&events, &calls)
+		return fmt.Sprintf("(a session of %d events, %d calls)", events, calls)
+	}
 	i := strings.LastIndexByte(key, '/')
 	if i < 0 || kind != "hour" {
 		return ""

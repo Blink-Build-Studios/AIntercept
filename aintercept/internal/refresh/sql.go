@@ -139,7 +139,9 @@ var minuteMissed = []string{
 //     those not internal (session.py is_internal, stored at insert), friction
 //     (sessionrows.go sessEvents.add: negative prompts, cancels, destructive
 //     commands), queries and bypassed (the same), reports, and what the person
-//     summary sums (pages.py _EVENT_TOTALS over personmap.go eventSums).
+//     summary sums (pages.py _EVENT_TOTALS over personmap.go eventSums), and
+//     the reports Claude Code sent past a custom CA (personmap.go eventSums
+//     gzipCA: the session row's custom_ca).
 const callAggs = `count(*) AS model_calls,
 	count(*) FILTER (WHERE c.request_class = 'main') AS main_calls,
 	count(*) FILTER (WHERE c.request_class = 'subagent') AS subagent_calls,
@@ -171,7 +173,8 @@ var eventAggs = `count(*) AS events,
 	count(` + jsonDouble(md("preToolHookDurationMs")) + `) FILTER (WHERE e.name = 'tengu_tool_use_success') AS hook_ms_n,
 	sum(` + jsonInt(md("cache_creation_5m_input_tokens")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cache_5m,
 	sum(` + jsonInt(md("cache_creation_1h_input_tokens")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cache_1h,
-	sum(` + jsonDouble(md("costUSD")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cost_usd`
+	sum(` + jsonDouble(md("costUSD")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cost_usd,
+	count(*) FILTER (WHERE e.name = 'tengu_api_success' AND ` + jsonText(md("gzipSkipReason")) + ` = 'custom_ca') AS custom_ca`
 
 // requestRows is the Requests tab's rows (stream_sql.py tx_rows): a
 // transaction with a credential, listed under its scope session (its own, else
@@ -193,7 +196,7 @@ var minuteRow = `INSERT INTO session_minutes AS m SELECT $1, $2,
 	cc.context_sum, cc.tool_calls,
 	ev.events, ev.events_shown, ev.frustrated, ev.interrupted, ev.destructive, ev.outside_cwd,
 	ev.queries, ev.bypassed, ev.reported, (SELECT count(*) FROM missed_reports WHERE session_id = $1 AND minute_ns = $2),
-	ev.hook_ms_sum, ev.hook_ms_n, ev.cache_5m, ev.cache_1h, ev.cost_usd,
+	ev.hook_ms_sum, ev.hook_ms_n, ev.cache_5m, ev.cache_1h, ev.cost_usd, ev.custom_ca,
 	coalesce((SELECT jsonb_object_agg(k, n) FROM (SELECT c.kind || '/' || c.key_hash AS k, count(*) AS n FROM calls c
 		WHERE c.scope_session_id = $1 AND ` + in + ` AND c.hidden_kind IS NULL AND ` + requestRows + `
 		GROUP BY 1) x), '{}'),
@@ -211,7 +214,7 @@ var sumColumns = []string{
 	"model_calls", "main_calls", "subagent_calls", "hidden_calls", "unreported",
 	"input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens", "outputs_known", "context_sum", "tool_calls",
 	"events", "events_shown", "frustrated", "interrupted", "destructive", "outside_cwd", "queries", "bypassed",
-	"reported", "missed", "hook_ms_sum", "hook_ms_n", "cache_5m", "cache_1h", "cost_usd",
+	"reported", "missed", "hook_ms_sum", "hook_ms_n", "cache_5m", "cache_1h", "cost_usd", "custom_ca",
 }
 
 func setAll(cols []string) string {

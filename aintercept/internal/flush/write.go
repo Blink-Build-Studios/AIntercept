@@ -259,6 +259,26 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 				dirty = append(dirty, Dirty{"minute", k})
 			}
 		}
+	}
+	// A step reads its report and tool events by request id, and their Bash
+	// events by tool use id, so those mark their calls' prompts (§5.3: a
+	// prompt's events include its calls' events, whatever prompt they name).
+	if ids := append(append([]string(nil), r.ReportedIDs...), r.StepIDs...); len(ids)+len(r.ToolUseIDs) > 0 {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT prompt_id FROM calls WHERE prompt_id IS NOT NULL AND (
+			request_id = ANY($1) OR client_request_id = ANY($1)
+			OR request_id IN (SELECT request_id FROM events WHERE tool_use_id = ANY($2) AND request_id IS NOT NULL))`, ids, r.ToolUseIDs)
+		if err != nil {
+			return fmt.Errorf("flush: steps: %w", err)
+		}
+		pids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return fmt.Errorf("flush: steps: %w", err)
+		}
+		for _, p := range pids {
+			dirty = append(dirty, Dirty{"prompt", p})
+		}
+	}
+	if len(dirty) > len(r.Dirty) {
 		slices.SortFunc(dirty, func(a, b Dirty) int {
 			if c := strings.Compare(a.Kind, b.Kind); c != 0 {
 				return c
