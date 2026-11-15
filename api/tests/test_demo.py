@@ -4,7 +4,7 @@ tools/make_demo_fixture.py), so stories show real shapes and numbers."""
 import pytest
 
 from tests.builders import Dataset, load_fixture
-from tests.conftest import bounded_store, make_client
+from tests.conftest import PgDataset, bounded_store, make_client, pg_admin
 
 DEMO_ACCOUNT = "7d2e0000-0000-4000-8000-00000000a41c"
 
@@ -17,6 +17,18 @@ def demo(tmp_path_factory):
     store = bounded_store(ds.write())
     yield make_client(store)
     store.close()
+
+
+@pytest.fixture(scope="module")
+def pg_demo(tmp_path_factory):
+    """The demo fixture in Postgres (conftest.PgDataset): the drawer's samples are v9's (§6.2)."""
+    ds = Dataset(tmp_path_factory.mktemp("pg-demo") / "data")
+    load_fixture(ds, "demo")
+    pg = PgDataset(pg_admin(), ds.write())
+    store = pg.store()
+    yield make_client(store)
+    store.close()
+    pg.close()
 
 
 def test_person_sessions_demo(demo, write_sample):
@@ -151,8 +163,8 @@ def _demo_call(client) -> str:
     return str(main[0])
 
 
-def test_request_demo(demo, write_sample):
-    client = demo
+def test_request_demo(pg_demo, write_sample):
+    client = pg_demo
     cid = _demo_call(client)
     r = client.get(f"/api/v1/requests/{cid}")
     write_sample(client, r, "demo")
@@ -164,24 +176,24 @@ def test_request_demo(demo, write_sample):
     assert client.get(f"/api/v1/requests/{missed['requestId']}").json()["data"]["kind"] == "notCaptured"
 
 
-def test_request_raw_demo(demo, write_sample):
-    client = demo
+def test_request_raw_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/requests/{_demo_call(client)}/raw")
     write_sample(client, r, "demo")
     d = r.json()["data"]
     assert d["unavailable"] is None and d["contentRetained"] is False and d["responseLine"].startswith("200")
 
 
-def test_request_details_demo(demo, write_sample):
-    client = demo
+def test_request_details_demo(pg_demo, write_sample):
+    client = pg_demo
     r = client.get(f"/api/v1/requests/{_demo_call(client)}/details")
     write_sample(client, r, "demo")
     d = r.json()["data"]
     assert len(d["sections"]) == 8 and any(e["name"] == "tengu_api_success" for e in d["events"])
 
 
-def test_event_demo(demo, write_sample):
-    client = demo
+def test_event_demo(pg_demo, write_sample):
+    client = pg_demo
     first = client.get(f"{SESSION}/events", params={"pageSize": 1}).json()["data"][0]
     r = client.get(f"/api/v1/events/{first['eventId']}")
     write_sample(client, r, "demo")

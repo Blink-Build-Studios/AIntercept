@@ -1,9 +1,10 @@
 """The read path over Postgres (docs/PIPELINE.md v7 §5, v8 §5.7): each page's reader (pages.py).
 
-/status, the request drawer and /events/{id} read the worker's finished rows through v8's reader
-(PgPages, on the psycopg reader in reader.py): one statement each. Every other page is still v7's
-loader's, below, until build steps 9 to 11 move it: its rows from Postgres into an in-memory DuckDB,
-and today's endpoint SQL (pages.SqlPages) over them.
+/status reads the worker's finished rows through v8's reader (PgPages, on the psycopg reader in
+reader.py), and the request drawer and /events/{id} read v9's facts and rollups and the call's raw
+member there (drawer.py, docs/PIPELINE.md §6.2). Every other page is still v7's loader's, below, until
+v9's build steps 6 and 7 move it: its rows from Postgres into an in-memory DuckDB, and today's endpoint
+SQL (pages.SqlPages) over them.
 
 For each request the store:
 1. takes one pooled connection and opens one snapshot (READ ONLY, REPEATABLE READ), so every
@@ -31,9 +32,9 @@ import contextlib
 import contextvars
 import importlib.resources
 import itertools
-import json
 import pathlib
 import time
+import urllib.error
 import urllib.parse
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Sequence
@@ -43,7 +44,7 @@ from typing import Any, TypeVar, cast
 import adbc_driver_postgresql.dbapi as pgdbapi
 import duckdb
 
-from aintercept_api import pages, ranges, raw, state_sql, stream_sql
+from aintercept_api import drawer, pages, ranges, state_sql, stream_sql
 from aintercept_api import request_detail as rd
 from aintercept_api import store as legacy
 from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
@@ -226,42 +227,8 @@ _STATUS = """SELECT
     EXISTS (SELECT 1 FROM keys WHERE content_retained) AS retained"""
 
 
-# The request drawer (§3.7): the worker's finished row, by its primary key (request_id, key; a
-# call another key held a moment ago, its copy's: the first key), with /status's values (the
-# drawer's lastDataAt is global, quirk 7), in one statement. v8 stores each object as a template
-# (drawer_templates, shared by every row of its shape) and its values, joined by \x1f, and the
-# statement rebuilds it with format(); a row's stepCount is its prompt's step count, kept once per
-# (session, prompt) in drawer_step_counts so a new step doesn't rewrite its prompt's rows: the row
-# holds it as its one `"stepCount":null`, filled in here.
-_STEP_COUNT = """replace({}, '"stepCount":null', '"stepCount":' || coalesce(c.n::text, 'null'))"""
-
-
-def _drawer_sql(column: str) -> str:
-    value = f"format(t.body, VARIADIC string_to_array(r.{column}_vals, E'\\x1f'))"
-    if column == "data":
-        value = _STEP_COUNT.format(value)
-    return f"""WITH status AS ({_STATUS})
-SELECT status.*, d.data FROM status LEFT JOIN LATERAL (
-    SELECT {value} AS data FROM drawer_requests r
-    JOIN drawer_templates t ON t.key = r.key AND t.id = r.{column}_tpl
-    LEFT JOIN drawer_step_counts c ON c.session_id = r.step_session AND c.prompt_id = r.step_prompt AND c.key = r.key
-    WHERE r.request_id = %(id)s ORDER BY r.key LIMIT 1) d ON true"""  # noqa: S608
-
-
-# /raw: the row's existence, and the call's requests row (the view when its detail object can't be
-# read: a WebSocket turn's, or one not found); request_detail formats the detail object as today.
-_REQUEST_COLUMNS = [c for c, _ in SHAPES["requests"] if c not in _NOT_STORED]
-_RAW = f"""WITH status AS ({_STATUS}),
-d AS (SELECT request_id FROM drawer_requests WHERE request_id = %(id)s LIMIT 1)
-SELECT status.*, (SELECT count(*) FROM d) AS found, r.* FROM status LEFT JOIN (
-    SELECT {columns("requests")} FROM requests
-    WHERE call_id = replace(%(id)s, '~', '#') AND NOT coalesce(synthetic, false) AND EXISTS (SELECT 1 FROM d)) r
-  ON true"""  # noqa: S608
-# /events/{id}: the event's row (its raw row comes from the batch's detail object, as today's).
-_EVENT = f"""WITH status AS ({_STATUS})
-SELECT status.*, e.data, e.correlation_id, e.event_key FROM status LEFT JOIN LATERAL (
-    SELECT data, correlation_id, event_key FROM drawer_events WHERE event_id = %(id)s ORDER BY key LIMIT 1) e
-  ON true"""  # noqa: S608
+# The drawer's lastDataAt (it's global, quirk 7): the newest record any observer pod sent (§6.4).
+_NEWEST = "SELECT max(last_ns) AS n FROM ingest_pods"
 
 # What each session page reads after its row: the tables its endpoint code queries.
 SESSION_PAGES: dict[str, tuple[str, ...]] = {
@@ -351,16 +318,6 @@ def _sid(value: str) -> list[tuple[object, str]]:
     return [(value, "VARCHAR")]
 
 
-def _event_id(eid: str) -> str:
-    """An event id as the worker writes it, <batch>:<rank>: request_detail.event reads the rank as
-    int(n), so "b:007" is b:7's (one that doesn't parse looks up as given, and 404s)."""
-    cid, _, n = eid.rpartition(":")
-    if cid and n.isdigit():
-        with contextlib.suppress(ValueError):
-            return f"{cid}:{int(n)}"
-    return eid
-
-
 # A range pushed down (the router's, snapped: ranges.of_query) is widened by this much each side.
 _WIDEN_NS = 1_000_000
 
@@ -388,7 +345,7 @@ class PgStore:
         # v8's reader (psycopg), and v7's loader's connections (ADBC) until build step 11 removes it.
         self.reader = Reader(dsn, pool_size=pool_size, trace=self.trace if trace else None)
         self.pool = Pool(self._adbc_connect, pool_size)
-        self.source, self.prefix = source, prefix  # calls/<id>.ndjson.gz (the drawer's raw view)
+        self.source, self.prefix = source, prefix  # the raw files (the drawer's calls' members)
         self.memory_limit, self.threads = memory_limit, threads
         self.data_dir = pathlib.Path(".")
         self.skipped: list[str] = []
@@ -742,28 +699,28 @@ class PgStore:
         finally:
             cur.close()
 
-    # The raw view: the call's detail object (calls/<id>.ndjson.gz), written when the call ends.
-    def _detail(self, correlation_id: str) -> list[bytes]:
-        if self.source is None or not correlation_id or "/" in correlation_id:
-            return []
-        from aintercept_api.buckets import _get_if_exists
-
-        return raw.lines(_get_if_exists(self.source, f"{self.prefix}calls/{correlation_id}.ndjson.gz"))
-
-    def raw_rows(self, correlation_id: str) -> list[dict[str, Any]]:
-        return legacy.rows_of(self._detail(correlation_id), correlation_id)
-
-    def raw_event(self, correlation_id: str, event_key: str, source_file: str) -> dict[str, Any] | None:
-        return legacy.event_row(self._detail(correlation_id), correlation_id, event_key)
+    def read_range(self, key: str, offset: int, length: int) -> bytes | None:
+        """A call's gzip member in its raw file (one ranged GET); None when the store can't give it."""
+        if self.source is None:
+            return None
+        try:
+            return cast(bytes, self.source.get_range(key, offset, length))
+        except FileNotFoundError:
+            return None
+        except urllib.error.HTTPError as e:
+            if e.code in (404, 416):
+                return None
+            raise
 
 
 # --- v8's reader (docs/PIPELINE.md v8 §5.6, §5.7) -------------------------------------------------------
 
 
 class PgPages:
-    """PgStore's pages that read finished rows through the psycopg reader, in one snapshot: /status, the
-    request drawer and /events/{id}, one statement each. A page moves here (build steps 9 to 11) by
-    adding its name to PAGES and its method, with pages.SqlPages' signature."""
+    """PgStore's pages that read Postgres through the psycopg reader, in one snapshot: /status (v8's
+    finished rows), and the request drawer and /events/{id} (v9: drawer.PgReads, docs/PIPELINE.md §6.2).
+    A page moves here (build steps 6 and 7) by adding its name to PAGES and its method, with
+    pages.SqlPages' signature."""
 
     PAGES = frozenset({"status", "request", "request/raw", "request/details", "event"})
 
@@ -771,89 +728,33 @@ class PgPages:
         self.store, self.snap = store, snap
         self._status: pages.StatusValues | None = None
 
-    def _with_status(self, name: str, sql: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """A statement's one row, which carries /status's values (the drawer's lastDataAt is global,
-        quirk 7)."""
-        (row,) = self.snap.dicts(name, sql, params or {})
-        found = [n for n in (row["newest_row_ns"], row["pods_ns"]) if n]
-        self._status = pages.StatusValues(
-            row["first_request_ns"] or None,
-            row["earliest_ns"] or None,
-            max(found) if found else None,
-            row["retained"] if row["any_key"] else None,
-        )
-        return row
-
     def status(self) -> pages.StatusValues:
         if self._status is None:
-            self._with_status("status", _STATUS)
-        return cast(pages.StatusValues, self._status)
+            (row,) = self.snap.dicts("status", _STATUS, {})
+            found = [n for n in (row["newest_row_ns"], row["pods_ns"]) if n]
+            self._status = pages.StatusValues(
+                row["first_request_ns"] or None,
+                row["earliest_ns"] or None,
+                max(found) if found else None,
+                row["retained"] if row["any_key"] else None,
+            )
+        return self._status
 
     def newest_ns(self) -> int | None:
-        return self.status().newest_ns
+        (row,) = self.snap.dicts("newest", _NEWEST, {})
+        return cast(int | None, row["n"])
 
-    def _drawer(self, rid: str, column: str) -> Any:
-        data = self._with_status("drawer", _drawer_sql(column), {"id": rid})["data"]
-        return None if data is None else json.loads(data)
+    def _reads(self) -> drawer.PgReads:
+        return drawer.PgReads(self.snap, self.store.read_range)
 
     def request(self, rid: str) -> RequestDetail | None:
-        d = self._drawer(rid, "data")
-        return None if d is None else RequestDetail.model_validate(d)
+        return rd.detail(self._reads(), rid)
 
     def request_details(self, rid: str) -> RequestDetails | None:
-        d = self._drawer(rid, "details")
-        return None if d is None else RequestDetails.model_validate(d)
+        return rd.details(self._reads(), rid)
 
     def request_raw(self, rid: str) -> RequestRaw | None:
-        row = self._with_status("drawer", _RAW, {"id": rid})
-        if not row["found"]:
-            return None
-        if rid.startswith(rd.REPORTED):
-            return rd.reported_raw()
-        with contextlib.closing(_OneCall(self.store, row)) as call:
-            return rd.wire_raw(cast(legacy.Store, call), rid)
+        return rd.raw(self._reads(), rid)
 
     def event(self, eid: str) -> EventDetail | None:
-        """The worker's row of the event, and its raw row from the batch's detail object."""
-        row = self._with_status("event", _EVENT, {"id": _event_id(eid)})
-        cid, _, n = eid.rpartition(":")
-        if not cid or not n.isdigit() or row["data"] is None:
-            return None
-        body = self.store.raw_event(row["correlation_id"], row["event_key"], "") or {}
-        ev = body.get("client_event") if isinstance(body, dict) else None
-        d = json.loads(row["data"])
-        d["eventId"], d["raw"] = eid, rd._scrub(ev if isinstance(ev, dict) else {})
-        return EventDetail.model_validate(d)
-
-
-class _OneCall:
-    """What /raw's formatter (request_detail.wire_raw) reads of one call: its detail object (S3), and
-    its requests row as today's `calls` view has it (a WebSocket turn's view, or one whose object is
-    missing), in a DuckDB of its own, made only when asked (build step 8 renders that view instead)."""
-
-    def __init__(self, store: PgStore, row: dict[str, Any]) -> None:
-        self.store, self.row = store, row
-        self.commit = next(store._n)
-        self._con: duckdb.DuckDBPyConnection | None = None
-
-    def raw_rows(self, correlation_id: str) -> list[dict[str, Any]]:
-        return self.store.raw_rows(correlation_id)
-
-    def query(self, sql: str, params: Sequence[object] | None = None) -> list[tuple[Any, ...]]:
-        if self._con is None:
-            con = self.store._duckdb()
-            con.execute(legacy._EMPTY["requests"])
-            if self.row.get("call_id") is not None:
-                cols = ", ".join(_q(c) for c in _REQUEST_COLUMNS)
-                marks = ", ".join("?" for _ in _REQUEST_COLUMNS)
-                con.execute(
-                    f"INSERT INTO requests ({cols}) VALUES ({marks})",  # noqa: S608 (fixed names)
-                    [self.row[c] for c in _REQUEST_COLUMNS],
-                )
-            PgStore._finish(con)
-            self._con = con
-        return self._con.execute(sql, params or []).fetchall()
-
-    def close(self) -> None:
-        if self._con is not None:
-            self._con.close()
+        return self._reads().event(eid)

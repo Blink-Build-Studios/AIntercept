@@ -570,3 +570,23 @@ def timing(ds: Dataset, cid: str, *, response_ms: float, end_ms: float) -> None:
         r["timestamp_ns"] = t0 + int(response_ms * 1_000_000)
     for r in rows_of(ds, cid, "complete"):
         r["timestamp_ns"] = t0 + int(end_ms * 1_000_000)
+
+
+def end_batches(ds: Dataset) -> None:
+    """End every analytics batch still in flight: its response and complete rows, a second after its last
+    row, as the observer sees a batch's request answered. A batch's raw rows reach v9's raw files (its
+    call's member) when it ends (docs/PIPELINE.md §2.1)."""
+    batches: dict[str, list[dict]] = {}
+    for r in ds.rows:
+        if r.get("path") == "/api/event_logging/v2/batch":
+            batches.setdefault(r["correlation_id"], []).append(r)
+    for cid, rows in batches.items():
+        if any(r["phase"] == "complete" for r in rows):
+            continue
+        last = max(rows, key=lambda r: (r["timestamp_ns"], r["seq"]))
+        base = {"correlation_id": cid, "observer_instance": INSTANCE, "host": "api.anthropic.com", "method": "POST",
+                "path": "/api/event_logging/v2/batch", "synthetic": False}  # fmt: skip
+        ds.add({**base, "seq": last["seq"] + 1, "timestamp_ns": last["timestamp_ns"] + 1_000_000_000,
+                "phase": "response_headers", "status": 200, "direction": "outbound", "headers": {}})  # fmt: skip
+        ds.add({**base, "seq": last["seq"] + 2, "timestamp_ns": last["timestamp_ns"] + 1_000_000_001,
+                "phase": "complete", "status": 200, "end_of_stream": True})  # fmt: skip

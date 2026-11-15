@@ -16,6 +16,10 @@ Sources, per transaction (correlation_id):
 
 Envoy's own connection timings (accept, upstream connect, TLS) aren't recorded,
 so proxy timing starts at the request headers.
+
+What the drawer reads comes through `Reads`: today's stores' (StoreReads: SQL over the tables a store
+loaded, a call's raw rows from its lineage), or v9's indexed reads of Postgres and one ranged GET of the
+call's raw member (drawer.PgReads, docs/PIPELINE.md §6.2).
 """
 
 import base64
@@ -26,7 +30,7 @@ import threading
 import zlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from aintercept_api import agents, rows
 from aintercept_api import claude_code as cc
@@ -202,58 +206,68 @@ _BATCH_SESSION = """SELECT session_id FROM analytics WHERE correlation_id = ? AN
                     ORDER BY ns, session_id LIMIT 1"""
 
 
+# A request row's columns, as the wire is built from it (wire_from_row).
+ROW_COLUMNS = (
+    "ts, method, path, ip, key_hash, status, response_start_ns, end_ts, client_json, provider_json, model, "
+    "stop_reason, message_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, request_bytes, "
+    "response_bytes, error, session_id, device_id, ext_json"
+)
+
+
 def _wire_from_tables(store: Store, cid: str) -> Wire | None:
     """The transaction from its request row, when its raw files can't be read
     (not synced, or the object store unreachable): what the drawer can still say."""
-    found = store.query(
-        """SELECT ts, method, path, ip, key_hash, status, response_start_ns, end_ts, client_json, provider_json,
-                  model, stop_reason, message_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                  request_bytes, response_bytes, error, session_id, device_id, ext_json
-           FROM calls WHERE call_id = replace(?, '~', '#') ORDER BY ts LIMIT 1""",
+    found = store.query_dicts(
+        f"SELECT {ROW_COLUMNS} FROM calls WHERE call_id = replace(?, '~', '#') ORDER BY ts LIMIT 1",  # noqa: S608
         [cid],
     )
     if not found:
         return None
-    (ts, method, path, ip, kh, status, resp_ts, end_ts, client, provider, model, stop, msg,
-     inp, out, read, write, up, down, error, sid, device, ext) = found[0]  # fmt: skip
+    w = wire_from_row(cid, found[0])
+    if w.kind == "analytics":
+        sid = store.query(_BATCH_SESSION, [cid])
+        w.batch_session = sid[0][0] if sid else None
+    return w
+
+
+def wire_from_row(cid: str, r: dict[str, Any]) -> Wire:
+    """The transaction from its request row (ROW_COLUMNS; its JSON columns as text): its headers as the
+    processor keeps them, no bodies or stream."""
     complete = {
         k: v
         for k, v in {
-            "model": model,
-            "stop_reason": stop,
-            "message_id": msg,
-            "input_tokens": inp,
-            "output_tokens": out,
-            "cache_read_tokens": read,
-            "cache_write_tokens": write,
-            "error": error,
-            "session_id": sid,
-            "device_id": device,
-            "client_metadata": json.loads(ext) if ext else None,
+            "model": r["model"],
+            "stop_reason": r["stop_reason"],
+            "message_id": r["message_id"],
+            "input_tokens": r["input_tokens"],
+            "output_tokens": r["output_tokens"],
+            "cache_read_tokens": r["cache_read_tokens"],
+            "cache_write_tokens": r["cache_write_tokens"],
+            "error": r["error"],
+            "session_id": r["session_id"],
+            "device_id": r["device_id"],
+            "client_metadata": json.loads(r["ext_json"]) if r["ext_json"] else None,
         }.items()
         if v is not None
     }
-    w = Wire(
+    status, resp_ts, end_ts = r["status"], r["response_start_ns"], r["end_ts"]
+    return Wire(
         cid,
-        ts,
-        method,
-        path or "",
-        _json_obj(client),
-        ip,
-        kh,
+        r["ts"],
+        r["method"],
+        r["path"] or "",
+        _json_obj(r["client_json"]),
+        r["ip"],
+        r["key_hash"],
         status=status,
         resp_ts=resp_ts,
-        resp_headers=_json_obj(provider) if resp_ts is not None or status is not None else None,
+        resp_headers=_json_obj(r["provider_json"]) if resp_ts is not None or status is not None else None,
         complete=complete if end_ts is not None else None,
         end_ts=end_ts,
-        up=up,
-        down=down,
+        up=r["request_bytes"],
+        down=r["response_bytes"],
         from_tables=True,
     )
-    if w.kind == "analytics":
-        found = store.query(_BATCH_SESSION, [cid])
-        w.batch_session = found[0][0] if found else None
-    return w
 
 
 def _json_obj(text: str | None) -> dict[str, str]:
@@ -287,9 +301,18 @@ def load_wire(store: Store, cid: str) -> Wire | None:
 def _load_wire(store: Store, cid: str) -> Wire | None:
     if WS_TURN in cid:  # one turn of a WebSocket: its row says what the drawer shows
         return _wire_from_tables(store, cid)
-    rows = sorted(store.raw_rows(cid), key=lambda r: (r.get("seq") or 0, r.get("timestamp_ns") or 0))
-    if not rows:
+    w = wire_from_rows(cid, store.raw_rows(cid))
+    if w is None:  # no raw rows, or its request headers are in a file the lineage doesn't reach
         return _wire_from_tables(store, cid)
+    if w.kind == "analytics":
+        sid = store.query(_BATCH_SESSION, [cid])
+        w.batch_session = sid[0][0] if sid else None
+    return w
+
+
+def wire_from_rows(cid: str, raw_rows: list[dict[str, Any]]) -> Wire | None:
+    """The transaction from its raw rows; None without its request headers among them."""
+    rows = sorted(raw_rows, key=lambda r: (r.get("seq") or 0, r.get("timestamp_ns") or 0))
     w: Wire | None = None
     disconnect: dict[str, Any] | None = None
     for r in rows:
@@ -312,8 +335,8 @@ def _load_wire(store: Store, cid: str) -> Wire | None:
                 w.status = status
         elif w is not None and phase == "disconnect" and disconnect is None:
             disconnect = r
-    if w is None:  # its request headers are in a file the lineage doesn't reach
-        return _wire_from_tables(store, cid)
+    if w is None:
+        return None
     if w.complete is None and disconnect is not None:  # it ended in a disconnect, as its row says
         w.complete, w.end_ts = disconnect, disconnect.get("timestamp_ns")
     for phase in ("request_body_chunk", "response_body_chunk"):
@@ -336,9 +359,6 @@ def _load_wire(store: Store, cid: str) -> Wire | None:
             (w.req_chunks if phase == "request_body_chunk" else w.resp_chunks).append(
                 (int(r.get("timestamp_ns") or 0), chunk)
             )
-    if w.kind == "analytics":
-        sid = store.query(_BATCH_SESSION, [cid])
-        w.batch_session = sid[0][0] if sid else None
     return w
 
 
@@ -500,21 +520,18 @@ def _near_query(evs: list[ss.Event], prompt: str | None, ts: int) -> ss.Event | 
     return best
 
 
-def facts(store: Store, sid: str | None, rid: str | None, crid: str | None, w: Wire | None) -> Facts:
+def facts(reads: "Reads", sid: str | None, rid: str | None, crid: str | None, w: Wire | None) -> Facts:
     if not sid:
         return Facts(None, None, None, [], None, None, [])
     # Only this call's events: its prompt's (the query and retries carry no request
     # id), those naming its ids, then the Bash events its tool uses point at.
-    prompt_id = w.prompt_id if w else None
     ids = [x for x in (rid, crid) if x]
-    evs = ss.events(store, sid, about=(prompt_id, ids, []))
+    evs = reads.call_events(sid, w, ids)
     tool_ids = [t for e in evs if _str_id(e.md.get("requestId")) in ids and (t := _str_id(e.md.get("toolUseID")))]
     if tool_ids:
         seen = {e.id for e in evs}
-        evs = sorted(
-            evs + [e for e in ss.events(store, sid, about=(None, [], tool_ids)) if e.id not in seen],
-            key=lambda e: (e.ts, e.id),
-        )
+        more = [e for e in reads.tool_events(sid, tool_ids) if e.id not in seen]
+        evs = sorted(evs + more, key=lambda e: (e.ts, e.id))
     j = ss._joins(evs)
     succ = (j.success.get(rid) if rid else None) or (j.success.get(crid) if crid else None)
     stall = next(
@@ -602,7 +619,8 @@ class Position:
     next: str | None = None
     prev_message: str | None = None
     next_message: str | None = None
-    calls: list[ss.Step] = field(default_factory=list)
+    delivered: int | None = None
+    """The step its tool results are delivered in: the next call's."""
 
 
 def position(store: Store, s: cc.Session | None, w: Wire) -> Position:
@@ -631,6 +649,8 @@ def position(store: Store, s: cc.Session | None, w: Wire) -> Position:
     if nxt is None and at is not None and at + 1 < len(lane):
         nxt = lane[at + 1].correlation_id
     step = next((i + 1 for i, x in enumerate(same) if x.correlation_id == w.cid), None)
+    # Today's "delivered in": the next call's place among the session's calls (§8, difference 7).
+    delivered = next((i + 1 for i, x in enumerate(steps) if x.correlation_id == nxt), None)
     return Position(
         prompt_index=index.get(w.prompt_id or ""),
         step_index=step,
@@ -639,19 +659,23 @@ def position(store: Store, s: cc.Session | None, w: Wire) -> Position:
         next=nxt,
         prev_message=prev_mid,
         next_message=chain.get(nxt or "", (None, None))[0],
-        calls=steps,
+        delivered=delivered,
     )
 
 
-def _retry_info(store: Store, w: Wire, f: Facts, pos: Position) -> RetryInfo | None:
+def next_attempt(store: Store, sid: str, w: Wire) -> ss.Step | None:
+    """The first call after w of its prompt and request class: what a failed call's retry was."""
+    for x in ss.steps(store, sid):
+        if x.ts > w.ts and x.prompt_id == w.prompt_id and x.request_class == w.request_class:
+            return x
+    return None
+
+
+def _retry_info(reads: "Reads", sid: str | None, w: Wire, f: Facts) -> RetryInfo | None:
     if f.retry is None:
         return None
     attempt = ss._int(f.retry.md.get("attempt")) or 1
-    nxt = None
-    for x in pos.calls:
-        if x.ts > w.ts and x.prompt_id == w.prompt_id and x.request_class == w.request_class:
-            nxt = x
-            break
+    nxt = reads.next_attempt(sid, w) if sid and w.kind == "model" else None
     status: int | str | None = None
     if nxt is not None:
         status = nxt.status if nxt.status is not None else ("ERR" if nxt.end_ts is not None else None)
@@ -803,23 +827,118 @@ def _received_shape(w: Wire, md: dict[str, Any]) -> list[ContentRow]:
     return out
 
 
+# --- what the drawer reads ------------------------------------------------------------------------
+
+
+class Reads(Protocol):
+    """What the drawer reads of one call (or report, or event), whichever store holds it."""
+
+    def wire(self, cid: str) -> Wire | None:
+        """The call as the observer recorded it (with its analytics batch's session); None for no call."""
+        ...
+
+    def call_events(self, sid: str, w: Wire | None, ids: list[str]) -> list[ss.Event]:
+        """The session's Claude Code events about the call, oldest first: those naming one of ids (its
+        request id, client request id), its stall summary, and the query and retries of its prompt (by
+        name and time; at least those `facts` picks from)."""
+        ...
+
+    def tool_events(self, sid: str, tool_ids: list[str]) -> list[ss.Event]:
+        """The session's Claude Code events of these tool uses (their Bash events), oldest first."""
+        ...
+
+    def position(self, sid: str | None, w: Wire) -> Position: ...
+
+    def next_attempt(self, sid: str, w: Wire) -> ss.Step | None:
+        """The first call after w of its prompt and request class (the retry of a failed one)."""
+        ...
+
+    def event_rows(self, sid: str, evs: list[ss.Event]) -> list[EventRow]:
+        """The events as the session's Events tab lists them (link, summary, marker)."""
+        ...
+
+    def sandbox(self, sid: str, until_ns: int) -> str | None:
+        """The newest Bash event's sandbox_enabled up to until_ns."""
+        ...
+
+    def report(self, key: str) -> tuple[str, ss.Event] | None:
+        """A report's (session, tengu_api_success) by request id, client request id or time."""
+        ...
+
+    def prompt_index(self, sid: str, prompt_id: str | None) -> int | None: ...
+
+
+class StoreReads:
+    """Today's stores' reads: SQL over the tables the store loaded, a call's raw rows from its lineage."""
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+
+    def wire(self, cid: str) -> Wire | None:
+        return load_wire(self.store, cid)
+
+    def call_events(self, sid: str, w: Wire | None, ids: list[str]) -> list[ss.Event]:
+        return ss.events(self.store, sid, about=(w.prompt_id if w else None, ids, []))
+
+    def tool_events(self, sid: str, tool_ids: list[str]) -> list[ss.Event]:
+        return ss.events(self.store, sid, about=(None, [], tool_ids))
+
+    def position(self, sid: str | None, w: Wire) -> Position:
+        return position(self.store, cc.load_session(self.store, sid) if sid else None, w)
+
+    def next_attempt(self, sid: str, w: Wire) -> ss.Step | None:
+        return next_attempt(self.store, sid, w)
+
+    def event_rows(self, sid: str, evs: list[ss.Event]) -> list[EventRow]:
+        return _event_rows(self.store, sid, evs)
+
+    def sandbox(self, sid: str, until_ns: int) -> str | None:
+        sandbox = None
+        for e in ss.events(self.store, sid, ["tengu_bash_tool_command_executed"]):
+            if e.ts <= until_ns:
+                sandbox = ss._str(e.md.get("sandbox_enabled")) or sandbox
+        return sandbox
+
+    def report(self, key: str) -> tuple[str, ss.Event] | None:
+        return find_report(self.store, key)
+
+    def prompt_index(self, sid: str, prompt_id: str | None) -> int | None:
+        s = cc.load_session(self.store, sid)
+        return (cc.prompt_index(s) if s else {}).get(prompt_id or "")
+
+
 # --- RequestDetail ------------------------------------------------------------------------------
 
 
-def detail(store: Store, cid: str) -> RequestDetail | None:
+@dataclass
+class _Drawn:
+    """A drawer's summary, and what its details read again."""
+
+    d: RequestDetail
+    sid: str | None
+    w: Wire | None
+    f: Facts
+    pos: Position
+
+
+def detail(reads: Reads, cid: str) -> RequestDetail | None:
+    drawn = _draw(reads, cid)
+    return drawn.d if drawn else None
+
+
+def _draw(reads: Reads, cid: str) -> _Drawn | None:
     if cid.startswith(REPORTED):
-        return reported_detail(store, cid)
-    w = load_wire(store, cid)
+        return reported_detail(reads, cid)
+    w = reads.wire(cid)
     if w is None:
         return None
     sid = w.session_id
-    s = cc.load_session(store, sid) if sid else None
-    f = facts(store, sid, w.request_id, w.client_request_id, w)
-    pos = position(store, s, w)
+    f = facts(reads, sid, w.request_id, w.client_request_id, w)
+    pos = reads.position(sid, w)
     md = f.success.md if f.success else {}
     model = w.kind == "model"
     tokens = _tokens(w, md)
-    retry = _retry_info(store, w, f, pos)
+    retry = _retry_info(reads, sid, w, f)
     status: int | str | None = w.status if w.status is not None else ("ERR" if w.end_ts is not None else None)
     retained = w.retained
     sent = (_sent_retained(w) if retained else None) or (_sent_shape(w, md) if model else [])
@@ -828,7 +947,7 @@ def detail(store: Store, cid: str) -> RequestDetail | None:
         received = [ContentRow(label="no response", detail=w.error or f"HTTP {w.status}", size=None, unit=None)]
     client_ttft = ss._float(md.get("ttftMs"))
     proxy_ttft = _ms(w.ts, w.down_first or w.resp_ts) if not w.failed else None
-    return RequestDetail(
+    d = RequestDetail(
         requestId=w.cid,
         kind="failed" if w.failed else "normal",
         t=rows.dt(w.ts),
@@ -881,11 +1000,11 @@ def detail(store: Store, cid: str) -> RequestDetail | None:
         received=received,
         contentRetained=retained,
     )
+    return _Drawn(d, sid, w, f, pos)
 
 
-def find_report(store: Store, cid: str) -> tuple[str, ss.Event] | None:
-    """A `reported:<requestId | clientRequestId | ts>` id -> (session id, its tengu_api_success)."""
-    key = cid.removeprefix(REPORTED)
+def find_report(store: Store, key: str) -> tuple[str, ss.Event] | None:
+    """A report's key (`reported:<requestId | clientRequestId | ts>`'s) -> (session id, its tengu_api_success)."""
     found = store.query(
         """SELECT session_id FROM cc_events WHERE name = 'tengu_api_success'
              AND (json_extract_string(md, '$.requestId') = ? OR json_extract_string(md, '$.clientRequestId') = ?
@@ -902,16 +1021,14 @@ def find_report(store: Store, cid: str) -> tuple[str, ss.Event] | None:
     return None
 
 
-def reported_detail(store: Store, cid: str) -> RequestDetail | None:
+def reported_detail(reads: Reads, cid: str) -> _Drawn | None:
     """A call Claude Code reported that the proxy never saw: everything comes from its tengu_api_success."""
-    hit = find_report(store, cid)
+    hit = reads.report(cid.removeprefix(REPORTED))
     if hit is None:
         return None
     sid, e = hit
-    s = cc.load_session(store, sid)
     md = e.md
     tokens = _tokens(None, md)
-    index = cc.prompt_index(s) if s else {}
     inp, out = ss._int(md.get("inputTokens")), ss._int(md.get("outputTokens"))
     cached = ss._int(md.get("cachedInputTokens"))
     usage = (
@@ -919,7 +1036,7 @@ def reported_detail(store: Store, cid: str) -> RequestDetail | None:
         if inp is not None and out is not None
         else "usage not reported"
     )
-    return RequestDetail(
+    d = RequestDetail(
         requestId=cid,
         kind="notCaptured",
         t=rows.dt(e.ts),
@@ -930,7 +1047,7 @@ def reported_detail(store: Store, cid: str) -> RequestDetail | None:
         bytesUp=None,
         bytesDown=None,
         sessionId=sid,
-        promptIndex=index.get(e.prompt_id or ""),
+        promptIndex=reads.prompt_index(sid, e.prompt_id),
         stepIndex=None,
         stepCount=None,
         requestClass=None,
@@ -966,6 +1083,7 @@ def reported_detail(store: Store, cid: str) -> RequestDetail | None:
         received=[ContentRow(label="usage", detail=usage, size=out, unit="tokens" if out is not None else None)],
         contentRetained=False,
     )
+    return _Drawn(d, sid, None, Facts(e, None, None, [], None, None, [e]), Position())
 
 
 # --- raw --------------------------------------------------------------------------------------
@@ -1017,12 +1135,12 @@ def _fold(events: list[Sse]) -> list[StreamEvent]:
     return out
 
 
-def raw(store: Store, cid: str) -> RequestRaw | None:
+def raw(reads: Reads, cid: str) -> RequestRaw | None:
     if cid.startswith(REPORTED):
-        if find_report(store, cid) is None:
+        if reads.report(cid.removeprefix(REPORTED)) is None:
             return None
         return reported_raw()
-    return wire_raw(store, cid)
+    return wire_raw(reads.wire(cid))
 
 
 def reported_raw() -> RequestRaw:
@@ -1043,13 +1161,12 @@ def reported_raw() -> RequestRaw:
     )
 
 
-def wire_raw(store: Store, cid: str) -> RequestRaw | None:
+def wire_raw(w: Wire | None) -> RequestRaw | None:
     """A captured call's raw view: its detail object (or, when that can't be read, its request row)."""
-    w = load_wire(store, cid)
     if w is None:
         return None
     unavailable = None
-    if WS_TURN in cid:
+    if WS_TURN in w.cid:
         unavailable = (
             "This is one turn of a WebSocket connection: its frames are in the connection's raw rows, "
             "which aren't split per turn here. The summary and details come from the processed tables."
@@ -1096,9 +1213,7 @@ def _pct(v: str | None) -> float | None:
     return round(f * 100, 1) if f is not None else None
 
 
-def _event_rows(store: Store, sid: str | None, evs: list[ss.Event]) -> list[EventRow]:
-    if not sid:
-        return []
+def _event_rows(store: Store, sid: str, evs: list[ss.Event]) -> list[EventRow]:
     steps = {x.request_id: x for x in ss.steps(store, sid) if x.request_id}
     index = pp.prompt_indexes(store, [sid])
     return [
@@ -1144,7 +1259,6 @@ def _fields(w: Wire | None, md: dict[str, Any]) -> list[FieldEntry]:
 
 def _tool_details(w: Wire | None, f: Facts, pos: Position) -> list[ToolCallDetail]:
     inputs = {b.id: b for b in response_blocks(w) if b.type == "tool_use"} if w and w.retained else {}
-    nxt = next((i for i, x in enumerate(pos.calls) if x.correlation_id == pos.next), None)
     out = []
     for e in f.tools:
         tool = ss._tool(e, f.joins)
@@ -1165,7 +1279,7 @@ def _tool_details(w: Wire | None, f: Facts, pos: Position) -> list[ToolCallDetai
                     *([_row("destructive", tool.destructive.category)] if tool.destructive else []),
                 ],
                 result=[
-                    _row("delivered in", f"step {nxt + 1}" if nxt is not None else None, note=pos.next),
+                    _row("delivered in", f"step {pos.delivered}" if pos.delivered is not None else None, note=pos.next),
                     _row("size", tool.resultBytes, "bytes"),
                     _row("is_error", tool.status == "error"),
                 ],
@@ -1185,34 +1299,17 @@ def _input_row(k: str, v: Any) -> DetailRow:
     return _row(k, f"{_lines(text)} · {len(text)} chars", tone="muted")
 
 
-def details(store: Store, cid: str) -> RequestDetails | None:
-    d = detail(store, cid)
-    if d is None:
+def details(reads: Reads, cid: str) -> RequestDetails | None:
+    drawn = _draw(reads, cid)
+    if drawn is None:
         return None
-    if cid.startswith(REPORTED):
-        hit = find_report(store, cid)
-        sid, e = hit if hit else (None, None)
-        md = e.md if e else {}
-        f = Facts(e, None, None, [], None, None, [e] if e else [])
-        w: Wire | None = None
-        pos = Position()
-    else:
-        w = load_wire(store, cid)
-        if w is None:  # gone between the two reads
-            return None
-        sid = w.session_id
-        f = facts(store, sid, w.request_id, w.client_request_id, w)
-        md = f.success.md if f.success else {}
-        pos = position(store, cc.load_session(store, sid) if sid else None, w)
+    d, sid, w, f, pos = drawn.d, drawn.sid, drawn.w, drawn.f, drawn.pos
+    md = f.success.md if f.success else {}
     k = d.keyStrip
     rh = w.resp_headers if w else None
     t = k.tokens
     stalls = ss._int(f.stall.md.get("stall_count")) if f.stall else (0 if f.success else None)
-    sandbox = None
-    if sid:
-        for e in ss.events(store, sid, ["tengu_bash_tool_command_executed"]):
-            if e.ts <= cc.to_ns(d.t) + cc.NS:
-                sandbox = ss._str(e.md.get("sandbox_enabled")) or sandbox
+    sandbox = reads.sandbox(sid, cc.to_ns(d.t) + cc.NS) if sid else None
     mcp = sorted(
         {
             str(x.get("server"))
@@ -1367,7 +1464,7 @@ def details(store: Store, cid: str) -> RequestDetails | None:
         sections=sections,
         tool=_tool_details(w, f, pos),
         timing=Timing(proxy=proxy, client=client),
-        events=_event_rows(store, sid, f.events),
+        events=reads.event_rows(sid, f.events) if sid else [],
         fields=_fields(w, md),
     )
 

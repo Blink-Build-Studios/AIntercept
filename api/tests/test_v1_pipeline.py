@@ -373,28 +373,9 @@ def test_status_matches_the_oracle(pg_clients):
     assert new.get("/api/v1/status").json() == old.get("/api/v1/status").json()
 
 
-def test_the_drawer_and_events_match_the_oracle(pg_clients, pg_urls):
-    """Every drawer URL; the one documented difference is a call still in flight, whose drawer
-    404s until it ends (the owner's call)."""
-    old, new, _, _ = pg_clients
-    urls, _ = pg_urls
-    chosen = [u for u in urls if group(u) == "drawer"]
-    assert chosen
-    differing = [u for u in _differing(old, new, chosen) if not _in_flight(old, new, u)]
-    assert not differing, (len(differing), differing[:5])
-
-
-def _in_flight(old, new, url: str) -> bool:
-    a, b = old.get(url), new.get(url)
-    if url.startswith("/api/v1/events/"):  # its raw row is in the detail object, written at its end
-        x, y = a.json(), b.json()
-        return x["data"].pop("raw", None) is not None and y["data"].pop("raw", None) == {} and x == y
-    return b.status_code == 404 and a.status_code == 200 and a.json()["data"].get("status") is None
-
-
-# The drawer's own rows (its precomputed /requests/{id}, /details and /events/{id}) are held to the
-# oracle's derivation byte for byte, for every request id and event id of every dataset, in
-# test_v7_drawer.py: the Postgres drawer no longer loads tables to compare.
+# The drawer (/requests/{id}, /details, /raw and /events/{id}) reads v9, which these databases don't
+# hold: test_drawer.py holds it to the oracle's derivation for every request id and event id of every
+# dataset.
 
 
 # --- the directory (build step 7) -------------------------------------------------------------------

@@ -1,8 +1,8 @@
 """Request drawer endpoints (handoff §5.1 rows 14-16, §5.2.10) and one analytics event (§5.2.9).
 
-Each reads through its page's reader (pages.py): on the Postgres store the worker's finished row
-(docs/PIPELINE.md v7 §3.7; /raw and /events/{id} format the call's, or the batch's, detail object as
-today); on the other stores today's derivation at request time (request_detail.py)."""
+Each reads through its page's reader (pages.py), and request_detail.py renders it when it opens: on the
+Postgres store from v9's rows and the call's (or the batch's) raw member (drawer.py, docs/PIPELINE.md
+§6.2); on the other stores from the tables they loaded and the call's raw rows."""
 
 from fastapi import APIRouter, HTTPException, Request
 
