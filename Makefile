@@ -171,9 +171,21 @@ test-pipeline: ## Go: the end-to-end gate on a real capture's records (local onl
 	cd aintercept && AINTERCEPT_RECORDS=$(AINTERCEPT_RECORDS) go test -count=1 -timeout 120m -tags full \
 		-run 'TestPipelineRealCapture|TestRealData' -v ./internal/stream/...
 
-.PHONY: test-full
-test-full: ## Go: the exhaustive variants too (-tags full: more seeds, longer captures); nightly in CI
-	cd aintercept && go test -race -count=1 -timeout 45m -tags full ./...
+# Nightly CI runs test-full as parallel jobs: test-full-rest, and test-full-sim once per N
+# (the simulation matrix alone needs over 40 minutes under -race on a 4-CPU runner).
+.PHONY: test-full test-full-rest test-full-sim
+test-full: test-full-rest ## Go: the exhaustive variants too (-tags full: more seeds, longer captures); nightly in CI
+	$(MAKE) test-full-sim N=1
+	$(MAKE) test-full-sim N=3
+	$(MAKE) test-full-sim N=8
+
+test-full-rest: ## Go: test-full but TestSimulateMatrix; the memory test (one goroutine) without -race
+	cd aintercept && go test -race -count=1 -timeout 45m -tags full -skip '^TestSimulateMatrix$$' ./...
+	cd aintercept && go test -count=1 -timeout 15m -tags full -run '^TestReplicaMemoryFlatInHistory$$' ./internal/stream/
+
+test-full-sim: ## Go: TestSimulateMatrix's cases with N ingest pods (make test-full-sim N=3)
+	@test -n "$(N)" || (echo "set N to 1, 3 or 8" && exit 1)
+	cd aintercept && go test -race -count=1 -timeout 45m -tags full -run '^TestSimulateMatrix$$/^N$(N)_' -v ./internal/stream/
 
 .PHONY: check-api
 check-api: ## API: ruff (incl. security rules), format, mypy strict, tests with a 90% coverage floor, requirements.json
