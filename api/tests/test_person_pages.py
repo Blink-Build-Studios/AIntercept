@@ -25,6 +25,7 @@ from typing import Any
 import pytest
 
 from aintercept_api import claude_code as cc
+from aintercept_api import ranges
 from aintercept_api.raw import LocalRaw
 from tests.builders import ClaudeCode, Dataset
 from tests.conftest import FROZEN_NOW, PgDataset, lay_out, make_client, pg_admin
@@ -339,7 +340,41 @@ def test_the_directory_is_the_windows_activity_from_scratch(sides):
             assert o["sessions"] == sum(r["sessions"] for r in people)
             assert o["activeNow"] == sum(r["live"] for r in people)
             assert o["notCaptured"] == sum(r["coverage"]["notCaptured"] for r in people if r["coverage"])
+            cards = {c["agent"]: c["sessions"] for c in o["agents"] if c["people"]}
+            want = cards_from_scratch(side, *ranges.snap(lo, hi))
+            assert cards == {a: n for a, n in want.items() if a in cards}, (side.name, q, cards, want)
     assert checked
+
+
+# Each session's agent (its first visible call's) and the span of its activity (visible calls and Claude Code
+# events), with whether an account appears on it.
+_SESSION_SPANS = f"""WITH act AS (
+  SELECT c.session_id, coalesce(c.start_ns, c.end_ns) AS t FROM calls c WHERE {_VISIBLE}
+  UNION ALL SELECT e.session_id, e.ts_ns FROM events e WHERE e.source = 'claude_code' AND e.session_id IS NOT NULL)
+SELECT a.session_id, min(a.t), max(a.t), EXISTS (SELECT 1 FROM session_accounts sa WHERE sa.session_id = a.session_id)
+FROM act a GROUP BY 1"""  # noqa: S608 (fixed text)
+_CALL_DAYS = f"""SELECT DISTINCT c.session_id, coalesce(c.start_ns, c.end_ns) - coalesce(c.start_ns, c.end_ns) % {DAY}
+FROM calls c WHERE {_VISIBLE}"""  # noqa: S608 (fixed text)
+_FIRST_SOURCE = f"""SELECT DISTINCT ON (c.session_id) c.session_id, c.source FROM calls c WHERE {_VISIBLE}
+ORDER BY c.session_id, coalesce(c.start_ns, c.end_ns), c.call_id COLLATE "C"
+"""  # noqa: S608 (fixed text)
+
+
+def cards_from_scratch(side: Side, lo: int | None, hi: int | None) -> dict[str, int]:
+    """The overview's agent cards' sessions, as today counts them, from the facts: the people's sessions with a
+    model call on a day the window touches, and the sessions no account appears on that were active in it."""
+    agent = {s: "codex" if src == "codex" else "claude-code" for s, src in side.query(_FIRST_SOURCE)}
+    first_day = None if lo is None else lo - lo % DAY
+    out: dict[str, set[str]] = defaultdict(set)
+    attributed = {}
+    for sid, a, b, named in side.query(_SESSION_SPANS):
+        attributed[sid] = named
+        if not named and sid in agent and (lo is None or b >= lo) and (hi is None or a <= hi):
+            out[agent[sid]].add(sid)
+    for sid, day in side.query(_CALL_DAYS):
+        if attributed.get(sid) and (first_day is None or day >= first_day) and (hi is None or day <= hi):
+            out[agent[sid]].add(sid)
+    return {a: len(v) for a, v in out.items()}
 
 
 def test_the_directory_sorts_filters_and_pages(sides):

@@ -8,7 +8,8 @@
   session's) and, when they missed calls, their not-captured windows (`missed_reports`). The 14-day activity
   strip is the last 14 days' rows; live is the newest day row's last activity.
 - /overview: totals over the same rows; requests from `cred_hours` (whole hours inside the window, minutes at
-  its edges); unattributed from `sessions`.
+  its edges); unattributed from `sessions`. An agent card's sessions are today's: those with a model call in
+  the window (`account_days.call_session_ids`, and the unattributed sessions active in it).
 - /status: the first captured call by index (its start, else its end: a WebSocket turn has only an end; a
   probe's while waiting);
   whether any call kept its content; `lastDataAt` from `ingest_pods`.
@@ -352,12 +353,24 @@ class DirectoryReads:
         )
 
     def _sessions_by(self, now: int, lo: int | None, hi: int | None) -> dict[str, int]:
-        """Each agent's sessions in the window: the distinct sessions of its day rows."""
+        """Each agent's sessions with a model call in the window, as today's cards count them: the distinct
+        sessions of its day rows that had a model call that day, and the unattributed sessions (no person's
+        rows) active in the window."""
         got = self.snap.rows(
             "sessions_by",
-            "SELECT d.agent, count(DISTINCT s.sid) FROM account_days d, unnest(d.session_ids) s(sid)"
-            " WHERE d.day_ns >= %(dlo)s AND d.day_ns <= %(dhi)s GROUP BY d.agent",
-            {"dlo": -_FAR if lo is None else _day_of(lo), "dhi": _FAR if hi is None else hi},
+            """SELECT agent, count(DISTINCT sid) FROM (
+                 SELECT d.agent, s.sid FROM account_days d, unnest(d.call_session_ids) s(sid)
+                 WHERE d.day_ns >= %(dlo)s AND d.day_ns <= %(dhi)s
+                 UNION ALL
+                 SELECT CASE WHEN product = 'codex' THEN 'codex' ELSE 'claude-code' END, session_id FROM sessions
+                 WHERE unattributed AND start_ns <= %(hi)s AND last_ns >= %(lo)s) x
+               GROUP BY agent""",
+            {
+                "dlo": -_FAR if lo is None else _day_of(lo),
+                "dhi": _FAR if hi is None else hi,
+                "lo": -_FAR if lo is None else lo,
+                "hi": _FAR if hi is None else hi,
+            },
         )
         return {a: int(n) for a, n in got}
 

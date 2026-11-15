@@ -14,7 +14,8 @@ package refresh
 // rollups.py _PEOPLE sums its sessions' rows:
 //   - sessions, session_ids, sessions_with_events: the sessions active (their
 //     ids, so a window counts each session once however many of its days it
-//     was active on; with_events: those
+//     was active on; call_session_ids: those with a model call that day, the
+//     overview's agent cards' sessions; with_events: those
 //     with a Claude Code event in the day; their coverage counts);
 //   - prompts: their prompts in the day (call and typed prompts, distinct per
 //     session, as session_rows.prompts);
@@ -29,7 +30,9 @@ package refresh
 
 // daySelect is account $1's day [$2, $3) by agent.
 var daySelect = `SELECT $1, $2, CASE WHEN s.product = 'codex' THEN 'codex' ELSE 'claude-code' END,
-	count(*), array_agg(sa.session_id ORDER BY sa.session_id COLLATE "C"), count(*) FILTER (WHERE h.events > 0), coalesce(sum(k.prompts), 0), sum(h.model_calls), sum(h.outputs_known),
+	count(*), array_agg(sa.session_id ORDER BY sa.session_id COLLATE "C"),
+	coalesce(array_agg(sa.session_id ORDER BY sa.session_id COLLATE "C") FILTER (WHERE h.model_calls > 0), '{}'),
+	count(*) FILTER (WHERE h.events > 0), coalesce(sum(k.prompts), 0), sum(h.model_calls), sum(h.outputs_known),
 	sum(h.input_tokens), sum(h.cache_read_tokens), sum(h.cache_write_tokens), sum(h.output_tokens),
 	sum(h.queries), sum(h.bypassed), sum(h.reported), sum(h.missed),
 	min(least(ev.first, cf.first)), max(greatest(ev.last, cl.last))
@@ -54,6 +57,6 @@ GROUP BY 3`
 // row leaves when its sessions' activity in the day has.
 var dayRefresh = []string{
 	`DELETE FROM account_days WHERE account_id = $1 AND day_ns = $2`,
-	`INSERT INTO account_days (account_id, day_ns, agent, sessions, session_ids, sessions_with_events, prompts, model_calls, outputs_known,
+	`INSERT INTO account_days (account_id, day_ns, agent, sessions, session_ids, call_session_ids, sessions_with_events, prompts, model_calls, outputs_known,
 		tokens_input, tokens_cache_read, tokens_cache_write, tokens_output, queries, bypassed, reported, missed, first_ns, last_ns) ` + daySelect,
 }

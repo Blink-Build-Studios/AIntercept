@@ -266,7 +266,7 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 Two values are read at the page instead (they're few, and a late record changes them):
 - **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
 - **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
-| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
+| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, the ids of those with a model call, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
 
 ### 5.3 Dirty kinds
 
@@ -368,7 +368,7 @@ per session within retention.
 | Page | Reads | Bound |
 |---|---|---|
 | `/people` | each person's row sums their accounts' `account_days` on the UTC days the window touches; the 14-day activity strip is the last 14 days' rows; live is the newest day row's last activity; sort, filter (`agent`, `q` on name, email, id, device) and page in SQL. The page's rows then read their members (`accounts`), their devices seen in the window (`account_devices`), Codex limits (the newest Codex session's, through `session_accounts`) and, when they missed calls, their not-captured windows (`missed_reports`) | ≤ 14 rows per account: about 21,000 small rows at 1,500 people, summed in one `GROUP BY`; then one page |
-| `/overview` | totals over the same rows; requests from `cred_hours` (whole hours inside the window, `cred_minutes` at its edges); unattributed from `sessions` | Same |
+| `/overview` | totals over the same rows; requests from `cred_hours` (whole hours inside the window, `cred_minutes` at its edges); unattributed from `sessions`; an agent card's sessions are those with a model call in the window (the day rows' `call_session_ids`, and the unattributed sessions active in it) | Same |
 | `/status` | first captured call by index (its start, else its end), the first probe's while waiting, whether any call kept its content; `lastDataAt` from `ingest_pods` | Index endpoints + pods |
 
 **The directory sums activity inside the window** (owner decision 2), not the
