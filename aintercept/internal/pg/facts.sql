@@ -246,6 +246,7 @@ CREATE TABLE session_minutes (
     cache_5m bigint,
     cache_1h bigint,
     cost_usd double precision,
+    custom_ca bigint NOT NULL,
     requests jsonb NOT NULL,
     requests_hidden jsonb NOT NULL,
     PRIMARY KEY (session_id, minute_ns)
@@ -282,6 +283,7 @@ CREATE TABLE session_hours (
     cache_5m bigint,
     cache_1h bigint,
     cost_usd double precision,
+    custom_ca bigint NOT NULL,
     requests jsonb NOT NULL,
     requests_hidden jsonb NOT NULL,
     PRIMARY KEY (session_id, hour_ns)
@@ -347,6 +349,199 @@ CREATE TABLE cred_hours (
     PRIMARY KEY (key_hash, hour_ns, kind, hidden, agent)
 );
 CREATE INDEX ON cred_hours (hour_ns);
+
+-- A prompt's events by name (its input, turn end, cancels, tools): what a prompt refresh reads.
+CREATE INDEX ON events (prompt_id, name);
+-- A session's calls with no prompt or a hidden kind (the Prompts page's call rows and hidden
+-- counts): what a session refresh reads, without the rest of the session's calls.
+CREATE INDEX ON calls (session_id, start_ns) WHERE prompt_id IS NULL OR hidden_kind IS NOT NULL;
+-- A session's calls by their time (start, else end: today's row time), newest or earliest first:
+-- the session and day refreshes' newest values and first and last calls.
+CREATE INDEX ON calls (session_id, (coalesce(start_ns, end_ns)));
+
+-- One per prompt of a session (process/promptrows.go rows): a tengu_input_prompt, or a prompt
+-- id seen only on visible model calls; an input with no prompt id is keyed input:<batch>:<n>.
+-- What the session's other prompts decide (its place, the Codex number, open tail, pastes and
+-- images, hidden calls) is in prompt_items. turn_report is Codex's codex_turn_event.
+CREATE TABLE prompts (
+    prompt_id text NOT NULL,
+    session_id text NOT NULL,
+    t_ns bigint NOT NULL,
+    product text,
+    has_input boolean NOT NULL,
+    prompt_index bigint,
+    text_chars bigint,
+    frustrated boolean NOT NULL,
+    steps bigint NOT NULL,
+    unfinished_max_ns bigint,
+    turn_end_ns bigint,
+    text text,
+    tokens_in bigint,
+    tokens_out bigint,
+    tool_counts jsonb NOT NULL,
+    interrupted boolean NOT NULL,
+    destructive bigint NOT NULL,
+    turn_report jsonb,
+    PRIMARY KEY (prompt_id, session_id)
+);
+CREATE INDEX ON prompts (session_id);
+
+-- One per visible model call with a prompt, numbered within its prompt by (time, call id): a
+-- step (process/promptrows.go step). end_ns is a real end (not the sweep's). reported is
+-- whether a tengu_api_success names it; tools and tools_live are its tool events.
+CREATE TABLE steps (
+    prompt_id text NOT NULL,
+    session_id text NOT NULL,
+    step bigint NOT NULL,
+    call_id text NOT NULL,
+    t_ns bigint NOT NULL,
+    end_ns bigint,
+    kind text NOT NULL,
+    model text,
+    request_class text,
+    tokens_input bigint,
+    tokens_cache_read bigint,
+    tokens_cache_write bigint,
+    tokens_cache_write_5m bigint,
+    tokens_cache_write_1h bigint,
+    tokens_output bigint,
+    ttft_ms double precision,
+    stop_reason text,
+    cost_usd double precision,
+    failed boolean NOT NULL,
+    reported boolean NOT NULL,
+    agent_type text,
+    tools jsonb NOT NULL,
+    tools_live jsonb,
+    does text NOT NULL,
+    commands text[] NOT NULL,
+    exit_codes bigint[] NOT NULL,
+    content_live boolean NOT NULL,
+    commands_live text[] NOT NULL,
+    exit_codes_live bigint[] NOT NULL,
+    patches jsonb NOT NULL,
+    text text,
+    usage_missing text,
+    PRIMARY KEY (prompt_id, session_id, step)
+);
+CREATE INDEX ON steps (call_id);
+
+-- The Prompts page's list of a session (process/promptrows.go rows): its prompts in order
+-- (their values in prompts) with the between rows (compactions, recaps, calls with no prompt)
+-- interleaved. prompt_index is the prompt's number: its input's, or a Codex turn's place.
+CREATE TABLE prompt_items (
+    session_id text NOT NULL,
+    seq bigint NOT NULL,
+    t_ns bigint NOT NULL,
+    type text NOT NULL,
+    prompt_id text,
+    prompt_index bigint,
+    open_tail boolean NOT NULL,
+    pasted_bytes bigint,
+    images bigint,
+    hidden jsonb,
+    between_kind text,
+    detail text,
+    call_id text,
+    tokens_from bigint,
+    tokens_to bigint,
+    attempt_ns bigint,
+    PRIMARY KEY (session_id, seq)
+);
+CREATE INDEX ON prompt_items (session_id, prompt_id);
+
+-- One per session with a visible model call or a Claude Code event: today's session row
+-- (process/sessionrows.go sessionRow). Sums from session_hours, distinct counts from
+-- session_keys, coverage from missed_reports, newest values by index. limits is the newest
+-- Codex response's x-codex-* headers (agents.codex_limits renders them).
+CREATE TABLE sessions (
+    session_id text PRIMARY KEY,
+    start_ns bigint NOT NULL,
+    last_ns bigint NOT NULL,
+    product text,
+    client text,
+    client_version text,
+    client_version_ns bigint,
+    hidden_calls bigint NOT NULL,
+    own_title text,
+    origin_kind text,
+    origin_session_id text,
+    origin jsonb,
+    repo text,
+    commit text,
+    prompts bigint,
+    captured_from_prompt bigint,
+    model_calls bigint NOT NULL,
+    events bigint,
+    frustrated bigint NOT NULL,
+    interrupted bigint NOT NULL,
+    destructive bigint NOT NULL,
+    queries bigint NOT NULL,
+    bypassed bigint NOT NULL,
+    cov_reported bigint,
+    cov_captured bigint NOT NULL,
+    cov_not_captured bigint NOT NULL,
+    cov_window_from bigint[],
+    cov_window_to bigint[],
+    cov_window_count bigint[],
+    fields_missing boolean NOT NULL,
+    person_id text,
+    device_id text,
+    device_platform text,
+    device_terminal text,
+    device_shell text,
+    networks bigint,
+    effort text,
+    tokens_input bigint,
+    tokens_cache_read bigint,
+    tokens_cache_write bigint,
+    tokens_output bigint,
+    outputs_known bigint NOT NULL,
+    tokens_accuracy text NOT NULL,
+    tool_calls bigint,
+    has_facts boolean NOT NULL,
+    facts_cwd text,
+    facts_approval text,
+    facts_sandbox text,
+    limits jsonb,
+    limits_ns bigint,
+    cli_version text,
+    cli_version_ns bigint,
+    rl_status text,
+    rl_util double precision,
+    rl_overage text,
+    rl_ns bigint,
+    sandbox text,
+    sandbox_ns bigint,
+    custom_ca boolean NOT NULL,
+    unattributed boolean NOT NULL,
+    prompt_event_last_ns bigint
+);
+
+-- An account's activity in one UTC day, per agent (the directory's numbers, owner decision 2):
+-- the sessions it appears on that were active that day, and their hours' sums in the day.
+CREATE TABLE account_days (
+    account_id text NOT NULL,
+    day_ns bigint NOT NULL,
+    agent text NOT NULL,
+    sessions bigint NOT NULL,
+    sessions_with_events bigint NOT NULL,
+    prompts bigint NOT NULL,
+    model_calls bigint NOT NULL,
+    outputs_known bigint NOT NULL,
+    tokens_input bigint,
+    tokens_cache_read bigint,
+    tokens_cache_write bigint,
+    tokens_output bigint,
+    queries bigint NOT NULL,
+    bypassed bigint NOT NULL,
+    reported bigint NOT NULL,
+    missed bigint NOT NULL,
+    first_ns bigint NOT NULL,
+    last_ns bigint NOT NULL,
+    PRIMARY KEY (account_id, day_ns, agent)
+);
+CREATE INDEX ON account_days (day_ns);
 
 -- §2 The raw files ingest wrote: when the lister saw each and when a worker loaded it (step 3).
 CREATE TABLE ingest_files (

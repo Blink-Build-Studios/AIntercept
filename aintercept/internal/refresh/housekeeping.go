@@ -106,8 +106,23 @@ func Retain(ctx context.Context, db *pgxpool.Pool, days int, now time.Time) (int
 			}
 		}
 	}
+	// The prompt, session and day rollups that held facts before the cut are
+	// recomputed from what's left (a row with nothing left goes), as any
+	// refresh is: marked dirty, not deleted here.
+	if _, err := db.Exec(ctx, retainMarks, cut.UnixNano()); err != nil {
+		return total, fmt.Errorf("retention: marks: %w", err)
+	}
 	return total, nil
 }
+
+// retainMarks marks the prompts, sessions and account days that began before
+// the cut ($1).
+const retainMarks = `INSERT INTO dirty (kind, key)
+	SELECT kind, key FROM (SELECT 'prompt' AS kind, prompt_id AS key FROM prompts WHERE t_ns < $1
+		UNION SELECT 'session', session_id FROM sessions WHERE start_ns < $1
+		UNION SELECT 'account_day', account_id || '/' || day_ns FROM account_days WHERE day_ns < $1) m
+	ORDER BY kind, key
+	ON CONFLICT (kind, key) DO UPDATE SET seq = excluded.seq`
 
 // Housekeeper runs the housekeeping on whichever worker holds
 // HousekeepingLock: the sweep every SweepEvery and retention every

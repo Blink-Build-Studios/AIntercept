@@ -144,6 +144,10 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 `(prompt_id, start_ns)`, `(key_hash, start_ns)`, `(request_id)`,
 `(client_request_id)`, `(message_id)`, `(parent_message_id)`, partial
 `(start_ns) WHERE end_ns IS NULL`, and partial `(start_ns) WHERE NOT synthetic`.
+For the session refresh (§5.2): `(session_id, coalesce(start_ns, end_ns))` (a
+session's calls by their time, for its newest values) and partial
+`(session_id, start_ns) WHERE prompt_id IS NULL OR hidden_kind IS NOT NULL`
+(its calls with no prompt, and its hidden calls).
 
 ### 3.2 `events`: one row per analytics event
 
@@ -158,7 +162,7 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 
 **Indexes:** `(session_id, ts_ns)`, `(session_id, name, ts_ns)`,
 `(request_id)`, `(client_request_id)`, `(tool_use_id)`,
-`(batch_call_id, batch_n)`.
+`(batch_call_id, batch_n)`, and `(prompt_id, name)` (a prompt's events).
 
 **A resent analytics batch counts once** (owner decision 4): the insert is
 `ON CONFLICT (event_key) DO NOTHING`.
@@ -242,21 +246,21 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 
 | Rollup | Grain | Computed from | Reads |
 |---|---|---|---|
-| `session_minutes` | (session, minute) | That minute's visible model calls (count, main and subagent, unreported, tokens, context sum, outputs known, tool calls) and hidden calls; its Claude Code events (all, and without internal events; frustrated, interrupted and destructive counts; queries and bypassed; reports; hook ms sum and count; cache 5m/1h; cost; outside-cwd commands); its missed reports; its Requests tab rows counted by kind and credential, hidden apart (a read keeps the session's credentials, as today's tab does) | One minute's rows |
+| `session_minutes` | (session, minute) | That minute's visible model calls (count, main and subagent, unreported, tokens, context sum, outputs known, tool calls) and hidden calls; its Claude Code events (all, and without internal events; frustrated, interrupted and destructive counts; queries and bypassed; reports; hook ms sum and count; cache 5m/1h; cost; outside-cwd commands; reports sent past a custom CA); its missed reports; its Requests tab rows counted by kind and credential, hidden apart (a read keeps the session's credentials, as today's tab does) | One minute's rows |
 | `session_hours` | (session, hour) | Sum of that hour's `session_minutes` | 60 rows |
 | `session_minute_keys` | (session, minute, kind, key) with count | Distinct things per minute: event names, tools and MCP tools, the session's tools from events and from calls' tool_use blocks, hooks, heads, PRs, IPs, batches, prompts (calls' and typed), command words, destructive categories, git operations. Also the timeline's top event names for a bin under an hour | One minute's rows |
 | `session_keys` | (session, hour, kind, key) with count | Sum of that hour's `session_minute_keys`. Distinct counts over a range are `count(DISTINCT key)` over these rows (minute rows at a range's partial hours) | 60 minutes' key rows |
 | `missed_reports` | one per Claude Code report with no captured call (by request id or client request id, within its session, as `requestrows.go:1093-1125` does) | That minute's reports, with an index lookup each on `calls` | One minute's rows |
-| `prompts` | prompt_id | Its number, steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report | One prompt's calls and events. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
-| `steps` | (prompt_id, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from the prompt's events. This is where a call's step number lives | One prompt's calls and events |
-| `prompt_items` | (session, seq) | The Prompts page's list: prompts in order, with compaction "between" rows interleaved | The session's prompts (hundreds) |
-| `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, limits, sandbox) by index lookup; coverage from `missed_reports`; Codex prompt numbers; `unattributed` (a visible call and no account) | The session's hour rows and prompts (hundreds) |
+| `prompts` | (prompt_id, session) | Its number (its input's), steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report. A typed prompt with no prompt id is keyed `input:<batch>:<n>`, as today | One prompt's calls and events, and its calls' reports and tool events by request id. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
+| `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id). This is where a call's step number lives. Exit codes come from the prompt's calls' recorded results (today: the session's; 7 of 4,398 results in the capture are carried by another prompt's call) | One prompt's calls and events |
+| `prompt_items` | (session, seq) | The Prompts page's list: prompts in order (with what the session's other prompts decide: a Codex turn's number, the open tail, pastes and images, hidden calls), with the between rows interleaved (compactions, recaps, calls with no prompt) | The session's prompts (hundreds), and its compaction events and prompt-less calls |
+| `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox, env) by index lookup; coverage from `missed_reports`; `unattributed` (a visible call and no account). A page computes the rest from these: the agent, bypass %, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, and an index lookup per newest value |
 | `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none) | One minute's calls / 60 rows |
 
 Two values are read at the page instead (they're few, and a late record changes them):
 - **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
 - **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
-| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active, prompts, model calls, tokens, devices, missed, bypassed and total queries, last seen | That account-day's hour rows and calls |
+| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (and with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
 
 ### 5.3 Dirty kinds
 
@@ -264,10 +268,10 @@ Two values are read at the page instead (they're few, and a late record changes 
 |---|---|
 | `minute` (session, minute) | a flush with a call or event in that minute; a flush with a call whose report is in that minute; a flush with a report whose call is in that minute |
 | `hour` (session, hour) | a `minute` refresh |
-| `prompt` | a flush with a call or event of that prompt |
+| `prompt` | a flush with a call or event of that prompt; a flush with a report, tool or Bash event of one of its calls (by request id and tool use id: a subagent's events can name another prompt) |
 | `session` | an `hour` or `prompt` refresh |
 | `cred_minute`, `cred_hour` | a flush with a call of that credential; a `cred_minute` refresh |
-| `account_day` | an `hour` refresh, for each account of the session |
+| `account_day` | a `session` refresh, for each account of the session and each day it has hours (so an account seen on a session late still gets its earlier days) |
 
 ### 5.4 Computed at read instead
 
@@ -285,7 +289,9 @@ runs it at a time.
   data (7 days for a WebSocket), in data time as `stream/state/expire.go` does
   today, is closed: `end_ns` set and `swept` true, its rows marked dirty.
 - **Retention** (hourly): delete facts older than the window in batches by
-  time, and their rollup rows. Raw files expire by an S3 lifecycle rule on `raw/`.
+  time, and their rollup rows; the prompts, sessions and account-days that
+  began before the cut are marked dirty and recomputed from what's left. Raw
+  files expire by an S3 lifecycle rule on `raw/`.
 
 `/lag` is the age of the oldest unloaded file or dirty row, whichever is
 older. KEDA scales `worker` on it.

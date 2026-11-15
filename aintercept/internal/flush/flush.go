@@ -35,7 +35,12 @@ type Rows struct {
 	// and client request ids: the minutes of their calls are marked dirty too,
 	// so a call whose report came later stops counting as unreported.
 	ReportedIDs []string
-	LastNS      int64 // the newest time in the records
+	// StepIDs are the request ids of Claude Code's tool events, and ToolUseIDs
+	// the tool use ids of its Bash events: a step reads them by those ids, not
+	// by its prompt, so the prompts of their calls are marked dirty too (with
+	// the reports' ReportedIDs).
+	StepIDs, ToolUseIDs []string
+	LastNS              int64 // the newest time in the records
 }
 
 // Call is a calls row: the record's request, and what's derived at insert.
@@ -116,6 +121,7 @@ func Collapse(recs []records.Record) Rows {
 	parents := map[[2]string]*Parent{}
 	dirty := map[Dirty]bool{}
 	reports, reported := map[string]bool{}, map[string]bool{}
+	stepIDs, toolUseIDs := map[string]bool{}, map[string]bool{}
 	var last int64
 
 	account := func(id string, ns int64) *Account {
@@ -184,6 +190,22 @@ func Collapse(recs []records.Record) Rows {
 			minute("minute", e.SessionID, ns)
 			if e.PromptID != "" {
 				dirty[Dirty{"prompt", e.PromptID}] = true
+			} else if e.Source == canon.ProductClaudeCode && e.Name == "tengu_input_prompt" && e.SessionID != "" {
+				// A typed prompt with no prompt id is its own prompt, keyed by its
+				// place in its batch (process/promptrows.go rows: "input:" + its id).
+				dirty[Dirty{"prompt", fmt.Sprintf("input:%s:%d", r.BatchID, r.BatchCCN)}] = true
+			}
+			if e.Source == canon.ProductClaudeCode {
+				switch e.Name {
+				case "tengu_tool_use_success", "tengu_tool_use_error", "tengu_tool_use_progress":
+					if e.RequestID != "" {
+						stepIDs[e.RequestID] = true
+					}
+				case "tengu_bash_tool_command_executed":
+					if e.ToolUseID != "" {
+						toolUseIDs[e.ToolUseID] = true
+					}
+				}
 			}
 			if e.Source == canon.ProductClaudeCode && e.Name == "tengu_api_success" {
 				for _, id := range []string{e.RequestID, e.ClientRequestID} {
@@ -306,6 +328,14 @@ func Collapse(recs []records.Record) Rows {
 		out.ReportedIDs = append(out.ReportedIDs, id)
 	}
 	slices.Sort(out.ReportedIDs)
+	for id := range stepIDs {
+		out.StepIDs = append(out.StepIDs, id)
+	}
+	slices.Sort(out.StepIDs)
+	for id := range toolUseIDs {
+		out.ToolUseIDs = append(out.ToolUseIDs, id)
+	}
+	slices.Sort(out.ToolUseIDs)
 	return out
 }
 

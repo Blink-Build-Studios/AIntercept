@@ -330,6 +330,51 @@ func TestReportMarksItsCallsMinutes(t *testing.T) {
 	}
 }
 
+// A step reads its report, tool and Bash events by their ids, whatever prompt
+// they name: each marks the prompt of its call.
+func TestStepEventsMarkTheirCallsPrompt(t *testing.T) {
+	db := fresh(t)
+	write(t, db, end("a", "s", t0, t0+5))
+	for _, x := range []struct{ name, field, md string }{
+		{"tengu_api_success", "req", `{}`},
+		{"tengu_tool_use_success", "req", `{"toolUseID":"tu1"}`},
+		{"tengu_tool_use_progress", "req", `{"toolUseID":"tu1"}`},
+		{"tengu_bash_tool_command_executed", "tool", `{"tool_use_id":"tu1"}`},
+	} {
+		if _, err := db.Exec(ctx(t), "DELETE FROM dirty"); err != nil {
+			t.Fatal(err)
+		}
+		e := event("b-"+x.name, 1, "e-"+x.name, "s", t0+minute)
+		e.Event.Name, e.Event.PromptID, e.Event.MetadataJSON = x.name, "other", x.md
+		if x.field == "req" {
+			e.Event.RequestID, e.Event.ToolUseID = "req-a", "tu1"
+		} else {
+			e.Event.ToolUseID = "tu1"
+		}
+		write(t, db, e)
+		var n int
+		if err := db.QueryRow(ctx(t), "SELECT count(*) FROM dirty WHERE kind = 'prompt' AND key = 'p-s'").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 1 {
+			t.Errorf("%s naming prompt other doesn't mark its call's prompt", x.name)
+		}
+	}
+}
+
+// A typed prompt with no prompt id marks the prompt keyed by its place in its
+// batch.
+func TestCollapseMarksAnUnnamedInput(t *testing.T) {
+	e := event("b1", 4, "e1", "s", t0)
+	e.Event.PromptID = ""
+	for _, d := range Collapse([]records.Record{e}).Dirty {
+		if d.Kind == "prompt" && d.Key == "input:b1:4" {
+			return
+		}
+	}
+	t.Error("no input:b1:4 prompt mark")
+}
+
 // The credential rollups count coding agents' calls, with or without a
 // credential; other calls mark none.
 func TestCollapseMarksCredentialsOfAgentCalls(t *testing.T) {

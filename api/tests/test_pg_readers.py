@@ -38,6 +38,11 @@ _V9_UNTIL_ROLLUPS = {
     "missed_reports",
     "cred_minutes",
     "cred_hours",
+    "prompts",
+    "steps",
+    "prompt_items",
+    "sessions",
+    "account_days",
 }
 
 

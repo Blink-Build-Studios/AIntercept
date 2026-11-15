@@ -480,8 +480,8 @@ func TestConcurrentWorkers(t *testing.T) {
 // for Coalesce.
 func TestCoalescedKindsWait(t *testing.T) {
 	db := fresh(t)
-	defer func(k []string) { Kinds = k }(Kinds)
-	Kinds = append(append([]string{}, Kinds...), "session")
+	defer func(c time.Duration) { Coalesce = c }(Coalesce)
+	Coalesce = 5 * time.Second
 	if _, err := db.Exec(ctx(t), "INSERT INTO dirty (kind, key) VALUES ('session', 's'), ('hour', 's/0')"); err != nil {
 		t.Fatal(err)
 	}
@@ -610,17 +610,21 @@ func TestLagCoversDirtyRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lag < 20*time.Second || lag > time.Minute {
-		t.Errorf("lag %v, want the minute row's ~20 s (a kind with no refresher yet doesn't count)", lag)
+	if lag < time.Hour || lag > time.Hour+time.Minute {
+		t.Errorf("lag %v, want the prompt row's ~1 h", lag)
 	}
 }
 
 // TestRefreshCostIsFlat times the refresh a flush causes (100 events, 5 model
-// calls and their reports landing in the session's newest minute: its
-// minute, hour and credential rows) when the session already has 1,000
-// events, then 50,000 (docs/PIPELINE.md §9: flat). A refresh reads one
-// minute's facts and an hour's 60 minute rows, never the session's. Timing: run
-// on demand with AINTERCEPT_REFRESH_COST=1.
+// calls and their reports landing in the session's newest minute and prompt:
+// its minute, hour and credential rows, its prompt, the session and its
+// account's day) when the session already has 1,000 events, then 50,000
+// (docs/PIPELINE.md §9: flat). A prompt holds 500 events and 25 calls (the
+// capture's busiest session has one prompt per ~320 events), so the session's
+// prompts grow from 2 to 100. A refresh reads one minute's facts, an hour's 60
+// minute rows, one prompt's calls and events, and the session's hours and
+// prompts, never the session's facts. Timing: run on demand with
+// AINTERCEPT_REFRESH_COST=1.
 func TestRefreshCostIsFlat(t *testing.T) {
 	if os.Getenv("AINTERCEPT_REFRESH_COST") == "" {
 		t.Skip("set AINTERCEPT_REFRESH_COST=1 to time refreshes")
@@ -628,21 +632,37 @@ func TestRefreshCostIsFlat(t *testing.T) {
 	db := fresh(t)
 	const perHour = 1000
 	n := 0 // events so far
-	names := []string{"tengu_tool_use_success", "tengu_api_query", "tengu_bash_tool_command_executed", "tengu_input_prompt"}
+	names := []string{"tengu_tool_use_success", "tengu_api_query", "tengu_bash_tool_command_executed", "tengu_api_success"}
+	prompt := func(n int) string { return fmt.Sprintf("q%d", n/500) }
+	big := func(id string, at int64, p string) records.Record {
+		c := call(id, "big", at)
+		c.Call.PromptID, c.Call.PersonID = p, "acct"
+		return c
+	}
 	grow := func(to int) {
 		for n < to {
 			var rs []records.Record
 			for i := 0; i < 1000 && n < to; i, n = i+1, n+1 {
 				at := t0 + int64(n/perHour)*hourNS + int64(n%perHour)*hourNS/perHour
-				rs = append(rs, ev(fmt.Sprintf("G%d", n/100), int64(n%100+1), "big", at, names[n%len(names)],
-					`{"toolName":"Bash","permissionMode":"default","bash_argv0":"ls"}`))
+				name := names[n%len(names)]
+				if n%500 == 0 {
+					name = "tengu_input_prompt"
+				}
+				e := ev(fmt.Sprintf("G%d", n/100), int64(n%100+1), "big", at, name,
+					`{"toolName":"Bash","permissionMode":"default","bash_argv0":"ls","sandbox_enabled":false}`)
+				e.Event.PromptID, e.Event.RequestID = prompt(n), fmt.Sprintf("req-g%d", n-n%20) // a report names its call
+				e.Event.PersonID, e.Event.DeviceID, e.Event.EnvJSON = "acct", "dev", `{"platform":"linux","terminal":"tmux","shell":"zsh"}`
+				rs = append(rs, e)
 				if n%20 == 0 {
-					rs = append(rs, call(fmt.Sprintf("g%d", n), "big", at))
+					rs = append(rs, big(fmt.Sprintf("g%d", n), at, prompt(n)))
 				}
 			}
 			write(t, db, rs...)
 		}
 		drain(t, db)
+		if _, err := db.Exec(ctx(t), "ANALYZE"); err != nil { // as autovacuum keeps a live database's statistics
+			t.Fatal(err)
+		}
 	}
 	timed := func() time.Duration {
 		var best time.Duration
@@ -650,11 +670,13 @@ func TestRefreshCostIsFlat(t *testing.T) {
 			last := t0 + int64((n-1)/perHour)*hourNS + int64((n-1)%perHour)*hourNS/perHour // the newest event's minute
 			var rs []records.Record
 			for i := 0; i < 100; i++ {
-				rs = append(rs, ev(fmt.Sprintf("T%d-%d", n, k), int64(i+1), "big", last, names[i%len(names)], `{"toolName":"Read"}`))
+				e := ev(fmt.Sprintf("T%d-%d", n, k), int64(i+1), "big", last, names[i%len(names)], `{"toolName":"Read"}`)
+				e.Event.PromptID = prompt(n - 1)
+				rs = append(rs, e)
 			}
 			for i := 0; i < 5; i++ {
 				id := fmt.Sprintf("t%d-%d-%d", n, k, i)
-				rs = append(rs, call(id, "big", last), rep(fmt.Sprintf("R%d-%d-%d", n, k, i), 1, "big", last, "req-"+id))
+				rs = append(rs, big(id, last, prompt(n-1)), rep(fmt.Sprintf("R%d-%d-%d", n, k, i), 1, "big", last, "req-"+id))
 			}
 			write(t, db, rs...)
 			start := time.Now()

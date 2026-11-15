@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 )
 
@@ -115,10 +117,16 @@ func credScratch(width int64) string {
 	FROM calls c WHERE ` + agentCall + ` GROUP BY 1, 2, 3, 4, 5`
 }
 
+// DB is what Check reads through: a pool.
+type DB interface {
+	pg.Querier
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 // Check compares every rollup table with its from-scratch rows.
-func Check(ctx context.Context, q pg.Querier) ([]Result, error) {
+func Check(ctx context.Context, q DB) ([]Result, error) {
 	var out []Result
-	for _, c := range checks {
+	for _, c := range append(checks, dayCheck) {
 		r := Result{Table: c.table}
 		err := q.QueryRow(ctx, `WITH a AS (`+c.rows+`), b AS (`+c.scratch+`)
 			SELECT (SELECT count(*) FROM a), (SELECT count(*) FROM b),
@@ -131,5 +139,139 @@ func Check(ctx context.Context, q pg.Querier) ([]Result, error) {
 		}
 		out = append(out, r)
 	}
+	rs, err := checkRecomputed(ctx, q)
+	return append(out, rs...), err
+}
+
+// recomputed are the prompt, session and day rollups, each with every key
+// the facts give it from scratch and the statements that compute a key's rows,
+// in the order they read each other (sessions read prompts, days sessions).
+var recomputed = []struct {
+	kind, keys string
+	tables     []string
+	stmts      []string
+}{
+	{"prompt", `SELECT DISTINCT prompt_id FROM calls c WHERE c.prompt_id IS NOT NULL AND ` + visible + `
+		UNION SELECT DISTINCT coalesce(e.prompt_id, 'input:' || e.batch_call_id || ':' || e.batch_cc_n) FROM events e
+		WHERE e.source = 'claude_code' AND e.name = 'tengu_input_prompt' AND e.session_id IS NOT NULL`,
+		[]string{"prompts", "steps"}, promptRefresh},
+	{"session", `SELECT DISTINCT session_id FROM calls c WHERE ` + visible + `
+		UNION SELECT DISTINCT session_id FROM events WHERE source = 'claude_code' AND session_id IS NOT NULL`,
+		[]string{"sessions", "prompt_items"}, sessionRefresh},
+	{"account_day", `SELECT DISTINCT a.account_id || '/' || (d.t - d.t % ` + fmt.Sprint(dayNS) + `) FROM session_accounts a JOIN (
+		SELECT c.session_id, ` + at + ` AS t FROM calls c WHERE ` + visible + `
+		UNION ALL SELECT session_id, ts_ns FROM events WHERE source = 'claude_code' AND session_id IS NOT NULL) d USING (session_id)`,
+		[]string{"account_days"}, dayRefresh},
+}
+
+// checkRecomputed compares the prompt, session and day rollups with the same
+// rollups computed again, inside a transaction it rolls back: every row
+// deleted, then every key's computed from the facts (and the rollups below
+// it, themselves checked above) with the refresh's own statements. It
+// catches a missed dirty mark, a lost update or an order the refresh got
+// wrong; what each value means is held to today's code by the unit tests and
+// the v7 comparison.
+func checkRecomputed(ctx context.Context, q DB) ([]Result, error) {
+	tx, err := q.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck // a rollback after a failure has nothing to report
+	var tables []string
+	for _, r := range recomputed {
+		tables = append(tables, r.tables...)
+	}
+	for _, t := range tables {
+		if _, err := tx.Exec(ctx, `CREATE TEMP TABLE was_`+t+` ON COMMIT DROP AS SELECT * FROM `+t); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM `+t); err != nil {
+			return nil, err
+		}
+	}
+	for _, r := range recomputed {
+		rows, err := tx.Query(ctx, r.keys)
+		if err != nil {
+			return nil, fmt.Errorf("check %s keys: %w", r.kind, err)
+		}
+		keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return nil, err
+		}
+		for _, k := range keys {
+			args, err := keyArgs(r.kind, k)
+			if err != nil {
+				return nil, err
+			}
+			for _, s := range r.stmts {
+				if _, err := tx.Exec(ctx, s, args[:params(s)]...); err != nil {
+					return nil, fmt.Errorf("check %s %q: %w", r.kind, k, err)
+				}
+			}
+		}
+	}
+	var out []Result
+	for _, t := range tables {
+		r := Result{Table: t}
+		err := tx.QueryRow(ctx, `WITH a AS (SELECT * FROM was_`+t+`), b AS (SELECT * FROM `+t+`)
+			SELECT (SELECT count(*) FROM a), (SELECT count(*) FROM b),
+				(SELECT count(*) FROM (SELECT * FROM b EXCEPT ALL SELECT * FROM a) x),
+				(SELECT count(*) FROM (SELECT * FROM a EXCEPT ALL SELECT * FROM b) y),
+				(SELECT coalesce(sum(('x' || substr(md5(a::text), 1, 15))::bit(60)::bigint), 0)::text FROM a)`).
+			Scan(&r.Rows, &r.Scratch, &r.Missing, &r.Extra, &r.Checksum)
+		if err != nil {
+			return nil, fmt.Errorf("check %s: %w", t, err)
+		}
+		out = append(out, r)
+	}
 	return out, nil
+}
+
+// dayCheck is account_days against one SQL over the facts alone (not the
+// session rollups it reads): each account's sessions' visible calls and Claude
+// Code events per UTC day, by the session's agent (owner decision 2: the
+// directory sums activity inside the window).
+var dayCheck = struct{ table, rows, scratch string }{"account_days (facts)",
+	`SELECT account_id, day_ns, agent, sessions, sessions_with_events, prompts, model_calls, outputs_known, tokens_input,
+		tokens_cache_read, tokens_cache_write, tokens_output, queries, bypassed, reported, missed, first_ns, last_ns FROM account_days`,
+	`WITH d AS (SELECT c.session_id AS sid, ` + at + ` - ` + at + ` % ` + fmt.Sprint(dayNS) + ` AS day, ` + at + ` AS t, true AS call, c.prompt_id AS prompt,
+			c.input_tokens, c.cache_read_tokens, c.cache_write_tokens, c.output_tokens, NULL::events AS e
+		FROM calls c WHERE ` + visible + `
+		UNION ALL SELECT e.session_id, e.ts_ns - e.ts_ns % ` + fmt.Sprint(dayNS) + `, e.ts_ns, false,
+			CASE WHEN e.name = 'tengu_input_prompt' THEN coalesce(e.prompt_id, 'input:' || e.ts_ns) END, NULL, NULL, NULL, NULL, e
+		FROM events e WHERE e.source = 'claude_code' AND e.session_id IS NOT NULL),
+	agent AS (SELECT DISTINCT ON (c.session_id) c.session_id AS sid, ` + agent + ` AS product FROM calls c WHERE ` + visible + `
+		ORDER BY c.session_id, ` + callOrder + `),
+	sd AS (SELECT sid, day, count(*) FILTER (WHERE call) AS calls, count(*) FILTER (WHERE NOT call) AS events,
+			count(DISTINCT prompt) AS prompts, count(output_tokens) AS outputs_known, sum(input_tokens) AS input_tokens,
+			sum(cache_read_tokens) AS cache_read_tokens, sum(cache_write_tokens) AS cache_write_tokens, sum(output_tokens) AS output_tokens,
+			count(*) FILTER (WHERE (e).name = 'tengu_api_query' AND coalesce(` + jsonText(`(e).metadata -> 'permissionMode'`) + `, '') <> '') AS queries,
+			count(*) FILTER (WHERE (e).name = 'tengu_api_query' AND ` + jsonText(`(e).metadata -> 'permissionMode'`) + ` = 'bypassPermissions') AS bypassed,
+			count(*) FILTER (WHERE (e).name = 'tengu_api_success') AS reported, min(t) AS first, max(t) AS last
+		FROM d GROUP BY 1, 2),
+	ms AS (SELECT r.session_id AS sid, r.ts_ns - r.ts_ns % ` + fmt.Sprint(dayNS) + ` AS day, count(*) AS missed
+		FROM events r WHERE r.session_id IS NOT NULL AND ` + missedWhere + ` GROUP BY 1, 2)
+	SELECT a.account_id, sd.day, CASE WHEN agent.product = 'codex' THEN 'codex' ELSE 'claude-code' END,
+		count(*), count(*) FILTER (WHERE sd.events > 0), sum(sd.prompts), sum(sd.calls), sum(sd.outputs_known),
+		sum(sd.input_tokens), sum(sd.cache_read_tokens), sum(sd.cache_write_tokens), sum(sd.output_tokens),
+		sum(sd.queries), sum(sd.bypassed), sum(sd.reported), sum(coalesce(ms.missed, 0)), min(sd.first), max(sd.last)
+	FROM session_accounts a JOIN sd ON sd.sid = a.session_id LEFT JOIN agent ON agent.sid = a.session_id
+		LEFT JOIN ms ON ms.sid = sd.sid AND ms.day = sd.day
+	GROUP BY 1, 2, 3`,
+}
+
+// keyArgs is a refresh's arguments for a key of kind (Refresh's).
+func keyArgs(kind, k string) ([]any, error) {
+	switch kind {
+	case "prompt":
+		return promptArgs(k), nil
+	case "session":
+		return []any{k}, nil
+	}
+	id, at, err := splitKey(k)
+	if err != nil {
+		return nil, err
+	}
+	at -= at % dayNS
+	return []any{id, at, at + dayNS}, nil
 }

@@ -24,8 +24,8 @@ import (
 
 // Coalesce is how long a prompt, session or account-day row waits after it's
 // marked before it's claimed, so a busy one is recomputed at most this often
-// however many flushes touch it (§5.1).
-const Coalesce = 5 * time.Second
+// however many flushes touch it (§5.1). A var so tests can drain at once.
+var Coalesce = 5 * time.Second
 
 // Stale is how long a claim lasts: a row claimed longer ago (its worker died)
 // is claimed again.
@@ -34,10 +34,8 @@ const Stale = time.Minute
 // claimBatch is how many rows one claim takes.
 const claimBatch = 32
 
-// Kinds are the dirty kinds this refresher recomputes (§5.3). The rest
-// (prompt, session, account_day: step 4b's) stay dirty until a refresher for
-// them exists, and /lag leaves them out until then.
-var Kinds = []string{"minute", "hour", "cred_minute", "cred_hour"}
+// Kinds are the dirty kinds this refresher recomputes (§5.3).
+var Kinds = []string{"minute", "hour", "cred_minute", "cred_hour", "prompt", "session", "account_day"}
 
 // coalesced are the kinds a claim waits Coalesce for.
 var coalesced = []string{"prompt", "session", "account_day"}
@@ -85,13 +83,23 @@ func Release(ctx context.Context, db *pgxpool.Pool, c Claim) (bool, error) {
 // Refresh recomputes c's rollup rows from the facts and marks the next level
 // dirty, in one transaction.
 func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
-	id, at, err := splitKey(c.Key)
-	if err != nil {
-		return fmt.Errorf("refresh %s %q: %w", c.Kind, c.Key, err)
+	id, at, args := c.Key, int64(0), []any(nil)
+	switch c.Kind {
+	case "prompt", "session": // keyed by an id alone
+		args = []any{id}
+		if c.Kind == "prompt" {
+			args = promptArgs(id)
+		}
+	default:
+		var err error
+		if id, at, err = splitKey(c.Key); err != nil {
+			return fmt.Errorf("refresh %s %q: %w", c.Kind, c.Key, err)
+		}
 	}
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		var stmts []string
 		var next []mark
+		width := minuteNS
 		switch c.Kind {
 		case "minute":
 			at -= at % minuteNS
@@ -99,46 +107,101 @@ func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
 			next = []mark{{"hour", key(id, at-at%hourNS)}}
 		case "hour":
 			at -= at % hourNS
+			width = hourNS
 			stmts = append([]string{hourRow}, hourKeys...)
 			next = []mark{{"session", id}}
-			// §5.3: an hour marks each of its session's accounts' day.
-			rows, err := tx.Query(ctx, "SELECT account_id FROM session_accounts WHERE session_id = $1", id)
-			if err != nil {
-				return err
-			}
-			accts, err := pgx.CollectRows(rows, pgx.RowTo[string])
-			if err != nil {
-				return err
-			}
-			day := at - at%(24*hourNS)
-			for _, a := range accts {
-				next = append(next, mark{"account_day", key(a, day)})
-			}
 		case "cred_minute":
 			at -= at % minuteNS
 			stmts = credMinute
 			next = []mark{{"cred_hour", key(id, at-at%hourNS)}}
 		case "cred_hour":
 			at -= at % hourNS
+			width = hourNS
 			stmts = credHour
+		case "prompt":
+			// §5.3: a prompt marks its sessions, those it was in and is in now.
+			rows, err := tx.Query(ctx, "DELETE FROM prompts WHERE prompt_id = $1 RETURNING session_id", id)
+			if err != nil {
+				return err
+			}
+			was, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				return err
+			}
+			for _, s := range was {
+				next = append(next, mark{"session", s})
+			}
+			stmts = promptRefresh
+		case "session":
+			stmts = sessionRefresh
+		case "account_day":
+			at -= at % dayNS
+			width = dayNS
+			stmts = dayRefresh
 		default:
 			return fmt.Errorf("refresh: no rollup for dirty kind %q", c.Kind)
 		}
-		width := minuteNS
-		if strings.HasSuffix(c.Kind, "hour") {
-			width = hourNS
+		if args == nil {
+			args = []any{id, at, at + width}
 		}
 		for _, s := range stmts {
-			args := []any{id, at}
-			if strings.Contains(s, "$3") {
-				args = append(args, at+width)
-			}
-			if _, err := tx.Exec(ctx, s, args...); err != nil {
+			if _, err := tx.Exec(ctx, s, args[:params(s)]...); err != nil {
 				return fmt.Errorf("refresh %s %q: %w", c.Kind, c.Key, err)
 			}
 		}
+		var more string
+		switch c.Kind {
+		case "prompt":
+			more = "SELECT 'session', session_id FROM prompts WHERE prompt_id = $1"
+		case "session":
+			// §5.3: a session marks each of its accounts' days, every day it
+			// has, so an account seen on it late still gets its earlier days.
+			more = "SELECT 'account_day', k FROM (" + sessionDays + ") d(k)"
+		}
+		if more != "" {
+			rows, err := tx.Query(ctx, more, id)
+			if err != nil {
+				return err
+			}
+			ms, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (mark, error) {
+				var m mark
+				return m, r.Scan(&m.kind, &m.key)
+			})
+			if err != nil {
+				return err
+			}
+			next = append(next, ms...)
+		}
 		return markDirty(ctx, tx, next)
 	})
+}
+
+// promptArgs is a prompt refresh's arguments: its key, and for an input with
+// no prompt id (input:<batch>:<n>) its batch and place ($2, $3; NULL else).
+func promptArgs(key string) []any {
+	batch, n := any(nil), any(nil)
+	if rest, ok := strings.CutPrefix(key, "input:"); ok {
+		if i := strings.LastIndexByte(rest, ':'); i > 0 {
+			if v, err := strconv.ParseInt(rest[i+1:], 10, 64); err == nil {
+				batch, n = rest[:i], v
+			}
+		}
+	}
+	return []any{key, batch, n}
+}
+
+// dayNS is a UTC day.
+const dayNS = 24 * hourNS
+
+// params is how many parameters statement s takes ($1…$n).
+func params(s string) int {
+	n := 0
+	for i := 1; i <= 3; i++ {
+		if strings.Contains(s, "$"+strconv.Itoa(i)) {
+			n = i
+		}
+	}
+	return n
 }
 
 // Drain claims, refreshes and releases until nothing is left to claim. It
