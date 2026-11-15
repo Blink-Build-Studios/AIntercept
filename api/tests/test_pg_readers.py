@@ -19,10 +19,9 @@ _WORKER_READS = {
 
 # The v9 fact tables, the dirty list and the raw files' list (docs/PIPELINE.md §2, §3, §5.1),
 # written by the flush (internal/flush) and ingest from steps 2 and 3, and the rollups the
-# refresher (internal/refresh) writes from step 4: read by the pages from step 5.
+# refresher (internal/refresh) writes from step 4: read by the pages from step 5 (the drawer reads
+# calls, events, steps, prompts and prompt_items) to step 7.
 _V9_UNTIL_ROLLUPS = {
-    "calls",
-    "events",
     "event_envs",
     "accounts",
     "session_accounts",
@@ -38,12 +37,14 @@ _V9_UNTIL_ROLLUPS = {
     "missed_reports",
     "cred_minutes",
     "cred_hours",
-    "prompts",
-    "steps",
-    "prompt_items",
     "sessions",
     "account_days",
 }
+
+
+# The Go drawer's rows (v8): the worker still writes them until step 8 deletes it, and nothing reads
+# them since the drawer reads v9 (step 5).
+_V8_DRAWER = {"drawer_templates", "drawer_requests", "drawer_step_counts", "drawer_events"}
 
 
 def _tables() -> list[str]:
@@ -51,10 +52,10 @@ def _tables() -> list[str]:
 
 
 def test_every_table_has_a_reader() -> None:
-    api = "\n".join(p.read_text() for p in sorted(_SRC.glob("pgstore*.py")))
+    api = "\n".join(p.read_text() for p in [*sorted(_SRC.glob("pgstore*.py")), _SRC / "drawer.py"])
     unread = []
     for t in _tables():
-        if t in _V9_UNTIL_ROLLUPS:
+        if t in _V9_UNTIL_ROLLUPS or t in _V8_DRAWER:
             continue
         if t in _WORKER_READS:
             go = (_GO / _WORKER_READS[t]).read_text()

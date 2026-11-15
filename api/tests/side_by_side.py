@@ -104,12 +104,12 @@ PAGES = [
          variants=("", "sort=activity", "sort=name", "q=codex", "agent=claude-code&agent=codex",
                    "q=codex&page=2&pageSize=1")),
     Page("overview", "/overview", ranged=True),
-    Page("request", "/requests/{id}", "request"),
-    Page("request/details", "/requests/{id}/details", "request"),
-    Page("request/raw", "/requests/{id}/raw", "request"),
-    Page("event", "/events/{id}", "event"),
+    # The drawer (/requests/{id}, /details, /raw, /events/{id}) reads v9 (docs/PIPELINE.md §6.2), which
+    # these databases don't hold: test_drawer.py holds it to the oracle on the same datasets.
 ]  # fmt: skip
 BY_NAME = {p.name: p for p in PAGES}
+# The drawer's pages, which test_drawer.py walks.
+DRAWER_PAGES = ("request", "request/details", "request/raw", "event")
 
 
 def page_of(url: str) -> str:
@@ -412,7 +412,7 @@ class Side:
 
     def ids(self, page: Page) -> list[str | None]:
         """What page's {id} walks: every session and person; every 10th request id and 50th event id
-        (test_v7_drawer.py holds the drawer for every one, byte for byte)."""
+        (test_drawer.py holds the drawer for every one, byte for byte)."""
         return {
             "session": self.sessions,
             "person": self.people,
@@ -538,8 +538,8 @@ def walk(
 
 
 def built(name: str, root: pathlib.Path) -> tuple[pathlib.Path, list[dict[str, Any]]]:
-    """One of test_v7_drawer's datasets, written under root: (its raw root, its rows)."""
-    from tests.test_v7_drawer import DATASETS
+    """One of test_drawer's datasets, written under root: (its raw root, its rows)."""
+    from tests.test_drawer import DATASETS
 
     ds = Dataset(root)
     DATASETS[name](ds)

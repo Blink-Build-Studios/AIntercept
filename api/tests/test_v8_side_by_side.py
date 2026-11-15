@@ -1,6 +1,6 @@
 """Every response through the router's page-reader seam equals the oracle's on the same snapped range
 (docs/PIPELINE.md v8, Testing; build step 1): each page of the API (tests/side_by_side.py PAGES) on
-every CI dataset (test_v7_drawer.py's: the mixed builders and demo, every drawer shape, the spanning
+every CI dataset (test_drawer.py's: the mixed builders and demo, every drawer shape, the spanning
 batch in flight), the oracle's reader against PgStore's through one router.
 
 `make check`: three URLs of each page on each dataset (test_v8_cuts.py walks every cut for one session
@@ -11,7 +11,7 @@ import pytest
 
 from tests import pgdb
 from tests.side_by_side import BY_NAME, PAGES, assert_held, built, compare, sides
-from tests.test_v7_drawer import DATASETS
+from tests.test_drawer import DATASETS
 
 
 def admin() -> str:

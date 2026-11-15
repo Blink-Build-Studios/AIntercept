@@ -221,6 +221,75 @@ def bounded_store(root, **kwargs) -> Any:
     return LaidOutStore(pathlib.Path(root), memory_limit="512MB", **kwargs)
 
 
+def load_v9(raw: pathlib.Path, dsn: str) -> pathlib.Path:
+    """v9's path over raw (docs/PIPELINE.md §2, §8 "In CI"): `aintercept canon -raw` writes the rows as v9
+    raw files through the observer's writer, and `canon -load -refresh 1` loads them into dsn as the
+    workers do (each call's member range on its row) with the rollups refreshed. Returns the raw files'
+    root: a call's raw_key is relative to it."""
+    out = pathlib.Path(tempfile.mkdtemp(dir=_laid_out_root(), prefix="v9-"))
+    binary = str(aintercept_binary())
+    subprocess.run([binary, "canon", "-src", str(raw), "-raw", str(out)], check=True, capture_output=True)  # noqa: S603
+    subprocess.run(  # noqa: S603
+        [binary, "canon", "-src", str(out), "-load", dsn, "-refresh", "1"], check=True, capture_output=True
+    )
+    return out
+
+
+class PgDataset:
+    """A dataset in a fresh Postgres of its own, as the cluster holds it while both paths run (build
+    steps 3 to 8): v7's tables (`v1layout -pg`), which the session and person pages read until steps 6
+    and 7, and v9's facts and rollups (load_v9), which the drawer reads; the raw files the drawer's
+    ranged GETs read."""
+
+    def __init__(self, admin: str, root: pathlib.Path) -> None:
+        self._db = pgdb.fresh_database(admin)
+        self.dsn = self._db.__enter__()
+        try:
+            lay_out(root, pg=self.dsn)
+            self.raw = load_v9(root, self.dsn)
+        except BaseException:
+            self._db.__exit__(None, None, None)
+            raise
+
+    def store(self, **kwargs: Any) -> Any:
+        from aintercept_api.pgstore import PgStore
+
+        kwargs.setdefault("threads", 1)
+        return PgStore(self.dsn, source=LocalSource(self.raw), **kwargs)
+
+    def close(self) -> None:
+        self._db.__exit__(None, None, None)
+
+
+def pg_admin() -> str:
+    """The test Postgres' admin DSN; the test skips without one (fails in CI)."""
+    admin = pgdb.admin_dsn()
+    if admin is None:
+        if pgdb.required():
+            pytest.fail("AINTERCEPT_TEST_PG isn't set (CI's service container should set it)")
+        pytest.skip("no test Postgres: set AINTERCEPT_TEST_PG (make check starts one: scripts/test-pg.sh)")
+    return admin
+
+
+@pytest.fixture
+def pg_client_for():
+    """pg_client_for(dataset) -> a TestClient with the frozen clock over that dataset in Postgres
+    (PgDataset): the API's default store, its drawer on v9."""
+    opened: list[tuple[PgDataset, Any]] = []
+
+    def make(ds: Dataset, **kwargs) -> TestClient:
+        root = ds.write()
+        root.mkdir(parents=True, exist_ok=True)
+        pg = PgDataset(pg_admin(), root)
+        opened.append((pg, pg.store()))
+        return make_client(opened[-1][1], **kwargs)
+
+    yield make
+    for pg, store in opened:
+        store.close()
+        pg.close()
+
+
 @pytest.fixture
 def client_for():
     """client_for(dataset) -> a TestClient over that dataset with the frozen clock."""

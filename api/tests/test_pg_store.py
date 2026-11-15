@@ -311,17 +311,8 @@ def test_every_person_page_runs_a_fixed_set_of_statements_on_one_connection(demo
                     assert len(load.statements) <= 8
 
 
-# The drawer's and /events' statement (§3.7): the worker's finished row by its primary key, with
-# /status's values (the drawer's lastDataAt is global, quirk 7), in one statement; /raw's also reads
-# the call's requests row (the view when its detail object can't be read).
-DRAWER_STATEMENTS = {
-    "/api/v1/requests/demo-000001": ["drawer"],
-    "/api/v1/requests/demo-000001/details": ["drawer"],
-    "/api/v1/requests/conn-1~2/raw": ["drawer"],
-    "/api/v1/requests/reported:req_1": ["drawer"],
-    "/api/v1/events/batch-1:3": ["event"],
-    "/api/v1/status": ["status"],
-}
+# /status's statement: v8's finished rows, with the recent pods'. (The drawer's are v9's: test_drawer.py.)
+STATUS_STATEMENTS = {"/api/v1/status": ["status"]}
 
 
 # The directory's statements (build step 7): the dimension rows of the keys whose day is from's day
@@ -351,13 +342,13 @@ def test_the_directory_runs_a_fixed_set_of_statements(demo, pg_dsn):
                 assert make_client(store).get(url).status_code == 200, url
 
 
-def test_the_drawer_and_status_run_a_fixed_set_of_statements(demo):
-    # On v8's reader: one statement each, on one connection, in one snapshot.
+def test_status_runs_one_statement(demo):
+    # On v8's reader: one statement, on one connection, in one snapshot.
     _, dsn = demo
     store = PgStore(dsn, trace=True)
     with contextlib.closing(store):
         client = make_client(store)
-        for url, names in DRAWER_STATEMENTS.items():
+        for url, names in STATUS_STATEMENTS.items():
             store.trace.clear()
             client.get(url)
             (load,) = store.trace
@@ -421,7 +412,7 @@ def test_every_statement_can_use_an_index(demo):
                 store.load_for(f"/api/v1/sessions/{sid}{sub}")
                 plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]
         client = make_client(store)
-        for url in DRAWER_STATEMENTS:
+        for url in STATUS_STATEMENTS:
             store.trace.clear()
             client.get(url)
             plans += [(s.name, p) for s in store.trace[0].statements for p in store.explain(s)]

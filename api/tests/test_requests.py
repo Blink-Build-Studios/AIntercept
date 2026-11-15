@@ -1,4 +1,5 @@
-"""/requests/{requestId}, /raw, /details and /events/{eventId} (handoff §5.2.10, §5.2.9)."""
+"""/requests/{requestId}, /raw, /details and /events/{eventId} (handoff §5.2.10, §5.2.9), on the Postgres
+store: the drawer reads v9's facts and rollups, and the call's raw member (docs/PIPELINE.md §6.2)."""
 
 import json
 
@@ -8,6 +9,7 @@ from tests.builders import (
     body_chunks,
     cid_of,
     complete_meta,
+    end_batches,
     headers_on,
     limits_on_last_call,
     sse,
@@ -97,9 +99,9 @@ def failed_then_retried(ds):
     return cc, cid, cid_of(ds, ok), bad
 
 
-def test_request_normal(dataset, client_for, write_sample):
+def test_request_normal(dataset, pg_client_for, write_sample):
     _, cid, nxt = two_steps(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}")
     write_sample(client, r, "normal")
     d = r.json()["data"]
@@ -116,7 +118,7 @@ def test_request_normal(dataset, client_for, write_sample):
     assert d["received"][2]["tone"] == "tool" and all(x["body"] is None for x in d["sent"] + d["received"])
 
 
-def test_request_not_captured(dataset, client_for, write_sample):
+def test_request_not_captured(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:10", "p1", 1)
     cc.call(f"{H}:01:00", prompt="p1")
@@ -133,7 +135,7 @@ def test_request_not_captured(dataset, client_for, write_sample):
         ttftMs=2_011,
         durationMs=7_702,
     )
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     rows = client.get(f"/api/v1/sessions/{S1}/requests", params={"captured": "false"}).json()["data"]
     (row,) = rows
     r = client.get(f"/api/v1/requests/{row['requestId']}")
@@ -147,9 +149,9 @@ def test_request_not_captured(dataset, client_for, write_sample):
     assert d["received"][0]["detail"] == "38,104 in (37,690 cached) → 912 out"
 
 
-def test_request_failed(dataset, client_for, write_sample):
+def test_request_failed(dataset, pg_client_for, write_sample):
     _, cid, ok, _ = failed_then_retried(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}")
     write_sample(client, r, "failed")
     d = r.json()["data"]
@@ -177,9 +179,9 @@ def test_request_failed(dataset, client_for, write_sample):
     assert d["keyStrip"]["proxyTtftMs"] is None and d["keyStrip"]["cost"]["estimatedCalls"] == 0
 
 
-def test_request_rows_carry_their_retry(dataset, client_for):
+def test_request_rows_carry_their_retry(dataset, pg_client_for):
     _, cid, _, _ = failed_then_retried(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     (row,) = [x for x in client.get(f"/api/v1/sessions/{S1}/requests").json()["data"] if x["requestId"] == cid]
     assert row["retries"] == 1
     assert row["error"]["retries"] == 1 and row["error"]["retrySucceededAt"] == "2026-11-04T09:03:10Z"
@@ -260,9 +262,9 @@ def retained(ds):
     return cid
 
 
-def test_request_retained(dataset, client_for, write_sample):
+def test_request_retained(dataset, pg_client_for, write_sample):
     cid = retained(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}")
     write_sample(client, r, "retained")
     d = r.json()["data"]
@@ -275,16 +277,16 @@ def test_request_retained(dataset, client_for, write_sample):
     assert json.loads(d["received"][2]["body"]) == {"file_path": "src/auth/session.ts", "replace_all": False}
 
 
-def test_request_unknown_is_a_typed_404(dataset, client_for):
-    client = client_for(dataset)
+def test_request_unknown_is_a_typed_404(dataset, pg_client_for):
+    client = pg_client_for(dataset)
     for path in ("/api/v1/requests/nope", "/api/v1/requests/reported:nope", "/api/v1/requests/nope/raw"):
         r = client.get(path)
         assert r.status_code == 404 and r.json()["error"]["code"] == "http_404"
 
 
-def test_request_error(dataset, client_for, write_sample, monkeypatch):
+def test_request_error(dataset, pg_client_for, write_sample, monkeypatch):
     _, cid, _ = two_steps(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"/api/v1/requests/{cid}"), "error", status=500)
 
@@ -292,9 +294,9 @@ def test_request_error(dataset, client_for, write_sample, monkeypatch):
 # --- raw ----------------------------------------------------------------------------------------
 
 
-def test_raw_normal(dataset, client_for, write_sample):
+def test_raw_normal(dataset, pg_client_for, write_sample):
     _, cid, _ = two_steps(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}/raw")
     write_sample(client, r, "normal")
     d = r.json()["data"]
@@ -305,9 +307,9 @@ def test_raw_normal(dataset, client_for, write_sample):
     assert d["requestBody"] is None and d["stream"] is None and d["contentRetained"] is False
 
 
-def test_raw_retained(dataset, client_for, write_sample):
+def test_raw_retained(dataset, pg_client_for, write_sample):
     cid = retained(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}/raw")
     write_sample(client, r, "retained")
     d = r.json()["data"]
@@ -330,20 +332,20 @@ def test_raw_retained(dataset, client_for, write_sample):
     )
 
 
-def test_raw_unavailable(dataset, client_for, write_sample):
+def test_raw_unavailable(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     cc.call(f"{H}:01:00")
     cc.reported(f"{H}:02:00", "req_bypassed")
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get("/api/v1/requests/reported:req_bypassed/raw")
     write_sample(client, r, "unavailable")
     d = r.json()["data"]
     assert d["unavailable"].startswith("No wire data") and d["requestHeaders"] == [] and d["requestLine"] is None
 
 
-def test_raw_failed_has_the_request_only(dataset, client_for, write_sample):
+def test_raw_failed_has_the_request_only(dataset, pg_client_for, write_sample):
     _, cid, _, _ = failed_then_retried(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}/raw")
     write_sample(client, r, "failed")
     d = r.json()["data"]
@@ -351,9 +353,9 @@ def test_raw_failed_has_the_request_only(dataset, client_for, write_sample):
     assert d["requestHeaders"] and d["responseLine"] is None and d["responseHeaders"] == []
 
 
-def test_raw_error(dataset, client_for, write_sample, monkeypatch):
+def test_raw_error(dataset, pg_client_for, write_sample, monkeypatch):
     _, cid, _ = two_steps(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"/api/v1/requests/{cid}/raw"), "error", status=500)
 
@@ -361,9 +363,9 @@ def test_raw_error(dataset, client_for, write_sample, monkeypatch):
 # --- details ------------------------------------------------------------------------------------
 
 
-def test_details_normal(dataset, client_for, write_sample):
+def test_details_normal(dataset, pg_client_for, write_sample):
     _, cid, _ = two_steps(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}/details")
     write_sample(client, r, "normal")
     d = r.json()["data"]
@@ -398,9 +400,9 @@ def test_details_normal(dataset, client_for, write_sample):
     assert fields["effort"] == "high" and fields["speed"] is None and fields["analytics.costUSD"] == "0.21"
 
 
-def test_details_error(dataset, client_for, write_sample, monkeypatch):
+def test_details_error(dataset, pg_client_for, write_sample, monkeypatch):
     _, cid, _ = two_steps(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get(f"/api/v1/requests/{cid}/details"), "error", status=500)
 
@@ -408,11 +410,12 @@ def test_details_error(dataset, client_for, write_sample, monkeypatch):
 # --- one event ----------------------------------------------------------------------------------
 
 
-def test_event_normal(dataset, client_for, write_sample):
+def test_event_normal(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:10", "p1", 1)
     cc.event(f"{H}:00:10", "tengu_paste_text", env=ENV, pastedTextBytes=2_048, note=SECRET)
-    client = client_for(dataset)
+    end_batches(dataset)  # a batch's raw rows are in its call's member, written when it ends
+    client = pg_client_for(dataset)
     rows = client.get(f"/api/v1/sessions/{S1}/events").json()["data"]
     paste = next(x for x in rows if x["name"] == "tengu_paste_text")
     r = client.get(f"/api/v1/events/{paste['eventId']}")
@@ -423,7 +426,7 @@ def test_event_normal(dataset, client_for, write_sample):
     assert md["pastedTextBytes"] == 2_048 and SECRET not in json.dumps(d)
 
 
-def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, client_for):
+def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, pg_client_for):
     # One process's batch can carry events from two sessions (after /clear or a
     # resume); each event's id must open that event, not the other session's.
     first, second = "00000000-0000-4000-8000-000000000001", S1
@@ -432,7 +435,8 @@ def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, client_for):
     prompt(b, f"{H}:00:06", "pb", 1)
     a.event(f"{H}:00:10", "tengu_paste_text", env=ENV, batch="batch-shared", arrive=f"{H}:00:11", pastedTextBytes=1)
     b.event(f"{H}:00:11", "tengu_paste_text", env=ENV, batch="batch-shared", arrive=f"{H}:00:11", pastedTextBytes=2)
-    client = client_for(dataset)
+    end_batches(dataset)
+    client = pg_client_for(dataset)
     ids = set()
     for sid, size in ((first, 1), (second, 2)):
         rows = client.get(f"/api/v1/sessions/{sid}/events").json()["data"]
@@ -444,7 +448,7 @@ def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, client_for):
     assert len(ids) == 2
 
 
-def test_events_tied_on_every_order_key_number_by_event_key(dataset, client_for):
+def test_events_tied_on_every_order_key_number_by_event_key(dataset, pg_client_for):
     # A batch can carry events alike in sequence, times, name and metadata that differ
     # only in their raw body (their id, process stats). Their numbers must not depend on
     # the order the rows are read in: the event key breaks the tie.
@@ -459,27 +463,28 @@ def test_events_tied_on_every_order_key_number_by_event_key(dataset, client_for)
         ev["client_event"]["id"] = ev_id
         ev["client_event"]["data"]["process"] = {"uptime": uptime}
         dataset.add(ev)
-    client = client_for(dataset)
+    end_batches(dataset)
+    client = pg_client_for(dataset)
     for n, ev_id in ((1, "ev-a"), (2, "ev-b")):
         d = client.get(f"/api/v1/events/batch-tie:{n}").json()["data"]
         assert d["raw"]["id"] == ev_id, (n, d["raw"])
 
 
-def test_event_unknown_is_a_typed_404(dataset, client_for):
-    client = client_for(dataset)
+def test_event_unknown_is_a_typed_404(dataset, pg_client_for):
+    client = pg_client_for(dataset)
     for eid in ("nope", "batch-x:1"):
         assert client.get(f"/api/v1/events/{eid}").status_code == 404
 
 
-def test_event_error(dataset, client_for, write_sample, monkeypatch):
+def test_event_error(dataset, pg_client_for, write_sample, monkeypatch):
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:10", "p1", 1)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     error_on_query(client, monkeypatch)
     write_sample(client, client.get("/api/v1/events/batch-x:1"), "error", status=500)
 
 
-def test_request_that_ended_in_a_disconnect(dataset, client_for):
+def test_request_that_ended_in_a_disconnect(dataset, pg_client_for):
     """A client gone before any response: its raw rows end in a disconnect, which the
     drawer shows as the failure the request log shows (not a call with no end)."""
     cid = dataset.transaction(f"{H}:05:00")
@@ -494,14 +499,14 @@ def test_request_that_ended_in_a_disconnect(dataset, client_for):
             "observer_instance": INSTANCE,
         }
     )
-    d = client_for(dataset).get(f"/api/v1/requests/{cid}").json()["data"]
+    d = pg_client_for(dataset).get(f"/api/v1/requests/{cid}").json()["data"]
     assert (d["kind"], d["status"], d["durationMs"]) == ("failed", "ERR", 400.0)
 
 
-def test_request_whose_headers_are_out_of_reach_comes_from_its_row(dataset, client_for):
+def test_request_whose_headers_are_out_of_reach_comes_from_its_row(dataset, pg_client_for):
     """Raw rows found, but not its request headers (an earlier file the lineage doesn't
     reach): the drawer builds it from its request row rather than answering 404."""
     cid = dataset.transaction(f"{H}:06:00")
     dataset.rows[:] = [r for r in dataset.rows if not (r["correlation_id"] == cid and r["phase"] == "request_headers")]
-    r = client_for(dataset).get(f"/api/v1/requests/{cid}")
+    r = pg_client_for(dataset).get(f"/api/v1/requests/{cid}")
     assert r.status_code == 200, r.text

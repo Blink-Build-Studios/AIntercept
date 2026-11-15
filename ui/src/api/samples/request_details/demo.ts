@@ -733,7 +733,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": "demo-001368",
             "tone": null,
             "unit": null,
-            "v": "step 448"
+            "v": "step 2"
           },
           {
             "k": "size",

@@ -78,9 +78,14 @@ def live_session(ds):
 
 
 def error_on_query(client, monkeypatch):
-    """Every read the store can do fails: its tables and a call's raw rows."""
-    for name in ("query", "query_dicts", "raw_rows", "raw_event"):
-        monkeypatch.setattr(client.app.state.store, name, lambda *a, **k: 1 / 0)
+    """Every read the store can do fails: its tables, a call's raw rows, its Postgres snapshots."""
+    store = client.app.state.store
+    for name in ("query", "query_dicts", "raw_rows", "raw_event", "read_range"):
+        if hasattr(store, name):
+            monkeypatch.setattr(store, name, lambda *a, **k: 1 / 0)
+    reader = getattr(store, "reader", None)
+    if reader is not None:
+        monkeypatch.setattr(reader, "snapshot", lambda *a, **k: 1 / 0)
 
 
 # --- /sessions/{id} -----------------------------------------------------------------------------

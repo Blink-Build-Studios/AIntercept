@@ -202,9 +202,10 @@ def test_codex_requests_mark_hidden_calls(dataset, client_for, write_sample):
     write_sample(client, r, "codex_hidden")
 
 
-def test_codex_turn_opens_in_the_drawer(dataset, client_for):
+def test_codex_turn_opens_in_the_drawer(dataset, pg_client_for):
+    """A WebSocket turn's drawer, on v9 (docs/PIPELINE.md §6.2): built from its calls row."""
     codex_work(dataset)
-    client = client_for(dataset)
+    client = pg_client_for(dataset)
     rid = next(
         x["requestId"]
         for x in client.get(f"/api/v1/sessions/{ROOT}/requests").json()["data"]

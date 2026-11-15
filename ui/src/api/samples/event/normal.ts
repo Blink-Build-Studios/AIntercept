@@ -32,7 +32,7 @@ const sample: components["schemas"]["EventResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:00:40Z",
+    "lastDataAt": "2026-11-04T09:00:41Z",
     "page": null,
     "pageSize": null,
     "to": null,

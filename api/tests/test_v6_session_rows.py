@@ -152,8 +152,8 @@ def _datasets(tmp: pathlib.Path) -> Iterator[tuple[str, pathlib.Path]]:
         a.event(f"{H}:00:1{i}", "tengu_feature_ok", batch="batch-span", n=i)
     yield "spanning batch", pathlib.Path(ds.write())
     # An analytics batch spanning two sessions that ends: each session's Requests tab counts the
-    # whole batch (every key's batch_parts, read at render time: test_v7_drawer.py).
-    from tests.test_v7_drawer import ended_spanning_batch
+    # whole batch (every key's batch_parts, read at render time: test_drawer.py).
+    from tests.test_drawer import ended_spanning_batch
 
     ds = Dataset(tmp / "spanning-ended" / "data")
     ended_spanning_batch(ds)

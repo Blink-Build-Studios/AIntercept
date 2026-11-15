@@ -221,6 +221,11 @@ class Source(Protocol):
 
     def get(self, key: str) -> bytes: ...
 
+    def get_range(self, key: str, offset: int, length: int) -> bytes:
+        """length bytes of the object from offset (one ranged GET): a call's gzip member in its raw
+        file (docs/PIPELINE.md §2.1)."""
+        ...
+
     def folders(self, prefix: str) -> list[str]:
         """The names of the "folders" directly under prefix (S3 common prefixes)."""
         ...
@@ -249,6 +254,11 @@ class LocalSource:
 
     def get(self, key: str) -> bytes:
         return (self.root / key).read_bytes()
+
+    def get_range(self, key: str, offset: int, length: int) -> bytes:
+        with (self.root / key).open("rb") as f:
+            f.seek(offset)
+            return f.read(length)
 
     def folders(self, prefix: str) -> list[str]:
         base = self.root / prefix
@@ -305,6 +315,11 @@ class S3Source:
     def get(self, key: str) -> bytes:
         return self._request("/" + self.bucket + "/" + urllib.parse.quote(key, safe="/~"), {})
 
+    def get_range(self, key: str, offset: int, length: int) -> bytes:
+        # Range isn't signed (SigV4 signs host and the x-amz-* headers here), as S3 allows.
+        path = "/" + self.bucket + "/" + urllib.parse.quote(key, safe="/~")
+        return self._request(path, {}, {"Range": f"bytes={offset}-{offset + length - 1}"})
+
     def folders(self, prefix: str) -> list[str]:
         out: list[str] = []
         token: str | None = None
@@ -348,7 +363,7 @@ class S3Source:
         body = ", ".join(f"{k} {v if k in ('TYPE', 'PROVIDER') else lit(v)}" for k, v in opts.items())
         con.execute(f"CREATE OR REPLACE SECRET aintercept_s3 ({body})")
 
-    def _request(self, path: str, query: dict[str, str]) -> bytes:
+    def _request(self, path: str, query: dict[str, str], extra: dict[str, str] | None = None) -> bytes:
         now = dt.datetime.now(dt.UTC)
         amz, day = now.strftime("%Y%m%dT%H%M%SZ"), now.strftime("%Y%m%d")
         host = urllib.parse.urlparse(self.endpoint).netloc
@@ -371,7 +386,7 @@ class S3Source:
         url = self.endpoint + path + ("?" + qs if qs else "")
         if not url.startswith(("https://", "http://")):
             raise ValueError(f"S3 endpoint {self.endpoint!r}: use an http(s) URL")
-        req = urllib.request.Request(url, headers={**headers, "Authorization": auth})  # noqa: S310 (checked above)
+        req = urllib.request.Request(url, headers={**headers, **(extra or {}), "Authorization": auth})  # noqa: S310 (checked above)
         with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310
             return cast(bytes, r.read())
 

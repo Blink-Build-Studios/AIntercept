@@ -6,9 +6,9 @@ reader (`read`):
 - `SqlPages` is today's SQL over the API-shaped tables a store has loaded for the request. It's the
   oracle's reader (V1Store's, and tests/oracle's), and, until each page moves to v8's statements,
   PgStore's: v7's loader fills those tables from Postgres in the request's snapshot (pgstore.py).
-- PgStore's v8 reader (pgstore.PgPages) reads finished rows through the psycopg reader (reader.py):
-  /status and the drawer so far. Each later page plugs in by adding its name to `PgPages.PAGES` and
-  its method, with the same signature as SqlPages'.
+- PgStore's reader (pgstore.PgPages) reads Postgres through the psycopg reader (reader.py): /status
+  (v8's finished rows) and the drawer (v9's rows, drawer.py) so far. Each later page plugs in by adding
+  its name to `PgPages.PAGES` and its method, with the same signature as SqlPages'.
 
 Every method gets the router's snapped bounds (ns; None for an open end) and returns the same thing
 whichever reader serves it, so the side-by-side tests compare readers through one router.
@@ -295,13 +295,13 @@ class SqlPages:
         return self.store.newest_ns
 
     def request(self, rid: str) -> RequestDetail | None:
-        return rd.detail(self.store, rid)
+        return rd.detail(rd.StoreReads(self.store), rid)
 
     def request_details(self, rid: str) -> RequestDetails | None:
-        return rd.details(self.store, rid)
+        return rd.details(rd.StoreReads(self.store), rid)
 
     def request_raw(self, rid: str) -> RequestRaw | None:
-        return rd.raw(self.store, rid)
+        return rd.raw(rd.StoreReads(self.store), rid)
 
     def event(self, eid: str) -> EventDetail | None:
         return rd.event(self.store, eid)

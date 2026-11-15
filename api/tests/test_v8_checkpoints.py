@@ -28,7 +28,7 @@ from tests.side_by_side import (
     prefix,
     walk,
 )
-from tests.test_v7_drawer import DATASETS
+from tests.test_drawer import DATASETS
 from tests.test_v8_side_by_side import admin
 
 
