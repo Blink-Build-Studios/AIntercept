@@ -5,7 +5,7 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
 */ -}}
 {{- define "aintercept.spoolMaxBytes" -}}
 {{- $spool := .Values.observer.spool | default dict -}}
-{{- if $spool.maxBytes -}}{{ $spool.maxBytes }}{{- else -}}{{ $spool.maxBytesDefault | default 9663676416 }}{{- end -}}
+{{- if $spool.maxBytes -}}{{ int64 $spool.maxBytes }}{{- else -}}{{ int64 ($spool.maxBytesDefault | default 9663676416) }}{{- end -}}
 {{- end -}}
 
 {{- define "aintercept.observerContainer" -}}

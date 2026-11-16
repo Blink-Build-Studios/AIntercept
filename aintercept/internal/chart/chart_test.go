@@ -178,6 +178,23 @@ func TestIngestPodIsTheFullStack(t *testing.T) {
 // Even with enforcement on, the observer never asks to be taken out of
 // rotation when its spool is full: enforced calls are refused per stream, and
 // observed traffic must keep flowing.
+// The spool cap reaches the observer as a whole number of bytes: Helm reads
+// numbers as floats, and the observer can't parse "9.663676416e+09".
+func TestSpoolMaxBytesIsAWholeNumber(t *testing.T) {
+	for _, c := range []struct {
+		set  []string
+		want string
+	}{
+		{nil, "9663676416"},
+		{[]string{"observer.spool.maxBytes=21474836480"}, "21474836480"},
+	} {
+		obs := byName(get(find(render(t, c.set...), "Deployment", "envoy"), "spec", "template", "spec", "containers"))["observer"]
+		if got := byName(get(obs, "env"))["OBSERVER_SPOOL_MAX_BYTES"]["value"]; got != c.want {
+			t.Errorf("set %v: OBSERVER_SPOOL_MAX_BYTES = %v, want %q", c.set, got, c.want)
+		}
+	}
+}
+
 func TestFullSpoolNeverAffectsReadiness(t *testing.T) {
 	docs := render(t,
 		"interceptor.endpoint=ic:9100",
