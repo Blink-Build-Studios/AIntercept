@@ -121,8 +121,8 @@ storybook: ## Run Storybook on :6006
 	cd ui && pnpm storybook
 
 .PHONY: proto
-proto: ## Regenerate the Interceptor gRPC code from aintercept/interceptor/v1/interceptor.proto (needs protoc, protoc-gen-go, protoc-gen-go-grpc)
-	cd aintercept && protoc -I . --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative interceptor/v1/interceptor.proto
+proto: ## Regenerate the Interceptor gRPC code from aintercept/interceptor/v{1,2}/interceptor.proto (needs protoc, protoc-gen-go, protoc-gen-go-grpc)
+	cd aintercept && protoc -I . --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative interceptor/v1/interceptor.proto interceptor/v2/interceptor.proto
 
 .PHONY: test-interceptor
 test-interceptor: ## End-to-end test of the Interceptor (observe and enforce) through a real Envoy, in Docker

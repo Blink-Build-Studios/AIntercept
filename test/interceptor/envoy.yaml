@@ -3,6 +3,11 @@
 # and the observer behind them. Host observe.test runs the observing filter,
 # enforce.test the enforcing one (FULL_DUPLEX_STREAMED), both in front of the
 # fixture. The filters are configured as in the Helm chart.
+#
+# Contract v2 has its own observer (observer-v2, with the v2 example
+# Interceptor): the model hosts convo reads, api.anthropic.com and
+# chatgpt.com, go to the fixture through its enforcing filter, or its
+# observing one with the header x-e2e-mode: observe.
 static_resources:
   listeners:
     - name: http
@@ -21,6 +26,27 @@ static_resources:
                       routes:
                         - match: { prefix: "/" }
                           route: { cluster: fixture, timeout: 0s }
+                    - name: v2
+                      domains: ["api.anthropic.com", "chatgpt.com"]
+                      routes:
+                        - match: { prefix: "/", headers: [{ name: x-e2e-mode, string_match: { exact: observe } }] }
+                          route: { cluster: fixture, timeout: 0s }
+                          typed_per_filter_config:
+                            aintercept.observe:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+                              disabled: true
+                            aintercept.observe-v2:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+                              overrides: {}
+                        - match: { prefix: "/" }
+                          route: { cluster: fixture, timeout: 0s }
+                          typed_per_filter_config:
+                            aintercept.observe:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+                              disabled: true
+                            aintercept.enforce-v2:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+                              overrides: {}
                     - name: enforce
                       domains: ["enforce.test"]
                       routes:
@@ -51,6 +77,24 @@ static_resources:
                       message_timeout: 30s
                       request_attributes: ["source.address"]
                       processing_mode: { request_header_mode: SEND, response_header_mode: SEND, request_body_mode: FULL_DUPLEX_STREAMED, response_body_mode: FULL_DUPLEX_STREAMED, request_trailer_mode: SEND, response_trailer_mode: SEND }
+                  - name: aintercept.observe-v2
+                    disabled: true
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      grpc_service: { envoy_grpc: { cluster_name: observer_v2 } }
+                      observability_mode: true
+                      failure_mode_allow: true
+                      request_attributes: ["source.address"]
+                      processing_mode: { request_header_mode: SEND, response_header_mode: SEND, request_body_mode: STREAMED, response_body_mode: STREAMED, request_trailer_mode: SKIP, response_trailer_mode: SKIP }
+                  - name: aintercept.enforce-v2
+                    disabled: true
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      grpc_service: { envoy_grpc: { cluster_name: observer_v2 } }
+                      failure_mode_allow: false
+                      message_timeout: 30s
+                      request_attributes: ["source.address"]
+                      processing_mode: { request_header_mode: SEND, response_header_mode: SEND, request_body_mode: FULL_DUPLEX_STREAMED, response_body_mode: FULL_DUPLEX_STREAMED, request_trailer_mode: SEND, response_trailer_mode: SEND }
                   - name: envoy.filters.http.router
                     typed_config: { "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router }
   clusters:
@@ -64,4 +108,11 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config: { http2_protocol_options: {} }
       load_assignment: { cluster_name: observer, endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: observer, port_value: 9000 } } } }] }] }
+    - name: observer_v2
+      type: STRICT_DNS
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config: { http2_protocol_options: {} }
+      load_assignment: { cluster_name: observer_v2, endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: observer-v2, port_value: 9000 } } } }] }] }
 admin: { address: { socket_address: { address: 0.0.0.0, port_value: 9901 } } }

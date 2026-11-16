@@ -1,5 +1,7 @@
 // Package interceptor is the observer's client for a customer's Interceptor
-// service (interceptor/v1): the control-plane hook. See docs/INTERCEPTOR.md.
+// service: the control-plane hook. See docs/INTERCEPTOR.md. A deployment
+// speaks one contract: interceptor/v1 (the default), or interceptor/v2, which
+// hands over each call's new messages instead of bodies and events (v2.go).
 //
 // Two ways to call it, matching the two modes:
 //
@@ -10,6 +12,9 @@
 //   - Decide calls OnCallStart / OnMessage synchronously, within the deadline,
 //     for the enforcing filter. A failure or a missed deadline becomes Deny
 //     (fail closed) unless OnError is "allow".
+//
+// With v2, ObserveStart, DecideStart and Complete speak v2 (the same Call),
+// and ObserveRequest / DecideRequest replace the Message callbacks.
 //
 // Every verdict, in both modes, is reported through the record callback (a
 // verdict row in AIntercept's own stream) and attached to the call's
@@ -35,6 +40,8 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
 
@@ -42,9 +49,16 @@ import (
 type Config struct {
 	// Endpoint is the Interceptor's gRPC address, host:port.
 	Endpoint string
-	// Content enables OnMessage: request and response bodies go to the
-	// Interceptor. Independent of what AIntercept records.
+	// Contract is the interface the Interceptor implements: "v1" (default) or
+	// "v2".
+	Contract string
+	// Content enables the content callbacks: OnMessage (v1: request and
+	// response bodies), OnRequest (v2: each call's new messages). Independent
+	// of what AIntercept records.
 	Content bool
+	// InlineLimit (v2) is the size over which a part's content goes by
+	// reference (default convo.DefaultInlineLimit, 64 KiB).
+	InlineLimit int
 	// Deadline bounds each enforce-mode callback (default 50 ms).
 	Deadline time.Duration
 	// ObserveTimeout bounds each observe-mode and OnCallComplete call
@@ -97,6 +111,7 @@ type Client struct {
 	cfg    Config
 	conn   *grpc.ClientConn
 	api    pb.InterceptorClient
+	api2   pb2.InterceptorClient // contract v2
 	record func(callID string, v events.Verdict)
 
 	queues []chan job
@@ -105,20 +120,21 @@ type Client struct {
 	mu       sync.Mutex
 	verdicts map[string]*callVerdicts
 
-	queued, dropped, delivered, failed, decided, decideFailed atomic.Uint64
+	queued, dropped, delivered, failed, decided, decideFailed, unparsed atomic.Uint64
 }
 
 type job struct {
 	callID string
 	start  *pb.CallStart
 	msg    *pb.Message
+	req    *Request // v2: OnRequest
 	rec    *pb.CallRecord
 	// final marks the record that ends the call (its verdicts can go).
 	final bool
 }
 
 type callVerdicts struct {
-	list []*pb.RecordedVerdict
+	list []events.Verdict
 	seen time.Time
 }
 
@@ -144,6 +160,13 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 	}
 	if cfg.Workers <= 0 {
 		cfg.Workers = 8
+	}
+	switch cfg.Contract {
+	case "":
+		cfg.Contract = "v1"
+	case "v1", "v2":
+	default:
+		return nil, fmt.Errorf("interceptor: contract must be v1 or v2, not %q", cfg.Contract)
 	}
 	switch cfg.OnError {
 	case "":
@@ -173,7 +196,7 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 		record = func(string, events.Verdict) {}
 	}
 	c := &Client{
-		cfg: cfg, conn: conn, api: pb.NewInterceptorClient(conn), record: record,
+		cfg: cfg, conn: conn, api: pb.NewInterceptorClient(conn), api2: pb2.NewInterceptorClient(conn), record: record,
 		verdicts: map[string]*callVerdicts{},
 	}
 	c.queues = make([]chan job, cfg.Workers)
@@ -211,8 +234,18 @@ func transportCredentials(cfg Config) (credentials.TransportCredentials, error) 
 	return credentials.NewTLS(tc), nil
 }
 
-// Content reports whether OnMessage is enabled.
+// Content reports whether the content callbacks are enabled.
 func (c *Client) Content() bool { return c != nil && c.cfg.Content }
+
+// V2 reports whether the Interceptor implements contract v2.
+func (c *Client) V2() bool { return c != nil && c.cfg.Contract == "v2" }
+
+// Parser parses requests for OnRequest, with the deployment's inline limit.
+func (c *Client) Parser() convo.Parser { return convo.Parser{InlineLimit: c.cfg.InlineLimit} }
+
+// Unparsed counts a request (or client WebSocket message) v2 couldn't read:
+// it went upstream untouched, without OnRequest.
+func (c *Client) Unparsed() { c.unparsed.Add(1) }
 
 // Close drains the queues (bounded by ObserveTimeout per call) and closes the
 // connection.
@@ -239,9 +272,10 @@ func (c *Client) ObserveStart(s *pb.CallStart) {
 	c.enqueue(job{callID: s.GetCall().GetCallId(), start: s})
 }
 
-// ObserveMessage queues OnMessage (observe mode). No-op without content.
+// ObserveMessage queues OnMessage (observe mode). No-op without content, and
+// with v2.
 func (c *Client) ObserveMessage(m *pb.Message) {
-	if c.Content() {
+	if c.Content() && !c.V2() {
 		c.enqueue(job{callID: m.GetCall().GetCallId(), msg: m})
 	}
 }
@@ -279,6 +313,18 @@ func (c *Client) deliver(j job) {
 	defer cancel()
 	var err error
 	switch {
+	case j.start != nil && c.V2():
+		t := time.Now()
+		var v *pb2.CallVerdict
+		if v, err = c.api2.OnCallStart(ctx, StartV2(j.start)); err == nil {
+			c.noteStart2(j.callID, "observe", v, false, time.Since(t))
+		}
+	case j.req != nil:
+		err = c.onRequestObserved(ctx, j.req)
+	case j.rec != nil && c.V2():
+		rec := convert(j.rec, &pb2.CallRecord{})
+		rec.Verdicts = recordedV2(c.verdictsFor(j.callID, j.final))
+		_, err = c.api2.OnCallComplete(ctx, rec)
 	case j.start != nil:
 		t := time.Now()
 		var v *pb.Verdict
@@ -292,7 +338,7 @@ func (c *Client) deliver(j job) {
 			c.note(j.callID, "message", "observe", v, false, time.Since(t))
 		}
 	case j.rec != nil:
-		j.rec.Verdicts = c.verdictsFor(j.callID, j.final)
+		j.rec.Verdicts = recordedV1(c.verdictsFor(j.callID, j.final))
 		_, err = c.api.OnCallComplete(ctx, j.rec)
 	}
 	if err != nil {
@@ -308,6 +354,9 @@ func (c *Client) deliver(j job) {
 
 // DecideStart calls OnCallStart and waits for the verdict (enforce mode).
 func (c *Client) DecideStart(ctx context.Context, s *pb.CallStart) Decision {
+	if c.V2() {
+		return c.decideStart2(ctx, s)
+	}
 	return c.decide(ctx, s.GetCall().GetCallId(), "call_start", func(ctx context.Context) (*pb.Verdict, error) {
 		return c.api.OnCallStart(ctx, s)
 	})
@@ -327,21 +376,26 @@ func (c *Client) decide(parent context.Context, callID, callback string, call fu
 	v, err := call(ctx)
 	took := time.Since(t)
 	if err != nil {
-		c.decideFailed.Add(1)
-		applied := c.cfg.OnError == "deny"
-		c.store(callID, events.Verdict{
-			Callback: callback, Action: "error", Applied: applied, Mode: "enforce",
-			Reason: err.Error(), LatencyMS: took.Milliseconds(),
-		})
-		if applied {
-			return Decision{Action: Deny, Reason: "interceptor unavailable", HTTPStatus: 503}
-		}
-		return Decision{Action: Allow}
+		return c.fail(callID, callback, "", err, took)
 	}
 	c.decided.Add(1)
 	d := decisionOf(v, callback)
 	c.note(callID, callback, "enforce", v, true, took)
 	return d
+}
+
+// fail records an enforce-mode failure and applies onError.
+func (c *Client) fail(callID, callback, messageID string, err error, took time.Duration) Decision {
+	c.decideFailed.Add(1)
+	applied := c.cfg.OnError == "deny"
+	c.store(callID, events.Verdict{
+		Callback: callback, Action: "error", Applied: applied, Mode: "enforce",
+		Reason: err.Error(), LatencyMS: took.Milliseconds(), MessageID: messageID,
+	})
+	if applied {
+		return Decision{Action: Deny, Reason: "interceptor unavailable", HTTPStatus: 503}
+	}
+	return Decision{Action: Allow}
 }
 
 func decisionOf(v *pb.Verdict, callback string) Decision {
@@ -384,10 +438,6 @@ func (c *Client) note(callID, callback, mode string, v *pb.Verdict, applied bool
 // store reports a verdict and keeps it for the call's CallRecord.
 func (c *Client) store(callID string, v events.Verdict) {
 	c.record(callID, v)
-	rv := &pb.RecordedVerdict{Callback: v.Callback, Action: v.Action, Applied: v.Applied, Reason: v.Reason}
-	for k, val := range v.Annotations {
-		rv.Annotations = append(rv.Annotations, &pb.Annotation{Key: k, Value: val})
-	}
 	now := time.Now()
 	c.mu.Lock()
 	cv := c.verdicts[callID]
@@ -396,13 +446,13 @@ func (c *Client) store(callID string, v events.Verdict) {
 		c.verdicts[callID] = cv
 		c.sweepLocked(now)
 	}
-	cv.list = append(cv.list, rv)
+	cv.list = append(cv.list, v)
 	cv.seen = now
 	c.mu.Unlock()
 }
 
 // verdictsFor returns the call's verdicts so far; final releases them.
-func (c *Client) verdictsFor(callID string, final bool) []*pb.RecordedVerdict {
+func (c *Client) verdictsFor(callID string, final bool) []events.Verdict {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	cv := c.verdicts[callID]
@@ -413,6 +463,18 @@ func (c *Client) verdictsFor(callID string, final bool) []*pb.RecordedVerdict {
 		delete(c.verdicts, callID)
 	}
 	return cv.list
+}
+
+func recordedV1(vs []events.Verdict) []*pb.RecordedVerdict {
+	var out []*pb.RecordedVerdict
+	for _, v := range vs {
+		rv := &pb.RecordedVerdict{Callback: v.Callback, Action: v.Action, Applied: v.Applied, Reason: v.Reason}
+		for k, val := range v.Annotations {
+			rv.Annotations = append(rv.Annotations, &pb.Annotation{Key: k, Value: val})
+		}
+		out = append(out, rv)
+	}
+	return out
 }
 
 // verdictTTL bounds how long a call's verdicts wait for its final record (a
@@ -433,6 +495,7 @@ func (c *Client) sweepLocked(now time.Time) {
 // Stats are the client's counters, for the observer's /stats.
 type Stats struct {
 	Endpoint     string `json:"endpoint"`
+	Contract     string `json:"contract"`
 	Content      bool   `json:"content"`
 	Queued       uint64 `json:"queued"`
 	Dropped      uint64 `json:"dropped"`
@@ -440,13 +503,16 @@ type Stats struct {
 	Failed       uint64 `json:"failed"`
 	Decided      uint64 `json:"decided"`
 	DecideFailed uint64 `json:"decide_failed"`
+	// Unparsed (v2): requests that went upstream untouched, without OnRequest.
+	Unparsed uint64 `json:"unparsed"`
 }
 
 // Stats returns the counters.
 func (c *Client) Stats() Stats {
 	return Stats{
-		Endpoint: c.cfg.Endpoint, Content: c.cfg.Content,
+		Endpoint: c.cfg.Endpoint, Contract: c.cfg.Contract, Content: c.cfg.Content,
 		Queued: c.queued.Load(), Dropped: c.dropped.Load(), Delivered: c.delivered.Load(),
 		Failed: c.failed.Load(), Decided: c.decided.Load(), DecideFailed: c.decideFailed.Load(),
+		Unparsed: c.unparsed.Load(),
 	}
 }

@@ -19,14 +19,21 @@ cloud: digitalocean
 interceptionMode: content-free
 
 # ── Interceptor (the control-plane hook) ─────────────────────────────────────
-# A customer's gRPC service implementing interceptor/v1 (docs/INTERCEPTOR.md)
-# receives every call: OnCallStart, OnMessage (with content on) and
-# OnCallComplete. Observe mode (everywhere, by default) never touches
+# A customer's gRPC service implementing interceptor/v1 or v2
+# (docs/INTERCEPTOR.md) receives every call: OnCallStart, its content (with
+# content on: v1's OnMessage, v2's OnRequest) and OnCallComplete. Observe mode (everywhere, by default) never touches
 # traffic; hosts and paths listed under `enforce` go through the enforcing
 # filter, where the Interceptor's verdicts are applied.
 interceptor:
   # host:port of the Interceptor. Empty: no Interceptor.
   endpoint: ""
+  # The contract it implements: v1 (bodies and streamed events) or v2 (each
+  # call's new messages, in one shape for every provider; responses aren't
+  # sent). docs/INTERCEPTOR_V2.md.
+  contract: v1
+  # v2: a message part larger than this (bytes) is sent by reference (size and
+  # preview; the Interceptor can Fetch it).
+  inlineLimitBytes: 65536
   # Send request and response bodies to the Interceptor (OnMessage). Separate
   # from interceptionMode: the Interceptor can act on bodies AIntercept doesn't
   # record.

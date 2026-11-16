@@ -15,6 +15,10 @@ service decides.
 - **Building one?** [`BUILDING_AN_INTERCEPTOR.md`](BUILDING_AN_INTERCEPTOR.md)
   walks through it end to end: the code, local testing through a real Envoy,
   packaging, deployment, Helm wiring, and the observe-then-enforce rollout.
+- **Two contracts.** This page is v1 (`interceptor.contract: v1`, the
+  default): the wire, body by body and event by event. v2 (below, and
+  [`INTERCEPTOR_V2.md`](INTERCEPTOR_V2.md)) hands over only each call's new
+  messages, in one shape for every provider.
 
 ## The interface
 
@@ -105,6 +109,55 @@ release without re-compressing. It removes `accept-encoding` from requests, and
 isn't negotiated. A response that arrives compressed anyway, or is larger than
 32 MiB, is released unevaluated and counted.
 
+## Contract v2: the new messages of each call
+
+`interceptor.contract: v2` (observer: `INTERCEPTOR_CONTRACT=v2`) switches the
+deployment to `aintercept/interceptor/v2/interceptor.proto`. Observe, enforce,
+`onError`, deadlines and verdict rows work as above; what changes is the
+content:
+
+```proto
+service Interceptor {
+  rpc OnCallStart(CallStart) returns (CallVerdict);          // as v1: who, which client, which model
+  rpc OnRequest(RequestMessages) returns (RequestVerdict);   // the call's new messages (content on)
+  rpc OnToolCall(ResponseMessage) returns (MessageVerdict);  // declared; not called yet
+  rpc OnCallComplete(CallRecord) returns (Ack);              // as v1
+}
+```
+
+- **Only what's new.** `OnRequest` carries the messages a call adds (a prompt,
+  or tool results), not the history every call resends: `ConvMessage`s with
+  an id, role, index and parts (text, media, tool call, tool result, opaque),
+  the same for Anthropic Messages, OpenAI Responses (HTTP and Codex's
+  WebSocket) and Chat Completions.
+- **Message ids** are stable within the session: a hash of the message's role
+  and content, chained to the id before it (the first to the session id, and
+  for a chained request to the response it continues). The same message has
+  the same id on every call, whatever the client does with cache markers;
+  the same words said twice are two messages. A part's id is
+  `<message id>/<position>`.
+- **Large parts by reference.** A part over `inlineLimitBytes` (default 64 KiB)
+  comes with its size and a 1 KiB preview, not its content; when a call adds
+  many large parts, the largest go by reference until the message is under
+  3 MiB. Answer **Fetch** with part ids to get `OnRequest` again with those
+  parts inline (once per call; a second Fetch is an error).
+- **Answers, per message.** Accept (the default), or **Replace** with the
+  message changed: text, a tool result's text, a tool call's arguments (JSON).
+  Every part comes back by id, in order; media and opaque parts unchanged.
+  AIntercept writes your change back in the request's own format, in place:
+  every other byte goes upstream as sent. A Replace it can't apply is an
+  error (`onError`). **Respond** is in the contract but not supported yet: it
+  is treated as Accept and recorded as `respond_unsupported`.
+- **Requests it can't read** (another endpoint, a side call like a token
+  count, a body over the buffer) go upstream untouched without `OnRequest`,
+  and are counted (`/stats`: `interceptor.unparsed`).
+- **Responses aren't sent.** They stream to the client untouched.
+- Verdict rows are as v1's, with callback `request` and the message's
+  `message_id`.
+
+`aintercept/examples/rabbit` is the silly rabbit on v2, built into the image as
+`/rabbit-interceptor`; `make test-interceptor` runs it through a real Envoy.
+
 ## Deploying
 
 Helm values:
@@ -112,7 +165,9 @@ Helm values:
 ```yaml
 interceptor:
   endpoint: my-interceptor.policy.svc:9100   # host:port of your service
-  content: true                              # OnMessage (bodies)
+  contract: v1                               # v1 | v2 (the new messages of each call)
+  inlineLimitBytes: 65536                    # v2: larger parts go by reference
+  content: true                              # OnMessage (v1) / OnRequest (v2)
   deadlineMs: 50                             # enforce: per callback
   onError: deny                              # enforce: deny (fail closed) | allow
   enforce:                                   # empty: observe only
@@ -129,7 +184,8 @@ interceptor:
   tokenSecret: interceptor-token             # key `token`, sent as a Bearer token
 ```
 
-- **Without the chart:** set the observer's environment: `INTERCEPTOR_ENDPOINT`, `INTERCEPTOR_CONTENT`,
+- **Without the chart:** set the observer's environment: `INTERCEPTOR_ENDPOINT`,
+  `INTERCEPTOR_CONTRACT`, `INTERCEPTOR_INLINE_LIMIT_BYTES`, `INTERCEPTOR_CONTENT`,
   `INTERCEPTOR_DEADLINE_MS`, `INTERCEPTOR_ON_ERROR`, `INTERCEPTOR_TLS`,
   `INTERCEPTOR_TLS_CA_FILE`, `INTERCEPTOR_TLS_CERT_FILE`,
   `INTERCEPTOR_TLS_KEY_FILE`, `INTERCEPTOR_TLS_SERVER_NAME`, `INTERCEPTOR_TOKEN`,
@@ -165,8 +221,8 @@ AIntercept's raw stream:
   `error: "denied by interceptor: …"`;
 - the same verdicts reach your service on the call's `CallRecord`.
 
-The observer's `/stats` has an `interceptor` block: queued, dropped,
-delivered, failed, decided, decide_failed.
+The observer's `/stats` has an `interceptor` block: contract, queued, dropped,
+delivered, failed, decided, decide_failed, and (v2) unparsed.
 
 ## The example: redact "silly clown", and the silly rabbit
 
