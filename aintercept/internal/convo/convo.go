@@ -62,6 +62,9 @@ type Request struct {
 	// (Claude Code's message threads, previous_response_id), so it carries only
 	// what's new.
 	Chained bool
+	// Prev is the response a chained request continues: its
+	// previous_response_id, or its thread's previous_message_id.
+	Prev string
 	// Body is the request body the spans point into.
 	Body []byte
 }
@@ -211,17 +214,19 @@ func (p Parser) parse(format string, body []byte) (Request, bool) {
 		var thread struct {
 			PreviousMessageID string `json:"previous_message_id"`
 		}
-		r.Chained = top["thread"].kind() == '{' && json.Unmarshal(top["thread"].raw, &thread) == nil && thread.PreviousMessageID != ""
+		if top["thread"].kind() == '{' && json.Unmarshal(top["thread"].raw, &thread) == nil {
+			r.Prev = thread.PreviousMessageID
+		}
 	case FormatResponses:
 		ok = b.responses(top)
-		prev, _ := top["previous_response_id"].str()
-		r.Chained = prev != ""
+		r.Prev, _ = top["previous_response_id"].str()
 	case FormatChat:
 		ok = b.chat(top)
 	}
 	if !ok {
 		return Request{}, false
 	}
+	r.Chained = r.Prev != ""
 	r.Messages = b.msgs
 	from := b.cut
 	if r.Chained {

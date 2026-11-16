@@ -29,6 +29,10 @@ import (
 //     With content on, enforce asks upstream for uncompressed responses and
 //     no WebSocket compression, so verdicts never need re-compressing.
 //
+// With contract v2 and content, the request's new messages go to OnRequest
+// instead (a Replace is put back in place in the body, or in a Codex
+// WebSocket's response.create), and responses pass straight through.
+//
 // Recording is unchanged: the same observation events are emitted as in
 // observe mode, plus each verdict.
 
@@ -182,7 +186,11 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 		return srv.deny(st, d)
 	}
 	content := srv.enforcingContent(st)
+	requests := srv.enforcingRequests(st)
 	var remove []string
+	if requests && st.wsRequested {
+		remove = append(remove, "sec-websocket-extensions") // client messages are re-framed
+	}
 	if content {
 		// Ask for responses the observer can read and release without
 		// re-compressing them.
@@ -196,6 +204,20 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 		return []*extprocv3.ProcessingResponse{headersResponse(true, remove)}
 	}
 	fwd := body
+	if requests && len(body) > 0 {
+		plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"])
+		if err != nil {
+			srv.ic.Unparsed()
+		} else if r, ok := srv.parseRequest(st, plain); ok {
+			switch d := srv.decideRequest(st, r); d.Action {
+			case interceptor.Replace:
+				fwd = d.Payload
+				remove = append(remove, "content-length", "content-encoding")
+			case interceptor.Deny:
+				return srv.deny(st, d)
+			}
+		}
+	}
 	if content && len(body) > 0 {
 		plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"])
 		if err != nil {
@@ -217,7 +239,7 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 func (srv *Server) enforceResponseHeaders(st *streamState, h *extprocv3.HttpHeaders) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	if st.ws != nil {
-		if srv.enforcingContent(st) {
+		if srv.enforcingContent(st) || srv.enforcingRequests(st) {
 			if st.ws.ext.Deflate {
 				// The server negotiated compression the client was never offered:
 				// messages can't be re-encoded, so they pass unevaluated.
@@ -309,7 +331,9 @@ func (srv *Server) enforceResponseBody(st *streamState, chunk []byte, eos bool) 
 }
 
 // enforceWS forwards a WebSocket body chunk: as is without content; with
-// content, message by message through OnMessage, re-framed.
+// content, message by message through OnMessage, re-framed. With v2, client
+// messages go through OnRequest (a response.create) and are re-framed; the
+// server's are decoded for recording and forwarded as they came.
 func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3.HttpBody) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	toServer := dir == events.DirInbound
@@ -321,6 +345,13 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		dec = e.wsUp
 	}
 	msgs, err := dec.Feed(b.GetBody())
+	v2 := srv.enforcingRequests(st)
+	if v2 && !toServer { // recorded, never held or changed
+		for _, m := range msgs {
+			srv.wsMessage(st, dir, m)
+		}
+		return []*extprocv3.ProcessingResponse{bodyResponse(false, b.GetBody(), b.GetEndOfStream())}
+	}
 	if err != nil {
 		return srv.wsDeny(st, toServer, interceptor.Decision{Reason: "Undecodable WebSocket frame."}, 1002)
 	}
@@ -334,7 +365,12 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		if m.Truncated {
 			return srv.wsDeny(st, toServer, interceptor.Decision{Reason: "WebSocket message too large to evaluate."}, 1009)
 		}
-		d := srv.decideMessage(st, dir, wsKind(m.Opcode), m.Payload, "", "")
+		var d interceptor.Decision
+		if !v2 {
+			d = srv.decideMessage(st, dir, wsKind(m.Opcode), m.Payload, "", "")
+		} else if r, ok := srv.parseWSRequest(st, m); ok {
+			d = srv.decideRequest(st, r)
+		}
 		switch d.Action {
 		case interceptor.Replace:
 			out = append(out, wsframe.Encode(m.Opcode, d.Payload, toServer)...)

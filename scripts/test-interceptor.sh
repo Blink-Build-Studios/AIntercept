@@ -2,7 +2,8 @@
 # End-to-end test of the Interceptor (docs/INTERCEPTOR.md) through a real
 # Envoy: builds and starts test/interceptor's stack (Envoy with the observing
 # and enforcing filters, the observer, the example redact Interceptor, the
-# fixture), runs aintercept/internal/e2e against it, and tears it down.
+# fixture, and a second observer on contract v2 with the example rabbit
+# Interceptor), runs aintercept/internal/e2e against it, and tears it down.
 #   KEEP=1 leaves the stack running.
 #   INTERCEPTOR_COMPOSE_OVERRIDE=<compose file> runs your own Interceptor as the
 #   `redact` service instead (path relative to the repo root; the tests expect

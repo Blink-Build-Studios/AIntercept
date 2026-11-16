@@ -92,7 +92,7 @@ func (srv *Server) wsMessage(st *streamState, dir events.Direction, m wsframe.Me
 		return // ping / pong
 	}
 	if !m.Truncated {
-		srv.observeWSMessage(st, dir, m.Opcode, m.Payload)
+		srv.observeWSMessage(st, dir, m)
 	}
 	if m.Truncated {
 		ws.conn.TruncatedMessages++

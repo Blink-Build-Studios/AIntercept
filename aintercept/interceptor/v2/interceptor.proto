@@ -1,0 +1,349 @@
+// The Interceptor interface, v2: one message at a time
+// (docs/INTERCEPTOR_V2.md).
+//
+// The customer runs a gRPC server implementing Interceptor; AIntercept's
+// observer is the client. A deployment picks v1 or v2
+// (interceptor.contract); v1 is the default.
+//
+// v2 hands the Interceptor the conversation, not the wire: OnRequest carries
+// only the messages a call adds (not the history every call resends), in one
+// shape for Anthropic Messages, OpenAI Responses (HTTP and Codex's
+// WebSocket) and Chat Completions. Its answers come back per message, and
+// AIntercept puts them back on the wire in the provider's format.
+//
+//   observe  Callbacks are delivered asynchronously; answers are recorded,
+//            never applied.
+//   enforce  OnCallStart and OnRequest are in the request path, within the
+//            deadline; answers are applied. On a failure or a missed
+//            deadline the call is refused (fail closed; configurable).
+//
+// Content: OnRequest is only called when the deployment enables Interceptor
+// content. Responses stream to the client untouched.
+//
+// See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
+syntax = "proto3";
+
+package aintercept.interceptor.v2;
+
+option go_package = "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2;interceptorv2";
+
+service Interceptor {
+  // The request has arrived and been parsed; nothing has gone upstream yet in
+  // enforce mode. Accept (or Respond: not yet supported, treated as Accept).
+  rpc OnCallStart(CallStart) returns (CallVerdict);
+
+  // The call's new messages, before they go upstream. Per message: Accept or
+  // Replace. Or Fetch parts sent by reference first. Only called with
+  // Interceptor content on, for requests AIntercept can read.
+  rpc OnRequest(RequestMessages) returns (RequestVerdict);
+
+  // Each tool call in the model's reply, held whole. Declared for the
+  // contract; not called yet.
+  rpc OnToolCall(ResponseMessage) returns (MessageVerdict);
+
+  // The call has ended: the normalized per-call record. Always asynchronous.
+  rpc OnCallComplete(CallRecord) returns (Ack);
+}
+
+// ── The call (as in v1) ──────────────────────────────────────────────────────
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  // Answers are recorded, never applied.
+  MODE_OBSERVE = 1;
+  // Answers are applied; AIntercept waits for them.
+  MODE_ENFORCE = 2;
+}
+
+enum Transport {
+  TRANSPORT_UNSPECIFIED = 0;
+  TRANSPORT_HTTP = 1;
+  TRANSPORT_WEBSOCKET = 2;
+}
+
+// Call identifies one intercepted call and is repeated on every callback.
+message Call {
+  // Stable for the life of the call; the correlation_id on AIntercept's own
+  // records.
+  string call_id = 1;
+  Mode mode = 2;
+  Transport transport = 3;
+  string host = 4;
+  string method = 5;
+  // Path including the query string, as the client sent it.
+  string path = 6;
+  // When AIntercept received the request headers.
+  int64 start_unix_nano = 7;
+  Identity identity = 8;
+  Client client = 9;
+}
+
+// Identity known from the call itself (no enrichment).
+message Identity {
+  // Salted, irreversible hash of the API key or bearer token, and its display
+  // fragment. Never the credential itself.
+  string key_hash = 1;
+  string key_hint = 2;
+  string ip = 3;
+  string account_id = 4;
+  string org_id = 5;
+  // The client installation and its session, when the client sends them.
+  string device_id = 6;
+  string session_id = 7;
+  string email = 8;
+}
+
+message Client {
+  // "claude_code", "codex", "" when unknown.
+  string product = 1;
+  string user_agent = 2;
+  map<string, string> headers = 3;
+}
+
+// CallStart: the parsed request, before it goes upstream.
+message CallStart {
+  Call call = 1;
+  // Request headers, with credentials redacted.
+  map<string, string> headers = 2;
+  RequestInfo request = 3;
+}
+
+message RequestInfo {
+  string model = 1;
+  string effort = 2;
+  bool stream = 3;
+  int32 max_tokens = 4;
+  repeated string tools_available = 5;
+  repeated string mcp_tools_available = 6;
+  bool prewarm = 7;
+  int32 attachments = 8;
+  int64 request_bytes = 9;
+}
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_USER = 1;
+  // The model: its reply, its reasoning, each tool call it made.
+  ROLE_ASSISTANT = 2;
+  // A tool call's result.
+  ROLE_TOOL = 3;
+}
+
+// ConvMessage is one turn of the conversation: a prompt, a reply, one tool
+// call, one tool result. System prompts, developer instructions and tool
+// catalogs aren't messages.
+message ConvMessage {
+  // Stable within the session: the same message has the same id on every
+  // call that resends it. A hash of its role and content, chained to the id
+  // of the message before it (the first is chained to the session, or, for a
+  // chained request, the response it continues).
+  string id = 1;
+  Role role = 2;
+  repeated Part parts = 3;
+  // Position in the request's messages, from 0. A chained request carries
+  // only the new messages, so there it counts from the first of them.
+  int32 index = 4;
+}
+
+// Part is one piece of a message.
+message Part {
+  oneof kind {
+    Text text = 1;
+    Media media = 2;
+    ToolCall tool_call = 3;
+    ToolResult tool_result = 4;
+    Opaque opaque = 5;
+  }
+  // "<message id>/<position in the message>": for Fetch and Replace.
+  string id = 10;
+  // By reference: the content is over the inline limit (default 64 KiB) and
+  // left out (text, arguments, data are empty); size and preview describe
+  // it. Fetch it to see the rest.
+  bool ref = 11;
+  // The content's size in bytes: the text (UTF-8), the arguments, the
+  // media's decoded bytes; for Opaque, its size in the request.
+  int64 size = 12;
+  // Ref only: the first 1 KiB of text; empty for binary media.
+  string preview = 13;
+}
+
+message Text {
+  string text = 1;
+}
+
+// An image, a file, audio.
+message Media {
+  // image/png, application/pdf, … ("" when the request doesn't say).
+  string media_type = 1;
+  // Sent by reference by the client (a URL or a file id): no bytes in the
+  // request.
+  string url = 2;
+  // Set when the media is part of a tool result.
+  string call_id = 3;
+  // The decoded bytes, when inline (or fetched).
+  bytes data = 4;
+}
+
+// The model asks to run a tool.
+message ToolCall {
+  string call_id = 1;
+  string name = 2;
+  // Its arguments as JSON (a custom tool's free-form input as a JSON string).
+  string arguments = 3;
+}
+
+// What the tool returned, as text.
+message ToolResult {
+  string call_id = 1;
+  string text = 2;
+  bool is_error = 3;
+}
+
+// Reasoning, encrypted content, anything AIntercept doesn't recognise:
+// present, never inspectable, never changed.
+message Opaque {}
+
+// ── OnRequest ────────────────────────────────────────────────────────────────
+
+message RequestMessages {
+  Call call = 1;
+  // The request's format: "anthropic_messages", "openai_responses",
+  // "openai_chat".
+  string format = 2;
+  // The request continues a response the provider keeps (Claude Code's
+  // message threads, previous_response_id): every message in it is new.
+  bool chained = 3;
+  // Only the messages this call adds, in order.
+  repeated ConvMessage messages = 4;
+  // How many messages the request holds, history included.
+  int32 total_messages = 5;
+  // The second call after a Fetch: the parts asked for have their content
+  // inline. There is one Fetch per call.
+  bool fetched = 6;
+}
+
+// The answer to OnRequest. Set one of: messages (or nothing: Accept all),
+// fetch, respond.
+message RequestVerdict {
+  // Per message, by id. A message not listed is accepted.
+  repeated MessageVerdict messages = 1;
+  // Call OnRequest again with these parts' content inline (up to 32 MiB
+  // each). Once per call: a second Fetch is an error.
+  Fetch fetch = 2;
+  // The client gets this text as the model's reply. Not supported yet: it is
+  // treated as Accept and recorded as "respond_unsupported".
+  Respond respond = 3;
+  // Recorded on AIntercept's records of the call, in both modes.
+  repeated Annotation annotations = 10;
+}
+
+// The answer for one message (OnRequest) or tool call (OnToolCall). Unset
+// action means Accept.
+message MessageVerdict {
+  string message_id = 1;
+  oneof action {
+    Accept accept = 2;
+    Replace replace = 3;
+    // OnToolCall only (not called yet). In OnRequest, as RequestVerdict.respond.
+    Respond respond = 4;
+  }
+  repeated Annotation annotations = 10;
+}
+
+// Forward unchanged.
+message Accept {}
+
+// Put this version of the message in place. Every part of the original comes
+// back, by id, in order: change text (a text part, a tool result's text, a
+// tool call's arguments as valid JSON); a by-reference part sent back still a
+// reference is unchanged. Media and opaque parts come back as they were. The
+// role is ignored. Anything else is an error.
+message Replace {
+  ConvMessage message = 1;
+}
+
+message Respond {
+  string text = 1;
+}
+
+message Fetch {
+  repeated string part_ids = 1;
+}
+
+// The answer to OnCallStart. Unset action means Accept.
+message CallVerdict {
+  oneof action {
+    Accept accept = 1;
+    // Not supported yet: treated as Accept, recorded as "respond_unsupported".
+    Respond respond = 2;
+  }
+  repeated Annotation annotations = 10;
+}
+
+// ── OnToolCall (declared; not called yet) ────────────────────────────────────
+
+message ResponseMessage {
+  Call call = 1;
+  ConvMessage message = 2;
+}
+
+// ── OnCallComplete (as in v1) ────────────────────────────────────────────────
+
+message Annotation {
+  string key = 1;
+  string value = 2;
+}
+
+// CallRecord: the normalized record of a finished call. A WebSocket
+// connection produces one per model turn (ws_turn 1, 2, …) and a final one
+// when it closes (ws_turn 0).
+message CallRecord {
+  Call call = 1;
+  RequestInfo request = 2;
+  ResponseInfo response = 3;
+  // The answers the Interceptor gave for this call, and whether they were
+  // applied (enforce) or only recorded (observe).
+  repeated RecordedVerdict verdicts = 4;
+  int64 end_unix_nano = 5;
+  int32 ws_turn = 6;
+  // How a Respond was delivered: "synthesized" or "rewritten". Not set yet.
+  string respond = 7;
+}
+
+message ResponseInfo {
+  int32 status = 1;
+  string model = 2;
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
+  int64 cache_read_tokens = 5;
+  int64 cache_write_tokens = 6;
+  int64 reasoning_tokens = 7;
+  string stop_reason = 8;
+  repeated ToolCount tool_calls = 9;
+  int64 ttfb_ms = 10;
+  int64 duration_ms = 11;
+  int64 response_bytes = 12;
+  string error = 13;
+}
+
+message ToolCount {
+  string name = 1;
+  int32 count = 2;
+}
+
+message RecordedVerdict {
+  // "call_start" or "request".
+  string callback = 1;
+  // "accept" (annotated), "replace", "respond_unsupported", or "error" when
+  // the Interceptor failed, timed out or gave an invalid answer.
+  string action = 2;
+  bool applied = 3;
+  string reason = 4;
+  repeated Annotation annotations = 5;
+  // The message the answer is for ("" for the call).
+  string message_id = 6;
+}
+
+message Ack {}

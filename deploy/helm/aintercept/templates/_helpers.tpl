@@ -144,6 +144,9 @@ runtime failure in-cluster.
 {{- if not (has (.onError | default "deny") (list "deny" "allow")) -}}
 {{- fail "interceptor.onError must be deny or allow" -}}
 {{- end -}}
+{{- if not (has (.contract | default "v1") (list "v1" "v2")) -}}
+{{- fail "interceptor.contract must be v1 or v2" -}}
+{{- end -}}
 {{- range .enforce -}}
 {{- if not (has .host (splitList "," (nospace $.Values.interception.allowlist))) -}}
 {{- fail (printf "interceptor.enforce host %q isn't in interception.allowlist" .host) -}}
