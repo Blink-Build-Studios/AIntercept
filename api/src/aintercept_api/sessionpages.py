@@ -211,6 +211,19 @@ def children_json(sid: str, kids: list[Row]) -> str | None:
     )
 
 
+def title_text(answer: str) -> str:
+    """A title call's answer as a label: the text, or newer Codex's `{"title": ...}` object's title."""
+    text = answer.strip()
+    if text.startswith("{"):
+        try:
+            v = json.loads(text)
+        except ValueError:
+            v = None
+        if isinstance(v, dict) and isinstance(v.get("title"), str):
+            return str(v["title"]).strip()
+    return text.strip('"')
+
+
 def session_row(s: Row, now: int, children: str | None, title_call: str | None) -> Row:
     """A `sessions` row as today's session_rows has it (with `live` as of now): what a page computes from the
     stored values (the agent, bypass %, live, Codex's limits), its children and its label (§6.1: its own
@@ -222,7 +235,7 @@ def session_row(s: Row, now: int, children: str | None, title_call: str | None) 
     r["children_json"] = children
     title = s["own_title"]
     if title is None and needs_title(s):
-        title = title_call.strip().strip('"') if title_call is not None else None
+        title = title_text(title_call) if title_call is not None else None
     text, source = (title, "title") if title else (f"Session {sid[:8]}", "none")
     r["label_text"] = r["label_text_alone"] = text
     r["label_source"] = r["label_source_alone"] = source
