@@ -13,12 +13,13 @@
 //
 //   observe  Callbacks are delivered asynchronously; answers are recorded,
 //            never applied.
-//   enforce  OnCallStart and OnRequest are in the request path, within the
-//            deadline; answers are applied. On a failure or a missed
-//            deadline the call is refused (fail closed; configurable).
+//   enforce  OnCallStart, OnRequest and OnToolCall are in the call's path,
+//            within the deadline; answers are applied. On a failure or a
+//            missed deadline the call is refused (fail closed; configurable).
 //
-// Content: OnRequest is only called when the deployment enables Interceptor
-// content. Responses stream to the client untouched.
+// Content: OnRequest and OnToolCall are only called when the deployment
+// enables Interceptor content. A reply's text streams to the client
+// untouched; each tool call in it is held until OnToolCall has answered.
 //
 // See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
 
@@ -655,7 +656,8 @@ type ConvMessage struct {
 	// Stable within the session: the same message has the same id on every
 	// call that resends it. A hash of its role and content, chained to the id
 	// of the message before it (the first is chained to the session, or, for a
-	// chained request, the response it continues).
+	// chained request, the response it continues). In OnToolCall, the tool
+	// call's own id (the provider's toolu_…, call_…).
 	Id    string  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Role  Role    `protobuf:"varint,2,opt,name=role,proto3,enum=aintercept.interceptor.v2.Role" json:"role,omitempty"`
 	Parts []*Part `protobuf:"bytes,3,rep,name=parts,proto3" json:"parts,omitempty"`
@@ -1274,8 +1276,8 @@ type RequestVerdict struct {
 	// Call OnRequest again with these parts' content inline (up to 32 MiB
 	// each). Once per call: a second Fetch is an error.
 	Fetch *Fetch `protobuf:"bytes,2,opt,name=fetch,proto3" json:"fetch,omitempty"`
-	// The client gets this text as the model's reply. Not supported yet: it is
-	// treated as Accept and recorded as "respond_unsupported".
+	// The client gets this text as the model's reply (Respond, below). The
+	// message answers are then ignored.
 	Respond *Respond `protobuf:"bytes,3,opt,name=respond,proto3" json:"respond,omitempty"`
 	// Recorded on AIntercept's records of the call, in both modes.
 	Annotations   []*Annotation `protobuf:"bytes,10,rep,name=annotations,proto3" json:"annotations,omitempty"`
@@ -1448,7 +1450,8 @@ type MessageVerdict_Replace struct {
 }
 
 type MessageVerdict_Respond struct {
-	// OnToolCall only (not called yet). In OnRequest, as RequestVerdict.respond.
+	// OnToolCall: the reply ends here with this text. In OnRequest, as
+	// RequestVerdict.respond.
 	Respond *Respond `protobuf:"bytes,4,opt,name=respond,proto3,oneof"`
 }
 
@@ -1497,9 +1500,10 @@ func (*Accept) Descriptor() ([]byte, []int) {
 
 // Put this version of the message in place. Every part of the original comes
 // back, by id, in order: change text (a text part, a tool result's text, a
-// tool call's arguments as valid JSON); a by-reference part sent back still a
-// reference is unchanged. Media and opaque parts come back as they were. The
-// role is ignored. Anything else is an error.
+// tool call's arguments as valid JSON; a custom tool's as a JSON string); a
+// by-reference part sent back still a reference is unchanged. Media and
+// opaque parts come back as they were. The role is ignored. Anything else is
+// an error.
 type Replace struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       *ConvMessage           `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -1544,6 +1548,14 @@ func (x *Replace) GetMessage() *ConvMessage {
 	return nil
 }
 
+// The client gets text as the model's reply, in the provider's format
+// (streamed if it asked for a stream), with zero usage. When the client keeps
+// the conversation (Anthropic Messages, Responses without
+// previous_response_id, Chat Completions) the reply is synthesized and the
+// call never goes upstream; when the provider keeps it (a chained request),
+// the request is rewritten so the model replies with exactly the text. At a
+// tool call, the call and the rest of the reply are replaced by the text.
+// The text can't be empty.
 type Respond struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
@@ -1716,7 +1728,9 @@ type CallVerdict_Accept struct {
 }
 
 type CallVerdict_Respond struct {
-	// Not supported yet: treated as Accept, recorded as "respond_unsupported".
+	// Not for a WebSocket's OnCallStart (its requests come later: answer
+	// them in OnRequest), nor a request AIntercept can't read: recorded, not
+	// applied.
 	Respond *Respond `protobuf:"bytes,2,opt,name=respond,proto3,oneof"`
 }
 
@@ -1724,6 +1738,9 @@ func (*CallVerdict_Accept) isCallVerdict_Action() {}
 
 func (*CallVerdict_Respond) isCallVerdict_Action() {}
 
+// One tool call in the model's reply: an ASSISTANT message with one ToolCall
+// part, its arguments inline up to 3 MiB (by reference beyond: there is no
+// Fetch for a tool call).
 type ResponseMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Call          *Call                  `protobuf:"bytes,1,opt,name=call,proto3" json:"call,omitempty"`
@@ -1841,7 +1858,8 @@ type CallRecord struct {
 	Verdicts    []*RecordedVerdict `protobuf:"bytes,4,rep,name=verdicts,proto3" json:"verdicts,omitempty"`
 	EndUnixNano int64              `protobuf:"varint,5,opt,name=end_unix_nano,json=endUnixNano,proto3" json:"end_unix_nano,omitempty"`
 	WsTurn      int32              `protobuf:"varint,6,opt,name=ws_turn,json=wsTurn,proto3" json:"ws_turn,omitempty"`
-	// How a Respond was delivered: "synthesized" or "rewritten". Not set yet.
+	// How a Respond was delivered: "synthesized" or "rewritten" ("" when the
+	// call wasn't answered with one, or in observe mode).
 	Respond       string `protobuf:"bytes,7,opt,name=respond,proto3" json:"respond,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2120,16 +2138,18 @@ func (x *ToolCount) GetCount() int32 {
 
 type RecordedVerdict struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// "call_start" or "request".
+	// "call_start", "request" or "tool_call".
 	Callback string `protobuf:"bytes,1,opt,name=callback,proto3" json:"callback,omitempty"`
-	// "accept" (annotated), "replace", "respond_unsupported", or "error" when
-	// the Interceptor failed, timed out or gave an invalid answer.
+	// "accept" (annotated), "replace", "respond", or "error" when the
+	// Interceptor failed, timed out or gave an invalid answer.
 	Action      string        `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
 	Applied     bool          `protobuf:"varint,3,opt,name=applied,proto3" json:"applied,omitempty"`
 	Reason      string        `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
 	Annotations []*Annotation `protobuf:"bytes,5,rep,name=annotations,proto3" json:"annotations,omitempty"`
-	// The message the answer is for ("" for the call).
-	MessageId     string `protobuf:"bytes,6,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// The message the answer is for ("" for the call; a tool call's id).
+	MessageId string `protobuf:"bytes,6,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// Respond, applied: "synthesized" or "rewritten".
+	RespondMode   string `protobuf:"bytes,7,opt,name=respond_mode,json=respondMode,proto3" json:"respond_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2202,6 +2222,13 @@ func (x *RecordedVerdict) GetAnnotations() []*Annotation {
 func (x *RecordedVerdict) GetMessageId() string {
 	if x != nil {
 		return x.MessageId
+	}
+	return ""
+}
+
+func (x *RecordedVerdict) GetRespondMode() string {
+	if x != nil {
+		return x.RespondMode
 	}
 	return ""
 }
@@ -2401,7 +2428,7 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x05error\x18\r \x01(\tR\x05error\"5\n" +
 	"\tToolCount\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x05R\x05count\"\xdf\x01\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"\x82\x02\n" +
 	"\x0fRecordedVerdict\x12\x1a\n" +
 	"\bcallback\x18\x01 \x01(\tR\bcallback\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x18\n" +
@@ -2409,7 +2436,8 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x06reason\x18\x04 \x01(\tR\x06reason\x12G\n" +
 	"\vannotations\x18\x05 \x03(\v2%.aintercept.interceptor.v2.AnnotationR\vannotations\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x06 \x01(\tR\tmessageId\"\x05\n" +
+	"message_id\x18\x06 \x01(\tR\tmessageId\x12!\n" +
+	"\frespond_mode\x18\a \x01(\tR\vrespondMode\"\x05\n" +
 	"\x03Ack*@\n" +
 	"\x04Mode\x12\x14\n" +
 	"\x10MODE_UNSPECIFIED\x10\x00\x12\x10\n" +

@@ -1,13 +1,19 @@
-// rabbit is a minimal Interceptor on contract v2 (docs/INTERCEPTOR_V2.md):
-// when a new message the user sends says "I'm a silly rabbit", it replaces
-// that text with an instruction asking the model for "Well, tricks are for
-// kids.". Everything else is accepted.
+// rabbit is a minimal Interceptor on contract v2 (docs/INTERCEPTOR_V2.md).
+// When the newest message the user sends says "I'm a silly rabbit", it
+// answers for the model: "Well, tricks are for kids." When it says "first we
+// bing", the answer is "then we bong". Everything else is accepted.
 //
 // v2 hands it only the messages each call adds, in one shape for Claude
 // Code, Codex (HTTP or WebSocket) and the OpenAI APIs, so there's no body to
 // parse and no history to skip: a rabbit earlier in the conversation is
-// never seen again. AIntercept puts the replaced message back in the
-// request, in the provider's format.
+// never seen again. A Respond reaches the client as the model's reply, in
+// the provider's format: synthesized when the client keeps the conversation,
+// or, when the provider does, by asking the model for exactly that text.
+//
+// Each tool call the model makes comes to OnToolCall before the client sees
+// it: one whose arguments say "first we bing" is answered "then we bong"
+// instead (the reply ends there), and "I'm a silly rabbit" in the arguments
+// is replaced with "Well, tricks are for kids.".
 //
 // It keeps gRPC's default 4 MiB receive limit: v2's messages stay small
 // whatever the conversation holds (large parts arrive by reference).
@@ -29,10 +35,17 @@ import (
 	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 )
 
-// The rabbit, with a straight or curly apostrophe, or none.
-var rabbit = regexp.MustCompile(`(?i)i['’]?m a silly rabbit`)
+// The rules: what the user says (a straight or curly apostrophe, or none),
+// and the answer.
+var (
+	rabbit = regexp.MustCompile(`(?i)i['’]?m a silly rabbit`)
+	bing   = regexp.MustCompile(`(?i)first we bing`)
+)
 
-const tricks = "Reply with exactly this sentence and nothing else: Well, tricks are for kids."
+const (
+	tricks = "Well, tricks are for kids."
+	bong   = "then we bong"
+)
 
 type server struct {
 	pb.UnimplementedInterceptorServer
@@ -45,37 +58,59 @@ func (server) OnCallStart(_ context.Context, s *pb.CallStart) (*pb.CallVerdict, 
 	return &pb.CallVerdict{}, nil
 }
 
+// answer is the reply a text gets ("" for none).
+func answer(s string) string {
+	switch {
+	case rabbit.MatchString(s):
+		return tricks
+	case bing.MatchString(s):
+		return bong
+	}
+	return ""
+}
+
 func (server) OnRequest(_ context.Context, r *pb.RequestMessages) (*pb.RequestVerdict, error) {
 	v := &pb.RequestVerdict{}
-	for _, m := range r.GetMessages() {
-		if m.GetRole() != pb.Role_ROLE_USER {
+	msgs := r.GetMessages()
+	for i := len(msgs) - 1; i >= 0; i-- { // the newest user message
+		if msgs[i].GetRole() != pb.Role_ROLE_USER {
 			continue
 		}
-		hit := false
-		for _, p := range m.GetParts() {
-			if t := p.GetText(); t != nil && rabbit.MatchString(t.GetText()) {
-				t.Text = rabbit.ReplaceAllString(t.GetText(), tricks)
-				hit = true
+		for _, p := range msgs[i].GetParts() {
+			if a := answer(p.GetText().GetText()); a != "" {
+				v.Respond = &pb.Respond{Text: a}
+				v.Annotations = []*pb.Annotation{{Key: "answered", Value: a}}
 			}
 		}
-		if hit {
-			// The message as it was, with its text changed: every part comes back.
-			v.Messages = append(v.Messages, &pb.MessageVerdict{
-				MessageId:   m.GetId(),
-				Action:      &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: m}},
-				Annotations: []*pb.Annotation{{Key: "answered", Value: "silly rabbit"}},
-			})
-		}
+		break
 	}
-	slog.Info("request", "call", r.GetCall().GetCallId(), "format", r.GetFormat(), "new", len(r.GetMessages()),
-		"of", r.GetTotalMessages(), "replaced", len(v.GetMessages()))
+	slog.Info("request", "call", r.GetCall().GetCallId(), "format", r.GetFormat(), "new", len(msgs),
+		"of", r.GetTotalMessages(), "respond", v.GetRespond().GetText())
+	return v, nil
+}
+
+func (server) OnToolCall(_ context.Context, r *pb.ResponseMessage) (*pb.MessageVerdict, error) {
+	m := r.GetMessage()
+	tc := m.GetParts()[0].GetToolCall()
+	v := &pb.MessageVerdict{MessageId: m.GetId()}
+	switch args := tc.GetArguments(); {
+	case bing.MatchString(args):
+		v.Action = &pb.MessageVerdict_Respond{Respond: &pb.Respond{Text: bong}}
+	case rabbit.MatchString(args):
+		// The call as it was, with its arguments changed (still valid JSON:
+		// the replacement has no quotes or backslashes).
+		tc.Arguments = rabbit.ReplaceAllString(args, tricks)
+		v.Action = &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: m}}
+	}
+	slog.Info("tool call", "call", r.GetCall().GetCallId(), "tool", tc.GetName(), "answered", v.GetAction() != nil)
 	return v, nil
 }
 
 func (server) OnCallComplete(_ context.Context, r *pb.CallRecord) (*pb.Ack, error) {
 	resp := r.GetResponse()
 	slog.Info("call complete", "call", r.GetCall().GetCallId(), "ws_turn", r.GetWsTurn(), "status", resp.GetStatus(),
-		"model", resp.GetModel(), "in", resp.GetInputTokens(), "out", resp.GetOutputTokens(), "verdicts", len(r.GetVerdicts()))
+		"model", resp.GetModel(), "in", resp.GetInputTokens(), "out", resp.GetOutputTokens(), "verdicts", len(r.GetVerdicts()),
+		"respond", r.GetRespond())
 	return &pb.Ack{}, nil
 }
 

@@ -16,7 +16,8 @@ import (
 //
 // With contract v2 the content callback is OnRequest: each model request's
 // new messages (HTTP bodies and Codex's WebSocket response.create), parsed
-// by convo. Responses aren't sent.
+// by convo. Responses aren't sent; in enforce, their tool calls go to
+// OnToolCall (respond.go).
 
 // interceptState is a stream's Interceptor bookkeeping, shared by both modes.
 type interceptState struct {
@@ -30,6 +31,8 @@ type interceptState struct {
 	respTrunc bool
 	respSSE   bool
 	respKnown bool
+	// v2 enforce: the request's format, when its reply's tool calls are held.
+	holdTools string
 }
 
 // interceptContentCap bounds a whole body sent to OnMessage in observe mode.

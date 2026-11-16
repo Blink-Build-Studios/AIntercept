@@ -120,7 +120,7 @@ content:
 service Interceptor {
   rpc OnCallStart(CallStart) returns (CallVerdict);          // as v1: who, which client, which model
   rpc OnRequest(RequestMessages) returns (RequestVerdict);   // the call's new messages (content on)
-  rpc OnToolCall(ResponseMessage) returns (MessageVerdict);  // declared; not called yet
+  rpc OnToolCall(ResponseMessage) returns (MessageVerdict);  // each tool call in a reply (enforce, content on)
   rpc OnCallComplete(CallRecord) returns (Ack);              // as v1
 }
 ```
@@ -146,17 +146,44 @@ service Interceptor {
   Every part comes back by id, in order; media and opaque parts unchanged.
   AIntercept writes your change back in the request's own format, in place:
   every other byte goes upstream as sent. A Replace it can't apply is an
-  error (`onError`). **Respond** is in the contract but not supported yet: it
-  is treated as Accept and recorded as `respond_unsupported`.
+  error (`onError`).
+- **Respond** (`OnCallStart` or `OnRequest`, enforce): the client gets your
+  text as the model's reply, in its own format, streamed if it asked for a
+  stream, with zero usage. When the client keeps the conversation (Anthropic
+  Messages, Responses without `previous_response_id`, Chat Completions) the
+  reply is **synthesized** and the call never goes upstream; when the
+  provider keeps it (Claude Code's message threads, `previous_response_id`)
+  the request is **rewritten** so the model replies with exactly your text.
+  A request AIntercept can't read, or a WebSocket's `OnCallStart` (its
+  requests come later), can't be answered: the Respond is recorded, not
+  applied.
 - **Requests it can't read** (another endpoint, a side call like a token
   count, a body over the buffer) go upstream untouched without `OnRequest`,
   and are counted (`/stats`: `interceptor.unparsed`).
-- **Responses aren't sent.** They stream to the client untouched.
-- Verdict rows are as v1's, with callback `request` and the message's
-  `message_id`.
+- **Tool calls are held whole** (enforce, content on). A reply's text streams
+  to the client untouched; each tool call (Anthropic `tool_use` blocks,
+  Responses `function_call` and `custom_tool_call` items, over HTTP or
+  Codex's WebSocket) is held from its first event until it's complete, then
+  `OnToolCall` decides: Accept releases it as it was, Replace with new
+  arguments, Respond ends the reply with your text instead (the agent stops).
+  A non-streamed reply is decided whole before it's released. The cost: the
+  client sees each tool call when it's complete plus one `OnToolCall` round
+  trip, instead of piece by piece; text isn't delayed. To read replies,
+  enforce removes `accept-encoding` from these requests. An Interceptor that
+  doesn't implement `OnToolCall` accepts every call (AIntercept stops
+  holding them after the first `UNIMPLEMENTED`).
+- Verdict rows are as v1's, with callback `request` (or `tool_call`), the
+  message's `message_id` (a tool call's own id), and for an applied Respond
+  `respond_mode`: `synthesized` or `rewritten`. A synthesized call still gets
+  its complete row (status 200, zero usage); `CallRecord.respond` says which
+  was used.
 
-`aintercept/examples/rabbit` is the silly rabbit on v2, built into the image as
-`/rabbit-interceptor`; `make test-interceptor` runs it through a real Envoy.
+`aintercept/examples/rabbit` is the silly rabbit on v2, answered with Respond
+("I'm a silly rabbit" gets "Well, tricks are for kids.", "first we bing" gets
+"then we bong"), and the same rules on tool calls; it's built into the image
+as `/rabbit-interceptor`, and `make test-interceptor` runs it through a real
+Envoy. [`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md) walks
+through building one.
 
 ## Deploying
 

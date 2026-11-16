@@ -191,29 +191,264 @@ func TestV2InvalidAnswers(t *testing.T) {
 	}
 }
 
-// Respond is step 3: until then it's Accept, recorded as respond_unsupported.
-func TestV2RespondIsAcceptForNow(t *testing.T) {
+func respond(text string) *pb2.Respond { return &pb2.Respond{Text: text} }
+
+// Respond at call start: the decision carries the text; its row waits for
+// the observer to say how it was delivered (or that it couldn't be).
+func TestV2RespondAtCallStart(t *testing.T) {
+	f := &interceptortest.FakeV2{Start: func(*pb2.CallStart) *pb2.CallVerdict {
+		return &pb2.CallVerdict{Action: &pb2.CallVerdict_Respond{Respond: respond("no")}, Annotations: []*pb2.Annotation{{Key: "rule", Value: "r"}}}
+	}}
+	var rw rows
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+	defer c.Close()
+	d := c.DecideStart(context.Background(), &pb.CallStart{Call: call})
+	if d.Action != interceptor.Respond || d.Text != "no" {
+		t.Fatalf("decision %+v", d)
+	}
+	if got := rw.all(); len(got) != 0 {
+		t.Fatalf("rows before delivery %+v", got)
+	}
+	c.Responded("c1", d, "synthesized")
+	got := rw.all()
+	if len(got) != 1 || got[0].Callback != "call_start" || got[0].Action != "respond" || !got[0].Applied ||
+		got[0].RespondMode != "synthesized" || got[0].Mode != "enforce" || got[0].Annotations["rule"] != "r" {
+		t.Fatalf("rows %+v", got)
+	}
+	// Couldn't be delivered: recorded, not applied.
+	c.Responded("c1", d, "")
+	if got := rw.all(); len(got) != 2 || got[1].Applied || got[1].RespondMode != "" {
+		t.Fatalf("rows %+v", got)
+	}
+}
+
+// Respond at OnRequest: the call's answer; the per-message answers beside it
+// are ignored.
+func TestV2RespondAtRequest(t *testing.T) {
+	f := &interceptortest.FakeV2{Request: func(q *pb2.RequestMessages) *pb2.RequestVerdict {
+		v := replaceText("I'm a silly rabbit", "tricks")(q)
+		v.Respond = respond("Well, tricks are for kids.")
+		return v
+	}}
+	var rw rows
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+	defer c.Close()
+	d := c.DecideRequest(context.Background(), call, parse(t, withHistory))
+	if d.Action != interceptor.Respond || d.Text != "Well, tricks are for kids." || d.Payload != nil {
+		t.Fatalf("decision %+v", d)
+	}
+	c.Responded("c1", d, "rewritten")
+	if got := rw.all(); len(got) != 1 || got[0].Callback != "request" || got[0].Action != "respond" || got[0].RespondMode != "rewritten" || !got[0].Applied {
+		t.Fatalf("rows %+v", got)
+	}
+}
+
+// A Respond with no text is an invalid answer.
+func TestV2RespondNeedsText(t *testing.T) {
 	f := &interceptortest.FakeV2{
 		Start: func(*pb2.CallStart) *pb2.CallVerdict {
-			return &pb2.CallVerdict{Action: &pb2.CallVerdict_Respond{Respond: &pb2.Respond{Text: "no"}}}
+			return &pb2.CallVerdict{Action: &pb2.CallVerdict_Respond{Respond: respond("")}}
 		},
-		Request: func(*pb2.RequestMessages) *pb2.RequestVerdict {
-			return &pb2.RequestVerdict{Respond: &pb2.Respond{Text: "no"}}
-		},
+		Request: func(*pb2.RequestMessages) *pb2.RequestVerdict { return &pb2.RequestVerdict{Respond: respond("")} },
 	}
 	var rw rows
 	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
 	defer c.Close()
-	if d := c.DecideStart(context.Background(), &pb.CallStart{Call: call}); d.Action != interceptor.Allow {
-		t.Fatalf("start: %v", d.Action)
+	if d := c.DecideStart(context.Background(), &pb.CallStart{Call: call}); d.Action != interceptor.Deny {
+		t.Fatalf("start %+v", d)
 	}
-	if d := c.DecideRequest(context.Background(), call, parse(t, withHistory)); d.Action != interceptor.Allow {
-		t.Fatalf("request: %v", d.Action)
+	if d := c.DecideRequest(context.Background(), call, parse(t, withHistory)); d.Action != interceptor.Deny {
+		t.Fatalf("request %+v", d)
 	}
-	got := rw.all()
-	if len(got) != 2 || got[0].Callback != "call_start" || got[1].Callback != "request" ||
-		got[0].Action != "respond_unsupported" || got[1].Action != "respond_unsupported" || got[1].Applied {
+	if got := rw.all(); len(got) != 2 || got[0].Action != "error" || got[1].Action != "error" || !strings.Contains(got[1].Reason, "text") {
 		t.Fatalf("rows %+v", got)
+	}
+}
+
+// Observe: a Respond is recorded, never applied.
+func TestV2ObserveRespond(t *testing.T) {
+	f := &interceptortest.FakeV2{
+		Start: func(*pb2.CallStart) *pb2.CallVerdict {
+			return &pb2.CallVerdict{Action: &pb2.CallVerdict_Respond{Respond: respond("a")}}
+		},
+		Request: func(*pb2.RequestMessages) *pb2.RequestVerdict { return &pb2.RequestVerdict{Respond: respond("b")} },
+	}
+	var rw rows
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true}, rw.add)
+	c.ObserveStart(&pb.CallStart{Call: call})
+	c.ObserveRequest(call, parse(t, withHistory))
+	c.Close()
+	got := rw.all()
+	if len(got) != 2 || got[0].Action != "respond" || got[1].Action != "respond" || got[0].Applied || got[1].Applied || got[1].Mode != "observe" {
+		t.Fatalf("rows %+v", got)
+	}
+}
+
+var bash = convo.ToolCall{ID: "toolu_1", Name: "Bash", Arguments: `{"command":"echo first we bing"}`}
+
+func toolAnswer(a *pb2.MessageVerdict) func(*pb2.ResponseMessage) *pb2.MessageVerdict {
+	return func(*pb2.ResponseMessage) *pb2.MessageVerdict { return a }
+}
+
+// OnToolCall gets the call as an assistant message with one tool call part.
+func TestV2ToolCallMessage(t *testing.T) {
+	f := &interceptortest.FakeV2{}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	defer c.Close()
+	if !c.ToolCalls() {
+		t.Fatal("tool calls not decided")
+	}
+	if d := c.DecideToolCall(context.Background(), call, bash); d.Action != interceptor.Allow {
+		t.Fatalf("decision %+v", d)
+	}
+	got := f.ToolCallsSeen()
+	if len(got) != 1 {
+		t.Fatalf("%d OnToolCall", len(got))
+	}
+	m := got[0].GetMessage()
+	tc := m.GetParts()[0].GetToolCall()
+	if got[0].GetCall().GetCallId() != "c1" || m.GetId() != "toolu_1" || m.GetRole() != pb2.Role_ROLE_ASSISTANT || len(m.GetParts()) != 1 ||
+		m.GetParts()[0].GetId() != "toolu_1/0" || tc.GetCallId() != "toolu_1" || tc.GetName() != "Bash" || tc.GetArguments() != bash.Arguments ||
+		m.GetParts()[0].GetSize() != int64(len(bash.Arguments)) {
+		t.Fatalf("message %v", got[0])
+	}
+}
+
+func replaced(args string) *pb2.MessageVerdict {
+	return &pb2.MessageVerdict{MessageId: "toolu_1", Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: &pb2.ConvMessage{
+		Id: "toolu_1", Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{{Id: "toolu_1/0", Kind: &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: "toolu_1", Name: "Bash", Arguments: args}}}},
+	}}}}
+}
+
+func TestV2ToolCallAnswers(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer *pb2.MessageVerdict
+		want   interceptor.Decision
+		row    string
+	}{
+		{"accept", &pb2.MessageVerdict{}, interceptor.Decision{Action: interceptor.Allow}, ""},
+		{"replace", replaced(`{"command":"echo then we bong"}`), interceptor.Decision{Action: interceptor.Replace, Payload: []byte(`{"command":"echo then we bong"}`)}, "replace"},
+		{"replace unchanged", replaced(bash.Arguments), interceptor.Decision{Action: interceptor.Allow}, ""},
+		{"respond", &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Respond{Respond: respond("then we bong")}}, interceptor.Decision{Action: interceptor.Respond, Text: "then we bong"}, "respond"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &interceptortest.FakeV2{Tool: toolAnswer(tc.answer)}
+			var rw rows
+			c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+			defer c.Close()
+			d := c.DecideToolCall(context.Background(), call, bash)
+			if d.Action != tc.want.Action || string(d.Payload) != string(tc.want.Payload) || d.Text != tc.want.Text {
+				t.Fatalf("decision %+v, want %+v", d, tc.want)
+			}
+			got := rw.all()
+			if tc.row == "" {
+				if len(got) != 0 {
+					t.Fatalf("rows %+v", got)
+				}
+				return
+			}
+			if len(got) != 1 || got[0].Callback != "tool_call" || got[0].Action != tc.row || !got[0].Applied || got[0].MessageID != "toolu_1" ||
+				(tc.row == "respond") != (got[0].RespondMode == "synthesized") {
+				t.Fatalf("rows %+v", got)
+			}
+		})
+	}
+}
+
+// A custom tool's arguments are a JSON string; a Replace must keep them one.
+func TestV2ToolCallCustom(t *testing.T) {
+	f := &interceptortest.FakeV2{Tool: func(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+		v := replaced(`{"not":"a string"}`)
+		v.GetReplace().GetMessage().GetParts()[0].GetToolCall().Name = "exec"
+		v.GetReplace().GetMessage().GetParts()[0].GetToolCall().CallId = "call_2"
+		v.MessageId = "call_2"
+		v.GetReplace().GetMessage().Id = "call_2"
+		v.GetReplace().GetMessage().GetParts()[0].Id = "call_2/0"
+		return v
+	}}
+	var rw rows
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+	defer c.Close()
+	d := c.DecideToolCall(context.Background(), call, convo.ToolCall{ID: "call_2", Name: "exec", Arguments: `"ls"`, Custom: true})
+	if d.Action != interceptor.Deny || len(rw.all()) != 1 || !strings.Contains(rw.all()[0].Reason, "string") {
+		t.Fatalf("decision %+v rows %+v", d, rw.all())
+	}
+}
+
+func TestV2ToolCallInvalid(t *testing.T) {
+	cases := map[string]*pb2.MessageVerdict{
+		"not JSON": replaced(`{"command":`),
+		"another name": func() *pb2.MessageVerdict {
+			v := replaced(`{}`)
+			v.GetReplace().GetMessage().GetParts()[0].GetToolCall().Name = "Read"
+			return v
+		}(),
+		"no parts":   {Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: &pb2.ConvMessage{}}}},
+		"empty text": {Action: &pb2.MessageVerdict_Respond{Respond: respond("")}},
+	}
+	for name, answer := range cases {
+		for _, onError := range []string{"deny", "allow"} {
+			t.Run(name+" "+onError, func(t *testing.T) {
+				f := &interceptortest.FakeV2{Tool: toolAnswer(answer)}
+				var rw rows
+				c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second, OnError: onError}, rw.add)
+				defer c.Close()
+				d := c.DecideToolCall(context.Background(), call, bash)
+				if want := map[string]interceptor.Action{"deny": interceptor.Deny, "allow": interceptor.Allow}[onError]; d.Action != want {
+					t.Fatalf("decision %v, want %v", d.Action, want)
+				}
+				if got := rw.all(); len(got) != 1 || got[0].Action != "error" || got[0].Callback != "tool_call" || got[0].MessageID != "toolu_1" {
+					t.Fatalf("rows %+v", got)
+				}
+			})
+		}
+	}
+}
+
+// An Interceptor without OnToolCall accepts every call, and AIntercept stops
+// holding them.
+func TestV2ToolCallUnimplemented(t *testing.T) {
+	f := &interceptortest.FakeV2{NoToolCall: true}
+	var rw rows
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+	defer c.Close()
+	if d := c.DecideToolCall(context.Background(), call, bash); d.Action != interceptor.Allow {
+		t.Fatalf("decision %+v", d)
+	}
+	if c.ToolCalls() || len(rw.all()) != 0 {
+		t.Fatalf("still holding tool calls; rows %+v", rw.all())
+	}
+}
+
+// Large arguments go by reference, so OnToolCall stays under 4 MiB.
+func TestV2ToolCallLarge(t *testing.T) {
+	f := &interceptortest.FakeV2{}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	defer c.Close()
+	args := `{"content":"` + strings.Repeat("x", 5<<20) + `"}`
+	c.DecideToolCall(context.Background(), call, convo.ToolCall{ID: "t", Name: "Write", Arguments: args})
+	got := f.ToolCallsSeen()
+	if len(got) != 1 {
+		t.Fatal("OnToolCall didn't arrive")
+	}
+	p := got[0].GetMessage().GetParts()[0]
+	if !p.GetRef() || p.GetToolCall().GetArguments() != "" || p.GetSize() != int64(len(args)) || len(p.GetPreview()) != 1024 {
+		t.Fatalf("part ref %v size %d preview %d", p.GetRef(), p.GetSize(), len(p.GetPreview()))
+	}
+}
+
+// The call's record says how a Respond was delivered.
+func TestV2RecordRespond(t *testing.T) {
+	f := &interceptortest.FakeV2{Tool: toolAnswer(&pb2.MessageVerdict{Action: &pb2.MessageVerdict_Respond{Respond: respond("x")}})}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	c.DecideToolCall(context.Background(), call, bash)
+	c.Complete(&pb.CallRecord{Call: call}, true)
+	c.Close()
+	_, _, recs := f.Snapshot()
+	if len(recs) != 1 || recs[0].GetRespond() != "synthesized" || recs[0].GetVerdicts()[0].GetRespondMode() != "synthesized" {
+		t.Fatalf("records %v", recs)
 	}
 }
 

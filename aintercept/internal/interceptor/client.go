@@ -14,7 +14,8 @@
 //     (fail closed) unless OnError is "allow".
 //
 // With v2, ObserveStart, DecideStart and Complete speak v2 (the same Call),
-// and ObserveRequest / DecideRequest replace the Message callbacks.
+// ObserveRequest / DecideRequest replace the Message callbacks, and
+// DecideToolCall decides each tool call in a reply.
 //
 // Every verdict, in both modes, is reported through the record callback (a
 // verdict row in AIntercept's own stream) and attached to the call's
@@ -94,16 +95,24 @@ const (
 	Replace Action = "replace"
 	Drop    Action = "drop"
 	Deny    Action = "deny"
+	// Respond (v2): the client gets Text as the model's reply.
+	Respond Action = "respond"
 )
 
 // Decision is an enforce-mode verdict, ready to apply.
 type Decision struct {
 	Action Action
-	// Payload replaces the message's (Replace).
+	// Payload replaces the message's (Replace); for a tool call, its
+	// arguments.
 	Payload []byte
 	// Reason and HTTPStatus describe a Deny (status 0 means 403).
 	Reason     string
 	HTTPStatus int
+	// Text is a Respond's reply.
+	Text string
+	// pending is a call's Respond row, recorded by Responded once the
+	// observer knows how it was delivered.
+	pending *events.Verdict
 }
 
 // Client calls one Interceptor.
@@ -121,6 +130,8 @@ type Client struct {
 	verdicts map[string]*callVerdicts
 
 	queued, dropped, delivered, failed, decided, decideFailed, unparsed atomic.Uint64
+	// noToolCall: the Interceptor doesn't implement OnToolCall (v2).
+	noToolCall atomic.Bool
 }
 
 type job struct {
@@ -323,7 +334,8 @@ func (c *Client) deliver(j job) {
 		err = c.onRequestObserved(ctx, j.req)
 	case j.rec != nil && c.V2():
 		rec := convert(j.rec, &pb2.CallRecord{})
-		rec.Verdicts = recordedV2(c.verdictsFor(j.callID, j.final))
+		vs := c.verdictsFor(j.callID, j.final)
+		rec.Verdicts, rec.Respond = recordedV2(vs), respondMode(vs)
 		_, err = c.api2.OnCallComplete(ctx, rec)
 	case j.start != nil:
 		t := time.Now()
@@ -352,7 +364,8 @@ func (c *Client) deliver(j job) {
 
 // ── Enforce ──────────────────────────────────────────────────────────────────
 
-// DecideStart calls OnCallStart and waits for the verdict (enforce mode).
+// DecideStart calls OnCallStart and waits for the verdict (enforce mode). A
+// v2 Respond is the caller's to deliver, and to record with Responded.
 func (c *Client) DecideStart(ctx context.Context, s *pb.CallStart) Decision {
 	if c.V2() {
 		return c.decideStart2(ctx, s)

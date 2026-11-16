@@ -19,13 +19,18 @@ import (
 // server keeps the default 4 MiB receive limit.
 type FakeV2 struct {
 	pb2.UnimplementedInterceptorServer
-	mu       sync.Mutex
-	Start    func(*pb2.CallStart) *pb2.CallVerdict
-	Request  func(*pb2.RequestMessages) *pb2.RequestVerdict
-	Delay    time.Duration
-	Calls    []string // "start", "request", "complete"
-	Requests []*pb2.RequestMessages
-	Records  []*pb2.CallRecord
+	mu      sync.Mutex
+	Start   func(*pb2.CallStart) *pb2.CallVerdict
+	Request func(*pb2.RequestMessages) *pb2.RequestVerdict
+	Tool    func(*pb2.ResponseMessage) *pb2.MessageVerdict
+	// NoToolCall: OnToolCall is unimplemented, as in an Interceptor that
+	// doesn't have it.
+	NoToolCall bool
+	Delay      time.Duration
+	Calls      []string // "start", "request", "tool_call", "complete"
+	Requests   []*pb2.RequestMessages
+	ToolCalls  []*pb2.ResponseMessage
+	Records    []*pb2.CallRecord
 }
 
 func (f *FakeV2) OnCallStart(_ context.Context, s *pb2.CallStart) (*pb2.CallVerdict, error) {
@@ -49,6 +54,28 @@ func (f *FakeV2) OnRequest(_ context.Context, r *pb2.RequestMessages) (*pb2.Requ
 		return f.Request(r), nil
 	}
 	return &pb2.RequestVerdict{}, nil
+}
+
+func (f *FakeV2) OnToolCall(ctx context.Context, m *pb2.ResponseMessage) (*pb2.MessageVerdict, error) {
+	if f.NoToolCall {
+		return f.UnimplementedInterceptorServer.OnToolCall(ctx, m)
+	}
+	time.Sleep(f.Delay)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Calls = append(f.Calls, "tool_call")
+	f.ToolCalls = append(f.ToolCalls, m)
+	if f.Tool != nil {
+		return f.Tool(m), nil
+	}
+	return &pb2.MessageVerdict{}, nil
+}
+
+// ToolCallsSeen returns the OnToolCall messages received so far.
+func (f *FakeV2) ToolCallsSeen() []*pb2.ResponseMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*pb2.ResponseMessage(nil), f.ToolCalls...)
 }
 
 func (f *FakeV2) OnCallComplete(_ context.Context, r *pb2.CallRecord) (*pb2.Ack, error) {

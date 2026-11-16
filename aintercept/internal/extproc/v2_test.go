@@ -62,14 +62,15 @@ func newV2Rig(t *testing.T, enforce bool) *v2Rig {
 const rabbitHistory = `{"model":"m","messages":[{"role":"user","content":"I'm a silly rabbit"},{"role":"assistant","content":"ha"},`
 
 // Enforce, HTTP: the new prompt is replaced in place; the history (which
-// says the same thing) and every other byte go as sent. Responses aren't
-// touched: accept-encoding stays, and chunks pass straight through.
+// says the same thing) and every other byte go as sent. The reply is asked
+// for uncompressed (its tool calls are held), and its events go on as they
+// come.
 func TestV2EnforceReplacesTheNewPrompt(t *testing.T) {
 	r := newV2Rig(t, true)
 	body := rabbitHistory + `{"role":"user","content":[{"type":"text","text":"I'm a silly rabbit","cache_control":{"type":"ephemeral"}}]}]}`
 	r.send(eReqHeaders(false, anthropicCall...))
 	out := r.send(eReqBody(body, true))
-	if len(out) != 2 || strings.Join(removed(out[0]), ",") != "content-length,content-encoding" {
+	if len(out) != 2 || strings.Join(removed(out[0]), ",") != "content-length,content-encoding,accept-encoding" {
 		t.Fatalf("got %v (removed %v)", out, removed(out[0]))
 	}
 	want := rabbitHistory + `{"role":"user","content":[{"type":"text","text":"I'm a tricks","cache_control":{"type":"ephemeral"}}]}]}`
@@ -79,26 +80,27 @@ func TestV2EnforceReplacesTheNewPrompt(t *testing.T) {
 	if _, reqs, _ := r.fake.Snapshot(); len(reqs) != 1 || len(reqs[0].GetMessages()) != 1 || reqs[0].GetTotalMessages() != 3 {
 		t.Fatalf("OnRequest %v: want only the new message", reqs)
 	}
-	if out := r.send(eRespHeaders(":status", "200", "content-type", "text/event-stream")); len(out) != 1 || len(removed(out[0])) != 0 {
+	if out := r.send(eRespHeaders(":status", "200", "content-type", "text/event-stream")); len(out) != 1 || strings.Join(removed(out[0]), ",") != "content-length" {
 		t.Fatalf("response headers %v", out)
 	}
-	if out := r.send(eRespBody([]byte("data: silly rabbit\n"), false)); len(out) != 1 {
-		t.Fatalf("chunk not passed straight on: %v", out)
-	} else if b, _ := streamed(out[0]); string(b) != "data: silly rabbit\n" {
-		t.Fatalf("chunk %q", b)
+	if out := r.send(eRespBody([]byte("data: silly rabbit\n\n"), false)); len(out) != 1 {
+		t.Fatalf("event not passed straight on: %v", out)
+	} else if b, _ := streamed(out[0]); string(b) != "data: silly rabbit\n\n" {
+		t.Fatalf("event %q", b)
 	}
 	if rows := *r.rows; len(rows) != 1 || rows[0].Action != "replace" || !rows[0].Applied || rows[0].MessageID == "" {
 		t.Fatalf("rows %+v", rows)
 	}
 }
 
-// Nothing to change: the body goes as sent, headers untouched.
+// Nothing to change: the body goes as sent, headers untouched but for
+// accept-encoding (the reply's tool calls are held).
 func TestV2EnforceAccept(t *testing.T) {
 	r := newV2Rig(t, true)
 	body := `{"model":"m","messages":[{"role":"user","content":"hello"}]}`
 	r.send(eReqHeaders(false, anthropicCall...))
 	out := r.send(eReqBody(body, true))
-	if len(out) != 2 || len(removed(out[0])) != 0 {
+	if len(out) != 2 || strings.Join(removed(out[0]), ",") != "accept-encoding" {
 		t.Fatalf("got %v", out)
 	}
 	if b, _ := streamed(out[1]); string(b) != body {
