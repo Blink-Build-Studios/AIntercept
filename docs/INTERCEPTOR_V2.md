@@ -1,7 +1,11 @@
 # Interceptor v2: one message at a time
 
-Status: **proposed**. v1 ([`INTERCEPTOR.md`](INTERCEPTOR.md)) stays as it is
-until v2 ships, and both run side by side while integrations move over.
+Status: **built for Claude Code and Codex** (Anthropic Messages, OpenAI
+Responses over HTTP and Codex's WebSocket; Chat Completions requests): the
+new messages, Replace, Fetch, Respond and tool calls held whole. Not yet:
+watches on streamed text, ChatGPT and claude.ai on the web, and holding Chat
+Completions tool calls. v1 ([`INTERCEPTOR.md`](INTERCEPTOR.md)) stays as it
+is, and both run side by side while integrations move over.
 
 ## Why a v2
 
@@ -99,7 +103,9 @@ service Interceptor {
 - **`OnToolCall`** fires for each tool call in the model's reply, once it is
   complete and before the client sees it: **Accept**, **Replace** (for
   example, change the arguments), or **Respond** (end the reply here with your
-  text instead of the tool call).
+  text instead of the tool call). The message is the tool call alone: an
+  `ASSISTANT` message whose id is the provider's call id, with one `ToolCall`
+  part. Enforce only.
 - **Reply text streams.** It reaches the client as it's generated; v2 doesn't
   hold it. Rules on reply text come with watches (below, next).
 - **`OnCallComplete`** is asynchronous, as in v1: usage, timings, the verdicts
@@ -133,7 +139,54 @@ How it's delivered depends on whether the conversation lives with the client:
   model replies with exactly your text. The call reaches the provider, and the
   conversation stays consistent.
 
-`CallRecord.respond` says which was used.
+`CallRecord.respond` says which was used, and so does the verdict row
+(`action: respond`, `respond_mode: synthesized | rewritten`). A synthesized
+call still gets its complete row: status 200, the synthesized reply, zero
+usage.
+
+As built:
+
+- **Synthesized** replies: Anthropic's event sequence (`message_start`, one
+  text block, `message_delta` with `stop_reason: end_turn`, `message_stop`)
+  or its JSON message; the Responses events (`response.created` …
+  `response.output_text.delta` … `response.completed`) over SSE or as Codex
+  WebSocket messages, or the JSON response; Chat Completions chunks and
+  `[DONE]`, or the JSON completion. Ids are fresh, in each provider's style
+  (`msg_01…`, `resp_…`, `chatcmpl-…`).
+- **Rewritten**: the newest new user message's last text part becomes "Reply
+  with exactly this text and nothing else: " and your text (or, when the new
+  messages are only tool results, the last result's text). Every other byte
+  goes as sent. The model usually complies; it isn't guaranteed to.
+- A Respond to a request AIntercept can't read, or at a WebSocket's
+  `OnCallStart` (the connection's requests come later), is recorded and not
+  applied.
+- At a tool call, the call and the rest of the reply are replaced with your
+  text, and the reply ends cleanly (`end_turn`, or `response.completed`
+  listing the items already sent and your message). What the provider sends
+  after that is dropped.
+
+### Tool calls held whole
+
+A reply's text reaches the client as it streams. Each tool call is held from
+its first event (`content_block_start` of a `tool_use` block;
+`response.output_item.added` of a `function_call` or `custom_tool_call`)
+until it's complete (`content_block_stop`; `response.output_item.done`), then
+`OnToolCall` decides it:
+
+- **Accept**: the held events go out exactly as received.
+- **Replace**: the call goes out with the new arguments, in the stream's own
+  events (one argument delta with all of them, and the `.done` events and the
+  final `response.completed` rewritten to match).
+- **Respond**: as above.
+
+A non-streamed JSON reply is held whole and its tool calls decided in order
+before it's released. The cost is latency on tool calls only: the client gets
+each call when it's complete plus one `OnToolCall` round trip, rather than
+piece by piece; the text before it isn't delayed. A refusal (the Interceptor
+failed or was late, `onError: deny`) ends the reply with the provider's error
+event (HTTP) or closes the WebSocket. A tool call over 32 MiB goes out
+undecided. An Interceptor that doesn't implement `OnToolCall` accepts every
+call, and AIntercept stops holding them.
 
 ### Fetch
 

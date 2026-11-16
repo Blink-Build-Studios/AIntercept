@@ -10,6 +10,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/wsframe"
@@ -31,7 +32,9 @@ import (
 //
 // With contract v2 and content, the request's new messages go to OnRequest
 // instead (a Replace is put back in place in the body, or in a Codex
-// WebSocket's response.create), and responses pass straight through.
+// WebSocket's response.create); a reply's text passes straight through and
+// its tool calls are held for OnToolCall. A Respond is delivered as a reply
+// or by rewriting the request (respond.go).
 //
 // Recording is unchanged: the same observation events are emitted as in
 // observe mode, plus each verdict.
@@ -46,9 +49,11 @@ const wsEnforceCap = 16 << 20
 type respMode int
 
 const (
-	respPass  respMode = iota // forward chunks as they arrive
-	respSSE                   // evaluate event by event
-	respWhole                 // evaluate the whole body before releasing it
+	respPass       respMode = iota // forward chunks as they arrive
+	respSSE                        // evaluate event by event
+	respWhole                      // evaluate the whole body before releasing it
+	respToolsSSE                   // v2: hold each tool call in the event stream
+	respToolsWhole                 // v2: decide the tool calls in the whole body
 )
 
 type enforceState struct {
@@ -64,6 +69,12 @@ type enforceState struct {
 	// WebSocket with content: decoders per direction (uncompressed frames).
 	wsUp, wsDown *wsframe.Decoder
 	wsContent    bool
+	// v2: the reply's tool calls held (tools; a WebSocket's current turn in
+	// wsTools), ended once a Respond or a refusal ended the reply; toolDeny is
+	// the refusal.
+	tools, wsTools *convo.Stream
+	ended          bool
+	toolDeny       *interceptor.Decision
 }
 
 // processEnforce serves an enforced stream, starting with its first request.
@@ -151,7 +162,7 @@ func (srv *Server) enforceHandle(st *streamState, req *extprocv3.ProcessingReque
 		b := v.ResponseBody
 		var out []*extprocv3.ProcessingResponse
 		switch {
-		case e.denied:
+		case e.denied, e.ended:
 		case st.ws != nil:
 			out = srv.enforceWS(st, events.DirOutbound, b)
 		default:
@@ -164,7 +175,7 @@ func (srv *Server) enforceHandle(st *streamState, req *extprocv3.ProcessingReque
 
 	case *extprocv3.ProcessingRequest_ResponseTrailers:
 		var out []*extprocv3.ProcessingResponse
-		if e.respHeld && !e.denied {
+		if (e.respHeld || e.mode == respToolsSSE) && !e.denied && !e.ended { // held events end with the trailers
 			out = srv.enforceResponseBody(st, nil, true)
 		}
 		srv.emitComplete(st)
@@ -182,8 +193,9 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 		return srv.deny(st, interceptor.Decision{Action: interceptor.Deny, Reason: "Request too large to evaluate.", HTTPStatus: 413})
 	}
 	ci := srv.callInfo(st, body)
-	if d := srv.decideStart(st, ci); d.Action == interceptor.Deny {
-		return srv.deny(st, d)
+	start := srv.decideStart(st, ci)
+	if start.Action == interceptor.Deny {
+		return srv.deny(st, start)
 	}
 	content := srv.enforcingContent(st)
 	requests := srv.enforcingRequests(st)
@@ -200,10 +212,24 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 			remove = append(remove, "accept-encoding")
 		}
 	}
+	if start.Action == interceptor.Respond && (!hasBody || len(body) == 0) {
+		srv.ic.Responded(st.correlationID, start, "") // nothing to answer (a WebSocket's requests come later)
+	}
 	if !hasBody {
 		return []*extprocv3.ProcessingResponse{headersResponse(true, remove)}
 	}
 	fwd := body
+	if start.Action == interceptor.Respond && len(body) > 0 {
+		r, ok := srv.readRequest(st, body)
+		out, rewritten := srv.respondHTTP(st, ci, r, ok, start)
+		if out != nil {
+			return out
+		}
+		if rewritten != nil {
+			remove = append(remove, "content-length", "content-encoding")
+		}
+		return []*extprocv3.ProcessingResponse{headersResponse(true, remove), bodyResponse(true, firstOf(rewritten, body), true)}
+	}
 	if requests && len(body) > 0 {
 		plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"])
 		if err != nil {
@@ -215,6 +241,19 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 				remove = append(remove, "content-length", "content-encoding")
 			case interceptor.Deny:
 				return srv.deny(st, d)
+			case interceptor.Respond:
+				out, rewritten := srv.respondHTTP(st, ci, r, true, d)
+				if out != nil {
+					return out
+				}
+				if rewritten != nil {
+					fwd = rewritten
+					remove = append(remove, "content-length", "content-encoding")
+				}
+			}
+			if srv.holdsTools(r.Format) {
+				st.icState().holdTools = r.Format
+				remove = append(remove, "accept-encoding") // replies the observer can read
 			}
 		}
 	}
@@ -238,6 +277,9 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 
 func (srv *Server) enforceResponseHeaders(st *streamState, h *extprocv3.HttpHeaders) []*extprocv3.ProcessingResponse {
 	e := st.enf
+	if st.ws == nil && !h.GetEndOfStream() && st.ic != nil && st.ic.holdTools != "" && srv.ic.ToolCalls() {
+		return srv.holdToolsHeaders(st)
+	}
 	if st.ws != nil {
 		if srv.enforcingContent(st) || srv.enforcingRequests(st) {
 			if st.ws.ext.Deflate {
@@ -326,6 +368,12 @@ func (srv *Server) enforceResponseBody(st *streamState, chunk []byte, eos bool) 
 			return srv.deny(st, d)
 		}
 		return []*extprocv3.ProcessingResponse{continueResponseHeaders(), bodyResponse(false, body, true)}
+
+	case respToolsSSE:
+		return srv.toolsSSE(st, chunk, eos)
+
+	case respToolsWhole:
+		return srv.toolsWhole(st, chunk, eos)
 	}
 	return []*extprocv3.ProcessingResponse{bodyResponse(false, chunk, eos)}
 }
@@ -346,7 +394,7 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 	}
 	msgs, err := dec.Feed(b.GetBody())
 	v2 := srv.enforcingRequests(st)
-	if v2 && !toServer { // recorded, never held or changed
+	if v2 && !toServer && !srv.ic.ToolCalls() { // recorded, never held or changed
 		for _, m := range msgs {
 			srv.wsMessage(st, dir, m)
 		}
@@ -355,7 +403,10 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 	if err != nil {
 		return srv.wsDeny(st, toServer, interceptor.Decision{Reason: "Undecodable WebSocket frame."}, 1002)
 	}
-	var out []byte
+	if v2 && !toServer {
+		return srv.wsToolCalls(st, msgs, b.GetEndOfStream())
+	}
+	var out, toClient []byte
 	for _, m := range msgs {
 		srv.wsMessage(st, dir, m) // recording: turns and the connection row
 		if m.Opcode >= 0x8 {
@@ -369,12 +420,16 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		if !v2 {
 			d = srv.decideMessage(st, dir, wsKind(m.Opcode), m.Payload, "", "")
 		} else if r, ok := srv.parseWSRequest(st, m); ok {
-			d = srv.decideRequest(st, r)
+			if d = srv.decideRequest(st, r); d.Action == interceptor.Respond {
+				var reply []byte
+				d, reply = srv.respondWS(st, r, m.Payload, d)
+				toClient = append(toClient, reply...)
+			}
 		}
 		switch d.Action {
 		case interceptor.Replace:
 			out = append(out, wsframe.Encode(m.Opcode, d.Payload, toServer)...)
-		case interceptor.Drop:
+		case interceptor.Drop, interceptor.Respond: // a synthesized reply: the request never goes upstream
 		case interceptor.Deny:
 			if len(out) > 0 {
 				return append([]*extprocv3.ProcessingResponse{bodyResponse(toServer, out, false)}, srv.wsDeny(st, toServer, d, 1008)...)
@@ -385,7 +440,11 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		}
 	}
 	// Answered even when empty (Envoy holds the 101 until a body response).
-	return []*extprocv3.ProcessingResponse{bodyResponse(toServer, out, b.GetEndOfStream())}
+	res := []*extprocv3.ProcessingResponse{bodyResponse(toServer, out, b.GetEndOfStream())}
+	if len(toClient) > 0 {
+		res = append(res, bodyResponse(false, toClient, false))
+	}
+	return res
 }
 
 // wsDeny ends a WebSocket: the client gets the provider's error message and a

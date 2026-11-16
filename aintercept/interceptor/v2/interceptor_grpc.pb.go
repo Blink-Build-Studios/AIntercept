@@ -13,12 +13,13 @@
 //
 //   observe  Callbacks are delivered asynchronously; answers are recorded,
 //            never applied.
-//   enforce  OnCallStart and OnRequest are in the request path, within the
-//            deadline; answers are applied. On a failure or a missed
-//            deadline the call is refused (fail closed; configurable).
+//   enforce  OnCallStart, OnRequest and OnToolCall are in the call's path,
+//            within the deadline; answers are applied. On a failure or a
+//            missed deadline the call is refused (fail closed; configurable).
 //
-// Content: OnRequest is only called when the deployment enables Interceptor
-// content. Responses stream to the client untouched.
+// Content: OnRequest and OnToolCall are only called when the deployment
+// enables Interceptor content. A reply's text streams to the client
+// untouched; each tool call in it is held until OnToolCall has answered.
 //
 // See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
 
@@ -54,14 +55,19 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InterceptorClient interface {
 	// The request has arrived and been parsed; nothing has gone upstream yet in
-	// enforce mode. Accept (or Respond: not yet supported, treated as Accept).
+	// enforce mode. Accept, or Respond.
 	OnCallStart(ctx context.Context, in *CallStart, opts ...grpc.CallOption) (*CallVerdict, error)
 	// The call's new messages, before they go upstream. Per message: Accept or
-	// Replace. Or Fetch parts sent by reference first. Only called with
-	// Interceptor content on, for requests AIntercept can read.
+	// Replace. For the call: Respond. Or Fetch parts sent by reference first.
+	// Only called with Interceptor content on, for requests AIntercept can
+	// read.
 	OnRequest(ctx context.Context, in *RequestMessages, opts ...grpc.CallOption) (*RequestVerdict, error)
-	// Each tool call in the model's reply, held whole. Declared for the
-	// contract; not called yet.
+	// Each tool call in the model's reply (Anthropic Messages, Responses over
+	// HTTP or Codex's WebSocket; streamed or not), held from its start until
+	// it's complete and this has answered: Accept, Replace (new arguments), or
+	// Respond (the reply ends with your text instead of the call). Enforce
+	// only, with Interceptor content on. An Interceptor that doesn't implement
+	// it (UNIMPLEMENTED) accepts every call.
 	OnToolCall(ctx context.Context, in *ResponseMessage, opts ...grpc.CallOption) (*MessageVerdict, error)
 	// The call has ended: the normalized per-call record. Always asynchronous.
 	OnCallComplete(ctx context.Context, in *CallRecord, opts ...grpc.CallOption) (*Ack, error)
@@ -120,14 +126,19 @@ func (c *interceptorClient) OnCallComplete(ctx context.Context, in *CallRecord, 
 // for forward compatibility.
 type InterceptorServer interface {
 	// The request has arrived and been parsed; nothing has gone upstream yet in
-	// enforce mode. Accept (or Respond: not yet supported, treated as Accept).
+	// enforce mode. Accept, or Respond.
 	OnCallStart(context.Context, *CallStart) (*CallVerdict, error)
 	// The call's new messages, before they go upstream. Per message: Accept or
-	// Replace. Or Fetch parts sent by reference first. Only called with
-	// Interceptor content on, for requests AIntercept can read.
+	// Replace. For the call: Respond. Or Fetch parts sent by reference first.
+	// Only called with Interceptor content on, for requests AIntercept can
+	// read.
 	OnRequest(context.Context, *RequestMessages) (*RequestVerdict, error)
-	// Each tool call in the model's reply, held whole. Declared for the
-	// contract; not called yet.
+	// Each tool call in the model's reply (Anthropic Messages, Responses over
+	// HTTP or Codex's WebSocket; streamed or not), held from its start until
+	// it's complete and this has answered: Accept, Replace (new arguments), or
+	// Respond (the reply ends with your text instead of the call). Enforce
+	// only, with Interceptor content on. An Interceptor that doesn't implement
+	// it (UNIMPLEMENTED) accepts every call.
 	OnToolCall(context.Context, *ResponseMessage) (*MessageVerdict, error)
 	// The call has ended: the normalized per-call record. Always asynchronous.
 	OnCallComplete(context.Context, *CallRecord) (*Ack, error)

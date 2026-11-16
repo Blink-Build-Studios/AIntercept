@@ -2,6 +2,7 @@ package interceptor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -10,6 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
@@ -20,8 +23,13 @@ import (
 
 // Contract v2 (interceptor/v2, docs/INTERCEPTOR_V2.md): OnRequest carries a
 // call's new messages, parsed by convo, and its answers come back per
-// message. Call, CallStart and CallRecord are v1's messages field for field,
-// so they're built as v1 and converted on the wire format.
+// message; OnToolCall each tool call in a reply. Call, CallStart and
+// CallRecord are v1's messages field for field, so they're built as v1 and
+// converted on the wire format.
+//
+// A Respond at call start or OnRequest is delivered by the observer
+// (synthesized, or the request rewritten), which then records it with
+// Responded; one at a tool call is always delivered in the stream.
 
 const (
 	// fetchMax bounds a fetched part's content; a larger one stays a reference.
@@ -54,13 +62,43 @@ func StartV2(s *pb.CallStart) *pb2.CallStart { return convert(s, &pb2.CallStart{
 func recordedV2(vs []events.Verdict) []*pb2.RecordedVerdict {
 	var out []*pb2.RecordedVerdict
 	for _, v := range vs {
-		rv := &pb2.RecordedVerdict{Callback: v.Callback, Action: v.Action, Applied: v.Applied, Reason: v.Reason, MessageId: v.MessageID}
+		rv := &pb2.RecordedVerdict{Callback: v.Callback, Action: v.Action, Applied: v.Applied, Reason: v.Reason, MessageId: v.MessageID, RespondMode: v.RespondMode}
 		for k, val := range v.Annotations {
 			rv.Annotations = append(rv.Annotations, &pb2.Annotation{Key: k, Value: val})
 		}
 		out = append(out, rv)
 	}
 	return out
+}
+
+// respondMode is how the call's latest applied Respond was delivered.
+func respondMode(vs []events.Verdict) string {
+	for i := len(vs) - 1; i >= 0; i-- {
+		if vs[i].Action == "respond" && vs[i].Applied {
+			return vs[i].RespondMode
+		}
+	}
+	return ""
+}
+
+// Responded records a Respond decision's row: delivered as mode
+// ("synthesized" or "rewritten"), or, with mode "", not delivered (recorded,
+// not applied).
+func (c *Client) Responded(callID string, d Decision, mode string) {
+	if d.pending == nil {
+		return
+	}
+	v := *d.pending
+	v.Applied, v.RespondMode = mode != "", mode
+	c.store(callID, v)
+}
+
+// checkRespond checks a Respond's text.
+func checkRespond(r *pb2.Respond) error {
+	if r.GetText() == "" {
+		return invalid("a Respond with no text")
+	}
+	return nil
 }
 
 func annotations(as []*pb2.Annotation) map[string]string {
@@ -83,21 +121,28 @@ func (c *Client) decideStart2(ctx context.Context, s *pb.CallStart) Decision {
 	t := time.Now()
 	v, err := c.api2.OnCallStart(ctx, StartV2(s))
 	took := time.Since(t)
+	if err == nil && v.GetRespond() != nil {
+		err = checkRespond(v.GetRespond())
+	}
 	if err != nil {
 		return c.fail(callID, "call_start", "", err, took)
 	}
 	c.decided.Add(1)
+	if r := v.GetRespond(); r != nil {
+		return Decision{Action: Respond, Text: r.GetText(), pending: &events.Verdict{Callback: "call_start", Action: "respond",
+			Mode: "enforce", LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}}
+	}
 	c.noteStart2(callID, "enforce", v, true, took)
 	return Decision{Action: Allow}
 }
 
-// noteStart2 records OnCallStart's answer: an annotated Accept, or a Respond
-// (not supported yet: treated as Accept).
+// noteStart2 records OnCallStart's answer: an annotated Accept, or (observe)
+// a Respond, recorded and not applied.
 func (c *Client) noteStart2(callID, mode string, v *pb2.CallVerdict, enforce bool, took time.Duration) {
 	ev := events.Verdict{Callback: "call_start", Action: "accept", Applied: enforce, Mode: mode,
 		LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}
 	if v.GetRespond() != nil {
-		ev.Action, ev.Applied = "respond_unsupported", false
+		ev.Action, ev.Applied = "respond", false
 	}
 	if ev.Action == "accept" && len(ev.Annotations) == 0 {
 		return
@@ -261,17 +306,22 @@ func (q *Request) fetch(ids []string) (map[string]bool, error) {
 }
 
 // answer turns OnRequest's answer into edits and the verdict rows to record
-// (callback, action, message id, annotations).
+// (callback, action, message id, annotations). A Respond is the call's
+// answer: its row is the only one, and the per-message answers are ignored.
 func (q *Request) answer(v *pb2.RequestVerdict) ([]convo.Edit, []events.Verdict, error) {
 	var edits []convo.Edit
 	var rows []events.Verdict
 	row := func(action, messageID string, as []*pb2.Annotation) {
 		rows = append(rows, events.Verdict{Callback: "request", Action: action, MessageID: messageID, Annotations: annotations(as)})
 	}
-	switch {
-	case v.GetRespond() != nil:
-		row("respond_unsupported", "", v.GetAnnotations())
-	case len(v.GetAnnotations()) > 0:
+	if r := respondOf(v); r != nil {
+		if err := checkRespond(r); err != nil {
+			return nil, nil, err
+		}
+		row("respond", "", v.GetAnnotations())
+		return nil, rows, nil
+	}
+	if len(v.GetAnnotations()) > 0 {
 		row("accept", "", v.GetAnnotations())
 	}
 	seen := map[string]bool{}
@@ -293,8 +343,6 @@ func (q *Request) answer(v *pb2.RequestVerdict) ([]convo.Edit, []events.Verdict,
 			}
 			edits = append(edits, e...)
 			row("replace", id, mv.GetAnnotations())
-		case *pb2.MessageVerdict_Respond:
-			row("respond_unsupported", id, mv.GetAnnotations())
 		default:
 			if len(mv.GetAnnotations()) > 0 {
 				row("accept", id, mv.GetAnnotations())
@@ -358,29 +406,44 @@ func (q *Request) replace(i int, rm *pb2.ConvMessage) ([]convo.Edit, error) {
 	return edits, nil
 }
 
-// ask runs OnRequest, with its one Fetch round, and reads the answer.
-func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Verdict, error) {
+// ask runs OnRequest, with its one Fetch round, and reads the answer: the
+// edits, the rows, and a Respond's text.
+func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Verdict, string, error) {
 	v, err := c.api2.OnRequest(ctx, q.message(nil))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if ids := v.GetFetch().GetPartIds(); len(ids) > 0 {
 		fetched, err := q.fetch(ids)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		if v, err = c.api2.OnRequest(ctx, q.message(fetched)); err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		if len(v.GetFetch().GetPartIds()) > 0 {
-			return nil, nil, invalid("a second Fetch: there is one per call")
+			return nil, nil, "", invalid("a second Fetch: there is one per call")
 		}
 	}
 	edits, rows, err := q.answer(v)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
-	return edits, rows, nil
+	return edits, rows, respondOf(v).GetText(), nil
+}
+
+// respondOf is OnRequest's Respond: the call's, or else the first message's
+// (a message's Respond is the call's).
+func respondOf(v *pb2.RequestVerdict) *pb2.Respond {
+	if r := v.GetRespond(); r != nil {
+		return r
+	}
+	for _, mv := range v.GetMessages() {
+		if r := mv.GetRespond(); r != nil {
+			return r
+		}
+	}
+	return nil
 }
 
 // apply puts the edits on the wire: the body to forward.
@@ -403,7 +466,7 @@ func (c *Client) ObserveRequest(call *pb.Call, r convo.Request) {
 // never applied. An answer that couldn't be applied is recorded as an error.
 func (c *Client) onRequestObserved(ctx context.Context, q *Request) error {
 	t := time.Now()
-	edits, rows, err := c.ask(ctx, q)
+	edits, rows, _, err := c.ask(ctx, q)
 	if err == nil && len(edits) > 0 {
 		_, err = q.apply(edits)
 	}
@@ -424,8 +487,8 @@ func (c *Client) onRequestObserved(ctx context.Context, q *Request) error {
 
 // DecideRequest calls OnRequest and waits for the answer (enforce mode),
 // within the deadline, Fetch included. Replace: Payload is the body to
-// forward. A failure, a missed deadline or an answer that can't be applied
-// is onError.
+// forward. Respond: the caller delivers it and records it with Responded. A
+// failure, a missed deadline or an answer that can't be applied is onError.
 func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Request) Decision {
 	if !c.Content() || !c.V2() {
 		return Decision{Action: Allow}
@@ -434,7 +497,7 @@ func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Reque
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
-	edits, rows, err := c.ask(ctx, q)
+	edits, rows, text, err := c.ask(ctx, q)
 	var body []byte
 	if err == nil && len(edits) > 0 {
 		body, err = q.apply(edits)
@@ -444,12 +507,104 @@ func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Reque
 		return c.fail(call.GetCallId(), "request", "", err, took)
 	}
 	c.decided.Add(1)
+	if text != "" {
+		r := rows[0]
+		r.Mode, r.LatencyMS = "enforce", took.Milliseconds()
+		return Decision{Action: Respond, Text: text, pending: &r}
+	}
 	for _, r := range rows {
-		r.Mode, r.Applied, r.LatencyMS = "enforce", r.Action != "respond_unsupported", took.Milliseconds()
+		r.Mode, r.Applied, r.LatencyMS = "enforce", true, took.Milliseconds()
 		c.store(call.GetCallId(), r)
 	}
 	if body != nil {
 		return Decision{Action: Replace, Payload: body}
 	}
 	return Decision{Action: Allow}
+}
+
+// ── OnToolCall ───────────────────────────────────────────────────────────────
+
+// ToolCalls reports whether tool calls in replies are held for OnToolCall
+// (v2 with content, until the Interceptor turns out not to implement it).
+func (c *Client) ToolCalls() bool { return c.Content() && c.V2() && !c.noToolCall.Load() }
+
+// DecideToolCall calls OnToolCall for one complete tool call in a reply and
+// waits for the answer (enforce mode), within the deadline. Replace: Payload
+// is the new arguments. Respond: Text ends the reply (recorded here, as
+// synthesized). A failure, a missed deadline or an answer that can't be
+// applied is onError; an Interceptor without OnToolCall accepts.
+func (c *Client) DecideToolCall(ctx context.Context, call *pb.Call, tc convo.ToolCall) Decision {
+	callID := call.GetCallId()
+	part := &pb2.Part{Id: partID(tc.ID, 0), Size: int64(len(tc.Arguments)),
+		Kind: &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: tc.ID, Name: tc.Name, Arguments: tc.Arguments}}}
+	if len(tc.Arguments) > messageMax {
+		byReference(part, convo.Part{Kind: convo.KindToolCall})
+		part.Preview = preview(tc.Arguments)
+	}
+	msg := &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}),
+		Message: &pb2.ConvMessage{Id: tc.ID, Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{part}}}
+	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
+	defer cancel()
+	t := time.Now()
+	v, err := c.api2.OnToolCall(ctx, msg)
+	took := time.Since(t)
+	if status.Code(err) == codes.Unimplemented {
+		c.noToolCall.Store(true)
+		return Decision{Action: Allow}
+	}
+	var d Decision
+	if err == nil {
+		d, err = toolAnswer(tc, v)
+	}
+	if err != nil {
+		return c.fail(callID, "tool_call", tc.ID, err, took)
+	}
+	c.decided.Add(1)
+	row := events.Verdict{Callback: "tool_call", Action: "accept", Applied: true, Mode: "enforce", LatencyMS: took.Milliseconds(),
+		MessageID: tc.ID, Annotations: annotations(v.GetAnnotations())}
+	switch d.Action {
+	case Replace:
+		row.Action = "replace"
+	case Respond:
+		row.Action, row.RespondMode = "respond", "synthesized"
+	}
+	if row.Action != "accept" || len(row.Annotations) > 0 {
+		c.store(callID, row)
+	}
+	return d
+}
+
+// toolAnswer checks OnToolCall's answer against the call.
+func toolAnswer(tc convo.ToolCall, v *pb2.MessageVerdict) (Decision, error) {
+	switch a := v.GetAction().(type) {
+	case *pb2.MessageVerdict_Respond:
+		if err := checkRespond(a.Respond); err != nil {
+			return Decision{}, err
+		}
+		return Decision{Action: Respond, Text: a.Respond.GetText()}, nil
+	case *pb2.MessageVerdict_Replace:
+		ps := a.Replace.GetMessage().GetParts()
+		if len(ps) != 1 || ps[0].GetToolCall() == nil {
+			return Decision{}, invalid("Replace of a tool call is one tool call part")
+		}
+		if ps[0].GetRef() {
+			return Decision{Action: Allow}, nil // still a reference: unchanged
+		}
+		r := ps[0].GetToolCall()
+		if r.GetCallId() != tc.ID || r.GetName() != tc.Name {
+			return Decision{}, invalid("only a tool call's arguments can change")
+		}
+		args := r.GetArguments()
+		var str string
+		switch {
+		case !json.Valid([]byte(args)):
+			return Decision{}, invalid("tool call arguments must be JSON")
+		case tc.Custom && json.Unmarshal([]byte(args), &str) != nil:
+			return Decision{}, invalid("a custom tool's arguments are a JSON string")
+		case args == tc.Arguments:
+			return Decision{Action: Allow}, nil
+		}
+		return Decision{Action: Replace, Payload: []byte(args)}, nil
+	}
+	return Decision{Action: Allow}, nil
 }

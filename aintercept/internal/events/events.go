@@ -826,13 +826,12 @@ type WSConnection struct {
 
 // Verdict is one decision a customer's Interceptor returned for a call.
 type Verdict struct {
-	// Callback is "call_start" or "message" (contract v1), "call_start" or
-	// "request" (v2).
+	// Callback is "call_start" or "message" (contract v1), "call_start",
+	// "request" or "tool_call" (v2).
 	Callback string `json:"callback"`
-	// Action: allow, replace, drop, deny (v1); accept, replace,
-	// respond_unsupported (v2); or error (the Interceptor failed, missed its
-	// deadline or gave an answer that can't be applied; Applied then says
-	// whether the call was refused).
+	// Action: allow, replace, drop, deny (v1); accept, replace, respond (v2);
+	// or error (the Interceptor failed, missed its deadline or gave an answer
+	// that can't be applied; Applied then says whether the call was refused).
 	Action      string            `json:"action"`
 	Applied     bool              `json:"applied"`
 	Mode        string            `json:"mode"`
@@ -840,6 +839,11 @@ type Verdict struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 	// LatencyMS is how long the Interceptor took to answer.
 	LatencyMS int64 `json:"latency_ms,omitempty"`
-	// MessageID is the message a v2 answer is for ("" for the call).
+	// MessageID is the message a v2 answer is for ("" for the call; a tool
+	// call's id).
 	MessageID string `json:"message_id,omitempty"`
+	// RespondMode is how an applied Respond was delivered: "synthesized" (the
+	// call never went upstream, or a tool call's reply was ended with the
+	// text) or "rewritten" (the request asked the model for the text).
+	RespondMode string `json:"respond_mode,omitempty"`
 }

@@ -9,6 +9,11 @@ assume anything about AIntercept beyond what's here.
 and the settings. This document is the walkthrough. Read the reference's first
 two sections first.
 
+This walkthrough builds on contract v1 (bodies and events). For contract v2
+(each call's new messages, Respond, tool calls held whole), read
+[`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md) for what's
+different; deploying and operating are the same.
+
 **Contents**
 1. [What you're building](#1-what-youre-building)
 2. [Decide what your Interceptor needs](#2-decide-what-your-interceptor-needs)
