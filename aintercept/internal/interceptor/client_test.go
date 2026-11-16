@@ -1,6 +1,7 @@
 package interceptor_test
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"testing"
@@ -61,6 +62,20 @@ func TestDecideAppliesVerdicts(t *testing.T) {
 }
 
 // A missed deadline fails closed by default, and open with OnError allow.
+// A Replace carries the whole rewritten body back, and a request body can be up
+// to the enforce cap (32 MiB): more than gRPC's default 4 MiB receive limit.
+func TestTakesALargeReplacement(t *testing.T) {
+	big := bytes.Repeat([]byte("x"), 30<<20)
+	f := &interceptortest.Fake{Message: func(*pb.Message) *pb.Verdict {
+		return &pb.Verdict{Action: &pb.Verdict_Replace{Replace: &pb.Replace{Payload: big}}}
+	}}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	defer c.Close()
+	if d := c.DecideMessage(context.Background(), msg("a", 1, "old")); d.Action != interceptor.Replace || len(d.Payload) != len(big) {
+		t.Fatalf("got %v (%d bytes), want the 30 MiB replacement", d.Action, len(d.Payload))
+	}
+}
+
 func TestDeadlineFailsClosed(t *testing.T) {
 	f := &interceptortest.Fake{Delay: 200 * time.Millisecond}
 	for _, tc := range []struct {

@@ -124,6 +124,11 @@ type callVerdicts struct {
 
 // New connects to the Interceptor (lazily: gRPC dials on first use and
 // reconnects on its own). record receives every verdict; it must not block.
+// MaxMessageBytes is the largest callback or verdict either side has to take:
+// a request body up to the enforce cap (32 MiB) with room for the rest of the
+// message. An Interceptor's gRPC server needs the same receive limit.
+const MaxMessageBytes = 33 << 20
+
 func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, error) {
 	if cfg.Endpoint == "" {
 		return nil, errors.New("interceptor: no endpoint")
@@ -151,11 +156,14 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 	if err != nil {
 		return nil, err
 	}
+	// A Replace verdict carries a whole body back (up to the 32 MiB enforce cap):
+	// above gRPC's default 4 MiB receive limit.
 	// Round-robin across every address the endpoint resolves to (a headless
 	// Service with dns:///…), rather than gRPC's default of the first one.
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(creds),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig":[{"round_robin":{}}]}`),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMessageBytes)),
 	}
 	conn, err := grpc.NewClient(cfg.Endpoint, append(opts, cfg.DialOptions...)...)
 	if err != nil {

@@ -155,7 +155,8 @@ section 5:
 - `aintercept/examples/python-redact/server.py` (Python)
 
 They do the same thing: redact "silly clown" in both directions, refuse the
-model `forbidden-model`, and log every call. Here is the Python one, in full:
+model `forbidden-model`, answer the silly rabbit (below), and log every call. Here is
+the core of the Python one:
 
 ```python
 import logging, os, re
@@ -195,11 +196,27 @@ class Interceptor(pb_grpc.InterceptorServicer):
                      r.status, r.input_tokens, r.output_tokens)
         return pb.Ack()
 
-server = grpc.server(futures.ThreadPoolExecutor(max_workers=32))
+# Request bodies arrive whole, up to 32 MiB: raise gRPC's default 4 MiB limit.
+server = grpc.server(futures.ThreadPoolExecutor(max_workers=32),
+                     options=[("grpc.max_receive_message_length", 33 << 20)])
 pb_grpc.add_InterceptorServicer_to_server(Interceptor(), server)
 server.add_insecure_port(os.environ.get("LISTEN", "[::]:9100"))
 server.start(); server.wait_for_termination()
 ```
+
+**Raise your server's message limit.** `OnMessage` carries a whole request
+body, up to 32 MiB, and clients resend the whole conversation on every call: a
+long Claude Code session's body is several MiB. gRPC servers take 4 MiB by
+default, and anything over that fails the callback (in enforce, the call is
+refused). Set the receive limit to 33 MiB: `grpc.MaxRecvMsgSize(33 << 20)` in
+Go, `grpc.max_receive_message_length` in Python.
+
+**The silly rabbit** shows a rule on what the user just said. Clients resend the
+whole conversation, so the examples look only at the newest user message
+(`newest` in each): the last message or input item when it's the user's, or
+claude.ai's `prompt`. "I'm a silly rabbit" is rewritten to ask the model for
+"Well, tricks are for kids.". Anything that isn't a request they know is
+matched whole.
 
 The rest of this section is what you need to know to write your own.
 
@@ -359,8 +376,8 @@ INTERCEPTOR_COMPOSE_OVERRIDE=path/to/my-interceptor.override.yml make test-inter
 ```
 
 The tests assert the example's rules: redact "silly clown", refuse
-`forbidden-model`. To run them against your service, temporarily add those two
-rules. The Python example shows they're five lines. Or use the stack as a
+`forbidden-model`, and the silly rabbit. To run them against your service,
+temporarily add those rules; the Python example shows them. Or use the stack as a
 sandbox for your own rules:
 
 ```bash

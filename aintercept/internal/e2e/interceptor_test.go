@@ -123,6 +123,30 @@ func TestEnforceDenyAtCallStart(t *testing.T) {
 	}
 }
 
+// The silly rabbit: a request whose newest user message says "I'm a silly
+// rabbit" reaches the model rewritten to ask for "Well, tricks are for kids.".
+const tricks = "Well, tricks are for kids."
+
+func TestEnforceSillyRabbit(t *testing.T) {
+	resp, body := post(t, "enforce.test", "/v1/messages",
+		`{"model":"fixture-model","stream":true,"messages":[{"role":"user","content":"I'm a silly rabbit"}]}`)
+	if resp.StatusCode != 200 {
+		t.Fatalf("status %d: %s", resp.StatusCode, body)
+	}
+	if got := received(t, resp); strings.Contains(got, "silly rabbit") || !strings.Contains(got, tricks) {
+		t.Errorf("upstream received %q; want it asked for %q", got, tricks)
+	}
+}
+
+func TestEnforceSillyRabbitOnAWebSocket(t *testing.T) {
+	c, r := wsDial(t, "enforce.test")
+	defer c.Close()
+	_, _ = c.Write(wsframe.Encode(wsframe.OpText, []byte(`{"input":"I'm a silly rabbit"}`), true))
+	if _, got := wsRead(t, r); strings.Contains(got, "silly rabbit") || !strings.Contains(got, tricks) {
+		t.Errorf("got %q; want the message rewritten to ask for %q", got, tricks)
+	}
+}
+
 // wsDial opens a WebSocket to the fixture's /ws through Envoy.
 func wsDial(t *testing.T, host string) (net.Conn, *bufio.Reader) {
 	t.Helper()
@@ -239,11 +263,11 @@ func TestVerdictsRecorded(t *testing.T) {
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		applied, recorded := countVerdicts(t)
-		if applied >= 5 && recorded >= 3 {
+		if applied >= 7 && recorded >= 3 {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("verdict rows: %d applied, %d recorded-only; want ≥5 and ≥3", applied, recorded)
+			t.Fatalf("verdict rows: %d applied, %d recorded-only; want ≥7 and ≥3", applied, recorded)
 		}
 		time.Sleep(time.Second)
 	}

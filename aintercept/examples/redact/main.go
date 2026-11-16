@@ -1,7 +1,10 @@
 // redact is a minimal example Interceptor (docs/INTERCEPTOR.md): it replaces
 // "silly clown" with "[redacted]" wherever it appears in a call's content,
 // in both directions, refuses calls that ask for the model
-// "forbidden-model", and logs each call's start and record.
+// "forbidden-model", and logs each call's start and record. It also answers
+// the silly rabbit, in what the client sends: "I'm a silly rabbit" is
+// rewritten to ask the model for "Well, tricks are for kids.". Everything else
+// goes through unchanged.
 //
 // It shows the whole contract: OnCallStart decides from the parsed request
 // (Deny or Allow), OnMessage returns Replace when it changes a message (Allow
@@ -12,17 +15,21 @@
 //
 // Matching is per message: a phrase split across two streamed events (two
 // deltas of the model's text) isn't seen. A real policy would track state per
-// call (Call.call_id) where that matters.
+// call (Call.call_id) where that matters. The rabbit is matched in the newest
+// thing the user said (newest), not the whole body: clients resend the whole
+// conversation, and a rabbit earlier in it is history.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log/slog"
 	"net"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"google.golang.org/grpc"
 
@@ -30,6 +37,15 @@ import (
 )
 
 var phrase = regexp.MustCompile(`(?i)silly clown`)
+
+// The rabbit, with a straight or curly apostrophe (raw, or JSON-escaped), or none.
+const apostrophe = `(?:'|’|\\u0027|\\u2019)?`
+
+var (
+	sillyRabbit = regexp.MustCompile(`(?i)i` + apostrophe + `m a silly rabbit`)
+	// No quotes or backslashes: it goes inside JSON strings as it is.
+	tricks = []byte("Reply with exactly this sentence and nothing else: Well, tricks are for kids.")
+)
 
 type server struct {
 	pb.UnimplementedInterceptorServer
@@ -46,17 +62,31 @@ func (server) OnCallStart(_ context.Context, s *pb.CallStart) (*pb.Verdict, erro
 }
 
 func (server) OnMessage(_ context.Context, m *pb.Message) (*pb.Verdict, error) {
-	n := len(phrase.FindAllIndex(m.GetPayload(), -1))
-	if n == 0 {
+	in := m.GetPayload()
+	var notes []*pb.Annotation
+	if m.GetDirection() == pb.Direction_DIRECTION_CLIENT_TO_SERVER {
+		said, ok := newest(in)
+		if !ok {
+			said = string(in) // not a request we know: the whole message
+		}
+		if sillyRabbit.MatchString(said) {
+			in = sillyRabbit.ReplaceAll(in, tricks)
+			notes = append(notes, &pb.Annotation{Key: "rabbit", Value: "silly"})
+			slog.Info("silly rabbit", "call", m.GetCall().GetCallId(), "kind", m.GetKind().String(),
+				"applied", m.GetCall().GetMode() == pb.Mode_MODE_ENFORCE)
+		}
+	}
+	n := len(phrase.FindAllIndex(in, -1))
+	if n == 0 && notes == nil {
 		return &pb.Verdict{}, nil // unset action: Allow
 	}
-	out := phrase.ReplaceAll(m.GetPayload(), []byte("[redacted]"))
-	slog.Info("redacted", "call", m.GetCall().GetCallId(), "direction", m.GetDirection().String(),
-		"kind", m.GetKind().String(), "matches", n, "applied", m.GetCall().GetMode() == pb.Mode_MODE_ENFORCE)
-	return &pb.Verdict{
-		Action:      &pb.Verdict_Replace{Replace: &pb.Replace{Payload: out}},
-		Annotations: []*pb.Annotation{{Key: "redacted", Value: strconv.Itoa(n)}},
-	}, nil
+	out := phrase.ReplaceAll(in, []byte("[redacted]"))
+	if n > 0 {
+		slog.Info("redacted", "call", m.GetCall().GetCallId(), "direction", m.GetDirection().String(),
+			"kind", m.GetKind().String(), "matches", n, "applied", m.GetCall().GetMode() == pb.Mode_MODE_ENFORCE)
+		notes = append(notes, &pb.Annotation{Key: "redacted", Value: strconv.Itoa(n)})
+	}
+	return &pb.Verdict{Action: &pb.Verdict_Replace{Replace: &pb.Replace{Payload: out}}, Annotations: notes}, nil
 }
 
 func (server) OnCallComplete(_ context.Context, r *pb.CallRecord) (*pb.Ack, error) {
@@ -76,13 +106,90 @@ func main() {
 		slog.Error("listen", "err", err)
 		os.Exit(1)
 	}
-	g := grpc.NewServer()
-	pb.RegisterInterceptorServer(g, server{})
+	g := newServer()
 	slog.Info("redact interceptor listening", "addr", *listen)
 	if err := g.Serve(l); err != nil {
 		slog.Error("serve", "err", err)
 		os.Exit(1)
 	}
+}
+
+// newServer takes messages up to 33 MiB: the observer sends request bodies up
+// to 32 MiB, and gRPC's default 4 MiB limit would fail a long session's.
+// newest is the newest thing the user said in a request body we know: the last
+// message or input item when it's the user's (the Anthropic and OpenAI APIs,
+// Claude Code, Codex over HTTP or its WebSocket, ChatGPT on the web), or
+// claude.ai's prompt. ok is false for any other body.
+func newest(payload []byte) (said string, ok bool) {
+	var body struct {
+		Messages []json.RawMessage `json:"messages"`
+		Input    json.RawMessage   `json:"input"`
+		Prompt   *string           `json:"prompt"`
+	}
+	if json.Unmarshal(payload, &body) != nil {
+		return "", false
+	}
+	switch {
+	case body.Prompt != nil:
+		return *body.Prompt, true
+	case len(body.Messages) > 0:
+		return userText(body.Messages[len(body.Messages)-1]), true
+	case len(body.Input) > 0:
+		var s string
+		if json.Unmarshal(body.Input, &s) == nil {
+			return s, true
+		}
+		var items []json.RawMessage
+		if json.Unmarshal(body.Input, &items) == nil {
+			if len(items) == 0 {
+				return "", true
+			}
+			return userText(items[len(items)-1]), true
+		}
+	}
+	return "", false
+}
+
+// userText is a message's text when the user sent it: its content as a string,
+// its text blocks (not tool results), or ChatGPT's content parts.
+func userText(raw json.RawMessage) string {
+	var m struct {
+		Role   string `json:"role"`
+		Author struct {
+			Role string `json:"role"`
+		} `json:"author"`
+		Content json.RawMessage `json:"content"`
+	}
+	if json.Unmarshal(raw, &m) != nil || (m.Role != "user" && m.Author.Role != "user") {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(m.Content, &s) == nil {
+		return s
+	}
+	var texts []string
+	var blocks []struct{ Type, Text string }
+	var chatgpt struct{ Parts []json.RawMessage }
+	if json.Unmarshal(m.Content, &blocks) == nil {
+		for _, b := range blocks {
+			if b.Type == "text" || b.Type == "input_text" {
+				texts = append(texts, b.Text)
+			}
+		}
+	} else if json.Unmarshal(m.Content, &chatgpt) == nil {
+		for _, p := range chatgpt.Parts {
+			if json.Unmarshal(p, &s) == nil {
+				texts = append(texts, s)
+			}
+		}
+	}
+	return strings.Join(texts, "\n")
+}
+
+func newServer() *grpc.Server {
+	g := grpc.NewServer(grpc.MaxRecvMsgSize(33 << 20))
+	pb.RegisterInterceptorServer(g, server{})
+	return g
 }
 
 func envOr(k, def string) string {
