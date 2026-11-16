@@ -5,6 +5,8 @@ in its own fields."""
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from aintercept_api import agents, rows
 from tests.builders import ACCOUNT, CODEX_ACCOUNT, ClaudeCode, Codex
 
@@ -390,9 +392,11 @@ def test_person_requests_and_sessions_scope_to_an_agent(dataset, pg_client_for):
     assert {"claude-code", "codex"} <= agents_of(both)
 
 
-def test_a_title_thread_names_the_thread_it_follows(dataset, pg_client_for):
+@pytest.mark.parametrize("answer", ["Fix flaky timer test", '{"title":"Fix flaky timer test"}'])
+def test_a_title_thread_names_the_thread_it_follows(dataset, pg_client_for, answer):
     """Codex titles a thread from a thread of its own, just after the first turn: the title
-    goes to the same account's thread that started last before it (handoff §11M 3.4)."""
+    goes to the same account's thread that started last before it (handoff §11M 3.4). Newer
+    Codex answers with a JSON object; the label is its title."""
     t = Codex(dataset, CHILD)
     t.post("2026-11-04T16:00:00", "turn-x", {"input": []}, [])
     Codex(dataset, "01a1c1ec-3e49-71b3-b32b-55a748502bab").post(
@@ -402,7 +406,7 @@ def test_a_title_thread_names_the_thread_it_follows(dataset, pg_client_for):
         [
             {
                 "type": "response.output_item.done",
-                "item": {"type": "message", "content": [{"type": "output_text", "text": "Fix flaky timer test"}]},
+                "item": {"type": "message", "content": [{"type": "output_text", "text": answer}]},
             }
         ],
         source="thread_title",
