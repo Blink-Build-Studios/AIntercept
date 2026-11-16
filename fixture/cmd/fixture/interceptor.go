@@ -4,7 +4,8 @@ package main
 // a provider-shaped event stream and JSON response that echo the request and
 // say "silly clown", and a WebSocket echo.
 // A request carrying "fixture_tool" gets a reply that calls that tool
-// instead (toolReply). Synthetic content only.
+// instead, and one carrying "fixture_text" a reply whose text arrives in
+// those pieces, "fixture_gap_ms" apart (toolReply). Synthetic content only.
 
 import (
 	"bufio"
@@ -18,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func interceptorRoutes(mux *http.ServeMux) {
@@ -45,6 +47,9 @@ func interceptorRoutes(mux *http.ServeMux) {
 		}
 		messages(w, r)
 	})
+
+	// Chat Completions (contract v2's end-to-end test), as /v1/messages.
+	mux.HandleFunc("/v1/chat/completions", messages)
 }
 
 // messages answers with an event stream echoing the request body. The body
@@ -110,8 +115,10 @@ func wsEcho(w http.ResponseWriter, r *http.Request) {
 			_, _ = conn.Write(frame(0xA, payload))
 		case 0x1:
 			if evs := toolEvents("responses", payload); evs != nil {
+				gap := requestGap(payload)
 				for _, e := range evs {
 					_, _ = conn.Write(frame(0x1, e.data))
+					time.Sleep(gap)
 				}
 				continue
 			}
@@ -192,64 +199,140 @@ func ev(v map[string]any) event {
 	return event{name: v["type"].(string), data: b}
 }
 
-// requestTool is a request's "fixture_tool" (nil when it has none).
-func requestTool(body []byte) *fixtureTool {
-	var req struct {
-		Tool *fixtureTool `json:"fixture_tool"`
-	}
-	_ = json.Unmarshal(body, &req)
-	return req.Tool
+// fixtureReply is what a request asks the fixture's reply to be: its text
+// in pieces ("fixture_text"; default "Let me look."), then a tool call
+// ("fixture_tool"), the events fixture_gap_ms apart.
+type fixtureReply struct {
+	Tool  *fixtureTool `json:"fixture_tool"`
+	Text  []string     `json:"fixture_text"`
+	GapMS int          `json:"fixture_gap_ms"`
 }
 
-// toolEvents is the reply to a request with "fixture_tool", as events in
-// format ("anthropic" or "responses"): "Let me look.", then the tool call,
-// its arguments in two pieces. Nil for any other request.
+func requestReply(body []byte) fixtureReply {
+	var r fixtureReply
+	_ = json.Unmarshal(body, &r)
+	return r
+}
+
+// requestTool is a request's "fixture_tool" (nil when it has none).
+func requestTool(body []byte) *fixtureTool { return requestReply(body).Tool }
+
+func requestGap(body []byte) time.Duration {
+	return time.Duration(requestReply(body).GapMS) * time.Millisecond
+}
+
+// toolEvents is the reply to a request with "fixture_tool" or
+// "fixture_text", as events in format ("anthropic", "responses" or "chat"):
+// the text, then the tool call, its arguments in two pieces. Nil for any
+// other request.
 func toolEvents(format string, body []byte) []event {
-	tool := requestTool(body)
-	if tool == nil {
+	rr := requestReply(body)
+	tool := rr.Tool
+	if tool == nil && rr.Text == nil {
 		return nil
 	}
-	args := string(tool.Arguments)
-	half := len(args) / 2
-	if format == "anthropic" {
-		return []event{
+	pieces := rr.Text
+	if pieces == nil {
+		pieces = []string{"Let me look."}
+	}
+	full := strings.Join(pieces, "")
+	var args string
+	var half int
+	if tool != nil {
+		args = string(tool.Arguments)
+		half = len(args) / 2
+	}
+	switch format {
+	case "anthropic":
+		evs := []event{
 			ev(map[string]any{"type": "message_start", "message": map[string]any{"id": "msg_fixture", "type": "message", "role": "assistant", "model": "fixture-model", "content": []any{}, "usage": map[string]int{"input_tokens": 12, "output_tokens": 1}}}),
 			ev(map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]string{"type": "text", "text": ""}}),
-			ev(map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]string{"type": "text_delta", "text": "Let me look."}}),
-			ev(map[string]any{"type": "content_block_stop", "index": 0}),
-			ev(map[string]any{"type": "content_block_start", "index": 1, "content_block": map[string]any{"type": "tool_use", "id": "toolu_fixture", "name": tool.Name, "input": map[string]any{}}}),
-			ev(map[string]any{"type": "content_block_delta", "index": 1, "delta": map[string]string{"type": "input_json_delta", "partial_json": args[:half]}}),
-			ev(map[string]any{"type": "content_block_delta", "index": 1, "delta": map[string]string{"type": "input_json_delta", "partial_json": args[half:]}}),
-			ev(map[string]any{"type": "content_block_stop", "index": 1}),
-			ev(map[string]any{"type": "message_delta", "delta": map[string]string{"stop_reason": "tool_use"}, "usage": map[string]int{"output_tokens": 9}}),
-			ev(map[string]any{"type": "message_stop"}),
 		}
+		for _, p := range pieces {
+			evs = append(evs, ev(map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]string{"type": "text_delta", "text": p}}))
+		}
+		evs = append(evs, ev(map[string]any{"type": "content_block_stop", "index": 0}))
+		stop := "end_turn"
+		if tool != nil {
+			stop = "tool_use"
+			evs = append(evs,
+				ev(map[string]any{"type": "content_block_start", "index": 1, "content_block": map[string]any{"type": "tool_use", "id": "toolu_fixture", "name": tool.Name, "input": map[string]any{}}}),
+				ev(map[string]any{"type": "content_block_delta", "index": 1, "delta": map[string]string{"type": "input_json_delta", "partial_json": args[:half]}}),
+				ev(map[string]any{"type": "content_block_delta", "index": 1, "delta": map[string]string{"type": "input_json_delta", "partial_json": args[half:]}}),
+				ev(map[string]any{"type": "content_block_stop", "index": 1}))
+		}
+		return append(evs,
+			ev(map[string]any{"type": "message_delta", "delta": map[string]string{"stop_reason": stop}, "usage": map[string]int{"output_tokens": 9}}),
+			ev(map[string]any{"type": "message_stop"}))
+	case "chat":
+		chunk := func(delta map[string]any, finish any) event {
+			return event{data: mustJSON(map[string]any{"id": "chatcmpl-fixture", "object": "chat.completion.chunk", "created": 1, "model": "fixture-model",
+				"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}}})}
+		}
+		evs := []event{chunk(map[string]any{"role": "assistant", "content": ""}, nil)}
+		for _, p := range pieces {
+			evs = append(evs, chunk(map[string]any{"content": p}, nil))
+		}
+		finish := "stop"
+		if tool != nil {
+			finish = "tool_calls"
+			evs = append(evs,
+				chunk(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "call_fixture", "type": "function", "function": map[string]string{"name": tool.Name, "arguments": args[:half]}}}}, nil),
+				chunk(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "function": map[string]string{"arguments": args[half:]}}}}, nil))
+		}
+		return append(evs, chunk(map[string]any{}, finish),
+			event{data: mustJSON(map[string]any{"id": "chatcmpl-fixture", "object": "chat.completion.chunk", "created": 1, "model": "fixture-model", "choices": []any{},
+				"usage": map[string]int{"prompt_tokens": 12, "completion_tokens": 9, "total_tokens": 21}})},
+			event{data: []byte("[DONE]")})
 	}
-	msg := map[string]any{"id": "msg_fixture", "type": "message", "status": "completed", "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": "Let me look.", "annotations": []any{}}}}
-	call := map[string]any{"id": "fc_fixture", "type": "function_call", "status": "completed", "arguments": args, "call_id": "call_fixture", "name": tool.Name}
+	msg := map[string]any{"id": "msg_fixture", "type": "message", "status": "completed", "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": full, "annotations": []any{}}}}
 	resp := func(status string, output []any, usage any) map[string]any {
 		return map[string]any{"id": "resp_fixture", "object": "response", "status": status, "model": "fixture-model", "output": output, "usage": usage}
 	}
-	return []event{
-		ev(map[string]any{"type": "response.created", "sequence_number": 0, "response": resp("in_progress", []any{}, nil)}),
-		ev(map[string]any{"type": "response.output_item.added", "sequence_number": 1, "output_index": 0, "item": map[string]any{"id": "msg_fixture", "type": "message", "status": "in_progress", "role": "assistant", "content": []any{}}}),
-		ev(map[string]any{"type": "response.output_text.delta", "sequence_number": 2, "item_id": "msg_fixture", "output_index": 0, "content_index": 0, "delta": "Let me look."}),
-		ev(map[string]any{"type": "response.output_item.done", "sequence_number": 3, "output_index": 0, "item": msg}),
-		ev(map[string]any{"type": "response.output_item.added", "sequence_number": 4, "output_index": 1, "item": map[string]any{"id": "fc_fixture", "type": "function_call", "status": "in_progress", "arguments": "", "call_id": "call_fixture", "name": tool.Name}}),
-		ev(map[string]any{"type": "response.function_call_arguments.delta", "sequence_number": 5, "item_id": "fc_fixture", "output_index": 1, "delta": args[:half]}),
-		ev(map[string]any{"type": "response.function_call_arguments.delta", "sequence_number": 6, "item_id": "fc_fixture", "output_index": 1, "delta": args[half:]}),
-		ev(map[string]any{"type": "response.function_call_arguments.done", "sequence_number": 7, "item_id": "fc_fixture", "output_index": 1, "arguments": args}),
-		ev(map[string]any{"type": "response.output_item.done", "sequence_number": 8, "output_index": 1, "item": call}),
-		ev(map[string]any{"type": "response.completed", "sequence_number": 9, "response": resp("completed", []any{msg, call}, map[string]int{"input_tokens": 12, "output_tokens": 9, "total_tokens": 21})}),
+	seq := 0
+	next := func(m map[string]any) event {
+		m["sequence_number"] = seq
+		seq++
+		return ev(m)
 	}
+	evs := []event{
+		next(map[string]any{"type": "response.created", "response": resp("in_progress", []any{}, nil)}),
+		next(map[string]any{"type": "response.output_item.added", "output_index": 0, "item": map[string]any{"id": "msg_fixture", "type": "message", "status": "in_progress", "role": "assistant", "content": []any{}}}),
+	}
+	for _, p := range pieces {
+		evs = append(evs, next(map[string]any{"type": "response.output_text.delta", "item_id": "msg_fixture", "output_index": 0, "content_index": 0, "delta": p}))
+	}
+	evs = append(evs,
+		next(map[string]any{"type": "response.output_text.done", "item_id": "msg_fixture", "output_index": 0, "content_index": 0, "text": full}),
+		next(map[string]any{"type": "response.output_item.done", "output_index": 0, "item": msg}))
+	output := []any{msg}
+	if tool != nil {
+		call := map[string]any{"id": "fc_fixture", "type": "function_call", "status": "completed", "arguments": args, "call_id": "call_fixture", "name": tool.Name}
+		output = append(output, call)
+		evs = append(evs,
+			next(map[string]any{"type": "response.output_item.added", "output_index": 1, "item": map[string]any{"id": "fc_fixture", "type": "function_call", "status": "in_progress", "arguments": "", "call_id": "call_fixture", "name": tool.Name}}),
+			next(map[string]any{"type": "response.function_call_arguments.delta", "item_id": "fc_fixture", "output_index": 1, "delta": args[:half]}),
+			next(map[string]any{"type": "response.function_call_arguments.delta", "item_id": "fc_fixture", "output_index": 1, "delta": args[half:]}),
+			next(map[string]any{"type": "response.function_call_arguments.done", "item_id": "fc_fixture", "output_index": 1, "arguments": args}),
+			next(map[string]any{"type": "response.output_item.done", "output_index": 1, "item": call}))
+	}
+	return append(evs, next(map[string]any{"type": "response.completed", "response": resp("completed", output, map[string]int{"input_tokens": 12, "output_tokens": 9, "total_tokens": 21})}))
+}
+
+func mustJSON(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
 }
 
 // toolReply answers a request with "fixture_tool" (false for any other): an
 // event stream, or with "stream": false a JSON body, in the path's format.
 func toolReply(w http.ResponseWriter, path string, body []byte) bool {
 	format := "anthropic"
-	if strings.HasPrefix(path, "/backend-api/codex/") {
+	switch {
+	case strings.HasPrefix(path, "/backend-api/codex/"):
 		format = "responses"
+	case path == "/v1/chat/completions":
+		format = "chat"
 	}
 	evs := toolEvents(format, body)
 	if evs == nil {
@@ -261,12 +344,30 @@ func toolReply(w http.ResponseWriter, path string, body []byte) bool {
 	_ = json.Unmarshal(body, &req)
 	if req.Stream != nil && !*req.Stream { // the whole reply
 		var whole []byte
-		if format == "anthropic" {
-			tool := requestTool(body)
+		rr := requestReply(body)
+		text := "Let me look."
+		if rr.Text != nil {
+			text = strings.Join(rr.Text, "")
+		}
+		switch format {
+		case "anthropic":
+			content := []any{map[string]string{"type": "text", "text": text}}
+			stop := "end_turn"
+			if tool := rr.Tool; tool != nil {
+				content, stop = append(content, map[string]any{"type": "tool_use", "id": "toolu_fixture", "name": tool.Name, "input": tool.Arguments}), "tool_use"
+			}
 			whole, _ = json.Marshal(map[string]any{"id": "msg_fixture", "type": "message", "role": "assistant", "model": "fixture-model",
-				"content":     []any{map[string]string{"type": "text", "text": "Let me look."}, map[string]any{"type": "tool_use", "id": "toolu_fixture", "name": tool.Name, "input": tool.Arguments}},
-				"stop_reason": "tool_use", "usage": map[string]int{"input_tokens": 12, "output_tokens": 9}})
-		} else { // the completed response
+				"content": content, "stop_reason": stop, "usage": map[string]int{"input_tokens": 12, "output_tokens": 9}})
+		case "chat":
+			msg := map[string]any{"role": "assistant", "content": text}
+			finish := "stop"
+			if tool := rr.Tool; tool != nil {
+				msg["tool_calls"], finish = []any{map[string]any{"id": "call_fixture", "type": "function", "function": map[string]string{"name": tool.Name, "arguments": string(tool.Arguments)}}}, "tool_calls"
+			}
+			whole, _ = json.Marshal(map[string]any{"id": "chatcmpl-fixture", "object": "chat.completion", "created": 1, "model": "fixture-model",
+				"choices": []any{map[string]any{"index": 0, "message": msg, "finish_reason": finish}},
+				"usage":   map[string]int{"prompt_tokens": 12, "completion_tokens": 9, "total_tokens": 21}})
+		default: // the completed response
 			var last struct {
 				Response json.RawMessage `json:"response"`
 			}
@@ -279,11 +380,16 @@ func toolReply(w http.ResponseWriter, path string, body []byte) bool {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	f, _ := w.(http.Flusher)
+	gap := requestGap(body)
 	for _, e := range evs {
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.name, e.data)
+		if e.name != "" {
+			fmt.Fprintf(w, "event: %s\n", e.name)
+		}
+		fmt.Fprintf(w, "data: %s\n\n", e.data)
 		if f != nil {
 			f.Flush()
 		}
+		time.Sleep(gap)
 	}
 	return true
 }

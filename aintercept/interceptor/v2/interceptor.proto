@@ -13,13 +13,15 @@
 //
 //   observe  Callbacks are delivered asynchronously; answers are recorded,
 //            never applied.
-//   enforce  OnCallStart, OnRequest and OnToolCall are in the call's path,
-//            within the deadline; answers are applied. On a failure or a
-//            missed deadline the call is refused (fail closed; configurable).
+//   enforce  OnCallStart, OnRequest, OnReply and OnToolCall are in the
+//            call's path, within the deadline; answers are applied. On a
+//            failure or a missed deadline the call is refused (fail closed;
+//            configurable).
 //
-// Content: OnRequest and OnToolCall are only called when the deployment
-// enables Interceptor content. A reply's text streams to the client
-// untouched; each tool call in it is held until OnToolCall has answered.
+// Content: OnRequest, OnReply and OnToolCall are only called when the
+// deployment enables Interceptor content. Every message goes to the
+// Interceptor in both directions: the request's new messages before they go
+// upstream, and the reply's text and tool calls before the client sees them.
 //
 // See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
 syntax = "proto3";
@@ -38,6 +40,22 @@ service Interceptor {
   // Only called with Interceptor content on, for requests AIntercept can
   // read.
   rpc OnRequest(RequestMessages) returns (RequestVerdict);
+
+  // The model's reply text, as it streams, before the client sees any of it
+  // (Anthropic Messages, Responses over HTTP or Codex's WebSocket, Chat
+  // Completions; streamed or not). Per text block, each call carries the
+  // text released so far (never asked about again), the pending text (the
+  // new pieces, plus anything held back) and whether the block is finished.
+  // Accept releases the pending text; Replace releases your text instead;
+  // Hold keeps it and asks again when more arrives; keep, with Accept or
+  // Replace, holds back only the pending text's tail (with done set, nothing
+  // can stay held: a Hold then releases it as Accept); Respond ends the
+  // reply with your text. While a call is outstanding, new pieces gather
+  // for the next one. Also called once for each opaque part of the reply
+  // (reasoning, encrypted content): it exists, and the answer is ignored.
+  // An Interceptor that doesn't implement it (UNIMPLEMENTED) accepts all
+  // reply text, and AIntercept stops holding it.
+  rpc OnReply(ResponseMessage) returns (MessageVerdict);
 
   // Each tool call in the model's reply (Anthropic Messages, Responses over
   // HTTP or Codex's WebSocket; streamed or not), held from its start until
@@ -253,15 +271,28 @@ message MessageVerdict {
   oneof action {
     Accept accept = 2;
     Replace replace = 3;
-    // OnToolCall: the reply ends here with this text. In OnRequest, as
-    // RequestVerdict.respond.
+    // OnToolCall, OnReply: the reply ends here with this text. In
+    // OnRequest, as RequestVerdict.respond.
     Respond respond = 4;
+    // OnReply only: keep the pending text and ask again when more arrives.
+    Hold hold = 5;
   }
+  // OnReply, with Accept (or no action) or Replace: the last keep bytes of
+  // the pending text (cut on a character) stay held and come back in the next
+  // call with what arrives next; Accept releases the rest as it is, Replace
+  // releases the message's text in its place. This is how a match that may
+  // continue in the next piece is held back while the text before it goes
+  // on. Ignored once the block is done.
+  int32 keep = 6;
   repeated Annotation annotations = 10;
 }
 
 // Forward unchanged.
 message Accept {}
+
+// Release nothing yet: the pending text comes back, with whatever arrives
+// next, in the next call.
+message Hold {}
 
 // Put this version of the message in place. Every part of the original comes
 // back, by id, in order: change text (a text part, a tool result's text, a
@@ -301,14 +332,27 @@ message CallVerdict {
   repeated Annotation annotations = 10;
 }
 
-// ── OnToolCall ───────────────────────────────────────────────────────────────
+// ── OnReply, OnToolCall ──────────────────────────────────────────────────────
 
-// One tool call in the model's reply: an ASSISTANT message with one ToolCall
-// part, its arguments inline up to 3 MiB (by reference beyond: there is no
-// Fetch for a tool call).
+// A message from the model, before the client sees it: an ASSISTANT message
+// with one part.
+//
+// OnToolCall: one ToolCall part, its arguments inline up to 3 MiB (by
+// reference beyond: there is no Fetch for a tool call). The message id is
+// the provider's call id.
+//
+// OnReply: one Text part, the pending text of a text block; or one Opaque
+// part. The message id is the block's, the same on every call for it:
+// "<the reply's id>:<the block's index>" (msg_…:0, resp item msg_…:0,
+// chatcmpl-…:0).
 message ResponseMessage {
   Call call = 1;
   ConvMessage message = 2;
+  // OnReply, text: the block's text already released to the client.
+  string released = 3;
+  // OnReply: the block is finished (always, for an opaque part): nothing
+  // more of it will come.
+  bool done = 4;
 }
 
 // ── OnCallComplete (as in v1) ────────────────────────────────────────────────
@@ -357,15 +401,16 @@ message ToolCount {
 }
 
 message RecordedVerdict {
-  // "call_start", "request" or "tool_call".
+  // "call_start", "request", "reply" or "tool_call".
   string callback = 1;
-  // "accept" (annotated), "replace", "respond", or "error" when the
+  // "accept" (annotated), "replace", "respond", "hold", or "error" when the
   // Interceptor failed, timed out or gave an invalid answer.
   string action = 2;
   bool applied = 3;
   string reason = 4;
   repeated Annotation annotations = 5;
-  // The message the answer is for ("" for the call; a tool call's id).
+  // The message the answer is for ("" for the call; a tool call's id; a
+  // reply text block's id).
   string message_id = 6;
   // Respond, applied: "synthesized" or "rewritten".
   string respond_mode = 7;

@@ -32,9 +32,14 @@ import (
 //
 // With contract v2 and content, the request's new messages go to OnRequest
 // instead (a Replace is put back in place in the body, or in a Codex
-// WebSocket's response.create); a reply's text passes straight through and
-// its tool calls are held for OnToolCall. A Respond is delivered as a reply
-// or by rewriting the request (respond.go).
+// WebSocket's response.create); a reply's text is held piece by piece for
+// OnReply and its tool calls whole for OnToolCall. A Respond is delivered as
+// a reply or by rewriting the request (respond.go).
+//
+// Envoy's messages are read on their own goroutine, so a reply's pieces keep
+// arriving while OnReply decides: the pending text is asked about only when
+// nothing more is waiting, and pieces that came meanwhile go in the next
+// call.
 //
 // Recording is unchanged: the same observation events are emitted as in
 // observe mode, plus each verdict.
@@ -52,8 +57,8 @@ const (
 	respPass       respMode = iota // forward chunks as they arrive
 	respSSE                        // evaluate event by event
 	respWhole                      // evaluate the whole body before releasing it
-	respToolsSSE                   // v2: hold each tool call in the event stream
-	respToolsWhole                 // v2: decide the tool calls in the whole body
+	respToolsSSE                   // v2: hold the event stream's text and tool calls
+	respToolsWhole                 // v2: decide the whole body's text and tool calls
 )
 
 type enforceState struct {
@@ -69,18 +74,44 @@ type enforceState struct {
 	// WebSocket with content: decoders per direction (uncompressed frames).
 	wsUp, wsDown *wsframe.Decoder
 	wsContent    bool
-	// v2: the reply's tool calls held (tools; a WebSocket's current turn in
-	// wsTools), ended once a Respond or a refusal ended the reply; toolDeny is
-	// the refusal.
+	// v2: the reply's text and tool calls held (tools; a WebSocket's current
+	// turn in wsTools), ended once a Respond or a refusal ended the reply;
+	// toolDeny is the refusal.
 	tools, wsTools *convo.Stream
 	ended          bool
 	toolDeny       *interceptor.Decision
+	// more reports that more of the stream is waiting to be handled (nil:
+	// nothing is).
+	more func() bool
 }
+
+// waiting reports whether more of the stream is waiting to be handled.
+func (e *enforceState) waiting() bool { return e.more != nil && e.more() }
 
 // processEnforce serves an enforced stream, starting with its first request.
 func (srv *Server) processEnforce(stream extprocv3.ExternalProcessor_ProcessServer, st *streamState, req *extprocv3.ProcessingRequest) error {
 	st.enforce = true
-	st.enf = &enforceState{}
+	type recv struct {
+		req *extprocv3.ProcessingRequest
+		err error
+	}
+	in := make(chan recv, 64)
+	st.enf = &enforceState{more: func() bool { return len(in) > 0 }}
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for {
+			r, err := stream.Recv()
+			select {
+			case in <- recv{r, err}:
+			case <-done:
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
 	for {
 		for _, r := range srv.enforceHandle(st, req) {
 			if err := stream.Send(r); err != nil {
@@ -88,8 +119,9 @@ func (srv *Server) processEnforce(stream extprocv3.ExternalProcessor_ProcessServ
 				return err
 			}
 		}
-		var err error
-		req, err = stream.Recv()
+		r := <-in
+		req = r.req
+		err := r.err
 		if err == io.EOF {
 			srv.wsClose(st)
 			return nil
@@ -251,8 +283,8 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 					remove = append(remove, "content-length", "content-encoding")
 				}
 			}
-			if srv.holdsTools(r.Format) {
-				st.icState().holdTools = r.Format
+			if srv.holdsReply(r.Format) {
+				st.icState().replyFormat = r.Format
 				remove = append(remove, "accept-encoding") // replies the observer can read
 			}
 		}
@@ -277,8 +309,8 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 
 func (srv *Server) enforceResponseHeaders(st *streamState, h *extprocv3.HttpHeaders) []*extprocv3.ProcessingResponse {
 	e := st.enf
-	if st.ws == nil && !h.GetEndOfStream() && st.ic != nil && st.ic.holdTools != "" && srv.ic.ToolCalls() {
-		return srv.holdToolsHeaders(st)
+	if st.ws == nil && !h.GetEndOfStream() && st.ic != nil && st.ic.replyFormat != "" && srv.holdsReplies() {
+		return srv.holdReplyHeaders(st)
 	}
 	if st.ws != nil {
 		if srv.enforcingContent(st) || srv.enforcingRequests(st) {
@@ -394,7 +426,7 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 	}
 	msgs, err := dec.Feed(b.GetBody())
 	v2 := srv.enforcingRequests(st)
-	if v2 && !toServer && !srv.ic.ToolCalls() { // recorded, never held or changed
+	if v2 && !toServer && !srv.holdsReplies() { // recorded, never held or changed
 		for _, m := range msgs {
 			srv.wsMessage(st, dir, m)
 		}

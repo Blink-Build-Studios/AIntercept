@@ -524,9 +524,21 @@ func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Reque
 
 // ── OnToolCall ───────────────────────────────────────────────────────────────
 
-// ToolCalls reports whether tool calls in replies are held for OnToolCall
-// (v2 with content, until the Interceptor turns out not to implement it).
+// ToolCalls reports whether tool calls in replies go to OnToolCall (v2 with
+// content, until the Interceptor turns out not to implement it).
 func (c *Client) ToolCalls() bool { return c.Content() && c.V2() && !c.noToolCall.Load() }
+
+// toolMessage is OnToolCall's message for a tool call.
+func toolMessage(call *pb.Call, tc convo.ToolCall) *pb2.ResponseMessage {
+	part := &pb2.Part{Id: partID(tc.ID, 0), Size: int64(len(tc.Arguments)),
+		Kind: &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: tc.ID, Name: tc.Name, Arguments: tc.Arguments}}}
+	if len(tc.Arguments) > messageMax {
+		byReference(part, convo.Part{Kind: convo.KindToolCall})
+		part.Preview = preview(tc.Arguments)
+	}
+	return &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}),
+		Message: &pb2.ConvMessage{Id: tc.ID, Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{part}}}
+}
 
 // DecideToolCall calls OnToolCall for one complete tool call in a reply and
 // waits for the answer (enforce mode), within the deadline. Replace: Payload
@@ -535,14 +547,7 @@ func (c *Client) ToolCalls() bool { return c.Content() && c.V2() && !c.noToolCal
 // applied is onError; an Interceptor without OnToolCall accepts.
 func (c *Client) DecideToolCall(ctx context.Context, call *pb.Call, tc convo.ToolCall) Decision {
 	callID := call.GetCallId()
-	part := &pb2.Part{Id: partID(tc.ID, 0), Size: int64(len(tc.Arguments)),
-		Kind: &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: tc.ID, Name: tc.Name, Arguments: tc.Arguments}}}
-	if len(tc.Arguments) > messageMax {
-		byReference(part, convo.Part{Kind: convo.KindToolCall})
-		part.Preview = preview(tc.Arguments)
-	}
-	msg := &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}),
-		Message: &pb2.ConvMessage{Id: tc.ID, Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{part}}}
+	msg := toolMessage(call, tc)
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
@@ -607,4 +612,180 @@ func toolAnswer(tc convo.ToolCall, v *pb2.MessageVerdict) (Decision, error) {
 		return Decision{Action: Replace, Payload: []byte(args)}, nil
 	}
 	return Decision{Action: Allow}, nil
+}
+
+// ── OnReply ──────────────────────────────────────────────────────────────────
+
+// Replies reports whether reply text is held for OnReply (v2 with content,
+// until the Interceptor turns out not to implement it).
+func (c *Client) Replies() bool { return c.Content() && c.V2() && !c.noReply.Load() }
+
+// replyMessage is OnReply's message for a text block's pending text.
+func replyMessage(call *pb.Call, p convo.TextPiece) *pb2.ResponseMessage {
+	part := &pb2.Part{Id: partID(p.ID, 0), Size: int64(len(p.Pending)), Kind: &pb2.Part_Text{Text: &pb2.Text{Text: p.Pending}}}
+	return &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}), Released: p.Released, Done: p.Done,
+		Message: &pb2.ConvMessage{Id: p.ID, Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{part}}}
+}
+
+// opaqueMessage is OnReply's notice of an opaque part.
+func opaqueMessage(call *pb.Call, id string) *pb2.ResponseMessage {
+	return &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}), Done: true,
+		Message: &pb2.ConvMessage{Id: id, Role: pb2.Role_ROLE_ASSISTANT,
+			Parts: []*pb2.Part{{Id: partID(id, 0), Kind: &pb2.Part_Opaque{Opaque: &pb2.Opaque{}}}}}}
+}
+
+// replyAnswer checks OnReply's answer against the pending text.
+func replyAnswer(p convo.TextPiece, v *pb2.MessageVerdict) (Decision, error) {
+	d := Decision{Action: Allow}
+	switch a := v.GetAction().(type) {
+	case *pb2.MessageVerdict_Respond:
+		if err := checkRespond(a.Respond); err != nil {
+			return Decision{}, err
+		}
+		return Decision{Action: Respond, Text: a.Respond.GetText()}, nil
+	case *pb2.MessageVerdict_Hold:
+		return Decision{Action: Hold}, nil
+	case *pb2.MessageVerdict_Replace:
+		ps := a.Replace.GetMessage().GetParts()
+		if len(ps) != 1 || ps[0].GetText() == nil {
+			return Decision{}, invalid("Replace of reply text is one text part")
+		}
+		d = Decision{Action: Replace, Text: ps[0].GetText().GetText()}
+	}
+	if k := int(v.GetKeep()); k != 0 && !p.Done {
+		if k < 0 || k > len(p.Pending) || k < len(p.Pending) && !utf8.RuneStart(p.Pending[len(p.Pending)-k]) {
+			return Decision{}, invalid("keep %d of %d bytes isn't the pending text's tail, cut on a character", k, len(p.Pending))
+		}
+		d.Keep = k
+	}
+	if d.Action == Replace && d.Keep == 0 && d.Text == p.Pending {
+		d = Decision{Action: Allow}
+	}
+	return d, nil
+}
+
+// replyRow is the verdict row for an answer on reply text: every answer but
+// a plain Accept.
+func replyRow(id string, d Decision, v *pb2.MessageVerdict) (events.Verdict, bool) {
+	row := events.Verdict{Callback: "reply", Action: "accept", MessageID: id, Annotations: annotations(v.GetAnnotations())}
+	switch d.Action {
+	case Replace, Hold:
+		row.Action = string(d.Action)
+	case Respond:
+		row.Action, row.RespondMode = "respond", "synthesized"
+	}
+	return row, row.Action != "accept" || len(row.Annotations) > 0 || d.Keep > 0
+}
+
+// DecideReply calls OnReply for a text block's pending text and waits for the
+// answer (enforce mode), within the deadline: Allow (with Keep), Replace
+// (Text, with Keep), Hold or Respond. A failure, a missed deadline or an
+// answer that can't be applied is onError; an Interceptor without OnReply
+// accepts. A block over the message limit goes on undecided.
+func (c *Client) DecideReply(ctx context.Context, call *pb.Call, p convo.TextPiece) Decision {
+	if len(p.Released)+len(p.Pending) > messageMax {
+		return Decision{Action: Allow}
+	}
+	callID := call.GetCallId()
+	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
+	defer cancel()
+	t := time.Now()
+	v, err := c.api2.OnReply(ctx, replyMessage(call, p))
+	took := time.Since(t)
+	if status.Code(err) == codes.Unimplemented {
+		c.noReply.Store(true)
+		return Decision{Action: Allow}
+	}
+	var d Decision
+	if err == nil {
+		d, err = replyAnswer(p, v)
+	}
+	if err != nil {
+		return c.fail(callID, "reply", p.ID, err, took)
+	}
+	c.decided.Add(1)
+	if row, ok := replyRow(p.ID, d, v); ok {
+		row.Applied, row.Mode, row.LatencyMS = true, "enforce", took.Milliseconds()
+		c.store(callID, row)
+	}
+	return d
+}
+
+// replyJob is an OnReply or OnToolCall delivered off the stream: observe
+// mode, or an opaque part's notice.
+type replyJob struct {
+	msg    *pb2.ResponseMessage
+	text   *convo.TextPiece // OnReply on text
+	tool   *convo.ToolCall  // OnToolCall
+	notice bool             // OnReply on an opaque part: nothing to record
+}
+
+// ObserveReply queues OnReply for reply text (observe mode).
+func (c *Client) ObserveReply(call *pb.Call, p convo.TextPiece) {
+	if c.Replies() && len(p.Released)+len(p.Pending) <= messageMax {
+		c.enqueue(job{callID: call.GetCallId(), reply: &replyJob{msg: replyMessage(call, p), text: &p}})
+	}
+}
+
+// ObserveToolCall queues OnToolCall (observe mode).
+func (c *Client) ObserveToolCall(call *pb.Call, tc convo.ToolCall) {
+	if c.ToolCalls() {
+		c.enqueue(job{callID: call.GetCallId(), reply: &replyJob{msg: toolMessage(call, tc), tool: &tc}})
+	}
+}
+
+// Opaque tells OnReply of an opaque part of a reply (reasoning, encrypted
+// content), off the stream, in both modes: it can't be changed, and the
+// answer is ignored.
+func (c *Client) Opaque(call *pb.Call, id string) {
+	if c.Replies() {
+		c.enqueue(job{callID: call.GetCallId(), reply: &replyJob{msg: opaqueMessage(call, id), notice: true}})
+	}
+}
+
+// onReplyObserved delivers a queued OnReply or OnToolCall: its answer is
+// recorded, never applied.
+func (c *Client) onReplyObserved(ctx context.Context, callID string, j *replyJob) error {
+	t := time.Now()
+	var v *pb2.MessageVerdict
+	var err error
+	if j.tool != nil {
+		v, err = c.api2.OnToolCall(ctx, j.msg)
+	} else {
+		v, err = c.api2.OnReply(ctx, j.msg)
+	}
+	took := time.Since(t)
+	if status.Code(err) == codes.Unimplemented {
+		if j.tool != nil {
+			c.noToolCall.Store(true)
+		} else {
+			c.noReply.Store(true)
+		}
+		return nil
+	}
+	if err != nil || j.notice {
+		return err
+	}
+	callback, id := "reply", j.msg.GetMessage().GetId()
+	var d Decision
+	if j.tool != nil {
+		callback = "tool_call"
+		d, err = toolAnswer(*j.tool, v)
+	} else {
+		d, err = replyAnswer(*j.text, v)
+	}
+	if err != nil {
+		c.store(callID, events.Verdict{Callback: callback, Action: "error", Mode: "observe", Reason: err.Error(), LatencyMS: took.Milliseconds(), MessageID: id})
+		return nil
+	}
+	row, ok := replyRow(id, d, v)
+	row.Callback = callback
+	if ok {
+		row.Mode, row.LatencyMS = "observe", took.Milliseconds()
+		if row.Action == "respond" {
+			row.RespondMode = ""
+		}
+		c.store(callID, row)
+	}
+	return nil
 }
