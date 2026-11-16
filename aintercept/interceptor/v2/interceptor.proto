@@ -224,6 +224,9 @@ message ToolResult {
   string call_id = 1;
   string text = 2;
   bool is_error = 3;
+  // The tool it answers: the name of the call call_id, from the request's
+  // history ("" when the request doesn't carry the call).
+  string name = 4;
 }
 
 // Reasoning, encrypted content, anything AIntercept doesn't recognise:
@@ -370,7 +373,8 @@ message CallRecord {
   RequestInfo request = 2;
   ResponseInfo response = 3;
   // The answers the Interceptor gave for this call, and whether they were
-  // applied (enforce) or only recorded (observe).
+  // applied (enforce) or only recorded (observe). On a WebSocket, each
+  // record has those since the connection's previous one: a turn's own.
   repeated RecordedVerdict verdicts = 4;
   int64 end_unix_nano = 5;
   int32 ws_turn = 6;

@@ -160,14 +160,22 @@ type Request struct {
 	parsed convo.Request // Messages: only the new ones are set
 	msgs   []convo.Message
 	ids    []string
-	at     map[string]int // message id → position in msgs
+	at     map[string]int    // message id → position in msgs
+	tools  map[string]string // tool call id → its tool, from the whole request
 }
 
 // NewRequest prepares a parsed request for OnRequest. Ids chain from the
 // call's session (convo.Request.IDs).
 func NewRequest(call *pb.Call, r convo.Request) *Request {
 	ids := r.IDs(call.GetIdentity().GetSessionId())
-	q := &Request{call: convert(call, &pb2.Call{}), parsed: r, at: map[string]int{}}
+	q := &Request{call: convert(call, &pb2.Call{}), parsed: r, at: map[string]int{}, tools: map[string]string{}}
+	for _, m := range r.Messages {
+		for _, p := range m.Parts {
+			if p.Kind == convo.KindToolCall {
+				q.tools[p.CallID] = p.Name
+			}
+		}
+	}
 	q.parsed.Messages = make([]convo.Message, len(r.Messages))
 	for _, i := range r.New {
 		q.parsed.Messages[i] = r.Messages[i]
@@ -197,6 +205,9 @@ func (q *Request) message(fetched map[string]bool) *pb2.RequestMessages {
 		for j, p := range m.Parts {
 			id := partID(q.ids[i], j)
 			pp := part(p, id, fetched[id])
+			if r := pp.GetToolResult(); r != nil {
+				r.Name = q.tools[p.CallID]
+			}
 			if !pp.GetRef() && !fetched[id] && p.Size > 0 {
 				inlined = append(inlined, inline{pp, p})
 			}
@@ -546,6 +557,9 @@ func toolMessage(call *pb.Call, tc convo.ToolCall) *pb2.ResponseMessage {
 // synthesized). A failure, a missed deadline or an answer that can't be
 // applied is onError; an Interceptor without OnToolCall accepts.
 func (c *Client) DecideToolCall(ctx context.Context, call *pb.Call, tc convo.ToolCall) Decision {
+	if !c.ToolCalls() {
+		return Decision{Action: Allow}
+	}
 	callID := call.GetCallId()
 	msg := toolMessage(call, tc)
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
@@ -674,7 +688,7 @@ func replyRow(id string, d Decision, v *pb2.MessageVerdict) (events.Verdict, boo
 	case Respond:
 		row.Action, row.RespondMode = "respond", "synthesized"
 	}
-	return row, row.Action != "accept" || len(row.Annotations) > 0 || d.Keep > 0
+	return row, row.Action != "accept" || len(row.Annotations) > 0
 }
 
 // DecideReply calls OnReply for a text block's pending text and waits for the
@@ -683,7 +697,7 @@ func replyRow(id string, d Decision, v *pb2.MessageVerdict) (events.Verdict, boo
 // answer that can't be applied is onError; an Interceptor without OnReply
 // accepts. A block over the message limit goes on undecided.
 func (c *Client) DecideReply(ctx context.Context, call *pb.Call, p convo.TextPiece) Decision {
-	if len(p.Released)+len(p.Pending) > messageMax {
+	if !c.Replies() || len(p.Released)+len(p.Pending) > messageMax {
 		return Decision{Action: Allow}
 	}
 	callID := call.GetCallId()
@@ -734,12 +748,25 @@ func (c *Client) ObserveToolCall(call *pb.Call, tc convo.ToolCall) {
 	}
 }
 
-// Opaque tells OnReply of an opaque part of a reply (reasoning, encrypted
-// content), off the stream, in both modes: it can't be changed, and the
-// answer is ignored.
-func (c *Client) Opaque(call *pb.Call, id string) {
+// ObserveOpaque queues OnReply's notice of an opaque part of a reply
+// (reasoning, encrypted content; observe mode).
+func (c *Client) ObserveOpaque(call *pb.Call, id string) {
 	if c.Replies() {
 		c.enqueue(job{callID: call.GetCallId(), reply: &replyJob{msg: opaqueMessage(call, id), notice: true}})
+	}
+}
+
+// Opaque tells OnReply of an opaque part of a reply (enforce mode), in the
+// reply's path so the call's messages reach the Interceptor in order. It
+// can't be changed: the answer, and any failure, are ignored.
+func (c *Client) Opaque(ctx context.Context, call *pb.Call, id string) {
+	if !c.Replies() {
+		return
+	}
+	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
+	defer cancel()
+	if _, err := c.api2.OnReply(ctx, opaqueMessage(call, id)); status.Code(err) == codes.Unimplemented {
+		c.noReply.Store(true)
 	}
 }
 

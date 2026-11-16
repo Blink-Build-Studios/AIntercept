@@ -1080,10 +1080,13 @@ func (x *ToolCall) GetArguments() string {
 
 // What the tool returned, as text.
 type ToolResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CallId        string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
-	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
-	IsError       bool                   `protobuf:"varint,3,opt,name=is_error,json=isError,proto3" json:"is_error,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	CallId  string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	Text    string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	IsError bool                   `protobuf:"varint,3,opt,name=is_error,json=isError,proto3" json:"is_error,omitempty"`
+	// The tool it answers: the name of the call call_id, from the request's
+	// history ("" when the request doesn't carry the call).
+	Name          string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1137,6 +1140,13 @@ func (x *ToolResult) GetIsError() bool {
 		return x.IsError
 	}
 	return false
+}
+
+func (x *ToolResult) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 // Reasoning, encrypted content, anything AIntercept doesn't recognise:
@@ -2449,12 +2459,13 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\bToolCall\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
-	"\targuments\x18\x03 \x01(\tR\targuments\"T\n" +
+	"\targuments\x18\x03 \x01(\tR\targuments\"h\n" +
 	"\n" +
 	"ToolResult\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x19\n" +
-	"\bis_error\x18\x03 \x01(\bR\aisError\"\b\n" +
+	"\bis_error\x18\x03 \x01(\bR\aisError\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\"\b\n" +
 	"\x06Opaque\"\xfd\x01\n" +
 	"\x0fRequestMessages\x123\n" +
 	"\x04call\x18\x01 \x01(\v2\x1f.aintercept.interceptor.v2.CallR\x04call\x12\x16\n" +

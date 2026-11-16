@@ -202,7 +202,7 @@ func (srv *Server) observeWSMessage(st *streamState, dir events.Direction, m wsf
 func (srv *Server) observers(st *streamState) convo.Deciders {
 	call := st.ic.call
 	return convo.Deciders{
-		Opaque: func(id string) { srv.ic.Opaque(call, id) },
+		Opaque: func(id string) { srv.ic.ObserveOpaque(call, id) },
 		ToolCall: func(tc convo.ToolCall) convo.Answer {
 			srv.ic.ObserveToolCall(call, tc)
 			return convo.Answer{}

@@ -161,10 +161,12 @@ func decideChatBody(body []byte, top map[string]value, dec Deciders) ([]byte, bo
 		c := set(set(chs[0].raw, "message", m), "finish_reason", jsonString("stop"))
 		return spliceAll(body, []splice{{chs[0].span, c}}), false, nil
 	}
-	if text, _ := msg["content"].str(); text != "" && dec.Text != nil {
+	text, _ := msg["content"].str()
+	if text != "" && dec.Text != nil {
 		a := dec.Text(TextPiece{ID: blockID(id, 0), Pending: text, Done: true})
 		switch a.Verdict {
 		case Replace:
+			text = a.Text
 			ss = append(ss, splice{msg["content"].span, jsonString(a.Text)})
 		case Respond:
 			return respond(a.Text)
@@ -190,8 +192,8 @@ func decideChatBody(body []byte, top map[string]value, dec Deciders) ([]byte, bo
 				return nil, false, errors.New("tool call arguments must be JSON")
 			}
 			ss = append(ss, splice{fn["arguments"].span, jsonString(a.Arguments)})
-		case Respond:
-			return respond(a.Text)
+		case Respond: // the text so far, then the Respond's
+			return respond(text + a.Text)
 		case Stop:
 			return nil, true, nil
 		}

@@ -160,29 +160,33 @@ service Interceptor {
 - **Requests it can't read** (another endpoint, a side call like a token
   count, a body over the buffer) go upstream untouched without `OnRequest`,
   and are counted (`/stats`: `interceptor.unparsed`).
-- **Tool calls are held whole** (enforce, content on). A reply's text streams
-  to the client untouched; each tool call (Anthropic `tool_use` blocks,
-  Responses `function_call` and `custom_tool_call` items, over HTTP or
-  Codex's WebSocket) is held from its first event until it's complete, then
-  `OnToolCall` decides: Accept releases it as it was, Replace with new
-  arguments, Respond ends the reply with your text instead (the agent stops).
-  A non-streamed reply is decided whole before it's released. The cost: the
-  client sees each tool call when it's complete plus one `OnToolCall` round
-  trip, instead of piece by piece; text isn't delayed. To read replies,
-  enforce removes `accept-encoding` from these requests. An Interceptor that
-  doesn't implement `OnToolCall` accepts every call (AIntercept stops
-  holding them after the first `UNIMPLEMENTED`).
-- Verdict rows are as v1's, with callback `request` (or `tool_call`), the
-  message's `message_id` (a tool call's own id), and for an applied Respond
+- **Every message from the model is decided before the client sees it**
+  (enforce, content on). The reply's text goes to `OnReply` piece by piece as
+  it streams (Accept, Replace, Hold, or keep a tail held back; Respond ends
+  the reply with your text), and each tool call (Anthropic `tool_use` blocks,
+  Responses `function_call` and `custom_tool_call` items, Chat Completions
+  `tool_calls`, over HTTP or Codex's WebSocket) is held from its first event
+  until it's complete, then `OnToolCall` decides: Accept releases it as it
+  was, Replace with new arguments, Respond ends the reply with your text
+  instead (the agent stops). Opaque parts (reasoning) are announced. A
+  non-streamed reply is decided whole before it's released. The cost: one
+  round trip per piece of text (pieces that arrive meanwhile gather into the
+  next call) and per tool call. To read replies, enforce removes
+  `accept-encoding` from these requests. An Interceptor that doesn't
+  implement `OnReply` or `OnToolCall` accepts what it would have been asked
+  (AIntercept stops holding it after the first `UNIMPLEMENTED`).
+- Verdict rows are as v1's, with callback `request`, `reply` or `tool_call`,
+  the message's `message_id` (a tool call's own id, a text block's id), and for an applied Respond
   `respond_mode`: `synthesized` or `rewritten`. A synthesized call still gets
   its complete row (status 200, zero usage); `CallRecord.respond` says which
   was used.
 
-`aintercept/examples/rabbit` is the silly rabbit on v2, answered with Respond
-("I'm a silly rabbit" gets "Well, tricks are for kids.", "first we bing" gets
-"then we bong"), and the same rules on tool calls; it's built into the image
-as `/rabbit-interceptor`, and `make test-interceptor` runs it through a real
-Envoy. [`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md) walks
+`aintercept/examples/rabbit` is the smallest v2 Interceptor, on package
+`intercept`: two rules that answer two phrases in messages to the model with
+Reply. It's built into the image as `/rabbit-interceptor`.
+`make test-interceptor` runs the suite's own v2 Interceptor (the rabbit's
+rules plus rules on the reply and its tool calls) through a real Envoy.
+[`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md) walks
 through building one.
 
 ## Deploying

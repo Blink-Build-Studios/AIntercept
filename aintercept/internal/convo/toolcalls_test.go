@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// Tool calls held whole (docs/INTERCEPTOR_V2.md, T1–T2): a reply's text goes
-// on at once; each tool call is held from its first event until complete,
-// then decided.
+// Tool calls held whole (docs/INTERCEPTOR_V2.md, T2): without a text
+// decider a reply's text goes on at once; each tool call is held from its
+// first event until complete, then decided.
 
 type wireEvent struct{ name, data string }
 

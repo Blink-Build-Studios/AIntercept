@@ -1,7 +1,8 @@
 # The Interceptor end-to-end test stack (scripts/test-interceptor.sh):
 # Envoy (both filters) → fixture, with the observer and the example redact
-# Interceptor, and a second observer on contract v2 with the example rabbit
-# Interceptor (its records in ./out/events-v2.ndjson). Records land in ./out/events.ndjson and, through the observer's
+# Interceptor, and a second observer on contract v2 with the suite's own v2
+# Interceptor (the example rabbit's rules, plus rules on the model's reply and
+# its tool calls; its records in ./out/events-v2.ndjson). Records land in ./out/events.ndjson and, through the observer's
 # writer and its spool (./out/spool), in an S3 emulator (moto).
 name: aintercept-interceptor-test
 services:
@@ -19,13 +20,14 @@ services:
     build: ../../aintercept
     image: aintercept-test/aintercept:dev
     entrypoint: ["/redact-interceptor"]
-  rabbit:
-    image: aintercept-test/aintercept:dev
-    depends_on: [redact]
-    entrypoint: ["/rabbit-interceptor"]
+  v2-interceptor:
+    build:
+      context: ../../aintercept
+      dockerfile: internal/e2e/interceptor/Dockerfile
+    image: aintercept-test/e2e-interceptor:dev
   observer-v2:
     image: aintercept-test/aintercept:dev
-    depends_on: [rabbit]
+    depends_on: [v2-interceptor, redact]
     command: ["observer"]
     user: "0"
     environment:
@@ -33,7 +35,7 @@ services:
       OBSERVER_HTTP_LISTEN: "0.0.0.0:9001"
       OBSERVER_CAPTURE_FILE: /out/events-v2.ndjson
       INTERCEPTION_MODE: content-free
-      INTERCEPTOR_ENDPOINT: rabbit:9100
+      INTERCEPTOR_ENDPOINT: v2-interceptor:9100
       INTERCEPTOR_CONTRACT: v2
       INTERCEPTOR_CONTENT: "true"
       INTERCEPTOR_DEADLINE_MS: "2000"

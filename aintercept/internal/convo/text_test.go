@@ -522,7 +522,7 @@ func TestDecideChatBodyToolCalls(t *testing.T) {
 			FinishReason string `json:"finish_reason"`
 		}
 	}
-	if json.Unmarshal(out, &m) != nil || m.Choices[0].Message["content"] != "no" || m.Choices[0].Message["tool_calls"] != nil || m.Choices[0].FinishReason != "stop" {
+	if json.Unmarshal(out, &m) != nil || m.Choices[0].Message["content"] != "A purple elephant.no" || m.Choices[0].Message["tool_calls"] != nil || m.Choices[0].FinishReason != "stop" {
 		t.Fatalf("respond:\n%s", out)
 	}
 }

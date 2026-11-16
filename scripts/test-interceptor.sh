@@ -2,7 +2,7 @@
 # End-to-end test of the Interceptor (docs/INTERCEPTOR.md) through a real
 # Envoy: builds and starts test/interceptor's stack (Envoy with the observing
 # and enforcing filters, the observer, the example redact Interceptor, the
-# fixture, and a second observer on contract v2 with the example rabbit
+# fixture, and a second observer on contract v2 with the suite's own v2
 # Interceptor), runs aintercept/internal/e2e against it, and tears it down.
 #   KEEP=1 leaves the stack running.
 #   INTERCEPTOR_COMPOSE_OVERRIDE=<compose file> runs your own Interceptor as the

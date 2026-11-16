@@ -208,7 +208,7 @@ func TestV2ReplyTextReplaced(t *testing.T) {
 			if got := rf.text(t, out); got != "The [redacted] is here." || strings.Contains(out, "elephant") {
 				t.Fatalf("text %q\n%s", got, out)
 			}
-			r.ic.Close() // the opaque notice is queued
+			r.ic.Close()
 			opaque := 0
 			for _, m := range r.fake.RepliesSeen() {
 				if m.GetMessage().GetParts()[0].GetOpaque() != nil {
@@ -355,7 +355,13 @@ func TestV2ChatToolCall(t *testing.T) {
 // the reply goes on as it came.
 func TestV2ObserveReply(t *testing.T) {
 	r := newV2Rig(t, false)
-	r.fake.Reply = watchReply
+	r.fake.Reply = func(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+		if p := m.GetMessage().GetParts()[0]; p.GetText() != nil {
+			p.GetText().Text = strings.ToUpper(p.GetText().GetText())
+			return &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m.GetMessage()}}}
+		}
+		return &pb2.MessageVerdict{}
+	}
 	rf := replyFormats[0]
 	r.srv.handle(r.st, eReqHeaders(false, rf.call...))
 	r.srv.handle(r.st, eReqBody(rf.body, true))

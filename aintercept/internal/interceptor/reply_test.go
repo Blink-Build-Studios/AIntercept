@@ -51,7 +51,7 @@ func TestV2ReplyAnswers(t *testing.T) {
 		row    string
 	}{
 		{"accept", &pb2.MessageVerdict{}, interceptor.Decision{Action: interceptor.Allow}, ""},
-		{"accept keeping a tail", &pb2.MessageVerdict{Keep: 6}, interceptor.Decision{Action: interceptor.Allow, Keep: 6}, "accept"},
+		{"accept keeping a tail", &pb2.MessageVerdict{Keep: 6}, interceptor.Decision{Action: interceptor.Allow, Keep: 6}, ""},
 		{"replace", textReplace("msg_1:0", "[x]", 0), interceptor.Decision{Action: interceptor.Replace, Text: "[x]"}, "replace"},
 		{"replace keeping a tail", textReplace("msg_1:0", "[x]", 3), interceptor.Decision{Action: interceptor.Replace, Text: "[x]", Keep: 3}, "replace"},
 		{"replace unchanged", textReplace("msg_1:0", "purple ele", 0), interceptor.Decision{Action: interceptor.Allow}, ""},
@@ -169,7 +169,7 @@ func TestV2ObserveReply(t *testing.T) {
 	}
 	var rw rows
 	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true}, rw.add)
-	c.Opaque(call, "msg_1:0")
+	c.ObserveOpaque(call, "msg_1:0")
 	c.ObserveReply(call, piece)
 	c.ObserveToolCall(call, bash)
 	c.Complete(&pb.CallRecord{Call: call, Response: &pb.ResponseInfo{Status: 200}}, true)
@@ -185,5 +185,18 @@ func TestV2ObserveReply(t *testing.T) {
 	}
 	if vs := recs[0].GetVerdicts(); len(vs) != 2 || vs[0].GetCallback() != "reply" || vs[0].GetMessageId() != "msg_1:0" {
 		t.Fatalf("record %v", recs[0])
+	}
+}
+
+// A tool result names the tool it answers, from the call in the request's
+// history.
+func TestV2ToolResultName(t *testing.T) {
+	f := &interceptortest.FakeV2{}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	defer c.Close()
+	c.DecideRequest(context.Background(), call, parse(t, withHistory))
+	_, reqs, _ := f.Snapshot()
+	if r := reqs[0].GetMessages()[0].GetParts()[0].GetToolResult(); r.GetCallId() != "t1" || r.GetName() != "Bash" {
+		t.Fatalf("tool result %v", r)
 	}
 }

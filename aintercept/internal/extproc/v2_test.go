@@ -63,8 +63,8 @@ const rabbitHistory = `{"model":"m","messages":[{"role":"user","content":"I'm a 
 
 // Enforce, HTTP: the new prompt is replaced in place; the history (which
 // says the same thing) and every other byte go as sent. The reply is asked
-// for uncompressed (its tool calls are held), and its events go on as they
-// come.
+// for uncompressed (it goes to the Interceptor; this one has no OnReply, so
+// its text goes on as it comes).
 func TestV2EnforceReplacesTheNewPrompt(t *testing.T) {
 	r := newV2Rig(t, true)
 	body := rabbitHistory + `{"role":"user","content":[{"type":"text","text":"I'm a silly rabbit","cache_control":{"type":"ephemeral"}}]}]}`

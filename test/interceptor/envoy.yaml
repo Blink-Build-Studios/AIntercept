@@ -27,7 +27,7 @@ static_resources:
                         - match: { prefix: "/" }
                           route: { cluster: fixture, timeout: 0s }
                     - name: v2
-                      domains: ["api.anthropic.com", "chatgpt.com"]
+                      domains: ["api.anthropic.com", "chatgpt.com", "api.openai.com"]
                       routes:
                         - match: { prefix: "/", headers: [{ name: x-e2e-mode, string_match: { exact: observe } }] }
                           route: { cluster: fixture, timeout: 0s }

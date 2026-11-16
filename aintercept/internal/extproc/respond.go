@@ -121,7 +121,7 @@ func (srv *Server) holdsReply(format string) bool {
 func (srv *Server) deciders(st *streamState) convo.Deciders {
 	call := st.icState().call
 	var dec convo.Deciders
-	dec.Opaque = func(id string) { srv.ic.Opaque(call, id) }
+	dec.Opaque = func(id string) { srv.ic.Opaque(context.Background(), call, id) }
 	if srv.ic.ToolCalls() {
 		dec.ToolCall = func(tc convo.ToolCall) convo.Answer {
 			return srv.answer(st, srv.ic.DecideToolCall(context.Background(), call, tc))

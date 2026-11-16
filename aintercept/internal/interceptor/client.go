@@ -481,7 +481,7 @@ func (c *Client) verdictsFor(callID string, final bool) []events.Verdict {
 	if cv == nil {
 		return nil
 	}
-	if final {
+	if final || c.V2() { // v2: each record has the answers since the call's previous one
 		delete(c.verdicts, callID)
 	}
 	return cv.list
