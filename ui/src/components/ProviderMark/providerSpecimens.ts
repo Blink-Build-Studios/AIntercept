@@ -48,6 +48,8 @@ const base: Person = {
   live: false,
   sessions: 1,
   prompts: 1,
+  turns: 1,
+  workingOn: null,
   tokensOut: 0,
   tokensAccuracy: "exact",
   activity: [],

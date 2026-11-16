@@ -29,7 +29,9 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "events": 23,
       "modelCalls": 4,
       "prompts": 2,
-      "requests": 19
+      "requests": 19,
+      "steps": 4,
+      "turns": 2
     },
     "experimentsAt": null,
     "flagFetchesInRange": null,

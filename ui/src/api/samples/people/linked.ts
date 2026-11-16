@@ -121,7 +121,17 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "prompts": 6,
       "sessions": 5,
       "tokensAccuracy": "exact",
-      "tokensOut": 400
+      "tokensOut": 400,
+      "turns": 6,
+      "workingOn": {
+        "live": false,
+        "repo": null,
+        "repos": [
+          "pomodoro"
+        ],
+        "sessionId": null,
+        "turn": null
+      }
     }
   ],
   "meta": {

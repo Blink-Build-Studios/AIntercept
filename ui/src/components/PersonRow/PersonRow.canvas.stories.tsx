@@ -35,6 +35,8 @@ const base: Person = {
   live: false,
   sessions: 1,
   prompts: 1,
+  turns: 1,
+  workingOn: null,
   tokensOut: 1800,
   tokensAccuracy: "exact",
   activity: days([0, 1, 0, 2, 3, 0, 1, 0, 0, 2, 4, 1, 0, 0]),

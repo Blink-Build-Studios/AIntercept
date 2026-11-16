@@ -3,6 +3,7 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
+    "activeMs": 0.0,
     "agent": "claude-code",
     "branch": null,
     "bypassPct": null,
@@ -35,6 +36,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
+    "costUsd": null,
     "coverage": {
       "captured": 2,
       "notCaptured": 0,
@@ -63,6 +65,16 @@ const sample: components["schemas"]["SessionResponse"] = {
     "networks": null,
     "notCaptured": null,
     "origin": null,
+    "outcome": {
+      "commits": 0,
+      "editTypes": {},
+      "editedFiles": null,
+      "headFrom": null,
+      "headTo": null,
+      "lastTest": null,
+      "prs": [],
+      "pushes": 0
+    },
     "personId": null,
     "prompts": null,
     "repo": null,
@@ -77,7 +89,30 @@ const sample: components["schemas"]["SessionResponse"] = {
       "input": 6,
       "output": 200
     },
-    "toolCalls": null
+    "toolCalls": null,
+    "turns": 0,
+    "turnsInterrupted": 0,
+    "work": {
+      "commands": [],
+      "commits": 0,
+      "editTypes": {},
+      "editedFiles": null,
+      "edits": 0,
+      "linesAdded": null,
+      "linesRemoved": null,
+      "mcp": [],
+      "otherTools": 0,
+      "prs": [],
+      "pushes": 0,
+      "readFiles": null,
+      "readTypes": {},
+      "reads": 0,
+      "subagents": [],
+      "web": {
+        "fetches": 0,
+        "searches": 0
+      }
+    }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

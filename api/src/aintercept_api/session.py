@@ -160,11 +160,33 @@ def _mcp_server(e: Event) -> str | None:
     return _str(e.md.get("mcpServerName")) or (parts[1] if name.startswith("mcp__") and len(parts) >= 3 else None)
 
 
+_FILE_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "NotebookRead"}
+
+
+def program_of(argv0: str | None, sub: str | None, last: str | None) -> str | None:
+    """A Bash command's program as the work line names it (refresh/work.go programOf): argv0 with its
+    subcommand, or for `cd … && x` the last program."""
+    if argv0 == "cd" and last:
+        return last
+    if sub:
+        return f"{argv0} {sub}"
+    return argv0 or None
+
+
 def _tool(e: Event, j: _Joins) -> ToolCallData:
     tid = _str(e.md.get("toolUseID"))
     bash = j.bash.get(tid) if tid else None
     cat = _destructive(bash) if bash else None
+    name = _str(e.md.get("toolName")) or "—"
+    program = None
+    if name == "Bash":
+        b = bash.md if bash else {}
+        program = program_of(_str(b.get("bash_argv0")), _str(b.get("bash_subcommand")), _str(b.get("bash_last_argv0")))
+        program = program or program_of(_str(e.md.get("bash_argv0")), _str(e.md.get("bash_subcommand")), None)
+    ext = _str(e.md.get("fileExtension"))
     return ToolCallData(
+        program=program,
+        fileType=ext.lower() if name in _FILE_TOOLS and ext else None,
         toolUseId=tid,
         name=_str(e.md.get("toolName")) or "—",
         mcpServer=_mcp_server(e),

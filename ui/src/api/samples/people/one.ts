@@ -95,7 +95,9 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "prompts": 1,
       "sessions": 1,
       "tokensAccuracy": "exact",
-      "tokensOut": 300
+      "tokensOut": 300,
+      "turns": 1,
+      "workingOn": null
     }
   ],
   "meta": {

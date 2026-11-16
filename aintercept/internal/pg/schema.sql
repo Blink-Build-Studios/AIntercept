@@ -410,9 +410,16 @@ CREATE TABLE prompts (
     interrupted boolean NOT NULL,
     destructive bigint NOT NULL,
     turn_report jsonb,
+    -- The turn (handoff §11R): its last step's end (NULL while one is open), Claude Code's cost
+    -- estimate over its steps, and its work (refresh/work.go: TurnWork's JSON) from its events.
+    ended_ns bigint,
+    cost_usd double precision,
+    work jsonb,
     PRIMARY KEY (prompt_id, session_id)
 );
 CREATE INDEX ON prompts (session_id);
+-- A person's turns in a range (the header row's Active): their sessions' prompts by time.
+CREATE INDEX ON prompts (session_id, t_ns);
 
 -- One per visible model call with a prompt, numbered within its prompt by (time, call id): a
 -- step (process/promptrows.go step). end_ns is a real end (not the sweep's). reported is
@@ -450,6 +457,14 @@ CREATE TABLE steps (
     patches jsonb NOT NULL,
     text text,
     usage_missing text,
+    -- The step's work (handoff §11R): what it did (read, edit, run, web, mcp, spawn, tool, think),
+    -- its first command's program or MCP server (a new group starts where these change), its
+    -- subagent's id, and its pieces of work from its tool calls ([kind, key, n, exit], refresh/work.go).
+    work_kind text,
+    program text,
+    server text,
+    agent_id text,
+    work_pieces jsonb,
     PRIMARY KEY (prompt_id, session_id, step)
 );
 CREATE INDEX ON steps (call_id);
@@ -546,7 +561,18 @@ CREATE TABLE sessions (
     sandbox_ns bigint,
     custom_ca boolean NOT NULL,
     unattributed boolean NOT NULL,
-    prompt_event_last_ns bigint
+    prompt_event_last_ns bigint,
+    -- The turn ledger's header (handoff §11R): its turns (prompts rows), those interrupted, their
+    -- times summed (prompt to last step), Claude Code's cost estimate, its work from its session_keys
+    -- (TurnWork's JSON), the first and last head, and the last test program's run.
+    turns bigint,
+    turns_interrupted bigint,
+    active_ns bigint,
+    cost_usd double precision,
+    work jsonb,
+    head_from text,
+    head_to text,
+    last_test jsonb
 );
 
 -- An account's activity in one UTC day, per agent (the directory's numbers, owner decision 2):
@@ -574,6 +600,8 @@ CREATE TABLE account_days (
     missed bigint NOT NULL,
     first_ns bigint NOT NULL,
     last_ns bigint NOT NULL,
+    -- The day's sessions' repos (the People page's Working on, handoff §11R).
+    repos text[],
     PRIMARY KEY (account_id, day_ns, agent)
 );
 CREATE INDEX ON account_days (day_ns);

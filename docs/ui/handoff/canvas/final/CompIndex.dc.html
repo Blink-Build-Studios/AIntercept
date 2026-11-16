@@ -147,6 +147,16 @@ class Component extends DCLogic {
         C('Timeline (person)', 'Sessions · Prompts · Model calls · Analytics · Friction', 'lane heights, loading'),
         C('Timeline (session)', 'Prompts · Model calls · Context · Friction', 'lane heights, loading')
       ] },
+      { n: 'Turns & work', sheet: 'Turns & work (round 18)', items: [
+        C('TurnRow', 'turn, started, asked{size | text}, work, steps, time, tokens, cost?, friction, open, live', 'default, open, interrupted, live, with content, Codex'),
+        C('WorkGroup', 'kind, title, meta, exits?, open', 'collapsed, open, edits, thinking, reply, with paths'),
+        C('TurnStep', 'step, model, tokens, duration, tool → raw request', 'default'),
+        C('SubagentRow', 'name, work, tokens, thread', 'default'),
+        C('OutcomeSlot', 'title, facts[]', 'session, person fortnight'),
+        C('Lane/turns · Lane/work', 'TurnTrack blocks · WorkTrack stacked bars', 'session, person'),
+        C('RepoRow · SessionRow (work)', 'repo, sessions[], turns, active, work', 'open, collapsed'),
+        C('ContentBlock', 'kind, size, preview(head | tail), expand', 'pasted, tool result, reply, metadata only')
+      ] },
       { n: 'Hover, tooltips & keyboard', sheet: 'Tooltip · Timeline hover · Table hover', items: [
         C('Tooltip', 'title?, rows[{key, value, tone?}], hint?, body?, placement, openDelay', 'plain, key/value, unknown, disabled reason, truncated, column header, flipped'),
         C('LaneReadout', 'time, state, hint?', 'snapped (mark tooltip), readout'),

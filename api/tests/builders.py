@@ -122,6 +122,8 @@ class ClaudeCode:
         cache_write: int | None = None,
         stop_reason: str | None = None,
         agent_type: str | None = None,
+        agent_id: str | None = None,
+        tool_uses: list[str] | None = None,
         ip: str | None = None,
         complete=True,
         status: int | None = 200,
@@ -132,7 +134,7 @@ class ClaudeCode:
         """One model call; returns its request id. `parsed=False` mimics pre-parser rows (no identity);
         `complete=False` leaves it streaming (no complete row yet). `status=None` is a transport failure:
         no response headers, and the complete row carries only the proxy's `error`. `bytes_down` adds a
-        response body chunk of that size."""
+        response body chunk of that size. `tool_uses` names the tools the response asked for, in order."""
         n = next(self._n)
         rid = f"req_{self.session[:8]}_{n:04d}"
         headers = {
@@ -145,6 +147,8 @@ class ClaudeCode:
             headers["x-claude-code-prompt-id"] = prompt
         if agent_type:
             headers["x-claude-code-agent-type"] = agent_type
+        if agent_id:
+            headers["x-claude-code-agent-id"] = agent_id
         cid = self.ds.transaction(
             when, path="/v1/messages?beta=true", headers=headers, key_hash=self.key_hash, status=status
         )
@@ -170,6 +174,11 @@ class ClaudeCode:
                         **({"cache_read_tokens": cache_read} if cache_read is not None else {}),
                         **({"cache_write_tokens": cache_write} if cache_write is not None else {}),
                         **({"stop_reason": stop_reason} if stop_reason else {}),
+                        **(
+                            {"tool_uses": [{"name": t, "tool": t, "kind": "builtin", "count": 1} for t in tool_uses]}
+                            if tool_uses
+                            else {}
+                        ),
                     }
                 )
                 if parsed:
@@ -379,9 +388,19 @@ class Codex:
         )
         return f"{self.conn}#{n}"
 
-    def post(self, when: str, turn_id: str, request: dict, response: list[dict], *, source: str = "user") -> str:
+    def post(
+        self,
+        when: str,
+        turn_id: str,
+        request: dict,
+        response: list[dict],
+        *,
+        source: str = "user",
+        tool_uses: list[str] | None = None,
+    ) -> str:
         """One model call over HTTP whose bodies were recorded (full interception): the request
-        JSON and the response's SSE events, as base64 body chunks. Returns its correlation id."""
+        JSON and the response's SSE events, as base64 body chunks, and the tools it asked for (what
+        the observer reads from the response, in order). Returns its correlation id."""
         cid = f"{INSTANCE}-cxp-{self.thread[:8]}-{next(self._seq)}"
         t = ns(when)
         base = {
@@ -421,6 +440,11 @@ class Codex:
                 "stop_reason": "completed",
                 "input_tokens": 1200,
                 "output_tokens": 40,
+                **(
+                    {"tool_uses": [{"name": t, "tool": t, "kind": "builtin", "count": 1} for t in tool_uses]}
+                    if tool_uses
+                    else {}
+                ),
                 "client": {"originator": self.originator, "user-agent": f"{self.originator}/{version}"},
                 "account_uuid": self.account,
                 "device_id": CODEX_INSTALL,
@@ -467,6 +491,28 @@ class Codex:
             }
         )
         return cid
+
+    def event(self, when: str, name: str, turn_id: str, **params) -> None:
+        """One of Codex's own analytics events for a turn (codex_command_execution_event, …)."""
+        batch = f"{INSTANCE}-cxa-{self.thread[:8]}-{when}"
+        self.ds.add(
+            {
+                "correlation_id": batch,
+                "seq": next(self._seq),
+                "timestamp_ns": ns(when),
+                "phase": "client_event",
+                "host": "chatgpt.com",
+                "method": "POST",
+                "path": "/backend-api/codex/analytics-events/events",
+                "client_event": {
+                    "source": "codex",
+                    "type": name,
+                    "name": name,
+                    "session_id": self.thread,
+                    "data": {"thread_id": self.thread, "turn_id": turn_id, "session_id": self.thread, **params},
+                },
+            }
+        )
 
     def turn_event(self, when: str, turn_id: str, **params) -> None:
         """Codex's codex_turn_event for a turn (its own report)."""

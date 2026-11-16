@@ -20,7 +20,7 @@ from tests.conftest import PgDataset, pg_admin
 from tests.test_codex import codex_work
 from tests.test_drawer import SIDES, Side
 
-PAGES = ("", "/timeline", "/state", "/prompts", "/requests", "/events")
+PAGES = ("", "/timeline", "/state", "/prompts", "/turns", "/requests", "/events")
 
 
 def codex_threads(ds: Dataset) -> None:
@@ -120,6 +120,8 @@ def session_urls(side: Side, sid: str) -> list[str]:
         f"{base}/events?pageSize=20&page=99",
         f"{base}/prompts?pageSize=2&prompt=3",
         f"{base}/prompts?pageSize=20&prompt=999",
+        f"{base}/turns?pageSize=2&page=2",
+        f"{base}/turns?pageSize=1&turn=2",
         f"{base}/requests?kind=flags&kind=count&kind=metrics&kind=catalog&pageSize=20",
         f"{base}/requests?captured=false&hidden=true",
         f"{base}/requests?pageSize=20&page=99",
@@ -189,9 +191,12 @@ READS = {
         "friction",
         "context",
         "compactions",
+        "turn_blocks",
+        "work_keys",
     },  # fmt: skip
     "/state": SESSION | {"cells", "item_counts", "keys", "heads", "recaps", "latest", "credentials", "extra_rows"},
     "/prompts": SESSION | {"item_span", "prompt_at", "items", "steps"},
+    "/turns": SESSION | {"turn_count", "turn_at", "turns", "turn_steps", "threads"},
     "/requests": SESSION
     | {
         "credentials",
@@ -210,7 +215,7 @@ READS = {
 }
 # What a page draws, whatever it reads: the timeline's context points (one per main-thread call) and
 # typed prompts, and a page of prompts' steps.
-DRAWN = {"context", "typed", "steps"}
+DRAWN = {"context", "typed", "steps", "turn_blocks", "turn_steps"}
 
 
 def test_a_session_page_reads_cells_and_a_page_whatever_the_session(sides):

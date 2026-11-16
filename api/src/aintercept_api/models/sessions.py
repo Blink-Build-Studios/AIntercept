@@ -24,6 +24,7 @@ from aintercept_api.models.people import (
     Timeline,
     TokenCount,
 )
+from aintercept_api.models.work import OutcomeFacts, TurnBlock, TurnWork
 
 # --- header (§5.2.8) --------------------------------------------------------------------------
 
@@ -64,6 +65,18 @@ class SessionHeader(SessionRow):
     """Over the session's visible model calls (hidden calls excluded)."""
     toolCalls: int | None
     """Tool calls its model calls asked for; None when no call recorded its tool uses."""
+    # The turn ledger's header (handoff §11R).
+    turns: int
+    """Its turns (the Turns tab's rows)."""
+    turnsInterrupted: int
+    activeMs: float
+    """The sum of its turns' times (prompt to last step)."""
+    costUsd: float | None
+    """Claude Code's own cost estimate over the session (costUSD); None for agents that report none."""
+    work: TurnWork
+    """The whole session's work: Edited (files, lines), Commits."""
+    outcome: OutcomeFacts
+    """The OutcomeSlot's facts."""
 
 
 class SessionResponse(Envelope[SessionHeader]):
@@ -108,6 +121,8 @@ class SessionTimeline(Timeline):
 
     context: list[ContextPoint]
     compactions: list[Compaction]
+    turns: list[TurnBlock]
+    """The Turns lane (handoff §11R): one block per turn, prompt to last step."""
 
 
 class SessionTimelineResponse(Envelope[SessionTimeline]):
@@ -170,6 +185,10 @@ class RangeCounts(Model):
     requests: int
     events: int
     compactions: int
+    turns: int
+    """Turns that started in the range (the readout's `4 turns`): the same count as `prompts`."""
+    steps: int
+    """Steps (model calls) in the range: the same count as `modelCalls`."""
 
 
 class SessionState(Model):
@@ -264,6 +283,11 @@ class ToolCallData(Model):
     exitCode: int | None
     command: str | None
     """A Bash call's program, as Claude Code reports it (bash_argv0); None for other tools."""
+    program: str | None
+    """A Bash call's program as the work line names it (handoff §11R): bash_argv0 with its subcommand
+    (`npm test`), or for `cd … && x` the last program; None for other tools."""
+    fileType: str | None
+    """A file tool's (Read, Edit, Write) file extension, from Claude Code's analytics; None otherwise."""
     resultBytes: int | None
     destructive: DestructiveMark | None
 

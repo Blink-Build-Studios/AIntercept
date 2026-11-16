@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Exploration overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.comp{display:flex;flex-direction:column;gap:10px}
+.frame{background:#131618;border:1px solid #2a3034;width:1344px;position:relative;box-sizing:border-box}
+.lane{display:flex;border-bottom:1px solid #2a3034;position:relative}
+.lab{width:132px;flex:none;padding:6px 12px;box-sizing:border-box;border-right:1px solid #2a3034;overflow:hidden}
+.lab .k,.lab .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:16px;color:#a3a9ad}
+.rl{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:16px;color:#a3a9ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{position:relative;flex:1}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.tbl{background:#131618;border:1px solid #2a3034}
+.tbl .row{white-space:normal;align-items:flex-start}
+.note{color:#a3a9ad;font-size:12px;line-height:18px;max-width:1100px}
+.spec{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 32px}
+.cells{display:flex;flex-wrap:wrap;gap:12px}
+.cell{background:#131618;border:1px solid #2a3034;padding:14px 16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:150px}
+.illus{border:1px dashed #60686d}
+
+.tipb{text-align:left;box-sizing:border-box;white-space:normal;background:#1b1f22;border:1px solid #60686d;border-radius:2px;padding:8px 10px;font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#e6e3db;width:max-content;max-width:360px}
+.page{background:#0c0e0f;border:1px solid #2a3034;width:1344px;box-sizing:border-box}
+.pb{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.st{padding:0 16px;border-right:1px solid #2a3034}
+.st .v{font-family:"IBM Plex Mono",monospace;font-weight:500;white-space:nowrap}
+.gen{border:1px dashed #60686d;background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(132,140,144,.06) 6px 7px);padding:10px 12px}
+.oq{border-left:2px solid #ffd36b;padding:6px 12px;background:#131618;font-size:12px;line-height:18px;color:#e6e3db}
+.oq b{color:#ffd36b;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;font-weight:500;margin-right:6px}
+.cnt{border-left:2px solid #7db3ff;padding-left:10px}
+.vrow{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.panel{background:#131618;border:1px solid #2a3034}
+.ph{padding:8px 12px;border-bottom:1px solid #2a3034;display:flex;align-items:center;gap:8px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 12px;border-bottom:1px solid #2a3034}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1073px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 44px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · exploration · above the request layer</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Exploration overview</span>
+<span style="color: #a3a9ad; max-width: 1100px">Session and Person pages built around turns and work instead of requests. Pick a direction (A, B or C) for the Session page; the Person, activity, scale and long-content boards apply to whichever you pick.</span>
+</div>
+<div class="comp"><span class="cname">Three directions for the Session page</span><span class="props">all are “turn table” variants, metadata-first</span>
+<div class="tbl"><div class="row k" style="color: #848c90"><span style="width: 180px">Direction</span><span style="flex: 2">What it is</span><span style="flex: 1">Best at</span><span style="flex: 1">Costs</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">A · Turn ledger</span><span style="flex: 2">One row per turn, readable: who asked (size, or text with content), what work it did in plain verbs, effort, friction. Outcome card on top, slim activity strip as a scrubber. Request layer lives inside a turn.</span><span style="flex: 1">Densest; closest to today; scans fast at hundreds of turns.</span><span style="flex: 1">Work is a long line of verbs; rail data (files, hosts) is buried in turns.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">B · Ledger + work rail</span><span style="flex: 2">Same ledger, narrower, with a right rail that answers “what was touched” for the session or the brushed range: files by type, commands by program, hosts, MCP servers, capabilities available vs used, friction.</span><span style="flex: 1">Outcome questions answered without opening turns; rail follows the brush.</span><span style="flex: 1">Ledger loses ~380px; rail duplicates some of each turn’s work line.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">C · Ledger by phase</span><span style="flex: 2">Turns grouped into phases separated by idle gaps (&gt; 45 min) or days. A phase header summarises its turns; subagent threads nest under the turn that spawned them. Built for multi-day, hundreds-of-turns sessions.</span><span style="flex: 1">Long sessions collapse to a page of phases; days read naturally.</span><span style="flex: 1">Phase boundaries are a heuristic; one extra click to reach a turn.</span></div></div>
+</div>
+<div class="comp"><span class="cname">Shared across all directions</span><span class="props"></span>
+<div class="tbl"><div class="row k" style="color: #848c90"><span style="width: 180px">Part</span><span style="flex: 1">Rule</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">Metadata first</span><span style="flex: 1">Every board is drawn with what customer installs record (no bodies). Lines marked WITH CONTENT appear only when content is recorded, and sit in a blue-ruled block so the difference is visible here; in the product they just appear.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">Work verbs</span><span style="flex: 1">From step kinds, tool names and counts, and Claude Code’s analytics: <code style="font-family: IBM Plex Mono, monospace; font-size: 11.5px; color: #e6e3db; background: #1b1f22; padding: 0 3px">read N files</code>, <code style="font-family: IBM Plex Mono, monospace; font-size: 11.5px; color: #e6e3db; background: #1b1f22; padding: 0 3px">edited N files (.ts ×3) +38 −3</code>, <code style="font-family: IBM Plex Mono, monospace; font-size: 11.5px; color: #e6e3db; background: #1b1f22; padding: 0 3px">ran npm test ×4: 3 failed, then passed</code> (program + exit code), <code style="font-family: IBM Plex Mono, monospace; font-size: 11.5px; color: #e6e3db; background: #1b1f22; padding: 0 3px">spawned 1 subagent</code>. Codex: tool counts only (<code style="font-family: IBM Plex Mono, monospace; font-size: 11.5px; color: #e6e3db; background: #1b1f22; padding: 0 3px">ran 14 commands · patched 2 files</code>).</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">Drill-down</span><span style="flex: 1">Turn ▸ work group ▸ step (one model call) ▸ <code style="font-family: IBM Plex Mono, monospace; font-size: 11.5px; color: #e6e3db; background: #1b1f22; padding: 0 3px">raw request ›</code> opens today’s request drawer unchanged. Requests, Events and Raw remain as tabs, moved after the turn view.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">Outcome</span><span style="flex: 1">A dashed “needs a generated summary” slot, followed by the facts we do capture: commits, files edited, last test exit, push.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 180px">Unchanged</span><span style="flex: 1">People / Person / Session buckets, Wire theme, AppBar, ProviderMark, the drawer.</span></div></div>
+</div>
+<div class="comp"><span class="cname">Open questions</span><span class="props"></span>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 1100px"><div class="oq"><b>Open question</b>Is “turns” the leader’s word, or “prompts”? (Today: Prompts, §11L.7.) These boards say <i>turns</i>.</div><div class="oq"><b>Open question</b>Do we show <i>prompt size</i> at all without content, or just “asked” with no detail? Size is weak signal but proves the row exists.</div><div class="oq"><b>Open question</b>Grouping consecutive tool calls into work groups (“Ran npm test ×4”) is computed per turn. Can the new pipeline precompute it per turn, like the turn row itself?</div><div class="oq"><b>Open question</b>Generated summaries: per session, per turn, or both? Who pays for the model call, and are they generated from content (needs bodies)?</div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1073}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

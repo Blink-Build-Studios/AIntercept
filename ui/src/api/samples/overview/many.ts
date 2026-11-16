@@ -106,6 +106,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
     "people": 2,
     "requests": 8,
     "sessions": 2,
+    "turns": 2,
     "unattributed": {
       "firstSeen": null,
       "modelCalls": 0,

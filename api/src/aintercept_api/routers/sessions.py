@@ -6,8 +6,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import AwareDatetime
 
-from aintercept_api import agents, pages, ranges
+from aintercept_api import agents, pages, ranges, turnpages
 from aintercept_api import claude_code as cc
+from aintercept_api import work as wk
 from aintercept_api.models.common import AgentLimits, ErrorResponse, Meta, RequestKind
 from aintercept_api.models.people import DeviceInfo, TokenCount
 from aintercept_api.models.sessions import (
@@ -21,6 +22,7 @@ from aintercept_api.models.sessions import (
     SessionStateResponse,
     SessionTimelineResponse,
 )
+from aintercept_api.models.turns import SessionTurnsResponse
 from aintercept_api.rows import dt, session_row_from_table
 from aintercept_api.timeutil import ns_to_dt
 
@@ -107,6 +109,12 @@ def header_from_table(r: dict[str, Any]) -> SessionHeader:
             accuracy=r["tokens_accuracy"],
         ),
         toolCalls=r["tool_calls"],
+        turns=int(r["turns"] or 0),
+        turnsInterrupted=int(r["turns_interrupted"] or 0),
+        activeMs=(r["active_ns"] or 0) / 1e6,
+        costUsd=r["cost_usd"] if row.agent == "claude-code" else None,
+        work=wk.turn_work(r["work"]),
+        outcome=turnpages.outcome(r),
     )
 
 
@@ -183,6 +191,35 @@ def get_session_prompts(
         total=total,
     )
     return SessionPromptsResponse(data=items, meta=meta)
+
+
+@router.get("/sessions/{sessionId}/turns", response_model=SessionTurnsResponse)
+def get_session_turns(
+    request: Request,
+    sessionId: str,  # noqa: N803
+    from_: AwareDatetime | None = FROM,
+    to: AwareDatetime | None = TO,
+    page: int = PAGE,
+    pageSize: int = PAGE_SIZE,  # noqa: N803
+    turn: int | None = Query(None, ge=1, description="A turn number (#N): return the page that holds it."),
+) -> SessionTurnsResponse:
+    """The Turns tab (handoff §11R): the turns that started in the range, oldest first, each with its work,
+    its steps grouped, and its subagents."""
+    now_dt, now = _now(request)
+    with pages.read(request, "session/turns") as reader:
+        r = _load(reader, sessionId, now)
+        lo, hi = _range(r, from_, to, now)
+        rows, total, page = reader.session_turns(sessionId, now, lo, hi, page, pageSize, turn)
+    meta = Meta(
+        asOf=now_dt,
+        lastDataAt=ns_to_dt(r["last_ns"]),
+        from_=dt(lo),
+        to=dt(hi),
+        page=page,
+        pageSize=pageSize,
+        total=total,
+    )
+    return SessionTurnsResponse(data=rows, meta=meta)
 
 
 @router.get("/sessions/{sessionId}/requests", response_model=SessionRequestsResponse)

@@ -3,6 +3,7 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
+    "activeMs": 140004.0,
     "agent": "claude-code",
     "branch": null,
     "bypassPct": 100.0,
@@ -35,6 +36,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
+    "costUsd": 0.5,
     "coverage": {
       "captured": 2,
       "notCaptured": 0,
@@ -68,6 +70,16 @@ const sample: components["schemas"]["SessionResponse"] = {
     "networks": 1,
     "notCaptured": 0,
     "origin": null,
+    "outcome": {
+      "commits": 0,
+      "editTypes": {},
+      "editedFiles": null,
+      "headFrom": null,
+      "headTo": null,
+      "lastTest": null,
+      "prs": [],
+      "pushes": 0
+    },
     "personId": "00000000-0000-4000-8000-00000000acc1",
     "prompts": 2,
     "repo": null,
@@ -82,7 +94,42 @@ const sample: components["schemas"]["SessionResponse"] = {
       "input": 12,
       "output": 400
     },
-    "toolCalls": null
+    "toolCalls": null,
+    "turns": 2,
+    "turnsInterrupted": 1,
+    "work": {
+      "commands": [
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "rm",
+          "runs": 1
+        }
+      ],
+      "commits": 0,
+      "editTypes": {},
+      "editedFiles": null,
+      "edits": 0,
+      "linesAdded": null,
+      "linesRemoved": null,
+      "mcp": [
+        {
+          "calls": 1,
+          "server": "github"
+        }
+      ],
+      "otherTools": 0,
+      "prs": [],
+      "pushes": 0,
+      "readFiles": null,
+      "readTypes": {},
+      "reads": 1,
+      "subagents": [],
+      "web": {
+        "fetches": 0,
+        "searches": 0
+      }
+    }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

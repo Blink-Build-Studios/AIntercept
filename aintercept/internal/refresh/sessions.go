@@ -1,5 +1,7 @@
 package refresh
 
+import "fmt"
+
 // The session rollups (docs/PIPELINE.md §5.2): a session's row and its
 // Prompts page list, recomputed together from its hours, its keys, its
 // prompts and a few index lookups on its facts. They mean what today's
@@ -40,7 +42,7 @@ const sessionCols = `session_id, start_ns, last_ns, product, client, client_vers
 	device_terminal, device_shell, networks, effort, tokens_input, tokens_cache_read, tokens_cache_write, tokens_output,
 	outputs_known, tokens_accuracy, tool_calls, has_facts, facts_cwd, facts_approval, facts_sandbox, limits, limits_ns,
 	cli_version, cli_version_ns, rl_status, rl_util, rl_overage, rl_ns, sandbox, sandbox_ns, custom_ca, unattributed,
-	prompt_event_last_ns`
+	prompt_event_last_ns, turns, turns_interrupted, active_ns, cost_usd, work, head_from, head_to, last_test`
 
 // newestDesc is today's "newest call" order: latest time, then the latest id.
 const newestDesc = at + ` DESC, replace(c.call_id, '#', '~') COLLATE "C" DESC`
@@ -62,7 +64,7 @@ var sessionSelect = `WITH h AS (SELECT coalesce(sum(model_calls), 0) AS model_ca
 		coalesce(sum(reported), 0) AS reported, coalesce(sum(missed), 0) AS missed,
 		sum(input_tokens) AS input_tokens, sum(cache_read_tokens) AS cache_read_tokens, sum(cache_write_tokens) AS cache_write_tokens,
 		sum(output_tokens) AS output_tokens, coalesce(sum(outputs_known), 0) AS outputs_known, sum(tool_calls) AS tool_calls,
-		coalesce(sum(custom_ca), 0) AS custom_ca
+		coalesce(sum(custom_ca), 0) AS custom_ca, sum(cost_usd ORDER BY hour_ns) AS cost_usd
 	FROM session_hours WHERE session_id = $1),
 k AS (SELECT nullif(count(DISTINCT key) FILTER (WHERE kind IN ('call_prompt', 'input_prompt')), 0) AS prompts,
 		nullif(count(DISTINCT key) FILTER (WHERE kind = 'ip'), 0) AS networks
@@ -107,8 +109,14 @@ SELECT $1, least(ev.first, fc.at), greatest(ev.last, lc.at), fc.product, cl.clie
 	h.custom_ca > 0,
 	h.model_calls > 0 AND NOT acct.any,
 	(SELECT max(l.ts_ns) FROM unnest(ARRAY[` + promptEventNames + `]) n(name), LATERAL (SELECT e.ts_ns FROM events e
-		WHERE e.session_id = $1 AND e.name = n.name AND e.source = 'claude_code' ORDER BY e.ts_ns DESC LIMIT 1) l)
+		WHERE e.session_id = $1 AND e.name = n.name AND e.source = 'claude_code' ORDER BY e.ts_ns DESC LIMIT 1) l),
+	tn.turns, tn.interrupted, tn.active, h.cost_usd,
+	(WITH i AS MATERIALIZED (SELECT kind, key, n, NULL::bigint AS exit, 0::bigint AS at, ''::text AS b, 0::bigint AS bn
+		FROM session_keys WHERE session_id = $1 AND starts_with(kind, 'w:')) SELECT ` + workObj("i", false) + `),
+	` + headOf("") + `, ` + headOf("DESC") + `, ` + lastTest + `
 FROM h, k, w
+LEFT JOIN LATERAL (SELECT count(*) AS turns, count(*) FILTER (WHERE interrupted) AS interrupted,
+	coalesce(sum(greatest(ended_ns - t_ns, 0)), 0) AS active FROM prompts WHERE session_id = $1) tn ON true
 LEFT JOIN LATERAL (SELECT (SELECT min(ts_ns) FROM events WHERE session_id = $1 AND source = 'claude_code') AS first,
 	(SELECT max(ts_ns) FROM events WHERE session_id = $1 AND source = 'claude_code') AS last) ev ON true
 LEFT JOIN LATERAL ` + newestCall(visible, callOrder, at+` AS at, `+agent+` AS product`) + ` fc ON true
@@ -165,6 +173,33 @@ LEFT JOIN LATERAL (SELECT (SELECT key FROM jsonb_object_keys(cx.ws) key LIMIT 1)
 LEFT JOIN LATERAL (SELECT CASE WHEN coalesce(cx.sandbox, '') <> '' THEN cx.sandbox
 	ELSE ` + jsonStrOnly(`cx.turn -> 'sandbox_policy'`) + ` END AS v) fs ON true
 WHERE h.model_calls > 0 OR h.events > 0`
+
+// headOf is the session's first (order "") or last (DESC) head_sha (the
+// OutcomeSlot's head range, handoff §11R): its Claude Code events by time,
+// from the first (or to the end of the last) hour its keys have a head in, so
+// a session with none, or heads only late, reads one hour's events at most.
+func headOf(order string) string {
+	bound := `e.ts_ns >= (SELECT min(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'head')`
+	if order == "DESC" {
+		bound = `e.ts_ns < (SELECT max(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'head') + ` + fmt.Sprint(hourNS)
+	}
+	return `(SELECT e.head_sha FROM events e WHERE e.session_id = $1 AND ` + bound + ` AND e.source = 'claude_code' AND e.head_sha IS NOT NULL
+		ORDER BY e.ts_ns ` + order + `, e.batch_call_id COLLATE "C" ` + order + `, e.batch_cc_n ` + order + ` LIMIT 1)`
+}
+
+// lastTest is the session's last run of a test program (the OutcomeSlot's
+// last test, handoff §11R): its newest Bash command whose program is a test
+// run, with its exit code and time, read back from the end of the last hour
+// whose work keys hold a test program's run.
+var lastTest = func() string {
+	md := func(k string) string { return pyStr(emd("e", k)) }
+	p := programOf(md("bash_argv0"), md("bash_subcommand"), md("bash_last_argv0"))
+	return `(SELECT jsonb_build_object('program', ` + p + `, 'exit', ` + jsonTrunc(emd("e", "exit_code")) + `, 't', e.ts_ns) FROM events e
+		WHERE e.session_id = $1 AND e.name = 'tengu_bash_tool_command_executed' AND e.source = 'claude_code'
+		  AND e.ts_ns < (SELECT max(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'w:run' AND ` + isTest("key") + `) + ` + fmt.Sprint(hourNS) + `
+		  AND ` + isTest(p) + ` AND ` + jsonTrunc(emd("e", "exit_code")) + ` IS NOT NULL
+		ORDER BY e.ts_ns DESC, e.batch_call_id COLLATE "C" DESC, e.batch_cc_n DESC LIMIT 1)`
+}()
 
 // gapSplit is claude_code.py GAP_SPLIT_NS: coverage windows split at gaps this
 // long (sessionrows.go coverageWindows).

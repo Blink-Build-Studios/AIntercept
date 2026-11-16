@@ -4,7 +4,7 @@ import requests from "../../api/samples/session_requests/codex_channels";
 import hidden from "../../api/samples/session_requests/codex_hidden";
 import { requestChannels, requestDetail, sessionTabs, tabHint } from "./sessionView";
 
-const counts = { prompts: 1, modelCalls: 203, requests: 615, events: 58, compactions: 0 };
+const counts = { prompts: 1, modelCalls: 203, requests: 615, events: 58, compactions: 0, turns: 1, steps: 203 };
 
 describe("session tabs (handoff §11L.7)", () => {
   it("label each tab with its count and unit", () => {

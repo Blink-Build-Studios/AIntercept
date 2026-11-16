@@ -88,14 +88,18 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div style="color: #a3a9ad; max-width: 720px">Latest recap: “Coverage check and IPv6 routing; PR #2 open, CI pending.”</div>
 </div>
 <div data-spec="HeaderStatGroup" style="display: flex; flex-wrap: wrap; row-gap: 8px; border-left: 1px solid #2a3034">
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Span</div><div class="m" style="font-weight: 500">Nov 2 10:04 → now · 2d 0h</div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Prompts</div><div class="m" style="font-weight: 500">34</div></div>
-<div data-spec="HeaderStat/withQualifier" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Model calls</div><div class="m" style="font-weight: 500">640 <span style="color: #ff7a6b">+94 not captured</span></div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Events</div><div class="m" style="font-weight: 500">21,305</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Span</div><div class="m" style="font-weight: 500">Nov 2 10:04 → now · 2d 0h</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">6h 12m active</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Turns</div><div class="m" style="font-weight: 500">34</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">2 interrupted</div></div>
+<div data-spec="HeaderStat/withQualifier" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Steps</div><div class="m" style="font-weight: 500">640 <span style="color: #ff7a6b">+94 not captured</span></div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">model calls</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Tokens</div><div class="m" style="font-weight: 500">8.2M → 1.1M</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">92% cache read</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Cost</div><div class="m" style="font-weight: 500">$48.10</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">est.</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Edited</div><div class="m" style="font-weight: 500">23 files</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">+1,204 −388</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Commits</div><div class="m" style="font-weight: 500">2</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">a41f → 9c02</div></div>
 <div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Device</div><div class="m" style="font-weight: 500">darwin · zsh · 3 networks</div></div>
 <div data-spec="HeaderStat" style="padding: 0 16px"><div class="k">Approvals bypassed</div><div class="m" style="font-weight: 500">99.7% of calls</div></div>
 </div>
 </div>
+<div data-spec="OutcomeSlot" style="border: 1px dashed #60686d; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(132,140,144,.06) 6px 7px); padding: 10px 12px"><div class="k" style="color: #a3a9ad">Outcome · <span style="color: #ffd36b">needs a generated summary · not captured yet</span></div><div style="display: flex; flex-direction: column; gap: 6px; margin: 8px 0"><div style="height: 8px; width: 82%; background: #20252a"></div><div style="height: 8px; width: 56%; background: #20252a"></div></div><div data-spec="OutcomeFacts" class="m" style="font-size: 12px">2 commits on <b>partner-readiness</b> (a41f → 9c02) · 23 files edited (.ts ×17, .md ×4, .json ×2) · last <b>npm test</b> exited 0 · PR #2 open</div></div>
 
 <!-- session timeline (range control) -->
 <div>
@@ -111,17 +115,16 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div data-spec="Gridlines" style="position: absolute; top: 0; bottom: 0; left: 132px; right: 0; pointer-events: none"><sc-for list="{{grid}}" as="g" hint-placeholder-count="14"><div style="position: absolute; top: 0; bottom: 0; width: 1px; left: {{g.l}}; background: {{g.c}}"></div></sc-for></div>
 <div style="position: absolute; top: 0; bottom: 0; left: 132px; width: calc((100% - 132px) * {{brush.l}}); background: rgba(12, 14, 15, .45); z-index: 1; pointer-events: none"></div>
 <div style="position: absolute; top: 0; bottom: 0; right: 0; width: calc((100% - 132px) * {{brush.r}}); background: rgba(12, 14, 15, .45); z-index: 1; pointer-events: none"></div>
-<div data-spec="Lane/prompts" class="lane" style="height: 26px">
-<div class="lab"><div class="k">Prompts</div></div>
-<div data-spec="MarkerTrack/prompts" class="track">
-<sc-for list="{{prompts}}" as="p" hint-placeholder-count="34"><div style="position: absolute; top: 5px; width: 1px; height: 16px; background: #e6e3db; left: {{p.l}}"></div></sc-for>
-<sc-for list="{{plabels}}" as="p" hint-placeholder-count="4"><span class="m" style="position: absolute; top: 3px; font-size: 10.5px; color: #a3a9ad; left: {{p.l}}">{{p.t}}</span></sc-for>
+<div data-spec="Lane/turns" class="lane" style="height: 26px">
+<div class="lab"><div class="k">Turns</div></div>
+<div data-spec="TurnTrack" class="track">
+<sc-for list="{{turnBlk}}" as="p" hint-placeholder-count="34"><div style="position: absolute; top: 5px; height: 16px; box-sizing: border-box; background: #1b1f22; border-left: 2px solid #e6e3db; left: {{p.l}}; width: {{p.w}}"></div></sc-for>
 </div>
 </div>
-<div data-spec="Lane/modelCalls" class="lane" style="height: 76px">
-<div class="lab" style="position: relative"><div class="k">Model calls</div><div class="m" style="font-size: 11px; line-height: 16px; color: #a3a9ad">per 15m</div><div class="m" style="position: absolute; left: 12px; bottom: 0; height: 16px; font-size: 10.5px; line-height: 16px; color: #ff7a6b; white-space: nowrap">▲ not captured {{gapTotal}}</div></div>
-<div data-spec="BarTrack/modelCalls" class="track"><div style="position: absolute; left: 0; right: 0; top: 0; height: 58px">
-<sc-for list="{{model}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #7db3ff; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
+<div data-spec="Lane/work" class="lane" style="height: 76px">
+<div class="lab" style="position: relative"><div class="k">Work</div><div class="m" style="font-size: 11px; line-height: 16px; color: #a3a9ad">per 15m</div><div class="m" style="position: absolute; left: 12px; bottom: 0; height: 16px; font-size: 10.5px; line-height: 16px; color: #ff7a6b; white-space: nowrap">▲ not captured {{gapTotal}}</div></div>
+<div data-spec="WorkTrack" class="track"><div style="position: absolute; left: 0; right: 0; top: 0; height: 58px">
+<sc-for list="{{work}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #a3a9ad; left: {{b.l}}; width: {{b.w}}; height: {{b.c}}"></div><div style="position: absolute; background: #e6e3db; left: {{b.l}}; width: {{b.w}}; bottom: {{b.c}}; height: {{b.e}}"></div></sc-for>
 </div><div data-spec="GapRow" style="position: absolute; left: 0; right: 0; bottom: 0; height: 16px; border-top: 1px solid #2a3034"><sc-for list="{{gaps}}" as="g" hint-placeholder-count="2"><div style="position: absolute; top: 3px; height: 10px; min-width: 3px; box-sizing: border-box; left: {{g.l}}; width: {{g.w}}; background: repeating-linear-gradient(135deg, rgba(255,122,107,.3) 0 4px, transparent 4px 8px); border-left: 1px solid #ff7a6b; border-right: 1px solid #ff7a6b"></div></sc-for></div></div>
 </div>
 <div data-spec="Lane/context" class="lane" style="height: 56px">
@@ -188,30 +191,9 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <span class="m" style="color: #848c90">{{rng.tabTxt}}</span>
 </div>
 
-<!-- Prompts tab -->
-<sc-if value="{{isPrompts}}" hint-placeholder-val="{{ true }}">
-<div data-spec="DataTable/prompts" class="panel" style="border-top: 0; overflow-x: auto">
-<div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 18px"></span><span style="width: 40px">#</span><span style="width: 92px">Time</span><span style="width: 240px">Prompt</span><span style="width: 70px">Steps</span><span style="width: 64px">Dur</span><span style="width: 110px">Tokens</span><span style="flex: 1">Tools</span><span style="width: 80px">Friction</span></div>
-<sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
-<sc-if value="{{r.isPrompt}}" hint-placeholder-val="{{ true }}">
-<div data-spec="PromptRow" class="row m" style="min-width: 1100px; background: {{r.bg}}">
-<span style="width: 18px">{{r.tw}}</span><span style="width: 40px; font-weight: 600">#{{r.n}}</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span>
-<span style="width: 240px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.txt}}</span>
-<span style="width: 70px">{{r.steps}}</span><span style="width: 64px; color: #a3a9ad">{{r.dur}}</span><span style="width: 110px">{{r.tok}}</span>
-<span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.tools}}</span><span style="width: 80px">{{r.mk}}</span>
-</div>
-</sc-if>
-<sc-if value="{{r.isStep}}" hint-placeholder-val="{{ false }}">
-<button data-spec="{{r.spec}}" class="srow m" onClick="{{r.open}}" style="min-width: 1100px; padding-left: {{r.pad}}; background: {{r.bg}}">
-<span style="color: #848c90; width: 64px">{{r.t}}</span><span style="font-weight: {{r.fw}}; color: {{r.c}}; width: 72px">{{r.a}}</span>
-<span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{r.b}}</span><span style="color: #a3a9ad">{{r.r}}</span><span style="color: #ff7a6b">{{r.w}}</span>
-</button>
-</sc-if>
-<sc-if value="{{r.isBetween}}" hint-placeholder-val="{{ false }}">
-<div data-spec="BetweenRow" class="row m quiet" style="min-width: 1100px"><span style="width: 18px"></span><span style="width: 40px; color: #848c90">—</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span><span class="ch" style="color: {{r.c}}">{{r.b}}</span></div>
-</sc-if>
-</sc-for>
-</div>
+<!-- Turns tab -->
+<sc-if value="{{isTurns}}" hint-placeholder-val="{{ true }}">
+<div data-spec="DataTable/turns" class="panel" style="border-top: 0; overflow-x: auto"><div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 14px"></span><span style="width: 40px">Turn</span><span style="width: 92px">Started</span><span style="width: 240px">Asked</span><span style="flex: 1">Work done</span><span style="width: 50px; text-align: right">Steps</span><span style="width: 64px; text-align: right">Time</span><span style="width: 110px; text-align: right">Tokens</span><span style="width: 64px; text-align: right">Cost</span><span style="width: 40px"></span></div><div data-spec="TurnRow" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#13</span><span style="width: 92px; color: #848c90">Nov 3 10:02</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">212 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 31 files · ran 6 commands (rg ×4, git ×2)</span><span style="width: 50px; text-align: right">18</span><span style="width: 64px; text-align: right; color: #a3a9ad">3m 40s</span><span style="width: 110px; text-align: right">410k → 6.1k</span><span style="width: 64px; text-align: right; color: #a3a9ad">$1.92</span><span style="width: 40px; text-align: center"></span></div><div data-spec="TurnRow/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #1b1f22"><span style="width: 14px; color: #a3a9ad">▾</span><span style="width: 40px; font-weight: 600">#14</span><span style="width: 92px; color: #848c90">10:09</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">1.4k chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 5 · edited 2 files +31 −9 · ran npm test ×4: <span style="color: #e6e3db">3 failed</span>, then passed</span><span style="width: 50px; text-align: right">41</span><span style="width: 64px; text-align: right; color: #a3a9ad">9m 18s</span><span style="width: 110px; text-align: right">1.2M → 14k</span><span style="width: 64px; text-align: right; color: #a3a9ad">$5.80</span><span style="width: 40px; text-align: center">↯</span></div><div data-spec="WorkGroup" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read 5 files <span style="color: #a3a9ad">.ts ×5 · 4 steps · 41 s</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▾</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Ran npm test ×4 <span style="color: #a3a9ad">4 steps · 2m 12s</span></span><span style="color: #a3a9ad">exit 1 · exit 1 · exit 1 · exit 0</span></div><button data-spec="TurnStep" class="srow m" onClick="{{openStep}}" style="min-width: 1100px; padding: 6px 12px 6px 112px"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">step 22 · <span style="color: #a3a9ad">sonnet · 96k → 610 · 4.1 s · Bash npm · exit 1 · 18 s</span></span><span style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">raw request ›</span></button><div data-spec="WorkGroup/edits" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Edited 2 files <span style="color: #a3a9ad">+31 −9 · .ts ×2 · 3 steps</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/thinking" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Thinking <span style="color: #a3a9ad">22 steps with no tool · 1m 40s · 210k → 3.2k</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/reply" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">↩</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Reply <span style="color: #a3a9ad">1.2k tokens</span></span><span style="color: #a3a9ad"></span></div><div data-spec="TurnRow/interrupted" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#15</span><span style="width: 92px; color: #848c90">10:36</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">40 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">edited 1 file +4 −0</span><span style="width: 50px; text-align: right">3</span><span style="width: 64px; text-align: right; color: #a3a9ad">22s</span><span style="width: 110px; text-align: right">120k → 400</span><span style="width: 64px; text-align: right; color: #a3a9ad">$0.41</span><span style="width: 40px; text-align: center">✕</span></div><div data-spec="TurnRow/subagent" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#16</span><span style="width: 92px; color: #848c90">10:41</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">388 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 4 · edited 2 files +66 −4 · ran npm test ×3: passed · spawned 1 subagent</span><span style="width: 50px; text-align: right">37</span><span style="width: 64px; text-align: right; color: #a3a9ad">8m 51s</span><span style="width: 110px; text-align: right">1.0M → 12k</span><span style="width: 64px; text-align: right; color: #a3a9ad">$4.66</span><span style="width: 40px; text-align: center"></span></div><div data-spec="SubagentRow" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; background: #0c0e0f"><span style="width: 14px; color: #a3a9ad">⤷</span><span style="width: 220px">subagent <b>test-writer</b></span><span style="flex: 1; color: #a3a9ad">9 steps · wrote 1 file (.test.ts) +66 · ran npm test ×2: passed</span><span style="width: 110px; text-align: right">180k → 2.2k</span></div><div data-spec="Pagination/turns" class="row m" style="min-width: 1100px; color: #a3a9ad; border-bottom: 0; justify-content: space-between"><span>Turns 13–16 of 34 in range · oldest first</span><span>4 of 34</span></div></div>
 </sc-if>
 
 <!-- Requests tab -->
@@ -426,7 +408,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["prompts","requests","events"],"default":"prompts"},"drawer":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["ready","loading","live","error"],"default":"ready"},"drawerKind":{"editor":"enum","options":["normal","ghost","failed","retained"],"default":"normal"},"drawerTab":{"editor":"enum","options":["summary","raw","all"],"default":"summary"},"$preview":{"width":1440,"height":2000}}'>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["turns","requests","events"],"default":"turns"},"drawer":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["ready","loading","live","error"],"default":"ready"},"drawerKind":{"editor":"enum","options":["normal","ghost","failed","retained"],"default":"normal"},"drawerTab":{"editor":"enum","options":["summary","raw","all"],"default":"summary"},"$preview":{"width":1440,"height":2000}}'>
 class Component extends DCLogic {
   renderVals() {
     var self = this;
@@ -442,8 +424,8 @@ class Component extends DCLogic {
     var isLive = st8 === 'live';
     var brush = isLive ? { l: '0.9901', w: '0.005', r: '0.0049', sel: false } : { l: '0.516', w: '0.0397', r: '0.4443', sel: true };
     var rng = isLive
-      ? { t: 'Last 15 min · following live', p: '2 prompts', c: '19 model calls', r: '31 requests', e: '402 events', x: '0 compactions', at: 'now', tabTxt: 'last 15 min · oldest first · new rows append below', recapN: '0 of 7', recapT: '', recapX: 'No recap in this range.' }
-      : { t: 'Nov 3 10:00:00 → 12:00:00 · 2h 0m', p: '4 prompts', c: '96 model calls', r: '170 requests', e: '2,412 events', x: '1 compaction', at: 'at 12:00', tabTxt: '10:00 → 12:00 · oldest first', recapN: '1 of 7', recapT: '11:02', recapX: 'Patched session refresh race; auth suite green locally.' };
+      ? { t: 'Last 15 min · following live', p: '2 turns', c: '19 steps', r: '31 requests', e: '402 events', x: '0 compactions', at: 'now', tabTxt: 'last 15 min · oldest first · new rows append below', recapN: '0 of 7', recapT: '', recapX: 'No recap in this range.' }
+      : { t: 'Nov 3 10:00:00 → 12:00:00 · 2h 0m', p: '4 turns', c: '96 steps', r: '170 requests', e: '2,412 events', x: '1 compaction', at: 'at 12:00', tabTxt: '10:00 → 12:00 · oldest first', recapN: '1 of 7', recapT: '11:02', recapX: 'Patched session refresh race; auth suite green locally.' };
     var liveRows = [
       { isPrompt: true, tw: '▸', n: 33, t: 'Nov 4 09:58', txt: '58 chars', steps: '14', dur: '3m 02s', tok: '61k → 2.2k', tools: 'Bash·10 Read·3', mk: '', bg: '#131618' },
       { isPrompt: true, tw: '▾', n: 34, t: 'Nov 4 10:05', txt: '120 chars', steps: '5 so far', dur: '● 4m 3s', tok: '64k → 1.4k', tools: 'Bash·3 Read·1', mk: '', bg: '#1b1f22' },
@@ -559,10 +541,10 @@ class Component extends DCLogic {
         { t: '+9.3 s', e: 'message_stop', d: '' }
       ]
     };
-    var ptab = st.ptab || this.props.tab || 'prompts';
+    var ptab = st.ptab || this.props.tab || 'turns';
     var selEv = st.selEv !== undefined ? st.selEv : 5;
     var openDrawer = function () { self.setState({ drawer: true }); };
-    var ptabs = (st8 === 'live' ? [['prompts', 'Prompts · 2'], ['requests', 'Requests · 31'], ['events', 'Events · 402']] : [['prompts', 'Prompts · 4'], ['requests', 'Requests · 170'], ['events', 'Events · 2,412']]).map(function (t) {
+    var ptabs = (st8 === 'live' ? [['turns', 'Turns · 2'], ['requests', 'Requests · 31'], ['events', 'Events · 402']] : [['turns', 'Turns · 4'], ['requests', 'Requests · 170'], ['events', 'Events · 2,412']]).map(function (t) {
       var on = t[0] === ptab;
       return { n: t[1], c: on ? '#e6e3db' : '#a3a9ad', b: on ? '#e6e3db' : 'transparent', pick: function () { self.setState({ ptab: t[0] }); } };
     });
@@ -588,6 +570,8 @@ class Component extends DCLogic {
     }
     var ph = [10.1, 10.9, 12, 13.4, 14.2, 15.5, 16.8, 17.3, 21.8, 22.6, 23.4, 24.6, 33, 33.8, 34.03, 34.4, 34.7, 35.43, 36.5, 37.4, 42.4, 43, 43.6, 44.1, 44.8, 45.5, 46.1, 46.7, 47.4, 56.2, 56.9, 57.3, 57.7, 58.0];
     ph.forEach(function (x) { prompts.push({ l: pct(x) }); });
+    var turnBlk = ph.map(function (x, i) { var nx = i + 1 < ph.length ? ph[i + 1] : NOW; return { l: pct(x), w: 'max(3px, calc(' + dur(Math.max(0.05, Math.min(nx - x, 2.2) * 0.8)) + ' - 1px))' }; });
+    var work = model.map(function (b, i) { var hh = parseInt(b.h, 10); var e = Math.round(hh * (0.25 + ((i * 37) % 10) / 40)); return { l: b.l, w: b.w, c: (hh - e) + 'px', e: e + 'px' }; });
     var F = '#e6e3db';
     var AX = { a: A0, span: span, minor: [], major: [], labels: [] };
     for (var hh = 9; hh <= A0 + span; hh += 3) { if (hh % 12) AX.minor.push(hh); else AX.major.push(hh); }
@@ -668,7 +652,7 @@ class Component extends DCLogic {
       dh: K.dh, ds: K.ds, dk: { wire: K.wire, noWire: !K.wire, rawMsg: K.rawMsg || '', allMsg: K.allMsg || '', ev: K.ev || [] },
       dtAllWire: dtab === 'all' && K.wire, dtAllNoWire: dtab === 'all' && !K.wire,
       close: function () { self.setState({ drawer: false }); },
-      ptabs: ptabs, isPrompts: ptab === 'prompts', isRequests: ptab === 'requests', isEvents: ptab === 'events',
+      ptabs: ptabs, isTurns: ptab === 'turns', openStep: openDrawer, isRequests: ptab === 'requests', isEvents: ptab === 'events',
       reqLog: reqLog, evLog: evLog,
       kstrip: K.kstrip, ov: drawerData.ov, convoOut: drawerData.convoOut, toolCols: drawerData.toolCols, ccTiming: drawerData.ccTiming, sse: drawerData.sse,
       dt: { summary: dtab === 'summary', raw: dtab === 'raw', all: dtab === 'all' },
@@ -678,7 +662,7 @@ class Component extends DCLogic {
         var on = t[0] === dtab;
         return { n: t[1], c: on ? '#e6e3db' : '#a3a9ad', b: on ? '#e6e3db' : 'transparent', pick: function () { self.setState({ dtab: t[0] }); } };
       }),
-      prompts: prompts,
+      prompts: prompts, turnBlk: turnBlk, work: work,
       plabels: [{ l: pct(10.1), t: '#1' }, { l: pct(33), t: '#13' }, { l: pct(42.4), t: '#21' }, { l: pct(56.2), t: '#30' }],
       model: model, ctx: ctx,
       ctxMarks: [{ l: pct(35.3), t: '⇣ compaction 905k → 21k · 1m 11s' }, { l: pct(47), t: '⇣ idle compaction 904k' }],

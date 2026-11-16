@@ -69,6 +69,18 @@
       "demo": true
     },
     {
+      "path": "/api/v1/people/{personId}/work",
+      "operationId": "get_person_work",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "codex",
+        "error"
+      ],
+      "demo": true
+    },
+    {
       "path": "/api/v1/people/{personId}/sessions",
       "operationId": "get_person_sessions",
       "scenarios": [
@@ -126,6 +138,21 @@
       "scenarios": [
         "default",
         "empty_range",
+        "error"
+      ],
+      "demo": true
+    },
+    {
+      "path": "/api/v1/sessions/{sessionId}/turns",
+      "operationId": "get_session_turns",
+      "scenarios": [
+        "empty",
+        "one",
+        "many",
+        "live",
+        "subagents",
+        "codex",
+        "with_content",
         "error"
       ],
       "demo": true

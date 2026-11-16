@@ -16,6 +16,10 @@
   {
    "id": "components",
    "name": "Components"
+  },
+  {
+   "id": "explorations",
+   "name": "Explorations"
   }
  ],
  "boards": {
@@ -363,6 +367,78 @@
    "h": 1960,
    "title": "Timeline lanes · round 17",
    "page": "components"
+  },
+  "ExpOverview.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1073,
+   "title": "Overview · pick a direction",
+   "page": "explorations"
+  },
+  "ExpSessionA.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1804,
+   "title": "Session A · Turn ledger",
+   "page": "explorations"
+  },
+  "ExpSessionB.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1749,
+   "title": "Session B · Ledger + work rail",
+   "page": "explorations"
+  },
+  "ExpSessionC.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 1496,
+   "title": "Session C · Ledger by phase",
+   "page": "explorations"
+  },
+  "ExpPerson.dc.html": {
+   "x": 6080,
+   "y": 0,
+   "w": 1440,
+   "h": 1591,
+   "title": "Person · Work by repo",
+   "page": "explorations"
+  },
+  "ExpActivity.dc.html": {
+   "x": 7600,
+   "y": 0,
+   "w": 1440,
+   "h": 1341,
+   "title": "Activity, reimagined",
+   "page": "explorations"
+  },
+  "ExpScale.dc.html": {
+   "x": 9120,
+   "y": 0,
+   "w": 1440,
+   "h": 1069,
+   "title": "Scale & People",
+   "page": "explorations"
+  },
+  "ExpLongContent.dc.html": {
+   "x": 10640,
+   "y": 0,
+   "w": 1440,
+   "h": 1387,
+   "title": "Long content & forensic path",
+   "page": "explorations"
+  },
+  "CompTurns.dc.html": {
+   "x": 27360,
+   "y": 0,
+   "w": 1440,
+   "h": 4760,
+   "title": "Turns & work · round 18",
+   "page": "components"
   }
  },
  "order": [
@@ -405,7 +481,16 @@
   "CompR11.dc.html",
   "CompAgents.dc.html",
   "CompProviders.dc.html",
-  "CompPersonTimeline.dc.html"
+  "CompPersonTimeline.dc.html",
+  "ExpOverview.dc.html",
+  "ExpSessionA.dc.html",
+  "ExpSessionB.dc.html",
+  "ExpSessionC.dc.html",
+  "ExpPerson.dc.html",
+  "ExpActivity.dc.html",
+  "ExpScale.dc.html",
+  "ExpLongContent.dc.html",
+  "CompTurns.dc.html"
  ],
  "notes": {
   "n1": {
@@ -455,6 +540,14 @@
    "kind": "title1",
    "maxW": 15120,
    "page": "components"
+  },
+  "e0": {
+   "x": 0,
+   "y": -300,
+   "text": "Exploration · above the request layer (metadata-first)",
+   "kind": "title1",
+   "maxW": 12080,
+   "page": "explorations"
   }
  },
  "designSystems": [

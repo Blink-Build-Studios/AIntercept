@@ -204,7 +204,26 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "start": "2026-11-04T09:00:00Z"
       }
     ],
-    "to": "2026-11-04T09:50:00Z"
+    "to": "2026-11-04T09:50:00Z",
+    "turns": [
+      {
+        "endedAt": "2026-11-04T09:01:00.002000Z",
+        "live": false,
+        "n": 1,
+        "promptId": "p1",
+        "startedAt": "2026-11-04T09:00:00Z",
+        "steps": 1
+      },
+      {
+        "endedAt": "2026-11-04T09:40:10.002000Z",
+        "live": false,
+        "n": 2,
+        "promptId": "p2",
+        "startedAt": "2026-11-04T09:40:00Z",
+        "steps": 1
+      }
+    ],
+    "work": []
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

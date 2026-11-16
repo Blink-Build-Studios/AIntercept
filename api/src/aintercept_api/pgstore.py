@@ -10,20 +10,22 @@ import contextlib
 import urllib.error
 from collections.abc import Iterator, Sequence
 from datetime import datetime
+from functools import partial
 from typing import Any, cast
 
-from aintercept_api import directorypages, drawer, pages, personpages, sessionpages
+from aintercept_api import directorypages, drawer, pages, personpages, sessionpages, turnpages
 from aintercept_api import request_detail as rd
 from aintercept_api.models.people import Overview, PersonHeader, PersonSummary, SessionRow, Timeline
 from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
 from aintercept_api.models.sessions import BetweenItem, EventRow, PromptItem, SessionState, SessionTimeline
+from aintercept_api.models.turns import RepoGroup, TurnRow
 from aintercept_api.objects import Source
 from aintercept_api.reader import BEGIN, POOL_SIZE, Load, Reader, SchemaMismatch, Snapshot
 
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "9c6af23cd032d10f9f9d6f059ae2de308e64baf2c6c41b881110332ff9e5ed89"
+SCHEMA_HASH = "bf7a3d5533780f248cf6adf7fc956bfb353903d1c3402204ca621a622e6de3b5"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
@@ -94,6 +96,7 @@ class PgPages:
         self._sessions = sessionpages.SessionReads(snap)
         self._people = personpages.PersonReads(snap, self._sessions)
         self._directory = directorypages.DirectoryReads(snap)
+        self._turns = turnpages.TurnReads(snap, self._sessions)
 
     def status(self) -> pages.StatusValues:
         s = self._directory.status()
@@ -126,7 +129,8 @@ class PgPages:
     def session_timeline(
         self, sid: str, r: dict[str, Any], now_dt: datetime, now: int, lo: int, hi: int, bin_s: int
     ) -> SessionTimeline:
-        return self._sessions.timeline(sid, r, now_dt, now, lo, hi, bin_s)
+        blocks = self._turns.blocks(sid, r["live"], now)
+        return self._sessions.timeline(sid, r, now_dt, now, lo, hi, bin_s, blocks, partial(self._turns.bins, sid))
 
     def session_state(self, sid: str, lo: int, hi: int, req_lo: int | None, req_hi: int | None) -> SessionState:
         return self._sessions.state(sid, lo, hi, self._sessions.request_count(sid, req_lo, req_hi))
@@ -135,6 +139,11 @@ class PgPages:
         self, sid: str, now: int, lo: int, hi: int, page: int, size: int, prompt: int | None
     ) -> tuple[list[PromptItem | BetweenItem], int, int]:
         return self._sessions.prompts(sid, now, lo, hi, page, size, prompt)
+
+    def session_turns(
+        self, sid: str, now: int, lo: int, hi: int, page: int, size: int, turn: int | None
+    ) -> tuple[list[TurnRow], int, int]:
+        return self._turns.turns(sid, now, lo, hi, page, size, turn)
 
     def session_requests(
         self, sid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
@@ -173,6 +182,9 @@ class PgPages:
 
     def person_summary(self, pid: str, sids: list[str], now: int, lo: int, hi: int) -> tuple[PersonSummary, int | None]:
         return self._people.summary(pid, now, lo, hi)
+
+    def person_work(self, pid: str, now: int, lo: int | None, hi: int | None) -> tuple[list[RepoGroup], int | None]:
+        return self._people.work(pid, now, lo, hi)
 
     def person_requests(
         self, pid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,

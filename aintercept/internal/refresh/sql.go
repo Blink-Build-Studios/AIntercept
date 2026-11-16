@@ -267,11 +267,12 @@ var nullable = map[string]bool{
 //   - ip: its visible calls' networks; call_prompt: their prompts (the person
 //     summary's prompt count); input_prompt: its typed prompts' ids, or
 //     input:<time> for one with none (sessionrows.go prompts).
+//   - w:…: its work (work.go workItems), the Work lane's and the session's.
 //
-// keyItems is one row per occurrence: (session, its time, kind, key), over the
-// events and calls the filters keep.
+// keyItems is one row per occurrence: (session, its time, kind, key, n: 1, or
+// a work piece's count), over the events and calls the filters keep.
 func keyItems(events, calls string) string {
-	return `SELECT e.session_id AS sid, e.ts_ns AS at, x.k AS kind, x.v AS key FROM events e
+	return `SELECT e.session_id AS sid, e.ts_ns AS at, x.k AS kind, x.v AS key, 1::bigint AS n FROM events e
 	LEFT JOIN LATERAL (SELECT ` + pyTruthy(md("toolName")) + ` AS used,
 		` + jsonText(md("toolName")) + ` AS tool, coalesce(` + md("isMcp") + ` #>> '{}' = 'true', false) AS mcp,
 		coalesce(nullif(` + pyStr(md("mcpServerName")) + `, ''),
@@ -296,14 +297,16 @@ func keyItems(events, calls string) string {
 	) AS x(k, v)
 	WHERE ` + events + ` AND e.source = 'claude_code' AND x.v IS NOT NULL
 	UNION ALL
-	SELECT c.session_id, ` + at + `, x.k, x.v FROM calls c, LATERAL (VALUES ('ip', c.ip), ('call_prompt', c.prompt_id)) AS x(k, v)
+	SELECT c.session_id, ` + at + `, x.k, x.v, 1 FROM calls c, LATERAL (VALUES ('ip', c.ip), ('call_prompt', c.prompt_id)) AS x(k, v)
 	WHERE ` + calls + ` AND ` + visible + ` AND x.v IS NOT NULL
 	UNION ALL
 	SELECT c.session_id, ` + at + `, CASE WHEN u ->> 'kind' = 'mcp' AND u ->> 'server' <> '' AND u ->> 'tool' <> '' THEN 'call_mcp' ELSE 'call_builtin' END,
 	       CASE WHEN u ->> 'kind' = 'mcp' AND u ->> 'server' <> '' AND u ->> 'tool' <> ''
-	            THEN jsonb_build_array(u ->> 'server', u ->> 'tool')::text ELSE u ->> 'tool' END
+	            THEN jsonb_build_array(u ->> 'server', u ->> 'tool')::text ELSE u ->> 'tool' END, 1
 	FROM calls c, jsonb_array_elements(CASE jsonb_typeof(c.tool_uses) WHEN 'array' THEN c.tool_uses ELSE '[]' END) u
-	WHERE ` + calls + ` AND c.end_ns IS NOT NULL AND jsonb_typeof(u) = 'object' AND u ->> 'tool' <> ''`
+	WHERE ` + calls + ` AND c.end_ns IS NOT NULL AND jsonb_typeof(u) = 'object' AND u ->> 'tool' <> ''
+	UNION ALL
+	SELECT w.sid, w.at, w.kind, w.key, w.n FROM (` + workItems(events) + `) w`
 }
 
 // minuteKeys recomputes session_minute_keys for one (session $1, minute
@@ -311,7 +314,7 @@ func keyItems(events, calls string) string {
 // holds leaves, so the minute's rows are replaced.
 var minuteKeys = []string{
 	`DELETE FROM session_minute_keys WHERE session_id = $1 AND minute_ns = $2`,
-	`INSERT INTO session_minute_keys (session_id, minute_ns, kind, key, n) SELECT $1, $2, kind, key, count(*) FROM (` +
+	`INSERT INTO session_minute_keys (session_id, minute_ns, kind, key, n) SELECT $1, $2, kind, key, sum(n) FROM (` +
 		keyItems("e.session_id = $1 AND e.ts_ns >= $2 AND e.ts_ns < $3", "c.session_id = $1 AND "+in) + `) k GROUP BY kind, key`,
 }
 

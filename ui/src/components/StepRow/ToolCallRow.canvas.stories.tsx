@@ -17,6 +17,8 @@ const P = ({ spec, children }: { spec: string; children: ReactNode }) => (
 
 const read: ToolCall = {
   command: null,
+  program: null,
+  fileType: "ts",
   toolUseId: "toolu_read",
   name: "Read",
   mcpServer: null,

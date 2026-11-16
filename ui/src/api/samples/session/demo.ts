@@ -3,6 +3,7 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
+    "activeMs": 18077741.032934,
     "agent": "claude-code",
     "branch": null,
     "bypassPct": 99.7,
@@ -35,6 +36,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
+    "costUsd": 75.78856069999999,
     "coverage": {
       "captured": 507,
       "notCaptured": 95,
@@ -99,6 +101,18 @@ const sample: components["schemas"]["SessionResponse"] = {
     "networks": 3,
     "notCaptured": 95,
     "origin": null,
+    "outcome": {
+      "commits": 18,
+      "editTypes": {},
+      "editedFiles": null,
+      "headFrom": "b81e6e1c56b801e901fad5631be634f68628c90b",
+      "headTo": "fa97e3b2e72acf47adc7d12d11c1734ca22135d1",
+      "lastTest": null,
+      "prs": [
+        2
+      ],
+      "pushes": 13
+    },
     "personId": "7d2e0000-0000-4000-8000-00000000a41c",
     "prompts": 43,
     "repo": null,
@@ -113,7 +127,217 @@ const sample: components["schemas"]["SessionResponse"] = {
       "input": 52004,
       "output": 694376
     },
-    "toolCalls": 516
+    "toolCalls": 516,
+    "turns": 43,
+    "turnsInterrupted": 3,
+    "work": {
+      "commands": [
+        {
+          "failed": 1,
+          "lastExit": null,
+          "program": "cd",
+          "runs": 138
+        },
+        {
+          "failed": 3,
+          "lastExit": null,
+          "program": "python",
+          "runs": 81
+        },
+        {
+          "failed": 1,
+          "lastExit": null,
+          "program": "sed",
+          "runs": 45
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "cat",
+          "runs": 38
+        },
+        {
+          "failed": 1,
+          "lastExit": null,
+          "program": "grep",
+          "runs": 33
+        },
+        {
+          "failed": 1,
+          "lastExit": null,
+          "program": "other",
+          "runs": 21
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "git",
+          "runs": 16
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "kubectl",
+          "runs": 14
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "mkdir",
+          "runs": 14
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "docker",
+          "runs": 13
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "bash",
+          "runs": 10
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "curl",
+          "runs": 9
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "echo",
+          "runs": 8
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "gh",
+          "runs": 6
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "cp",
+          "runs": 5
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "helm",
+          "runs": 4
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "ls",
+          "runs": 4
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "go",
+          "runs": 3
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "rm",
+          "runs": 3
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "sleep",
+          "runs": 3
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "awk",
+          "runs": 2
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "head",
+          "runs": 2
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "wc",
+          "runs": 2
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "date",
+          "runs": 1
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "find",
+          "runs": 1
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "pkill",
+          "runs": 1
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "seq",
+          "runs": 1
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "tail",
+          "runs": 1
+        },
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": "which",
+          "runs": 1
+        }
+      ],
+      "commits": 18,
+      "editTypes": {},
+      "editedFiles": null,
+      "edits": 31,
+      "linesAdded": null,
+      "linesRemoved": null,
+      "mcp": [
+        {
+          "calls": 1,
+          "server": ""
+        }
+      ],
+      "otherTools": 8,
+      "prs": [
+        2
+      ],
+      "pushes": 13,
+      "readFiles": null,
+      "readTypes": {},
+      "reads": 15,
+      "subagents": [
+        {
+          "count": 2,
+          "name": null
+        }
+      ],
+      "web": {
+        "fetches": 2,
+        "searches": 1
+      }
+    }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

@@ -254,19 +254,21 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 |---|---|---|---|
 | `session_minutes` | (session, minute) | That minute's visible model calls (count, main and subagent, unreported, tokens, context sum, outputs known, tool calls) and hidden calls; its Claude Code events (all, and without internal events; frustrated, interrupted and destructive counts; queries and bypassed; reports; hook ms sum and count; cache 5m/1h; cost; outside-cwd commands; reports sent past a custom CA); its missed reports; its Requests tab rows counted by kind and credential, hidden apart (a read keeps the session's credentials, as today's tab does) | One minute's rows |
 | `session_hours` | (session, hour) | Sum of that hour's `session_minutes` | 60 rows |
-| `session_minute_keys` | (session, minute, kind, key) with count | Distinct things per minute: event names, tools and MCP tools, the session's tools from events and from calls' tool_use blocks, hooks, heads, PRs, IPs, batches, prompts (calls' and typed), command words, destructive categories, git operations. Also the timeline's top event names for a bin under an hour | One minute's rows |
+| `session_minute_keys` | (session, minute, kind, key) with count | Distinct things per minute: event names, tools and MCP tools, the session's tools from events and from calls' tool_use blocks, hooks, heads, PRs, IPs, batches, prompts (calls' and typed), command words, destructive categories, git operations. Also the timeline's top event names for a bin under an hour, and the minute's work (kinds `w:…`, §5.6): reads and edits by file type, files by hashed path, lines, commands by program and their failures, searches, MCP servers, subagents, commits, pushes, PRs (the Work lane's bins) | One minute's rows |
 | `session_keys` | (session, hour, kind, key) with count | Sum of that hour's `session_minute_keys`. Distinct counts over a range are `count(DISTINCT key)` over these rows (minute rows at a range's partial hours) | 60 minutes' key rows |
 | `missed_reports` | one per Claude Code report with no captured call (by request id or client request id, within its session, as `requestrows.go:1093-1125` does) | That minute's reports, with an index lookup each on `calls` | One minute's rows |
-| `prompts` | (prompt_id, session) | Its number (its input's), steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report. A typed prompt with no prompt id is keyed `input:<batch>:<n>`, as today | One prompt's calls and events, and its calls' reports and tool events by request id. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
-| `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id). This is where a call's step number lives. Exit codes come from the session's first call that carries each tool call's result back, which can be a later prompt's (the prompt after an interrupt): one lookup per tool call by its id, and a flush with such a call marks the prompt that made the tool call | One prompt's calls and events |
+| `prompts` | (prompt_id, session) | Its number (its input's), steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report. A typed prompt with no prompt id is keyed `input:<batch>:<n>`, as today. As a turn (§5.6): its end (its last step's), its cost (its steps') and its work (its own events') | One prompt's calls and events, and its calls' reports and tool events by request id. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
+| `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id), and its work (§5.6: its kind, program or server, subagent id, and its tools' work). This is where a call's step number lives. Exit codes come from the session's first call that carries each tool call's result back, which can be a later prompt's (the prompt after an interrupt): one lookup per tool call by its id, and a flush with such a call marks the prompt that made the tool call | One prompt's calls and events |
 | `prompt_items` | (session, seq) | The Prompts page's list: prompts in order (with what the session's other prompts decide: a Codex turn's number, the open tail, pastes and images, hidden calls), with the between rows interleaved (compactions, recaps, calls with no prompt) | The session's prompts (hundreds), and its compaction events and prompt-less calls |
-| `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox, env) by index lookup; coverage from `missed_reports`; `unattributed` (a visible call and no account). A page computes the rest from these: the agent, bypass %, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, and an index lookup per newest value |
+| `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox, env) by index lookup; coverage from `missed_reports`; `unattributed` (a visible call and no account). The turn ledger's header (§5.6): its turns, those interrupted and their times (its `prompts` rows), its cost (its hours'), its work (its `w:…` keys), its first and last head and its last test run (index lookups on its events). A page computes the rest from these: the agent, bypass %, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, and an index lookup per newest value |
 | `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none). Indexes on the minute and the hour (the overview's window) | One minute's calls / 60 rows |
 
 Two values are read at the page instead (they're few, and a late record changes them):
 - **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
 - **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
-| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, the ids of those with a model call, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen. Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
+| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, the ids of those with a model call, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen, the sessions' repos (Working on, §5.6). Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
+
+A turn (handoff §11R) is a `prompts` row and a step a `steps` row; the turn ledger's values are in §5.6.
 
 ### 5.3 Dirty kinds
 
@@ -302,6 +304,43 @@ runs it at a time.
 `/lag` is the age of the oldest unloaded file or dirty row, whichever is
 older. KEDA scales `worker` on it.
 
+### 5.6 Work (handoff §11R)
+
+What a turn, a step, a minute and a session did, metadata first (`refresh/work.go`). One rule classes events
+as pieces of work, each keyed `(kind, key, n)`:
+
+| Kind | From (Claude Code) | From (Codex) | Key |
+|---|---|---|---|
+| `w:read`, `w:edit`, `w:web`, `w:mcp`, `w:spawn`, `w:tool` | tool events (`tengu_tool_use_success`, `_error`) by tool name (its Bash calls are counted by their commands) | `codex_file_change_event`, `codex_mcp_tool_call_event`, `codex_web_search_event`, `codex_collab_agent_tool_call_event` | file type, search or fetch, MCP server, subagent type |
+| `w:read_file`, `w:edit_file` | `tengu_file_operation` | — | hashed path (counted distinct) |
+| `w:lines_added`, `w:lines_removed` | `tengu_file_changed` | `codex_accepted_line_fingerprints` | n is the lines |
+| `w:run`, `w:run_failed` | `tengu_bash_tool_command_executed` (exit code ≠ 0 failed) | `codex_command_execution_event` | program (`npm test`; none for Codex) |
+| `w:commit`, `w:push`, `w:pr` | `tengu_git_operation`, `tengu_session_linked_to_pr` | — | PR number |
+
+- **A turn's work** (`prompts.work`): the pieces of its own events (by `prompt_id`, its subagents' included),
+  added up into the API's TurnWork, each command with its last run's exit code. Its end is its last step's,
+  its cost its steps'.
+- **A step's work** (`steps.work`, `work_kind`, `program`, `server`, `agent_id`): its tool calls as its tool
+  events report them (`steps.tools`, each Bash call with its program and exit code and each file tool with its
+  type), else the tools its response asked for (`tool_uses`: Codex's, or a call with no analytics). Its kind
+  is its first tool call's (no tool: thinking); the API groups consecutive steps of a turn where the kind,
+  program or server changes, and calls a finished turn's last group with no tool its reply.
+- **A minute's and an hour's** are `session_minute_keys` and `session_keys` rows (kinds `w:…`): the Work lane's
+  bins and a range's work read them (`api/…/work.py from_keys`, the same rules).
+- **A session's** (`sessions.work`) is its `w:…` keys added up (no last exits), with its turns, interrupted
+  turns and active time (its `prompts` rows: the sum of each turn's time, prompt to last step), its cost (its
+  hours'), its first and last head, and its last test (its newest command whose program is a test runner).
+- **A repo's, a group's, a subagent's**: the API adds the stored works of its sessions or steps.
+
+- **A step's pieces** (`steps.work_pieces`) are `[kind, key, n, exit]` in order; the API adds a group's or a
+  subagent's up (`work.py from_pieces`) rather than storing a work per step, which cost the prompt refresh
+  another 30 ms on the largest prompt.
+
+**Refresh cost** on the real capture (median of 21 refreshes): the 1,244-step prompt went from 78 ms to
+116 ms (its steps 70 → 86 ms, its row 9 → 26 ms: 1,187 work events read once each); it was over §5.1's 50 ms
+before this. The 53,132-event session stays about 11–21 ms: its head range and last test read from the
+hour its keys show them in, so a session with no head or no test reads no events for them.
+
 ## 6. Pages
 
 The API stays Python. Its routers, response models and shaping code stay. What
@@ -315,11 +354,12 @@ Ranges are snapped to whole minutes, as today (`ranges.py`).
 | Page | Reads | Bound |
 |---|---|---|
 | `/sessions/{id}` | its `sessions` row. Label: its own title, else the earliest title call from its accounts 0–5 min after its start (calls by account and time). Children by `session_edges` (named `session_parents` until step 8) | One row + a few |
-| `/sessions/{id}/timeline` | lanes from `session_minutes` (bins under an hour) or `session_hours`; event names from `session_minute_keys` (bins under an hour) or `session_keys`; not-captured windows from `missed_reports`; friction from friction events (few); typed prompts from `prompts`; compactions from events by name; context points: one per main-thread call, from `calls` by `(session_id, start_ns)` | Cells and prompts of the session (hundreds). Context points are one per main-thread call, ~1,700 on the heaviest session: what the chart draws |
+| `/sessions/{id}/timeline` | lanes from `session_minutes` (bins under an hour) or `session_hours`; event names from `session_minute_keys` (bins under an hour) or `session_keys`; not-captured windows from `missed_reports`; friction from friction events (few); typed prompts from `prompts`; compactions from events by name; context points: one per main-thread call, from `calls` by `(session_id, start_ns)`; the Turns lane (one block per turn) from `prompts`; the Work lane from the `w:…` key rows | Cells and prompts of the session (hundreds). Context points are one per main-thread call, ~1,700 on the heaviest session: what the chart draws |
 | `/sessions/{id}/state` | counts from `session_minutes` in the brush; distinct heads and PRs from `session_keys` in the brush (minute grain at the edges); capabilities (tools used, MCP servers and tools, skills, hooks) for the whole session from the `sessions` row; recaps by name | Cells and keys in the brush + one row |
 | `/sessions/{id}/events` | a page of `events` by `(session_id, ts_ns)`, one row per event; prompt numbers by join to `prompts`; `linkedTo` by join on request id; totals from `session_minutes`' event counts | One page + cells |
 | `/sessions/{id}/requests` | a page of `calls` by `(scope_session_id, start_ns)` with `kind`, hidden and captured filters, unioned with the session's `missed_reports`; for a Codex thread also its client's sessionless Codex calls in its window by `(key_hash, start_ns)`; prompt and step numbers by join to `steps`; TTFT and cache by join to the report; counts from `session_minutes` | One page + cells |
 | `/sessions/{id}/prompts` | a page of `prompt_items` by `(session, seq)`, with each prompt's `steps` | One page of prompts and their steps |
+| `/sessions/{id}/turns` | a page of `prompt_items`' prompts in range by `(session, seq)` with their `prompts` rows (work, end, cost) and `steps` (grouped where the kind, program or server changes; subagent steps by subagent); for a Codex thread its subagent threads (`session_edges`, their `sessions` rows), each under the parent's turn running when it started | One page of turns and their steps; a session's children |
 
 **Text search (`q`)** on events and requests scans the session's rows in range.
 That's bounded by one session's range; if it's ever too slow it gets a trigram
@@ -359,15 +399,16 @@ per session within retention.
 |---|---|---|
 | `/people/{id}` | `accounts` of the group; devices from `account_devices`; lifetime sums (missed, bypass %, agent info) and the newest values (limits, posture, live) from the person's `sessions` rows | A handful of accounts and devices; one row per session |
 | `/people/{id}/sessions` | a page of the person's `sessions` rows in range, children nested (`session_parents`); labels as §6.1 | One page |
-| `/people/{id}/timeline` | lanes from `session_hours`/`session_minutes` over the person's sessions in range; bands from `sessions`; typed prompts from `prompts` in range | Cells in range: up to a few thousand for a 24-hour, 5-minute view; 14 days reads hour cells |
-| `/people/{id}/summary` | sums from `session_hours`; distinct counts from `session_keys`; latest values ≤ hi by index; account calls from `cred_hours` | Hour cells and keys in range |
+| `/people/{id}/timeline` | lanes from `session_hours`/`session_minutes` over the person's sessions in range; bands from `sessions`; typed prompts from `prompts` in range; the Work lane from the `w:…` key rows | Cells in range: up to a few thousand for a 24-hour, 5-minute view; 14 days reads hour cells |
+| `/people/{id}/summary` | sums from `session_hours`; distinct counts from `session_keys`; latest values ≤ hi by index; account calls from `cred_hours`; the header row's work from the `w:…` key rows, its turns and active time from `prompts` by `(session_id, t_ns)`, its last test from the `sessions` rows | Hour cells and keys in range; one row per turn in range |
+| `/people/{id}/work` | the person's `sessions` rows in range, grouped by repo (work, turns, active time are on the rows); labels as §6.1 | One row per session |
 | `/people/{id}/requests` | a page of `calls` by `(key_hash, start_ns)` over the scope's credentials (a merge of a few index scans), with the scope's `missed_reports`; counts from `cred_minutes`/`cred_hours` | One page + cells |
 
 ### 6.4 Directory, overview, status
 
 | Page | Reads | Bound |
 |---|---|---|
-| `/people` | each person's row sums their accounts' `account_days` on the UTC days the window touches; the 14-day activity strip is the last 14 days' rows; live is the newest day row's last activity; sort, filter (`agent`, `q` on name, email, id, device) and page in SQL. The page's rows then read their members (`accounts`), their devices seen in the window (`account_devices`), Codex limits (the newest Codex session's, through `session_accounts`) and, when they missed calls, their not-captured windows (`missed_reports`) | ≤ 14 rows per account: about 21,000 small rows at 1,500 people, summed in one `GROUP BY`; then one page |
+| `/people` | each person's row sums their accounts' `account_days` on the UTC days the window touches; the 14-day activity strip is the last 14 days' rows; live is the newest day row's last activity; sort, filter (`agent`, `q` on name, email, id, device) and page in SQL. The page's rows then read their members (`accounts`), their devices seen in the window (`account_devices`), Codex limits (the newest Codex session's, through `session_accounts`), when they missed calls their not-captured windows (`missed_reports`), and for a live person their newest session and its newest turn (Working on; otherwise the day rows' repos) | ≤ 14 rows per account: about 21,000 small rows at 1,500 people, summed in one `GROUP BY`; then one page |
 | `/overview` | totals over the same rows; requests from `cred_hours` (whole hours inside the window, `cred_minutes` at its edges); unattributed from `sessions`; an agent card's sessions are those with a model call in the window (the day rows' `call_session_ids`, and the unattributed sessions active in it) | Same |
 | `/status` | first captured call by index (its start, else its end), the first probe's while waiting, whether any call kept its content; `lastDataAt` from `ingest_pods` | Index endpoints + pods |
 

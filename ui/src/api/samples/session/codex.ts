@@ -3,6 +3,7 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
+    "activeMs": 18000.0,
     "agent": "codex",
     "branch": null,
     "bypassPct": null,
@@ -41,6 +42,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "exec",
     "clientVersion": "0.164.0",
     "commit": "1aa2f42",
+    "costUsd": null,
     "coverage": {
       "captured": 3,
       "notCaptured": 0,
@@ -97,6 +99,16 @@ const sample: components["schemas"]["SessionResponse"] = {
     "networks": null,
     "notCaptured": null,
     "origin": null,
+    "outcome": {
+      "commits": 0,
+      "editTypes": {},
+      "editedFiles": null,
+      "headFrom": null,
+      "headTo": null,
+      "lastTest": null,
+      "prs": [],
+      "pushes": 0
+    },
     "personId": "c0de0000-0000-4000-8000-00000000c0de",
     "prompts": 2,
     "repo": "pomodoro",
@@ -111,7 +123,30 @@ const sample: components["schemas"]["SessionResponse"] = {
       "input": 3600,
       "output": 150
     },
-    "toolCalls": null
+    "toolCalls": null,
+    "turns": 2,
+    "turnsInterrupted": 0,
+    "work": {
+      "commands": [],
+      "commits": 0,
+      "editTypes": {},
+      "editedFiles": null,
+      "edits": 0,
+      "linesAdded": null,
+      "linesRemoved": null,
+      "mcp": [],
+      "otherTools": 0,
+      "prs": [],
+      "pushes": 0,
+      "readFiles": null,
+      "readTypes": {},
+      "reads": 0,
+      "subagents": [],
+      "web": {
+        "fetches": 0,
+        "searches": 0
+      }
+    }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

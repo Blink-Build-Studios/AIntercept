@@ -244,6 +244,8 @@ func TestSessionKeys(t *testing.T) {
 		fmt.Sprintf("input_prompt input:%d 1", t0+5e9), "ip 10.0.0.1 1", "mcp_tool mcp__gh__list 1",
 		"name tengu_git_operation 1", "name tengu_input_prompt 1", "name tengu_run_hook 2",
 		"name tengu_session_linked_to_pr 1", "name tengu_tool_use_success 3", "pr 12 1", "tool Glob 1", "tool Read 1",
+		// The work the hour's events show (work.go workItems): a commit, an MCP call, PR #12, two reads.
+		"w:commit  1", "w:mcp gh 1", "w:pr 12 1", "w:read  2",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("keys:\n got %q\nwant %q", got, want)

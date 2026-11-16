@@ -126,7 +126,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "start": "2026-11-04T09:00:00Z"
       }
     ],
-    "to": "2026-11-04T10:00:59.999999Z"
+    "to": "2026-11-04T10:00:59.999999Z",
+    "work": []
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
