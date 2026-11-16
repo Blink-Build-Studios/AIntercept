@@ -457,14 +457,14 @@ CREATE TABLE steps (
     patches jsonb NOT NULL,
     text text,
     usage_missing text,
-    -- The step's work (handoff §11R): what it did (read, edit, run, web, mcp, spawn, tool, think,
-    -- reply), its first command's program or MCP server (a new group starts where these change),
-    -- its subagent's id, and its work from its tool events (TurnWork's JSON).
+    -- The step's work (handoff §11R): what it did (read, edit, run, web, mcp, spawn, tool, think),
+    -- its first command's program or MCP server (a new group starts where these change), its
+    -- subagent's id, and its pieces of work from its tool calls ([kind, key, n, exit], refresh/work.go).
     work_kind text,
     program text,
     server text,
     agent_id text,
-    work jsonb,
+    work_pieces jsonb,
     PRIMARY KEY (prompt_id, session_id, step)
 );
 CREATE INDEX ON steps (call_id);

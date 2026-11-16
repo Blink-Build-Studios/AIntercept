@@ -75,18 +75,21 @@ func TestTurnWork(t *testing.T) {
 	expect(t, p, map[string]any{"ended_ns": float64(t0 + 7*sec), "cost_usd": 1.0})
 	expect(t, p["work"].(map[string]any), turn)
 
-	// Each step's kind, program and work (its tool events by request id).
+	// Each step's kind, program and pieces of work (its tool calls, as its tool events report them).
 	for _, want := range []struct {
 		step          int
 		kind, program any
-		reads, edits  int
-	}{{1, "read", nil, 1, 0}, {2, "edit", nil, 0, 1}, {3, "run", "npm test", 0, 0}, {4, "run", "npm", 0, 0}, {5, "think", nil, 0, 0}} {
-		got := row(t, db, "SELECT work_kind, program, work FROM steps WHERE prompt_id = 'p1' AND step = $1", want.step)
-		expect(t, got, map[string]any{"work_kind": want.kind, "program": want.program})
-		expect(t, got["work"].(map[string]any), map[string]any{"reads": want.reads, "edits": want.edits})
+		pieces        []any
+	}{
+		{1, "read", nil, []any{[]any{"w:read", "ts", 1.0, nil}}},
+		{2, "edit", nil, []any{[]any{"w:edit", "ts", 1.0, nil}}},
+		{3, "run", "npm test", []any{[]any{"w:run", "npm test", 1.0, 1.0}, []any{"w:run_failed", "npm test", 1.0, nil}}},
+		{4, "run", "npm", []any{[]any{"w:run", "npm", 1.0, 0.0}}},
+		{5, "think", nil, []any{}},
+	} {
+		got := row(t, db, "SELECT work_kind, program, work_pieces FROM steps WHERE prompt_id = 'p1' AND step = $1", want.step)
+		expect(t, got, map[string]any{"work_kind": want.kind, "program": want.program, "work_pieces": want.pieces})
 	}
-	got := row(t, db, "SELECT work FROM steps WHERE prompt_id = 'p1' AND step = 3")["work"].(map[string]any)
-	expect(t, got, map[string]any{"commands": []any{map[string]any{"program": "npm test", "runs": 1.0, "failed": 1.0, "lastExit": 1.0}}})
 
 	// The session: its turns, their time, its cost and its work from its keys (no last exits: a
 	// session keeps totals), its head range and its last test.
