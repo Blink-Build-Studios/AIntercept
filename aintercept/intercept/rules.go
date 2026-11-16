@@ -138,6 +138,17 @@ func (t toolMatcher) Match(m *Message) bool {
 // Tool matches a call of the tool name, or its result.
 func Tool(name string) Matcher { return toolMatcher(name) }
 
+type promptMatcher struct{ m Matcher }
+
+func (p promptMatcher) Match(m *Message) bool {
+	return m.Kind == KindPrompt && (p.m == nil || p.m.Match(m))
+}
+
+// Prompt matches the user's prompts that m matches (nil: every prompt): not
+// tool results (a file the agent read, a command's output), media, or
+// anything from the model.
+func Prompt(m Matcher) Matcher { return promptMatcher{m} }
+
 type allOf []Matcher
 
 func (ms allOf) Match(m *Message) bool {
@@ -255,6 +266,8 @@ func patternOf(m Matcher) *pattern {
 	case *pattern:
 		return x
 	case argMatcher:
+		return patternOf(x.m)
+	case promptMatcher:
 		return patternOf(x.m)
 	}
 	return nil

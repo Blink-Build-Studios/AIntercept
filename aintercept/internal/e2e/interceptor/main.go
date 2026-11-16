@@ -28,8 +28,8 @@ const (
 // Rules is the suite's rules.
 func Rules() []intercept.Item {
 	return []intercept.Item{
-		intercept.OnRequest(intercept.Matches(rabbit)).Reply(tricks),
-		intercept.OnRequest(intercept.Matches(bing)).Reply(bong),
+		intercept.OnRequest(intercept.Prompt(intercept.Matches(rabbit))).Reply(tricks),
+		intercept.OnRequest(intercept.Prompt(intercept.Matches(bing))).Reply(bong),
 		intercept.OnToolCallRequest("", intercept.Matches(bing)).Reply(bong),
 		intercept.OnToolCallRequest("", intercept.Matches(rabbit)).Replace(tricks),
 		intercept.OnResponse(intercept.Contains("swordfish")).Replace(password),

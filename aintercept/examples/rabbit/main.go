@@ -1,8 +1,9 @@
 // rabbit is a minimal Interceptor (docs/BUILDING_AN_INTERCEPTOR_V2.md), on
-// package intercept. When a message to the model says the rabbit's phrase
-// (the one that ends "…silly rabbit"), it answers for the model: "Well,
-// tricks are for kids." When one says the bing phrase, it answers "then we
-// bong". Everything else goes through.
+// package intercept. When the user's prompt says the rabbit's phrase (the
+// one that ends "…silly rabbit"), it answers for the model: "Well, tricks
+// are for kids." When one says the bing phrase, it answers "then we bong".
+// Tool results (a file the agent read, a command's output) aren't looked at.
+// Everything else goes through.
 //
 // It sees each call's new messages only, in one shape for Claude Code, Codex
 // (HTTP or WebSocket) and the OpenAI APIs: a phrase earlier in the
@@ -36,8 +37,8 @@ const (
 
 func rules() []intercept.Item {
 	return []intercept.Item{
-		intercept.OnRequest(intercept.Matches(rabbit)).Reply(tricks),
-		intercept.OnRequest(intercept.Matches(bing)).Reply(bong),
+		intercept.OnRequest(intercept.Prompt(intercept.Matches(rabbit))).Reply(tricks),
+		intercept.OnRequest(intercept.Prompt(intercept.Matches(bing))).Reply(bong),
 	}
 }
 

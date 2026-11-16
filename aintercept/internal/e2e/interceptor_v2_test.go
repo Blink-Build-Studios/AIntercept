@@ -2,9 +2,8 @@
 
 // Contract v2 end to end (docs/INTERCEPTOR_V2.md): test/interceptor's second
 // observer speaks v2 to the suite's own Interceptor (internal/e2e/interceptor,
-// on package intercept): the example rabbit's rules (a message to the model
-// saying the rabbit's phrase is answered with tricks, the bing phrase with
-// bong), and rules on the reply: a tool call whose arguments say the bing
+// on package intercept): the example rabbit's rules (a prompt saying the
+// rabbit's phrase is answered with tricks, the bing phrase with bong), and rules on the reply: a tool call whose arguments say the bing
 // phrase is answered with bong, the rabbit's phrase in them replaced, and
 // "swordfish" in the reply's text replaced with "[password]". Envoy sends
 // api.anthropic.com, chatgpt.com and api.openai.com to it, enforced, or

@@ -25,10 +25,11 @@ import "github.com/Blink-Build-Studios/aintercept/aintercept/intercept"
 ## 1. Rules
 
 A rule is a condition and its answer. The example,
-`aintercept/examples/rabbit`, is two of them: when a message to the model
-says the rabbit's phrase (the one ending "…silly rabbit"), it answers for the
-model "Well, tricks are for kids."; when one says the bing phrase, "then we
-bong". Everything else goes through.
+`aintercept/examples/rabbit`, is two of them: when the user's prompt says
+the rabbit's phrase (the one ending "…silly rabbit"), it answers for the
+model "Well, tricks are for kids."; when it says the bing phrase, "then we
+bong". Everything else goes through, including tool results: a file the
+agent reads that says a phrase doesn't set it off.
 
 ```go
 var (
@@ -38,8 +39,8 @@ var (
 
 func main() {
 	log.Fatal(intercept.Run(
-		intercept.OnRequest(intercept.Matches(rabbit)).Reply("Well, tricks are for kids."),
-		intercept.OnRequest(intercept.Matches(bing)).Reply("then we bong"),
+		intercept.OnRequest(intercept.Prompt(intercept.Matches(rabbit))).Reply("Well, tricks are for kids."),
+		intercept.OnRequest(intercept.Prompt(intercept.Matches(bing))).Reply("then we bong"),
 	))
 }
 ```
@@ -60,12 +61,13 @@ replies at all: an Interceptor pays only for what it handles.
 
 Each takes a matcher and ends with `.Reply(text)` (answer for the model),
 `.Replace(text)` (replace what matched) or `.Do(func(*Message) Answer)`.
-Matchers: `Contains(s)` (ignoring case), `Matches(re)`, `Arg(name, m)` (a
-tool call's argument), `Tool(name)`, `And`, `Or`, `Not`.
+Matchers: `Contains(s)` (ignoring case), `Matches(re)`, `Prompt(m)` (the
+user's prompts only: `OnRequest` alone also sees tool results and media),
+`Arg(name, m)` (a tool call's argument), `Tool(name)`, `And`, `Or`, `Not`.
 
 ```go
 intercept.Run(
-	intercept.OnRequest(intercept.Contains("magic word")).Reply("No magic here."),
+	intercept.OnRequest(intercept.Prompt(intercept.Contains("magic word"))).Reply("No magic here."),
 	intercept.OnMessage(intercept.Matches(apiKey)).Replace("[secret]"),
 	intercept.OnResponse(intercept.Contains("swordfish")).Replace("[password]"),
 	intercept.OnToolCallRequest("Bash", intercept.Arg("command", intercept.Contains("rm -rf"))).Reply("I won't run that."),

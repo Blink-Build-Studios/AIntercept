@@ -17,7 +17,7 @@ func TestRabbit(t *testing.T) {
 	h.Prompt(sillyRabbit+"!").WantReply(t, tricks)
 	h.Prompt("I’m a SIL"+"LY RAB"+"BIT").WantReply(t, tricks)
 	h.Prompt("well, "+firstBing).WantReply(t, bong)
-	h.ToolResult("Bash", "it said "+sillyRabbit).WantReply(t, tricks) // every message to the model
+	h.ToolResult("Read", "the file says "+sillyRabbit).WantAccepted(t) // prompts only, not tool results
 	h.Prompt("hello").WantAccepted(t)
 	// Nothing on the reply: it goes as it came, and so do tool calls.
 	h.Reply("I'm a sil", "ly rab", "bit").WantClientSees(t, sillyRabbit)

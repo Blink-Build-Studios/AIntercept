@@ -357,6 +357,6 @@ Codex; the web apps follow.
 - `interceptor.contract: v1 | v2` in the chart; v1 is the default until v2 has
   passed the matrix for the clients in use.
 - The example (`aintercept/examples/rabbit`, on package `intercept`) answers
-  two phrases in messages to the model with Reply.
+  two phrases in the user's prompts with Reply.
 - The same "what's new" parsing then serves storage: recording each message
   once, instead of every call's full history.

@@ -182,7 +182,7 @@ service Interceptor {
   was used.
 
 `aintercept/examples/rabbit` is the smallest v2 Interceptor, on package
-`intercept`: two rules that answer two phrases in messages to the model with
+`intercept`: two rules that answer two phrases in the user's prompts with
 Reply. It's built into the image as `/rabbit-interceptor`.
 `make test-interceptor` runs the suite's own v2 Interceptor (the rabbit's
 rules plus rules on the reply and its tool calls) through a real Envoy.

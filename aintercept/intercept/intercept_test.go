@@ -39,6 +39,24 @@ func TestRules(t *testing.T) {
 	h.ToolCall("Bash", `{"command":"echo sk-abcdefgh123"}`).WantReplaced(t, `{"command":"echo [secret]"}`)
 }
 
+// Prompt: the user's prompts only. A tool result (a file the agent read)
+// saying the same thing doesn't match, nor does the model's reply.
+func TestPromptMatcher(t *testing.T) {
+	h := intercepttest.New(
+		intercept.OnRequest(intercept.Prompt(intercept.Contains("magic word"))).Reply("No magic here."),
+		intercept.OnMessage(intercept.Prompt(intercept.Matches(apiKey))).Replace("[secret]"),
+	)
+	h.Prompt("say the magic word").WantReply(t, "No magic here.")
+	h.ToolResult("Read", "the file says: magic word").WantAccepted(t)
+	h.Prompt("key sk-abcdefgh123").WantReplaced(t, "key [secret]")
+	h.ToolResult("Bash", "key sk-abcdefgh123").WantAccepted(t)
+	h.Reply("the magic word").WantClientSees(t, "the magic word")
+	h.ToolCall("Bash", `{"command":"echo magic word"}`).WantAccepted(t)
+	h2 := intercepttest.New(intercept.OnRequest(intercept.Prompt(nil)).Reply("every prompt"))
+	h2.Prompt("anything").WantReply(t, "every prompt")
+	h2.ToolResult("Read", "anything").WantAccepted(t)
+}
+
 // A rule on reply text is a watch: the phrase split across pieces is caught;
 // the text before it isn't held back.
 func TestRulesOnReplyText(t *testing.T) {
