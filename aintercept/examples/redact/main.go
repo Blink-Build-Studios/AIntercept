@@ -2,9 +2,9 @@
 // "silly clown" with "[redacted]" wherever it appears in a call's content,
 // in both directions, refuses calls that ask for the model
 // "forbidden-model", and logs each call's start and record. It also answers
-// the silly rabbit, in what the client sends: "I'm a silly rabbit" is
-// rewritten to ask the model for "Well, tricks are for kids.". Everything else
-// goes through unchanged.
+// two phrases in what the client sends: "I'm a silly rabbit" is rewritten to
+// ask the model for "Well, tricks are for kids.", and "first we bing" for
+// "then we bong". Everything else goes through unchanged.
 //
 // It shows the whole contract: OnCallStart decides from the parsed request
 // (Deny or Allow), OnMessage returns Replace when it changes a message (Allow
@@ -41,11 +41,24 @@ var phrase = regexp.MustCompile(`(?i)silly clown`)
 // The rabbit, with a straight or curly apostrophe (raw, or JSON-escaped), or none.
 const apostrophe = `(?:'|’|\\u0027|\\u2019)?`
 
-var (
-	sillyRabbit = regexp.MustCompile(`(?i)i` + apostrophe + `m a silly rabbit`)
-	// No quotes or backslashes: it goes inside JSON strings as it is.
-	tricks = []byte("Reply with exactly this sentence and nothing else: Well, tricks are for kids.")
-)
+var tricks = ask("Well, tricks are for kids.")
+
+// answers: when the newest thing the user said matches, the request is
+// rewritten to ask the model for the answer instead.
+var answers = []struct {
+	name   string
+	said   *regexp.Regexp
+	answer []byte
+}{
+	{"silly rabbit", regexp.MustCompile(`(?i)i` + apostrophe + `m a silly rabbit`), tricks},
+	{"bing", regexp.MustCompile(`(?i)first,? we bing`), ask("then we bong")},
+}
+
+// ask is the instruction that makes the model reply with exactly this. No
+// quotes or backslashes in reply: it goes inside JSON strings as it is.
+func ask(reply string) []byte {
+	return []byte("Reply with exactly this sentence and nothing else: " + reply)
+}
 
 type server struct {
 	pb.UnimplementedInterceptorServer
@@ -69,10 +82,13 @@ func (server) OnMessage(_ context.Context, m *pb.Message) (*pb.Verdict, error) {
 		if !ok {
 			said = string(in) // not a request we know: the whole message
 		}
-		if sillyRabbit.MatchString(said) {
-			in = sillyRabbit.ReplaceAll(in, tricks)
-			notes = append(notes, &pb.Annotation{Key: "rabbit", Value: "silly"})
-			slog.Info("silly rabbit", "call", m.GetCall().GetCallId(), "kind", m.GetKind().String(),
+		for _, a := range answers {
+			if !a.said.MatchString(said) {
+				continue
+			}
+			in = a.said.ReplaceAll(in, a.answer)
+			notes = append(notes, &pb.Annotation{Key: "answered", Value: a.name})
+			slog.Info("answered", "rule", a.name, "call", m.GetCall().GetCallId(), "kind", m.GetKind().String(),
 				"applied", m.GetCall().GetMode() == pb.Mode_MODE_ENFORCE)
 		}
 	}
