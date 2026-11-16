@@ -171,7 +171,8 @@ delivered, failed, decided, decide_failed.
   directions;
 - calls asking for the model `forbidden-model` are refused at `OnCallStart`;
 - when the newest thing the user said contains "I'm a silly rabbit", the
-  request is rewritten to ask the model for "Well, tricks are for kids.".
+  request is rewritten to ask the model for "Well, tricks are for kids."
+  ("first we bing" gets "then we bong" the same way).
   Clients resend the
   whole conversation, so only the newest user message counts (the last
   message or input item, or claude.ai's `prompt`). This works the same for

@@ -53,6 +53,20 @@ func TestRabbits(t *testing.T) {
 	}
 }
 
+// "First we bing" gets "then we bong", the same way.
+func TestBing(t *testing.T) {
+	up := pb.Direction_DIRECTION_CLIENT_TO_SERVER
+	for _, said := range []string{"first we bing", "First, we BING!"} {
+		v := onMessage(t, up, `{"prompt":"`+said+`"}`)
+		if got := string(v.GetReplace().GetPayload()); !strings.Contains(got, "Reply with exactly this sentence and nothing else: then we bong") {
+			t.Errorf("%q: got %q, want it to ask for then we bong", said, got)
+		}
+	}
+	if v := onMessage(t, up, `{"prompt":"we bing first"}`); v.GetAction() != nil {
+		t.Errorf("got %v, want allow", v.GetAction())
+	}
+}
+
 // Only the newest thing the user said counts: clients resend the whole
 // conversation, and a rabbit earlier in it is history.
 func TestRabbitsInTheNewestMessageOnly(t *testing.T) {

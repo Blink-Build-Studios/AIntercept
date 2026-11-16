@@ -1,7 +1,7 @@
 """A minimal Interceptor in Python (docs/BUILDING_AN_INTERCEPTOR.md): redacts
 "silly clown" in both directions, refuses the model "forbidden-model", answers
-the silly rabbit in what the client sends ("I'm a silly rabbit" asks the model
-for "Well, tricks are for kids."), and checks the bearer token the observer
+two phrases in what the client sends ("I'm a silly rabbit" asks the model for
+"Well, tricks are for kids.", "first we bing" for "then we bong"), and checks the bearer token the observer
 sends when INTERCEPTOR_TOKEN is set."""
 import json
 import logging
@@ -20,6 +20,11 @@ _APOSTROPHE = "(?:'|\u2019|\\\\u0027|\\\\u2019)?".encode()
 SILLY_RABBIT = re.compile(rb"(?i)i" + _APOSTROPHE + rb"m a silly rabbit")
 # No quotes or backslashes: it goes inside JSON strings as it is.
 TRICKS = b"Reply with exactly this sentence and nothing else: Well, tricks are for kids."
+# When the newest thing the user said matches, the request asks the model for the answer instead.
+ANSWERS = [
+    ("silly rabbit", SILLY_RABBIT, TRICKS),
+    ("bing", re.compile(rb"(?i)first,? we bing"), b"Reply with exactly this sentence and nothing else: then we bong"),
+]
 
 
 def newest(payload: bytes) -> str | None:
@@ -82,9 +87,11 @@ class Interceptor(pb_grpc.InterceptorServicer):
         payload, notes = request.payload, []
         if request.direction == pb.DIRECTION_CLIENT_TO_SERVER:
             said = newest(payload)
-            if SILLY_RABBIT.search(payload if said is None else said.encode()):
-                payload = SILLY_RABBIT.sub(lambda _: TRICKS, payload)
-                notes.append(pb.Annotation(key="rabbit", value="silly"))
+            said_bytes = payload if said is None else said.encode()
+            for name, pattern, answer in ANSWERS:
+                if pattern.search(said_bytes):
+                    payload = pattern.sub(lambda _, a=answer: a, payload)
+                    notes.append(pb.Annotation(key="answered", value=name))
         new, n = PHRASE.subn(b"[redacted]", payload)
         if n == 0 and not notes:
             return pb.Verdict()

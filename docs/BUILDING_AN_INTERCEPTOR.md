@@ -215,7 +215,7 @@ Go, `grpc.max_receive_message_length` in Python.
 whole conversation, so the examples look only at the newest user message
 (`newest` in each): the last message or input item when it's the user's, or
 claude.ai's `prompt`. "I'm a silly rabbit" is rewritten to ask the model for
-"Well, tricks are for kids.". Anything that isn't a request they know is
+"Well, tricks are for kids.", and "first we bing" for "then we bong". Anything that isn't a request they know is
 matched whole.
 
 The rest of this section is what you need to know to write your own.
