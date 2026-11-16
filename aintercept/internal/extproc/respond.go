@@ -16,18 +16,19 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/wsframe"
 )
 
-// Contract v2 in enforce (docs/INTERCEPTOR_V2.md): Respond, and tool calls
-// held whole.
+// Contract v2 in enforce (docs/INTERCEPTOR_V2.md): Respond, and every
+// message of the reply decided before the client sees it.
 //
 //   - Respond (OnCallStart, OnRequest): when the client keeps the
 //     conversation, the reply is synthesized in the request's format and the
 //     call never goes upstream (an immediate 200, or a WebSocket turn's
 //     events); when the provider keeps it (a chained request), the request is
 //     rewritten to ask the model for exactly the text.
-//   - Tool calls: a reply's text streams through as it comes; each tool call
-//     (Anthropic Messages, Responses over HTTP or Codex's WebSocket) is held
-//     from its first event until it's complete, then OnToolCall decides it
-//     (convo.Stream). A whole JSON reply is decided before it's released.
+//   - The reply (Anthropic Messages, Responses over HTTP or Codex's
+//     WebSocket, Chat Completions): its text is held piece by piece and
+//     decided by OnReply, each tool call held from its first event until
+//     it's complete and decided by OnToolCall (convo.Stream). A whole JSON
+//     reply is decided before it's released.
 
 // readRequest decodes and parses an HTTP request body.
 func (srv *Server) readRequest(st *streamState, body []byte) (convo.Request, bool) {
@@ -104,34 +105,55 @@ func (srv *Server) respondWS(st *streamState, r convo.Request, create []byte, d 
 	return d, out
 }
 
-// ── Tool calls held whole ────────────────────────────────────────────────────
+// ── The reply, message by message ────────────────────────────────────────────
 
-// holdsTools reports whether a reply to a request in format has its tool
-// calls held.
-func (srv *Server) holdsTools(format string) bool {
-	return srv.ic.ToolCalls() && (format == convo.FormatAnthropic || format == convo.FormatResponses)
+// holdsReplies reports whether replies go to the Interceptor: their text to
+// OnReply or their tool calls to OnToolCall.
+func (srv *Server) holdsReplies() bool { return srv.ic.Replies() || srv.ic.ToolCalls() }
+
+// holdsReply reports whether a reply to a request in format goes to the
+// Interceptor.
+func (srv *Server) holdsReply(format string) bool {
+	return srv.holdsReplies() && (format == convo.FormatAnthropic || format == convo.FormatResponses || format == convo.FormatChat)
 }
 
-// decider asks OnToolCall about each tool call in the stream's reply.
-func (srv *Server) decider(st *streamState) func(convo.ToolCall) convo.Answer {
-	return func(tc convo.ToolCall) convo.Answer {
-		d := srv.ic.DecideToolCall(context.Background(), st.icState().call, tc)
-		switch d.Action {
-		case interceptor.Replace:
-			return convo.Answer{Verdict: convo.Replace, Arguments: string(d.Payload)}
-		case interceptor.Respond:
-			return convo.Answer{Verdict: convo.Respond, Text: d.Text}
-		case interceptor.Deny:
-			st.enf.toolDeny = &d
-			return convo.Answer{Verdict: convo.Stop}
+// deciders ask OnReply and OnToolCall about the stream's reply (enforce).
+func (srv *Server) deciders(st *streamState) convo.Deciders {
+	call := st.icState().call
+	var dec convo.Deciders
+	dec.Opaque = func(id string) { srv.ic.Opaque(context.Background(), call, id) }
+	if srv.ic.ToolCalls() {
+		dec.ToolCall = func(tc convo.ToolCall) convo.Answer {
+			return srv.answer(st, srv.ic.DecideToolCall(context.Background(), call, tc))
 		}
-		return convo.Answer{}
 	}
+	if srv.ic.Replies() {
+		dec.Text = func(p convo.TextPiece) convo.Answer {
+			return srv.answer(st, srv.ic.DecideReply(context.Background(), call, p))
+		}
+	}
+	return dec
 }
 
-// holdToolsHeaders starts holding a successful reply's tool calls: event by
-// event for an event stream, whole for JSON. Anything else passes.
-func (srv *Server) holdToolsHeaders(st *streamState) []*extprocv3.ProcessingResponse {
+// answer turns a decision on part of the reply into the stream's answer.
+func (srv *Server) answer(st *streamState, d interceptor.Decision) convo.Answer {
+	switch d.Action {
+	case interceptor.Replace:
+		return convo.Answer{Verdict: convo.Replace, Arguments: string(d.Payload), Text: d.Text, Keep: d.Keep}
+	case interceptor.Respond:
+		return convo.Answer{Verdict: convo.Respond, Text: d.Text}
+	case interceptor.Hold:
+		return convo.Answer{Verdict: convo.Hold}
+	case interceptor.Deny:
+		st.enf.toolDeny = &d
+		return convo.Answer{Verdict: convo.Stop}
+	}
+	return convo.Answer{Keep: d.Keep}
+}
+
+// holdReplyHeaders starts holding a successful reply: event by event for an
+// event stream, whole for JSON. Anything else passes.
+func (srv *Server) holdReplyHeaders(st *streamState) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	ct := st.respHeaders["content-type"]
 	switch {
@@ -140,7 +162,7 @@ func (srv *Server) holdToolsHeaders(st *streamState) []*extprocv3.ProcessingResp
 		srv.undecodable(st, "reply with content-encoding "+st.respEncoding)
 	case strings.Contains(ct, "text/event-stream"):
 		e.mode = respToolsSSE
-		e.tools = convo.NewStream(st.ic.holdTools, convo.SSE, srv.decider(st))
+		e.tools = convo.NewStream(st.ic.replyFormat, convo.SSE, srv.deciders(st))
 		return []*extprocv3.ProcessingResponse{headersResponse(false, []string{"content-length"})}
 	case strings.Contains(ct, "json"):
 		e.mode, e.respHeld = respToolsWhole, true
@@ -149,13 +171,23 @@ func (srv *Server) holdToolsHeaders(st *streamState) []*extprocv3.ProcessingResp
 	return []*extprocv3.ProcessingResponse{continueResponseHeaders()}
 }
 
-// toolsSSE releases an event stream's chunk: text as it comes, each tool
-// call once decided. A Respond or a refusal ends the reply.
+// toolsSSE releases what an event stream's chunk lets go: text and each
+// tool call once decided. Its pending text is asked about when nothing more
+// is waiting. A Respond or a refusal ends the reply.
 func (srv *Server) toolsSSE(st *streamState, chunk []byte, eos bool) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	var out []byte
-	for _, ev := range e.sse.feed(chunk) {
-		if out = append(out, e.tools.Feed(ev.name, ev.data, ev.raw)...); e.tools.Ended() {
+	evs := e.sse.feed(chunk)
+	if !eos && !e.waiting() {
+		evs = append(evs, sseEvent{}) // pump
+	}
+	for _, ev := range evs {
+		if ev.raw == nil {
+			out = append(out, e.tools.Pump()...)
+		} else {
+			out = append(out, e.tools.Feed(ev.name, ev.data, ev.raw)...)
+		}
+		if e.tools.Ended() {
 			e.ended = true
 			if d := e.toolDeny; d != nil {
 				dn := srv.denial(st, *d)
@@ -188,7 +220,7 @@ func (srv *Server) toolsWhole(st *streamState, chunk []byte, eos bool) []*extpro
 	e.respHeld = false
 	body := e.resp
 	e.resp = nil
-	out, stopped, err := convo.DecideBody(st.ic.holdTools, body, srv.decider(st))
+	out, stopped, err := convo.DecideBody(st.ic.replyFormat, body, srv.deciders(st))
 	switch {
 	case stopped:
 		return srv.deny(st, *e.toolDeny)
@@ -202,12 +234,27 @@ func (srv *Server) toolsWhole(st *streamState, chunk []byte, eos bool) []*extpro
 }
 
 // wsToolCalls forwards a Codex WebSocket's server messages, re-framed: each
-// turn's tool calls held and decided, the rest as it came. After a Respond
-// the turn's remaining messages are dropped; a refusal ends the connection.
+// turn's text and tool calls held and decided, the rest as it came. After a
+// Respond the turn's remaining messages are dropped; a refusal ends the
+// connection. The turn's pending text is asked about when nothing more is
+// waiting.
 func (srv *Server) wsToolCalls(st *streamState, msgs []wsframe.Message, eos bool) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	var out []byte
+	if !e.waiting() {
+		msgs = append(msgs, wsframe.Message{Opcode: pumpOp})
+	}
 	for _, m := range msgs {
+		if m.Opcode == pumpOp {
+			if e.wsTools == nil || e.wsTools.Ended() {
+				continue
+			}
+			out = append(out, e.wsTools.Pump()...)
+			if e.wsTools.Ended() && e.toolDeny != nil {
+				return append([]*extprocv3.ProcessingResponse{bodyResponse(false, out, false)}, srv.wsDeny(st, false, *e.toolDeny, 1008)...)
+			}
+			continue
+		}
 		srv.wsMessage(st, events.DirOutbound, m) // recording: turns and the connection row
 		if m.Truncated {
 			return srv.wsDeny(st, false, interceptor.Decision{Reason: "WebSocket message too large to evaluate."}, 1009)
@@ -219,7 +266,7 @@ func (srv *Server) wsToolCalls(st *streamState, msgs []wsframe.Message, eos bool
 		}
 		typ := messageType(m.Payload)
 		if typ == "response.created" { // a new turn
-			e.wsTools = convo.NewStream(convo.FormatResponses, wsText, srv.decider(st))
+			e.wsTools = convo.NewStream(convo.FormatResponses, wsText, srv.deciders(st))
 		}
 		switch {
 		case e.wsTools == nil:
@@ -238,6 +285,10 @@ func (srv *Server) wsToolCalls(st *streamState, msgs []wsframe.Message, eos bool
 	}
 	return []*extprocv3.ProcessingResponse{bodyResponse(false, out, eos)}
 }
+
+// pumpOp marks the point in wsToolCalls' messages where the pending text is
+// asked about (no WebSocket opcode).
+const pumpOp = 0xff
 
 // wsText frames an event the Stream makes as a server text message.
 func wsText(_ string, data []byte) []byte { return wsframe.Encode(wsframe.OpText, data, false) }

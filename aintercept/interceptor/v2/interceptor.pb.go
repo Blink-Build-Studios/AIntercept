@@ -13,13 +13,15 @@
 //
 //   observe  Callbacks are delivered asynchronously; answers are recorded,
 //            never applied.
-//   enforce  OnCallStart, OnRequest and OnToolCall are in the call's path,
-//            within the deadline; answers are applied. On a failure or a
-//            missed deadline the call is refused (fail closed; configurable).
+//   enforce  OnCallStart, OnRequest, OnReply and OnToolCall are in the
+//            call's path, within the deadline; answers are applied. On a
+//            failure or a missed deadline the call is refused (fail closed;
+//            configurable).
 //
-// Content: OnRequest and OnToolCall are only called when the deployment
-// enables Interceptor content. A reply's text streams to the client
-// untouched; each tool call in it is held until OnToolCall has answered.
+// Content: OnRequest, OnReply and OnToolCall are only called when the
+// deployment enables Interceptor content. Every message goes to the
+// Interceptor in both directions: the request's new messages before they go
+// upstream, and the reply's text and tool calls before the client sees them.
 //
 // See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
 
@@ -1078,10 +1080,13 @@ func (x *ToolCall) GetArguments() string {
 
 // What the tool returned, as text.
 type ToolResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CallId        string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
-	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
-	IsError       bool                   `protobuf:"varint,3,opt,name=is_error,json=isError,proto3" json:"is_error,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	CallId  string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	Text    string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	IsError bool                   `protobuf:"varint,3,opt,name=is_error,json=isError,proto3" json:"is_error,omitempty"`
+	// The tool it answers: the name of the call call_id, from the request's
+	// history ("" when the request doesn't carry the call).
+	Name          string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1135,6 +1140,13 @@ func (x *ToolResult) GetIsError() bool {
 		return x.IsError
 	}
 	return false
+}
+
+func (x *ToolResult) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 // Reasoning, encrypted content, anything AIntercept doesn't recognise:
@@ -1353,8 +1365,16 @@ type MessageVerdict struct {
 	//	*MessageVerdict_Accept
 	//	*MessageVerdict_Replace
 	//	*MessageVerdict_Respond
-	Action        isMessageVerdict_Action `protobuf_oneof:"action"`
-	Annotations   []*Annotation           `protobuf:"bytes,10,rep,name=annotations,proto3" json:"annotations,omitempty"`
+	//	*MessageVerdict_Hold
+	Action isMessageVerdict_Action `protobuf_oneof:"action"`
+	// OnReply, with Accept (or no action) or Replace: the last keep bytes of
+	// the pending text (cut on a character) stay held and come back in the next
+	// call with what arrives next; Accept releases the rest as it is, Replace
+	// releases the message's text in its place. This is how a match that may
+	// continue in the next piece is held back while the text before it goes
+	// on. Ignored once the block is done.
+	Keep          int32         `protobuf:"varint,6,opt,name=keep,proto3" json:"keep,omitempty"`
+	Annotations   []*Annotation `protobuf:"bytes,10,rep,name=annotations,proto3" json:"annotations,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1430,6 +1450,22 @@ func (x *MessageVerdict) GetRespond() *Respond {
 	return nil
 }
 
+func (x *MessageVerdict) GetHold() *Hold {
+	if x != nil {
+		if x, ok := x.Action.(*MessageVerdict_Hold); ok {
+			return x.Hold
+		}
+	}
+	return nil
+}
+
+func (x *MessageVerdict) GetKeep() int32 {
+	if x != nil {
+		return x.Keep
+	}
+	return 0
+}
+
 func (x *MessageVerdict) GetAnnotations() []*Annotation {
 	if x != nil {
 		return x.Annotations
@@ -1450,9 +1486,14 @@ type MessageVerdict_Replace struct {
 }
 
 type MessageVerdict_Respond struct {
-	// OnToolCall: the reply ends here with this text. In OnRequest, as
-	// RequestVerdict.respond.
+	// OnToolCall, OnReply: the reply ends here with this text. In
+	// OnRequest, as RequestVerdict.respond.
 	Respond *Respond `protobuf:"bytes,4,opt,name=respond,proto3,oneof"`
+}
+
+type MessageVerdict_Hold struct {
+	// OnReply only: keep the pending text and ask again when more arrives.
+	Hold *Hold `protobuf:"bytes,5,opt,name=hold,proto3,oneof"`
 }
 
 func (*MessageVerdict_Accept) isMessageVerdict_Action() {}
@@ -1460,6 +1501,8 @@ func (*MessageVerdict_Accept) isMessageVerdict_Action() {}
 func (*MessageVerdict_Replace) isMessageVerdict_Action() {}
 
 func (*MessageVerdict_Respond) isMessageVerdict_Action() {}
+
+func (*MessageVerdict_Hold) isMessageVerdict_Action() {}
 
 // Forward unchanged.
 type Accept struct {
@@ -1498,6 +1541,44 @@ func (*Accept) Descriptor() ([]byte, []int) {
 	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{15}
 }
 
+// Release nothing yet: the pending text comes back, with whatever arrives
+// next, in the next call.
+type Hold struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Hold) Reset() {
+	*x = Hold{}
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Hold) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Hold) ProtoMessage() {}
+
+func (x *Hold) ProtoReflect() protoreflect.Message {
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Hold.ProtoReflect.Descriptor instead.
+func (*Hold) Descriptor() ([]byte, []int) {
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{16}
+}
+
 // Put this version of the message in place. Every part of the original comes
 // back, by id, in order: change text (a text part, a tool result's text, a
 // tool call's arguments as valid JSON; a custom tool's as a JSON string); a
@@ -1513,7 +1594,7 @@ type Replace struct {
 
 func (x *Replace) Reset() {
 	*x = Replace{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1525,7 +1606,7 @@ func (x *Replace) String() string {
 func (*Replace) ProtoMessage() {}
 
 func (x *Replace) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1538,7 +1619,7 @@ func (x *Replace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Replace.ProtoReflect.Descriptor instead.
 func (*Replace) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{16}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Replace) GetMessage() *ConvMessage {
@@ -1565,7 +1646,7 @@ type Respond struct {
 
 func (x *Respond) Reset() {
 	*x = Respond{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1577,7 +1658,7 @@ func (x *Respond) String() string {
 func (*Respond) ProtoMessage() {}
 
 func (x *Respond) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1590,7 +1671,7 @@ func (x *Respond) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Respond.ProtoReflect.Descriptor instead.
 func (*Respond) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{17}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Respond) GetText() string {
@@ -1609,7 +1690,7 @@ type Fetch struct {
 
 func (x *Fetch) Reset() {
 	*x = Fetch{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1621,7 +1702,7 @@ func (x *Fetch) String() string {
 func (*Fetch) ProtoMessage() {}
 
 func (x *Fetch) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1634,7 +1715,7 @@ func (x *Fetch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Fetch.ProtoReflect.Descriptor instead.
 func (*Fetch) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{18}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Fetch) GetPartIds() []string {
@@ -1659,7 +1740,7 @@ type CallVerdict struct {
 
 func (x *CallVerdict) Reset() {
 	*x = CallVerdict{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1671,7 +1752,7 @@ func (x *CallVerdict) String() string {
 func (*CallVerdict) ProtoMessage() {}
 
 func (x *CallVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1684,7 +1765,7 @@ func (x *CallVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallVerdict.ProtoReflect.Descriptor instead.
 func (*CallVerdict) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{19}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CallVerdict) GetAction() isCallVerdict_Action {
@@ -1738,20 +1819,33 @@ func (*CallVerdict_Accept) isCallVerdict_Action() {}
 
 func (*CallVerdict_Respond) isCallVerdict_Action() {}
 
-// One tool call in the model's reply: an ASSISTANT message with one ToolCall
-// part, its arguments inline up to 3 MiB (by reference beyond: there is no
-// Fetch for a tool call).
+// A message from the model, before the client sees it: an ASSISTANT message
+// with one part.
+//
+// OnToolCall: one ToolCall part, its arguments inline up to 3 MiB (by
+// reference beyond: there is no Fetch for a tool call). The message id is
+// the provider's call id.
+//
+// OnReply: one Text part, the pending text of a text block; or one Opaque
+// part. The message id is the block's, the same on every call for it:
+// "<the reply's id>:<the block's index>" (msg_…:0, resp item msg_…:0,
+// chatcmpl-…:0).
 type ResponseMessage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Call          *Call                  `protobuf:"bytes,1,opt,name=call,proto3" json:"call,omitempty"`
-	Message       *ConvMessage           `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Call    *Call                  `protobuf:"bytes,1,opt,name=call,proto3" json:"call,omitempty"`
+	Message *ConvMessage           `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	// OnReply, text: the block's text already released to the client.
+	Released string `protobuf:"bytes,3,opt,name=released,proto3" json:"released,omitempty"`
+	// OnReply: the block is finished (always, for an opaque part): nothing
+	// more of it will come.
+	Done          bool `protobuf:"varint,4,opt,name=done,proto3" json:"done,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResponseMessage) Reset() {
 	*x = ResponseMessage{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1763,7 +1857,7 @@ func (x *ResponseMessage) String() string {
 func (*ResponseMessage) ProtoMessage() {}
 
 func (x *ResponseMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1776,7 +1870,7 @@ func (x *ResponseMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseMessage.ProtoReflect.Descriptor instead.
 func (*ResponseMessage) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{20}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ResponseMessage) GetCall() *Call {
@@ -1793,6 +1887,20 @@ func (x *ResponseMessage) GetMessage() *ConvMessage {
 	return nil
 }
 
+func (x *ResponseMessage) GetReleased() string {
+	if x != nil {
+		return x.Released
+	}
+	return ""
+}
+
+func (x *ResponseMessage) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
 type Annotation struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -1803,7 +1911,7 @@ type Annotation struct {
 
 func (x *Annotation) Reset() {
 	*x = Annotation{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1815,7 +1923,7 @@ func (x *Annotation) String() string {
 func (*Annotation) ProtoMessage() {}
 
 func (x *Annotation) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1828,7 +1936,7 @@ func (x *Annotation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Annotation.ProtoReflect.Descriptor instead.
 func (*Annotation) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{21}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Annotation) GetKey() string {
@@ -1867,7 +1975,7 @@ type CallRecord struct {
 
 func (x *CallRecord) Reset() {
 	*x = CallRecord{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1879,7 +1987,7 @@ func (x *CallRecord) String() string {
 func (*CallRecord) ProtoMessage() {}
 
 func (x *CallRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1892,7 +2000,7 @@ func (x *CallRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallRecord.ProtoReflect.Descriptor instead.
 func (*CallRecord) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{22}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CallRecord) GetCall() *Call {
@@ -1965,7 +2073,7 @@ type ResponseInfo struct {
 
 func (x *ResponseInfo) Reset() {
 	*x = ResponseInfo{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1977,7 +2085,7 @@ func (x *ResponseInfo) String() string {
 func (*ResponseInfo) ProtoMessage() {}
 
 func (x *ResponseInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1990,7 +2098,7 @@ func (x *ResponseInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseInfo.ProtoReflect.Descriptor instead.
 func (*ResponseInfo) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{23}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ResponseInfo) GetStatus() int32 {
@@ -2094,7 +2202,7 @@ type ToolCount struct {
 
 func (x *ToolCount) Reset() {
 	*x = ToolCount{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2106,7 +2214,7 @@ func (x *ToolCount) String() string {
 func (*ToolCount) ProtoMessage() {}
 
 func (x *ToolCount) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2119,7 +2227,7 @@ func (x *ToolCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCount.ProtoReflect.Descriptor instead.
 func (*ToolCount) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{24}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ToolCount) GetName() string {
@@ -2138,15 +2246,16 @@ func (x *ToolCount) GetCount() int32 {
 
 type RecordedVerdict struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// "call_start", "request" or "tool_call".
+	// "call_start", "request", "reply" or "tool_call".
 	Callback string `protobuf:"bytes,1,opt,name=callback,proto3" json:"callback,omitempty"`
-	// "accept" (annotated), "replace", "respond", or "error" when the
+	// "accept" (annotated), "replace", "respond", "hold", or "error" when the
 	// Interceptor failed, timed out or gave an invalid answer.
 	Action      string        `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
 	Applied     bool          `protobuf:"varint,3,opt,name=applied,proto3" json:"applied,omitempty"`
 	Reason      string        `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
 	Annotations []*Annotation `protobuf:"bytes,5,rep,name=annotations,proto3" json:"annotations,omitempty"`
-	// The message the answer is for ("" for the call; a tool call's id).
+	// The message the answer is for ("" for the call; a tool call's id; a
+	// reply text block's id).
 	MessageId string `protobuf:"bytes,6,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	// Respond, applied: "synthesized" or "rewritten".
 	RespondMode   string `protobuf:"bytes,7,opt,name=respond_mode,json=respondMode,proto3" json:"respond_mode,omitempty"`
@@ -2156,7 +2265,7 @@ type RecordedVerdict struct {
 
 func (x *RecordedVerdict) Reset() {
 	*x = RecordedVerdict{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2168,7 +2277,7 @@ func (x *RecordedVerdict) String() string {
 func (*RecordedVerdict) ProtoMessage() {}
 
 func (x *RecordedVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2181,7 +2290,7 @@ func (x *RecordedVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordedVerdict.ProtoReflect.Descriptor instead.
 func (*RecordedVerdict) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{25}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RecordedVerdict) GetCallback() string {
@@ -2241,7 +2350,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2253,7 +2362,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2266,7 +2375,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{26}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{27}
 }
 
 var File_interceptor_v2_interceptor_proto protoreflect.FileDescriptor
@@ -2350,12 +2459,13 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\bToolCall\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
-	"\targuments\x18\x03 \x01(\tR\targuments\"T\n" +
+	"\targuments\x18\x03 \x01(\tR\targuments\"h\n" +
 	"\n" +
 	"ToolResult\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x19\n" +
-	"\bis_error\x18\x03 \x01(\bR\aisError\"\b\n" +
+	"\bis_error\x18\x03 \x01(\bR\aisError\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\"\b\n" +
 	"\x06Opaque\"\xfd\x01\n" +
 	"\x0fRequestMessages\x123\n" +
 	"\x04call\x18\x01 \x01(\v2\x1f.aintercept.interceptor.v2.CallR\x04call\x12\x16\n" +
@@ -2369,17 +2479,20 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x05fetch\x18\x02 \x01(\v2 .aintercept.interceptor.v2.FetchR\x05fetch\x12<\n" +
 	"\arespond\x18\x03 \x01(\v2\".aintercept.interceptor.v2.RespondR\arespond\x12G\n" +
 	"\vannotations\x18\n" +
-	" \x03(\v2%.aintercept.interceptor.v2.AnnotationR\vannotations\"\xbf\x02\n" +
+	" \x03(\v2%.aintercept.interceptor.v2.AnnotationR\vannotations\"\x8a\x03\n" +
 	"\x0eMessageVerdict\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12;\n" +
 	"\x06accept\x18\x02 \x01(\v2!.aintercept.interceptor.v2.AcceptH\x00R\x06accept\x12>\n" +
 	"\areplace\x18\x03 \x01(\v2\".aintercept.interceptor.v2.ReplaceH\x00R\areplace\x12>\n" +
-	"\arespond\x18\x04 \x01(\v2\".aintercept.interceptor.v2.RespondH\x00R\arespond\x12G\n" +
+	"\arespond\x18\x04 \x01(\v2\".aintercept.interceptor.v2.RespondH\x00R\arespond\x125\n" +
+	"\x04hold\x18\x05 \x01(\v2\x1f.aintercept.interceptor.v2.HoldH\x00R\x04hold\x12\x12\n" +
+	"\x04keep\x18\x06 \x01(\x05R\x04keep\x12G\n" +
 	"\vannotations\x18\n" +
 	" \x03(\v2%.aintercept.interceptor.v2.AnnotationR\vannotationsB\b\n" +
 	"\x06action\"\b\n" +
-	"\x06Accept\"K\n" +
+	"\x06Accept\"\x06\n" +
+	"\x04Hold\"K\n" +
 	"\aReplace\x12@\n" +
 	"\amessage\x18\x01 \x01(\v2&.aintercept.interceptor.v2.ConvMessageR\amessage\"\x1d\n" +
 	"\aRespond\x12\x12\n" +
@@ -2391,10 +2504,12 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\arespond\x18\x02 \x01(\v2\".aintercept.interceptor.v2.RespondH\x00R\arespond\x12G\n" +
 	"\vannotations\x18\n" +
 	" \x03(\v2%.aintercept.interceptor.v2.AnnotationR\vannotationsB\b\n" +
-	"\x06action\"\x88\x01\n" +
+	"\x06action\"\xb8\x01\n" +
 	"\x0fResponseMessage\x123\n" +
 	"\x04call\x18\x01 \x01(\v2\x1f.aintercept.interceptor.v2.CallR\x04call\x12@\n" +
-	"\amessage\x18\x02 \x01(\v2&.aintercept.interceptor.v2.ConvMessageR\amessage\"4\n" +
+	"\amessage\x18\x02 \x01(\v2&.aintercept.interceptor.v2.ConvMessageR\amessage\x12\x1a\n" +
+	"\breleased\x18\x03 \x01(\tR\breleased\x12\x12\n" +
+	"\x04done\x18\x04 \x01(\bR\x04done\"4\n" +
 	"\n" +
 	"Annotation\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -2451,10 +2566,11 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tROLE_USER\x10\x01\x12\x12\n" +
 	"\x0eROLE_ASSISTANT\x10\x02\x12\r\n" +
-	"\tROLE_TOOL\x10\x032\x8c\x03\n" +
+	"\tROLE_TOOL\x10\x032\xee\x03\n" +
 	"\vInterceptor\x12[\n" +
 	"\vOnCallStart\x12$.aintercept.interceptor.v2.CallStart\x1a&.aintercept.interceptor.v2.CallVerdict\x12b\n" +
-	"\tOnRequest\x12*.aintercept.interceptor.v2.RequestMessages\x1a).aintercept.interceptor.v2.RequestVerdict\x12c\n" +
+	"\tOnRequest\x12*.aintercept.interceptor.v2.RequestMessages\x1a).aintercept.interceptor.v2.RequestVerdict\x12`\n" +
+	"\aOnReply\x12*.aintercept.interceptor.v2.ResponseMessage\x1a).aintercept.interceptor.v2.MessageVerdict\x12c\n" +
 	"\n" +
 	"OnToolCall\x12*.aintercept.interceptor.v2.ResponseMessage\x1a).aintercept.interceptor.v2.MessageVerdict\x12W\n" +
 	"\x0eOnCallComplete\x12%.aintercept.interceptor.v2.CallRecord\x1a\x1e.aintercept.interceptor.v2.AckBSZQgithub.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2;interceptorv2b\x06proto3"
@@ -2472,7 +2588,7 @@ func file_interceptor_v2_interceptor_proto_rawDescGZIP() []byte {
 }
 
 var file_interceptor_v2_interceptor_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_interceptor_v2_interceptor_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_interceptor_v2_interceptor_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_interceptor_v2_interceptor_proto_goTypes = []any{
 	(Mode)(0),               // 0: aintercept.interceptor.v2.Mode
 	(Transport)(0),          // 1: aintercept.interceptor.v2.Transport
@@ -2493,28 +2609,29 @@ var file_interceptor_v2_interceptor_proto_goTypes = []any{
 	(*RequestVerdict)(nil),  // 16: aintercept.interceptor.v2.RequestVerdict
 	(*MessageVerdict)(nil),  // 17: aintercept.interceptor.v2.MessageVerdict
 	(*Accept)(nil),          // 18: aintercept.interceptor.v2.Accept
-	(*Replace)(nil),         // 19: aintercept.interceptor.v2.Replace
-	(*Respond)(nil),         // 20: aintercept.interceptor.v2.Respond
-	(*Fetch)(nil),           // 21: aintercept.interceptor.v2.Fetch
-	(*CallVerdict)(nil),     // 22: aintercept.interceptor.v2.CallVerdict
-	(*ResponseMessage)(nil), // 23: aintercept.interceptor.v2.ResponseMessage
-	(*Annotation)(nil),      // 24: aintercept.interceptor.v2.Annotation
-	(*CallRecord)(nil),      // 25: aintercept.interceptor.v2.CallRecord
-	(*ResponseInfo)(nil),    // 26: aintercept.interceptor.v2.ResponseInfo
-	(*ToolCount)(nil),       // 27: aintercept.interceptor.v2.ToolCount
-	(*RecordedVerdict)(nil), // 28: aintercept.interceptor.v2.RecordedVerdict
-	(*Ack)(nil),             // 29: aintercept.interceptor.v2.Ack
-	nil,                     // 30: aintercept.interceptor.v2.Client.HeadersEntry
-	nil,                     // 31: aintercept.interceptor.v2.CallStart.HeadersEntry
+	(*Hold)(nil),            // 19: aintercept.interceptor.v2.Hold
+	(*Replace)(nil),         // 20: aintercept.interceptor.v2.Replace
+	(*Respond)(nil),         // 21: aintercept.interceptor.v2.Respond
+	(*Fetch)(nil),           // 22: aintercept.interceptor.v2.Fetch
+	(*CallVerdict)(nil),     // 23: aintercept.interceptor.v2.CallVerdict
+	(*ResponseMessage)(nil), // 24: aintercept.interceptor.v2.ResponseMessage
+	(*Annotation)(nil),      // 25: aintercept.interceptor.v2.Annotation
+	(*CallRecord)(nil),      // 26: aintercept.interceptor.v2.CallRecord
+	(*ResponseInfo)(nil),    // 27: aintercept.interceptor.v2.ResponseInfo
+	(*ToolCount)(nil),       // 28: aintercept.interceptor.v2.ToolCount
+	(*RecordedVerdict)(nil), // 29: aintercept.interceptor.v2.RecordedVerdict
+	(*Ack)(nil),             // 30: aintercept.interceptor.v2.Ack
+	nil,                     // 31: aintercept.interceptor.v2.Client.HeadersEntry
+	nil,                     // 32: aintercept.interceptor.v2.CallStart.HeadersEntry
 }
 var file_interceptor_v2_interceptor_proto_depIdxs = []int32{
 	0,  // 0: aintercept.interceptor.v2.Call.mode:type_name -> aintercept.interceptor.v2.Mode
 	1,  // 1: aintercept.interceptor.v2.Call.transport:type_name -> aintercept.interceptor.v2.Transport
 	4,  // 2: aintercept.interceptor.v2.Call.identity:type_name -> aintercept.interceptor.v2.Identity
 	5,  // 3: aintercept.interceptor.v2.Call.client:type_name -> aintercept.interceptor.v2.Client
-	30, // 4: aintercept.interceptor.v2.Client.headers:type_name -> aintercept.interceptor.v2.Client.HeadersEntry
+	31, // 4: aintercept.interceptor.v2.Client.headers:type_name -> aintercept.interceptor.v2.Client.HeadersEntry
 	3,  // 5: aintercept.interceptor.v2.CallStart.call:type_name -> aintercept.interceptor.v2.Call
-	31, // 6: aintercept.interceptor.v2.CallStart.headers:type_name -> aintercept.interceptor.v2.CallStart.HeadersEntry
+	32, // 6: aintercept.interceptor.v2.CallStart.headers:type_name -> aintercept.interceptor.v2.CallStart.HeadersEntry
 	7,  // 7: aintercept.interceptor.v2.CallStart.request:type_name -> aintercept.interceptor.v2.RequestInfo
 	2,  // 8: aintercept.interceptor.v2.ConvMessage.role:type_name -> aintercept.interceptor.v2.Role
 	9,  // 9: aintercept.interceptor.v2.ConvMessage.parts:type_name -> aintercept.interceptor.v2.Part
@@ -2526,38 +2643,41 @@ var file_interceptor_v2_interceptor_proto_depIdxs = []int32{
 	3,  // 15: aintercept.interceptor.v2.RequestMessages.call:type_name -> aintercept.interceptor.v2.Call
 	8,  // 16: aintercept.interceptor.v2.RequestMessages.messages:type_name -> aintercept.interceptor.v2.ConvMessage
 	17, // 17: aintercept.interceptor.v2.RequestVerdict.messages:type_name -> aintercept.interceptor.v2.MessageVerdict
-	21, // 18: aintercept.interceptor.v2.RequestVerdict.fetch:type_name -> aintercept.interceptor.v2.Fetch
-	20, // 19: aintercept.interceptor.v2.RequestVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	24, // 20: aintercept.interceptor.v2.RequestVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	22, // 18: aintercept.interceptor.v2.RequestVerdict.fetch:type_name -> aintercept.interceptor.v2.Fetch
+	21, // 19: aintercept.interceptor.v2.RequestVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	25, // 20: aintercept.interceptor.v2.RequestVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
 	18, // 21: aintercept.interceptor.v2.MessageVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
-	19, // 22: aintercept.interceptor.v2.MessageVerdict.replace:type_name -> aintercept.interceptor.v2.Replace
-	20, // 23: aintercept.interceptor.v2.MessageVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	24, // 24: aintercept.interceptor.v2.MessageVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	8,  // 25: aintercept.interceptor.v2.Replace.message:type_name -> aintercept.interceptor.v2.ConvMessage
-	18, // 26: aintercept.interceptor.v2.CallVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
-	20, // 27: aintercept.interceptor.v2.CallVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	24, // 28: aintercept.interceptor.v2.CallVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	3,  // 29: aintercept.interceptor.v2.ResponseMessage.call:type_name -> aintercept.interceptor.v2.Call
-	8,  // 30: aintercept.interceptor.v2.ResponseMessage.message:type_name -> aintercept.interceptor.v2.ConvMessage
-	3,  // 31: aintercept.interceptor.v2.CallRecord.call:type_name -> aintercept.interceptor.v2.Call
-	7,  // 32: aintercept.interceptor.v2.CallRecord.request:type_name -> aintercept.interceptor.v2.RequestInfo
-	26, // 33: aintercept.interceptor.v2.CallRecord.response:type_name -> aintercept.interceptor.v2.ResponseInfo
-	28, // 34: aintercept.interceptor.v2.CallRecord.verdicts:type_name -> aintercept.interceptor.v2.RecordedVerdict
-	27, // 35: aintercept.interceptor.v2.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v2.ToolCount
-	24, // 36: aintercept.interceptor.v2.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	6,  // 37: aintercept.interceptor.v2.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v2.CallStart
-	15, // 38: aintercept.interceptor.v2.Interceptor.OnRequest:input_type -> aintercept.interceptor.v2.RequestMessages
-	23, // 39: aintercept.interceptor.v2.Interceptor.OnToolCall:input_type -> aintercept.interceptor.v2.ResponseMessage
-	25, // 40: aintercept.interceptor.v2.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v2.CallRecord
-	22, // 41: aintercept.interceptor.v2.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v2.CallVerdict
-	16, // 42: aintercept.interceptor.v2.Interceptor.OnRequest:output_type -> aintercept.interceptor.v2.RequestVerdict
-	17, // 43: aintercept.interceptor.v2.Interceptor.OnToolCall:output_type -> aintercept.interceptor.v2.MessageVerdict
-	29, // 44: aintercept.interceptor.v2.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v2.Ack
-	41, // [41:45] is the sub-list for method output_type
-	37, // [37:41] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	20, // 22: aintercept.interceptor.v2.MessageVerdict.replace:type_name -> aintercept.interceptor.v2.Replace
+	21, // 23: aintercept.interceptor.v2.MessageVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	19, // 24: aintercept.interceptor.v2.MessageVerdict.hold:type_name -> aintercept.interceptor.v2.Hold
+	25, // 25: aintercept.interceptor.v2.MessageVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	8,  // 26: aintercept.interceptor.v2.Replace.message:type_name -> aintercept.interceptor.v2.ConvMessage
+	18, // 27: aintercept.interceptor.v2.CallVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
+	21, // 28: aintercept.interceptor.v2.CallVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	25, // 29: aintercept.interceptor.v2.CallVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	3,  // 30: aintercept.interceptor.v2.ResponseMessage.call:type_name -> aintercept.interceptor.v2.Call
+	8,  // 31: aintercept.interceptor.v2.ResponseMessage.message:type_name -> aintercept.interceptor.v2.ConvMessage
+	3,  // 32: aintercept.interceptor.v2.CallRecord.call:type_name -> aintercept.interceptor.v2.Call
+	7,  // 33: aintercept.interceptor.v2.CallRecord.request:type_name -> aintercept.interceptor.v2.RequestInfo
+	27, // 34: aintercept.interceptor.v2.CallRecord.response:type_name -> aintercept.interceptor.v2.ResponseInfo
+	29, // 35: aintercept.interceptor.v2.CallRecord.verdicts:type_name -> aintercept.interceptor.v2.RecordedVerdict
+	28, // 36: aintercept.interceptor.v2.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v2.ToolCount
+	25, // 37: aintercept.interceptor.v2.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	6,  // 38: aintercept.interceptor.v2.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v2.CallStart
+	15, // 39: aintercept.interceptor.v2.Interceptor.OnRequest:input_type -> aintercept.interceptor.v2.RequestMessages
+	24, // 40: aintercept.interceptor.v2.Interceptor.OnReply:input_type -> aintercept.interceptor.v2.ResponseMessage
+	24, // 41: aintercept.interceptor.v2.Interceptor.OnToolCall:input_type -> aintercept.interceptor.v2.ResponseMessage
+	26, // 42: aintercept.interceptor.v2.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v2.CallRecord
+	23, // 43: aintercept.interceptor.v2.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v2.CallVerdict
+	16, // 44: aintercept.interceptor.v2.Interceptor.OnRequest:output_type -> aintercept.interceptor.v2.RequestVerdict
+	17, // 45: aintercept.interceptor.v2.Interceptor.OnReply:output_type -> aintercept.interceptor.v2.MessageVerdict
+	17, // 46: aintercept.interceptor.v2.Interceptor.OnToolCall:output_type -> aintercept.interceptor.v2.MessageVerdict
+	30, // 47: aintercept.interceptor.v2.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v2.Ack
+	43, // [43:48] is the sub-list for method output_type
+	38, // [38:43] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_interceptor_v2_interceptor_proto_init() }
@@ -2576,8 +2696,9 @@ func file_interceptor_v2_interceptor_proto_init() {
 		(*MessageVerdict_Accept)(nil),
 		(*MessageVerdict_Replace)(nil),
 		(*MessageVerdict_Respond)(nil),
+		(*MessageVerdict_Hold)(nil),
 	}
-	file_interceptor_v2_interceptor_proto_msgTypes[19].OneofWrappers = []any{
+	file_interceptor_v2_interceptor_proto_msgTypes[20].OneofWrappers = []any{
 		(*CallVerdict_Accept)(nil),
 		(*CallVerdict_Respond)(nil),
 	}
@@ -2587,7 +2708,7 @@ func file_interceptor_v2_interceptor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_interceptor_v2_interceptor_proto_rawDesc), len(file_interceptor_v2_interceptor_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

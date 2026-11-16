@@ -97,6 +97,8 @@ const (
 	Deny    Action = "deny"
 	// Respond (v2): the client gets Text as the model's reply.
 	Respond Action = "respond"
+	// Hold (v2, reply text): nothing is released yet.
+	Hold Action = "hold"
 )
 
 // Decision is an enforce-mode verdict, ready to apply.
@@ -108,8 +110,11 @@ type Decision struct {
 	// Reason and HTTPStatus describe a Deny (status 0 means 403).
 	Reason     string
 	HTTPStatus int
-	// Text is a Respond's reply.
+	// Text is a Respond's reply, or reply text's replacement.
 	Text string
+	// Keep (reply text, Allow or Replace): the pending text's last Keep
+	// bytes stay held.
+	Keep int
 	// pending is a call's Respond row, recorded by Responded once the
 	// observer knows how it was delivered.
 	pending *events.Verdict
@@ -130,15 +135,17 @@ type Client struct {
 	verdicts map[string]*callVerdicts
 
 	queued, dropped, delivered, failed, decided, decideFailed, unparsed atomic.Uint64
-	// noToolCall: the Interceptor doesn't implement OnToolCall (v2).
-	noToolCall atomic.Bool
+	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
+	// OnReply (v2).
+	noToolCall, noReply atomic.Bool
 }
 
 type job struct {
 	callID string
 	start  *pb.CallStart
 	msg    *pb.Message
-	req    *Request // v2: OnRequest
+	req    *Request  // v2: OnRequest
+	reply  *replyJob // v2: OnReply or OnToolCall
 	rec    *pb.CallRecord
 	// final marks the record that ends the call (its verdicts can go).
 	final bool
@@ -332,6 +339,8 @@ func (c *Client) deliver(j job) {
 		}
 	case j.req != nil:
 		err = c.onRequestObserved(ctx, j.req)
+	case j.reply != nil:
+		err = c.onReplyObserved(ctx, j.callID, j.reply)
 	case j.rec != nil && c.V2():
 		rec := convert(j.rec, &pb2.CallRecord{})
 		vs := c.verdictsFor(j.callID, j.final)
@@ -472,7 +481,7 @@ func (c *Client) verdictsFor(callID string, final bool) []events.Verdict {
 	if cv == nil {
 		return nil
 	}
-	if final {
+	if final || c.V2() { // v2: each record has the answers since the call's previous one
 		delete(c.verdicts, callID)
 	}
 	return cv.list

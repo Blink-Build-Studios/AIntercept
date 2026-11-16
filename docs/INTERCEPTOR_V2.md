@@ -1,11 +1,17 @@
 # Interceptor v2: one message at a time
 
 Status: **built for Claude Code and Codex** (Anthropic Messages, OpenAI
-Responses over HTTP and Codex's WebSocket; Chat Completions requests): the
-new messages, Replace, Fetch, Respond and tool calls held whole. Not yet:
-watches on streamed text, ChatGPT and claude.ai on the web, and holding Chat
-Completions tool calls. v1 ([`INTERCEPTOR.md`](INTERCEPTOR.md)) stays as it
-is, and both run side by side while integrations move over.
+Responses over HTTP and Codex's WebSocket, Chat Completions): every message
+in both directions, before it goes on. The request's new messages, Replace,
+Fetch and Respond; the reply's text piece by piece and its tool calls whole,
+each decided before the client sees it. Not yet: ChatGPT and claude.ai on
+the web. v1 ([`INTERCEPTOR.md`](INTERCEPTOR.md)) stays as it is, and both run
+side by side while integrations move over.
+
+Most Interceptors are written with the Go library, package `intercept`
+(rules, hooks and watches over this protocol):
+[`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md). This
+document is the protocol.
 
 ## Why a v2
 
@@ -81,8 +87,10 @@ calls is three messages. System prompts, developer instructions and tool
 catalogs aren't messages. Content of a type AIntercept doesn't recognise
 arrives as Opaque.
 
-The **response** is split into messages as it streams: the reply text, and
-each tool call.
+The **response** is split into messages as it streams: each text block (a
+content block, a Responses message's text part, a Chat Completion's content),
+each tool call, and each opaque part (reasoning). Every one reaches the
+Interceptor before the client sees it.
 
 ## Callbacks
 
@@ -90,6 +98,7 @@ each tool call.
 service Interceptor {
   rpc OnCallStart(CallStart) returns (CallVerdict);           // who, which client, which model
   rpc OnRequest(RequestMessages) returns (RequestVerdict);    // the call's new messages
+  rpc OnReply(ResponseMessage) returns (MessageVerdict);      // the reply's text, piece by piece; opaque parts
   rpc OnToolCall(ResponseMessage) returns (MessageVerdict);   // each tool call the model makes, held whole
   rpc OnCallComplete(CallRecord) returns (Ack);               // the finished call: usage, timings
 }
@@ -105,20 +114,31 @@ service Interceptor {
   example, change the arguments), or **Respond** (end the reply here with your
   text instead of the tool call). The message is the tool call alone: an
   `ASSISTANT` message whose id is the provider's call id, with one `ToolCall`
-  part. Enforce only.
-- **Reply text streams.** It reaches the client as it's generated; v2 doesn't
-  hold it. Rules on reply text come with watches (below, next).
+  part.
+- **`OnReply`** fires for the reply's text as it streams, before the client
+  sees any of it (below, "Reply text"): **Accept**, **Replace**, **Hold** or
+  **Respond**, and `keep` to hold back only a tail. It also tells of each
+  opaque part (reasoning, encrypted content), which can't be changed.
 - **`OnCallComplete`** is asynchronous, as in v1: usage, timings, the verdicts
   and whether they were applied.
+
+`OnRequest`, `OnReply` and `OnToolCall` need Interceptor content on. In
+observe mode every callback is made the same way, queued off the stream;
+answers are recorded, never applied. An Interceptor that doesn't implement
+`OnReply` or `OnToolCall` (UNIMPLEMENTED) accepts what it would have been
+asked, and AIntercept stops holding it: there's no cost for what nobody
+handles.
 
 ### Answers
 
 | Answer | Where | Effect |
 |---|---|---|
 | **Accept** | everywhere | unchanged (an empty verdict) |
-| **Replace** | a request message, a tool call | AIntercept puts your version of the message in place, in the provider's format; everything else in the call is byte-for-byte as sent |
-| **Respond** | call start, request, a tool call | the client gets your text as the model's reply (below) |
-| **Fetch** | request, tool call | AIntercept calls the same callback again with those parts' content filled in |
+| **Replace** | a request message, reply text, a tool call | AIntercept puts your version of the message in place, in the provider's format; everything else in the call is byte-for-byte as sent |
+| **Hold** | reply text | nothing is released yet; the pending text comes back with what arrives next |
+| `keep` | reply text, with Accept or Replace | the pending text's last `keep` bytes stay held; the rest goes (as it was, or replaced) |
+| **Respond** | call start, request, reply text, a tool call | the client gets your text as the model's reply (below) |
+| **Fetch** | request | AIntercept calls `OnRequest` again with those parts' content filled in |
 
 There is no Deny or Drop.
 
@@ -161,17 +181,83 @@ As built:
   `OnCallStart` (the connection's requests come later), is recorded and not
   applied.
 - At a tool call, the call and the rest of the reply are replaced with your
-  text, and the reply ends cleanly (`end_turn`, or `response.completed`
-  listing the items already sent and your message). What the provider sends
-  after that is dropped.
+  text, and the reply ends cleanly (`end_turn`, `response.completed` listing
+  the items already sent and your message, or Chat's `finish_reason: stop`
+  and `[DONE]`). What the provider sends after that is dropped.
+- In reply text, the pending text and the rest of the reply are replaced with
+  your text, in the same text block (what was released stays), and the reply
+  ends the same way. The record keeps the provider's real usage: it
+  generated the reply.
+
+### Reply text
+
+No reply text reaches the client until `OnReply` has decided it. Per text
+block, each call carries:
+
+- `released`: the block's text already released to the client. It's never
+  asked about again.
+- the message's one `Text` part: the **pending** text, the pieces that came
+  since the last answer plus anything held back.
+- `done`: the block is finished; nothing more of it will come.
+
+The message id is the block's, the same on every call for it
+(`<the reply's id>:<the block's index>`: `msg_…:0`, a Responses message's
+`msg_…:0`, `chatcmpl-…:0`). The answers:
+
+- **Accept**: the pending text goes out exactly as received (the provider's
+  own events, byte for byte).
+- **Replace** with the message, its text changed: your text goes out instead,
+  as one text event in the stream's own format. For the Responses API, every
+  later event and item that repeats the text (`output_text.done`,
+  `content_part.done`, `output_item.done`, `response.completed`) says what the
+  client got.
+- **Hold**: nothing goes out; the pending text comes back, with what arrives
+  next, in the next call. This is how a match spanning pieces is seen whole.
+- `keep` (with Accept or Replace): the last `keep` bytes of the pending text
+  (cut on a character) stay held for the next call; the rest goes out, as it
+  was or replaced. A rule watching for a phrase holds back only a tail that
+  could still become it, and the text before it isn't delayed.
+- **Respond**: above.
+
+At the block's end (`done`), nothing can stay held: a Hold releases the text
+as Accept, and `keep` is ignored. Events that aren't text (a ping, the
+block's stop) wait behind held text, in order.
+
+**One call at a time, and latency doesn't compound.** While a call is
+outstanding, the pieces that arrive gather for the next one: AIntercept reads
+Envoy's messages on their own goroutine and asks about the pending text only
+when nothing more of the reply is waiting. A burst of pieces is one call. Each
+piece of text waits for one `OnReply` round trip: measured through the
+enforcing filter with a package `intercept` Interceptor over gRPC on loopback,
+about 60 µs per streamed event (66–73 µs against 12 µs when text isn't held;
+`BenchmarkReplyPiece`); in a cluster, add the network round trip to the
+Interceptor. Through a real Envoy, the end-to-end test sees no added delay
+beyond its fixture's timer jitter (`TestV2ReplyLatency`).
+
+**Why a new callback, not a general one for every response message.** One
+callback for text and tool calls was the alternative. A separate `OnReply` is
+the simpler change: it's additive (an Interceptor written for `OnToolCall`
+keeps working unchanged), the two shapes differ (text is a stream of pieces
+with `released`, `done`, Hold and `keep`; a tool call is one whole message),
+and leaving `OnReply` unimplemented is how an Interceptor that has no rules
+on reply text tells AIntercept not to hold it, the same way `OnToolCall`
+already worked. Both take `ResponseMessage` and answer `MessageVerdict`.
+
+**Opaque parts** (an Anthropic `thinking` or `redacted_thinking` block, a
+Responses `reasoning` item) go to `OnReply` once each, as a message with one
+`Opaque` part and `done` set, in the reply's order. They can't be read or
+changed: they go out as they came, and the answer is ignored.
+
+A non-streamed JSON reply is held whole: each text block (as done, `released`
+empty) and each tool call is decided in order before the reply is released.
 
 ### Tool calls held whole
 
-A reply's text reaches the client as it streams. Each tool call is held from
-its first event (`content_block_start` of a `tool_use` block;
-`response.output_item.added` of a `function_call` or `custom_tool_call`)
-until it's complete (`content_block_stop`; `response.output_item.done`), then
-`OnToolCall` decides it:
+Each tool call is held from its first event (`content_block_start` of a
+`tool_use` block; `response.output_item.added` of a `function_call` or
+`custom_tool_call`; Chat's first `tool_calls` delta for an index) until it's
+complete (`content_block_stop`; `response.output_item.done`; the next tool
+call's index, or the finish), then `OnToolCall` decides it:
 
 - **Accept**: the held events go out exactly as received.
 - **Replace**: the call goes out with the new arguments, in the stream's own
@@ -179,14 +265,35 @@ until it's complete (`content_block_stop`; `response.output_item.done`), then
   final `response.completed` rewritten to match).
 - **Respond**: as above.
 
-A non-streamed JSON reply is held whole and its tool calls decided in order
-before it's released. The cost is latency on tool calls only: the client gets
-each call when it's complete plus one `OnToolCall` round trip, rather than
-piece by piece; the text before it isn't delayed. A refusal (the Interceptor
-failed or was late, `onError: deny`) ends the reply with the provider's error
-event (HTTP) or closes the WebSocket. A tool call over 32 MiB goes out
-undecided. An Interceptor that doesn't implement `OnToolCall` accepts every
-call, and AIntercept stops holding them.
+The client gets each call when it's complete plus one `OnToolCall` round
+trip, rather than piece by piece. A refusal at a tool call or in reply text
+(the Interceptor failed, was late or gave an answer that can't be applied,
+with `onError: deny`) ends the reply with the provider's error event (HTTP)
+or closes the WebSocket; with `onError: allow` the held text or call goes out
+as it came. A tool call over 32 MiB, or a text block over the hold cap, goes
+out undecided; a text block whose released and pending text pass 3 MiB is
+released undecided from then on.
+
+### What's recorded
+
+Every answer other than a plain Accept is a verdict row (`callback`:
+`call_start`, `request`, `reply` or `tool_call`; `action`: `accept` with
+annotations, `replace`, `hold`, `respond` or `error`), with the message's id,
+in both modes (`applied: false` in observe). `CallRecord.verdicts` carries the
+call's rows: an HTTP call's, or on a WebSocket, each turn's own.
+
+### What an Interceptor can't see or change
+
+- Opaque parts: it's told they exist, never what's in them, and can't change
+  them.
+- Requests AIntercept can't read (an unknown format, a body over the 32 MiB
+  enforce cap): they go upstream untouched, counted, without `OnRequest`.
+- System prompts, developer instructions and tool catalogs aren't messages.
+- Responses with a `content-encoding` AIntercept didn't remove, and WebSocket
+  connections where the server negotiated compression the client was never
+  offered: they pass unevaluated (counted).
+- Only the first choice of a Chat Completion with several is decided.
+- ChatGPT and claude.ai on the web aren't parsed yet.
 
 ### Fetch
 
@@ -197,16 +304,12 @@ one more round trip, inside the same deadline. A fetched part can be larger than
 gRPC's default 4 MiB, so an Interceptor that fetches raises its receive limit to
 33 MiB.
 
-## Next: watches on streamed text
+## Watches
 
-Reply text streams, and a phrase can span two pieces of it. Watches will let an
-Interceptor declare, at `OnCallStart`, literal strings or bounded regexes to
-look for in the reply text (and in tool arguments and request text).
-AIntercept matches over the decoded text, holding back only as many characters
-as the longest pattern, and calls `OnMatch` only on a match: Accept, Replace
-the matched text, or Respond (end the reply there). A call with no matches
-costs no round trips after the request. Specified separately, after v2's first
-cut.
+A phrase in reply text can span pieces. Package `intercept`'s watches find it
+over this protocol: each call holds back (`keep`) only the tail that could
+still become a match, so the match is seen whole while the text before it
+goes on ([`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md)).
 
 ## Test matrix
 
@@ -238,8 +341,10 @@ Codex; the web apps follow.
 | S4 | Respond on a tool call ends the reply cleanly; the agent stops |
 | S5 | A responded call is recorded with zero usage, marked synthesized or rewritten |
 | **Streaming** | |
-| T1 | Reply text streams without waiting on the Interceptor |
-| T2 | Tool calls are held until complete, then released (or replaced) |
+| T1 | Reply text is decided piece by piece before the client sees it: Accept byte for byte, Replace, Hold, keep, Respond, in every format |
+| T2 | Tool calls are held until complete, then released (or replaced), Chat Completions too |
+| T3 | A phrase split across two and three pieces is replaced; nothing of it reaches the client |
+| T4 | Pieces that arrive while a call is outstanding gather into the next |
 | **Everywhere** | |
 | E1 | Observe mode: every answer recorded, none applied |
 | E2 | The Interceptor down or late: `onError` (allow passes through) |
@@ -251,7 +356,7 @@ Codex; the web apps follow.
 
 - `interceptor.contract: v1 | v2` in the chart; v1 is the default until v2 has
   passed the matrix for the clients in use.
-- The examples (Go and Python) move to v2 with the same rules: "I'm a silly
-  rabbit" and "first we bing", as Respond.
+- The example (`aintercept/examples/rabbit`, on package `intercept`) answers
+  two phrases in the user's prompts with Reply.
 - The same "what's new" parsing then serves storage: recording each message
   once, instead of every call's full history.

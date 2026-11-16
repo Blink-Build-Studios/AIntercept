@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// Tool calls held whole (docs/INTERCEPTOR_V2.md, T1–T2): a reply's text goes
-// on at once; each tool call is held from its first event until complete,
-// then decided.
+// Tool calls held whole (docs/INTERCEPTOR_V2.md, T2): without a text
+// decider a reply's text goes on at once; each tool call is held from its
+// first event until complete, then decided.
 
 type wireEvent struct{ name, data string }
 
@@ -65,7 +65,7 @@ func run(t *testing.T, format string, ws bool, evs []wireEvent, decide func(Tool
 	if ws {
 		frame = func(_ string, data []byte) []byte { return append(append([]byte{}, data...), 0) }
 	}
-	s = NewStream(format, frame, decide)
+	s = NewStream(format, frame, Deciders{ToolCall: decide})
 	for _, e := range evs {
 		raw := e.raw()
 		if ws {
@@ -300,7 +300,7 @@ const responsesBody = `{"id":"resp_1","object":"response","status":"completed","
 func TestDecideBodyAccept(t *testing.T) {
 	for _, c := range []struct{ format, body string }{{FormatAnthropic, anthropicBody}, {FormatResponses, responsesBody}} {
 		var got []ToolCall
-		out, stopped, err := DecideBody(c.format, []byte(c.body), accept(&got))
+		out, stopped, err := decideBodyTools(c.format, []byte(c.body), accept(&got))
 		if err != nil || stopped || string(out) != c.body {
 			t.Fatalf("%s: %v %v %s", c.format, err, stopped, out)
 		}
@@ -314,7 +314,7 @@ func TestDecideBodyAccept(t *testing.T) {
 }
 
 func TestDecideBodyReplace(t *testing.T) {
-	out, _, err := DecideBody(FormatAnthropic, []byte(anthropicBody), func(tc ToolCall) Answer {
+	out, _, err := decideBodyTools(FormatAnthropic, []byte(anthropicBody), func(tc ToolCall) Answer {
 		if tc.ID == "toolu_1" {
 			return Answer{Verdict: Replace, Arguments: `{"command":"echo then we bong"}`}
 		}
@@ -323,7 +323,7 @@ func TestDecideBodyReplace(t *testing.T) {
 	if want := strings.Replace(anthropicBody, `{"command":"echo first we bing"}`, `{"command":"echo then we bong"}`, 1); err != nil || string(out) != want {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	out, _, err = DecideBody(FormatResponses, []byte(responsesBody), func(ToolCall) Answer {
+	out, _, err = decideBodyTools(FormatResponses, []byte(responsesBody), func(ToolCall) Answer {
 		return Answer{Verdict: Replace, Arguments: `{"command":"echo then we bong"}`}
 	})
 	if want := strings.Replace(responsesBody, `first we bing`, `then we bong`, 1); err != nil || string(out) != want {
@@ -335,7 +335,7 @@ func TestDecideBodyReplace(t *testing.T) {
 // never asked about.
 func TestDecideBodyRespond(t *testing.T) {
 	asked := 0
-	out, _, err := DecideBody(FormatAnthropic, []byte(anthropicBody), func(ToolCall) Answer {
+	out, _, err := decideBodyTools(FormatAnthropic, []byte(anthropicBody), func(ToolCall) Answer {
 		asked++
 		return Answer{Verdict: Respond, Text: replyText}
 	})
@@ -349,7 +349,7 @@ func TestDecideBodyRespond(t *testing.T) {
 		m.Content[1].Type != "text" || m.Content[1].Text != replyText || m.StopReason != "end_turn" {
 		t.Fatalf("%v asked %d\n%s", err, asked, out)
 	}
-	out, _, err = DecideBody(FormatResponses, []byte(responsesBody), func(ToolCall) Answer {
+	out, _, err = decideBodyTools(FormatResponses, []byte(responsesBody), func(ToolCall) Answer {
 		return Answer{Verdict: Respond, Text: replyText}
 	})
 	var r struct {
@@ -366,7 +366,7 @@ func TestDecideBodyRespond(t *testing.T) {
 }
 
 func TestDecideBodyStop(t *testing.T) {
-	_, stopped, err := DecideBody(FormatAnthropic, []byte(anthropicBody), func(ToolCall) Answer { return Answer{Verdict: Stop} })
+	_, stopped, err := decideBodyTools(FormatAnthropic, []byte(anthropicBody), func(ToolCall) Answer { return Answer{Verdict: Stop} })
 	if err != nil || !stopped {
 		t.Fatalf("%v %v", err, stopped)
 	}
@@ -375,9 +375,14 @@ func TestDecideBodyStop(t *testing.T) {
 func TestDecideBodyNotAReply(t *testing.T) {
 	for _, b := range []string{`{"type":"error","error":{"message":"x"}}`, `not json`, `[]`} {
 		var got []ToolCall
-		out, stopped, err := DecideBody(FormatAnthropic, []byte(b), accept(&got))
+		out, stopped, err := decideBodyTools(FormatAnthropic, []byte(b), accept(&got))
 		if err != nil || stopped || string(out) != b || len(got) != 0 {
 			t.Fatalf("%s: %v %v %s", b, err, stopped, out)
 		}
 	}
+}
+
+// decideBodyTools is DecideBody deciding tool calls only.
+func decideBodyTools(format string, body []byte, decide func(ToolCall) Answer) ([]byte, bool, error) {
+	return DecideBody(format, body, Deciders{ToolCall: decide})
 }

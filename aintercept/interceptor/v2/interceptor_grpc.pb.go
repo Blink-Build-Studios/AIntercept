@@ -13,13 +13,15 @@
 //
 //   observe  Callbacks are delivered asynchronously; answers are recorded,
 //            never applied.
-//   enforce  OnCallStart, OnRequest and OnToolCall are in the call's path,
-//            within the deadline; answers are applied. On a failure or a
-//            missed deadline the call is refused (fail closed; configurable).
+//   enforce  OnCallStart, OnRequest, OnReply and OnToolCall are in the
+//            call's path, within the deadline; answers are applied. On a
+//            failure or a missed deadline the call is refused (fail closed;
+//            configurable).
 //
-// Content: OnRequest and OnToolCall are only called when the deployment
-// enables Interceptor content. A reply's text streams to the client
-// untouched; each tool call in it is held until OnToolCall has answered.
+// Content: OnRequest, OnReply and OnToolCall are only called when the
+// deployment enables Interceptor content. Every message goes to the
+// Interceptor in both directions: the request's new messages before they go
+// upstream, and the reply's text and tool calls before the client sees them.
 //
 // See docs/INTERCEPTOR.md for wiring, deadlines and failure behaviour.
 
@@ -46,6 +48,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Interceptor_OnCallStart_FullMethodName    = "/aintercept.interceptor.v2.Interceptor/OnCallStart"
 	Interceptor_OnRequest_FullMethodName      = "/aintercept.interceptor.v2.Interceptor/OnRequest"
+	Interceptor_OnReply_FullMethodName        = "/aintercept.interceptor.v2.Interceptor/OnReply"
 	Interceptor_OnToolCall_FullMethodName     = "/aintercept.interceptor.v2.Interceptor/OnToolCall"
 	Interceptor_OnCallComplete_FullMethodName = "/aintercept.interceptor.v2.Interceptor/OnCallComplete"
 )
@@ -62,6 +65,21 @@ type InterceptorClient interface {
 	// Only called with Interceptor content on, for requests AIntercept can
 	// read.
 	OnRequest(ctx context.Context, in *RequestMessages, opts ...grpc.CallOption) (*RequestVerdict, error)
+	// The model's reply text, as it streams, before the client sees any of it
+	// (Anthropic Messages, Responses over HTTP or Codex's WebSocket, Chat
+	// Completions; streamed or not). Per text block, each call carries the
+	// text released so far (never asked about again), the pending text (the
+	// new pieces, plus anything held back) and whether the block is finished.
+	// Accept releases the pending text; Replace releases your text instead;
+	// Hold keeps it and asks again when more arrives; keep, with Accept or
+	// Replace, holds back only the pending text's tail (with done set, nothing
+	// can stay held: a Hold then releases it as Accept); Respond ends the
+	// reply with your text. While a call is outstanding, new pieces gather
+	// for the next one. Also called once for each opaque part of the reply
+	// (reasoning, encrypted content): it exists, and the answer is ignored.
+	// An Interceptor that doesn't implement it (UNIMPLEMENTED) accepts all
+	// reply text, and AIntercept stops holding it.
+	OnReply(ctx context.Context, in *ResponseMessage, opts ...grpc.CallOption) (*MessageVerdict, error)
 	// Each tool call in the model's reply (Anthropic Messages, Responses over
 	// HTTP or Codex's WebSocket; streamed or not), held from its start until
 	// it's complete and this has answered: Accept, Replace (new arguments), or
@@ -101,6 +119,16 @@ func (c *interceptorClient) OnRequest(ctx context.Context, in *RequestMessages, 
 	return out, nil
 }
 
+func (c *interceptorClient) OnReply(ctx context.Context, in *ResponseMessage, opts ...grpc.CallOption) (*MessageVerdict, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessageVerdict)
+	err := c.cc.Invoke(ctx, Interceptor_OnReply_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *interceptorClient) OnToolCall(ctx context.Context, in *ResponseMessage, opts ...grpc.CallOption) (*MessageVerdict, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MessageVerdict)
@@ -133,6 +161,21 @@ type InterceptorServer interface {
 	// Only called with Interceptor content on, for requests AIntercept can
 	// read.
 	OnRequest(context.Context, *RequestMessages) (*RequestVerdict, error)
+	// The model's reply text, as it streams, before the client sees any of it
+	// (Anthropic Messages, Responses over HTTP or Codex's WebSocket, Chat
+	// Completions; streamed or not). Per text block, each call carries the
+	// text released so far (never asked about again), the pending text (the
+	// new pieces, plus anything held back) and whether the block is finished.
+	// Accept releases the pending text; Replace releases your text instead;
+	// Hold keeps it and asks again when more arrives; keep, with Accept or
+	// Replace, holds back only the pending text's tail (with done set, nothing
+	// can stay held: a Hold then releases it as Accept); Respond ends the
+	// reply with your text. While a call is outstanding, new pieces gather
+	// for the next one. Also called once for each opaque part of the reply
+	// (reasoning, encrypted content): it exists, and the answer is ignored.
+	// An Interceptor that doesn't implement it (UNIMPLEMENTED) accepts all
+	// reply text, and AIntercept stops holding it.
+	OnReply(context.Context, *ResponseMessage) (*MessageVerdict, error)
 	// Each tool call in the model's reply (Anthropic Messages, Responses over
 	// HTTP or Codex's WebSocket; streamed or not), held from its start until
 	// it's complete and this has answered: Accept, Replace (new arguments), or
@@ -157,6 +200,9 @@ func (UnimplementedInterceptorServer) OnCallStart(context.Context, *CallStart) (
 }
 func (UnimplementedInterceptorServer) OnRequest(context.Context, *RequestMessages) (*RequestVerdict, error) {
 	return nil, status.Error(codes.Unimplemented, "method OnRequest not implemented")
+}
+func (UnimplementedInterceptorServer) OnReply(context.Context, *ResponseMessage) (*MessageVerdict, error) {
+	return nil, status.Error(codes.Unimplemented, "method OnReply not implemented")
 }
 func (UnimplementedInterceptorServer) OnToolCall(context.Context, *ResponseMessage) (*MessageVerdict, error) {
 	return nil, status.Error(codes.Unimplemented, "method OnToolCall not implemented")
@@ -221,6 +267,24 @@ func _Interceptor_OnRequest_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Interceptor_OnReply_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResponseMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InterceptorServer).OnReply(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Interceptor_OnReply_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InterceptorServer).OnReply(ctx, req.(*ResponseMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Interceptor_OnToolCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResponseMessage)
 	if err := dec(in); err != nil {
@@ -271,6 +335,10 @@ var Interceptor_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OnRequest",
 			Handler:    _Interceptor_OnRequest_Handler,
+		},
+		{
+			MethodName: "OnReply",
+			Handler:    _Interceptor_OnReply_Handler,
 		},
 		{
 			MethodName: "OnToolCall",

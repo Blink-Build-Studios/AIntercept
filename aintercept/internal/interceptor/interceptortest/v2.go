@@ -23,13 +23,17 @@ type FakeV2 struct {
 	Start   func(*pb2.CallStart) *pb2.CallVerdict
 	Request func(*pb2.RequestMessages) *pb2.RequestVerdict
 	Tool    func(*pb2.ResponseMessage) *pb2.MessageVerdict
+	// Reply answers OnReply; nil leaves it unimplemented, as in an
+	// Interceptor that doesn't have it.
+	Reply func(*pb2.ResponseMessage) *pb2.MessageVerdict
 	// NoToolCall: OnToolCall is unimplemented, as in an Interceptor that
 	// doesn't have it.
 	NoToolCall bool
 	Delay      time.Duration
-	Calls      []string // "start", "request", "tool_call", "complete"
+	Calls      []string // "start", "request", "reply", "tool_call", "complete"
 	Requests   []*pb2.RequestMessages
 	ToolCalls  []*pb2.ResponseMessage
+	Replies    []*pb2.ResponseMessage
 	Records    []*pb2.CallRecord
 }
 
@@ -69,6 +73,25 @@ func (f *FakeV2) OnToolCall(ctx context.Context, m *pb2.ResponseMessage) (*pb2.M
 		return f.Tool(m), nil
 	}
 	return &pb2.MessageVerdict{}, nil
+}
+
+func (f *FakeV2) OnReply(ctx context.Context, m *pb2.ResponseMessage) (*pb2.MessageVerdict, error) {
+	if f.Reply == nil {
+		return f.UnimplementedInterceptorServer.OnReply(ctx, m)
+	}
+	time.Sleep(f.Delay)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Calls = append(f.Calls, "reply")
+	f.Replies = append(f.Replies, m)
+	return f.Reply(m), nil
+}
+
+// RepliesSeen returns the OnReply messages received so far.
+func (f *FakeV2) RepliesSeen() []*pb2.ResponseMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*pb2.ResponseMessage(nil), f.Replies...)
 }
 
 // ToolCallsSeen returns the OnToolCall messages received so far.

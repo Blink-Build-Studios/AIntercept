@@ -14,10 +14,11 @@ import (
 // The customer Interceptor (docs/INTERCEPTOR.md), observe side: callbacks
 // queued off the stream, never awaited. The enforce side is enforce.go.
 //
-// With contract v2 the content callback is OnRequest: each model request's
+// With contract v2 the content callbacks are OnRequest, each model request's
 // new messages (HTTP bodies and Codex's WebSocket response.create), parsed
-// by convo. Responses aren't sent; in enforce, their tool calls go to
-// OnToolCall (respond.go).
+// by convo, and for the reply OnReply (its text, piece by piece) and
+// OnToolCall (each tool call): in path in enforce (respond.go), queued here
+// in observe.
 
 // interceptState is a stream's Interceptor bookkeeping, shared by both modes.
 type interceptState struct {
@@ -31,8 +32,12 @@ type interceptState struct {
 	respTrunc bool
 	respSSE   bool
 	respKnown bool
-	// v2 enforce: the request's format, when its reply's tool calls are held.
-	holdTools string
+	// v2: the request's format, when its reply goes to OnReply and
+	// OnToolCall; observe: the reply's stream, or its body held whole.
+	replyFormat string
+	reply       *convo.Stream
+	replyBody   []byte
+	replyTrunc  bool
 }
 
 // interceptContentCap bounds a whole body sent to OnMessage in observe mode.
@@ -97,6 +102,9 @@ func (srv *Server) observeStart(st *streamState) {
 				srv.ic.ObserveMessage(srv.message(st, events.DirInbound, pb.MessageKind_MESSAGE_KIND_HTTP_REQUEST_BODY, plain, st.reqHeaders["content-type"], ""))
 			} else if r, ok := srv.parseRequest(st, plain); ok {
 				srv.ic.ObserveRequest(ic.call, r)
+				if srv.holdsReply(r.Format) {
+					ic.replyFormat = r.Format
+				}
 			}
 		}
 	}
@@ -130,10 +138,14 @@ func (srv *Server) parseWSRequest(st *streamState, m wsframe.Message) (convo.Req
 // (observe mode): each event of an event stream as it completes, any other
 // body whole at its end.
 func (srv *Server) observeResponseContent(st *streamState, chunk []byte, eos bool) {
-	if !srv.intercepting(st) || st.enforce || !srv.ic.Content() || srv.ic.V2() || st.ic == nil || !st.ic.started {
+	if !srv.intercepting(st) || st.enforce || !srv.ic.Content() || st.ic == nil || !st.ic.started {
 		return
 	}
 	ic := st.ic
+	if srv.ic.V2() {
+		srv.observeReply(st, chunk, eos)
+		return
+	}
 	if !ic.respKnown {
 		ic.respKnown = true
 		ic.respSSE = strings.Contains(st.respHeaders["content-type"], "text/event-stream") && st.respEncoding == ""
@@ -168,6 +180,68 @@ func (srv *Server) observeWSMessage(st *streamState, dir events.Direction, m wsf
 	if dir == events.DirInbound {
 		if r, ok := srv.parseWSRequest(st, m); ok {
 			srv.ic.ObserveRequest(st.ic.call, r)
+		}
+		return
+	}
+	if m.Opcode != wsframe.OpText || !srv.holdsReplies() {
+		return
+	}
+	ic := st.ic
+	typ := messageType(m.Payload)
+	if typ == "response.created" { // a new turn
+		ic.reply = convo.NewStream(convo.FormatResponses, wsText, srv.observers(st))
+	}
+	if ic.reply != nil {
+		ic.reply.Feed(typ, m.Payload, nil)
+		ic.reply.Pump()
+	}
+}
+
+// observers queue OnReply and OnToolCall for a reply (observe mode): the
+// Stream carries on as if each had accepted.
+func (srv *Server) observers(st *streamState) convo.Deciders {
+	call := st.ic.call
+	return convo.Deciders{
+		Opaque: func(id string) { srv.ic.ObserveOpaque(call, id) },
+		ToolCall: func(tc convo.ToolCall) convo.Answer {
+			srv.ic.ObserveToolCall(call, tc)
+			return convo.Answer{}
+		},
+		Text: func(p convo.TextPiece) convo.Answer {
+			srv.ic.ObserveReply(call, p)
+			return convo.Answer{}
+		},
+	}
+}
+
+// observeReply follows a reply in observe mode (v2): an event stream event by
+// event, asking about its text as each chunk ends; a JSON body whole at its
+// end (capped).
+func (srv *Server) observeReply(st *streamState, chunk []byte, eos bool) {
+	ic := st.ic
+	if ic.replyFormat == "" || st.status != 200 || st.respEncoding != "" {
+		return
+	}
+	ct := st.respHeaders["content-type"]
+	switch {
+	case strings.Contains(ct, "text/event-stream"):
+		if ic.reply == nil {
+			ic.reply = convo.NewStream(ic.replyFormat, convo.SSE, srv.observers(st))
+		}
+		for _, ev := range ic.sse.feed(chunk) {
+			ic.reply.Feed(ev.name, ev.data, ev.raw)
+		}
+		ic.reply.Pump()
+		if eos {
+			ic.reply.Flush()
+		}
+	case strings.Contains(ct, "json"):
+		ic.replyBody, ic.replyTrunc = appendCapped(ic.replyBody, chunk, ic.replyTrunc, interceptContentCap)
+		if eos && !ic.replyTrunc {
+			_, _, _ = convo.DecideBody(ic.replyFormat, ic.replyBody, srv.observers(st))
+		}
+		if eos {
+			ic.replyBody = nil
 		}
 	}
 }

@@ -1,15 +1,15 @@
 //go:build e2e
 
 // Contract v2 end to end (docs/INTERCEPTOR_V2.md): test/interceptor's second
-// observer speaks v2 to the example rabbit Interceptor
-// (aintercept/examples/rabbit). It answers a newest user message saying
-// "I'm a silly rabbit" with Respond("Well, tricks are for kids.") and "first
-// we bing" with Respond("then we bong"); a tool call whose arguments say
-// "first we bing" with Respond("then we bong"), and "I'm a silly rabbit" in
-// its arguments with them replaced. Envoy sends api.anthropic.com and
-// chatgpt.com to it, enforced, or observed with x-e2e-mode: observe. The
-// fixture echoes what it receives, or, for a request with "fixture_tool",
-// replies with that tool call.
+// observer speaks v2 to the suite's own Interceptor (internal/e2e/interceptor,
+// on package intercept): the example rabbit's rules (a prompt saying the
+// rabbit's phrase is answered with tricks, the bing phrase with bong), and rules on the reply: a tool call whose arguments say the bing
+// phrase is answered with bong, the rabbit's phrase in them replaced, and
+// "swordfish" in the reply's text replaced with "[password]". Envoy sends
+// api.anthropic.com, chatgpt.com and api.openai.com to it, enforced, or
+// observed with x-e2e-mode: observe. The fixture echoes what it receives,
+// or, for a request with "fixture_tool" or "fixture_text", replies with that
+// tool call and text.
 package e2e
 
 import (
@@ -340,8 +340,8 @@ const (
 	lsArgs       = `{"command":"ls"}`
 )
 
-// T1, T2, P3: the reply's text streams; its tool call is held, then released
-// as it was, or with new arguments.
+// T1, T2, P3: the reply's text is decided as it streams; its tool call is
+// held, then released as it was, or with new arguments.
 func TestV2ToolCallsAnthropic(t *testing.T) {
 	for _, stream := range []bool{true, false} {
 		for args, want := range map[string]string{lsArgs: lsArgs, rabbitArgs: replacedArgs} {
@@ -405,10 +405,8 @@ func compactJSON(s string) string {
 	return string(b)
 }
 
-// A long history isn't re-sent: the rabbit Interceptor keeps gRPC's default
-// 4 MiB receive limit, and this call's history is 6 MiB. Were it in
-// OnRequest, the call would fail (and enforce refuse it, 503). The newest
-// prompt is answered.
+// A long history isn't re-sent: this call's history is 6 MiB, and OnRequest
+// carries only the newest prompt, which is answered.
 func TestV2LongHistoryNotResent(t *testing.T) {
 	var b strings.Builder
 	b.WriteString(`{"model":"fixture-model","messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"ok"}`)
@@ -441,7 +439,8 @@ func TestV2ObserveRecordsButNeverChanges(t *testing.T) {
 
 // TestV2VerdictsRecorded runs after the others: each Respond is a verdict row
 // saying how it was delivered, applied when enforced, recorded when
-// observed; tool calls' answers are rows with the call's id; a synthesized
+// observed; tool calls' and reply text's answers are rows with the
+// message's id; a synthesized
 // call has its complete row, with zero usage.
 func TestV2VerdictsRecorded(t *testing.T) {
 	deadline := time.Now().Add(15 * time.Second)
@@ -468,12 +467,13 @@ func TestV2VerdictsRecorded(t *testing.T) {
 			if key == "request/respond/synthesized" && e.CorrelationID != "" {
 				synthesized = append(synthesized, e.CorrelationID)
 			}
-			if v.Callback == "tool_call" && v.MessageID == "" {
+			if (v.Callback == "tool_call" || v.Callback == "reply") && v.MessageID == "" {
 				t.Fatalf("tool call row without the call's id: %+v", v)
 			}
 		}
 		done := n["request/respond/synthesized"] >= 5 && n["request/respond/rewritten"] >= 3 &&
-			n["tool_call/replace/"] >= 4 && n["tool_call/respond/synthesized"] >= 4 && n["request/respond//observed"] >= 1
+			n["tool_call/replace/"] >= 4 && n["tool_call/respond/synthesized"] >= 6 && n["request/respond//observed"] >= 1 &&
+			n["reply/replace/"] >= 18 && n["reply/replace//observed"] >= 1
 		if done {
 			for _, id := range synthesized {
 				c, ok := complete[id]
