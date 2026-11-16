@@ -193,7 +193,43 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "start": "2026-11-04T11:00:00Z"
       }
     ],
-    "to": "2026-11-04T12:00:59.999999Z"
+    "to": "2026-11-04T12:00:59.999999Z",
+    "work": [
+      {
+        "edits": 0,
+        "other": 2,
+        "steps": 6,
+        "t": "2026-11-04T09:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": null,
+              "runs": 2
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      }
+    ]
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

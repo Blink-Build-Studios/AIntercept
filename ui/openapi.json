@@ -587,6 +587,50 @@
         "title": "CodeShipped",
         "type": "object"
       },
+      "CommandRuns": {
+        "additionalProperties": false,
+        "description": "The commands a turn ran with one program (`ran npm test \u00d74: 3 failed, then passed`).",
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "lastExit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastexit"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
+          "runs": {
+            "title": "Runs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program",
+          "runs",
+          "failed",
+          "lastExit"
+        ],
+        "title": "CommandRuns",
+        "type": "object"
+      },
       "CommandWord": {
         "additionalProperties": false,
         "properties": {
@@ -1683,10 +1727,22 @@
             },
             "title": "Topcommandwords",
             "type": "array"
+          },
+          "turns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turns"
           }
         },
         "required": [
           "prompts",
+          "turns",
           "toolCalls",
           "toolsByName",
           "commands",
@@ -2042,6 +2098,31 @@
         "title": "KeyStrip",
         "type": "object"
       },
+      "LastTest": {
+        "additionalProperties": false,
+        "properties": {
+          "exitCode": {
+            "title": "Exitcode",
+            "type": "integer"
+          },
+          "program": {
+            "title": "Program",
+            "type": "string"
+          },
+          "t": {
+            "format": "date-time",
+            "title": "T",
+            "type": "string"
+          }
+        },
+        "required": [
+          "program",
+          "exitCode",
+          "t"
+        ],
+        "title": "LastTest",
+        "type": "object"
+      },
       "LimitWindow": {
         "additionalProperties": false,
         "properties": {
@@ -2211,6 +2292,25 @@
           "riskyVerbs"
         ],
         "title": "McpServer",
+        "type": "object"
+      },
+      "McpUse": {
+        "additionalProperties": false,
+        "properties": {
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "server": {
+            "title": "Server",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "calls"
+        ],
+        "title": "McpUse",
         "type": "object"
       },
       "Meta": {
@@ -2409,6 +2509,89 @@
         "title": "OrgStat",
         "type": "object"
       },
+      "OutcomeFacts": {
+        "additionalProperties": false,
+        "description": "What a session (or a person's period) shipped, as captured (OutcomeSlot facts). The generated\nsummary isn't captured yet.",
+        "properties": {
+          "commits": {
+            "title": "Commits",
+            "type": "integer"
+          },
+          "editTypes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Edittypes",
+            "type": "object"
+          },
+          "editedFiles": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editedfiles"
+          },
+          "headFrom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headfrom"
+          },
+          "headTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headto"
+          },
+          "lastTest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastTest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prs": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Prs",
+            "type": "array"
+          },
+          "pushes": {
+            "title": "Pushes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "commits",
+          "headFrom",
+          "headTo",
+          "editedFiles",
+          "editTypes",
+          "lastTest",
+          "pushes",
+          "prs"
+        ],
+        "title": "OutcomeFacts",
+        "type": "object"
+      },
       "Overview": {
         "additionalProperties": false,
         "properties": {
@@ -2519,6 +2702,10 @@
             "title": "Sessions",
             "type": "integer"
           },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
+          },
           "unattributed": {
             "$ref": "#/components/schemas/Unattributed"
           }
@@ -2531,6 +2718,7 @@
           "channels",
           "devices",
           "sessions",
+          "turns",
           "requests",
           "notCaptured",
           "unattributed"
@@ -2976,13 +3164,17 @@
           },
           "ribbon": {
             "$ref": "#/components/schemas/Ribbon"
+          },
+          "work": {
+            "$ref": "#/components/schemas/PersonWorkStats"
           }
         },
         "required": [
           "ribbon",
           "coverage",
           "capabilities",
-          "footprint"
+          "footprint",
+          "work"
         ],
         "title": "PersonSummary",
         "type": "object"
@@ -3179,6 +3371,27 @@
               }
             ],
             "title": "Tokensout"
+          },
+          "turns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turns"
+          },
+          "workingOn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkingOn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3196,6 +3409,8 @@
           "live",
           "sessions",
           "prompts",
+          "turns",
+          "workingOn",
           "tokensOut",
           "tokensAccuracy",
           "activity",
@@ -3223,6 +3438,61 @@
           "meta"
         ],
         "title": "PersonTimelineResponse",
+        "type": "object"
+      },
+      "PersonWorkResponse": {
+        "additionalProperties": false,
+        "description": "The person's sessions that overlap [from, to], grouped by repo; repos by most recent activity.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RepoGroup"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "PersonWorkResponse",
+        "type": "object"
+      },
+      "PersonWorkStats": {
+        "additionalProperties": false,
+        "description": "The person header row's work numbers over the range.",
+        "properties": {
+          "activeMs": {
+            "title": "Activems",
+            "type": "number"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/OutcomeFacts"
+          },
+          "repos": {
+            "title": "Repos",
+            "type": "integer"
+          },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "turns",
+          "activeMs",
+          "work",
+          "repos",
+          "outcome"
+        ],
+        "title": "PersonWorkStats",
         "type": "object"
       },
       "Posture": {
@@ -3535,6 +3805,14 @@
           "requests": {
             "title": "Requests",
             "type": "integer"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
           }
         },
         "required": [
@@ -3542,7 +3820,9 @@
           "modelCalls",
           "requests",
           "events",
-          "compactions"
+          "compactions",
+          "turns",
+          "steps"
         ],
         "title": "RangeCounts",
         "type": "object"
@@ -3572,6 +3852,75 @@
           "text"
         ],
         "title": "Recap",
+        "type": "object"
+      },
+      "RepoGroup": {
+        "additionalProperties": false,
+        "description": "RepoRow: a repo (Claude Code) or workspace (Codex) and its sessions.",
+        "properties": {
+          "activeMs": {
+            "title": "Activems",
+            "type": "number"
+          },
+          "agents": {
+            "items": {
+              "enum": [
+                "claude-code",
+                "codex",
+                "chatgpt",
+                "claude-ai"
+              ],
+              "type": "string"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "lastActiveAt": {
+            "format": "date-time",
+            "title": "Lastactiveat",
+            "type": "string"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SessionWorkRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "repo",
+          "agents",
+          "sessions",
+          "turns",
+          "activeMs",
+          "work",
+          "lastActiveAt",
+          "rows"
+        ],
+        "title": "RepoGroup",
         "type": "object"
       },
       "RepoInRange": {
@@ -4773,6 +5122,10 @@
         "additionalProperties": false,
         "description": "The session row's fields, plus what the session page header adds.",
         "properties": {
+          "activeMs": {
+            "title": "Activems",
+            "type": "number"
+          },
           "agent": {
             "enum": [
               "claude-code",
@@ -4913,6 +5266,17 @@
             ],
             "title": "Commit"
           },
+          "costUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costusd"
+          },
           "coverage": {
             "anyOf": [
               {
@@ -5041,6 +5405,9 @@
               }
             ]
           },
+          "outcome": {
+            "$ref": "#/components/schemas/OutcomeFacts"
+          },
           "personId": {
             "anyOf": [
               {
@@ -5096,6 +5463,17 @@
               }
             ],
             "title": "Toolcalls"
+          },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
+          },
+          "turnsInterrupted": {
+            "title": "Turnsinterrupted",
+            "type": "integer"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
           }
         },
         "required": [
@@ -5131,7 +5509,13 @@
           "channels",
           "effort",
           "tokens",
-          "toolCalls"
+          "toolCalls",
+          "turns",
+          "turnsInterrupted",
+          "activeMs",
+          "costUsd",
+          "work",
+          "outcome"
         ],
         "title": "SessionHeader",
         "type": "object"
@@ -5739,6 +6123,20 @@
             "format": "date-time",
             "title": "To",
             "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/TurnBlock"
+            },
+            "title": "Turns",
+            "type": "array"
+          },
+          "work": {
+            "items": {
+              "$ref": "#/components/schemas/WorkBin"
+            },
+            "title": "Work",
+            "type": "array"
           }
         },
         "required": [
@@ -5752,8 +6150,10 @@
           "analytics",
           "notCaptured",
           "friction",
+          "work",
           "context",
-          "compactions"
+          "compactions",
+          "turns"
         ],
         "title": "SessionTimeline",
         "type": "object"
@@ -5773,6 +6173,112 @@
           "meta"
         ],
         "title": "SessionTimelineResponse",
+        "type": "object"
+      },
+      "SessionTurnsResponse": {
+        "additionalProperties": false,
+        "description": "The session's turns that started in [from, to], oldest first; paged by turn.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/TurnRow"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SessionTurnsResponse",
+        "type": "object"
+      },
+      "SessionWorkRow": {
+        "additionalProperties": false,
+        "description": "SessionRow (work): a session under its repo on the person's Work tab.",
+        "properties": {
+          "activeMs": {
+            "title": "Activems",
+            "type": "number"
+          },
+          "agent": {
+            "enum": [
+              "claude-code",
+              "codex",
+              "chatgpt",
+              "claude-ai"
+            ],
+            "title": "Agent",
+            "type": "string"
+          },
+          "capturedFromPrompt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capturedfromprompt"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "friction": {
+            "$ref": "#/components/schemas/Friction"
+          },
+          "label": {
+            "$ref": "#/components/schemas/SessionLabel"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "sessionId",
+          "agent",
+          "start",
+          "end",
+          "live",
+          "label",
+          "turns",
+          "capturedFromPrompt",
+          "activeMs",
+          "work",
+          "friction"
+        ],
+        "title": "SessionWorkRow",
         "type": "object"
       },
       "Status": {
@@ -6139,6 +6645,119 @@
         "title": "StreamEvent",
         "type": "object"
       },
+      "SubagentRow": {
+        "additionalProperties": false,
+        "description": "A subagent the turn spawned (`\u2937 subagent test-writer`), with its own work.",
+        "properties": {
+          "agentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agentid"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/WorkGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "tokensIn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokensin"
+          },
+          "tokensOut": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokensout"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "agentId",
+          "name",
+          "sessionId",
+          "steps",
+          "work",
+          "tokensIn",
+          "tokensOut",
+          "groups"
+        ],
+        "title": "SubagentRow",
+        "type": "object"
+      },
+      "SubagentSpawn": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ],
+        "title": "SubagentSpawn",
+        "type": "object"
+      },
       "ThreadChildren": {
         "additionalProperties": false,
         "description": "The subagent and review threads started from a session.",
@@ -6237,6 +6856,13 @@
             "format": "date-time",
             "title": "To",
             "type": "string"
+          },
+          "work": {
+            "items": {
+              "$ref": "#/components/schemas/WorkBin"
+            },
+            "title": "Work",
+            "type": "array"
           }
         },
         "required": [
@@ -6249,7 +6875,8 @@
           "modelCalls",
           "analytics",
           "notCaptured",
-          "friction"
+          "friction",
+          "work"
         ],
         "title": "Timeline",
         "type": "object"
@@ -6637,6 +7264,17 @@
             ],
             "title": "Exitcode"
           },
+          "fileType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filetype"
+          },
           "mcpServer": {
             "anyOf": [
               {
@@ -6651,6 +7289,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
           },
           "resultBytes": {
             "anyOf": [
@@ -6704,6 +7353,8 @@
           "durationMs",
           "exitCode",
           "command",
+          "program",
+          "fileType",
           "resultBytes",
           "destructive"
         ],
@@ -6803,6 +7454,62 @@
           "used"
         ],
         "title": "ToolTally",
+        "type": "object"
+      },
+      "TurnBlock": {
+        "additionalProperties": false,
+        "description": "A turn on the session timeline's Turns lane: from its prompt to its last step.",
+        "properties": {
+          "endedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "promptId": {
+            "title": "Promptid",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "promptId",
+          "n",
+          "startedAt",
+          "endedAt",
+          "steps",
+          "live"
+        ],
+        "title": "TurnBlock",
         "type": "object"
       },
       "TurnReport": {
@@ -6919,6 +7626,493 @@
         "title": "TurnReport",
         "type": "object"
       },
+      "TurnRow": {
+        "additionalProperties": false,
+        "description": "One turn (CompTurns TurnRow).",
+        "properties": {
+          "asked": {
+            "$ref": "#/components/schemas/PromptText"
+          },
+          "costUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costusd"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "friction": {
+            "$ref": "#/components/schemas/PromptFriction"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/WorkGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "promptId": {
+            "title": "Promptid",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "subagents": {
+            "items": {
+              "$ref": "#/components/schemas/SubagentRow"
+            },
+            "title": "Subagents",
+            "type": "array"
+          },
+          "tokensIn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokensin"
+          },
+          "tokensOut": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokensout"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "promptId",
+          "n",
+          "startedAt",
+          "endedAt",
+          "durationMs",
+          "live",
+          "asked",
+          "steps",
+          "tokensIn",
+          "tokensOut",
+          "costUsd",
+          "friction",
+          "work",
+          "groups",
+          "subagents"
+        ],
+        "title": "TurnRow",
+        "type": "object"
+      },
+      "TurnStep": {
+        "additionalProperties": false,
+        "description": "One model call in a turn (CompTurns TurnStep). `requestId` opens today's drawer on it.",
+        "properties": {
+          "agentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agenttype"
+          },
+          "commands": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Commands",
+            "type": "array"
+          },
+          "costUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costusd"
+          },
+          "does": {
+            "enum": [
+              "exec",
+              "patch",
+              "mcp",
+              "spawn",
+              "tool",
+              "text",
+              "interrupt"
+            ],
+            "title": "Does",
+            "type": "string"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "eventsPending": {
+            "title": "Eventspending",
+            "type": "boolean"
+          },
+          "exitCodes": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Exitcodes",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "model",
+              "subagent"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "patches": {
+            "items": {
+              "$ref": "#/components/schemas/PatchFile"
+            },
+            "title": "Patches",
+            "type": "array"
+          },
+          "requestClass": {
+            "anyOf": [
+              {
+                "enum": [
+                  "main",
+                  "subagent",
+                  "auxiliary",
+                  "compaction"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requestclass"
+          },
+          "requestId": {
+            "title": "Requestid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "done",
+              "streaming",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopreason"
+          },
+          "t": {
+            "format": "date-time",
+            "title": "T",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/TokenCount"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallData"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "ttftMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttftms"
+          },
+          "usageMissing": {
+            "anyOf": [
+              {
+                "enum": [
+                  "parseBuffer",
+                  "streamCut",
+                  "interrupted",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usagemissing"
+          }
+        },
+        "required": [
+          "requestId",
+          "t",
+          "kind",
+          "model",
+          "requestClass",
+          "tokens",
+          "durationMs",
+          "ttftMs",
+          "stopReason",
+          "costUsd",
+          "status",
+          "eventsPending",
+          "agentType",
+          "tools",
+          "does",
+          "commands",
+          "patches",
+          "text",
+          "exitCodes",
+          "usageMissing",
+          "step"
+        ],
+        "title": "TurnStep",
+        "type": "object"
+      },
+      "TurnWork": {
+        "additionalProperties": false,
+        "description": "What a turn (a group, a session, a repo, a bin) did. A kind with nothing is 0 or empty: the UI\nleaves it out of the line. Reads, edits and file types are Claude Code's; Codex's edits are its\nfile changes (apply_patch).",
+        "properties": {
+          "commands": {
+            "items": {
+              "$ref": "#/components/schemas/CommandRuns"
+            },
+            "title": "Commands",
+            "type": "array"
+          },
+          "commits": {
+            "title": "Commits",
+            "type": "integer"
+          },
+          "editTypes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Edittypes",
+            "type": "object"
+          },
+          "editedFiles": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editedfiles"
+          },
+          "edits": {
+            "title": "Edits",
+            "type": "integer"
+          },
+          "linesAdded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linesadded"
+          },
+          "linesRemoved": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linesremoved"
+          },
+          "mcp": {
+            "items": {
+              "$ref": "#/components/schemas/McpUse"
+            },
+            "title": "Mcp",
+            "type": "array"
+          },
+          "otherTools": {
+            "title": "Othertools",
+            "type": "integer"
+          },
+          "prs": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Prs",
+            "type": "array"
+          },
+          "pushes": {
+            "title": "Pushes",
+            "type": "integer"
+          },
+          "readFiles": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readfiles"
+          },
+          "readTypes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Readtypes",
+            "type": "object"
+          },
+          "reads": {
+            "title": "Reads",
+            "type": "integer"
+          },
+          "subagents": {
+            "items": {
+              "$ref": "#/components/schemas/SubagentSpawn"
+            },
+            "title": "Subagents",
+            "type": "array"
+          },
+          "web": {
+            "$ref": "#/components/schemas/WebUse"
+          }
+        },
+        "required": [
+          "reads",
+          "readFiles",
+          "readTypes",
+          "edits",
+          "editedFiles",
+          "editTypes",
+          "linesAdded",
+          "linesRemoved",
+          "commands",
+          "subagents",
+          "web",
+          "mcp",
+          "otherTools",
+          "commits",
+          "pushes",
+          "prs"
+        ],
+        "title": "TurnWork",
+        "type": "object"
+      },
       "Unattributed": {
         "additionalProperties": false,
         "description": "Sessions whose rows carry no account id on any call or event (handoff \u00a75.2.1).",
@@ -6995,6 +8189,258 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WebUse": {
+        "additionalProperties": false,
+        "properties": {
+          "fetches": {
+            "title": "Fetches",
+            "type": "integer"
+          },
+          "searches": {
+            "title": "Searches",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "searches",
+          "fetches"
+        ],
+        "title": "WebUse",
+        "type": "object"
+      },
+      "WorkBin": {
+        "additionalProperties": false,
+        "description": "The Work lane's bin: edits on top of everything else, and the bin tooltip's counts.",
+        "properties": {
+          "edits": {
+            "title": "Edits",
+            "type": "integer"
+          },
+          "other": {
+            "title": "Other",
+            "type": "integer"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "t": {
+            "format": "date-time",
+            "title": "T",
+            "type": "string"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "t",
+          "edits",
+          "other",
+          "steps",
+          "work"
+        ],
+        "title": "WorkBin",
+        "type": "object"
+      },
+      "WorkGroup": {
+        "additionalProperties": false,
+        "description": "Consecutive steps of a turn that did the same kind of work (a new group starts when the kind,\nthe program or the server changes).",
+        "properties": {
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "exits": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Exits",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "read",
+              "edit",
+              "run",
+              "web",
+              "mcp",
+              "spawn",
+              "tool",
+              "think",
+              "reply"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paths"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TurnStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "tokensIn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokensin"
+          },
+          "tokensOut": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokensout"
+          },
+          "work": {
+            "$ref": "#/components/schemas/TurnWork"
+          }
+        },
+        "required": [
+          "kind",
+          "program",
+          "server",
+          "work",
+          "exits",
+          "paths",
+          "startedAt",
+          "durationMs",
+          "tokensIn",
+          "tokensOut",
+          "text",
+          "steps"
+        ],
+        "title": "WorkGroup",
+        "type": "object"
+      },
+      "WorkingOn": {
+        "additionalProperties": false,
+        "description": "The People page's Working on: the live session's turn and repo, otherwise the repos.",
+        "properties": {
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo"
+          },
+          "repos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Repos",
+            "type": "array"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "turn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn"
+          }
+        },
+        "required": [
+          "live",
+          "sessionId",
+          "repo",
+          "turn",
+          "repos"
+        ],
+        "title": "WorkingOn",
         "type": "object"
       }
     }
@@ -7907,6 +9353,94 @@
         "summary": "Get Person Timeline"
       }
     },
+    "/api/v1/people/{personId}/work": {
+      "get": {
+        "description": "The Work tab (handoff \u00a711R): the person's sessions that overlap the range, grouped by repo or\nworkspace, each with its turns, active time and work.",
+        "operationId": "get_person_work",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "title": "Personid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now.",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonWorkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Query failed"
+          }
+        },
+        "summary": "Get Person Work"
+      }
+    },
     "/api/v1/requests/{requestId}": {
       "get": {
         "description": "A captured transaction (its correlation id), or `reported:<requestId>` for a call only Claude Code reported.",
@@ -8817,6 +10351,146 @@
           }
         },
         "summary": "Get Session Timeline"
+      }
+    },
+    "/api/v1/sessions/{sessionId}/turns": {
+      "get": {
+        "description": "The Turns tab (handoff \u00a711R): the turns that started in the range, oldest first, each with its work,\nits steps grouped, and its subagents.",
+        "operationId": "get_session_turns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "title": "Sessionid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "A turn number (#N): return the page that holds it.",
+            "in": "query",
+            "name": "turn",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A turn number (#N): return the page that holds it.",
+              "title": "Turn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTurnsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No session with this id"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid parameters"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Query failed"
+          }
+        },
+        "summary": "Get Session Turns"
       }
     },
     "/api/v1/status": {

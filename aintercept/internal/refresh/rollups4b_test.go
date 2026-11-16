@@ -87,9 +87,10 @@ func TestPromptAndSteps(t *testing.T) {
 		"interrupted": true, "destructive": 1, "turn_report": nil,
 	})
 	bash := map[string]any{"toolUseId": "tu1", "name": "Bash", "mcpServer": nil, "target": nil, "status": "ok", "durationMs": float64(15),
-		"exitCode": float64(1), "command": "rm", "resultBytes": nil, "destructive": map[string]any{"category": "rm_force", "scope": "cwd"}}
+		"exitCode": float64(1), "command": "rm", "program": "rm", "fileType": nil, "resultBytes": nil,
+		"destructive": map[string]any{"category": "rm_force", "scope": "cwd"}}
 	read := map[string]any{"toolUseId": "tu2", "name": "Read", "mcpServer": nil, "target": nil, "status": "running", "durationMs": nil,
-		"exitCode": nil, "command": nil, "resultBytes": nil, "destructive": nil}
+		"exitCode": nil, "command": nil, "program": nil, "fileType": nil, "resultBytes": nil, "destructive": nil}
 	expect(t, row(t, db, "SELECT * FROM steps WHERE prompt_id = 'p1' AND step = 1"), map[string]any{
 		"call_id": "a", "kind": "model", "model": "claude-opus-4", "request_class": "main", "tokens_input": 10, "tokens_cache_read": 20,
 		"tokens_cache_write": nil, "tokens_cache_write_5m": 7, "tokens_output": 5, "ttft_ms": nil, "cost_usd": 0.5, "reported": true,

@@ -12,7 +12,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "now": "2026-11-04T18:05:00Z",
     "prompts": [],
     "sessions": [],
-    "to": "2026-11-04T18:05:59.999999Z"
+    "to": "2026-11-04T18:05:59.999999Z",
+    "work": []
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

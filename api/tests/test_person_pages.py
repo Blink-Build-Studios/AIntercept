@@ -366,8 +366,10 @@ READS = {
     "": SCOPE | {"devices", "session_accounts"},
     "/sessions": SCOPE | {"children", "title"},
     "/timeline": SCOPE | {"children", "title", "cells", "names", "typed", "missed", "window", "friction_minutes",
-                          "friction"},
-    "/summary": SCOPE | {"cells", "keys", "key_counts", "missed", "latest", "credentials", "cred_cells"},
+                          "friction", "work_bins"},
+    "/summary": SCOPE | {"cells", "keys", "key_counts", "missed", "latest", "credentials", "cred_cells",
+                         "person_turns", "work_keys"},
+    "/work": SCOPE | {"children", "title"},
     "/requests": SCOPE | {"credentials", "cred_cells", "cred_minutes", "missed_cells", "missed_minutes", "call_rows",
                           "missed_rows", "reports", "prompt_indexes", "step_numbers", "retries", "next_attempt"},
 }  # fmt: skip
@@ -387,7 +389,7 @@ def test_a_person_page_reads_cells_and_a_page_whatever_the_history(sides):
     urls = [base, f"{base}/sessions", f"{base}/sessions?pageSize=5&page=3", f"{base}/timeline",
             f"{base}/timeline?{day}&bin=300", f"{base}/summary", f"{base}/summary?{day}", f"{base}/requests",
             f"{base}/requests?pageSize=5&page=7", f"{base}/requests?order=asc&{day}",
-            f"{base}/requests?kind=model"]  # fmt: skip
+            f"{base}/requests?kind=model", f"{base}/work", f"{base}/work?{day}"]  # fmt: skip
     (dense,) = side.query(
         """SELECT max(n) FROM (SELECT count(*) AS n FROM calls GROUP BY coalesce(start_ns, end_ns) / 60000000000) x"""
     )[0]

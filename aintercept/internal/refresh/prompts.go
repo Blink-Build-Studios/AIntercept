@@ -89,15 +89,20 @@ var toolObj = `jsonb_build_object(
 	'status', CASE t.name WHEN 'tengu_tool_use_success' THEN 'ok' WHEN 'tengu_tool_use_progress' THEN 'running' ELSE 'error' END,
 	'durationMs', ` + jsonDouble(tf("durationMs")) + `,
 	'exitCode', b.exit_code, 'command', b.argv0,
+	'program', CASE WHEN ` + pyStr(tf("toolName")) + ` = 'Bash'
+		THEN coalesce(b.program, ` + programOf(pyStr(tf("bash_argv0")), pyStr(tf("bash_subcommand")), "NULL") + `) END,
+	'fileType', ` + fileType(pyStr(tf("toolName")), pyStr(tf("fileExtension"))) + `,
 	'resultBytes', ` + jsonTrunc(tf("toolResultSizeBytes")) + `,
 	'destructive', CASE WHEN b.category IS NOT NULL THEN jsonb_build_object('category', b.category, 'scope', b.scope) END)`
 
 // toolFields is a tool event t's metadata fields the tools read.
-var toolFields = fields("t.metadata", "tm", "toolUseID", "toolName", "mcpServerName", "durationMs", "toolResultSizeBytes")
+var toolFields = fields("t.metadata", "tm", "toolUseID", "toolName", "mcpServerName", "durationMs", "toolResultSizeBytes",
+	"fileExtension", "bash_argv0", "bash_subcommand")
 
 // bashOf is tool event t's Bash event (promptrows.go joins: bash, by
 // str(tool_use_id) when truthy; the last in the session's order).
 var bashOf = `LEFT JOIN LATERAL (SELECT ` + pyStr(f("xm", "bash_argv0")) + ` AS argv0, ` + jsonTrunc(f("xm", "exit_code")) + ` AS exit_code,
+		` + programOf(pyStr(f("xm", "bash_argv0")), pyStr(f("xm", "bash_subcommand")), pyStr(f("xm", "bash_last_argv0"))) + ` AS program,
 		CASE WHEN ` + pyStr(f("xm", "destructive_category")) + ` NOT IN ('none', '') THEN ` + pyStr(f("xm", "destructive_category")) + ` END AS category,
 		` + pyStr(f("xm", "destructive_target_scope")) + ` AS scope
 	FROM (SELECT x.metadata FROM events x
@@ -105,7 +110,8 @@ var bashOf = `LEFT JOIN LATERAL (SELECT ` + pyStr(f("xm", "bash_argv0")) + ` AS 
 		  AND x.session_id = t.session_id AND x.source = 'claude_code' AND x.name = 'tengu_bash_tool_command_executed'
 		  AND ` + pyTruthy(emd("x", "tool_use_id")) + ` AND ` + pyStr(emd("x", "tool_use_id")) + ` = ` + pyStr(tf("toolUseID")) + `
 		ORDER BY ` + strings.ReplaceAll(evOrder("x"), ",", " DESC,") + ` DESC LIMIT 1) x,
-		` + fields("x.metadata", "xm", "bash_argv0", "exit_code", "destructive_category", "destructive_target_scope") + `) b ON true`
+		` + fields("x.metadata", "xm", "bash_argv0", "exit_code", "destructive_category", "destructive_target_scope",
+	"bash_subcommand", "bash_last_argv0") + `) b ON true`
 
 // toolKey is a tool event's identity among a step's tools (promptrows.go
 // toolsOf: _str(toolUseID) or _str(toolName)).
@@ -225,7 +231,8 @@ const usageMissing = `CASE WHEN coalesce(c.output_tokens, 0) <> 0 THEN NULL
 const stepCols = `prompt_id, session_id, step, call_id, t_ns, end_ns, kind, model, request_class,
 	tokens_input, tokens_cache_read, tokens_cache_write, tokens_cache_write_5m, tokens_cache_write_1h, tokens_output,
 	ttft_ms, stop_reason, cost_usd, failed, reported, agent_type, tools, tools_live, does,
-	commands, exit_codes, content_live, commands_live, exit_codes_live, patches, text, usage_missing`
+	commands, exit_codes, content_live, commands_live, exit_codes_live, patches, text, usage_missing,
+	work_kind, program, server, agent_id, work`
 
 // stepSelect is the steps of the prompts whose visible calls c `where` keeps:
 // one per call, numbered within its prompt by (time, call id) (§8 difference 7;
@@ -253,15 +260,25 @@ SELECT c.prompt_id, c.session_id,
 	CASE WHEN NOT ` + recorded + ` AND ` + liveAdds + ` THEN ` + bashCodes("tl.live") + ` ELSE '{}' END,
 	CASE WHEN ` + recorded + ` THEN ` + detailPatches + ` ELSE '[]' END,
 	nullif(` + jsonStrOnly("c.detail -> 'text'") + `, ''),
-	` + usageMissing + `
-FROM pc c ` + stepReport + ` ` + stepTools
+	` + usageMissing + `,
+	coalesce(sw.kind, 'think'), CASE WHEN sw.kind = 'run' THEN nullif(sw.key, '') END,
+	CASE WHEN sw.kind = 'mcp' THEN nullif(sw.key, '') END, nullif(c.agent_id, ''), sw.work
+FROM pc c ` + stepReport + ` ` + stepTools + ` ` + stepWork
 }
+
+// stepWork is call c's work (handoff §11R): its pieces (stepItems), what the
+// first of them is (the step's kind: a new group starts where it, or its
+// program or server, changes) and their TurnWork.
+var stepWork = `LEFT JOIN LATERAL (WITH i AS MATERIALIZED (` + stepItems + `)
+	SELECT (SELECT substr(kind, 3) FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS kind,
+		(SELECT key FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS key, ` + workObj("i", true) + ` AS work) sw ON true`
 
 // --- a prompt ------------------------------------------------------------------------------------
 
 // promptCols are prompts' columns.
 const promptCols = `prompt_id, session_id, t_ns, product, has_input, prompt_index, text_chars, frustrated, steps,
-	unfinished_max_ns, turn_end_ns, text, tokens_in, tokens_out, tool_counts, interrupted, destructive, turn_report`
+	unfinished_max_ns, turn_end_ns, text, tokens_in, tokens_out, tool_counts, interrupted, destructive, turn_report,
+	ended_ns, cost_usd, work`
 
 // turnReport is agents.turn_report of a codex_turn_event's metadata m
 // (promptrows.go turnReport): numbers only from JSON numbers.
@@ -298,7 +315,7 @@ var promptSelect = `WITH inp AS (
 	ORDER BY e.session_id, ` + evOrder("e") + `),
 st AS (SELECT session_id, count(*) AS n, min(t_ns) AS t, max(t_ns) FILTER (WHERE end_ns IS NULL) AS unfinished,
 		sum(nullif(coalesce(tokens_input, 0) + coalesce(tokens_cache_read, 0) + coalesce(tokens_cache_write, 0), 0)) AS tin,
-		sum(tokens_output) AS tout
+		sum(tokens_output) AS tout, max(coalesce(end_ns, t_ns)) AS ended, sum(cost_usd) AS cost
 	FROM steps WHERE prompt_id = $1 GROUP BY session_id),
 s AS (SELECT session_id FROM inp UNION SELECT session_id FROM st)
 SELECT $1, s.session_id, coalesce(inp.ts_ns, st.t), f.product, inp.session_id IS NOT NULL,
@@ -309,7 +326,9 @@ SELECT $1, s.session_id, coalesce(inp.ts_ns, st.t), f.product, inp.session_id IS
 	coalesce(tc.counts, '{}'), coalesce(ev.cancelled, false), coalesce(ev.destructive, 0),
 	CASE WHEN f.product = 'codex' THEN (SELECT ` + turnReport("e.metadata") + ` FROM events e
 		WHERE e.prompt_id = $1 AND e.session_id = s.session_id AND e.source = 'codex' AND e.name = 'codex_turn_event'
-		ORDER BY e.ts_ns DESC, e.event_key COLLATE "C" DESC LIMIT 1) END
+		ORDER BY e.ts_ns DESC, e.event_key COLLATE "C" DESC LIMIT 1) END,
+	coalesce(st.ended, ev.turn_end), st.cost,
+	(WITH i AS MATERIALIZED (` + workItems(`e.prompt_id = $1 AND e.session_id = s.session_id`) + `) SELECT ` + workObj("i", true) + `)
 FROM s LEFT JOIN inp USING (session_id) LEFT JOIN st USING (session_id)
 LEFT JOIN LATERAL (SELECT ` + agent + ` AS product FROM calls c
 	WHERE c.prompt_id = $1 AND c.session_id = s.session_id AND ` + visible + ` ORDER BY ` + callOrder + ` LIMIT 1) f ON true

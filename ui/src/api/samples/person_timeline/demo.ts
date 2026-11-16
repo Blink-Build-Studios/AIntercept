@@ -1846,7 +1846,1208 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "start": "2026-11-02T05:31:51.155051Z"
       }
     ],
-    "to": "2026-11-04T18:05:59.999999Z"
+    "to": "2026-11-04T18:05:59.999999Z",
+    "work": [
+      {
+        "edits": 0,
+        "other": 5,
+        "steps": 39,
+        "t": "2026-11-02T14:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 3,
+        "other": 70,
+        "steps": 79,
+        "t": "2026-11-02T15:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 3,
+              "lastExit": null,
+              "program": "python",
+              "runs": 21
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 10
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 6
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "kubectl",
+              "runs": 5
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "docker",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "git",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "other",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cp",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "echo",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "helm",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "curl",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "go",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "ls",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "pkill",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "tail",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "which",
+              "runs": 1
+            }
+          ],
+          "commits": 4,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 3,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 2,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 1,
+        "other": 24,
+        "steps": 30,
+        "t": "2026-11-02T16:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 9
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "bash",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "echo",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "docker",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "git",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "other",
+              "runs": 1
+            }
+          ],
+          "commits": 2,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 1,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 2,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 48,
+        "steps": 54,
+        "t": "2026-11-02T17:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 10
+            },
+            {
+              "failed": 1,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 6
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 5
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "docker",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "other",
+              "runs": 4
+            },
+            {
+              "failed": 1,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "kubectl",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "awk",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "date",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "find",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "helm",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "rm",
+              "runs": 1
+            }
+          ],
+          "commits": 3,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 1,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 1,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 2,
+        "other": 6,
+        "steps": 8,
+        "t": "2026-11-02T18:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "git",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "kubectl",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 1
+            }
+          ],
+          "commits": 3,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 2,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 2,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 1,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 1,
+        "steps": 3,
+        "t": "2026-11-02T21:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 7,
+        "other": 137,
+        "steps": 148,
+        "t": "2026-11-02T22:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 1,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 30
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 24
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 15
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 12
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "bash",
+              "runs": 7
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "curl",
+              "runs": 6
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 6
+            },
+            {
+              "failed": 1,
+              "lastExit": null,
+              "program": "other",
+              "runs": 6
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "git",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "kubectl",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sleep",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cp",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "echo",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "ls",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "head",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "helm",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 1
+            }
+          ],
+          "commits": 3,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 7,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [
+            2
+          ],
+          "pushes": 4,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 11,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 35,
+        "steps": 0,
+        "t": "2026-11-03T00:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 9
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 9
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "other",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "echo",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cp",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "kubectl",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 1
+            }
+          ],
+          "commits": 1,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 2,
+        "steps": 0,
+        "t": "2026-11-03T15:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "awk",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 37,
+        "steps": 0,
+        "t": "2026-11-03T16:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 7
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 6
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 5
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "docker",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "go",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "curl",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "kubectl",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "rm",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "seq",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 1,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 2,
+            "searches": 1
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 11,
+        "steps": 0,
+        "t": "2026-11-03T17:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "docker",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "curl",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "head",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 1
+            }
+          ],
+          "commits": 1,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 4,
+        "steps": 6,
+        "t": "2026-11-03T19:00:00Z",
+        "work": {
+          "commands": [],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [
+            {
+              "calls": 1,
+              "server": ""
+            }
+          ],
+          "otherTools": 3,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 22,
+        "steps": 30,
+        "t": "2026-11-03T20:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 7
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 5
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "ls",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 4,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 17,
+        "other": 94,
+        "steps": 135,
+        "t": "2026-11-03T21:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cd",
+              "runs": 61
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 5
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "git",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "other",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "cat",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "python",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "gh",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "mkdir",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "bash",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "wc",
+              "runs": 1
+            }
+          ],
+          "commits": 1,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 17,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [
+            2
+          ],
+          "pushes": 2,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 2,
+          "subagents": [
+            {
+              "count": 2,
+              "name": null
+            }
+          ],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 1,
+        "other": 12,
+        "steps": 18,
+        "t": "2026-11-04T00:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "gh",
+              "runs": 4
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "git",
+              "runs": 3
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "grep",
+              "runs": 2
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "rm",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 1
+            },
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "wc",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 1,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 1,
+        "steps": 4,
+        "t": "2026-11-04T18:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": "sed",
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      }
+    ]
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

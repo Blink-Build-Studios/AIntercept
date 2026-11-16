@@ -61,6 +61,14 @@ def test_person_summary_demo(pg_demo, write_sample):
     assert rb["modelCalls"] == 640 and rb["sessions"] == 1
 
 
+def test_person_work_demo(pg_demo, write_sample):
+    client = pg_demo
+    r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/work")
+    write_sample(client, r, "demo")
+    (g,) = r.json()["data"]
+    assert g["sessions"] == 1 and g["rows"][0]["sessionId"] == DEMO_SESSION
+
+
 def test_person_requests_demo(pg_demo, write_sample):
     client = pg_demo
     r = client.get(f"/api/v1/people/{DEMO_ACCOUNT}/requests", params={"pageSize": 50})
@@ -117,6 +125,13 @@ def test_session_prompts_demo(pg_demo, write_sample):
     # Between rows that are calls (compactions, auxiliary calls); recaps aren't calls.
     outside = [i["between"] for i in everything if i["type"] == "between" and i["between"]["requestId"]]
     assert steps + len(outside) == 640  # every captured call is a step or a between row, exactly once
+
+
+def test_session_turns_demo(pg_demo, write_sample):
+    client = pg_demo
+    r = client.get(f"{SESSION}/turns", params={**BRIEF_WINDOW, "pageSize": 10})
+    write_sample(client, r, "demo")
+    assert r.json()["meta"]["total"] > 0
 
 
 def test_session_requests_demo(pg_demo, write_sample):

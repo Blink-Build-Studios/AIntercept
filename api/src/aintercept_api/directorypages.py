@@ -36,6 +36,7 @@ from aintercept_api.models.people import (
     PersonSummaryRow,
     Unattributed,
 )
+from aintercept_api.models.work import WorkingOn
 from aintercept_api.reader import Snapshot
 from aintercept_api.rows import dt
 
@@ -113,7 +114,7 @@ LIMIT %(limit)s OFFSET %(offset)s"""  # noqa: S608 (fixed text)
 # The page's rows' members (their group's accounts with a session), and the window's days of each.
 _MEMBERS = f"""SELECT p.pid, b.account_id, b.org FROM unnest(%(pids)s::text[]) p(pid),
 LATERAL ({_members("p.pid")}) b"""  # noqa: S608 (fixed text)
-_DAYS = """SELECT account_id, day_ns, agent, model_calls, first_ns, last_ns FROM account_days
+_DAYS = """SELECT account_id, day_ns, agent, model_calls, first_ns, last_ns, repos FROM account_days
 WHERE account_id = ANY(%(accts)s) AND day_ns >= %(from)s AND day_ns <= %(to)s"""
 _DEVICES = """SELECT account_id, device_id, agent, version, version_ns FROM account_devices
 WHERE account_id = ANY(%(accts)s) AND first_ns <= %(hi)s AND last_ns >= %(lo)s"""
@@ -122,6 +123,13 @@ _LIMITS = """SELECT a.account_id, l.limits, l.limits_ns FROM unnest(%(accts)s::t
   SELECT s.limits, s.limits_ns FROM session_accounts sa JOIN sessions s USING (session_id)
   WHERE sa.account_id = a.account_id AND s.product = 'codex' AND s.limits IS NOT NULL AND s.limits_ns IS NOT NULL
   ORDER BY sa.first_ns DESC LIMIT 1) l"""
+# Working on (handoff §11R): a live account's newest session, its repo and its newest turn's number.
+_LIVE = """SELECT a.account_id, s.session_id, s.repo, s.last_ns, (
+    SELECT i.prompt_index FROM prompt_items i WHERE i.session_id = s.session_id AND i.type = 'prompt'
+    ORDER BY i.seq DESC LIMIT 1) AS turn
+FROM unnest(%(accts)s::text[]) a(account_id), LATERAL (
+  SELECT s.session_id, s.repo, s.last_ns FROM session_accounts sa JOIN sessions s USING (session_id)
+  WHERE sa.account_id = a.account_id AND s.last_ns >= %(since)s ORDER BY s.last_ns DESC LIMIT 1) s"""
 # The not-captured windows of an account's sessions in the window.
 _MISSED = """SELECT m.ts_ns FROM session_accounts sa JOIN missed_reports m USING (session_id)
 WHERE sa.account_id = ANY(%(accts)s) AND m.ts_ns >= %(lo)s AND m.ts_ns <= %(hi)s"""
@@ -211,6 +219,13 @@ class DirectoryReads:
                 p = by_acct[a]
                 if p not in limits or at > limits[p][1]:
                     limits[p] = (lim, at)
+        live_accts = sorted({a for r in rows if r["live"] for a in r["accts"]})
+        live_on: dict[str, Row] = {}
+        if live_accts:
+            for x in self.snap.dicts("live", _LIVE, {"accts": live_accts, "since": now - cc.LIVE_WITHIN_NS}):
+                p = by_acct[x["account_id"]]
+                if p not in live_on or x["last_ns"] > live_on[p]["last_ns"]:
+                    live_on[p] = x
         out = []
         for r in rows:
             pid = r["pid"]
@@ -261,6 +276,19 @@ class DirectoryReads:
                     agent_limits = [AgentLimits.model_validate_json(got.model_dump_json(by_alias=True))]
             n = len(mine) or 1
             known, calls = r["outputs_known"], r["calls"]
+            repo_last: dict[str, int] = {}
+            for d in in_window:
+                for repo in d["repos"] or []:
+                    repo_last[repo] = max(repo_last.get(repo, 0), d["last_ns"])
+            repos = sorted(repo_last, key=lambda k: (-repo_last[k], k))
+            on = live_on.get(pid)
+            working = (
+                WorkingOn(live=True, sessionId=on["session_id"], repo=on["repo"], turn=on["turn"], repos=repos)
+                if on is not None
+                else WorkingOn(live=False, sessionId=None, repo=None, turn=None, repos=repos)
+                if repos
+                else None
+            )
             out.append(
                 PersonSummaryRow(
                     personId=pid,
@@ -277,6 +305,8 @@ class DirectoryReads:
                     live=r["live"],
                     sessions=r["sessions"],
                     prompts=r["prompts"] or None,
+                    turns=r["prompts"] or None,
+                    workingOn=working,
                     tokensOut=r["tokens_out"] if known else None,
                     tokensAccuracy="missing" if not known else "exact" if known == calls else "estimated",
                     activity=dr.activity(dict(strip), now_dt),
@@ -340,6 +370,7 @@ class DirectoryReads:
                 channels=agents.CHANNELS,
                 devices=sum(r.devices for r in rows),
                 sessions=sum(r.sessions for r in rows),
+                turns=sum(r.turns or 0 for r in rows),
                 requests=int(requests),
                 notCaptured=sum(r.coverage.notCaptured for r in rows if r.coverage),
                 unattributed=Unattributed(

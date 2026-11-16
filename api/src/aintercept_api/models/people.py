@@ -15,6 +15,7 @@ from aintercept_api.models.common import (
     RequestKind,
     UsageMissing,
 )
+from aintercept_api.models.work import PersonWorkStats, WorkBin, WorkingOn
 
 
 class SessionLabel(Model):
@@ -216,6 +217,8 @@ class Timeline(Model):
     analytics: list[AnalyticsBin]
     notCaptured: list[GapWindow]
     friction: list[FrictionMark]
+    work: list[WorkBin]
+    """The Work lane (handoff §11R): bins with work only; a missing bin is zero."""
 
 
 class PersonTimelineResponse(Envelope[Timeline]):
@@ -407,6 +410,8 @@ class Failures(Model):
 
 class Footprint(Model):
     prompts: int | None
+    turns: int | None
+    """The turns in the range (handoff §11R: the footprint's Prompts row becomes Turns); the same count."""
     toolCalls: int | None
     toolsByName: dict[str, int]
     commands: int | None
@@ -422,6 +427,8 @@ class PersonSummary(Model):
     coverage: Coverage
     capabilities: Capabilities
     footprint: Footprint
+    work: PersonWorkStats
+    """The header row's turns, active time, edits and commits, and the OutcomeSlot's facts (§11R)."""
 
 
 class PersonSummaryResponse(Envelope[PersonSummary]):
@@ -536,6 +543,10 @@ class PersonSummaryRow(Model):
     sessions: int
     prompts: int | None
     """Distinct prompt ids on model calls; None when no call carries one."""
+    turns: int | None
+    """The Turns column (handoff §11R): the turns in the window, the same count as `prompts`."""
+    workingOn: WorkingOn | None
+    """The live session's turn and repo, otherwise the window's repos; None when there's neither."""
     tokensOut: int | None
     tokensAccuracy: Literal["exact", "estimated", "missing"]
     activity: list[ActivityDay]
@@ -594,6 +605,8 @@ class Overview(Model):
     devices: int
     """Devices across the people in range (the ribbon's Devices tile)."""
     sessions: int
+    turns: int
+    """Turns in the window (the ribbon's Turns tile, handoff §11R)."""
     requests: int
     """Captured transactions with coding agents (Claude Code, Codex), synthetic probes excluded."""
     notCaptured: int

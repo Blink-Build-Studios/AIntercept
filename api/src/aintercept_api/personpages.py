@@ -37,6 +37,8 @@ from aintercept_api import claude_code as cc
 from aintercept_api import directory as dr
 from aintercept_api import sessionpages as sp
 from aintercept_api import timeline as tl
+from aintercept_api import turnpages as tp
+from aintercept_api import work as wk
 from aintercept_api.models.common import AgentLimits, Coverage, CoverageWindow, LimitWindow
 from aintercept_api.models.people import (
     AgentInfo,
@@ -69,6 +71,8 @@ from aintercept_api.models.people import (
     TimelinePrompt,
     TokenCount,
 )
+from aintercept_api.models.turns import RepoGroup
+from aintercept_api.models.work import LastTest, OutcomeFacts, PersonWorkStats, WorkBin
 from aintercept_api.reader import Snapshot
 from aintercept_api.rows import dt, session_row_from_table
 
@@ -160,6 +164,25 @@ SELECT minute_ns, key, n FROM session_minute_keys WHERE session_id = ANY(%(sids)
   AND minute_ns >= %(lo)s AND minute_ns <= %(hi)s AND (minute_ns < %(hlo)s OR minute_ns >= %(hhi)s)"""
 _MINUTE_NAMES = """SELECT minute_ns AS t, key, n FROM session_minute_keys WHERE session_id = ANY(%(sids)s)
   AND kind = 'name' AND minute_ns >= %(lo)s AND minute_ns <= %(hi)s"""
+
+
+# Each bin's work key rows (handoff §11R's Work lane): the hours' (inside the range) and the minutes' (at its
+# edges), or every minute's, summed per bin.
+_HOUR_WORK = """SELECT hour_ns AS t, kind, key, n FROM session_keys
+WHERE session_id = ANY(%(sids)s) AND kind = ANY(%(kinds)s)
+  AND (%(hlo)s::bigint IS NULL OR hour_ns >= %(hlo)s) AND (%(hhi)s::bigint IS NULL OR hour_ns < %(hhi)s)
+UNION ALL
+SELECT minute_ns, kind, key, n FROM session_minute_keys WHERE session_id = ANY(%(sids)s) AND kind = ANY(%(kinds)s)
+  AND minute_ns >= %(lo)s AND minute_ns <= %(hi)s AND (minute_ns < %(hlo)s OR minute_ns >= %(hhi)s)"""
+_MINUTE_WORK = """SELECT minute_ns AS t, kind, key, n FROM session_minute_keys WHERE session_id = ANY(%(sids)s)
+  AND kind = ANY(%(kinds)s) AND minute_ns >= %(lo)s AND minute_ns <= %(hi)s"""
+
+
+def _binned_work(rows: str) -> str:
+    return f"""SELECT t - mod(t, %(width)s) AS b, kind, key, sum(n)::bigint AS n FROM ({rows}) x GROUP BY 1, 2, 3"""  # noqa: S608
+
+
+_WORK_BINS = {True: _binned_work(_HOUR_WORK), False: _binned_work(_MINUTE_WORK)}
 
 
 def _top_names(names: str) -> str:
@@ -598,7 +621,15 @@ class PersonReads:
             analytics=self._analytics(sids, cells, width, hourly, span) if sids else [],
             notCaptured=self._gaps(sids, lo, hi) if sids else [],
             friction=self._friction(sids, cells, width, span) if sids else [],
+            work=self._work_bins(cells, width, hourly, span) if sids else [],
         )
+
+    def _work_bins(self, cells: list[sp.Cell], width: int, hourly: bool, span: dict[str, Any]) -> list[WorkBin]:
+        steps = {c.start: int(c.row["model_calls"]) for c in cells}
+        rows: dict[int, list[tuple[str, str, int]]] = defaultdict(list)
+        for b, kind, key, n in self.snap.rows("work_bins", _WORK_BINS[hourly], {**span, "kinds": wk.KINDS}):
+            rows[b].append((kind, key, n))
+        return tp.work_bins(rows, steps)
 
     def _cells(self, name: str, sql: str, params: dict[str, Any]) -> list[sp.Cell]:
         return [sp.Cell(r["t"], r["t"] + r["w"], r) for r in self.snap.dicts(name, sql, params)]
@@ -824,6 +855,7 @@ class PersonReads:
             ),
             footprint=Footprint(
                 prompts=distinct.get("call_prompt", 0) or None,
+                turns=distinct.get("call_prompt", 0) or None,
                 toolCalls=sum(tools.values()) if has_events else None,
                 toolsByName=dict(tools.most_common()),
                 commands=names.get("tengu_bash_tool_command_executed", 0) if has_events else None,
@@ -850,8 +882,42 @@ class PersonReads:
                 ),
                 subagentCalls=count("subagent_calls"),
             ),
+            work=self._work_stats(shown_rows, span, lo, hi),
         )
         return summary, last
+
+    def _work_stats(self, shown: list[Row], span: dict[str, Any], lo: int, hi: int) -> PersonWorkStats:
+        """The header row's work over [lo, hi] (§11R): the turns that started in it and their times, the work
+        key rows of its cells, the repos of its sessions, and the newest last test among them."""
+        sids = sorted(r["session_id"] for r in shown)
+        turns, active = tp.person_turns(self.snap, sids, lo, hi)
+        w = wk.from_keys(self.snap.rows("work_keys", _KEYS, {**span, "kinds": wk.KINDS})) if sids else wk.add([])
+        tests = [r["last_test"] for r in shown if r["last_test"] and lo <= r["last_test"]["t"] <= hi]
+        test = max(tests, key=lambda t: t["t"]) if tests else None
+        return PersonWorkStats(
+            turns=turns,
+            activeMs=active,
+            work=wk.turn_work(w),
+            repos=len({r["repo"] for r in shown if r["repo"]}),
+            outcome=OutcomeFacts(
+                commits=w["commits"],
+                headFrom=None,
+                headTo=None,
+                editedFiles=w["editedFiles"],
+                editTypes=w["editTypes"],
+                lastTest=LastTest(program=test["program"], exitCode=test["exit"], t=dt(test["t"])) if test else None,
+                pushes=w["pushes"],
+                prs=w["prs"],
+            ),
+        )
+
+    # --- /people/{id}/work ----------------------------------------------------------------------
+
+    def work(self, pid: str, now: int, lo: int | None, hi: int | None) -> tuple[list[RepoGroup], int | None]:
+        rs = self.scope(pid).sessions
+        last = max((r["last_ns"] for r in rs), default=None)
+        kept = [r for r in rs if _shown(r, lo, hi, now)]
+        return tp.repo_groups(self.rows_of(kept, now), now), last
 
     def _latest(self, sids: list[str], hi: int) -> dict[str, int]:
         best: dict[str, tuple[int, int]] = {}

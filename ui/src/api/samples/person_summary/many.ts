@@ -78,7 +78,8 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
           "count": 2,
           "word": "rm"
         }
-      ]
+      ],
+      "turns": 1
     },
     "ribbon": {
       "accountCalls": 2,
@@ -102,6 +103,64 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
         "output": 1400
       },
       "toolsReachable": null
+    },
+    "work": {
+      "activeMs": 600004.0,
+      "outcome": {
+        "commits": 2,
+        "editTypes": {},
+        "editedFiles": null,
+        "headFrom": null,
+        "headTo": null,
+        "lastTest": null,
+        "prs": [
+          2
+        ],
+        "pushes": 2
+      },
+      "repos": 0,
+      "turns": 2,
+      "work": {
+        "commands": [
+          {
+            "failed": 0,
+            "lastExit": null,
+            "program": "git",
+            "runs": 2
+          },
+          {
+            "failed": 0,
+            "lastExit": null,
+            "program": "rm",
+            "runs": 2
+          }
+        ],
+        "commits": 2,
+        "editTypes": {},
+        "editedFiles": null,
+        "edits": 0,
+        "linesAdded": null,
+        "linesRemoved": null,
+        "mcp": [
+          {
+            "calls": 2,
+            "server": "github"
+          }
+        ],
+        "otherTools": 0,
+        "prs": [
+          2
+        ],
+        "pushes": 2,
+        "readFiles": null,
+        "readTypes": {},
+        "reads": 0,
+        "subagents": [],
+        "web": {
+          "fetches": 0,
+          "searches": 0
+        }
+      }
     }
   },
   "meta": {

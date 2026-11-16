@@ -95,7 +95,15 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "prompts": 1,
       "sessions": 1,
       "tokensAccuracy": "exact",
-      "tokensOut": 100
+      "tokensOut": 100,
+      "turns": 1,
+      "workingOn": {
+        "live": true,
+        "repo": null,
+        "repos": [],
+        "sessionId": "22222222-2222-4222-8222-222222222222",
+        "turn": 1
+      }
     },
     {
       "accountIdShort": "0000\u2026acc1",
@@ -189,7 +197,9 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "prompts": 1,
       "sessions": 1,
       "tokensAccuracy": "exact",
-      "tokensOut": 300
+      "tokensOut": 300,
+      "turns": 1,
+      "workingOn": null
     },
     {
       "accountIdShort": "0000\u2026acc3",
@@ -283,7 +293,9 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "prompts": 1,
       "sessions": 1,
       "tokensAccuracy": "exact",
-      "tokensOut": 200
+      "tokensOut": 200,
+      "turns": 1,
+      "workingOn": null
     }
   ],
   "meta": {

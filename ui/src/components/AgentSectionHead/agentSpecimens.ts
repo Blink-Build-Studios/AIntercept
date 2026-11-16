@@ -82,6 +82,8 @@ export const person: Person = {
   live: false,
   sessions: 1,
   prompts: 1,
+  turns: 1,
+  workingOn: null,
   tokensOut: 1800,
   tokensAccuracy: "exact",
   activity: [],
@@ -216,7 +218,7 @@ export const codexModelCall: Step = {
   tokens: { accuracy: "exact", input: 31_200, output: 640, cacheRead: null, cacheWrite: null, cacheWrite1h: null, cacheWrite5m: null },
   tools: [],
 };
-export const codexExec: ToolCall = { command: null, toolUseId: "c1", name: "exec", mcpServer: null, target: "npm test -- timer", status: "ok", durationMs: 3200, exitCode: 1, resultBytes: 4100, destructive: null };
+export const codexExec: ToolCall = { command: null, program: null, fileType: null, toolUseId: "c1", name: "exec", mcpServer: null, target: "npm test -- timer", status: "ok", durationMs: 3200, exitCode: 1, resultBytes: 4100, destructive: null };
 export const codexPatch: ToolCall = { ...codexExec, toolUseId: "c2", name: "apply_patch", target: "src/timer.test.ts", durationMs: null, exitCode: null, resultBytes: 1900 };
 export const codexPatchChange: PatchChange = { kind: "update", added: 38, removed: 2, acceptedAdded: 38, acceptedRemoved: 2 };
 export const codexSpawn: SpawnedThread = { t: at(8, 14, 25, 30), tool: "spawn_agent", agentName: "timer_edge_tests", threadShort: "4d0a…", prompts: 2, calls: 9, durationMs: 192_000, href: "#" };

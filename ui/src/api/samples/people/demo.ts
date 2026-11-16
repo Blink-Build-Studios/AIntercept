@@ -126,7 +126,15 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "prompts": 43,
       "sessions": 1,
       "tokensAccuracy": "estimated",
-      "tokensOut": 694376
+      "tokensOut": 694376,
+      "turns": 43,
+      "workingOn": {
+        "live": true,
+        "repo": null,
+        "repos": [],
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "turn": 47
+      }
     }
   ],
   "meta": {

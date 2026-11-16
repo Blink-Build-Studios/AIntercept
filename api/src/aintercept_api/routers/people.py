@@ -15,6 +15,7 @@ from aintercept_api.models.people import (
     PersonSummaryResponse,
     PersonTimelineResponse,
 )
+from aintercept_api.models.turns import PersonWorkResponse
 from aintercept_api.rows import dt as _dt
 from aintercept_api.timeutil import ns_to_dt
 
@@ -59,6 +60,29 @@ def get_person_sessions(
         total=total,
     )
     return PersonSessionsResponse(data=rows, meta=meta)
+
+
+@router.get("/people/{personId}/work", response_model=PersonWorkResponse)
+def get_person_work(
+    request: Request,
+    personId: str,  # noqa: N803
+    from_: AwareDatetime | None = FROM,
+    to: AwareDatetime | None = TO,
+) -> PersonWorkResponse:
+    """The Work tab (handoff §11R): the person's sessions that overlap the range, grouped by repo or
+    workspace, each with its turns, active time and work."""
+    now_dt, now = _now(request)
+    lo, hi = ranges.given(from_, to)
+    with pages.read(request, "person/work") as reader:
+        groups, last = reader.person_work(personId, now, lo, hi)
+    meta = Meta(
+        asOf=now_dt,
+        lastDataAt=ns_to_dt(last),
+        from_=ns_to_dt(lo),
+        to=ns_to_dt(hi),
+        total=sum(g.sessions for g in groups),
+    )
+    return PersonWorkResponse(data=groups, meta=meta)
 
 
 @router.get("/people/{personId}/timeline", response_model=PersonTimelineResponse)

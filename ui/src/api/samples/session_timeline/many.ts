@@ -228,7 +228,69 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "start": "2026-11-04T09:00:00Z"
       }
     ],
-    "to": "2026-11-04T09:42:00Z"
+    "to": "2026-11-04T09:42:00Z",
+    "turns": [
+      {
+        "endedAt": "2026-11-04T09:01:00.002000Z",
+        "live": false,
+        "n": 1,
+        "promptId": "p0",
+        "startedAt": "2026-11-04T09:00:00Z",
+        "steps": 1
+      },
+      {
+        "endedAt": "2026-11-04T09:21:00.002000Z",
+        "live": false,
+        "n": 2,
+        "promptId": "p1",
+        "startedAt": "2026-11-04T09:20:00Z",
+        "steps": 1
+      },
+      {
+        "endedAt": "2026-11-04T09:41:00.002000Z",
+        "live": false,
+        "n": 3,
+        "promptId": "p2",
+        "startedAt": "2026-11-04T09:40:00Z",
+        "steps": 1
+      }
+    ],
+    "work": [
+      {
+        "edits": 0,
+        "other": 1,
+        "steps": 1,
+        "t": "2026-11-04T09:40:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": null,
+              "runs": 1
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      }
+    ]
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",

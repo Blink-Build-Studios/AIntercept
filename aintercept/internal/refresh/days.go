@@ -24,7 +24,8 @@ package refresh
 //   - queries, bypassed: bypass %;
 //   - reported, missed: coverage (the windows are read from missed_reports);
 //   - first_ns, last_ns: the day's first and last activity (lastSeenAt, an
-//     agent's firstSeenAt).
+//     agent's firstSeenAt);
+//   - repos: its sessions' repos (the People page's Working on, handoff §11R).
 // Devices are read from account_devices (§6.4), and live, limits and versions
 // from the newest sessions rows.
 
@@ -35,7 +36,8 @@ var daySelect = `SELECT $1, $2, CASE WHEN s.product = 'codex' THEN 'codex' ELSE 
 	count(*) FILTER (WHERE h.events > 0), coalesce(sum(k.prompts), 0), sum(h.model_calls), sum(h.outputs_known),
 	sum(h.input_tokens), sum(h.cache_read_tokens), sum(h.cache_write_tokens), sum(h.output_tokens),
 	sum(h.queries), sum(h.bypassed), sum(h.reported), sum(h.missed),
-	min(least(ev.first, cf.first)), max(greatest(ev.last, cl.last))
+	min(least(ev.first, cf.first)), max(greatest(ev.last, cl.last)),
+	coalesce(array_agg(DISTINCT s.repo ORDER BY s.repo) FILTER (WHERE s.repo IS NOT NULL), '{}')
 FROM session_accounts sa JOIN sessions s USING (session_id)
 CROSS JOIN LATERAL (SELECT coalesce(sum(model_calls), 0) AS model_calls, coalesce(sum(events), 0) AS events,
 		coalesce(sum(outputs_known), 0) AS outputs_known, sum(input_tokens) AS input_tokens, sum(cache_read_tokens) AS cache_read_tokens,
@@ -58,5 +60,6 @@ GROUP BY 3`
 var dayRefresh = []string{
 	`DELETE FROM account_days WHERE account_id = $1 AND day_ns = $2`,
 	`INSERT INTO account_days (account_id, day_ns, agent, sessions, session_ids, call_session_ids, sessions_with_events, prompts, model_calls, outputs_known,
-		tokens_input, tokens_cache_read, tokens_cache_write, tokens_output, queries, bypassed, reported, missed, first_ns, last_ns) ` + daySelect,
+		tokens_input, tokens_cache_read, tokens_cache_write, tokens_output, queries, bypassed, reported, missed, first_ns, last_ns,
+		repos) ` + daySelect,
 }

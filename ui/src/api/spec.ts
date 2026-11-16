@@ -143,6 +143,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/{personId}/work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Person Work
+         * @description The Work tab (handoff §11R): the person's sessions that overlap the range, grouped by repo or
+         *     workspace, each with its turns, active time and work.
+         */
+        get: operations["get_person_work"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requests/{requestId}": {
         parameters: {
             query?: never;
@@ -291,6 +312,27 @@ export interface paths {
         };
         /** Get Session Timeline */
         get: operations["get_session_timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Turns
+         * @description The Turns tab (handoff §11R): the turns that started in the range, oldest first, each with its work,
+         *     its steps grouped, and its subagents.
+         */
+        get: operations["get_session_turns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -498,6 +540,20 @@ export interface components {
             prs: number[];
             /** Pushes */
             pushes: number;
+        };
+        /**
+         * CommandRuns
+         * @description The commands a turn ran with one program (`ran npm test ×4: 3 failed, then passed`).
+         */
+        CommandRuns: {
+            /** Failed */
+            failed: number;
+            /** Lastexit */
+            lastExit: number | null;
+            /** Program */
+            program: string | null;
+            /** Runs */
+            runs: number;
         };
         /** CommandWord */
         CommandWord: {
@@ -824,6 +880,8 @@ export interface components {
             };
             /** Topcommandwords */
             topCommandWords: components["schemas"]["CommandWord"][];
+            /** Turns */
+            turns: number | null;
         };
         /** Friction */
         Friction: {
@@ -922,6 +980,18 @@ export interface components {
             /** Usagemissing */
             usageMissing: ("parseBuffer" | "streamCut" | "interrupted" | "failed") | null;
         };
+        /** LastTest */
+        LastTest: {
+            /** Exitcode */
+            exitCode: number;
+            /** Program */
+            program: string;
+            /**
+             * T
+             * Format: date-time
+             */
+            t: string;
+        };
         /** LimitWindow */
         LimitWindow: {
             /** Name */
@@ -969,6 +1039,13 @@ export interface components {
             tools: number | null;
             /** Toolsused */
             toolsUsed: number;
+        };
+        /** McpUse */
+        McpUse: {
+            /** Calls */
+            calls: number;
+            /** Server */
+            server: string;
         };
         /** Meta */
         Meta: {
@@ -1034,6 +1111,30 @@ export interface components {
              */
             kind: "customer" | "outside" | "unset";
         };
+        /**
+         * OutcomeFacts
+         * @description What a session (or a person's period) shipped, as captured (OutcomeSlot facts). The generated
+         *     summary isn't captured yet.
+         */
+        OutcomeFacts: {
+            /** Commits */
+            commits: number;
+            /** Edittypes */
+            editTypes: {
+                [key: string]: number;
+            };
+            /** Editedfiles */
+            editedFiles: number | null;
+            /** Headfrom */
+            headFrom: string | null;
+            /** Headto */
+            headTo: string | null;
+            lastTest: components["schemas"]["LastTest"] | null;
+            /** Prs */
+            prs: number[];
+            /** Pushes */
+            pushes: number;
+        };
         /** Overview */
         Overview: {
             /** Activenow */
@@ -1058,6 +1159,8 @@ export interface components {
             requests: number;
             /** Sessions */
             sessions: number;
+            /** Turns */
+            turns: number;
             unattributed: components["schemas"]["Unattributed"];
         };
         /**
@@ -1179,6 +1282,7 @@ export interface components {
             coverage: components["schemas"]["Coverage"];
             footprint: components["schemas"]["Footprint"];
             ribbon: components["schemas"]["Ribbon"];
+            work: components["schemas"]["PersonWorkStats"];
         };
         /**
          * PersonSummaryResponse
@@ -1240,6 +1344,9 @@ export interface components {
             tokensAccuracy: "exact" | "estimated" | "missing";
             /** Tokensout */
             tokensOut: number | null;
+            /** Turns */
+            turns: number | null;
+            workingOn: components["schemas"]["WorkingOn"] | null;
         };
         /**
          * PersonTimelineResponse
@@ -1248,6 +1355,29 @@ export interface components {
         PersonTimelineResponse: {
             data: components["schemas"]["Timeline"];
             meta: components["schemas"]["Meta"];
+        };
+        /**
+         * PersonWorkResponse
+         * @description The person's sessions that overlap [from, to], grouped by repo; repos by most recent activity.
+         */
+        PersonWorkResponse: {
+            /** Data */
+            data: components["schemas"]["RepoGroup"][];
+            meta: components["schemas"]["Meta"];
+        };
+        /**
+         * PersonWorkStats
+         * @description The person header row's work numbers over the range.
+         */
+        PersonWorkStats: {
+            /** Activems */
+            activeMs: number;
+            outcome: components["schemas"]["OutcomeFacts"];
+            /** Repos */
+            repos: number;
+            /** Turns */
+            turns: number;
+            work: components["schemas"]["TurnWork"];
         };
         /** Posture */
         Posture: {
@@ -1341,6 +1471,10 @@ export interface components {
             prompts: number;
             /** Requests */
             requests: number;
+            /** Steps */
+            steps: number;
+            /** Turns */
+            turns: number;
         };
         /** Recap */
         Recap: {
@@ -1351,6 +1485,30 @@ export interface components {
             t: string;
             /** Text */
             text: string | null;
+        };
+        /**
+         * RepoGroup
+         * @description RepoRow: a repo (Claude Code) or workspace (Codex) and its sessions.
+         */
+        RepoGroup: {
+            /** Activems */
+            activeMs: number;
+            /** Agents */
+            agents: ("claude-code" | "codex" | "chatgpt" | "claude-ai")[];
+            /**
+             * Lastactiveat
+             * Format: date-time
+             */
+            lastActiveAt: string;
+            /** Repo */
+            repo: string | null;
+            /** Rows */
+            rows: components["schemas"]["SessionWorkRow"][];
+            /** Sessions */
+            sessions: number;
+            /** Turns */
+            turns: number;
+            work: components["schemas"]["TurnWork"];
         };
         /** RepoInRange */
         RepoInRange: {
@@ -1631,6 +1789,8 @@ export interface components {
          * @description The session row's fields, plus what the session page header adds.
          */
         SessionHeader: {
+            /** Activems */
+            activeMs: number;
             /**
              * Agent
              * @enum {string}
@@ -1653,6 +1813,8 @@ export interface components {
             clientVersion: string | null;
             /** Commit */
             commit: string | null;
+            /** Costusd */
+            costUsd: number | null;
             coverage: components["schemas"]["Coverage"] | null;
             device: components["schemas"]["DeviceInfo"] | null;
             /** Effort */
@@ -1678,6 +1840,7 @@ export interface components {
             /** Notcaptured */
             notCaptured: number | null;
             origin: components["schemas"]["SessionOrigin"] | null;
+            outcome: components["schemas"]["OutcomeFacts"];
             /** Personid */
             personId: string | null;
             /** Prompts */
@@ -1694,6 +1857,11 @@ export interface components {
             tokens: components["schemas"]["TokenCount"];
             /** Toolcalls */
             toolCalls: number | null;
+            /** Turns */
+            turns: number;
+            /** Turnsinterrupted */
+            turnsInterrupted: number;
+            work: components["schemas"]["TurnWork"];
         };
         /** SessionLabel */
         SessionLabel: {
@@ -1866,11 +2034,55 @@ export interface components {
              * Format: date-time
              */
             to: string;
+            /** Turns */
+            turns: components["schemas"]["TurnBlock"][];
+            /** Work */
+            work: components["schemas"]["WorkBin"][];
         };
         /** SessionTimelineResponse */
         SessionTimelineResponse: {
             data: components["schemas"]["SessionTimeline"];
             meta: components["schemas"]["Meta"];
+        };
+        /**
+         * SessionTurnsResponse
+         * @description The session's turns that started in [from, to], oldest first; paged by turn.
+         */
+        SessionTurnsResponse: {
+            /** Data */
+            data: components["schemas"]["TurnRow"][];
+            meta: components["schemas"]["Meta"];
+        };
+        /**
+         * SessionWorkRow
+         * @description SessionRow (work): a session under its repo on the person's Work tab.
+         */
+        SessionWorkRow: {
+            /** Activems */
+            activeMs: number;
+            /**
+             * Agent
+             * @enum {string}
+             */
+            agent: "claude-code" | "codex" | "chatgpt" | "claude-ai";
+            /** Capturedfromprompt */
+            capturedFromPrompt: number | null;
+            /** End */
+            end: string | null;
+            friction: components["schemas"]["Friction"];
+            label: components["schemas"]["SessionLabel"];
+            /** Live */
+            live: boolean;
+            /** Sessionid */
+            sessionId: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /** Turns */
+            turns: number;
+            work: components["schemas"]["TurnWork"];
         };
         /**
          * Status
@@ -1966,6 +2178,34 @@ export interface components {
             type: string;
         };
         /**
+         * SubagentRow
+         * @description A subagent the turn spawned (`⤷ subagent test-writer`), with its own work.
+         */
+        SubagentRow: {
+            /** Agentid */
+            agentId: string | null;
+            /** Groups */
+            groups: components["schemas"]["WorkGroup"][];
+            /** Name */
+            name: string | null;
+            /** Sessionid */
+            sessionId: string | null;
+            /** Steps */
+            steps: number;
+            /** Tokensin */
+            tokensIn: number | null;
+            /** Tokensout */
+            tokensOut: number | null;
+            work: components["schemas"]["TurnWork"];
+        };
+        /** SubagentSpawn */
+        SubagentSpawn: {
+            /** Count */
+            count: number;
+            /** Name */
+            name: string | null;
+        };
+        /**
          * ThreadChildren
          * @description The subagent and review threads started from a session.
          */
@@ -2005,6 +2245,8 @@ export interface components {
              * Format: date-time
              */
             to: string;
+            /** Work */
+            work: components["schemas"]["WorkBin"][];
         };
         /** TimelinePrompt */
         TimelinePrompt: {
@@ -2102,10 +2344,14 @@ export interface components {
             durationMs: number | null;
             /** Exitcode */
             exitCode: number | null;
+            /** Filetype */
+            fileType: string | null;
             /** Mcpserver */
             mcpServer: string | null;
             /** Name */
             name: string;
+            /** Program */
+            program: string | null;
             /** Resultbytes */
             resultBytes: number | null;
             /**
@@ -2141,6 +2387,27 @@ export interface components {
             used: number | null;
         };
         /**
+         * TurnBlock
+         * @description A turn on the session timeline's Turns lane: from its prompt to its last step.
+         */
+        TurnBlock: {
+            /** Endedat */
+            endedAt: string | null;
+            /** Live */
+            live: boolean;
+            /** N */
+            n: number | null;
+            /** Promptid */
+            promptId: string;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /** Steps */
+            steps: number;
+        };
+        /**
          * TurnReport
          * @description Codex's own report on a turn (codex_turn_event, handoff §11J gap 6). Absent fields: None.
          */
@@ -2165,6 +2432,144 @@ export interface components {
             };
             /** Trigger */
             trigger: string | null;
+        };
+        /**
+         * TurnRow
+         * @description One turn (CompTurns TurnRow).
+         */
+        TurnRow: {
+            asked: components["schemas"]["PromptText"];
+            /** Costusd */
+            costUsd: number | null;
+            /** Durationms */
+            durationMs: number | null;
+            /** Endedat */
+            endedAt: string | null;
+            friction: components["schemas"]["PromptFriction"];
+            /** Groups */
+            groups: components["schemas"]["WorkGroup"][];
+            /** Live */
+            live: boolean;
+            /** N */
+            n: number | null;
+            /** Promptid */
+            promptId: string;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /** Steps */
+            steps: number;
+            /** Subagents */
+            subagents: components["schemas"]["SubagentRow"][];
+            /** Tokensin */
+            tokensIn: number | null;
+            /** Tokensout */
+            tokensOut: number | null;
+            work: components["schemas"]["TurnWork"];
+        };
+        /**
+         * TurnStep
+         * @description One model call in a turn (CompTurns TurnStep). `requestId` opens today's drawer on it.
+         */
+        TurnStep: {
+            /** Agenttype */
+            agentType: string | null;
+            /** Commands */
+            commands: string[];
+            /** Costusd */
+            costUsd: number | null;
+            /**
+             * Does
+             * @enum {string}
+             */
+            does: "exec" | "patch" | "mcp" | "spawn" | "tool" | "text" | "interrupt";
+            /** Durationms */
+            durationMs: number | null;
+            /** Eventspending */
+            eventsPending: boolean;
+            /** Exitcodes */
+            exitCodes: number[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "model" | "subagent";
+            /** Model */
+            model: string | null;
+            /** Patches */
+            patches: components["schemas"]["PatchFile"][];
+            /** Requestclass */
+            requestClass: ("main" | "subagent" | "auxiliary" | "compaction") | null;
+            /** Requestid */
+            requestId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "streaming" | "error";
+            /** Step */
+            step: number;
+            /** Stopreason */
+            stopReason: string | null;
+            /**
+             * T
+             * Format: date-time
+             */
+            t: string;
+            /** Text */
+            text: string | null;
+            tokens: components["schemas"]["TokenCount"];
+            /** Tools */
+            tools: components["schemas"]["ToolCallData"][];
+            /** Ttftms */
+            ttftMs: number | null;
+            /** Usagemissing */
+            usageMissing: ("parseBuffer" | "streamCut" | "interrupted" | "failed") | null;
+        };
+        /**
+         * TurnWork
+         * @description What a turn (a group, a session, a repo, a bin) did. A kind with nothing is 0 or empty: the UI
+         *     leaves it out of the line. Reads, edits and file types are Claude Code's; Codex's edits are its
+         *     file changes (apply_patch).
+         */
+        TurnWork: {
+            /** Commands */
+            commands: components["schemas"]["CommandRuns"][];
+            /** Commits */
+            commits: number;
+            /** Edittypes */
+            editTypes: {
+                [key: string]: number;
+            };
+            /** Editedfiles */
+            editedFiles: number | null;
+            /** Edits */
+            edits: number;
+            /** Linesadded */
+            linesAdded: number | null;
+            /** Linesremoved */
+            linesRemoved: number | null;
+            /** Mcp */
+            mcp: components["schemas"]["McpUse"][];
+            /** Othertools */
+            otherTools: number;
+            /** Prs */
+            prs: number[];
+            /** Pushes */
+            pushes: number;
+            /** Readfiles */
+            readFiles: number | null;
+            /** Readtypes */
+            readTypes: {
+                [key: string]: number;
+            };
+            /** Reads */
+            reads: number;
+            /** Subagents */
+            subagents: components["schemas"]["SubagentSpawn"][];
+            web: components["schemas"]["WebUse"];
         };
         /**
          * Unattributed
@@ -2192,6 +2597,83 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WebUse */
+        WebUse: {
+            /** Fetches */
+            fetches: number;
+            /** Searches */
+            searches: number;
+        };
+        /**
+         * WorkBin
+         * @description The Work lane's bin: edits on top of everything else, and the bin tooltip's counts.
+         */
+        WorkBin: {
+            /** Edits */
+            edits: number;
+            /** Other */
+            other: number;
+            /** Steps */
+            steps: number;
+            /**
+             * T
+             * Format: date-time
+             */
+            t: string;
+            work: components["schemas"]["TurnWork"];
+        };
+        /**
+         * WorkGroup
+         * @description Consecutive steps of a turn that did the same kind of work (a new group starts when the kind,
+         *     the program or the server changes).
+         */
+        WorkGroup: {
+            /** Durationms */
+            durationMs: number | null;
+            /** Exits */
+            exits: number[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "read" | "edit" | "run" | "web" | "mcp" | "spawn" | "tool" | "think" | "reply";
+            /** Paths */
+            paths: string[] | null;
+            /** Program */
+            program: string | null;
+            /** Server */
+            server: string | null;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /** Steps */
+            steps: components["schemas"]["TurnStep"][];
+            /** Text */
+            text: string | null;
+            /** Tokensin */
+            tokensIn: number | null;
+            /** Tokensout */
+            tokensOut: number | null;
+            work: components["schemas"]["TurnWork"];
+        };
+        /**
+         * WorkingOn
+         * @description The People page's Working on: the live session's turn and repo, otherwise the repos.
+         */
+        WorkingOn: {
+            /** Live */
+            live: boolean;
+            /** Repo */
+            repo: string | null;
+            /** Repos */
+            repos: string[];
+            /** Sessionid */
+            sessionId: string | null;
+            /** Turn */
+            turn: number | null;
         };
     };
     responses: never;
@@ -2561,6 +3043,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonTimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Query failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_person_work: {
+        parameters: {
+            query?: {
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: unbounded / the person's first activity. */
+                from?: string | null;
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: unbounded / now. */
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonWorkResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3037,6 +3564,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionTimelineResponse"];
+                };
+            };
+            /** @description No session with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid parameters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Query failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_session_turns: {
+        parameters: {
+            query?: {
+                /** @description Range start (RFC 3339), snapped to its minute's start. Default: the session's start. */
+                from?: string | null;
+                /** @description Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live). */
+                to?: string | null;
+                page?: number;
+                pageSize?: number;
+                /** @description A turn number (#N): return the page that holds it. */
+                turn?: number | null;
+            };
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionTurnsResponse"];
                 };
             };
             /** @description No session with this id */

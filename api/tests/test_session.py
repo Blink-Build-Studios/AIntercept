@@ -278,7 +278,15 @@ def test_state_default(dataset, pg_client_for, write_sample):
     assert d["experimentsAt"] is None and d["flagFetchesInRange"] is None
     # Each count matches its tab over the same range.
     # 4 model calls + 15 analytics batches (one per event timestamp in the builder), 23 events.
-    assert d["counts"] == {"prompts": 2, "modelCalls": 4, "requests": 4 + 15, "events": 23, "compactions": 0}
+    assert d["counts"] == {
+        "prompts": 2,
+        "modelCalls": 4,
+        "requests": 4 + 15,
+        "events": 23,
+        "compactions": 0,
+        "turns": 2,
+        "steps": 4,
+    }
     tabs = {t: client.get(f"{BASE}/{t}").json()["meta"]["total"] for t in ("requests", "events")}
     assert tabs == {"requests": d["counts"]["requests"], "events": d["counts"]["events"]}
 

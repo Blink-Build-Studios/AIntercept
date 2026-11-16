@@ -74,6 +74,7 @@ from aintercept_api.models.sessions import (
     ToolTally,
     TurnReport,
 )
+from aintercept_api.models.work import TurnBlock, WorkBin
 from aintercept_api.reader import Snapshot
 from aintercept_api.rows import dt, usage_missing
 
@@ -715,7 +716,20 @@ class SessionReads:
 
     # --- the timeline ---------------------------------------------------------------------------
 
-    def timeline(self, sid: str, r: Row, now_dt: datetime, now: int, lo: int, hi: int, bin_s: int) -> SessionTimeline:
+    def timeline(
+        self,
+        sid: str,
+        r: Row,
+        now_dt: datetime,
+        now: int,
+        lo: int,
+        hi: int,
+        bin_s: int,
+        turns: list[TurnBlock],
+        work: Callable[[int, dict[int, int]], list[WorkBin]],
+    ) -> SessionTimeline:
+        """The timeline, with the Turns lane given and the Work lane from `work(width, steps per bin)`
+        (turnpages.TurnReads, §11R)."""
         width = bin_s * NS
         hourly = width % HOUR == 0
         cells = self.cells(sid, None, None) if hourly else self.minutes(sid, None, None)
@@ -798,6 +812,8 @@ class SessionReads:
                 )
                 for c in self.snap.dicts("compactions", _COMPACTIONS, {"sid": sid, "lo": None, "hi": None})
             ],
+            turns=turns,
+            work=work(width, {b: m["model_calls"] for b, m in model.items()}),
         )
 
     def typed_prompts(self, sid: str, r: Row, now: int) -> list[TimelinePrompt]:
@@ -934,6 +950,8 @@ class SessionReads:
                 requests=requests,
                 events=n_events,
                 compactions=counts["compactions"],
+                turns=counts["prompts"],
+                steps=model_calls,
             ),
         )
 

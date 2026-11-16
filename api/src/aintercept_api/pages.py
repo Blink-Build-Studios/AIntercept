@@ -32,6 +32,7 @@ from aintercept_api.models.sessions import (
     SessionState,
     SessionTimeline,
 )
+from aintercept_api.models.turns import RepoGroup, TurnRow
 
 Row = dict[str, Any]
 
@@ -81,6 +82,9 @@ class Pages(Protocol):
     def session_prompts(
         self, sid: str, now: int, lo: int, hi: int, page: int, size: int, prompt: int | None
     ) -> tuple[list[PromptItem | BetweenItem], int, int]: ...
+    def session_turns(
+        self, sid: str, now: int, lo: int, hi: int, page: int, size: int, turn: int | None
+    ) -> tuple[list[TurnRow], int, int]: ...
     def session_requests(
         self, sid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
         captured: bool | None, page: int, size: int, order: str, hidden: bool,
@@ -100,6 +104,7 @@ class Pages(Protocol):
     def person_summary(
         self, pid: str, sids: list[str], now: int, lo: int, hi: int
     ) -> tuple[PersonSummary, int | None]: ...
+    def person_work(self, pid: str, now: int, lo: int | None, hi: int | None) -> tuple[list[RepoGroup], int | None]: ...
     def person_requests(
         self, pid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
         captured: bool | None, page: int, size: int, order: str, agent: Sequence[str] | None, hidden: bool,
@@ -131,6 +136,7 @@ _ROUTES = [
     ("session/timeline", r"/sessions/[^/]+/timeline"),
     ("session/state", r"/sessions/[^/]+/state"),
     ("session/prompts", r"/sessions/[^/]+/prompts"),
+    ("session/turns", r"/sessions/[^/]+/turns"),
     ("session/requests", r"/sessions/[^/]+/requests"),
     ("session/events", r"/sessions/[^/]+/events"),
     ("people", r"/people"),
@@ -139,6 +145,7 @@ _ROUTES = [
     ("person/sessions", r"/people/[^/]+/sessions"),
     ("person/timeline", r"/people/[^/]+/timeline"),
     ("person/summary", r"/people/[^/]+/summary"),
+    ("person/work", r"/people/[^/]+/work"),
     ("person/requests", r"/people/[^/]+/requests"),
     ("request", r"/requests/[^/]+"),
     ("request/raw", r"/requests/[^/]+/raw"),

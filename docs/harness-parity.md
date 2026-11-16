@@ -88,6 +88,24 @@ images, interrupts and a second model. Last reviewed 2026-11-08.
 | Images | pasted images | `-i` input images, `view_image` | mapped | shown / captured |
 | Plugins, skills, hooks | skills, hooks (analytics) | plugins (`/backend-api/ps/plugins/*`) | bespoke | shown / served (the catalog channel) |
 
+## Turns and work (handoff §11R)
+
+The Session and Person pages lead with turns and the work each did. A turn is a prompt and every step (model
+call) it started. Work is metadata first (`aintercept/internal/refresh/work.go`); recorded content only adds
+paths, commands and the reply's text.
+
+| Concept | Claude Code | Codex | Mapping | AIntercept (Claude Code / Codex) |
+|---|---|---|---|---|
+| Reads | `Read`, `Grep`, `Glob`, `LS` tool events, with `fileExtension`; distinct files by `tengu_file_operation`'s hashed `filePathHash` | `fs/read_*` tools in `tool_uses` only (no event) | mapped (partial) | served (`work.reads`, `readFiles`, `readTypes`) / served (steps only) |
+| Edits | `Edit`, `Write`, `MultiEdit` tool events with `fileExtension`; distinct files by `filePathHash`; lines from `tengu_file_changed` (per turn: it names no tool call) | `codex_file_change_event` (one per patch; no file type); lines from `codex_accepted_line_fingerprints` | mapped | served (`edits`, `editedFiles`, `editTypes`, `linesAdded`, `linesRemoved`) / served (no types, no distinct files) |
+| Commands | `tengu_bash_tool_command_executed`: `bash_argv0` + `bash_subcommand` (`npm test`), `bash_last_argv0` for `cd … && x`, `exit_code` | `codex_command_execution_event`: `exit_code`, no program | mapped | served (`commands`: program, runs, failed, last exit) / served (program null) |
+| Subagents | `Agent`/`Task` tool events (`subagent_type` when sent); subagent steps by `x-claude-code-agent-id` | subagent threads (their own sessions), under the parent's turn running when they started | mapped | served (`subagents`; a turn's ⤷ rows with their groups) / served (⤷ rows open the thread) |
+| Web, MCP | `WebSearch`, `WebFetch`; MCP tools (`mcpServerName`, `mcp__server__tool`) | `codex_web_search_event`, `codex_mcp_tool_call_event` (`mcp_server_name`) | mapped | served / served |
+| Commits, PR | `tengu_git_operation` (`commit`, `commit_amend`, `push`), `tengu_session_linked_to_pr`; head range from `head_sha` | — (the workspace's commit only) | bespoke (Claude Code) | served (`commits`, `pushes`, `prs`, `outcome.headFrom/headTo`) / — |
+| Last test | the last command whose program is a test runner (`npm test`, `pytest`, `go test`, …) and its exit code | — (no program) | bespoke (Claude Code) | served (`outcome.lastTest`) / — |
+| Turn cost | `costUSD` on its reports | — | bespoke (Claude Code) | served (`costUsd`) / — |
+| Step kinds | each step's first tool call (tool events by request id, else the response's `tool_uses`); no tool: thinking, or the turn's reply | `tool_uses` (`exec_command` runs, `apply_patch` edits; `exec`, the script wrapper, is skipped) | mapped | served (`groups`) / served |
+
 ## Telemetry and coverage
 
 | Concept | Claude Code | Codex | Mapping | AIntercept (Claude Code / Codex) |
