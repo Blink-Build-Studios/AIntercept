@@ -8,11 +8,11 @@ const counts = { prompts: 1, modelCalls: 203, requests: 615, events: 58, compact
 
 describe("session tabs (handoff §11L.7)", () => {
   it("label each tab with its count and unit", () => {
-    expect(sessionTabs(counts).map((t) => `${t.label} ${t.count}`)).toEqual(["Prompts 1 · 203 steps", "Requests 203 calls · 412 other", "Events 58"]);
+    expect(sessionTabs(counts).map((t) => `${t.label} ${t.count}`)).toEqual(["Turns 1 · 203 steps", "Requests 203 calls · 412 other", "Events 58"]);
   });
 
-  it("Codex's Prompts hint says it calls a prompt a turn", () => {
-    expect(tabHint("prompts", session.data, counts, undefined, "Sam")).toBe("What Sam asked, and the work each message started: 1 prompt, 203 model calls as steps. Codex calls a prompt a turn.");
+  it("the Turns hint says what a turn is (§11R: everyone's word, Codex's too)", () => {
+    expect(tabHint("turns", session.data, counts, undefined, "Sam")).toBe("What Sam asked, and the work each turn did: 1 turn, 203 model calls as steps.");
   });
 });
 

@@ -17,12 +17,14 @@ export type HeaderStatProps = {
   onQualifier?: () => void;
   /** How the number is computed and where it comes from (§6B.7): hover fill, cursor help, roving stop. */
   tip?: TooltipContent;
+  /** A line under the value, 11/14 in --ink-faint: what it's out of or made of (`6h 12m active`, `est.`; §11R). */
+  sub?: ReactNode;
   /** Pins hover for stories. */
   "data-force"?: "hover";
 };
 
 /** A label above its value, in a page header (handoff §6.3). Null renders "— reason". */
-export function HeaderStat({ label, value, live, unknownReason, qualifier, qualifierTone = "muted", onQualifier, tip, "data-force": force }: HeaderStatProps) {
+export function HeaderStat({ label, value, live, unknownReason, qualifier, qualifierTone = "muted", onQualifier, tip, sub, "data-force": force }: HeaderStatProps) {
   const unknown = value === null || value === undefined;
   const reason = unknownReason ?? "unknown";
   const content = tip ?? (unknown ? unknownTip(label, reason) : null);
@@ -61,6 +63,7 @@ export function HeaderStat({ label, value, live, unknownReason, qualifier, quali
       )}
       {/* "hidden": its own line under the value, 11/14 faint (CompProviders HeaderStatGroup/session). */}
       {!unknown && qualifier && qualifierTone === "hidden" && <div className="header-stat-qualifier-hidden text-ink-faint">{qualifier}</div>}
+      {!unknown && sub !== undefined && sub !== null && <div className="header-stat-qualifier-hidden text-ink-faint">{sub}</div>}
     </div>
     </Tooltip>
   );

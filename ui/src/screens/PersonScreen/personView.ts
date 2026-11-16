@@ -12,7 +12,8 @@ import type { Band } from "../../components/Timeline/BandTrack";
 import type { Gap } from "../../components/Timeline/BarTrack";
 import type { TimelineMark } from "../../components/Timeline/MarkerTrack";
 import type { KeyValueRow } from "../../components/KeyValueList/KeyValueList";
-import type { StatTileProps } from "../../components/StatTile/StatTile";
+import type { OutcomeFact } from "../../components/OutcomeSlot/OutcomeFacts";
+import { outcomeFacts } from "../../lib/turns";
 
 export type PersonHeader = Schemas["PersonHeader"];
 export type PersonSummary = Schemas["PersonSummary"];
@@ -47,11 +48,16 @@ function devicesValue(p: PersonHeader): string | null {
 export function commonStats(p: PersonHeader, s: PersonSummary | undefined, now: Date): PersonStatData[] {
   const t = s?.ribbon.tokens;
   const tokens = t && t.output !== null ? `${t.input === null ? "—" : formatTokens(t.input, "total")} → ${formatTokens(t.output, "total")}` : null;
-  const prompts = s?.footprint.prompts ?? null;
+  const w = s?.work;
+  const edited = w ? (w.outcome.editedFiles ?? w.work.editedFiles ?? (w.work.edits || null)) : null;
+  const lines = w && w.work.linesAdded !== null && w.work.linesRemoved !== null ? `+${formatCount(w.work.linesAdded)} −${formatCount(w.work.linesRemoved)}` : null;
   return [
     stat("Sessions", s ? formatCount(s.ribbon.sessions) : null, null, "the summary hasn’t loaded"),
-    stat("Prompts", prompts === null ? null : formatCount(prompts), null, "no prompt ids on these calls"),
+    stat("Turns", w ? formatCount(w.turns) : null, null, "the summary hasn’t loaded"),
     stat("Tokens", tokens, null, "no usage on these calls"),
+    stat("Active", w ? formatDuration(w.activeMs) : null, w ? "turn time" : null, "the summary hasn’t loaded"),
+    stat("Edited", edited === null ? null : `${formatCount(edited)} ${edited === 1 ? "file" : "files"}`, lines, "no file edits reported"),
+    stat("Commits", w ? formatCount(w.outcome.commits) : null, w ? `${formatCount(w.repos)} ${w.repos === 1 ? "repo" : "repos"}` : null, "the summary hasn’t loaded"),
     stat("Devices", devicesValue(p), null, "no device seen yet"),
     stat("Last seen", p.live ? lastSeenValue("now", true) : p.lastSeenAt ? lastSeenValue(formatTime(p.lastSeenAt, now), false) : null, null, "no traffic yet"),
   ];
@@ -120,7 +126,12 @@ export function personHeaderProps(p: PersonHeader, s: PersonSummary | undefined,
     name: p.name ?? "name unknown",
     subtitle: personSubtitle(p.email ?? "email not seen", Math.max(1, p.accounts.length)),
     common: commonStats(p, s, now),
-    agentRows: agents.map((agent) => ({ agent, account: accountOf(p, agent), stats: AGENT_STATS[agent]?.(p, p.capabilities, now) ?? [] })),
+    agentRows: agents.map((agent) => ({
+      agent,
+      account: accountOf(p, agent),
+      // Cost is Claude Code's own report (§11R: it moved from the ribbon into its row).
+      stats: [...(agent === "claude-code" && reports(p.capabilities, agent, "cost") ? [costStat(s)] : []), ...(AGENT_STATS[agent]?.(p, p.capabilities, now) ?? [])],
+    })),
   };
 }
 
@@ -135,24 +146,17 @@ export function postureChips(p: PersonHeader): string[] {
   ].filter((c): c is string => !!c);
 }
 
-/** The ribbon (handoff §7.2): model calls, analytics, account calls, reach, tokens out, cost. */
-export function ribbonTiles(s: PersonSummary): StatTileProps[] {
-  const r = s.ribbon;
-  const sessions = `${formatCount(r.sessions)} ${r.sessions === 1 ? "session" : "sessions"}`;
-  return [
-    { label: "Model calls", swatch: "model", value: r.modelCalls, sub: s.coverage.notCaptured ? `${sessions} · ${formatCount(s.coverage.notCaptured)} not captured` : sessions },
-    { label: "Analytics", swatch: "analytics", value: r.analyticsEvents, sub: `${formatCount(r.analyticsBatches)} batches · ${formatCount(r.eventTypes)} types` },
-    { label: "Account calls", swatch: "account", value: r.accountCalls, sub: "no session" },
-    { label: "Reach", swatch: "skills", value: r.toolsReachable, unknownReason: "not extracted yet" },
-    { label: "Tokens out", swatch: "count", value: r.tokens.output, sub: r.tokens.cacheRead === null ? undefined : `${formatCount(r.tokens.cacheRead)} cache read`, unknownReason: "no usage on these calls" },
-    {
-      label: "Cost est.",
-      value: r.cost.usd === null ? null : formatUsd(r.cost.usd),
-      sub: r.cost.estimatedCalls ? `API-equivalent · ${formatCount(r.cost.estimatedCalls)} estimated` : "API-equivalent",
-      unknownReason: "no cost reported",
-    },
-  ];
+/** Claude Code's reported cost for the range (`$118`, `est.`). */
+function costStat(s: PersonSummary | undefined): PersonStatData {
+  const c = s?.ribbon.cost;
+  return stat("Cost", c?.usd === null || c?.usd === undefined ? null : formatUsd(c.usd), c?.usd === null || c?.usd === undefined ? null : "est.", "no cost reported");
 }
+
+/** The OutcomeSlot's title for the window: `This fortnight`, `This week`, `Today`, `All time`. */
+export const outcomeTitle = (window: string) => ({ "24h": "Today", "7d": "This week", "14d": "This fortnight" })[window] ?? "All time";
+
+/** The facts the person's OutcomeSlot shows (§11R): what the range shipped, as captured; zeros left out. */
+export const personFacts = (s: PersonSummary): OutcomeFact[] => outcomeFacts(s.work.outcome, {});
 
 /** A count, or null (unknown: "—" with its reason). */
 const count = (n: number | null) => (n === null ? null : formatCount(n));
@@ -179,7 +183,7 @@ export function footprintRows(s: PersonSummary): KeyValueRow[] {
     .sort((a, b) => b[1] - a[1])
     .map(([k]) => k);
   return [
-    { k: "Prompts", d: `${formatCount(s.ribbon.sessions)} ${s.ribbon.sessions === 1 ? "session" : "sessions"}`, v: f.prompts === null ? null : formatCount(f.prompts), unknownReason: "no prompt ids" },
+    { k: "Turns", d: `${formatCount(s.ribbon.sessions)} ${s.ribbon.sessions === 1 ? "session" : "sessions"}`, v: f.turns === null ? null : formatCount(f.turns), unknownReason: "no prompt ids" },
     { k: "Tool calls", d: tools.slice(0, 6).join(" · "), v: f.toolCalls === null ? null : formatCount(f.toolCalls), unknownReason: "not extracted yet" },
     { k: "Commands", d: f.topCommandWords.slice(0, 6).map((w) => w.word).join(" · "), v: f.commands === null ? null : formatCount(f.commands), unknownReason: "no analytics" },
     {
@@ -200,11 +204,11 @@ export function footprintRows(s: PersonSummary): KeyValueRow[] {
 export function personLanes(d: PersonTimeline) {
   return {
     window: { from: d.from, to: d.to, now: d.now ?? undefined },
-    callBins: d.modelCalls.map((b) => ({ t: b.t, v: b.count })),
-    analyticsBins: d.analytics.map((b) => ({ t: b.t, v: b.count })),
+    // Work per bin (§11R): edits on top of everything else.
+    workBins: d.work.map((b) => ({ t: b.t, edits: b.edits, other: b.other })),
     gaps: d.notCaptured.map((g): Gap => ({ from: g.from, to: g.to, count: g.count })),
     bands: d.sessions.map((s): Band => ({ id: s.sessionId, from: s.start, to: s.end, label: s.label, row: s.row, live: s.live, preCapture: s.capturedFromPrompt !== null, capturedFrom: s.capturedFromPrompt })),
-    prompts: d.prompts.map((p): TimelineMark => ({ t: p.t, id: p.promptId, hoverLabel: p.index === null ? undefined : `#${p.index}` })),
+    turns: d.prompts.map((p): TimelineMark => ({ t: p.t, id: p.promptId, hoverLabel: p.index === null ? undefined : `#${p.index}` })),
     friction: d.friction,
     rows: Math.max(1, ...d.sessions.map((s) => s.row + 1)),
   };

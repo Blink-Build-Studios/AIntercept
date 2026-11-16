@@ -13,7 +13,6 @@ import { HeaderStatGroup } from "../HeaderStatGroup/HeaderStatGroup";
 import { HiddenCallsNote } from "../HiddenCallsNote/HiddenCallsNote";
 import { PersonIdentity } from "../PersonIdentity/PersonIdentity";
 import { PERSON_COLUMNS, PERSON_MIN_WIDTH, PersonRow } from "../PersonRow/PersonRow";
-import { PromptRow } from "../PromptRow/PromptRow";
 import { DetailSection } from "../RequestDrawer/DetailSection";
 import { SessionHeader } from "../SessionHeader/SessionHeader";
 import { SESSION_AGENT_COLUMNS, SESSION_AGENT_MIN_WIDTH, SessionRow } from "../SessionRow/SessionRow";
@@ -32,7 +31,6 @@ import {
   codexPatch,
   codexPatchChange,
   codexPerson,
-  codexPrompt,
   codexResponseRows,
   codexSpawn,
   forkOrigin,
@@ -194,9 +192,6 @@ export function AgentRowsSheet() {
           absent={{ missed: true }}
         />
       </SessionR>
-      <Row spec="PromptRow/codexExpanded">
-        <PromptRow item={codexPrompt} expanded onToggle={fn()} now={NOW} />
-      </Row>
       <Row spec="StepRow/codexModelCall">
         <StepRow step={codexModelCall} extras={{ reasoning: 212, effort: "medium" }} onOpen={fn()} />
       </Row>

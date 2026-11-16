@@ -1,7 +1,7 @@
 import { AboutThisData, type AboutState } from "../../components/AboutThisData/AboutThisData";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas, SessionTimeline } from "../../api/types";
-import { formatCount, formatDuration, formatPct, formatTokens } from "../../lib/format";
+import { formatCount, formatDuration, formatPct, formatTokens, formatUsd } from "../../lib/format";
 import { slowNotice, type Region } from "../../lib/region";
 import { useLatest } from "../../lib/useLatest";
 import { formatDayTime, formatTime } from "../../lib/time";
@@ -9,7 +9,6 @@ import { modelCallsTip } from "../../lib/tips";
 import { AppBar } from "../../components/AppBar/AppBar";
 import { AGENT_NAME, type Agent } from "../../components/AgentChip/AgentChip";
 import { Banner, type BannerProps } from "../../components/Banner/Banner";
-import { BetweenRow } from "../../components/BetweenRow/BetweenRow";
 import { Button } from "../../components/Button/Button";
 import { CopyButton } from "../../components/CopyButton/CopyButton";
 import { DataTable } from "../../components/DataTable/DataTable";
@@ -23,9 +22,15 @@ import { sessionFacts, threadOrigin, type Capability } from "../../lib/agents";
 import { HeaderStat } from "../../components/HeaderStat/HeaderStat";
 import { HeaderStatGroup } from "../../components/HeaderStatGroup/HeaderStatGroup";
 import { PartialMark } from "../../components/PartialMark/PartialMark";
+import { OutcomeSlot } from "../../components/OutcomeSlot/OutcomeSlot";
 import { SessionHeader } from "../../components/SessionHeader/SessionHeader";
 import { Pagination } from "../../components/Pagination/Pagination";
-import { PROMPT_COLUMNS, PROMPT_MIN_WIDTH, PromptRow } from "../../components/PromptRow/PromptRow";
+import { ReplyPreview } from "../../components/TurnRow/ReplyPreview";
+import { SubagentRow } from "../../components/TurnRow/SubagentRow";
+import { TURN_COLUMNS, TURN_MIN_WIDTH, TurnRow } from "../../components/TurnRow/TurnRow";
+import { TurnStep } from "../../components/TurnRow/TurnStep";
+import { WorkGroup } from "../../components/TurnRow/WorkGroup";
+import { datedRows, outcomeFacts, turnView, type TurnView } from "../../lib/turns";
 import { RangeReadout } from "../../components/RangeReadout/RangeReadout";
 import { RegionState } from "../../components/RegionState/RegionState";
 import { RequestDrawer, type RequestDrawerProps } from "../../components/RequestDrawer/RequestDrawer";
@@ -42,14 +47,15 @@ import type { Range } from "../../components/Timeline/Brush";
 import { laneInteractions, sessionInteractions } from "../../components/Timeline/interactions";
 import { FrictionTrack, frictionRowLabels } from "../../components/Timeline/FrictionTrack";
 import { Lane, LANE_HEIGHT } from "../../components/Timeline/Lane";
-import { MarkerTrack } from "../../components/Timeline/MarkerTrack";
+import { TurnTrack } from "../../components/Timeline/TurnTrack";
+import { WorkTrack } from "../../components/Timeline/WorkTrack";
 import { sessionLanes } from "../../components/Timeline/sessionLanes";
 import { Timeline } from "../../components/Timeline/Timeline";
 import { LANE_DEFINITIONS, nowTip } from "../../components/Timeline/timelineTips";
 import { requestChannels, requestDetail, sessionTabs, sessionTitle, tabHint } from "./sessionView";
 import "./SessionScreen.css";
 
-export type SessionTab = "prompts" | "requests" | "events";
+export type SessionTab = "turns" | "requests" | "events";
 export const PAGE_SIZE = 20;
 
 export type SessionScreenProps = {
@@ -63,12 +69,14 @@ export type SessionScreenProps = {
   person?: { name: string | null; href: string; agents?: Agent[] } | null;
   /** `/sessions/:id/timeline`: the whole session, fetched once and brushed here. */
   timeline: Region<SessionTimeline>;
-  /** Range-scoped (`from`/`to`): `/state`, `/prompts`, `/requests`, `/events`. */
+  /** Range-scoped (`from`/`to`): `/state`, `/turns`, `/requests`, `/events`. */
   state: Region<Schemas["SessionState"]>;
-  prompts: Region<Schemas["SessionPromptsResponse"]>;
+  turns: Region<Schemas["SessionTurnsResponse"]>;
   requests: Region<Schemas["SessionRequestsResponse"]>;
   events: Region<Schemas["SessionEventsResponse"]>;
-  onRetry: (region: "session" | "timeline" | "state" | "prompts" | "requests" | "events") => void;
+  onRetry: (region: "session" | "timeline" | "state" | "turns" | "requests" | "events") => void;
+  /** A session page (a Codex subagent's own thread, `open thread ›`). */
+  sessionHref?: (sessionId: string) => string;
 
   live: LiveBadgeProps;
   paused: boolean;
@@ -156,18 +164,18 @@ function SessionTimelinePanel({
     const own = sessionInteractions(data, actions);
     return (
       <>
-        <Lane label="Prompts" height={26} summary={`${l.prompts.markers.length} prompts`}>
-          <MarkerTrack markers={l.prompts.markers} labels={l.prompts.labels} interact={on.prompts} />
+        <Lane label="Turns" height={26} summary={`${l.turns.length} turns`}>
+          <TurnTrack blocks={l.turns} now={data.now ?? data.to} interact={own.turns} />
         </Lane>
         <Lane
-          label="Model calls"
+          label="Work"
           sublabel={l.perBin}
           height={LANE_HEIGHT.barsWithGapRow}
-          summary={`${l.modelCalls.bins.length} active bins; ${l.modelCalls.gaps.length} gaps`}
-          definition={LANE_DEFINITIONS.modelCalls}
+          summary={`${l.work.length} active bins; ${l.modelCalls.gaps.length} gaps`}
+          definition={LANE_DEFINITIONS.work}
           footer={gapRowLabel(l.modelCalls.gaps)}
         >
-          <BarTrack bins={l.modelCalls.bins} binSeconds={l.binSeconds} color="model" gaps={l.modelCalls.gaps} gapRow interact={on.modelCalls} gapTip={on.gapTip} onGap={on.onGap} />
+          <WorkTrack bins={l.work} binSeconds={l.binSeconds} gaps={l.modelCalls.gaps} interact={on.work} gapTip={on.gapTip} onGap={on.onGap} />
         </Lane>
         <Lane label="Context" sublabel="main thread" height={56} summary={`peak ${l.context.peak} tokens; ${l.context.labels.length} compactions`}>
           <BarTrack bins={l.context.bins} binSeconds={l.binSeconds} color="count" level labels={l.context.labels} interact={own.context} labelTip={own.compactionTip} />
@@ -267,6 +275,8 @@ function SessionHeaderBlock({ s, now, onNotCaptured }: { s: Schemas["SessionHead
   const client = [s.agent === "codex" ? s.client : null, s.clientVersion].filter(Boolean).join(" ") || null;
   const device = s.device ? [s.device.platform, s.device.shell, s.networks === null ? null : `${formatCount(s.networks)} ${s.networks === 1 ? "network" : "networks"}`].filter(Boolean).join(" · ") || null : null;
   const hidden = has("hiddenCalls") && s.hiddenCalls ? s.hiddenCalls : 0;
+  const edited = s.outcome.editedFiles ?? s.work.editedFiles ?? (s.work.edits || null);
+  const lines = s.work.linesAdded !== null && s.work.linesRemoved !== null ? `+${formatCount(s.work.linesAdded)} −${formatCount(s.work.linesRemoved)}` : undefined;
   const limits = has("limits") && s.limitsAtEnd?.windows.length ? s.limitsAtEnd.windows.map((w) => `${w.name} ${w.usedPct === null ? "—" : `${Math.round(w.usedPct)}%`}`).join(" · ") : null;
   return (
     <SessionHeader
@@ -279,30 +289,34 @@ function SessionHeaderBlock({ s, now, onNotCaptured }: { s: Schemas["SessionHead
       origin={origin}
       stats={
         <HeaderStatGroup label="Session" wrapGap>
-          <HeaderStat label="Span" value={`${formatDayTime(s.start)} → ${s.end ? formatTime(s.end, new Date(now)) : "now"} · ${formatDuration(Date.parse(s.end ?? now) - Date.parse(s.start))}`} />
           <HeaderStat
-            label="Prompts"
-            value={
-              s.prompts === null ? null : (
-                <>
-                  {formatCount(s.prompts)}
-                  {s.capturedFromPrompt !== null && <PartialMark from={s.capturedFromPrompt} />}
-                </>
-              )
-            }
-            unknownReason="no prompt ids on these calls"
+            label="Span"
+            value={`${formatDayTime(s.start)} → ${s.end ? formatTime(s.end, new Date(now)) : "now"} · ${formatDuration(Date.parse(s.end ?? now) - Date.parse(s.start))}`}
+            sub={`${formatDuration(s.activeMs)} active`}
           />
           <HeaderStat
-            label="Model calls"
+            label="Turns"
+            value={
+              <>
+                {formatCount(s.turns)}
+                {s.capturedFromPrompt !== null && <PartialMark from={s.capturedFromPrompt} />}
+              </>
+            }
+            sub={s.turnsInterrupted ? `${formatCount(s.turnsInterrupted)} interrupted` : undefined}
+          />
+          <HeaderStat
+            label="Steps"
             value={formatCount(s.modelCalls)}
             qualifier={s.notCaptured ? `+${formatCount(s.notCaptured)} not captured` : hidden ? `+${formatCount(hidden)} hidden` : undefined}
             qualifierTone={s.notCaptured ? "gap" : "hidden"}
             onQualifier={s.notCaptured ? onNotCaptured : undefined}
             tip={modelCallsTip(s.modelCalls, s.notCaptured)}
+            sub="model calls"
           />
-          <HeaderStat label="Tokens" value={sessionTokens(s.tokens)} unknownReason="no usage on these calls" />
-          <HeaderStat label="Tool calls" value={s.toolCalls === null ? null : formatCount(s.toolCalls)} unknownReason="no tool uses recorded on these calls" />
-          {has("analytics") && <HeaderStat label="Events" value={s.events === null ? null : formatCount(s.events)} unknownReason="no analytics captured" />}
+          <HeaderStat label="Tokens" value={sessionTokens(s.tokens)} sub={cacheShare(s.tokens)} unknownReason="no usage on these calls" />
+          {has("cost") && <HeaderStat label="Cost" value={s.costUsd === null ? null : formatUsd(s.costUsd)} sub={s.costUsd === null ? undefined : "est."} unknownReason="no cost reported" />}
+          {edited !== null && <HeaderStat label="Edited" value={`${formatCount(edited)} ${edited === 1 ? "file" : "files"}`} sub={lines} />}
+          <HeaderStat label="Commits" value={formatCount(s.outcome.commits)} sub={s.outcome.headFrom && s.outcome.headTo && s.outcome.headFrom !== s.outcome.headTo ? `${s.outcome.headFrom.slice(0, 4)} → ${s.outcome.headTo.slice(0, 4)}` : undefined} />
           {(has("device") || device) && <HeaderStat label="Device" value={device} unknownReason="no device reported" />}
           {has("permission") && <HeaderStat label="Approvals bypassed" value={s.bypassPct === null ? null : `${formatPct(s.bypassPct)} of calls`} unknownReason="no permission mode reported" />}
           {has("reasoning") && <HeaderStat label="Reasoning" value={s.effort} unknownReason="no effort on these calls" />}
@@ -311,6 +325,69 @@ function SessionHeaderBlock({ s, now, onNotCaptured }: { s: Schemas["SessionHead
       }
     />
   );
+}
+
+/**
+ * The Turns tab's rows (handoff §11R, Session.dc.html `DataTable/turns`): a TurnRow per turn;
+ * open, its WorkGroups (each opening to its TurnSteps, a reply to its preview) and its
+ * subagents. A step opens the drawer on its call.
+ */
+function TurnRows({
+  turns,
+  expanded,
+  onToggle,
+  groups,
+  onToggleGroup,
+  arrived,
+  selected,
+  onOpenStep,
+  sessionHref,
+  now,
+}: {
+  turns: TurnView[];
+  expanded: string[];
+  onToggle: (id: string) => void;
+  groups: string[];
+  onToggleGroup: (key: string) => void;
+  arrived: string | null;
+  selected: string | null;
+  onOpenStep: (requestId: string) => void;
+  sessionHref?: (sessionId: string) => string;
+  now: string;
+}) {
+  const dated = datedRows(turns.map((v) => v.turn.startedAt));
+  return (
+    <>
+      {turns.map((v, i) => (
+        <TurnRow key={v.turn.promptId} turn={v.turn} work={v.work} dated={dated[i]} expanded={expanded.includes(v.turn.promptId)} arrived={arrived === v.turn.promptId} onToggle={onToggle} now={now}>
+          {v.groups.map((g) => (
+            <WorkGroup key={g.key} kind={g.kind} title={g.title} meta={g.meta} exits={g.exits} expanded={groups.includes(g.key)} onToggle={() => onToggleGroup(g.key)}>
+              {g.reply && <ReplyPreview text={g.reply.text} size={g.reply.size} />}
+              {g.steps.map((st) => (
+                <TurnStep key={st.requestId} label={st.label} detail={st.detail} selected={st.requestId === selected} onOpen={() => onOpenStep(st.requestId)} />
+              ))}
+            </WorkGroup>
+          ))}
+          {v.subagents.map((a) => (
+            <SubagentRow
+              key={a.key}
+              name={a.name}
+              work={a.work}
+              tokens={a.tokens}
+              href={a.sessionId && sessionHref ? sessionHref(a.sessionId) : undefined}
+              onOpen={a.requestId ? () => onOpenStep(a.requestId as string) : undefined}
+            />
+          ))}
+        </TurnRow>
+      ))}
+    </>
+  );
+}
+
+/** `92% cache read`: the share of input tokens read from the cache; null when unknown. */
+function cacheShare(t: { input: number | null; cacheRead: number | null; cacheWrite: number | null }): string | null {
+  const sent = (t.input ?? 0) + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0);
+  return t.cacheRead === null || sent === 0 ? null : `${formatPct(Math.round((t.cacheRead / sent) * 100))} cache read`;
 }
 
 /** A session's tokens as in → out (input includes cache reads and writes); null when unknown. */
@@ -360,20 +437,21 @@ export function SessionScreen(p: SessionScreenProps) {
   const s = p.session.data;
   const now = p.now ?? new Date().toISOString();
   const [expanded, setExpanded] = useState<string[]>([]);
-  const [subagents, setSubagents] = useState<string[]>([]);
+  const [groups, setGroups] = useState<string[]>([]);
   // Prewarm and title calls are left out of Requests unless asked for (§11J gap 2): the API
   // counts them (`hiddenCount`) and sends them with `hidden=true`.
   const showHidden = !!p.requestFilter.hidden;
   const setShowHidden = (hidden: boolean) => p.onRequestFilter({ ...p.requestFilter, hidden });
   const hiddenCount = p.requests.data?.hiddenCount ?? p.session.data?.hiddenCalls ?? 0;
   const following = p.rangeMode === "following";
-  const listLength = (p.tab === "prompts" ? p.prompts.data?.data.length : p.tab === "requests" ? p.requests.data?.data.length : p.events.data?.data.length) ?? 0;
+  const listLength = (p.tab === "turns" ? p.turns.data?.data.length : p.tab === "requests" ? p.requests.data?.data.length : p.events.data?.data.length) ?? 0;
   const pill = useNewRows(listLength, following);
-  // In-flight prompts start open (§6.5).
+  const turns = useMemo(() => (p.turns.data?.data ?? []).map(turnView), [p.turns.data]);
+  // In-flight turns start open (§6.5).
   useEffect(() => {
-    const open = p.prompts.data?.data.flatMap((i) => (i.type === "prompt" && i.prompt.inFlight ? [i.prompt.promptId] : [])) ?? [];
+    const open = p.turns.data?.data.flatMap((t) => (t.live ? [t.promptId] : [])) ?? [];
     if (open.length) setExpanded((e) => [...new Set([...e, ...open])]);
-  }, [p.prompts.data]);
+  }, [p.turns.data]);
   // A jump from the timeline (§11H.6): once its page is here, that prompt is selected
   // ("arrived"), opened and centred, with focus (its ring only for keyboard arrivals).
   const jumped = useRef(-1);
@@ -392,17 +470,17 @@ export function SessionScreen(p: SessionScreenProps) {
   useEffect(() => {
     const j = p.jumpTo;
     if (!j || jumped.current === j.seq) return;
-    const hit = p.prompts.data?.data.find((i) => i.type === "prompt" && i.prompt.index === j.index);
-    if (!hit || hit.type !== "prompt") return;
+    const hit = p.turns.data?.data.find((t) => t.n === j.index);
+    if (!hit) return;
     jumped.current = j.seq;
-    setExpanded((e) => (e.includes(hit.prompt.promptId) ? e : [...e, hit.prompt.promptId]));
-    setArrived(hit.prompt.promptId);
+    setExpanded((e) => (e.includes(hit.promptId) ? e : [...e, hit.promptId]));
+    setArrived(hit.promptId);
     requestAnimationFrame(() => {
-      const row = document.querySelector<HTMLElement>(`[data-prompt-index="${j.index}"]`);
+      const row = document.querySelector<HTMLElement>(`[data-turn-index="${j.index}"]`);
       row?.scrollIntoView?.({ block: "center" }); // optional: jsdom (tests) has none
       row?.focus({ preventScroll: true, focusVisible: keyboard.current } as FocusOptions);
     });
-  }, [p.jumpTo, p.prompts.data]);
+  }, [p.jumpTo, p.turns.data]);
   // Selected until the next pointer-down, a tab or page change, or Esc.
   useEffect(() => setArrived(null), [p.tab, p.page]);
   useEffect(() => {
@@ -489,6 +567,8 @@ export function SessionScreen(p: SessionScreenProps) {
       <div className="session-head">
       {/* Header (§11L.5): the ProviderMark, the title, then only the fields this agent reports. */}
       {s ? <div className="session-head-box"><SessionHeaderBlock s={s} now={now} onNotCaptured={() => p.onRequestFilter({ q: "", kinds: [], notCaptured: true })} /></div> : null}
+      {/* Where a generated summary will go, and the facts we capture (§11R). */}
+      {s && <OutcomeSlot title="Outcome" facts={outcomeFacts(s.outcome, { branch: s.branch })} />}
       {s ? null : (
         <div className="session-header-skeleton" aria-busy>
           <SkeletonBar width={300} height={22} />
@@ -512,15 +592,16 @@ export function SessionScreen(p: SessionScreenProps) {
                 following={following}
                 onSelect={p.onRange}
                 onOpenRequest={(id) => p.onOpenRequest(id)}
-                onJumpToPrompt={(index, t) => (p.onJumpToPrompt ? p.onJumpToPrompt(index, t) : p.onTab("prompts"))}
+                onJumpToPrompt={(index, t) => (p.onJumpToPrompt ? p.onJumpToPrompt(index, t) : p.onTab("turns"))}
                 onListNotCaptured={() => p.onTab("requests")}
               />
             ),
           )}
           <RangeReadout
+            turns
             mode={following ? "live" : "range"}
             range={p.range}
-            counts={p.state.status === "ready" ? (counts ?? null) : null}
+            counts={p.state.status === "ready" && counts ? { ...counts, prompts: counts.turns, modelCalls: counts.steps } : null}
             onPrev={p.onPrevRange}
             onNext={p.onNextRange}
             onClear={() => p.onRange(null)}
@@ -538,42 +619,29 @@ export function SessionScreen(p: SessionScreenProps) {
             <span className="type-data text-ink-faint">{rangeText}</span>
           </div>
 
-          {p.tab === "prompts" &&
+          {p.tab === "turns" &&
             region(
-              p.prompts,
-              "prompts",
-              "prompts",
-              <DataTable expandable columns={PROMPT_COLUMNS} minWidth={PROMPT_MIN_WIDTH} label="Prompts" loading />,
-              p.prompts.data && (
-                <DataTable expandable columns={PROMPT_COLUMNS} minWidth={PROMPT_MIN_WIDTH} label="Prompts" footer={pagination(p.prompts.data.meta, p.prompts.status === "refetching")}>
-                  {p.prompts.data.data.map((i) =>
-                    i.type === "prompt" ? (
-                      <PromptRow
-                        key={i.prompt.promptId}
-                        item={i}
-                        expanded={expanded.includes(i.prompt.promptId)}
-                        arrived={arrived === i.prompt.promptId}
-                        onShowHidden={
-                          p.onShowHiddenRequests ??
-                          (() => {
-                            setShowHidden(true);
-                            p.onTab("requests");
-                          })
-                        }
-                        onToggle={(id) => setExpanded((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))}
-                        onOpenStep={(id) => p.onOpenRequest(id)}
-                        selectedRequestId={selected}
-                        expandedSubagents={subagents}
-                        onToggleSubagent={(id) => setSubagents((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))}
-                        now={now}
-                      />
-                    ) : (
-                      <BetweenRow key={`${i.between.kind}-${i.between.t}`} between={i.between} onOpen={(id) => p.onOpenRequest(id)} selected={i.between.requestId === selected} now={now} />
-                    ),
-                  )}
+              p.turns,
+              "turns",
+              "turns",
+              <DataTable expandable columns={TURN_COLUMNS} minWidth={TURN_MIN_WIDTH} label="Turns" loading />,
+              p.turns.data && (
+                <DataTable expandable columns={TURN_COLUMNS} minWidth={TURN_MIN_WIDTH} label="Turns" footer={pagination(p.turns.data.meta, p.turns.status === "refetching")}>
+                  <TurnRows
+                    turns={turns}
+                    expanded={expanded}
+                    onToggle={(id) => setExpanded((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))}
+                    groups={groups}
+                    onToggleGroup={(id) => setGroups((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))}
+                    arrived={arrived}
+                    selected={selected}
+                    onOpenStep={(id) => p.onOpenRequest(id)}
+                    sessionHref={p.sessionHref}
+                    now={now}
+                  />
                 </DataTable>
               ),
-              <EmptyState compact title="No prompts in this range" actions={<Button onClick={() => p.onRange(null)}>Whole session</Button>} />,
+              <EmptyState compact title="No turns in this range" actions={<Button onClick={() => p.onRange(null)}>Whole session</Button>} />,
             )}
 
           {p.tab === "requests" && (

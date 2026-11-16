@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment } from "react";
 import { formatCount } from "../../lib/format";
 import type { Channel } from "../ChannelSwatch/ChannelSwatch";
 import type { TooltipContent } from "../Tooltip/Tooltip";
@@ -205,6 +205,47 @@ export function gapRowLabel(gaps: Gap[]) {
   return <span className={`block ${n > 0 ? "text-danger" : "text-ink-muted"}`}>{n > 0 ? `▲ not captured ${formatCount(n)}` : "not captured 0"}</span>;
 }
 
+/** The gap row's hover (§11H.2): gaps within 16px snap; else every reported call was captured. */
+export const gapRowHover: TrackHover = {
+  zone: (y, h) => (y >= h - GAP_ROW_PX ? { snapPx: SNAP_PX, band: [h - GAP_ROW_PX, Infinity] } : { snapPx: 0 }),
+  readout: (t, y, h) => (y >= h - GAP_ROW_PX ? readoutLine(t, "all reported calls captured") : null),
+};
+
+/**
+ * The not-captured row under a bar lane's bars (§11G.A4): hatched gaps in danger with 1px
+ * danger ends, at least 3px wide, merged when under 4px apart; interactive with `gapTip`.
+ */
+export function GapRow({ gaps, binSeconds, gapTip, onGap, forceGap }: { gaps: Gap[]; binSeconds: number; gapTip?: (g: Gap) => TooltipContent; onGap?: (g: Gap) => void; forceGap?: ForceAt }) {
+  const scale = useTimeScale();
+  const trackPx = useTrackWidth();
+  const binMs = binSeconds * 1000;
+  const px = (t: number) => (scale.x(t) / 100) * trackPx;
+  return (
+    <div className="tl-gaprow">
+      {mergeGaps(gaps, binMs, px).map((g) => {
+        const a = ms(g.from);
+        const style = { left: `${scale.x(a)}%`, width: `max(3px, ${scale.width(a, ms(g.to) + binMs)}%)` };
+        const label = `▲ ${formatCount(g.count)} reported, not captured`;
+        return gapTip ? (
+          <Mark
+            key={g.from}
+            t={a}
+            tip={gapTip(g)}
+            onActivate={onGap && (() => onGap(g))}
+            link={{ source: "timeline", span: [g.from, g.to] }}
+            label={label}
+            className="tl-gap"
+            style={style}
+            force={forceGap && ms(forceGap.t) >= a && ms(forceGap.t) <= ms(g.to) ? forceGap.state : undefined}
+          />
+        ) : (
+          <div key={g.from} className="tl-gap" style={style} />
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Bars a bin wide less 1px (handoff §6.4, §11G.A5). Not-captured gaps (reported,
  * not captured) sit in their own row under the bars, hatched in danger with 1px
@@ -213,11 +254,8 @@ export function gapRowLabel(gaps: Gap[]) {
  */
 export function BarTrack({ bins, binSeconds, color, gaps = [], gapRow = false, maxV, level = false, labels = [], interact, gapTip, onGap, labelTip, onLabel, forceGap, forceLabel }: BarTrackProps) {
   const scale = useTimeScale();
-  const trackPx = useTrackWidth();
-  const binMs = binSeconds * 1000;
   const sortedLabels = [...labels].sort((a, b) => ms(a.t) - ms(b.t));
   const at = (t: string | undefined) => (t === undefined ? undefined : scale.x(ms(t)));
-  const px = (t: number) => (scale.x(t) / 100) * trackPx;
   const bars = (
     <Bars
       bins={bins}
@@ -229,45 +267,12 @@ export function BarTrack({ bins, binSeconds, color, gaps = [], gapRow = false, m
       className={(b) => `${b.auxiliary ? "bg-line-strong" : FILL[color]} ${level ? "tl-bar-level" : ""}`}
     />
   );
-  // The gap row (§11H.2): gaps within 16px snap; else every reported call was captured.
-  // The bars need nothing: each bin's column answers, empty ones with 0.
-  const hover = useMemo<TrackHover | undefined>(
-    () =>
-      gapRow
-        ? {
-            zone: (y, h) => (y >= h - GAP_ROW_PX ? { snapPx: SNAP_PX, band: [h - GAP_ROW_PX, Infinity] } : { snapPx: 0 }),
-            readout: (t, y, h) => (y >= h - GAP_ROW_PX ? readoutLine(t, "all reported calls captured") : null),
-          }
-        : undefined,
-    [gapRow],
-  );
+  // The gap row (§11H.2); the bars need nothing: each bin's column answers, empty ones with 0.
+  const hover = gapRow ? gapRowHover : undefined;
   return (
     <Track interactive={!!interact} hover={hover}>
       {gapRow ? <div className="tl-bars">{bars}</div> : bars}
-      {gapRow && (
-        <div className="tl-gaprow">
-          {mergeGaps(gaps, binMs, px).map((g) => {
-            const a = ms(g.from);
-            const style = { left: `${scale.x(a)}%`, width: `max(3px, ${scale.width(a, ms(g.to) + binMs)}%)` };
-            const label = `▲ ${formatCount(g.count)} reported, not captured`;
-            return gapTip ? (
-              <Mark
-                key={g.from}
-                t={a}
-                tip={gapTip(g)}
-                onActivate={onGap && (() => onGap(g))}
-                link={{ source: "timeline", span: [g.from, g.to] }}
-                label={label}
-                className="tl-gap"
-                style={style}
-                force={forceGap && ms(forceGap.t) >= a && ms(forceGap.t) <= ms(g.to) ? forceGap.state : undefined}
-              />
-            ) : (
-              <div key={g.from} className="tl-gap" style={style} />
-            );
-          })}
-        </div>
-      )}
+      {gapRow && <GapRow gaps={gaps} binSeconds={binSeconds} gapTip={gapTip} onGap={onGap} forceGap={forceGap} />}
       {sortedLabels.map((l, i) => {
         const left = scale.x(ms(l.t));
         const style = { left: `${left}%`, ...clipBefore(left, at(sortedLabels[i + 1]?.t)) };

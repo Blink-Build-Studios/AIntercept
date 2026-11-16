@@ -15,7 +15,6 @@ import { PeopleTable } from "../PeopleTable/PeopleTable";
 import { OrgStat, orgUnsetTip } from "../PersonHeader/OrgStat";
 import { PersonHeader } from "../PersonHeader/PersonHeader";
 import { PersonRow, type PeopleView, type Person } from "../PersonRow/PersonRow";
-import { PromptRow } from "../PromptRow/PromptRow";
 import { HeaderList } from "../RequestDrawer/HeaderList";
 import { KeyStrip } from "../RequestDrawer/KeyStrip";
 import { SummaryLabel } from "../RequestDrawer/SummaryLabel";
@@ -47,8 +46,6 @@ import {
   codexKeyTiles,
   codexRequests,
   codexResponseHeaders,
-  longTurnPrompt,
-  longTurnPromptNoBodies,
   longTurnRuns,
   longTurnRunsNoBodies,
   claudeCodeRunNoBodies,
@@ -152,10 +149,10 @@ export function ProvidersAppBarSheet() {
   return (
     <div className="flex flex-col items-start gap-3 p-4">
       {people}
-      {bar("AppBar/codexPerson", [{ label: "people", href: "#" }, { label: "Sam Rivera", agents: ["codex"] }])}
+      {bar("AppBar/codexPerson", [{ label: "people", href: "#" }, { label: "Logan Lamb", agents: ["codex"] }])}
       {bar("AppBar/codexSession", [
         { label: "people", href: "#" },
-        { label: "Sam Rivera", href: "#", agents: ["codex"] },
+        { label: "Logan Lamb", href: "#", agents: ["codex"] },
         { label: "pomodoro · Nov 9 09:00", agents: ["codex"] },
       ])}
       {bar("AppBar/mixedPersonCodexSession", [
@@ -299,30 +296,6 @@ export function ProvidersSessionSheet() {
     <StepRun key="43" {...longTurnRunsNoBodies.run} onToggle={fn()} />,
     <StepRow key="203" numbered={longTurnStepsNoBodies.text} />,
   ];
-  // A long turn as the sheet draws it: the prompt row, its strip, the first rows, then `show N more`.
-  const longTurn = (spec: string, head: string, item: typeof longTurnPrompt, rows: JSX.Element[], strip: string) => (
-    <ParityTags targets={[{ spec: head, selector: ".prompt-row" }]}>
-      <div data-parity={spec} className="grid" style={{ gridTemplateColumns: "1344px" }}>
-        <div className="dt border border-line bg-surface">
-          <div className="dt-grid">
-            <PromptRow item={item} expanded onToggle={fn()} now="2026-11-10T10:00:00" />
-            <div role="row" className="dt-row step-strip-row">
-              <div role="cell" style={{ width: 1240 }}>
-                <StepStrip {...LONG_TURN_STRIP} onJump={fn()} />
-              </div>
-            </div>
-            {rows}
-            {strip === "StepStrip" && <StepList rows={rows} limit={0} stepsShown={120} totalSteps={203} onMore={fn()} />}
-          </div>
-        </div>
-      </div>
-      {strip === "StepStrip/noBodies" && (
-        <P spec={strip} width={1240}>
-          <StepStrip {...LONG_TURN_STRIP} onJump={fn()} />
-        </P>
-      )}
-    </ParityTags>
-  );
   return (
     <div className="flex flex-col items-start gap-4 p-4">
       <ParityTags
@@ -365,7 +338,7 @@ export function ProvidersSessionSheet() {
             tabs={sessionTabs}
             value="prompts"
             onChange={fn()}
-            hint="What Sam asked, and the work each message started: one prompt, its 203 model calls as steps. Codex calls a prompt a turn."
+            hint="What Logan asked, and the work each message started: one prompt, its 203 model calls as steps. Codex calls a prompt a turn."
           />
         </P>
       </ParityTags>
@@ -393,8 +366,10 @@ export function ProvidersSessionSheet() {
           </RequestTable>
         </P>
       </ParityTags>
-      {longTurn("PromptRow/longTurn", "PromptRow/longTurnHead", longTurnPrompt, turnRows, "StepStrip")}
-      {longTurn("PromptRow/longTurnNoBodies", "PromptRow/longTurnHeadNoBodies", longTurnPromptNoBodies, noBodyRows, "StepStrip/noBodies")}
+      {/* The PromptRow long-turn specimens are illustrative since §11R (TurnRow replaces PromptRow). */}
+      <P spec="StepStrip/noBodies" width={1240}>
+        <StepStrip {...LONG_TURN_STRIP} onJump={fn()} />
+      </P>
       <P spec="StepStrip" width={1240}>
         <StepStrip {...LONG_TURN_STRIP} onJump={fn()} />
       </P>

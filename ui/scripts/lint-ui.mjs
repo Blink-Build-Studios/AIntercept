@@ -23,8 +23,8 @@ const C = "src/components/";
 const RESERVED = [
   {
     re: /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|fill|stroke|outline|ring|decoration)-live\b|var\(--live\)/g,
-    owners: ["src/design/", `${C}LiveBadge/`, `${C}Marker/`, `${C}Timeline/`, `${C}Tooltip/`, `${C}WaitingChecklist/`, `${C}PersonRow/`],
-    msg: "`live` is reserved for the live dot/badge (LiveBadge, Marker, Timeline now-line, the active setup step, a person seen now)",
+    owners: ["src/design/", `${C}LiveBadge/`, `${C}Marker/`, `${C}Timeline/`, `${C}Tooltip/`, `${C}WaitingChecklist/`, `${C}PersonRow/`, `${C}TurnRow/`],
+    msg: "`live` is reserved for the live dot/badge (LiveBadge, Marker, Timeline now-line, the active setup step, a person seen now, a running turn's time)",
   },
   {
     re: /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|fill|stroke|outline|ring|decoration)-danger\b|var\(--danger\)/g,
@@ -211,7 +211,8 @@ export function checkSource(text, rel) {
   // Copy (handoff §3.3): neutral voice and no emoji, in text the viewer can see.
   if (lang !== "css") {
     scan(/\byour\b/gi, code, 0, 'copy says "your": use a neutral voice (handoff §3.3)');
-    scan(/\p{Extended_Pictographic}|️/gu, code, 0, "emoji (use the handoff's text glyphs, §3.2)");
+    // ↩ is a handoff glyph (a turn's Reply group, §11R), though Unicode files it as pictographic.
+    scan(/(?!↩)\p{Extended_Pictographic}|️/gu, code, 0, "emoji (use the handoff's text glyphs, §3.2)");
   }
   return out;
 }

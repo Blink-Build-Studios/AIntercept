@@ -1,0 +1,30 @@
+/* OutcomeSlot (CompTurns "OutcomeSlot"): a 1px dashed --line-strong box with a faint 135deg
+   hatch, padding 10px 12px; two 8px skeleton lines (82%, 56%, 6px apart, 8px above and below);
+   the facts in mono 12/20. */
+@layer components {
+  .outcome-slot {
+    box-sizing: border-box;
+    border: 1px dashed var(--line-strong);
+    background: repeating-linear-gradient(135deg, transparent 0 6px, var(--outcome-hatch) 6px 7px);
+    padding: 10px 12px;
+  }
+  .outcome-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .outcome-line {
+    height: 8px;
+    background: var(--skeleton);
+  }
+  .outcome-line-long {
+    width: 82%;
+  }
+  .outcome-line-short {
+    width: 56%;
+  }
+  .outcome-facts {
+    font: 400 12px/20px var(--font-mono);
+  }
+}

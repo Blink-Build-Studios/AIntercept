@@ -20,3 +20,5 @@ export const Hover: Story = {
 };
 /** Calls hidden by default (§11J gap 2): faint, at 400. */
 export const HiddenQualifier: Story = { args: { label: "Model calls", value: "63", qualifier: "+6 prewarm hidden", qualifierTone: "hidden" } };
+/** A line under the value (§11R session header): what it's out of or made of. */
+export const WithSub: Story = { args: { label: "Span", value: "Nov 2 10:04 → now · 2d 0h", sub: "6h 12m active" } };

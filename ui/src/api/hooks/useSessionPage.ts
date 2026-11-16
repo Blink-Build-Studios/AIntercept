@@ -19,7 +19,7 @@ import { useRequestDrawer } from "./useRequestDrawer";
 /** Live sessions follow the last 15 min (handoff §7.3). */
 /** Range-scoped queries wait this long after the brush settles (§7.3). */
 const DEBOUNCE_MS = 200;
-const TABS: SessionTab[] = ["prompts", "requests", "events"];
+const TABS: SessionTab[] = ["turns", "requests", "events"];
 
 
 const qs = (params: Record<string, string | number | boolean | string[] | undefined>) => {
@@ -89,7 +89,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
   const scopedFrom = useDebounced(brushed?.from ?? "", DEBOUNCE_MS);
   const scopedTo = useDebounced(brushed?.to ?? "", DEBOUNCE_MS);
   const scoped = useMemo(() => (scopedFrom && scopedTo ? { from: scopedFrom, to: scopedTo } : {}), [scopedFrom, scopedTo]);
-  const tab: SessionTab = TABS.includes(url.tab as SessionTab) ? (url.tab as SessionTab) : "prompts";
+  const tab: SessionTab = TABS.includes(url.tab as SessionTab) ? (url.tab as SessionTab) : "turns";
   const kinds = url.kind as RequestKind[];
 
   const scopedQuery = <T,>(name: string, path: string, params: Record<string, string | number | boolean | string[] | undefined>, enabled = true) => ({
@@ -101,9 +101,9 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
   });
   const stateQ = useQuery(scopedQuery<Schemas["SessionStateResponse"]>("state", "state", {}));
   const pageParams = { page: url.page, pageSize: PAGE_SIZE };
-  // A jump (`prompt`) asks for the page that holds that prompt.
-  const promptsQ = useQuery(
-    scopedQuery<Schemas["SessionPromptsResponse"]>("prompts", "prompts", url.prompt ? { pageSize: PAGE_SIZE, prompt: url.prompt } : pageParams, tab === "prompts"),
+  // A jump (`prompt`: the turn's number) asks for the page that holds that turn.
+  const turnsQ = useQuery(
+    scopedQuery<Schemas["SessionTurnsResponse"]>("turns", "turns", url.prompt ? { pageSize: PAGE_SIZE, turn: url.prompt } : pageParams, tab === "turns"),
   );
   const requestsQ = useQuery(scopedQuery<Schemas["SessionRequestsResponse"]>("requests", "requests", { ...pageParams, kind: kinds, q: typedQ, captured: url.captured, hidden: url.hidden || undefined }, tab === "requests"));
   const eventsQ = useQuery(
@@ -114,7 +114,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     session: useSlow(headerQ.isFetching, ["session", sessionId], true),
     timeline: useSlow(timelineQ.isFetching, ["session", sessionId, "timeline"]),
     state: useSlow(stateQ.isFetching, ["session", sessionId, "state"]),
-    prompts: useSlow(promptsQ.isFetching, ["session", sessionId, "prompts"]),
+    turns: useSlow(turnsQ.isFetching, ["session", sessionId, "turns"]),
     requests: useSlow(requestsQ.isFetching, ["session", sessionId, "requests"]),
     events: useSlow(eventsQ.isFetching, ["session", sessionId, "events"]),
   };
@@ -134,7 +134,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
   const seeds = useRef(new Map<string, Schemas["RequestRow"]>());
 
   const aboutProducts = useAboutProducts(url.about);
-  const refresh = useRefresh([headerQ, timelineQ, stateQ, promptsQ, requestsQ, eventsQ]);
+  const refresh = useRefresh([headerQ, timelineQ, stateQ, turnsQ, requestsQ, eventsQ]);
   const delayed = delayedSince(headerQ.data?.meta, isLive);
   const width = Date.parse(range.to) - Date.parse(range.from);
   const shift = (dir: 1 | -1) => {
@@ -147,7 +147,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     session: headerQ.refetch,
     timeline: timelineQ.refetch,
     state: stateQ.refetch,
-    prompts: promptsQ.refetch,
+    turns: turnsQ.refetch,
     requests: requestsQ.refetch,
     events: eventsQ.refetch,
   };
@@ -165,7 +165,8 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
       : null,
     timeline: { ...toRegion<SessionTimeline>({ ...timelineQ, data: timelineQ.data?.data }), slow: slow.timeline },
     state: { ...toRegion({ ...stateQ, data: stateQ.data?.data }), slow: slow.state },
-    prompts: { ...toRegion(promptsQ, (r) => r.data.length === 0), slow: slow.prompts },
+    turns: { ...toRegion(turnsQ, (r) => r.data.length === 0), slow: slow.turns },
+    sessionHref: (id) => `/sessions/${encodeURIComponent(id)}`,
     requests: { ...toRegion(requestsQ, (r) => r.data.length === 0), slow: slow.requests },
     events: { ...toRegion(eventsQ, (r) => r.data.length === 0), slow: slow.events },
     onRetry: (r) => void retry[r](),
@@ -184,9 +185,9 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     onPrevRange: () => shift(-1),
     onNextRange: () => shift(1),
     tab,
-    onTab: (t) => setUrl({ tab: t === "prompts" ? undefined : t, q: undefined }),
+    onTab: (t) => setUrl({ tab: t === "turns" ? undefined : t, q: undefined }),
     jumpTo,
-    // To the Prompts tab on that prompt's page, dropping a range that excludes it.
+    // To the Turns tab on that turn's page, dropping a range that excludes it.
     onJumpToPrompt: (index, t) => {
       const outside = !!brushed && !!t && (Date.parse(t) < Date.parse(brushed.from) || Date.parse(t) > Date.parse(brushed.to));
       setUrl({ tab: undefined, prompt: String(index), ...(outside ? { from: undefined, to: undefined } : {}) });

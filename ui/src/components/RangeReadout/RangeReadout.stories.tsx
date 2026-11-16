@@ -15,3 +15,5 @@ type Story = StoryObj<typeof meta>;
 export const Range: Story = { args: { mode: "range", counts: { prompts: 6, modelCalls: 118, requests: 402, events: 3_912, compactions: 1 } } };
 export const Live: Story = { args: { mode: "live", range: { from: "2026-11-04T17:50:00Z", to: "2026-11-04T18:05:00Z" }, counts: { prompts: 1, modelCalls: 9, requests: 31, events: 287, compactions: 0 } } };
 export const Empty: Story = { args: { mode: "empty", nearest: { earlier: "2026-11-03T14:41:00Z", later: "2026-11-03T19:12:00Z" } } };
+/** The session page's words since §11R: turns and steps. */
+export const Turns: Story = { args: { mode: "range", turns: true, counts: { prompts: 4, modelCalls: 96, requests: 170, events: 2_412, compactions: 1 } } };

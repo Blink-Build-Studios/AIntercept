@@ -187,6 +187,25 @@
     height: 16px;
     background: var(--ink);
   }
+  /* Turn blocks (§11R): a turn from its prompt to its last step. */
+  .tl-turn {
+    position: absolute;
+    top: 5px;
+    height: 16px;
+    box-sizing: border-box;
+    background: var(--surface-raised);
+    border-left: 2px solid var(--ink);
+  }
+  .tl-turn.tl-mark:hover,
+  .tl-turn[data-force="hover"],
+  .tl-turn[data-force="linked"] {
+    background: var(--line);
+  }
+  .tl-turn:focus-visible,
+  .tl-turn[data-force="focus"] {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
   .tl-glyph {
     position: absolute;
     top: 3px;

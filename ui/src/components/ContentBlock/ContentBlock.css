@@ -1,0 +1,43 @@
+/* ContentBlock (CompTurns "ContentBlock"): a surface panel; the header is a 4px 12px row with an
+   8px gap and a hairline under it; the preview is mono 12/20 in --ink-muted, kept as written,
+   clipped at 84px and fading out; the footer is mono 11/20 in --ink-faint. */
+@layer components {
+  .content-block-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .content-block-body {
+    padding: 8px 12px;
+  }
+  .content-block-text {
+    font: 400 12px/20px var(--font-mono);
+    color: var(--ink-muted);
+    white-space: pre;
+    overflow: hidden;
+  }
+  .content-block-clip {
+    max-height: 84px;
+    mask-image: linear-gradient(to bottom, var(--bg) 60%, transparent);
+  }
+  .content-block-foot {
+    padding: 4px 12px;
+    font: 400 11px/20px var(--font-mono);
+  }
+  .content-block-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-align: start;
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+  }
+  .content-block-link:hover {
+    text-decoration-color: var(--ink);
+  }
+}

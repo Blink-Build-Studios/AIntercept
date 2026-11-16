@@ -79,8 +79,8 @@ export const peopleRows = {
   codex: {
     ...base,
     personId: "sam",
-    name: "Sam Rivera",
-    email: "sam@acme.dev",
+    name: "Logan Lamb",
+    email: "logan@acme.dev",
     accountIdShort: "9c2e…41",
     agents: ["codex"],
     lastSeenAt: at(9, 11, 40),
@@ -124,8 +124,8 @@ const stat = (label: string, value: PersonStatData["value"], sub?: string): Pers
 export const personHeaders = {
   codexOnly: {
     agents: ["codex" as const],
-    name: "Sam Rivera",
-    subtitle: "sam@acme.dev · 1 account",
+    name: "Logan Lamb",
+    subtitle: "logan@acme.dev · 1 account",
     common: [stat("Sessions", "4"), stat("Prompts", "6"), stat("Tokens", "1.9M → 34k"), stat("Devices", "1 · linux · tmux"), stat("Last seen", lastSeenValue("Nov 9 11:40", false))],
     agentRows: [
       {

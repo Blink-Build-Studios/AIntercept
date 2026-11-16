@@ -92,7 +92,7 @@ describe("lint-ui reserved channels and copy", () => {
     expect(flagged(`<span className="hover:border-danger" />`, "src/screens/PersonPage/PersonPage.tsx")).toEqual(["hover:border-danger"]);
     expect(flagged(`<span className="bg-agent-codex" />`, "src/components/AgentChip/AgentChip.tsx")).toEqual([]);
     const css = (decl) => `@layer components {\n  .x { ${decl} }\n}`;
-    expect(flagged(css("color: var(--danger);"), "src/components/PromptRow/PromptRow.css")).toEqual(["var(--danger)"]);
+    expect(flagged(css("color: var(--danger);"), "src/components/TurnRow/TurnRow.css")).toEqual(["var(--danger)"]);
     expect(flagged(css("color: var(--danger);"), "src/components/Marker/Marker.css")).toEqual([]);
   });
 
@@ -105,7 +105,7 @@ describe("lint-ui reserved channels and copy", () => {
   it("bans emoji but allows the handoff's glyphs", () => {
     expect(flagged(`<p>done 🎉</p>`)).toHaveLength(1);
     expect(flagged(`<p>ok ✔️</p>`).length).toBeGreaterThan(0);
-    expect(flagged(`<p>▾ ▸ › ⤷ ● ↯ ✕ ▲ ✓ ○ ⇣ — · ≈</p>`)).toEqual([]);
+    expect(flagged(`<p>▾ ▸ › ⤷ ● ↯ ✕ ▲ ✓ ○ ⇣ ↩ — · ≈</p>`)).toEqual([]);
   });
 });
 

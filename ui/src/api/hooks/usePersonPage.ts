@@ -41,7 +41,7 @@ export function usePersonPage(personId: string): PersonScreenProps {
   const live = useLive();
   const win: PersonWindow = (WINDOWS as readonly string[]).includes(url.win ?? "") ? (url.win as PersonWindow) : "14d";
   const range = url.from && url.to ? { from: url.from, to: url.to } : null;
-  const tab: PersonTab = url.tab === "requests" ? "requests" : "sessions";
+  const tab: PersonTab = url.tab === "requests" ? "requests" : "work";
   // The window's start, computed when a query runs (so its key stays stable while now moves).
   const windowFrom = () => (WINDOW_MS[win] === null ? undefined : new Date(Date.now() - (WINDOW_MS[win] ?? 0)).toISOString());
   const scoped = () => (range ? { from: range.from, to: range.to } : { from: windowFrom() });
@@ -71,10 +71,10 @@ export function usePersonPage(personId: string): PersonScreenProps {
     placeholderData: keepPreviousData,
     ...poll,
   });
-  const sessionsQ = useQuery({
-    queryKey: ["person", personId, "sessions", win, range, scope, tab === "sessions" ? url.page : 1],
-    queryFn: ({ signal }) =>
-      getJson<Schemas["PersonSessionsResponse"]>(`${base}/sessions${qs({ ...scoped(), agent: agentParam, page: tab === "sessions" ? url.page : 1, pageSize: PAGE_SIZE })}`, signal),
+  // The Work tab: the range's sessions grouped by repo (§11R).
+  const workQ = useQuery({
+    queryKey: ["person", personId, "work", win, range],
+    queryFn: ({ signal }) => getJson<Schemas["PersonWorkResponse"]>(`${base}/work${qs(scoped())}`, signal),
     placeholderData: keepPreviousData,
     ...poll,
   });
@@ -95,12 +95,12 @@ export function usePersonPage(personId: string): PersonScreenProps {
   const drawer = useRequestDrawer(url.req ?? "", dtab, !!url.req);
 
   const aboutProducts = useAboutProducts(url.about);
-  const refresh = useRefresh([personQ, timelineQ, summaryQ, sessionsQ, requestsQ]);
+  const refresh = useRefresh([personQ, timelineQ, summaryQ, workQ, requestsQ]);
   const slow = {
     person: useSlow(personQ.isFetching, ["person", personId], true),
     summary: useSlow(summaryQ.isFetching, ["person", personId, "summary"]),
     timeline: useSlow(timelineQ.isFetching, ["person", personId, "timeline"]),
-    sessions: useSlow(sessionsQ.isFetching, ["person", personId, "sessions"]),
+    work: useSlow(workQ.isFetching, ["person", personId, "work"]),
     requests: useSlow(requestsQ.isFetching, ["person", personId, "requests"]),
   };
   const person = personQ.data?.data;
@@ -127,8 +127,8 @@ export function usePersonPage(personId: string): PersonScreenProps {
     range,
     onRange: (r) => setUrl({ from: r?.from, to: r?.to }),
     tab,
-    onTab: (t) => setUrl({ tab: t === "sessions" ? undefined : t }),
-    sessions: { ...toRegion(sessionsQ, (r) => r.data.length === 0), slow: slow.sessions },
+    onTab: (t) => setUrl({ tab: t === "work" ? undefined : t }),
+    work: { ...toRegion(workQ, (r) => r.data.length === 0), slow: slow.work },
     requests: { ...toRegion(requestsQ, (r) => r.data.length === 0), slow: slow.requests },
     page: url.page,
     onPage: (page) => setUrl({ page }),
@@ -144,7 +144,7 @@ export function usePersonPage(personId: string): PersonScreenProps {
     notCaptured: url.captured === "false",
     onNotCaptured: (on) => setUrl(on ? { tab: "requests", captured: "false" } : { captured: undefined }),
     about: aboutState(url.about, setUrl, status?.data, aboutProducts),
-    onRetry: (r) => void { person: personQ, summary: summaryQ, timeline: timelineQ, sessions: sessionsQ, requests: requestsQ }[r].refetch(),
+    onRetry: (r) => void { person: personQ, summary: summaryQ, timeline: timelineQ, work: workQ, requests: requestsQ }[r].refetch(),
     peopleHref: "/people",
     sessionHref: (id) => `/sessions/${encodeURIComponent(id)}`,
     onOpenRequest: (row) => {

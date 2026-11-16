@@ -57,7 +57,14 @@ export type PeopleScreenProps = {
   now: string;
 };
 
-const RIBBON_LABELS = ["People", "Agents seen", "Sessions", "Requests", "Devices"];
+const RIBBON_LABELS = ["People", "Agents seen", "Sessions", "Turns", "Devices"];
+
+/** A row's turns and what the person is working on (§11R, People.dc.html): the live turn, else the repos; a chat surface `(chat)`. */
+function personTurns(r: Schemas["PersonSummaryRow"]) {
+  const w = r.workingOn;
+  const chatOnly = r.agents.every((a) => a === "chatgpt" || a === "claude-ai");
+  return { count: r.turns, workingOn: { live: w?.live ? { repo: w.repo, turn: w.turn } : null, repos: w?.repos ?? [], chat: chatOnly } };
+}
 
 /** The window in words, for the subtitle (§11G.C1). */
 const WINDOW_WORDS: Record<string, string> = { "24h": "24 hours", "7d": "7 days", "14d": "14 days" };
@@ -69,7 +76,7 @@ function ribbon(o: Schemas["Overview"]) {
     { label: "People", value: o.people, sub: `${formatCount(o.activeNow)} active now` },
     { label: "Agents seen", value: seen.length, sub: seen.map((a) => AGENT_NAME[a.agent]).join(", ") || "none yet" },
     { label: "Sessions", value: o.sessions, sub: o.unattributed.sessions ? `+${formatCount(o.unattributed.sessions)} not tied to a person` : "all tied to a person" },
-    { label: "Requests", value: o.requests, sub: "all agents, all channels" },
+    { label: "Turns", value: o.turns, sub: "across all agents" },
     // §11L.1: Missed is Claude Code's, so it moves to that agent's card; the ribbon keeps what every agent has.
     { label: "Devices", value: o.devices, sub: "across all agents" },
   ];
@@ -197,9 +204,9 @@ export function PeopleScreen(p: PeopleScreenProps) {
             hasData={!!rows}
             label="people"
             skeleton={
-              <PeopleTable view={view}>
+              <PeopleTable view={view} turns>
                 {Array.from({ length: 5 }, (_, i) => (
-                  <PersonRowSkeleton key={i} view={view} />
+                  <PersonRowSkeleton key={i} view={view} turns />
                 ))}
               </PeopleTable>
             }
@@ -209,6 +216,7 @@ export function PeopleScreen(p: PeopleScreenProps) {
             {rows && (
                 <PeopleTable
                   view={view}
+                  turns
                   empty={<EmptyState compact bare title="No people match" body={p.agent ? `No one in this window uses ${AGENT_NAME[p.agent]}.` : "Try a shorter search."} />}
                   footer={
                     total > size ? (
@@ -225,6 +233,7 @@ export function PeopleScreen(p: PeopleScreenProps) {
                           activityMax={busiest}
                           now={p.now}
                           view={view}
+                          turns={personTurns(r)}
                           {...(view === "codex" ? codexCells(r) : {})}
                         />
                       ))

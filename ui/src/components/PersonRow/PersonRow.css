@@ -63,12 +63,27 @@
   .dt-row.person-row > :nth-child(10) {
     width: var(--w10, auto);
   }
+  .dt-row.person-row > :nth-child(11) {
+    width: var(--w11, auto);
+  }
+  .dt-row.person-row > :nth-child(12) {
+    width: var(--w12, auto);
+  }
+  .working-on {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dt-row.person-row > .working-on {
+    min-width: 0;
+    overflow: hidden;
+  }
   .dt-row.person-row > .person-cell {
     min-width: 0;
     overflow: hidden;
   }
   .dt-row.person-row > .person-activity,
-  .dt-row.person-head > :nth-child(7) {
+  .dt-row.person-head:not(.person-turns) > :nth-child(7),
+  .dt-row.person-head.person-turns > :nth-child(8) {
     min-width: 160px;
   }
   /* The header row keeps the table's 4px padding, not a person row's 8px. */

@@ -1,9 +1,9 @@
 import { AboutThisData, type AboutState } from "../../components/AboutThisData/AboutThisData";
 import { useMemo, useState, type ReactNode } from "react";
 import type { Schemas } from "../../api/types";
-import { isNested, reports, threadFacts } from "../../lib/agents";
 import { formatCount } from "../../lib/format";
 import { useLatest } from "../../lib/useLatest";
+import { repoView } from "../../lib/turns";
 import { slowNotice, type Region } from "../../lib/region";
 import { formatDayTime, formatRange } from "../../lib/time";
 import { AppBar } from "../../components/AppBar/AppBar";
@@ -23,21 +23,23 @@ import { RequestDrawer, type RequestDrawerProps } from "../../components/Request
 import { RequestRow, type Request } from "../../components/RequestRow/RequestRow";
 import { RequestFilters, CODEX_CHANNELS, type RequestChannel } from "../../components/RequestFilters/RequestFilters";
 import { RequestTable } from "../../components/RequestTable/RequestTable";
-import { SessionRow } from "../../components/SessionRow/SessionRow";
-import { SessionTable, type SessionTableView } from "../../components/SessionTable/SessionTable";
+import { OutcomeSlot } from "../../components/OutcomeSlot/OutcomeSlot";
+import { DataTable } from "../../components/DataTable/DataTable";
+import { RepoRow, WORK_COLUMNS, WORK_MIN_WIDTH } from "../../components/RepoRow/RepoRow";
+import { WorkSessionRow } from "../../components/RepoRow/WorkSessionRow";
+import { AgentChip } from "../../components/AgentChip/AgentChip";
 import { AgentScope, type AgentScopeValue } from "../../components/AgentScope/AgentScope";
 import type { Agent } from "../../components/AgentChip/AgentChip";
 import type { Channel } from "../../components/ChannelSwatch/ChannelSwatch";
 import { requestDetail, sharedChannel, sharedRequestChannels } from "../SessionScreen/sessionView";
 import { PERSON_TIMELINE_LANES, Skeleton } from "../../components/Skeleton/Skeleton";
-import { StatRibbon } from "../../components/StatRibbon/StatRibbon";
 import { Tabs } from "../../components/Tabs/Tabs";
 import { TextInput } from "../../components/TextInput/TextInput";
 import { BandTrack } from "../../components/Timeline/BandTrack";
-import { BarTrack, gapRowLabel } from "../../components/Timeline/BarTrack";
+import { gapRowLabel } from "../../components/Timeline/BarTrack";
 import { FrictionTrack, frictionRowLabels } from "../../components/Timeline/FrictionTrack";
 import type { Range } from "../../components/Timeline/Brush";
-import { DensityTrack } from "../../components/Timeline/DensityTrack";
+import { WorkTrack } from "../../components/Timeline/WorkTrack";
 import { laneInteractions, type TimelineActions } from "../../components/Timeline/interactions";
 import { Lane, LANE_HEIGHT } from "../../components/Timeline/Lane";
 import { MarkerTrack } from "../../components/Timeline/MarkerTrack";
@@ -49,10 +51,11 @@ import {
   capabilityRows,
   footprintRows,
   nearest,
+  outcomeTitle,
+  personFacts,
   personHeaderProps,
   personLanes,
   postureChips,
-  ribbonTiles,
   windowLabel,
   type PersonHeader,
   type PersonSummary,
@@ -60,7 +63,7 @@ import {
 } from "./personView";
 import "./PersonScreen.css";
 
-export type PersonTab = "sessions" | "requests";
+export type PersonTab = "work" | "requests";
 export const WINDOWS = ["24h", "7d", "14d", "all"] as const;
 export type PersonWindow = (typeof WINDOWS)[number];
 export const REQUEST_KINDS = ["model", "analytics", "flags", "count", "account"] as const;
@@ -102,7 +105,8 @@ export type PersonScreenProps = {
   onRange: (r: Range | null) => void;
   tab: PersonTab;
   onTab: (t: PersonTab) => void;
-  sessions: Region<Schemas["PersonSessionsResponse"]>;
+  /** The Work tab (§11R): the range's sessions grouped by repo. */
+  work: Region<Schemas["PersonWorkResponse"]>;
   requests: Region<Schemas["PersonRequestsResponse"]>;
   page: number;
   onPage: (p: number) => void;
@@ -121,7 +125,7 @@ export type PersonScreenProps = {
   notCaptured: boolean;
   /** Turns that filter on (switching to All requests) or off. */
   onNotCaptured: (on: boolean) => void;
-  onRetry: (region: "person" | "summary" | "timeline" | "sessions" | "requests") => void;
+  onRetry: (region: "person" | "summary" | "timeline" | "work" | "requests") => void;
   peopleHref: string;
   sessionHref: (sessionId: string) => string;
   /** Click a request row: the drawer opens in place (`?req`). */
@@ -129,9 +133,6 @@ export type PersonScreenProps = {
   /** The open drawer, when `?req` is set (its Regions come from useRequestDrawer). */
   drawer?: RequestDrawerProps | null;
 };
-
-/** The ribbon's tiles while it loads, at their final size. */
-const RIBBON_LABELS = ["Model calls", "Analytics", "Account calls", "Reach", "Tokens out", "Cost est."];
 
 const err = (r: Region<unknown>, onRetry: () => void) => r.error && { message: r.error.message, queryId: r.error.queryId, onRetry };
 
@@ -183,13 +184,13 @@ export function PersonScreen(p: PersonScreenProps) {
     );
   }
 
-  const sessionsTotal = p.sessions.data?.meta.total ?? p.summary.data?.ribbon.sessions;
+  const sessionsTotal = p.summary.data?.ribbon.sessions ?? p.work.data?.data.reduce((n, g) => n + g.sessions, 0);
   const requestsTotal = p.requests.data?.meta.total;
   const rangeLabel = p.range ? formatRange(p.range.from, p.range.to, at) : null;
   const t = p.timeline.data;
 
   // Empty range: the brush covers no activity; offer the nearest activity either side.
-  const emptyRange = !!p.range && p.sessions.status !== "loading" && p.sessions.data?.data.length === 0 && (p.requests.data?.data.length ?? 0) === 0;
+  const emptyRange = !!p.range && p.work.status !== "loading" && p.work.data?.data.length === 0 && (p.requests.data?.data.length ?? 0) === 0;
   const near = p.range ? nearest(t, p.range.from, p.range.to) : {};
   const posture = person && !unattributed ? postureChips(person) : [];
 
@@ -224,11 +225,14 @@ export function PersonScreen(p: PersonScreenProps) {
             ))}
         </RegionState>
 
-        <RegionState status={p.summary.status} slow={slowNotice(p.summary, "the summary")} hasData={!!p.summary.data} skeleton={<StatRibbon tiles={RIBBON_LABELS.map((label) => ({ label, value: null }))} loading />} error={err(p.summary, () => p.onRetry("summary"))} label="the summary">
+        {/* The window's outcome (§11R: in place of the request ribbon), then the coverage line. */}
+        <RegionState status={p.summary.status} slow={slowNotice(p.summary, "the summary")} hasData={!!p.summary.data} skeleton={<Skeleton shape="block" />} error={err(p.summary, () => p.onRetry("summary"))} label="the summary">
           {p.summary.data && (
-            <div className="person-ribbon border border-line bg-surface">
-              <StatRibbon tiles={ribbonTiles(p.summary.data)} />
-              <CoverageLine coverage={p.summary.data.coverage} now={at} onView={() => p.onNotCaptured(true)} />
+            <div className="person-outcome">
+              <OutcomeSlot title={outcomeTitle(p.window)} facts={personFacts(p.summary.data)} />
+              <div className="person-coverage border border-line bg-surface">
+                <CoverageLine coverage={p.summary.data.coverage} now={at} onView={() => p.onNotCaptured(true)} />
+              </div>
             </div>
           )}
         </RegionState>
@@ -253,7 +257,7 @@ export function PersonScreen(p: PersonScreenProps) {
               value={p.tab}
               onChange={(id) => p.onTab(id as PersonTab)}
               tabs={[
-                { id: "sessions", label: "Sessions", count: sessionsTotal ?? undefined },
+                { id: "work", label: "Work", count: sessionsTotal === undefined || sessionsTotal === null ? undefined : `${formatCount(sessionsTotal)} ${sessionsTotal === 1 ? "session" : "sessions"}` },
                 { id: "requests", label: "All requests", count: requestsTotal ?? undefined },
               ]}
             />
@@ -278,8 +282,8 @@ export function PersonScreen(p: PersonScreenProps) {
                 </>
               }
             />
-          ) : p.tab === "sessions" ? (
-            <SessionsTable {...p} at={at} />
+          ) : p.tab === "work" ? (
+            <WorkTable {...p} />
           ) : (
             <RequestsTable {...p} at={at} />
           )}
@@ -326,14 +330,11 @@ function PersonTimelinePanel({ d, range, onRange, sessionHref, onNotCaptured }: 
       <Lane label="Sessions" height={l.rows > 1 ? 6 + l.rows * 34 : 44} summary={`${l.bands.length} sessions`} sunken>
         <BandTrack bands={l.bands} now={d.now ?? d.to} interact={on.bands} />
       </Lane>
-      <Lane label="Prompts" height={24} summary={`${l.prompts.length} prompts`}>
-        <MarkerTrack markers={l.prompts} interact={on.prompts} />
+      <Lane label="Turns" height={24} summary={`${l.turns.length} turns`}>
+        <MarkerTrack markers={l.turns} interact={on.prompts} noun="turn" />
       </Lane>
-      <Lane label="Model calls" sublabel={per} height={LANE_HEIGHT.personBarsWithGapRow} summary={`${l.gaps.length} gaps`} definition={LANE_DEFINITIONS.modelCalls} footer={gapRowLabel(l.gaps)}>
-        <BarTrack bins={l.callBins} binSeconds={d.binSeconds} color="model" gaps={l.gaps} gapRow interact={on.modelCalls} gapTip={on.gapTip} onGap={on.onGap} />
-      </Lane>
-      <Lane label="Analytics" sublabel="events" height={44} summary="analytics events" definition={LANE_DEFINITIONS.analytics}>
-        <DensityTrack bins={l.analyticsBins} binSeconds={d.binSeconds} color="analytics" interact={on.analytics} />
+      <Lane label="Work" sublabel={per} height={LANE_HEIGHT.personBarsWithGapRow} summary={`${l.workBins.length} active bins; ${l.gaps.length} gaps`} definition={LANE_DEFINITIONS.work} footer={gapRowLabel(l.gaps)}>
+        <WorkTrack bins={l.workBins} binSeconds={d.binSeconds} gaps={l.gaps} interact={on.work} gapTip={on.gapTip} onGap={on.onGap} />
       </Lane>
       <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
         <FrictionTrack marks={l.friction} interact={on.friction} />
@@ -352,56 +353,50 @@ const windowLabelOf = (d: PersonTimeline) => windowLabel(d.from, d.to);
 /** "hourly", "daily", "15-min bins". */
 const binWord = (s: number) => (s === 3600 ? "hourly" : s === 86_400 ? "daily" : `${Math.round(s / 60)}-min bins`);
 
-function SessionsTable(p: PersonScreenProps & { at: Date }) {
-  const r = p.sessions;
-  const rows = r.data?.data ?? [];
-  const meta = r.data?.meta;
-  const [open, setOpen] = useState<Set<string>>(() => new Set());
-  const caps = p.person.data?.capabilities;
-  // All agents for a person with more than one agent: only the common columns, with Agent (§11M 2.7).
-  // Scoped to Claude Code it's the canonical table; scoped to Codex, the common columns without Agent.
-  const scope = p.agentScope ?? "all";
-  const agents = new Set([...personAgents(p), ...rows.map((s) => s.agent)]);
-  const only = scope === "all" ? (agents.size === 1 ? [...agents][0] : null) : scope;
-  const view: SessionTableView = only === null ? "mixed" : only === "claude-code" ? "claude-code" : "codex";
-  // Subagent and review threads nest under their parent, collapsed by default (§11J gap 3).
-  const ids = new Set(rows.map((s) => s.sessionId));
-  const nested = rows.some((s) => isNested(s, ids));
-  const toggle = (id: string) => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+/**
+ * The Work tab (handoff §11R, Main.dc.html `DataTable/work`): sessions grouped under their repo
+ * (RepoRow), repos by most recent activity, each open by default; a session row opens its page.
+ */
+function WorkTable(p: PersonScreenProps) {
+  const r = p.work;
+  const repos = useMemo(() => (r.data?.data ?? []).map(repoView), [r.data]);
+  const mixed = new Set(repos.flatMap((x) => x.agents)).size > 1;
+  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (k: string) => setClosed((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const table = (children?: ReactNode, loading = false) => (
+    <DataTable expandable columns={WORK_COLUMNS} minWidth={WORK_MIN_WIDTH} label="Work" loading={loading}>
+      {children}
+    </DataTable>
+  );
   return (
     <RegionState
       status={r.status} slow={slowNotice(r, "sessions")}
       hasData={!!r.data}
-      skeleton={<SessionTable view={view} loading />}
-      error={err(r, () => p.onRetry("sessions"))}
+      skeleton={table(undefined, true)}
+      error={err(r, () => p.onRetry("work"))}
       empty={<EmptyState title="No sessions in this range" compact />}
       label="sessions"
     >
-      <SessionTable view={view} expandable={nested} footer={meta && <Pager meta={meta} page={p.page} onPage={p.onPage} loading={r.status === "refetching"} />}>
-        {rows.map((s) => {
-          const child = isNested(s, ids);
-          if (child && !open.has(s.origin?.sessionId ?? "")) return null;
-          return (
-            <SessionRow
-              key={s.sessionId}
-              session={s}
-              href={p.sessionHref(s.sessionId)}
-              now={p.now}
-              agentColumn={view === "mixed" ? { client: s.agent === "codex" ? s.client : null } : undefined}
-              common={view === "codex"}
-              nesting={
-                child
-                  ? { kind: "child", agentName: s.origin?.agentName ?? (s.origin?.kind === "review" ? "review" : "subagent") }
-                  : s.children
-                    ? { kind: "parent", expanded: open.has(s.sessionId), onToggle: () => toggle(s.sessionId) }
-                    : undefined
-              }
-              threadFacts={child ? null : threadFacts(s)}
-              absent={{ missed: !!caps && !reports(caps, s.agent, "missed") }}
-            />
-          );
-        })}
-      </SessionTable>
+      {table(
+        repos.map((repo) => (
+          <RepoRow
+            key={repo.key}
+            repo={repo.repo}
+            sub={repo.sub}
+            agents={mixed ? repo.agents.map((a) => <AgentChip key={a} agent={a} />) : undefined}
+            sessions={repo.sessions}
+            turns={repo.turns}
+            activeMs={repo.activeMs}
+            work={repo.work}
+            expanded={!closed.has(repo.key)}
+            onToggle={() => toggle(repo.key)}
+          >
+            {repo.rows.map((row) => (
+              <WorkSessionRow key={row.session.sessionId} session={row.session} work={row.work} href={p.sessionHref(row.session.sessionId)} now={p.now} />
+            ))}
+          </RepoRow>
+        )),
+      )}
     </RegionState>
   );
 }

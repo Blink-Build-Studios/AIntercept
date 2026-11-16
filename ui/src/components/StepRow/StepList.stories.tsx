@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { DataTable } from "../DataTable/DataTable";
-import { PROMPT_COLUMNS, PROMPT_MIN_WIDTH } from "../PromptRow/PromptRow";
+import { TURN_COLUMNS as PROMPT_COLUMNS, TURN_MIN_WIDTH as PROMPT_MIN_WIDTH } from "../TurnRow/TurnRow";
 import { longTurnRuns, longTurnSteps } from "../ProviderMark/providerSpecimens";
 import { StepList } from "./StepList";
 import { StepRow } from "./StepRow";

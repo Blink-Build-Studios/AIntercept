@@ -32,8 +32,14 @@ export function describeElement(root) {
   };
   const texts = [];
   const marks = [];
+  // An illustrative specimen nested in this one is skipped; one around it is not (a measured
+  // specimen can sit inside an illustrative one, as CompProviders' steps inside PromptRow/longTurn).
+  const illustrative = (el) => {
+    const i = el.closest("[data-spec-illustrative]");
+    return !!i && root.contains(i) && i !== root;
+  };
   for (const el of root.querySelectorAll("*")) {
-    if (!visible(el) || ["SCRIPT", "STYLE"].includes(el.tagName) || el.parentElement?.closest("svg") || interp(el) || el.closest("[data-spec-illustrative]")) continue;
+    if (!visible(el) || ["SCRIPT", "STYLE"].includes(el.tagName) || el.parentElement?.closest("svg") || interp(el) || illustrative(el)) continue;
     if (el.tagName.toLowerCase() === "svg") {
       marks.push({ box: box(el), style: {} });
       continue;
