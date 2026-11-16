@@ -1,0 +1,59 @@
+/* RepoRow and the Work tab's session rows (handoff §11R, CompTurns): repo rows 6px 12px,
+   --surface-raised when open: ▸ 14 · sessions 112 · repo 260 · turns 60 · active 70 · work
+   (flex, 12px in) · friction 84 · 12. Session rows 4px 12px, 38px in: started 92 · ● 10 ·
+   label 260 · turns 60 · active 70 · work · friction 84 · › 12. */
+@layer components {
+  .dt-row.repo-row {
+    padding-block: 6px;
+    min-width: calc(1100px + 24px);
+  }
+  .dt-row.repo-row[aria-expanded="true"] {
+    background: var(--surface-raised);
+  }
+  .dt-row.repo-row > :nth-child(1) {
+    flex: 0 0 14px;
+  }
+  .dt-row.repo-row > :nth-child(2) {
+    flex: 0 0 112px;
+  }
+  .dt-row.repo-row > :nth-child(3),
+  .dt-row.work-session-row > :nth-child(3) {
+    flex: 0 0 260px;
+  }
+  .dt-row.repo-row > :nth-child(4),
+  .dt-row.work-session-row > :nth-child(4) {
+    flex: 0 0 60px;
+  }
+  .dt-row.repo-row > :nth-child(5),
+  .dt-row.work-session-row > :nth-child(5) {
+    flex: 0 0 70px;
+  }
+  .dt-row.repo-row > :nth-child(6),
+  .dt-row.work-session-row > :nth-child(6) {
+    flex: 1 1 0%;
+  }
+  .dt-row.repo-row > :nth-child(7),
+  .dt-row.work-session-row > :nth-child(7) {
+    flex: 0 0 84px;
+  }
+  .dt-row.repo-row > :nth-child(8),
+  .dt-row.work-session-row > :nth-child(8) {
+    flex: 0 0 12px;
+  }
+  .dt-row.work-session-row {
+    padding-left: 38px;
+    min-width: calc(1100px + 50px);
+  }
+  .dt-row.work-session-row > :nth-child(1) {
+    flex: 0 0 92px;
+  }
+  .dt-row.work-session-row > :nth-child(2) {
+    flex: 0 0 10px;
+  }
+  .repo-row-work {
+    padding-left: 12px;
+  }
+  .repo-row-sub {
+    font-weight: 400;
+  }
+}

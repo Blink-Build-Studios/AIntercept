@@ -22,8 +22,8 @@ const TONE = { ink: "", danger: "text-danger", muted: "text-ink-muted" };
 
 const hm = (t: number) => formatDayTime(new Date(t).toISOString()).slice(-5);
 
-/** The prompt ticks between ticks (§11H.2): no prompt, and the previous one (else the next). */
-export function promptsReadout(markers: TimelineMark[], t: number) {
+/** The ticks between ticks (§11H.2): no prompt (or turn), and the previous one (else the next). */
+export function promptsReadout(markers: TimelineMark[], t: number, noun = "prompt") {
   let prev: TimelineMark | undefined;
   let next: TimelineMark | undefined;
   for (const m of markers) {
@@ -31,22 +31,22 @@ export function promptsReadout(markers: TimelineMark[], t: number) {
     if (at <= t && (!prev || at > ms(prev.t))) prev = m;
     if (at > t && (!next || at < ms(next.t))) next = m;
   }
-  const name = (m: TimelineMark) => m.hoverLabel ?? "prompt";
+  const name = (m: TimelineMark) => m.hoverLabel ?? noun;
   const hint = prev
     ? `previous: ${name(prev)} at ${hm(ms(prev.t))} · ${formatDuration(t - ms(prev.t))} before`
     : next && `next: ${name(next)} at ${hm(ms(next.t))} · ${formatDuration(ms(next.t) - t)} after`;
-  return readoutLine(t, "no prompt", hint || undefined);
+  return readoutLine(t, `no ${noun}`, hint || undefined);
 }
 
 /**
  * Prompt ticks (1px ink, 16px), friction glyphs from their time, and optional
  * labels ("#1") (handoff §6.4). Interactive ticks get a 13px hit box (the guide
- * snaps to a marker within 6px); on hover, or when a PromptRow points at
+ * snaps to a marker within 6px); on hover, or when a table row points at
  * them (§6B.5), they widen to 3px and show their `hoverLabel`.
  */
-export function MarkerTrack({ markers, labels = [], interact }: { markers: TimelineMark[]; labels?: MarkLabel[]; interact?: MarkerInteraction }) {
+export function MarkerTrack({ markers, labels = [], interact, noun = "prompt" }: { markers: TimelineMark[]; labels?: MarkLabel[]; interact?: MarkerInteraction; /** What a tick is: `prompt`, or `turn` (the person page's Turns lane, §11R). */ noun?: string }) {
   const scale = useTimeScale();
-  const hover = useMemo<TrackHover>(() => ({ readout: (t) => promptsReadout(markers, t) }), [markers]);
+  const hover = useMemo<TrackHover>(() => ({ readout: (t) => promptsReadout(markers, t, noun) }), [markers, noun]);
   return (
     <Track interactive={!!interact} hover={hover}>
       {markers.map((m, i) => {
@@ -76,7 +76,7 @@ export function MarkerTrack({ markers, labels = [], interact }: { markers: Timel
           );
         }
         return (
-          <Mark key={key} {...common} label={m.hoverLabel ?? "prompt"} className="tl-hit" style={{ left }}>
+          <Mark key={key} {...common} label={m.hoverLabel ?? noun} className="tl-hit" style={{ left }}>
             <span className="tl-tick" />
             {m.hoverLabel && <span className="tl-tick-label">{m.hoverLabel}</span>}
           </Mark>

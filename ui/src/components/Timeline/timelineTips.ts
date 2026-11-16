@@ -5,6 +5,7 @@ import { formatCount, formatDuration, formatExact, formatTokens } from "../../li
 import { formatDayTime, formatTime } from "../../lib/time";
 import { unknownValue, type TooltipContent, type TooltipRow } from "../Tooltip/Tooltip";
 import { ms } from "./scale";
+import { workLine, workText } from "../../lib/work";
 
 type S = Schemas;
 
@@ -45,6 +46,34 @@ export function modelBinTip(from: string, to: string, bin: S["ModelCallBin"] | u
   // An empty bin answers too (§11H.2: Tooltip/emptyBin), without the drag hint.
   const hint = bin && bin.count > 0 ? `Click to select this ${binWords(binSeconds)} · drag to select a range` : `Click to select this ${binWords(binSeconds)}`;
   return { title: dayRange(from, to), rows, hint };
+}
+
+/**
+ * A Work bin (handoff §11R, CompTurns "Tooltip (Work bin)"): its steps and its work line
+ * (`9 steps · edited 3 files · ran npm test ×4: 1 failed · read 6 files`), and its not-captured calls.
+ */
+export function workBinTip(from: string, to: string, bin: S["WorkBin"] | undefined, missed: number, binSeconds: number): TooltipContent {
+  const steps = bin?.steps ?? 0;
+  const line = bin ? workText(workLine(bin.work)) : "";
+  const rows: TooltipRow[] = [{ key: "Steps", value: formatExact(steps) }];
+  if (line) rows.push({ key: "Work", value: line });
+  if (missed > 0) rows.push({ key: "Not captured", value: `▲ ${formatExact(missed)}`, tone: "danger" });
+  const hint = steps > 0 ? `Click to select this ${binWords(binSeconds)} · drag to select a range` : `Click to select this ${binWords(binSeconds)}`;
+  return { title: dayRange(from, to), rows, hint };
+}
+
+/** A turn's block on the session timeline (§11R): its number, start, steps and time. */
+export function turnTip(t: S["TurnBlock"], now: string): TooltipContent {
+  const end = t.endedAt ?? now;
+  return {
+    title: t.n === null ? "Turn" : `Turn #${t.n}`,
+    rows: [
+      { key: "Started", value: formatDayTime(t.startedAt) },
+      { key: "Steps", value: formatExact(t.steps) },
+      { key: "Time", value: t.live ? `● ${formatDuration(Math.max(0, ms(end) - ms(t.startedAt)))}` : formatDuration(Math.max(0, ms(end) - ms(t.startedAt))), tone: t.live ? "live" : undefined },
+    ],
+    hint: "Click to open this turn",
+  };
 }
 
 /** An analytics bin: the event count and its three most frequent names. */
@@ -189,4 +218,5 @@ export const brushTip = (from: string, to: string): TooltipContent => ({ body: s
 export const LANE_DEFINITIONS = {
   modelCalls: "Bars: calls the proxy captured, per bin. Hatched: calls Claude Code reported that the proxy didn’t capture.",
   analytics: "Claude Code analytics events per bin.",
+  work: "Steps per bin: edits on top in ink, commands, reads and the rest below. Hatched: calls the agent reported that the proxy didn’t capture.",
 } as const;

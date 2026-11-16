@@ -17,7 +17,7 @@ export function SkeletonBar({ width, height = 12, faint, className = "" }: Skele
 }
 
 /** The timelines' loading lanes (CompPersonTimeline, §11Q). */
-export const PERSON_TIMELINE_LANES = [30, 14, 60, 30, 48] as const;
+export const PERSON_TIMELINE_LANES = [30, 14, 60, 48] as const;
 export const SESSION_TIMELINE_LANES = [14, 48, 44, 14] as const;
 
 export type SkeletonProps = {

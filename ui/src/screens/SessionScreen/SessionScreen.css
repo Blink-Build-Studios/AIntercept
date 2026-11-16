@@ -21,6 +21,10 @@
   .session-head > .session-header-skeleton {
     padding: 24px 32px;
   }
+  /* The OutcomeSlot under the header, in the page's column (§11R). */
+  .session-head > .outcome-slot {
+    margin: 0 32px 8px;
+  }
   .session-header-skeleton {
     display: flex;
     flex-direction: column;

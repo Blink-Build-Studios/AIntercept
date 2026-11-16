@@ -38,13 +38,13 @@ type Counts = Schemas["RangeCounts"];
 const plural = (n: number, one: string, many = `${one}s`) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
 /**
- * The tabs' labels with count and unit (§11L.7): `Prompts 1 · 203 steps`, `Requests 203 calls ·
- * 412 other`, `Events 58`. The shared model-call count links Prompts and Requests.
+ * The tabs' labels with count and unit (§11L.7, §11R): `Turns 4 · 96 steps`, `Requests 203 calls ·
+ * 412 other`, `Events 58`. The shared model-call count links Turns and Requests.
  */
 export function sessionTabs(c: Counts | undefined): TabSpec[] {
   const other = c ? Math.max(0, c.requests - c.modelCalls) : 0;
   return [
-    { id: "prompts", label: "Prompts", count: c ? `${formatCount(c.prompts)} · ${plural(c.modelCalls, "step")}` : null },
+    { id: "turns", label: "Turns", count: c ? `${formatCount(c.turns)} · ${plural(c.steps, "step")}` : null },
     { id: "requests", label: "Requests", count: c ? `${plural(c.modelCalls, "call")}${other ? ` · ${formatCount(other)} other` : ""}` : null },
     { id: "events", label: "Events", count: c ? formatCount(c.events) : null },
   ];
@@ -60,8 +60,8 @@ export function tabHint(tab: string, s: Header | undefined, c: Counts | undefine
     return tabHints.requests(channels.filter((ch) => (kindCounts?.[ch] ?? 1) > 0).flatMap((ch) => (UNPROMPTED[ch] ? [UNPROMPTED[ch]] : [])));
   }
   if (tab === "events") return `The analytics events ${s ? AGENT_NAME[s.agent] : "the agent"} sent during this session, in time order.`;
-  const detail = c ? `${plural(c.prompts, "prompt")}, ${plural(c.modelCalls, "model call")} as steps` : "";
-  return tabHints.prompts(person ?? "this person", detail, s?.agent === "codex" ? "Codex calls a prompt a turn." : null);
+  const detail = c ? `${plural(c.turns, "turn")}, ${plural(c.steps, "model call")} as steps` : "";
+  return tabHints.turns(person ?? "this person", detail);
 }
 
 /** Each channel's chip label; Codex's from CODEX_CHANNELS. */
@@ -139,3 +139,4 @@ export const sharedChannel = (kind: Channel): Channel => SHARED_CHANNELS.find((c
 export function sharedRequestChannels(kindCounts: Record<string, number> | undefined): RequestChannel[] {
   return SHARED_CHANNELS.map(({ channel, label, members }) => ({ channel, label, count: members.reduce((n, m) => n + (kindCounts?.[m] ?? 0), 0) }));
 }
+

@@ -15,6 +15,8 @@ export type RangeReadoutProps = {
   /** The clear button's words (§11G.A8): "Clear range" (person page) or "Whole session" (session page). */
   clearLabel?: "Clear range" | "Whole session";
   nearest?: { earlier?: string; later?: string };
+  /** The turn ledger's words (§11R, Session.dc.html): `4 turns · 96 steps` for prompts and model calls. */
+  turns?: boolean;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -42,12 +44,12 @@ export function formatReadoutRange(from: string, to: string): string {
 }
 
 /** The strip under the timeline naming the brushed range and what's in it (handoff §6.4). */
-export function RangeReadout({ mode, range, counts, onPrev, onNext, onClear, clearLabel = "Whole session", nearest }: RangeReadoutProps) {
+export function RangeReadout({ mode, range, counts, onPrev, onNext, onClear, clearLabel = "Whole session", nearest, turns = false }: RangeReadoutProps) {
   const c = (n: number) => (counts ? formatCount(n) : "…");
   const span = Date.parse(range.to) - Date.parse(range.from);
   const items: string[] = [];
   if (mode !== "empty") {
-    items.push(`${c(counts?.prompts ?? 0)} prompts`, `${c(counts?.modelCalls ?? 0)} model calls`);
+    items.push(`${c(counts?.prompts ?? 0)} ${turns ? "turns" : "prompts"}`, `${c(counts?.modelCalls ?? 0)} ${turns ? "steps" : "model calls"}`);
     if (counts?.requests !== undefined) items.push(`${c(counts.requests)} requests`);
     items.push(`${c(counts?.events ?? 0)} events`);
     if (counts?.compactions) items.push(`${c(counts.compactions)} compactions`);

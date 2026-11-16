@@ -6,6 +6,7 @@ import { SESSION_COLUMNS, SESSION_MIN_WIDTH, SessionRow, type Session } from "./
 import { columnVars } from "../DataTable/DataTable";
 import { AgentRowsSheet } from "../AgentSectionHead/CompAgents.canvas.stories";
 import { ProvidersSessionsSheet } from "../ProviderMark/CompProviders.canvas.stories";
+import { WorkSpecimens } from "../TurnRow/CompTurns.canvas.stories";
 
 // Staging: CompRows draws each row alone (no table, so no hairline) in a 1180px
 // frame, with the table's min width (the row overflows the frame, as there).
@@ -100,6 +101,8 @@ export const Canvas: StoryObj = {
       <AgentRowsSheet />
       {/* CompProviders: the mixed sessions table (§11M 2.2, 2.3, 2.7, 3.4). */}
       <ProvidersSessionsSheet />
+      {/* CompTurns: the Work tab's session row (§11R). */}
+      <WorkSpecimens />
     </div>
   ),
 };

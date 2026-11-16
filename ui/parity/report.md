@@ -1,8 +1,8 @@
 # Design parity report
 
-517 specimens · 517 pass · 0 fail · 24 illustrative (not measured)
+534 specimens · 529 pass · 5 fail · 24 illustrative (not measured)
 
-Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputCompositionBar, NotReportedLine, PageHeader, RequestDrawer, TabMark, TabTitle
+Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputCompositionBar, NotReportedLine, PageHeader, PromptRow, RequestDrawer, TabMark, TabTitle
 
 - ✓ AboutSection/products
 - ✓ AboutProduct/claudeCode
@@ -76,6 +76,10 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Chip/selectedFilter
 - ✓ Chip/withSwatch
 - ✓ Chip/countNew
+- ✓ ContentBlock/pasted
+- ✓ ContentBlock/toolResult
+- ✓ ContentBlock/reply
+- ✓ ContentBlock/metadataOnly
 - ✓ CoverageCell/gap
 - ✓ CoverageCell/complete
 - ✓ CoverageCell/notApplicable
@@ -134,6 +138,8 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ NewRowsPill/visible
 - ✓ Notice/danger
 - ✓ Notice/neutral
+- ✓ OutcomeSlot/session
+- ✓ OutcomeSlot/personFortnight
 - ✓ Pagination/firstPage
 - ✓ Pagination/middle
 - ✓ Pagination/lastPage
@@ -179,17 +185,6 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ ProgressBar/refetching
 - ✓ ProgressBar/slow
 - ✓ ProgressBar/pagination
-- ✓ PromptRow/codexExpanded
-- ✓ PromptRow/longTurn
-- ✓ PromptRow/longTurnHead
-- ✓ PromptRow/longTurnNoBodies
-- ✓ PromptRow/longTurnHeadNoBodies
-- ✓ PromptRow/arrived
-- ✓ PromptRow/collapsed
-- ✓ PromptRow/expanded
-- ✓ PromptRow/inFlight
-- ✓ PromptRow/interrupted
-- ✓ PromptRow/hoverLinked
 - ✓ ProviderMark/claudeCodePerson
 - ✓ ProviderMark/codexPerson
 - ✓ ProviderMark/mixedPerson
@@ -209,6 +204,8 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ RegionState/errorStale
 - ✓ RegionState/errorEmpty
 - ✓ RegionState/empty
+- ✓ RepoRow/open
+- ✓ RepoRow/collapsed
 - ✓ ContentRow/shapeOnly
 - ✓ ContentRow/notRetained
 - ✓ ContentRow/toolCall
@@ -324,6 +321,7 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ SessionRow/fieldsMissing
 - ✓ SessionRow/noRecapLabel
 - ✓ SessionRow/hoverLinked
+- ✓ SessionRow/workDefault
 - ✓ SessionTable/mixed
 - ✓ SessionTabs/withHints
 - ✓ TabHint
@@ -458,6 +456,104 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Lane/modelCallsFocus (48 accepted deviations)
 - ✓ Lane/modelCallsPressed (48 accepted deviations)
 - ✓ Lane/sessionsFocus (1 accepted deviation)
+- ✓ Lane/turnsSpec
+- ✕ Lane/workSpec: 
+  - mark[0] · box.w: canvas `14.52` · ours `18.36`
+  - mark[1] · box.w: canvas `14.52` · ours `18.36`
+  - mark[2] · box.w: canvas `14.52` · ours `18.36`
+  - mark[3] · box.w: canvas `14.52` · ours `18.36`
+  - mark[4] · box.w: canvas `14.52` · ours `18.36`
+  - mark[5] · box.w: canvas `14.52` · ours `18.36`
+  - mark[6] · box.w: canvas `14.52` · ours `18.36`
+  - mark[7] · box.w: canvas `14.52` · ours `18.36`
+  - mark[8] · box.w: canvas `14.52` · ours `18.36`
+  - mark[9] · box.w: canvas `14.52` · ours `18.36`
+  - mark[10] · box.w: canvas `14.52` · ours `18.36`
+  - mark[11] · box.w: canvas `14.52` · ours `18.36`
+  - mark[12] · box.w: canvas `14.52` · ours `18.36`
+  - mark[13] · box.w: canvas `14.52` · ours `18.36`
+  - mark[14] · box.w: canvas `14.52` · ours `18.36`
+  - mark[15] · box.w: canvas `14.52` · ours `18.36`
+  - mark[16] · box.w: canvas `14.52` · ours `18.36`
+  - mark[17] · box.w: canvas `14.52` · ours `18.36`
+  - mark[18] · box.w: canvas `14.52` · ours `18.36`
+  - mark[19] · box.w: canvas `14.52` · ours `18.36`
+  - mark[20] · box.w: canvas `14.52` · ours `18.36`
+  - mark[21] · box.w: canvas `14.52` · ours `18.36`
+  - mark[22] · box.w: canvas `14.52` · ours `18.36`
+  - mark[23] · box.w: canvas `14.52` · ours `18.36`
+  - mark[24] · box.w: canvas `14.52` · ours `18.36`
+  - mark[25] · box.w: canvas `14.52` · ours `18.36`
+  - mark[26] · box.w: canvas `14.52` · ours `18.36`
+  - mark[27] · box.w: canvas `14.52` · ours `18.36`
+  - mark[28] · box.w: canvas `14.52` · ours `18.36`
+  - mark[29] · box.w: canvas `14.52` · ours `18.36`
+  - mark[30] · box.w: canvas `14.52` · ours `18.36`
+  - mark[31] · box.w: canvas `14.52` · ours `18.36`
+  - mark[32] · box.w: canvas `14.52` · ours `18.36`
+  - mark[33] · box.w: canvas `14.52` · ours `18.36`
+  - mark[34] · box.w: canvas `14.52` · ours `18.36`
+  - mark[35] · box.w: canvas `14.52` · ours `18.36`
+  - mark[36] · box.w: canvas `14.52` · ours `18.36`
+  - mark[37] · box.w: canvas `14.52` · ours `18.36`
+  - mark[38] · box.w: canvas `14.52` · ours `18.36`
+  - mark[39] · box.w: canvas `14.52` · ours `18.36`
+  - mark[40] · box.w: canvas `14.52` · ours `18.36`
+  - mark[41] · box.w: canvas `14.52` · ours `18.36`
+  - mark[42] · box.w: canvas `14.52` · ours `18.36`
+  - mark[43] · box.w: canvas `14.52` · ours `18.36`
+  - mark[44] · box.w: canvas `14.52` · ours `18.36`
+  - mark[45] · box.w: canvas `14.52` · ours `18.36`
+  - mark[46] · box.w: canvas `14.52` · ours `18.36`
+  - mark[47] · box.w: canvas `14.52` · ours `18.36`
+  - mark[48] · box.w: canvas `14.52` · ours `18.36`
+  - mark[49] · box.w: canvas `14.52` · ours `18.36`
+  - mark[50] · box.w: canvas `14.52` · ours `18.36`
+  - mark[51] · box.w: canvas `14.52` · ours `18.36`
+  - mark[52] · box.w: canvas `14.52` · ours `18.36`
+  - mark[53] · box.w: canvas `14.52` · ours `18.36`
+  - mark[54] · box.w: canvas `14.52` · ours `18.36`
+  - mark[55] · box.w: canvas `14.52` · ours `18.36`
+  - mark[56] · box.w: canvas `14.52` · ours `18.36`
+  - mark[57] · box.w: canvas `14.52` · ours `18.36`
+  - mark[58] · box.w: canvas `14.52` · ours `18.36`
+  - mark[59] · box.w: canvas `14.52` · ours `18.36`
+  - mark[60] · box.w: canvas `14.52` · ours `18.36`
+  - mark[61] · box.w: canvas `14.52` · ours `18.36`
+  - mark[62] · box.w: canvas `14.52` · ours `18.36`
+  - mark[63] · box.w: canvas `14.52` · ours `18.36`
+  - mark[64] · box.w: canvas `14.52` · ours `18.36`
+  - mark[65] · box.w: canvas `14.52` · ours `18.36`
+  - mark[66] · box.w: canvas `14.52` · ours `18.36`
+  - mark[67] · box.w: canvas `14.52` · ours `18.36`
+  - mark[68] · box.w: canvas `14.52` · ours `18.36`
+  - mark[69] · box.w: canvas `14.52` · ours `18.36`
+  - mark[70] · box.w: canvas `14.52` · ours `18.36`
+  - mark[71] · box.w: canvas `14.52` · ours `18.36`
+  - mark[72] · box.w: canvas `14.52` · ours `18.36`
+  - mark[73] · box.w: canvas `14.52` · ours `18.36`
+  - mark[74] · box.w: canvas `14.52` · ours `18.36`
+  - mark[75] · box.w: canvas `14.52` · ours `18.36`
+  - mark[76] · box.w: canvas `14.52` · ours `18.36`
+  - mark[77] · box.w: canvas `14.52` · ours `18.36`
+  - mark[78] · box.w: canvas `14.52` · ours `18.36`
+  - mark[79] · box.w: canvas `14.52` · ours `18.36`
+  - mark[80] · box.w: canvas `14.52` · ours `18.36`
+  - mark[81] · box.w: canvas `14.52` · ours `18.36`
+  - mark[82] · box.w: canvas `14.52` · ours `18.36`
+  - mark[83] · box.w: canvas `14.52` · ours `18.36`
+  - mark[84] · box.w: canvas `14.52` · ours `18.36`
+  - mark[85] · box.w: canvas `14.52` · ours `18.36`
+  - mark[86] · box.w: canvas `14.52` · ours `18.36`
+  - mark[87] · box.w: canvas `14.52` · ours `18.36`
+  - mark[88] · box.w: canvas `14.52` · ours `18.36`
+  - mark[89] · box.w: canvas `14.52` · ours `18.36`
+  - mark[90] · box.w: canvas `14.52` · ours `18.36`
+  - mark[91] · box.w: canvas `14.52` · ours `18.36`
+  - mark[92] · box.w: canvas `14.52` · ours `18.36`
+  - mark[93] · box.w: canvas `14.52` · ours `18.36`
+  - mark[94] · box.w: canvas `14.52` · ours `18.36`
+  - mark[95] · box.w: canvas `14.52` · ours `18.36`
 - ✓ MarkerTrack/linkedTick
 - ✓ MarkerTrack/ticks
 - ✓ MarkerTrack/hoverTick
@@ -472,6 +568,104 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Timeline/withBrush (105 accepted deviations)
 - ✓ Timeline/loading (3 accepted deviations)
 - ✓ Timeline/hoverGuide (185 accepted deviations)
+- ✓ TurnTrack/blocks
+- ✕ WorkTrack/stacked: 
+  - mark[0] · box.w: canvas `14.52` · ours `18.36`
+  - mark[1] · box.w: canvas `14.52` · ours `18.36`
+  - mark[2] · box.w: canvas `14.52` · ours `18.36`
+  - mark[3] · box.w: canvas `14.52` · ours `18.36`
+  - mark[4] · box.w: canvas `14.52` · ours `18.36`
+  - mark[5] · box.w: canvas `14.52` · ours `18.36`
+  - mark[6] · box.w: canvas `14.52` · ours `18.36`
+  - mark[7] · box.w: canvas `14.52` · ours `18.36`
+  - mark[8] · box.w: canvas `14.52` · ours `18.36`
+  - mark[9] · box.w: canvas `14.52` · ours `18.36`
+  - mark[10] · box.w: canvas `14.52` · ours `18.36`
+  - mark[11] · box.w: canvas `14.52` · ours `18.36`
+  - mark[12] · box.w: canvas `14.52` · ours `18.36`
+  - mark[13] · box.w: canvas `14.52` · ours `18.36`
+  - mark[14] · box.w: canvas `14.52` · ours `18.36`
+  - mark[15] · box.w: canvas `14.52` · ours `18.36`
+  - mark[16] · box.w: canvas `14.52` · ours `18.36`
+  - mark[17] · box.w: canvas `14.52` · ours `18.36`
+  - mark[18] · box.w: canvas `14.52` · ours `18.36`
+  - mark[19] · box.w: canvas `14.52` · ours `18.36`
+  - mark[20] · box.w: canvas `14.52` · ours `18.36`
+  - mark[21] · box.w: canvas `14.52` · ours `18.36`
+  - mark[22] · box.w: canvas `14.52` · ours `18.36`
+  - mark[23] · box.w: canvas `14.52` · ours `18.36`
+  - mark[24] · box.w: canvas `14.52` · ours `18.36`
+  - mark[25] · box.w: canvas `14.52` · ours `18.36`
+  - mark[26] · box.w: canvas `14.52` · ours `18.36`
+  - mark[27] · box.w: canvas `14.52` · ours `18.36`
+  - mark[28] · box.w: canvas `14.52` · ours `18.36`
+  - mark[29] · box.w: canvas `14.52` · ours `18.36`
+  - mark[30] · box.w: canvas `14.52` · ours `18.36`
+  - mark[31] · box.w: canvas `14.52` · ours `18.36`
+  - mark[32] · box.w: canvas `14.52` · ours `18.36`
+  - mark[33] · box.w: canvas `14.52` · ours `18.36`
+  - mark[34] · box.w: canvas `14.52` · ours `18.36`
+  - mark[35] · box.w: canvas `14.52` · ours `18.36`
+  - mark[36] · box.w: canvas `14.52` · ours `18.36`
+  - mark[37] · box.w: canvas `14.52` · ours `18.36`
+  - mark[38] · box.w: canvas `14.52` · ours `18.36`
+  - mark[39] · box.w: canvas `14.52` · ours `18.36`
+  - mark[40] · box.w: canvas `14.52` · ours `18.36`
+  - mark[41] · box.w: canvas `14.52` · ours `18.36`
+  - mark[42] · box.w: canvas `14.52` · ours `18.36`
+  - mark[43] · box.w: canvas `14.52` · ours `18.36`
+  - mark[44] · box.w: canvas `14.52` · ours `18.36`
+  - mark[45] · box.w: canvas `14.52` · ours `18.36`
+  - mark[46] · box.w: canvas `14.52` · ours `18.36`
+  - mark[47] · box.w: canvas `14.52` · ours `18.36`
+  - mark[48] · box.w: canvas `14.52` · ours `18.36`
+  - mark[49] · box.w: canvas `14.52` · ours `18.36`
+  - mark[50] · box.w: canvas `14.52` · ours `18.36`
+  - mark[51] · box.w: canvas `14.52` · ours `18.36`
+  - mark[52] · box.w: canvas `14.52` · ours `18.36`
+  - mark[53] · box.w: canvas `14.52` · ours `18.36`
+  - mark[54] · box.w: canvas `14.52` · ours `18.36`
+  - mark[55] · box.w: canvas `14.52` · ours `18.36`
+  - mark[56] · box.w: canvas `14.52` · ours `18.36`
+  - mark[57] · box.w: canvas `14.52` · ours `18.36`
+  - mark[58] · box.w: canvas `14.52` · ours `18.36`
+  - mark[59] · box.w: canvas `14.52` · ours `18.36`
+  - mark[60] · box.w: canvas `14.52` · ours `18.36`
+  - mark[61] · box.w: canvas `14.52` · ours `18.36`
+  - mark[62] · box.w: canvas `14.52` · ours `18.36`
+  - mark[63] · box.w: canvas `14.52` · ours `18.36`
+  - mark[64] · box.w: canvas `14.52` · ours `18.36`
+  - mark[65] · box.w: canvas `14.52` · ours `18.36`
+  - mark[66] · box.w: canvas `14.52` · ours `18.36`
+  - mark[67] · box.w: canvas `14.52` · ours `18.36`
+  - mark[68] · box.w: canvas `14.52` · ours `18.36`
+  - mark[69] · box.w: canvas `14.52` · ours `18.36`
+  - mark[70] · box.w: canvas `14.52` · ours `18.36`
+  - mark[71] · box.w: canvas `14.52` · ours `18.36`
+  - mark[72] · box.w: canvas `14.52` · ours `18.36`
+  - mark[73] · box.w: canvas `14.52` · ours `18.36`
+  - mark[74] · box.w: canvas `14.52` · ours `18.36`
+  - mark[75] · box.w: canvas `14.52` · ours `18.36`
+  - mark[76] · box.w: canvas `14.52` · ours `18.36`
+  - mark[77] · box.w: canvas `14.52` · ours `18.36`
+  - mark[78] · box.w: canvas `14.52` · ours `18.36`
+  - mark[79] · box.w: canvas `14.52` · ours `18.36`
+  - mark[80] · box.w: canvas `14.52` · ours `18.36`
+  - mark[81] · box.w: canvas `14.52` · ours `18.36`
+  - mark[82] · box.w: canvas `14.52` · ours `18.36`
+  - mark[83] · box.w: canvas `14.52` · ours `18.36`
+  - mark[84] · box.w: canvas `14.52` · ours `18.36`
+  - mark[85] · box.w: canvas `14.52` · ours `18.36`
+  - mark[86] · box.w: canvas `14.52` · ours `18.36`
+  - mark[87] · box.w: canvas `14.52` · ours `18.36`
+  - mark[88] · box.w: canvas `14.52` · ours `18.36`
+  - mark[89] · box.w: canvas `14.52` · ours `18.36`
+  - mark[90] · box.w: canvas `14.52` · ours `18.36`
+  - mark[91] · box.w: canvas `14.52` · ours `18.36`
+  - mark[92] · box.w: canvas `14.52` · ours `18.36`
+  - mark[93] · box.w: canvas `14.52` · ours `18.36`
+  - mark[94] · box.w: canvas `14.52` · ours `18.36`
+  - mark[95] · box.w: canvas `14.52` · ours `18.36`
 - ✓ ToggleChip/off
 - ✓ ToggleChip/on
 - ✓ ToggleChip/hover
@@ -530,6 +724,27 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Tooltip/flippedBottom
 - ✓ Tooltip/chartAnchored
 - ✓ TurnReport
+- ✓ TurnRow/default
+- ✕ TurnRow/open: 
+  - text "1.4k chars" · missing: canvas `1.4k chars` · ours `null`
+  - text "1,400 chars" · extra: canvas `null` · ours `1,400 chars`
+- ✕ TurnRow/interruptedTurn: 
+  - text "22s" · missing: canvas `22s` · ours `null`
+  - text "22 s" · extra: canvas `null` · ours `22 s`
+- ✕ TurnRow/live: 
+  - text "● 1m 04s" · missing: canvas `● 1m 04s` · ours `null`
+  - text "● 1m 4s" · extra: canvas `null` · ours `● 1m 4s`
+- ✓ TurnRow/withContent
+- ✓ TurnRow/codex
+- ✓ ReplyPreview
+- ✓ SubagentRow/default
+- ✓ TurnStep/default
+- ✓ WorkGroup/collapsed
+- ✓ WorkGroup/open
+- ✓ WorkGroup/editsGroup
+- ✓ WorkGroup/thinkingGroup
+- ✓ WorkGroup/replyGroup
+- ✓ WorkGroup/withPaths
 - ✓ UnattributedNotice/default
 - ✓ UpdatedAgo
 - ✓ UpdatedAgo/peopleBar

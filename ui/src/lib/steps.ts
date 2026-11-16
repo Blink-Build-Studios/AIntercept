@@ -1,5 +1,5 @@
 // A long turn's steps (handoff §11L.7): what each step did, runs of command-only steps, and
-// the rows the step list shows. Pure: PromptRow and its tests call these.
+// the rows the step list shows. Pure: the step rows and their tests call these.
 import type { StepData } from "../api/types";
 import type { StepKind, StripStep } from "../components/StepStrip/StepStrip";
 import type { StepRunPart } from "../components/StepRow/StepRun";

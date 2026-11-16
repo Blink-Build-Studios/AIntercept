@@ -432,7 +432,8 @@
         "unknown",
         "withQualifier",
         "hover",
-        "hiddenQualifier"
+        "hiddenQualifier",
+        "withSub"
       ]
     },
     {
@@ -614,7 +615,8 @@
       "states": [
         "range",
         "live",
-        "empty"
+        "empty",
+        "turns"
       ]
     },
     {
@@ -653,7 +655,10 @@
         "claudeCodeOnly",
         "mixedCommon",
         "codexView",
-        "claudeCodeView"
+        "claudeCodeView",
+        "workingOnLive",
+        "workingOnRepos",
+        "loadingTurns"
       ]
     },
     {
@@ -746,22 +751,6 @@
         "expanded",
         "compact",
         "linkedToHover"
-      ]
-    },
-    {
-      "name": "PromptRow",
-      "group": "Rows",
-      "states": [
-        "collapsed",
-        "expanded",
-        "inFlight",
-        "interrupted",
-        "frustrated",
-        "linked",
-        "arrived",
-        "codexExpanded",
-        "longTurn",
-        "longTurnNoBodies"
       ]
     },
     {
@@ -1321,6 +1310,150 @@
         "codex",
         "oneAgent"
       ]
+    },
+    {
+      "name": "ContentBlock",
+      "group": "Turns",
+      "states": [
+        "pasted",
+        "toolResult",
+        "reply",
+        "metadataOnly",
+        "expanded",
+        "short"
+      ]
+    },
+    {
+      "name": "OutcomeSlot",
+      "group": "Turns",
+      "states": [
+        "session",
+        "personFortnight",
+        "noFacts"
+      ]
+    },
+    {
+      "name": "OutcomeFacts",
+      "group": "Turns",
+      "states": [
+        "session",
+        "person"
+      ],
+      "path": "src/components/OutcomeSlot/OutcomeFacts.tsx"
+    },
+    {
+      "name": "TurnRow",
+      "group": "Turns",
+      "states": [
+        "default",
+        "open",
+        "interruptedTurn",
+        "live",
+        "withContent",
+        "codex",
+        "hover",
+        "focus",
+        "linked",
+        "arrived"
+      ]
+    },
+    {
+      "name": "WorkGroup",
+      "group": "Turns",
+      "states": [
+        "collapsed",
+        "open",
+        "editsGroup",
+        "thinkingGroup",
+        "replyGroup",
+        "withPaths",
+        "hover"
+      ],
+      "path": "src/components/TurnRow/WorkGroup.tsx"
+    },
+    {
+      "name": "TurnStep",
+      "group": "Turns",
+      "states": [
+        "default",
+        "hover",
+        "selected"
+      ],
+      "path": "src/components/TurnRow/TurnStep.tsx"
+    },
+    {
+      "name": "SubagentRow",
+      "group": "Turns",
+      "states": [
+        "default",
+        "codexThread"
+      ],
+      "path": "src/components/TurnRow/SubagentRow.tsx"
+    },
+    {
+      "name": "ReplyPreview",
+      "group": "Turns",
+      "states": [
+        "default"
+      ],
+      "path": "src/components/TurnRow/ReplyPreview.tsx"
+    },
+    {
+      "name": "WorkText",
+      "group": "Turns",
+      "states": [
+        "default"
+      ],
+      "path": "src/components/TurnRow/WorkText.tsx"
+    },
+    {
+      "name": "RepoRow",
+      "group": "Turns",
+      "states": [
+        "open",
+        "collapsed",
+        "withAgent"
+      ]
+    },
+    {
+      "name": "WorkSessionRow",
+      "group": "Turns",
+      "states": [
+        "workDefault",
+        "ended",
+        "partialCapture",
+        "hover",
+        "linked"
+      ],
+      "path": "src/components/RepoRow/WorkSessionRow.tsx"
+    },
+    {
+      "name": "WorkingOn",
+      "group": "Turns",
+      "states": [
+        "live",
+        "repos",
+        "chat",
+        "nothing"
+      ]
+    },
+    {
+      "name": "TurnTrack",
+      "group": "Timeline",
+      "states": [
+        "blocks",
+        "interactive"
+      ],
+      "path": "src/components/Timeline/TurnTrack.tsx"
+    },
+    {
+      "name": "WorkTrack",
+      "group": "Timeline",
+      "states": [
+        "stacked",
+        "interactive"
+      ],
+      "path": "src/components/Timeline/WorkTrack.tsx"
     }
   ],
   "screens": [
@@ -1338,7 +1471,7 @@
     {
       "name": "PersonScreen",
       "states": [
-        "sessions",
+        "work",
         "allRequests",
         "loading",
         "waiting",
@@ -1347,13 +1480,14 @@
         "emptyRange",
         "notCaptured",
         "noUncaptured",
-        "aboutOpen"
+        "aboutOpen",
+        "workManyRepos"
       ]
     },
     {
       "name": "SessionScreen",
       "states": [
-        "prompts",
+        "turns",
         "requests",
         "events",
         "live",
@@ -1362,7 +1496,10 @@
         "drawer",
         "drawerNotCaptured",
         "drawerFailed",
-        "drawerRetained"
+        "drawerRetained",
+        "codexTurns",
+        "withContent",
+        "subagents"
       ]
     }
   ],

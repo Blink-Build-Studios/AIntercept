@@ -18,6 +18,7 @@ import { ScaleContext, makeScale } from "./scale";
 import { ParityTags } from "../../test/ParityTag";
 import { NowLine, Timeline } from "./Timeline";
 import { TimelineHoverSheet } from "./TimelineHover.canvas.stories";
+import { TurnsLaneSpecimens } from "../TurnRow/CompTurns.canvas.stories";
 
 // The canvas axis reads Nov 2 08:00 → Nov 4 08:00 in the viewer's zone: 48h, 100 bins.
 const FROM = new Date(2026, 10, 2, 8).getTime();
@@ -163,6 +164,7 @@ export function TimelineCanvasSheet() {
       <DensityCanvasSheet />
       <HoverR11Sheet />
       <CodexTimelineSheet />
+      <TurnsLaneSpecimens />
     </div>
   );
 }

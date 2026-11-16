@@ -17,7 +17,7 @@ const meta = {
         role="table"
         aria-label="PersonRow examples"
         className="grid"
-        style={{ gridTemplateColumns: `${PERSON_MIN_WIDTH + 24}px`, ...columnVars(personColumns(ctx.args.view)) } as CSSProperties}
+        style={{ gridTemplateColumns: `${PERSON_MIN_WIDTH + 24}px`, ...columnVars(personColumns(ctx.args.view, !!ctx.args.turns)) } as CSSProperties}
       >
         {Story()}
       </div>
@@ -56,3 +56,7 @@ export const MixedCommon: Story = { args: { person: peopleRows.mixed, now: PEOPL
 export const CodexView: Story = { args: { person: peopleViewRows.codexLinked, now: PEOPLE_NOW, activityMax: 19, view: "codex", limits: [41, 83], plan: "Plus" } };
 /** The Claude Code view: Bypass and Missed before the chevron. */
 export const ClaudeCodeView: Story = { args: { person: peopleViewRows.claudeCodeLinked, now: PEOPLE_NOW, activityMax: 19, view: "claude-code" } };
+/** The turns form (§11R, People.dc.html): Working on after Last seen, Turns in place of Prompts. */
+export const WorkingOnLive: Story = { args: { person: live, now: demo.meta.asOf, turns: { count: 66, workingOn: { live: { repo: "aintercept", turn: 34 }, repos: ["aintercept"] } } } };
+export const WorkingOnRepos: Story = { args: { turns: { count: 41, workingOn: { live: null, repos: ["observer", "notes"] } } } };
+export const LoadingTurns: Story = { args: { turns: { count: null, workingOn: { live: null, repos: [] } } }, render: () => <PersonRowSkeleton turns /> };

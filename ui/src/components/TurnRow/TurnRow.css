@@ -1,0 +1,124 @@
+/* TurnRow (handoff §11R, CompTurns): ▸ 14 · # 40 · started 92 · asked 240 · work (flex) · steps 50 ·
+   time 64 · tokens 110 · cost 64 · friction 40 (centred); padding 6px 12px on --surface, raised
+   when open; min width 1100. Set here too, so the row holds its columns outside a DataTable. */
+@layer components {
+  .dt-row.turn-row {
+    padding-block: 6px;
+    background: var(--surface);
+    min-width: calc(1100px + 24px);
+  }
+  .dt-row.turn-row > :nth-child(1) {
+    flex: 0 0 14px;
+  }
+  .dt-row.turn-row > :nth-child(2) {
+    flex: 0 0 40px;
+  }
+  .dt-row.turn-row > :nth-child(3) {
+    flex: 0 0 92px;
+  }
+  .dt-row.turn-row > :nth-child(4) {
+    flex: 0 0 240px;
+  }
+  .dt-row.turn-row > :nth-child(5) {
+    flex: 1 1 0%;
+  }
+  .dt-row.turn-row > :nth-child(6) {
+    flex: 0 0 50px;
+  }
+  .dt-row.turn-row > :nth-child(7) {
+    flex: 0 0 64px;
+  }
+  .dt-row.turn-row > :nth-child(8) {
+    flex: 0 0 110px;
+  }
+  .dt-row.turn-row > :nth-child(9) {
+    flex: 0 0 64px;
+  }
+  .dt-row.turn-row > :nth-child(10) {
+    flex: 0 0 40px;
+  }
+  .turn-friction {
+    text-align: center;
+  }
+  .dt-row.turn-row[aria-expanded="true"],
+  .dt-row.turn-row:hover,
+  .dt-row.turn-row[data-force="hover"] {
+    background: var(--surface-raised);
+  }
+  /* Arrived from the timeline (§11H.6): selected, --surface-raised and a 2px --ink inset rule. */
+  .dt-row.turn-row[data-arrived="true"] {
+    background: var(--surface-raised);
+    box-shadow: inset 2px 0 0 var(--ink);
+  }
+
+  /* Inside an open turn (CompTurns WorkGroup · TurnStep · SubagentRow): groups from 82px,
+     steps and previews from 112px; rows 6px 12px, transparent, a hairline under each. */
+  .dt-row.work-group,
+  .dt-row.turn-step,
+  .dt-row.subagent-row,
+  .dt-row.reply-preview {
+    padding: 6px 12px 6px 82px;
+    min-width: calc(1100px + 94px);
+    border-bottom: 1px solid var(--line);
+  }
+  .dt-row.turn-step,
+  .dt-row.reply-preview {
+    padding-left: 112px;
+  }
+  .dt-row.work-group > :nth-child(1),
+  .dt-row.subagent-row > :nth-child(1) {
+    flex: 0 0 14px;
+  }
+  .dt-row.work-group > :nth-child(2),
+  .dt-row.turn-step > :nth-child(1) {
+    flex: 1 1 0%;
+  }
+  .dt-row.work-group > :nth-child(3),
+  .dt-row.turn-step > :nth-child(2) {
+    flex: none;
+  }
+  .dt-row.subagent-row {
+    background: var(--bg);
+  }
+  .dt-row.subagent-row > :nth-child(2) {
+    flex: 0 0 220px;
+  }
+  .dt-row.subagent-row > :nth-child(3) {
+    flex: 1 1 0%;
+  }
+  .dt-row.subagent-row > :nth-child(4) {
+    flex: 0 0 110px;
+  }
+  .dt-row.subagent-row > :nth-child(5) {
+    flex: none;
+    margin-left: 12px;
+  }
+  .dt-row.reply-preview {
+    white-space: normal;
+  }
+  .dt-row.reply-preview > :nth-child(1) {
+    flex: 1 1 0%;
+  }
+  .reply-preview-text {
+    border-left: 2px solid var(--ch-model);
+    padding-left: 10px;
+  }
+  /* The row links (`raw request ›`, `open thread ›`, `expand`): ink, a --line-strong underline. */
+  .turn-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+    text-align: start;
+  }
+  .subagent-row .turn-link {
+    display: block;
+  }
+  .turn-link:hover {
+    text-decoration-color: var(--ink);
+  }
+}

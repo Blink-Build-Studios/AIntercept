@@ -27,12 +27,11 @@
   .person-posture > .type-key {
     margin-right: 4px;
   }
-  .person-ribbon > .stat-ribbon {
-    border: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .person-ribbon > .coverage-line {
-    border: 0;
+  /* The window's OutcomeSlot, then the coverage line in its own box (§11R, Main.dc.html). */
+  .person-outcome {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
   .person-panels {
     display: flex;

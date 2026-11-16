@@ -9,6 +9,7 @@ import { CoverageCell, MISSED_COLUMN } from "../CoverageCell/CoverageCell";
 import { SkeletonBar } from "../Skeleton/Skeleton";
 import { Sparkline } from "../Sparkline/Sparkline";
 import { Tooltip } from "../Tooltip/Tooltip";
+import { WorkingOn, type WorkingOnData } from "../WorkingOn/WorkingOn";
 import "./PersonRow.css";
 
 export type Person = Schemas["PersonSummaryRow"];
@@ -30,6 +31,20 @@ const COMMON: Column[] = [
   { id: "tokens", header: "Tokens", width: 90, align: "right", definition: "Output tokens. ≈ when some calls had no usage." },
   { id: "activity", header: "Activity · 14 days", width: "flex" },
 ];
+/**
+ * The turns form (handoff §11R, People.dc.html): Agents 200px, a Working on column (160px) after
+ * Last seen, and Turns in place of Prompts.
+ */
+const TURNS_COMMON: Column[] = [
+  { id: "person", header: "Person", width: 250 },
+  { id: "agents", header: "Agents", width: 200 },
+  { id: "seen", header: "Last seen", width: 100 },
+  { id: "on", header: "Working on", width: 160, definition: "The live turn and its repo; otherwise the repos worked on in the window." },
+  { id: "sessions", header: "Sessions", width: 70, align: "right" },
+  { id: "turns", header: "Turns", width: 70, align: "right" },
+  { id: "tokens", header: "Tokens", width: 90, align: "right", definition: "Output tokens. ≈ when some calls had no usage." },
+  { id: "activity", header: "Activity · 14 days", width: "flex" },
+];
 const GO: Column = { id: "go", header: "", width: 12 };
 /** Each agent view's own columns (§11L.1): Claude Code's Bypass and Missed, Codex's limits and plan. */
 const AGENT_COLUMNS: Partial<Record<Agent, Column[]>> = {
@@ -39,8 +54,8 @@ const AGENT_COLUMNS: Partial<Record<Agent, Column[]>> = {
     { id: "plan", header: "Plan", width: 100 },
   ],
 };
-/** The columns of a view: the common ones, the agent's own, the chevron. */
-export const personColumns = (view: PeopleView = "all"): Column[] => [...COMMON, ...(view === "all" ? [] : (AGENT_COLUMNS[view] ?? [])), GO];
+/** The columns of a view: the common ones (the turns form's with `turns`), the agent's own, the chevron. */
+export const personColumns = (view: PeopleView = "all", turns = false): Column[] => [...(turns ? TURNS_COMMON : COMMON), ...(view === "all" ? [] : (AGENT_COLUMNS[view] ?? [])), GO];
 /** The Claude Code view's columns: CompRows draws its PersonRow states there. */
 export const PERSON_COLUMNS: Column[] = personColumns("claude-code");
 
@@ -123,6 +138,7 @@ export function PersonRow({
   idLine,
   limits,
   plan,
+  turns,
   "data-force": force,
 }: {
   person: Person;
@@ -139,6 +155,8 @@ export function PersonRow({
   limits?: (number | null)[] | null;
   /** Codex view: the account's plan ("Plus"). */
   plan?: string | null;
+  /** The turns form (§11R): what the person is working on, and their turns in place of prompts. */
+  turns?: { count: number | null; workingOn: WorkingOnData };
   "data-force"?: "hover" | "focus";
 }) {
   const at = now ? new Date(now) : new Date();
@@ -168,14 +186,23 @@ export function PersonRow({
           {seen.text}
         </span>
       </Tooltip>
+      {turns && <WorkingOn data={turns.workingOn} />}
       <span role="cell" className="dt-right">
         {formatCount(p.sessions)}
       </span>
-      <Tooltip content={p.prompts === null ? unknownTip("Prompts", "no prompt ids on these calls") : null}>
-        <span role="cell" className="dt-right" {...(p.prompts === null ? unknownAttrs("no prompt ids on these calls") : {})}>
-          {p.prompts === null ? "—" : formatCount(p.prompts)}
-        </span>
-      </Tooltip>
+      {turns ? (
+        <Tooltip content={turns.count === null ? unknownTip("Turns", "no prompt ids on these calls") : null}>
+          <span role="cell" className="dt-right" {...(turns.count === null ? unknownAttrs("no prompt ids on these calls") : {})}>
+            {turns.count === null ? "—" : formatCount(turns.count)}
+          </span>
+        </Tooltip>
+      ) : (
+        <Tooltip content={p.prompts === null ? unknownTip("Prompts", "no prompt ids on these calls") : null}>
+          <span role="cell" className="dt-right" {...(p.prompts === null ? unknownAttrs("no prompt ids on these calls") : {})}>
+            {p.prompts === null ? "—" : formatCount(p.prompts)}
+          </span>
+        </Tooltip>
+      )}
       <span role="cell" className={`dt-right ${tokens.tone}`}>
         {tokens.text}
       </span>
@@ -217,7 +244,7 @@ export function PersonRow({
 }
 
 /** A loading row at the loaded row's size (handoff §6A.3; CompRows "PersonRow/loading"; People.dc.html: common cells only). */
-export function PersonRowSkeleton({ view = "all" }: { view?: PeopleView }) {
+export function PersonRowSkeleton({ view = "all", turns = false }: { view?: PeopleView; turns?: boolean }) {
   const right = (w: number) => (
     <span role="cell" className="flex justify-end">
       <SkeletonBar width={w} />
@@ -236,6 +263,11 @@ export function PersonRowSkeleton({ view = "all" }: { view?: PeopleView }) {
       <span role="cell">
         <SkeletonBar width={70} />
       </span>
+      {turns && (
+        <span role="cell">
+          <SkeletonBar width={110} />
+        </span>
+      )}
       {right(30)}
       {right(30)}
       {right(54)}

@@ -5,6 +5,8 @@ export const tabHints = {
   /** "What Sam asked, and the work each message started: one prompt, its 203 model calls as steps. Codex calls a prompt a turn." */
   prompts: (person: string, detail: string, agentWord?: string | null) =>
     [`What ${person} asked, and the work each message started${detail ? `: ${detail}` : ""}.`, agentWord].filter(Boolean).join(" "),
+  /** "What Sam asked, and the work each turn did: 4 turns, 96 model calls as steps." (§11R) */
+  turns: (person: string, detail: string) => `What ${person} asked, and the work each turn did${detail ? `: ${detail}` : ""}.`,
   /** "Every call on the wire for this session, in time order, including calls no prompt started (limits, catalog, metrics)." */
   requests: (unprompted: string[]) =>
     `Every call on the wire for this session, in time order, including calls no prompt started${unprompted.length ? ` (${unprompted.join(", ")})` : ""}.`,

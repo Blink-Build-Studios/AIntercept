@@ -6,7 +6,7 @@ import many from "../../api/samples/session_prompts/many";
 import one from "../../api/samples/session_prompts/one";
 import type { SessionPromptsResponse } from "../../api/types";
 import { DataTable } from "../DataTable/DataTable";
-import { PROMPT_COLUMNS, PROMPT_MIN_WIDTH } from "../PromptRow/PromptRow";
+import { TURN_COLUMNS as PROMPT_COLUMNS, TURN_MIN_WIDTH as PROMPT_MIN_WIDTH } from "../TurnRow/TurnRow";
 import { StepRow, type Step, type StepRowProps } from "./StepRow";
 import { codexExec, codexModelCall, codexPatch, codexPatchChange, codexSpawn } from "../AgentSectionHead/agentSpecimens";
 import { longTurnSteps, longTurnStepsNoBodies } from "../ProviderMark/providerSpecimens";

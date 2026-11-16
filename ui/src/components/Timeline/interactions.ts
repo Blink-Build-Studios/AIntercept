@@ -6,6 +6,7 @@ import type { BandInteraction } from "./BandTrack";
 import type { BinInteraction, BinSlot, Gap } from "./BarTrack";
 import type { FrictionInteraction } from "./FrictionTrack";
 import type { MarkLabel, MarkerInteraction } from "./MarkerTrack";
+import type { TurnInteraction } from "./TurnTrack";
 import { ms } from "./scale";
 import {
   analyticsBinTip,
@@ -16,6 +17,8 @@ import {
   mergedGapTip,
   modelBinTip,
   promptTip,
+  turnTip,
+  workBinTip,
   sessionBandTip,
 } from "./timelineTips";
 
@@ -44,7 +47,13 @@ export function laneInteractions(d: AnyTimeline, on: TimelineActions) {
   const gaps = new Map(d.notCaptured.map((g) => [ms(g.from), g]));
   const sessions = new Map(d.sessions.map((s) => [s.sessionId, s]));
   const selectBin = (s: BinSlot) => on.select({ from: s.from, to: s.to });
+  const work = byT(d.work);
   return {
+    work: {
+      tip: (s) => workBinTip(s.from, s.to, work.get(ms(s.from)), calls.get(ms(s.from))?.notCaptured ?? 0, d.binSeconds),
+      label: (s) => `${s.from} to ${s.to}: ${work.get(ms(s.from))?.steps ?? 0} steps`,
+      onSelect: selectBin,
+    } satisfies BinInteraction,
     modelCalls: {
       tip: (s) => modelBinTip(s.from, s.to, calls.get(ms(s.from)), d.binSeconds),
       label: binLabel("model calls"),
@@ -108,7 +117,17 @@ export function sessionInteractions(d: SessionTimeline, on: TimelineActions) {
     }
     return context[lo - 1]?.c;
   };
+  const turns = new Map(d.turns.map((t) => [t.promptId, t]));
   return {
+    turns: {
+      tip: (b) => {
+        const t = turns.get(b.id);
+        return t ? turnTip(t, d.now ?? d.to) : null;
+      },
+      onActivate: (b) => {
+        if (b.index !== null) on.jumpToPrompt?.(b.index, b.from);
+      },
+    } satisfies TurnInteraction,
     context: {
       tip: (s) => {
         const c = pointFor(s);

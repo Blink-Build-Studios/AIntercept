@@ -15,16 +15,16 @@ import sessionDemo from "../../api/samples/session/demo";
 import sessionError from "../../api/samples/session/error";
 import sessionLive from "../../api/samples/session/live";
 import eventsDemo from "../../api/samples/session_events/demo";
-import promptsCodex from "../../api/samples/session_prompts/codex";
-import promptsDemo from "../../api/samples/session_prompts/demo";
-import promptsInFlight from "../../api/samples/session_prompts/in_flight";
+import turnsCodex from "../../api/samples/session_turns/codex";
+import turnsDemo from "../../api/samples/session_turns/demo";
+import turnsLive from "../../api/samples/session_turns/live";
+import turnsSubagents from "../../api/samples/session_turns/subagents";
+import turnsWithContent from "../../api/samples/session_turns/with_content";
 import requestsCodex from "../../api/samples/session_requests/codex_channels";
 import requestsDemo from "../../api/samples/session_requests/demo";
 import stateDemo from "../../api/samples/session_state/demo";
 import timelineDemo from "../../api/samples/session_timeline/demo";
 import { readyRegion, type Region } from "../../lib/region";
-import type { PromptItem, StepData } from "../../api/types";
-import { longTurnPrompt, longTurnSteps } from "../../components/ProviderMark/providerSpecimens";
 import type { DrawerTab } from "../../components/RequestDrawer/DrawerTabs";
 import { curl } from "../../components/RequestDrawer/drawerData";
 import { SessionScreen, type SessionScreenProps, type SessionTab } from "./SessionScreen";
@@ -35,7 +35,7 @@ const whole = { from: timelineDemo.data.from, to: timelineDemo.data.to };
 type Drawer = { detail: typeof requestNormal; raw: typeof rawNormal; tab?: DrawerTab };
 
 /** The screen with its tabs, filters and pages working inside the story; data from the samples. */
-function Screen({ initialTab = "prompts", openDrawer: drawer, ...over }: Partial<SessionScreenProps> & { initialTab?: SessionTab; openDrawer?: Drawer }) {
+function Screen({ initialTab = "turns", openDrawer: drawer, ...over }: Partial<SessionScreenProps> & { initialTab?: SessionTab; openDrawer?: Drawer }) {
   const [tab, setTab] = useState<SessionTab>(initialTab);
   const [dtab, setDtab] = useState<DrawerTab>(drawer?.tab ?? "summary");
   const [rq, setRq] = useState({ q: "", kinds: [] as SessionScreenProps["requestFilter"]["kinds"], notCaptured: false });
@@ -47,7 +47,8 @@ function Screen({ initialTab = "prompts", openDrawer: drawer, ...over }: Partial
     person: { name: null, href: "/people/p" },
     timeline: readyRegion(timelineDemo.data),
     state: readyRegion(stateDemo.data),
-    prompts: readyRegion(promptsDemo),
+    turns: readyRegion(turnsDemo),
+    sessionHref: (id) => `/sessions/${id}`,
     requests: readyRegion(requestsDemo),
     events: readyRegion(eventsDemo),
     onRetry: fn(),
@@ -95,28 +96,28 @@ const meta = { title: "Screens/SessionScreen", component: Screen, parameters: { 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The demo session (real traffic, sanitized), whole session, Prompts tab. */
-export const Prompts: Story = {};
+/** The demo session (real traffic, sanitized), whole session, Turns tab (§11R). */
+export const Turns: Story = {};
 export const Requests: Story = { args: { initialTab: "requests" } };
 export const Events: Story = { args: { initialTab: "events" } };
-/** Live: the brush follows the last 15 min; a prompt in flight, its steps open. */
+/** Live: the brush follows the last 15 min; a turn running, open. */
 export const Live: Story = {
   args: {
     session: readyRegion(sessionLive.data),
-    prompts: readyRegion(promptsInFlight),
+    turns: readyRegion(turnsLive),
     rangeMode: "following",
     range: { from: new Date(Date.parse(sessionDemo.meta.asOf) - 15 * 60_000).toISOString(), to: sessionDemo.meta.asOf },
   },
 };
 /** First load: every region's skeleton at its loaded size. */
-export const Loading: Story = { args: { session: loading, timeline: loading, state: loading, prompts: loading, requests: loading, events: loading } };
+export const Loading: Story = { args: { session: loading, timeline: loading, state: loading, turns: loading, requests: loading, events: loading } };
 /** The header query failed with nothing to show: the page's ErrorState. */
 export const LoadFailed: Story = {
   args: {
     session: { status: "error", data: undefined, error: { message: sessionError.error.message, queryId: sessionError.error.queryId ?? undefined } },
     timeline: loading,
     state: loading,
-    prompts: loading,
+    turns: loading,
     requests: loading,
     events: loading,
   },
@@ -129,27 +130,11 @@ export const DrawerFailed: Story = { args: { openDrawer: { detail: requestFailed
 export const DrawerRetained: Story = { args: { openDrawer: { detail: requestRetained, raw: rawRetained, tab: "raw" } } };
 
 /** A Codex thread (handoff §11L.5): the ProviderMark with its client, only Codex's facts and stats; Claude Code's lanes absent. */
-export const CodexPrompts: Story = { args: { session: readyRegion(sessionCodex.data), prompts: readyRegion(promptsCodex), requests: readyRegion(requestsCodex) } };
+export const CodexTurns: Story = { args: { session: readyRegion(sessionCodex.data), turns: readyRegion(turnsCodex), requests: readyRegion(requestsCodex) } };
 /** Codex's Requests (§11L.6): chips for its channels with calls, the hidden-calls checkbox, details shaped per channel. */
-export const CodexRequests: Story = { args: { ...CodexPrompts.args, initialTab: "requests" } };
+export const CodexRequests: Story = { args: { ...CodexTurns.args, initialTab: "requests" } };
 
-// A 45-step turn (§11L.7), built from CompProviders' step specimens: reads, a failing test
-// loop (a run), a patch, more commands, a closing text step.
-const turn: StepData[] = Array.from({ length: 45 }, (_, i): StepData => {
-  const base = longTurnSteps.first.step;
-  const t = new Date(Date.parse(base.t) + i * 25_000).toISOString();
-  const step = { ...base, requestId: `turn-step-${i + 1}`, t, durationMs: 20_000 };
-  if (i === 20) return { ...step, does: "patch", patches: [{ file: "src/timer.ts", added: 12, removed: 3 }] };
-  if (i === 44) return { ...step, does: "text", text: "Tests pass now. The flake came from", stopReason: "end_turn" };
-  if (i === 30) return { ...step, does: "mcp" };
-  return { ...step, commands: i < 20 ? ["rg"] : ["npm test"], exitCodes: i > 20 && i < 30 ? [1] : [0] };
-});
-const longTurn: PromptItem = { ...longTurnPrompt, steps: turn, prompt: { ...longTurnPrompt.prompt, steps: turn.length } };
-/** A long turn opened: the StepStrip under the prompt, numbered steps, command-only runs collapsed. */
-export const LongTurn: Story = {
-  args: {
-    session: readyRegion(sessionCodex.data),
-    prompts: readyRegion({ ...promptsCodex, data: [longTurn] }),
-    jumpTo: { index: 1, seq: 1 },
-  },
-};
+/** Recorded content: the prompt's text, paths in the groups, the reply's preview. */
+export const WithContent: Story = { args: { turns: readyRegion(turnsWithContent), jumpTo: { index: 1, seq: 1 } } };
+/** A turn with MCP, web and a spawned subagent, its ⤷ row under it. */
+export const Subagents: Story = { args: { turns: readyRegion(turnsSubagents), jumpTo: { index: 2, seq: 1 } } };

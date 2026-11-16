@@ -2,12 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import person from "../../api/samples/person/demo";
 import personLinked from "../../api/samples/person/linked_codex";
-import sessionsCodex from "../../api/samples/person_sessions/codex_threads";
+import workCodex from "../../api/samples/person_work/codex";
 import requestsDemo from "../../api/samples/person_requests/demo";
 import requestsEmpty from "../../api/samples/person_requests/empty";
 import requestsNotCaptured from "../../api/samples/person_requests/not_captured";
-import sessionsDemo from "../../api/samples/person_sessions/demo";
-import sessionsEmpty from "../../api/samples/person_sessions/empty";
+import workDemo from "../../api/samples/person_work/demo";
+import workEmpty from "../../api/samples/person_work/empty";
+import workMany from "../../api/samples/person_work/many";
 import summary from "../../api/samples/person_summary/demo";
 import timeline from "../../api/samples/person_timeline/demo";
 import requestDetail from "../../api/samples/request/demo";
@@ -34,9 +35,9 @@ const base: PersonScreenProps = {
   timeline: readyRegion(timeline.data),
   range: null,
   onRange: fn(),
-  tab: "sessions",
+  tab: "work",
   onTab: fn(),
-  sessions: readyRegion(sessionsDemo),
+  work: readyRegion(workDemo),
   requests: readyRegion(requestsDemo),
   page: 1,
   onPage: fn(),
@@ -57,12 +58,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** The demo person (real traffic, sanitized): live, with a coverage gap. */
-export const Sessions: Story = {};
+/** The Work tab (§11R): sessions grouped by repo. */
+export const Work: Story = {};
+/** Several repos, and sessions from before the repo was parsed. */
+export const WorkManyRepos: Story = { args: { work: readyRegion(workMany) } };
 export const AllRequests: Story = { args: { tab: "requests" } };
 /** A person linked by email (handoff §11L.3): the ProviderMark names both agents; All agents, then a Claude Code and a Codex row, each with only its own fields. */
-export const Linked: Story = { args: { person: readyRegion(personLinked.data), sessions: readyRegion(sessionsCodex), agentScope: "all", onAgentScope: fn() } };
+export const Linked: Story = { args: { person: readyRegion(personLinked.data), work: readyRegion(workCodex), agentScope: "all", onAgentScope: fn() } };
 /** A linked person scoped to Codex (§11M 3.3): the sessions table without Agent; All requests with Codex's chips. */
-export const LinkedCodex: Story = { args: { person: readyRegion(personLinked.data), sessions: readyRegion(sessionsCodex), agentScope: "codex", onAgentScope: fn() } };
+export const LinkedCodex: Story = { args: { person: readyRegion(personLinked.data), work: readyRegion(workCodex), agentScope: "codex", onAgentScope: fn() } };
 /** A linked person's All requests in All agents: the shared chips and the agent-dot column. */
 export const LinkedAllRequests: Story = { args: { person: readyRegion(personLinked.data), tab: "requests", agentScope: "all", onAgentScope: fn(), onShowHidden: fn() } };
 /** "view N calls" (or the timeline's hatch): All requests filtered to calls the proxy didn't capture (handoff §11E.2). */
@@ -110,7 +114,7 @@ export const AllRequestsDrawer: Story = {
   },
 };
 /** First load: every region shows its skeleton; the header crumb is a skeleton word. */
-export const Loading: Story = { args: { person: loading, summary: loading, timeline: loading, sessions: loading, requests: loading, live: { status: "connecting" } } };
+export const Loading: Story = { args: { person: loading, summary: loading, timeline: loading, work: loading, requests: loading, live: { status: "connecting" } } };
 /** No traffic has reached the proxy yet. */
 export const Waiting: Story = { args: { waiting: { steps: waitingSteps(waitingStatus.data, new Date(NOW)), checkedAt: NOW }, live: { status: "waiting" } } };
 /** The scope is live but nothing has arrived for over 3 minutes. */
@@ -125,7 +129,7 @@ export const RefreshFailed: Story = {
 export const EmptyRange: Story = {
   args: {
     range: { from: "2026-11-02T01:00:00Z", to: "2026-11-02T03:00:00Z" },
-    sessions: readyRegion(sessionsEmpty),
+    work: readyRegion(workEmpty),
     requests: readyRegion(requestsEmpty),
   },
 };
