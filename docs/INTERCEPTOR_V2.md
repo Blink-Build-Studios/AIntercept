@@ -60,14 +60,18 @@ AIntercept works this out per call, without keeping state:
 
 | Client / API | The request chains to a previous response | Otherwise |
 |---|---|---|
-| Anthropic Messages (Claude Code, the SDKs) | Claude Code's message threads (`thread`, `previous_message_id`): every message in the request is new | the messages after the last `assistant` message |
-| OpenAI Responses (Codex over HTTP or WebSocket, the SDKs) | `previous_response_id`: every input item is new | the input items after the last output item (assistant message, function or custom tool call) |
+| Anthropic Messages (Claude Code, the SDKs) | Claude Code's message threads (`thread`, `previous_message_id`): every message in the request is new | the messages after the last `assistant` message; when the request ends with an `assistant` message (a prefill), that message and the prompt before it |
+| OpenAI Responses (Codex over HTTP or WebSocket, the SDKs) | `previous_response_id`: every input item is new | the input items after the last output item (an assistant message, `reasoning`, or any `*_call` item) |
 | OpenAI Chat Completions | n/a | the messages after the last `assistant` message |
 | ChatGPT on the web | the request carries only the new message (the server keeps the conversation) | |
 | claude.ai | the request carries only the new prompt and its attachments | |
 
 The new messages of a request are usually one user prompt, or the results of
-the tool calls the model just made (sometimes with a user note).
+the tool calls the model just made (sometimes with a user note). Each tool call
+and each tool result is its own message: a model turn with text and two tool
+calls is three messages. System prompts, developer instructions and tool
+catalogs aren't messages. Content of a type AIntercept doesn't recognise
+arrives as Opaque.
 
 The **response** is split into messages as it streams: the reply text, and
 each tool call.
