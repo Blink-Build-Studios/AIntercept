@@ -30,6 +30,11 @@ const (
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant" // the model: its reply, its reasoning, and each tool call it made
 	RoleTool      Role = "tool"      // a tool call's result
+	// RoleSystem is the harness's own text in the conversation: system and
+	// developer messages, and the notes it writes into a user's turn (a
+	// system reminder, an interrupted request, its environment). Not the
+	// user's words.
+	RoleSystem Role = "system"
 )
 
 // Kind is what a Part holds.
@@ -112,6 +117,9 @@ type Part struct {
 
 	content string // the full content: text, arguments, or media (base64 when b64)
 	b64     bool
+	// pre and post wrap the content in the body: the harness's words around
+	// the user's (Claude Code's mid-turn note). A Replace keeps them.
+	pre, post string
 }
 
 // Span is a range of bytes in Request.Body, [Start, End).
@@ -152,14 +160,33 @@ func ParseWebSocket(host, path string, msg []byte) (Request, bool) {
 
 // Parse parses a model request's body (decoded per its content-encoding) sent
 // to host and path. ok is false for a request in a format it doesn't read:
-// another endpoint, a body that isn't that endpoint's request, or a malformed
-// one.
+// another endpoint, or a body that isn't a conversation (not JSON, no
+// messages). Anything in a conversation it doesn't know is an opaque part;
+// it never makes the request unreadable.
 func (p Parser) Parse(host, path string, body []byte) (Request, bool) {
+	r, why := p.ParseReason(host, path, body)
+	return r, why == ""
+}
+
+// ParseReason is Parse, saying why a request isn't readable ("" when it is).
+func ParseReason(host, path string, body []byte) (Request, string) {
+	return Parser{}.ParseReason(host, path, body)
+}
+
+// ParseReason is Parse, saying why a request isn't readable ("" when it is).
+func (p Parser) ParseReason(host, path string, body []byte) (Request, string) {
 	format := formatOf(host, path)
-	if format == "" || !json.Valid(body) {
-		return Request{}, false
+	switch {
+	case format == "":
+		return Request{}, "not a model endpoint"
+	case !json.Valid(body):
+		return Request{}, "not JSON"
 	}
-	return p.parse(format, body)
+	r, ok := p.parse(format, body)
+	if !ok {
+		return Request{}, "not a conversation"
+	}
+	return r, ""
 }
 
 // ParseWebSocket parses a client message on a Responses WebSocket (Codex's
@@ -296,6 +323,62 @@ func (b *builder) fill(p Part) Part {
 
 func (b *builder) text(s string, span Span) Part {
 	return b.fill(Part{Kind: KindText, Size: len(s), Span: span, content: s})
+}
+
+// userText is a text part in a user's turn and whose it is: the user's
+// (RoleUser), with the harness's wrapper around their words set aside, or
+// the harness's own note (RoleSystem).
+func (b *builder) userText(s string, span Span) (Part, Role) {
+	if harnessNote(s) {
+		return b.text(s, span), RoleSystem
+	}
+	if pre, words, post, ok := midTurn(s); ok {
+		p := b.text(words, span)
+		p.pre, p.post = pre, post
+		return p, RoleUser
+	}
+	return b.text(s, span), RoleUser
+}
+
+// harnessNotes are how the harness's own notes in a user's turn begin:
+// Claude Code's system reminders, interrupted requests, and its title and
+// next-prompt suggestion requests; Codex's environment and instructions.
+var harnessNotes = []string{"<system-reminder", "[Request interrupted by user", "<session>", "[SUGGESTION MODE:",
+	"<environment_context>", "<user_instructions>", "<permissions instructions>"}
+
+func harnessNote(s string) bool {
+	t := strings.TrimSpace(s)
+	for _, h := range harnessNotes {
+		if strings.HasPrefix(t, h) {
+			return true
+		}
+	}
+	// Another sender's mid-turn note (an agent's, not the user's).
+	if i := strings.Index(t, " sent a message while you were working:"); i > 0 && i < 80 && !strings.HasPrefix(t, "The user ") {
+		return true
+	}
+	return false
+}
+
+// Claude Code's note for a message the user sends while it's working: the
+// user's words between a lead line and a trailing paragraph.
+const (
+	midTurnLead  = "The user sent a new message while you were working:\n"
+	midTurnTrail = "\n\nThis is how Claude Code surfaces messages the user sends mid-turn"
+)
+
+// midTurn splits Claude Code's mid-turn note into its wrapper and the user's
+// words.
+func midTurn(s string) (pre, words, post string, ok bool) {
+	if !strings.HasPrefix(s, midTurnLead) {
+		return "", "", "", false
+	}
+	rest := s[len(midTurnLead):]
+	i := strings.Index(rest, midTurnTrail)
+	if i < 0 {
+		return midTurnLead, rest, "", true
+	}
+	return midTurnLead, rest[:i], rest[i:], true
 }
 
 func (b *builder) toolCall(id, name, args string, span Span) Part {
@@ -438,14 +521,37 @@ func (b *builder) content(v value) ([]Part, bool) {
 		parts := make([]Part, 0, len(vs))
 		for _, e := range vs {
 			if e.kind() != '{' {
-				return nil, false
+				parts = append(parts, opaque(e))
+				continue
 			}
 			p, _ := b.contentPart(e)
 			parts = append(parts, p)
 		}
 		return parts, true
 	}
-	return nil, false
+	return []Part{opaque(v)}, true
+}
+
+// addUser adds a user's turn whose content is v and whose span is span: each
+// of the harness's notes in it is a RoleSystem message of its own, the rest
+// one RoleUser message between them, in order.
+func (b *builder) addUser(span Span, v value) {
+	parts, _ := b.content(v)
+	var run []Part
+	for _, p := range parts {
+		if p.Kind == KindText {
+			q, r := b.userText(p.content, p.Span)
+			if r == RoleSystem {
+				b.add(RoleUser, span, run...)
+				run = nil
+				b.add(RoleSystem, span, q)
+				continue
+			}
+			p = q
+		}
+		run = append(run, p)
+	}
+	b.add(RoleUser, span, run...)
 }
 
 func opaque(v value) Part {

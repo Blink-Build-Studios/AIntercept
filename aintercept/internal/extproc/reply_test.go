@@ -387,3 +387,31 @@ func TestV2ObserveReply(t *testing.T) {
 		t.Fatalf("rows %+v", *r.rows)
 	}
 }
+
+// A request v2 can't read goes upstream as sent and is counted, by reason; a
+// conversation with parts it doesn't know is read.
+func TestV2UnparsedReasons(t *testing.T) {
+	for _, c := range []struct{ path, body string }{
+		{"/v1/messages", `{}`},
+		{"/v1/messages/count_tokens", `{"messages":[{"role":"user","content":"hi"}]}`},
+		{"/v1/messages", `{"messages":[{"role":"system","content":"Note."},{"role":"user","content":[{"type":"brand_new","x":1},{"type":"text","text":"hi"}]}]}`},
+	} {
+		r := newBingRig(t, &interceptortest.FakeV2{}, interceptor.Config{})
+		r.send(eReqHeaders(false, ":authority", "api.anthropic.com", ":method", "POST", ":path", c.path, "content-type", "application/json"))
+		out := r.send(eReqBody(c.body, true))
+		if b, _ := streamed(out[len(out)-1]); string(b) != c.body {
+			t.Fatalf("%s: upstream got %s", c.path, b)
+		}
+		st := r.ic.Stats()
+		switch c.path {
+		case "/v1/messages/count_tokens":
+			if st.UnparsedReasons["not a model endpoint"] != 1 {
+				t.Errorf("stats %+v", st)
+			}
+		default:
+			if c.body == `{}` && st.UnparsedReasons["not a conversation"] != 1 || c.body != `{}` && st.Unparsed != 0 {
+				t.Errorf("%s: stats %+v", c.body, st)
+			}
+		}
+	}
+}

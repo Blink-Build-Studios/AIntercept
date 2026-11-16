@@ -6,9 +6,11 @@ import (
 )
 
 // responses reads an OpenAI Responses request's input (Codex over HTTP or its
-// WebSocket, the SDKs). instructions, developer and system messages, and tool
-// catalogs (additional_tools) aren't messages. Each input item is one message,
-// spanning the item.
+// WebSocket, the SDKs). instructions and tool catalogs (additional_tools)
+// aren't messages; developer and system messages, and the harness's notes in
+// user items (Codex's environment and instructions), are the harness's
+// (RoleSystem). Each input item is one message, spanning the item. Anything
+// it doesn't know is an opaque part.
 func (b *builder) responses(top map[string]value) bool {
 	input := top["input"]
 	if input.kind() == '"' { // a plain prompt
@@ -22,9 +24,6 @@ func (b *builder) responses(top map[string]value) bool {
 	}
 	for _, v := range items {
 		m, ok := members(v)
-		if !ok {
-			return false
-		}
 		var it struct {
 			Type      string `json:"type"`
 			Role      string `json:"role"`
@@ -33,25 +32,29 @@ func (b *builder) responses(top map[string]value) bool {
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"` // function_call, mcp_call: JSON text
 		}
-		if json.Unmarshal(v.raw, &it) != nil {
-			return false
+		if !ok || json.Unmarshal(v.raw, &it) != nil {
+			b.item(false)
+			b.add("", v.span, opaque(v))
+			continue
 		}
 		switch {
 		case it.Type == "" || it.Type == "message":
 			switch it.Role {
 			case "developer", "system":
 				b.item(false)
-				continue
-			case "user", "assistant":
+				parts, _ := b.content(m["content"])
+				b.add(RoleSystem, v.span, parts...)
+			case "user":
+				b.item(false)
+				b.addUser(v.span, m["content"])
+			case "assistant":
+				b.item(true)
+				parts, _ := b.content(m["content"])
+				b.add(RoleAssistant, v.span, parts...)
 			default:
-				return false
+				b.item(false)
+				b.add(Role(it.Role), v.span, opaque(v))
 			}
-			b.item(it.Role == "assistant")
-			parts, ok := b.content(m["content"])
-			if !ok {
-				return false
-			}
-			b.add(Role(it.Role), v.span, parts...)
 		case it.Type == "reasoning":
 			b.item(true)
 			b.add(RoleAssistant, v.span, opaque(v))
@@ -82,10 +85,11 @@ func (b *builder) responses(top map[string]value) bool {
 }
 
 // chat reads an OpenAI Chat Completions request's messages. System and
-// developer messages aren't ours. An assistant message's text and each of its
-// tool calls are separate messages: the text spans the message's content,
-// each call its tool_calls element. A user message spans its content; a tool
-// result, the whole message.
+// developer messages are the harness's (RoleSystem). An assistant message's
+// text and each of its tool calls are separate messages: the text spans the
+// message's content, each call its tool_calls element. A user or system
+// message spans its content; a tool result, the whole message. Anything it
+// doesn't know is an opaque part.
 func (b *builder) chat(top map[string]value) bool {
 	items, ok := elements(top["messages"])
 	if !ok {
@@ -93,41 +97,45 @@ func (b *builder) chat(top map[string]value) bool {
 	}
 	for _, v := range items {
 		m, ok := members(v)
-		if !ok {
-			return false
-		}
 		var it struct {
 			Role       string `json:"role"`
 			ToolCallID string `json:"tool_call_id"`
 			Name       string `json:"name"`
 		}
-		if json.Unmarshal(v.raw, &it) != nil {
-			return false
+		if !ok || json.Unmarshal(v.raw, &it) != nil {
+			b.item(false)
+			b.add("", v.span, opaque(v))
+			continue
 		}
+		c := m["content"]
+		hasContent := c.kind() != 0 && c.kind() != 'n'
 		switch it.Role {
 		case "system", "developer":
 			b.item(false)
-		case "user", "assistant":
-			b.item(it.Role == "assistant")
-			if c := m["content"]; c.kind() != 0 && c.kind() != 'n' {
-				parts, ok := b.content(c)
-				if !ok {
-					return false
-				}
-				b.add(Role(it.Role), c.span, parts...)
+			if hasContent {
+				parts, _ := b.content(c)
+				b.add(RoleSystem, c.span, parts...)
 			}
-			if it.Role == "assistant" && !b.chatToolCalls(m["tool_calls"]) {
-				return false
+		case "user":
+			b.item(false)
+			if hasContent {
+				b.addUser(c.span, c)
+			}
+		case "assistant":
+			b.item(true)
+			if hasContent {
+				parts, _ := b.content(c)
+				b.add(RoleAssistant, c.span, parts...)
+			}
+			if tc := m["tool_calls"]; !b.chatToolCalls(tc) {
+				b.add(RoleAssistant, tc.span, opaque(tc))
 			}
 		case "tool", "function": // function: the deprecated form, named by the function
 			b.item(false)
-			c := m["content"]
-			if k := c.kind(); k != '"' && k != '[' && k != 'n' && k != 0 {
-				return false
-			}
 			b.add(RoleTool, v.span, b.toolResult(firstOf(it.ToolCallID, it.Name), false, c, v.span)...)
 		default:
-			return false
+			b.item(false)
+			b.add(Role(it.Role), v.span, opaque(v))
 		}
 	}
 	return true

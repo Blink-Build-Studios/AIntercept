@@ -41,7 +41,7 @@ reply, a tool call, a tool result.
 ```proto
 message ConvMessage {
   string id = 1;              // stable: AIntercept's id for this message in this session
-  Role role = 2;              // USER, ASSISTANT, TOOL
+  Role role = 2;              // USER, ASSISTANT, TOOL, SYSTEM (the harness)
   repeated Part parts = 3;
   int32 index = 4;            // position in the conversation, from 0
 }
@@ -83,9 +83,43 @@ AIntercept works this out per call, without keeping state:
 The new messages of a request are usually one user prompt, or the results of
 the tool calls the model just made (sometimes with a user note). Each tool call
 and each tool result is its own message: a model turn with text and two tool
-calls is three messages. System prompts, developer instructions and tool
-catalogs aren't messages. Content of a type AIntercept doesn't recognise
-arrives as Opaque.
+calls is three messages. The system prompt (Anthropic's `system`, Responses'
+`instructions`) and tool catalogs aren't messages.
+
+### The harness's messages
+
+A message the user sends the model goes through a harness (Claude Code,
+Codex), and the harness adds its own text to the conversation. That text is a
+message of its own, `ROLE_SYSTEM`, never the user's:
+
+- system and developer messages in the conversation: Claude Code's notes when
+  tools are added or a file changes on disk, or a background task finishes;
+  Codex's permissions;
+- the notes the harness writes into a user's turn: a `<system-reminder>`, an
+  interrupted request (`[Request interrupted by user…]`), Claude Code's own
+  title and next-prompt suggestion requests (`<session>`,
+  `[SUGGESTION MODE: …]`), Codex's `<environment_context>` and
+  `<user_instructions>`, and another sender's mid-turn note ("The
+  coordinator sent a message while you were working: …").
+
+A user's turn is split accordingly: each note is its own `ROLE_SYSTEM`
+message, the user's text a `ROLE_USER` one. When the user types while Claude
+Code is working, Claude Code wraps the words ("The user sent a new message
+while you were working: … This is how Claude Code surfaces messages…"): the
+`ROLE_USER` text is just the user's words, and a Replace of them keeps the
+wrapper on the wire. The harness's messages can be replaced, and answered
+with a Respond, like any other.
+
+**Nothing unknown makes a request unreadable.** A role, an item, a block or a
+shape AIntercept doesn't know arrives as an `Opaque` part (present, never
+changed; `ROLE_UNSPECIFIED` for an unknown role), and the rest of the request
+is read. Only a body that isn't a conversation at all (not JSON, no
+`messages` or `input`), or another endpoint on an enforced route (a token
+count), goes upstream without `OnRequest`; the observer counts them by reason
+(`/stats`: `interceptor.unparsed_reasons`). On a capture of 9,832 Claude Code
+and Codex requests, one was: an empty `{}` body. (Before this, 5,450 Claude
+Code requests, every one with a system message in its conversation, went
+upstream unread.)
 
 The **response** is split into messages as it streams: each text block (a
 content block, a Responses message's text part, a Chat Completion's content),
@@ -286,9 +320,13 @@ call's rows: an HTTP call's, or on a WebSocket, each turn's own.
 
 - Opaque parts: it's told they exist, never what's in them, and can't change
   them.
-- Requests AIntercept can't read (an unknown format, a body over the 32 MiB
-  enforce cap): they go upstream untouched, counted, without `OnRequest`.
-- System prompts, developer instructions and tool catalogs aren't messages.
+- Bodies that aren't a conversation (not JSON, no messages), other endpoints
+  on an enforced route (a token count), and bodies over the 32 MiB enforce
+  cap: they go upstream untouched, counted by reason, without `OnRequest`.
+- The system prompt and tool catalogs aren't messages.
+- What a harness's note quotes is the harness's: a `<system-reminder>`
+  quoting a file the user wrote is `ROLE_SYSTEM`, not the user's prompt. An
+  unknown tag in a user's turn (a local hook's, say) stays the user's text.
 - Responses with a `content-encoding` AIntercept didn't remove, and WebSocket
   connections where the server negotiated compression the client was never
   offered: they pass unevaluated (counted).
@@ -325,6 +363,8 @@ Codex; the web apps follow.
 | N3 | A chained request (message threads, `previous_response_id`): every item arrives |
 | N4 | The same prompt from each client arrives as the same `ConvMessage` |
 | N5 | An unknown request format: passes through untouched and is counted, never broken |
+| N6 | The harness's messages (system messages in the conversation, notes in a user's turn) arrive as ROLE_SYSTEM; the user's mid-turn words as their prompt |
+| N7 | An unknown role, item, block or shape inside a conversation arrives as Opaque; the rest is read |
 | **References** | |
 | R1 | A part over the inline limit arrives as a reference with size and preview |
 | R2 | Fetch returns its content; a second round trip, inside the deadline |

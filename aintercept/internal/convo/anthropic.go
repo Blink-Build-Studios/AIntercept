@@ -5,9 +5,12 @@ import (
 	"strings"
 )
 
-// anthropic reads an Anthropic Messages request's messages. system and tools
-// aren't messages. One Anthropic message can hold several of ours: its text,
-// each tool call, each tool result.
+// anthropic reads an Anthropic Messages request's messages. The system prompt
+// and tools aren't messages; system messages in the conversation (Claude
+// Code's notes: tools added, a file changed) are the harness's (RoleSystem).
+// One Anthropic message can hold several of ours: its text, each tool call,
+// each tool result, and each of the harness's notes in a user's turn.
+// Anything it doesn't know is an opaque part.
 func (b *builder) anthropic(top map[string]value) bool {
 	items, ok := elements(top["messages"])
 	if !ok {
@@ -16,15 +19,21 @@ func (b *builder) anthropic(top map[string]value) bool {
 	for _, it := range items {
 		m, ok := members(it)
 		if !ok {
-			return false
+			b.item(false)
+			b.add("", it.span, opaque(it))
+			continue
 		}
 		role, _ := m["role"].str()
-		if role != "user" && role != "assistant" {
-			return false
-		}
-		b.item(role == "assistant")
-		if !b.anthropicContent(Role(role), m["content"]) {
-			return false
+		switch role {
+		case "user", "assistant":
+			b.item(role == "assistant")
+			b.anthropicContent(Role(role), m["content"])
+		case "system":
+			b.item(false)
+			b.anthropicContent(RoleSystem, m["content"])
+		default:
+			b.item(false)
+			b.add(Role(role), it.span, opaque(it))
 		}
 	}
 	return true
@@ -32,16 +41,25 @@ func (b *builder) anthropic(top map[string]value) bool {
 
 // anthropicContent splits a message's content into messages: each tool call
 // and tool result is its own, and the blocks between them are one message of
-// the item's role. Each message's span is its run of blocks (or the string).
-func (b *builder) anthropicContent(role Role, content value) bool {
+// the item's role (in a user's turn, each of the harness's notes is its own
+// RoleSystem message). Each message's span is its run of blocks (or the
+// string).
+func (b *builder) anthropicContent(role Role, content value) {
 	if content.kind() == '"' {
 		s, _ := content.str()
-		b.add(role, content.span, b.text(s, content.span))
-		return true
+		p, r := b.text(s, content.span), role
+		if role == RoleUser {
+			p, r = b.userText(s, content.span)
+		}
+		b.add(r, content.span, p)
+		return
 	}
 	blocks, ok := elements(content)
 	if !ok {
-		return false
+		if content.kind() != 0 && content.kind() != 'n' {
+			b.add(role, content.span, opaque(content))
+		}
+		return
 	}
 	var run []Part
 	var runSpan Span
@@ -49,47 +67,61 @@ func (b *builder) anthropicContent(role Role, content value) bool {
 		b.add(role, runSpan, run...)
 		run = nil
 	}
+	appendRun := func(p Part, span Span) {
+		if len(run) == 0 {
+			runSpan.Start = span.Start
+		}
+		runSpan.End = span.End
+		run = append(run, p)
+	}
 	for _, v := range blocks {
 		blk, ok := members(v)
 		if !ok {
-			return false
+			appendRun(opaque(v), v.span)
+			continue
 		}
 		typ, _ := blk["type"].str()
 		switch {
 		case typ == "tool_use", typ == "server_tool_use", typ == "mcp_tool_use":
-			flush()
 			var c struct {
 				ID   string `json:"id"`
 				Name string `json:"name"`
 			}
 			if json.Unmarshal(v.raw, &c) != nil {
-				return false
+				appendRun(opaque(v), v.span)
+				continue
 			}
+			flush()
 			b.add(RoleAssistant, v.span, b.toolCall(c.ID, c.Name, string(blk["input"].raw), v.span))
 		case strings.HasSuffix(typ, "tool_result"): // tool_result, and server tools' (web_search_tool_result, …)
-			flush()
 			var c struct {
 				ToolUseID string `json:"tool_use_id"`
 				IsError   bool   `json:"is_error"`
 			}
 			if json.Unmarshal(v.raw, &c) != nil {
-				return false
+				appendRun(opaque(v), v.span)
+				continue
 			}
+			flush()
 			if typ == "tool_result" {
 				b.add(RoleTool, v.span, b.toolResult(c.ToolUseID, c.IsError, blk["content"], v.span)...)
 				continue
 			}
 			raw := string(blk["content"].raw) // a server tool's result is structured: its JSON
 			b.add(RoleTool, v.span, b.fill(Part{Kind: KindToolResult, CallID: c.ToolUseID, Size: len(raw), Span: v.span, content: raw}))
-		default: // text, image, document; thinking and redacted_thinking are opaque
-			p, _ := b.contentPart(v)
-			if len(run) == 0 {
-				runSpan.Start = v.span.Start
+		default: // text, image, document; thinking, redacted_thinking and any block it doesn't know are opaque
+			p, isText := b.contentPart(v)
+			if isText && role == RoleUser {
+				if q, r := b.userText(p.content, v.span); r == RoleSystem {
+					flush()
+					b.add(RoleSystem, v.span, q)
+					continue
+				} else {
+					p = q
+				}
 			}
-			runSpan.End = v.span.End
-			run = append(run, p)
+			appendRun(p, v.span)
 		}
 	}
 	flush()
-	return true
 }

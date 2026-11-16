@@ -27,6 +27,7 @@ import (
 // isn't Accept wins (the rest are skipped):
 //
 //	prompt           rules → watches → OnRequest → OnMessage
+//	harness note     rules → watches → OnRequest → OnMessage
 //	tool result      rules → watches → OnToolCallResponse → OnRequest → OnMessage
 //	reply text       watches (rules on reply text among them) → rules → OnResponse → OnMessage
 //	tool call        rules → OnToolCallRequest → OnResponse → OnMessage
@@ -330,7 +331,15 @@ func (s *Server) OnRequest(ctx context.Context, r *pb.RequestMessages) (*pb.Requ
 			var res *ToolResult
 			switch k := p.GetKind().(type) {
 			case *pb.Part_Text:
-				m.Kind, m.Text, m.Newest = KindPrompt, k.Text.GetText(), i == newest
+				m.Text = k.Text.GetText()
+				switch cm.GetRole() {
+				case pb.Role_ROLE_USER:
+					m.Kind, m.Newest = KindPrompt, i == newest
+				case pb.Role_ROLE_SYSTEM:
+					m.Kind = KindHarness
+				default: // the model's text the request carries (a prefill)
+					m.Kind = KindText
+				}
 			case *pb.Part_ToolResult:
 				m.Kind, m.Text, m.Tool, m.IsError = KindToolResult, k.ToolResult.GetText(), k.ToolResult.GetName(), k.ToolResult.GetIsError()
 				res = &ToolResult{Name: m.Tool, Text: m.Text, IsError: m.IsError, Message: m, Call: c}
@@ -349,7 +358,7 @@ func (s *Server) OnRequest(ctx context.Context, r *pb.RequestMessages) (*pb.Requ
 				m.Text = p.GetPreview()
 			}
 			steps := s.ruleSteps(m, false)
-			if m.Kind == KindPrompt || m.Kind == KindToolResult {
+			if m.Kind == KindPrompt || m.Kind == KindToolResult || m.Kind == KindHarness {
 				steps = append(steps, s.watchStep(s.reqW))
 			}
 			if res != nil && s.hooks.OnToolCallResponse != nil {

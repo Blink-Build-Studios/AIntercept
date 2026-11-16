@@ -94,7 +94,7 @@ func (srv *Server) observeStart(st *streamState) {
 	ic.call = ci.Call()
 	srv.ic.ObserveStart(ci.Start())
 	if srv.ic.Content() && srv.ic.V2() && st.reqTrunc {
-		srv.ic.Unparsed() // over the buffer: it can't be read
+		srv.ic.Unparsed("over the buffer") // it can't be read
 	}
 	if srv.ic.Content() && len(body) > 0 {
 		if plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"]); err == nil {
@@ -113,11 +113,11 @@ func (srv *Server) observeStart(st *streamState) {
 // parseRequest reads a request body for OnRequest (v2). A body it can't
 // read goes upstream untouched, and is counted.
 func (srv *Server) parseRequest(st *streamState, plain []byte) (convo.Request, bool) {
-	r, ok := srv.ic.Parser().Parse(st.host, st.path, plain)
-	if !ok {
-		srv.ic.Unparsed()
+	r, why := srv.ic.Parser().ParseReason(st.host, st.path, plain)
+	if why != "" {
+		srv.ic.Unparsed(why)
 	}
-	return r, ok
+	return r, why == ""
 }
 
 // parseWSRequest reads a client WebSocket message for OnRequest (v2): a
@@ -129,7 +129,7 @@ func (srv *Server) parseWSRequest(st *streamState, m wsframe.Message) (convo.Req
 	}
 	r, ok := srv.ic.Parser().ParseWebSocket(st.host, st.path, m.Payload)
 	if !ok && messageType(m.Payload) == "response.create" {
-		srv.ic.Unparsed()
+		srv.ic.Unparsed("not a conversation")
 	}
 	return r, ok
 }

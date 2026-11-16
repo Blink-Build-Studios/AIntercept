@@ -265,7 +265,7 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 	if requests && len(body) > 0 {
 		plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"])
 		if err != nil {
-			srv.ic.Unparsed()
+			srv.ic.Unparsed("undecodable body")
 		} else if r, ok := srv.parseRequest(st, plain); ok {
 			switch d := srv.decideRequest(st, r); d.Action {
 			case interceptor.Replace:

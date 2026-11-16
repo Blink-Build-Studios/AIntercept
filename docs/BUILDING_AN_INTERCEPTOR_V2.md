@@ -61,9 +61,9 @@ replies at all: an Interceptor pays only for what it handles.
 
 Each takes a matcher and ends with `.Reply(text)` (answer for the model),
 `.Replace(text)` (replace what matched) or `.Do(func(*Message) Answer)`.
-Matchers: `Contains(s)` (ignoring case), `Matches(re)`, `Prompt(m)` (the
-user's prompts only: `OnRequest` alone also sees tool results and media),
-`Arg(name, m)` (a tool call's argument), `Tool(name)`, `And`, `Or`, `Not`.
+Matchers: `Contains(s)` (ignoring case), `Matches(re)`, `Prompt(m)` (only
+what the user sent: `OnRequest` alone also sees the harness's notes, tool
+results and media), `Arg(name, m)` (a tool call's argument), `Tool(name)`, `And`, `Or`, `Not`.
 
 ```go
 intercept.Run(
@@ -106,6 +106,7 @@ the first answer that isn't Accept wins; the rest are skipped:
 | Tool result | rules → watches → `OnToolCallResponse` → `OnRequest` → `OnMessage` |
 | Reply text (each piece) | watches (rules on reply text among them) → `OnResponse` → `OnMessage` |
 | Tool call | rules → `OnToolCallRequest` → `OnResponse` → `OnMessage` |
+| Harness note | rules → watches → `OnRequest` → `OnMessage` |
 | Opaque part (reasoning) | `OnResponse` → `OnMessage`; the answer is ignored |
 
 If nothing applies to the reply's text, or to its tool calls, the library
@@ -124,7 +125,8 @@ the process: run one replica, or keep state you need across replicas
 elsewhere.
 
 **`Message`**: `Direction` (`ToModel`, `FromModel`), `Kind` (`KindPrompt`,
-`KindToolResult`, `KindText`, `KindToolCall`, `KindMedia`, `KindOpaque`),
+`KindToolResult`, `KindText`, `KindToolCall`, `KindMedia`, `KindOpaque`,
+`KindHarness`),
 `Text`, `Tool`, `Call`, `Newest` (the prompt the user just sent), `Truncated`
 and `Size` (content over the inline limit: `Text` is its start), `ID`, and
 for reply text `Before` (the block's text already released to the client)
@@ -132,6 +134,15 @@ and `Final` (the block's last piece). `Changeable()` says whether an answer
 can take effect (enforce mode, and not media or opaque). Helpers:
 `Contains`, `Matches`, `IsPrompt`, `IsToolCall(name)`, `Command()`, `Path()`,
 `ReplaceAll(re, repl)`.
+
+**What the user sent, and what the harness added.** A user's message to the
+model goes through the harness (Claude Code, Codex), which adds its own text:
+system reminders, notes that a file changed or tools were added, Codex's
+environment. That text is `KindHarness`, never `KindPrompt`, so `Prompt(m)`
+matches only what the user sent. When the user types while Claude Code is
+working, `Text` is just their words, without Claude Code's wrapper (and a
+`Replace` keeps the wrapper). Rules, watches and hooks see `KindHarness`
+messages too, and can replace or answer them like any other.
 
 **`ToolCall`**: `Name`, `Server` (an MCP tool's server), `Args`, `Arg(name)`,
 `Command()` (a shell command, Claude Code's or Codex's), `Path()`, plus

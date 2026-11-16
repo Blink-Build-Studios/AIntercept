@@ -144,9 +144,10 @@ func (p promptMatcher) Match(m *Message) bool {
 	return m.Kind == KindPrompt && (p.m == nil || p.m.Match(m))
 }
 
-// Prompt matches the user's prompts that m matches (nil: every prompt): not
-// tool results (a file the agent read, a command's output), media, or
-// anything from the model.
+// Prompt matches the user's prompts that m matches (nil: every prompt): what
+// the user sent the model through the harness, and nothing else: not the
+// harness's own notes (KindHarness), tool results (a file the agent read, a
+// command's output), media, or anything from the model.
 func Prompt(m Matcher) Matcher { return promptMatcher{m} }
 
 type allOf []Matcher

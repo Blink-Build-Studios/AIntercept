@@ -95,6 +95,13 @@ func (h *Harness) Prompt(text string) *Result {
 		{Id: "m1/0", Size: int64(len(text)), Kind: &pb.Part_Text{Text: &pb.Text{Text: text}}}}})
 }
 
+// Harness is the harness's own note going to the model (a system message,
+// a system reminder in the user's turn).
+func (h *Harness) Harness(text string) *Result {
+	return h.request("harness note", &pb.ConvMessage{Id: "m1", Role: pb.Role_ROLE_SYSTEM, Parts: []*pb.Part{
+		{Id: "m1/0", Size: int64(len(text)), Kind: &pb.Part_Text{Text: &pb.Text{Text: text}}}}})
+}
+
 // ToolResult is tool's result going back to the model.
 func (h *Harness) ToolResult(tool, text string) *Result {
 	return h.request("tool result", &pb.ConvMessage{Id: "m1", Role: pb.Role_ROLE_TOOL, Parts: []*pb.Part{

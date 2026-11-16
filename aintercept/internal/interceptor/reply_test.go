@@ -200,3 +200,35 @@ func TestV2ToolResultName(t *testing.T) {
 		t.Fatalf("tool result %v", r)
 	}
 }
+
+// A Claude Code turn with the harness's messages: OnRequest gets them as
+// ROLE_SYSTEM, and the user's mid-turn words as a ROLE_USER text without the
+// wrapper; replacing those words keeps the wrapper on the wire.
+func TestV2HarnessMessages(t *testing.T) {
+	body := `{"model":"m","thread":{"type":"create"},"messages":[{"role":"user","content":"go"},` +
+		`{"role":"system","content":[{"type":"text","text":"Tools added."},{"type":"tool_addition","tool":{}}]},` +
+		`{"role":"assistant","content":"ok"},{"role":"system","content":"Note: a.go changed."},` +
+		`{"role":"user","content":[{"type":"text","text":"<system-reminder>be brief</system-reminder>"},` +
+		`{"type":"text","text":"The user sent a new message while you were working:\nuse b.go\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn."}]}]}`
+	var got []string
+	f := &interceptortest.FakeV2{Request: func(q *pb2.RequestMessages) *pb2.RequestVerdict {
+		v := &pb2.RequestVerdict{}
+		for _, m := range q.GetMessages() {
+			got = append(got, m.GetRole().String()+": "+m.GetParts()[0].GetText().GetText())
+			if m.GetRole() == pb2.Role_ROLE_USER {
+				m.GetParts()[0].GetText().Text = "use c.go"
+				v.Messages = append(v.Messages, &pb2.MessageVerdict{MessageId: m.GetId(), Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m}}})
+			}
+		}
+		return v
+	}}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	defer c.Close()
+	d := c.DecideRequest(context.Background(), call, parse(t, body))
+	if want := []string{"ROLE_SYSTEM: Note: a.go changed.", "ROLE_SYSTEM: <system-reminder>be brief</system-reminder>", "ROLE_USER: use b.go"}; strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("OnRequest got %q", got)
+	}
+	if want := strings.Replace(body, "use b.go", "use c.go", 1); d.Action != interceptor.Replace || string(d.Payload) != want {
+		t.Fatalf("decision %v\n%s", d.Action, d.Payload)
+	}
+}
