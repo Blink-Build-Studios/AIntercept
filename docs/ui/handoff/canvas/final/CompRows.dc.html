@@ -78,7 +78,7 @@ body{margin:0;background:#0c0e0f}
 </div>
 
 <div class="comp"><span class="cname">PromptRow · StepRow · ToolCallRow · BetweenRow</span><span class="props">PromptRow: index, time, text | shape, steps, duration, tokens, tools, friction, expanded · StepRow: model | subagent, status · ToolCallRow: tool, target, result, marker? · BetweenRow: compaction | recap</span>
-<sc-for list="{{prompts}}" as="r" hint-placeholder-count="4"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="{{r.spec}}" class="row m" style="min-width: 1100px; background: {{r.bg}}">
+<sc-for list="{{prompts}}" as="r" hint-placeholder-count="4"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="{{r.spec}}" data-spec-illustrative="true" class="row m" style="min-width: 1100px; background: {{r.bg}}">
 <span style="width: 18px">{{r.tw}}</span><span style="width: 40px; font-weight: 600">#{{r.n}}</span><span style="width: 92px; color: #a3a9ad">{{r.t}}</span><span style="width: 240px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.txt}}</span><span style="width: 70px">{{r.steps}}</span><span style="width: 64px; color: #a3a9ad">{{r.dur}}</span><span style="width: 110px">{{r.tok}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{r.tools}}</span><span style="width: 80px">{{r.mk}}</span>
 </div></div></div></sc-for>
 <sc-for list="{{steps}}" as="r" hint-placeholder-count="7"><div class="var"><span class="cap">{{r.cap}}</span><div class="frame"><div data-spec="{{r.spec}}" class="row m" style="min-width: 1100px; padding-left: {{r.pad}}; background: {{r.bg}}">

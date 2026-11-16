@@ -2414,6 +2414,75 @@ These four features need recomputation across a whole session whenever new data 
   | CompAgents | 4360 |
   | CompPersonTimeline | 1960 |
 
+## 11R. Turns and work above the request layer: Direction A, the turn ledger (canvas: CompTurns, Session, Main, People, CompPersonTimeline; Explorations page)
+
+The Session and Person pages now lead with **turns and the work they did**, not requests. A turn is one prompt plus all the work it started (Codex's word). Steps are model calls. Requests, events and the drawer are unchanged, one level down. Everything is drawn **metadata-first**, from what customer installs record; recorded content only adds detail.
+
+The Explorations page (`Exp*.dc.html`, all illustrative) holds the three directions considered. **A, the turn ledger, was chosen.** B (ledger plus work rail) and C (phases) are reference only.
+
+### Session page (Session.dc.html redrawn)
+
+1. **Header stats:**
+   - Span (sub: active time) · Turns (sub: interrupted) · Steps (`+94 not captured`) · Tokens (sub: cache read) · Cost (Claude Code only) · Edited (sub: +/− lines) · Commits (sub: head range) · Device · Approvals bypassed.
+   - The `Events` stat is removed.
+2. **OutcomeSlot** sits under the header:
+   - a dashed placeholder tagged `needs a generated summary · not captured yet`;
+   - followed by the facts we capture: commits, files edited by type, the last test program's exit code, PR.
+3. **Timeline:**
+   - **Turns** (26px, replaces Prompts): one block per turn from its prompt to its last step.
+   - **Work** (76px, replaces Model calls): stacked bars per bin, commands and reads in `--ink-muted` below, edits in `--ink` on top. The not-captured row is unchanged.
+   - Context and Friction are unchanged.
+   - The range readout reads `4 turns · 96 steps · …`.
+4. **Tabs:** `Turns · Requests · Events`, with Turns as the default (the prop `tab` becomes `turns | requests | events`).
+5. **Turns tab:** `DataTable/turns`.
+   - **TurnRow columns:** Turn, Started, Asked (prompt size; text when content is recorded), Work done, Steps, Time, Tokens, Cost, friction.
+   - **Expanding a turn** shows WorkGroups. A group opens to TurnSteps. A step's `raw request ›` opens today's drawer on that call.
+   - **Subagents** appear as a `⤷` row under the turn that spawned them.
+   - CompTurns has every state.
+
+### Person page (Main.dc.html redrawn)
+
+1. **Common header row:** Sessions · **Turns** · Tokens · **Active** · **Edited** · **Commits** · Devices · Last seen. **Cost** moves into the Claude Code AgentRow.
+2. **Request ribbon removed.** The model calls, analytics and account call tiles are gone. In their place is `OutcomeSlot/person` ("This fortnight"). The coverage line stays.
+3. **Timeline:** Sessions · **Turns** (ticks) · **Work** (stacked, 88px) · Friction. The Analytics lane is removed. Total height 254.
+4. **Tabs:** `Work · N sessions` (default, `DataTable/work`) and `All requests` (unchanged, forensic).
+   - The Work tab groups sessions under a **RepoRow**: repo or workspace, session count, turns, active time, work line.
+   - Under it, **SessionRow (work)**: started · live dot · label · turns · active · work · friction.
+   - Calls, Events, Bypass and Missed leave this table.
+5. **Footprint panel:** Prompts → Turns. The loading skeleton has 4 lanes.
+
+### People page (People.dc.html)
+
+- The Prompts column becomes Turns.
+- A new **Working on** column (160px) sits after Last seen: the live turn and repo (`aintercept · turn #34`), otherwise the repos.
+- The Agents column is now 200px.
+- The ribbon's Requests tile becomes Turns.
+
+### Rules
+
+- **Work line:** see CompTurns → Work line vocabulary.
+  - The phrases are `read N files`, `edited N files +a −b`, `ran <program> ×N: k failed, then passed`, `spawned N subagents`, `searched/fetched`, `used <server>`, `N commits · PR`.
+  - Phrases come from step kinds, tool names, and Claude Code's analytics (program, exit code, file types, lines).
+  - Codex gives tool counts only.
+- **Failed commands count as work, not friction.** Show `3 failed` in `--ink`, never red.
+- **Long content:** a ContentBlock is collapsed when it is over 12 lines or 4 KB.
+  - The header shows the size.
+  - Previews show the head for files and prompts, the tail for command output, and the head (rendered) for replies.
+  - Expanding shows up to 400 lines, then `open in raw ›`.
+- **Without content:** prompt size instead of text, file types instead of paths, no previews.
+- **Superseded:** `PromptRow/*` specimens (CompRows, CompR11, CompTableHover, CompAgents, CompProviders) are now illustrative; TurnRow replaces them.
+  - Bar-lane and marker-lane specimens elsewhere (Model calls / Prompts, including hover and readout) still define geometry and interaction for the Work and Turns lanes.
+- **Not designed yet:** generated summaries (slots only) and the chat-app ledger (same page, chat vocabulary; needs recorded content to be useful).
+
+### Data the API needs (per turn, precomputed)
+
+- `turn{n, startedAt, endedAt, promptChars, promptText?, steps, tokensIn, tokensOut, cost?, friction[]}`
+- `turn.work{reads, readTypes, edits, editTypes, linesAdded, linesRemoved, commands[{program, n, failed}], subagents[], web, mcp[], commits}`
+- `turn.groups[{kind, title, meta, steps[], exits?}]`
+- Per session: the same totals, plus `outcomeFacts`.
+- Per person: totals and `workingOn` (live session's turn and repo).
+- Per bin: `work{edits, other}`.
+
 ## 12. Acceptance checklist (whole project)
 
 - [ ] `tokens.css` generated; no hex literals outside it (lint rule `stylelint-declaration-strict-value`).

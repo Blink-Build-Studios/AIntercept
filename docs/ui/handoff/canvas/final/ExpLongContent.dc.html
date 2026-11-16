@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Long content & the forensic path</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0c0e0f}
+.m{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:20px}
+.k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90}
+.cname{font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:22px;font-weight:600}
+.props{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#a3a9ad}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:14px;letter-spacing:.04em;text-transform:uppercase;color:#848c90;margin-bottom:6px}
+.comp{display:flex;flex-direction:column;gap:10px}
+.frame{background:#131618;border:1px solid #2a3034;width:1344px;position:relative;box-sizing:border-box}
+.lane{display:flex;border-bottom:1px solid #2a3034;position:relative}
+.lab{width:132px;flex:none;padding:6px 12px;box-sizing:border-box;border-right:1px solid #2a3034;overflow:hidden}
+.lab .k,.lab .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:16px;color:#a3a9ad}
+.rl{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:16px;color:#a3a9ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{position:relative;flex:1}
+.row{display:flex;align-items:center;gap:12px;padding:4px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid #60686d;border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:18px;font-weight:500;letter-spacing:.04em;color:#e6e3db}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;color:#e6e3db;background:#131618;border:1px solid #60686d;border-radius:2px;padding:5px 10px;cursor:pointer}
+.tbl{background:#131618;border:1px solid #2a3034}
+.tbl .row{white-space:normal;align-items:flex-start}
+.note{color:#a3a9ad;font-size:12px;line-height:18px;max-width:1100px}
+.spec{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 32px}
+.cells{display:flex;flex-wrap:wrap;gap:12px}
+.cell{background:#131618;border:1px solid #2a3034;padding:14px 16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:150px}
+.illus{border:1px dashed #60686d}
+
+.tipb{text-align:left;box-sizing:border-box;white-space:normal;background:#1b1f22;border:1px solid #60686d;border-radius:2px;padding:8px 10px;font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:18px;color:#e6e3db;width:max-content;max-width:360px}
+.page{background:#0c0e0f;border:1px solid #2a3034;width:1344px;box-sizing:border-box}
+.pb{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.st{padding:0 16px;border-right:1px solid #2a3034}
+.st .v{font-family:"IBM Plex Mono",monospace;font-weight:500;white-space:nowrap}
+.gen{border:1px dashed #60686d;background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(132,140,144,.06) 6px 7px);padding:10px 12px}
+.oq{border-left:2px solid #ffd36b;padding:6px 12px;background:#131618;font-size:12px;line-height:18px;color:#e6e3db}
+.oq b{color:#ffd36b;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;font-weight:500;margin-right:6px}
+.cnt{border-left:2px solid #7db3ff;padding-left:10px}
+.vrow{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #2a3034;white-space:nowrap}
+.panel{background:#131618;border:1px solid #2a3034}
+.ph{padding:8px 12px;border-bottom:1px solid #2a3034;display:flex;align-items:center;gap:8px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 12px;border-bottom:1px solid #2a3034}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1387px; box-sizing: border-box; padding: 48px; background: #0c0e0f; color: #e6e3db; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 44px">
+<div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid #2a3034; padding-bottom: 16px">
+<span class="k">aintercept Wire · exploration · content</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600">Long content & the forensic path</span>
+<span style="color: #a3a9ad; max-width: 1100px">How a pasted file, a large tool result or a long reply shows without taking over the page, and how far down the raw request sits.</span>
+</div>
+<div class="comp"><span class="cname">Long content</span><span class="props">collapsed by default; preview + size; expandable</span>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style=""><div class="cap">with content</div><div style="display: flex; flex-direction: column; gap: 10px"><div class="panel" style="width: 640px"><div class="ph"><span class="k">Pasted into prompt</span><span class="m" style="color: #a3a9ad">18.4 KB · 412 lines · .csv</span><span style="flex: 1"></span><span class="m" style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d">expand</span></div><div style="padding: 8px 12px"><div class="m" style="font-size: 12px; color: #a3a9ad; white-space: pre; overflow: hidden; max-height: 84px; -webkit-mask-image: linear-gradient(#000 60%, transparent)">id,email,plan,created_at
+1041,ana@…,team,2026-09-02
+1042,raj@…,pro,2026-09-02
+1043,li@…,team,2026-09-03</div></div><div class="m" style="padding: 4px 12px; border-top: 1px solid #2a3034; font-size: 11px; color: #848c90">head 4 of 412 lines · full text in raw request ›</div></div><div class="panel" style="width: 640px"><div class="ph"><span class="k">Tool result · Bash npm test</span><span class="m" style="color: #a3a9ad">212 KB · 3,880 lines · exit 1</span><span style="flex: 1"></span><span class="m" style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d">expand</span></div><div style="padding: 8px 12px"><div class="m" style="font-size: 12px; color: #a3a9ad; white-space: pre; overflow: hidden; max-height: 84px; -webkit-mask-image: linear-gradient(#000 60%, transparent)">  ✓ refresh waits on in-flight promise (12 ms)
+  ✕ concurrent refresh writes once
+    Expected: 1  Received: 2
+Tests: 1 failed, 61 passed</div></div><div class="m" style="padding: 4px 12px; border-top: 1px solid #2a3034; font-size: 11px; color: #848c90">tail 4 of 3,880 lines (command output shows the end) · raw response ›</div></div><div class="panel" style="width: 640px"><div class="ph"><span class="k">Reply</span><span class="m" style="color: #a3a9ad">3.4k tokens · 212 lines</span><span style="flex: 1"></span><span class="m" style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d">expand</span></div><div style="padding: 8px 12px"><div class="m" style="font-size: 12px; color: #a3a9ad; white-space: pre; overflow: hidden; max-height: 84px; -webkit-mask-image: linear-gradient(#000 60%, transparent)">Fixed: two refreshes could race and both write the cache.
+The second now awaits the first’s promise. I also added a
+test that fires two refreshes at once. Remaining work:
+1. The observer still retries 401s without backoff…</div></div><div class="m" style="padding: 4px 12px; border-top: 1px solid #2a3034; font-size: 11px; color: #848c90">head 4 lines · expand shows all, rendered as markdown</div></div></div></div><div style="margin-top: 8px"><div class="cap">metadata only (customer install)</div><div style="display: flex; flex-direction: column; gap: 10px"><div class="panel" style="width: 640px"><div class="ph"><span class="k">Pasted into prompt</span><span class="m" style="color: #a3a9ad">prompt 18.9k chars</span><span style="flex: 1"></span></div><div class="m" style="padding: 4px 12px; border-top: 1px solid #2a3034; font-size: 11px; color: #848c90">metadata only: size known, content not recorded</div></div><div class="panel" style="width: 640px"><div class="ph"><span class="k">Tool result · Bash npm</span><span class="m" style="color: #a3a9ad">exit 1 · 18 s</span><span style="flex: 1"></span></div><div class="m" style="padding: 4px 12px; border-top: 1px solid #2a3034; font-size: 11px; color: #848c90">metadata only: program and exit code from Claude Code’s analytics</div></div></div></div></div><div style="margin-top: 12px"><div class="tbl"><div class="row k" style="color: #848c90"><span style="width: 160px">Part</span><span style="flex: 1">Rule</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 160px">Collapse when</span><span style="flex: 1">more than 12 lines or 4 KB. Shorter content shows in full.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 160px">Preview</span><span style="flex: 1">Files and prompts: the head (4 lines). Command output: the tail (failures are at the end). Replies: head, rendered.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 160px">Size</span><span style="flex: 1">Always bytes + lines (or tokens for model text), in the block header, so a 212 KB output is visible before expanding.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 160px">Expand</span><span style="flex: 1">Inline up to 400 lines, then “open in raw ›” to the drawer. Never load more than the visible text.</span></div><div class="row m" style="font-size: 12px; line-height: 18px"><span style="width: 160px">Without content</span><span style="flex: 1">The block keeps its header with what metadata gives (size, program, exit code) and no preview; the footer says why in one line.</span></div></div></div>
+</div>
+<div class="comp"><span class="cname">The forensic path</span><span class="props">one level down at each step; nothing forensic on the default view</span>
+<div class="m" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px"><span class="chip" style="border-color: #60686d">Session</span> <span style="color: #848c90">›</span> <span class="chip" style="border-color: #60686d">Turn #3</span> <span style="color: #848c90">›</span> <span class="chip" style="border-color: #60686d">Ran npm test ×4</span> <span style="color: #848c90">›</span> <span class="chip" style="border-color: #60686d">step 22 · Bash</span> <span style="color: #848c90">›</span> <span class="chip" style="border-color: #60686d">raw request (drawer)</span></div><div class="note" style="margin-top: 8px">The request drawer, Requests tab, Events tab and Raw tab are unchanged; they move behind the turn view. A step row’s <b>raw request ›</b> opens the drawer on that call, with ↑/↓ moving between the turn’s steps.</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1387}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
