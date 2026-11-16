@@ -61,6 +61,11 @@ And two modes, with the same callbacks and the same messages:
 
 You write the code once. Which traffic is enforced is deployment configuration.
 
+**Build on Allow and Replace.** Deny and Drop are being removed in the next
+version of the contract, in favour of Replace and a Respond answer (the
+Interceptor supplies the reply; the call never reaches the provider). Rewrite
+rather than refuse.
+
 ---
 
 ## 2. Decide what your Interceptor needs
@@ -72,11 +77,11 @@ to be.
 
 | You want to… | Content? | You'll implement |
 |---|---|---|
-| Alert on, block or count by model, client, person/key, host or path | No | `OnCallStart`, `OnCallComplete` |
-| Track spend or usage in real time | No | `OnCallComplete` |
+| Alert on or count by model, client, person/key, host or path | No | `OnCallStart`, `OnCallComplete` |
+| Track usage (calls, tokens) in real time | No | `OnCallComplete` |
 | Redact secrets or PII in prompts or responses | **Yes** | `OnMessage` (Replace) |
-| Block prompts that match a pattern or classifier | **Yes** | `OnMessage` (Deny) |
-| Block dangerous tool calls the model makes | **Yes** | `OnMessage` on server-to-client events (Drop or Deny) |
+| Rewrite prompts that match a pattern or classifier | **Yes** | `OnMessage` (Replace) |
+| Rewrite tool calls the model makes, before the agent runs them | **Yes** | `OnMessage` on server-to-client events (Replace) |
 
 Content is a deployment setting (`interceptor.content`). It's independent of
 whether AIntercept *records* bodies (`interceptionMode`). With content on, your
@@ -85,10 +90,10 @@ sensitive as the traffic itself.
 
 **Does it need to enforce, or only observe?**
 
-- **Only observe** (alerting, audit, spend): latency doesn't matter. Your
+- **Only observe** (alerting, audit, usage): latency doesn't matter. Your
   service can be a single replica, can call slow systems (Slack, a SIEM, a
   database), and can restart freely.
-- **Enforce** (redacting, blocking): `OnCallStart` and `OnMessage` are in the
+- **Enforce** (redacting, rewriting): `OnCallStart` and `OnMessage` are in the
   request path, with a deadline of 50 ms per callback by default. A slow or
   unavailable service means refused calls. You'll need multiple replicas, low
   latency, and no slow I/O inside those two handlers.
@@ -155,8 +160,8 @@ section 5:
 - `aintercept/examples/python-redact/server.py` (Python)
 
 They do the same thing: redact "silly clown" in both directions, refuse the
-model `forbidden-model`, answer the silly rabbit (below), and log every call. Here is
-the core of the Python one:
+model `forbidden-model`, answer two phrases (below), and log every call. Here
+is the core of the Python one:
 
 ```python
 import logging, os, re
@@ -211,12 +216,12 @@ default, and anything over that fails the callback (in enforce, the call is
 refused). Set the receive limit to 33 MiB: `grpc.MaxRecvMsgSize(33 << 20)` in
 Go, `grpc.max_receive_message_length` in Python.
 
-**The silly rabbit** shows a rule on what the user just said. Clients resend the
+**The phrases** show a rule on what the user just said. Clients resend the
 whole conversation, so the examples look only at the newest user message
 (`newest` in each): the last message or input item when it's the user's, or
 claude.ai's `prompt`. "I'm a silly rabbit" is rewritten to ask the model for
-"Well, tricks are for kids.", and "first we bing" for "then we bong". Anything that isn't a request they know is
-matched whole.
+"Well, tricks are for kids.", and "first we bing" for "then we bong". Anything
+that isn't a request they know is matched whole.
 
 The rest of this section is what you need to know to write your own.
 
@@ -315,7 +320,7 @@ is always whole.
 - **Denied calls get a record too:** the status they were refused with, and
   `error: "denied by interceptor: …"`.
 - **Where the slow work goes:** writing to your warehouse, posting to Slack,
-  updating budgets. It can take as long as it needs, up to 5 s per call by
+  updating your own counters. It can take as long as it needs, up to 5 s per call by
   default.
 
 ### 4.5 Failure semantics you must design for
@@ -350,10 +355,10 @@ certificate (`interceptor.tls.clientCert`), or both.
 
 The repo has an end-to-end stack: Envoy with both filters, the observer, the
 example Interceptor, and a fixture upstream that echoes requests and says
-"silly clown". `make test-interceptor` (Docker required) builds it and runs
-nine tests:
+"silly clown". `make test-interceptor` (Docker required) builds it and tests:
 - redaction in both directions, for an event stream, a JSON body and a
   WebSocket;
+- a prompt rewritten on the way out, over HTTP and over a WebSocket;
 - observe leaving traffic unchanged;
 - a deny at call start, with its record;
 - recorded verdicts;
@@ -376,8 +381,8 @@ INTERCEPTOR_COMPOSE_OVERRIDE=path/to/my-interceptor.override.yml make test-inter
 ```
 
 The tests assert the example's rules: redact "silly clown", refuse
-`forbidden-model`, and the silly rabbit. To run them against your service,
-temporarily add those rules; the Python example shows them. Or use the stack as a
+`forbidden-model`, and "I'm a silly rabbit". To run them against your
+service, temporarily add those rules; the Python example shows them. Or use the stack as a
 sandbox for your own rules:
 
 ```bash
@@ -502,7 +507,7 @@ spec:
   podSelector: { matchLabels: { app: my-interceptor } }
   policyTypes: ["Ingress"]
   ingress:
-    - from: [{ podSelector: { matchLabels: { app: observer } } }]
+    - from: [{ podSelector: { matchLabels: { app: envoy } } }]   # the observer runs in each envoy pod
       ports: [{ port: 9100, protocol: TCP }]
 ```
 
@@ -642,9 +647,9 @@ interceptor:
   enforce:
     - host: api.anthropic.com
       paths: ["/v1/messages"]
-observer:
+envoy:
   autoscaling:
-    minReplicas: 3          # enforced calls depend on the observer
+    minReplicas: 3          # enforced calls depend on the observer, which runs in each envoy pod
 ```
 
 **Check it:**
@@ -710,7 +715,7 @@ adding fields in v1. Regenerate when you update the copy you pinned.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| No callbacks arrive | `interceptor.endpoint` unset or wrong, or a NetworkPolicy blocks the observer | Check the `"interceptor configured"` log line; `kubectl exec` into an observer and try the address; allow ingress from `app: observer` |
+| No callbacks arrive | `interceptor.endpoint` unset or wrong, or a NetworkPolicy blocks the observer | Check the `"interceptor configured"` log line; `kubectl exec` into an observer and try the address; allow ingress from `app: envoy` (the observer runs in each envoy pod) |
 | `/stats` `failed` climbs; your logs show nothing | TLS mismatch (server name, CA), or the token is rejected | Check `tls.serverName`, `tls.ca`, the token Secret; try `grpcurl` from inside the cluster |
 | Enforced calls get 503 "interceptor unavailable" | Your service missed `deadlineMs` or errored | Check its p99 latency; raise `deadlineMs` only if you understand the cost to users; fix slow I/O in `OnCallStart`/`OnMessage` |
 | A replaced response breaks the client | The replacement isn't valid for that message (invalid JSON, or a dropped structural event) | Parse, change, re-serialize; never drop `message_start`, `message_stop`, `response.completed` |
@@ -728,9 +733,9 @@ adding fields in v1. Regenerate when you update the copy you pinned.
 - [ ] Generated code from a pinned copy of `interceptor.proto`.
 - [ ] `OnCallStart` and `OnMessage` answer fast, with no slow I/O; slow work is in `OnCallComplete` or in the background.
 - [ ] Handlers are thread-safe; per-call state is keyed by `call_id` and expires.
-- [ ] Replace keeps payloads valid for their kind; Drop never removes structural events.
+- [ ] Replace keeps payloads valid for their kind.
 - [ ] The service checks the token (or mutual TLS).
-- [ ] `make test-interceptor` passes against your service (with the example's two rules added), and unit tests cover your own rules.
+- [ ] `make test-interceptor` passes against your service (with the example's rules added), and unit tests cover your own rules.
 - [ ] It's deployed with readiness, resources, a NetworkPolicy, and graceful `SIGTERM`.
 - [ ] Helm values set `endpoint`, `content` (if needed), the token and TLS.
 - [ ] `/stats` shows `delivered` rising, and your logs show live calls.
