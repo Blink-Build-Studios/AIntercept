@@ -1,5 +1,7 @@
 package refresh
 
+import "fmt"
+
 // The session rollups (docs/PIPELINE.md §5.2): a session's row and its
 // Prompts page list, recomputed together from its hours, its keys, its
 // prompts and a few index lookups on its facts. They mean what today's
@@ -62,7 +64,7 @@ var sessionSelect = `WITH h AS (SELECT coalesce(sum(model_calls), 0) AS model_ca
 		coalesce(sum(reported), 0) AS reported, coalesce(sum(missed), 0) AS missed,
 		sum(input_tokens) AS input_tokens, sum(cache_read_tokens) AS cache_read_tokens, sum(cache_write_tokens) AS cache_write_tokens,
 		sum(output_tokens) AS output_tokens, coalesce(sum(outputs_known), 0) AS outputs_known, sum(tool_calls) AS tool_calls,
-		coalesce(sum(custom_ca), 0) AS custom_ca, sum(cost_usd) AS cost_usd
+		coalesce(sum(custom_ca), 0) AS custom_ca, sum(cost_usd ORDER BY hour_ns) AS cost_usd
 	FROM session_hours WHERE session_id = $1),
 k AS (SELECT nullif(count(DISTINCT key) FILTER (WHERE kind IN ('call_prompt', 'input_prompt')), 0) AS prompts,
 		nullif(count(DISTINCT key) FILTER (WHERE kind = 'ip'), 0) AS networks
@@ -173,20 +175,28 @@ LEFT JOIN LATERAL (SELECT CASE WHEN coalesce(cx.sandbox, '') <> '' THEN cx.sandb
 WHERE h.model_calls > 0 OR h.events > 0`
 
 // headOf is the session's first (order "") or last (DESC) head_sha (the
-// OutcomeSlot's head range, handoff §11R): its Claude Code events by time.
+// OutcomeSlot's head range, handoff §11R): its Claude Code events by time,
+// from the first (or to the end of the last) hour its keys have a head in, so
+// a session with none, or heads only late, reads one hour's events at most.
 func headOf(order string) string {
-	return `(SELECT e.head_sha FROM events e WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.head_sha IS NOT NULL
+	bound := `e.ts_ns >= (SELECT min(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'head')`
+	if order == "DESC" {
+		bound = `e.ts_ns < (SELECT max(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'head') + ` + fmt.Sprint(hourNS)
+	}
+	return `(SELECT e.head_sha FROM events e WHERE e.session_id = $1 AND ` + bound + ` AND e.source = 'claude_code' AND e.head_sha IS NOT NULL
 		ORDER BY e.ts_ns ` + order + `, e.batch_call_id COLLATE "C" ` + order + `, e.batch_cc_n ` + order + ` LIMIT 1)`
 }
 
 // lastTest is the session's last run of a test program (the OutcomeSlot's
 // last test, handoff §11R): its newest Bash command whose program is a test
-// run, with its exit code and time.
+// run, with its exit code and time, read back from the end of the last hour
+// whose work keys hold a test program's run.
 var lastTest = func() string {
 	md := func(k string) string { return pyStr(emd("e", k)) }
 	p := programOf(md("bash_argv0"), md("bash_subcommand"), md("bash_last_argv0"))
 	return `(SELECT jsonb_build_object('program', ` + p + `, 'exit', ` + jsonTrunc(emd("e", "exit_code")) + `, 't', e.ts_ns) FROM events e
 		WHERE e.session_id = $1 AND e.name = 'tengu_bash_tool_command_executed' AND e.source = 'claude_code'
+		  AND e.ts_ns < (SELECT max(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'w:run' AND ` + isTest("key") + `) + ` + fmt.Sprint(hourNS) + `
 		  AND ` + isTest(p) + ` AND ` + jsonTrunc(emd("e", "exit_code")) + ` IS NOT NULL
 		ORDER BY e.ts_ns DESC, e.batch_call_id COLLATE "C" DESC, e.batch_cc_n DESC LIMIT 1)`
 }()

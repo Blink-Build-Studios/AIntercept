@@ -332,7 +332,14 @@ as pieces of work, each keyed `(kind, key, n)`:
   hours'), its first and last head, and its last test (its newest command whose program is a test runner).
 - **A repo's, a group's, a subagent's**: the API adds the stored works of its sessions or steps.
 
-Refresh cost (the 1,244-step prompt and the 53,188-event session): see the PR that added it (§11R data).
+- **A step's pieces** (`steps.work_pieces`) are `[kind, key, n, exit]` in order; the API adds a group's or a
+  subagent's up (`work.py from_pieces`) rather than storing a work per step, which cost the prompt refresh
+  another 30 ms on the largest prompt.
+
+**Refresh cost** on the real capture (median of 21 refreshes): the 1,244-step prompt went from 78 ms to
+116 ms (its steps 70 → 86 ms, its row 9 → 26 ms: 1,187 work events read once each); it was over §5.1's 50 ms
+before this. The 53,132-event session stays about 11–21 ms: its head range and last test read from the
+hour its keys show them in, so a session with no head or no test reads no events for them.
 
 ## 6. Pages
 

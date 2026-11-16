@@ -232,7 +232,7 @@ const stepCols = `prompt_id, session_id, step, call_id, t_ns, end_ns, kind, mode
 	tokens_input, tokens_cache_read, tokens_cache_write, tokens_cache_write_5m, tokens_cache_write_1h, tokens_output,
 	ttft_ms, stop_reason, cost_usd, failed, reported, agent_type, tools, tools_live, does,
 	commands, exit_codes, content_live, commands_live, exit_codes_live, patches, text, usage_missing,
-	work_kind, program, server, agent_id, work`
+	work_kind, program, server, agent_id, work_pieces`
 
 // stepSelect is the steps of the prompts whose visible calls c `where` keeps:
 // one per call, numbered within its prompt by (time, call id) (§8 difference 7;
@@ -262,16 +262,18 @@ SELECT c.prompt_id, c.session_id,
 	nullif(` + jsonStrOnly("c.detail -> 'text'") + `, ''),
 	` + usageMissing + `,
 	coalesce(sw.kind, 'think'), CASE WHEN sw.kind = 'run' THEN nullif(sw.key, '') END,
-	CASE WHEN sw.kind = 'mcp' THEN nullif(sw.key, '') END, nullif(c.agent_id, ''), sw.work
+	CASE WHEN sw.kind = 'mcp' THEN nullif(sw.key, '') END, nullif(c.agent_id, ''), sw.pieces
 FROM pc c ` + stepReport + ` ` + stepTools + ` ` + stepWork
 }
 
-// stepWork is call c's work (handoff §11R): its pieces (stepItems), what the
-// first of them is (the step's kind: a new group starts where it, or its
-// program or server, changes) and their TurnWork.
+// stepWork is call c's work (handoff §11R): its pieces (stepItems: [kind,
+// key, n, exit], in order), and what the first of them is (the step's kind: a
+// new group starts where it, or its program or server, changes). The API adds
+// a group's steps' pieces up (work.py from_keys, the same rules as workObj).
 var stepWork = `LEFT JOIN LATERAL (WITH i AS MATERIALIZED (` + stepItems + `)
 	SELECT (SELECT substr(kind, 3) FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS kind,
-		(SELECT key FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS key, ` + workObj("i", true) + ` AS work) sw ON true`
+		(SELECT key FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS key,
+		(SELECT coalesce(jsonb_agg(jsonb_build_array(kind, key, n, exit) ORDER BY at, kind COLLATE "C"), '[]') FROM i) AS pieces) sw ON true`
 
 // --- a prompt ------------------------------------------------------------------------------------
 
@@ -315,7 +317,7 @@ var promptSelect = `WITH inp AS (
 	ORDER BY e.session_id, ` + evOrder("e") + `),
 st AS (SELECT session_id, count(*) AS n, min(t_ns) AS t, max(t_ns) FILTER (WHERE end_ns IS NULL) AS unfinished,
 		sum(nullif(coalesce(tokens_input, 0) + coalesce(tokens_cache_read, 0) + coalesce(tokens_cache_write, 0), 0)) AS tin,
-		sum(tokens_output) AS tout, max(coalesce(end_ns, t_ns)) AS ended, sum(cost_usd) AS cost
+		sum(tokens_output) AS tout, max(coalesce(end_ns, t_ns)) AS ended, sum(cost_usd ORDER BY step) AS cost
 	FROM steps WHERE prompt_id = $1 GROUP BY session_id),
 s AS (SELECT session_id FROM inp UNION SELECT session_id FROM st)
 SELECT $1, s.session_id, coalesce(inp.ts_ns, st.t), f.product, inp.session_id IS NOT NULL,

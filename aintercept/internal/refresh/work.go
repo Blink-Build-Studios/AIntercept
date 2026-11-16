@@ -76,25 +76,29 @@ const workEvents = `('tengu_tool_use_success', 'tengu_tool_use_error', 'tengu_fi
 //   - w:commit, w:push, w:pr (key: its number).
 func workItems(where string) string {
 	m := func(k string) string { return f("m", k) }
-	tn := pyStr(m("toolName"))
-	mcp := `(coalesce(` + m("isMcp") + ` #>> '{}' = 'true', false) OR ` + tn + ` = 'mcp_tool' OR coalesce(starts_with(` + tn + `, 'mcp__'), false))`
-	tk := toolKind(tn, mcp)
-	prog := `coalesce(` + programOf(pyStr(m("bash_argv0")), pyStr(m("bash_subcommand")), pyStr(m("bash_last_argv0"))) + `, '')`
-	exit := jsonTrunc(m("exit_code"))
+	tool := `e.name IN ('tengu_tool_use_success', 'tengu_tool_use_error')`
 	run := `e.name IN ('tengu_bash_tool_command_executed', 'codex_command_execution_event')`
-	added := `CASE e.name WHEN 'tengu_file_changed' THEN ` + jsonTrunc(m("lines_added")) + `
-		WHEN 'codex_accepted_line_fingerprints' THEN ` + jsonTrunc(m("accepted_added_lines")) + ` END`
-	removed := `CASE e.name WHEN 'tengu_file_changed' THEN ` + jsonTrunc(m("lines_removed")) + `
-		WHEN 'codex_accepted_line_fingerprints' THEN ` + jsonTrunc(m("accepted_deleted_lines")) + ` END`
-	hash := pyStr(m("filePathHash"))
-	op := pyStr(m("operation"))
+	// Each event's values, read once (only the ones its kind has).
+	vals := `SELECT CASE WHEN ` + tool + ` THEN ` + pyStr(m("toolName")) + ` END AS tn,
+		CASE WHEN ` + run + ` THEN coalesce(` + programOf(pyStr(m("bash_argv0")), pyStr(m("bash_subcommand")), pyStr(m("bash_last_argv0"))) + `, '') END AS prog,
+		CASE WHEN ` + run + ` THEN ` + jsonTrunc(m("exit_code")) + ` END AS exit,
+		CASE e.name WHEN 'tengu_file_changed' THEN ` + jsonTrunc(m("lines_added")) + `
+			WHEN 'codex_accepted_line_fingerprints' THEN ` + jsonTrunc(m("accepted_added_lines")) + ` END AS added,
+		CASE e.name WHEN 'tengu_file_changed' THEN ` + jsonTrunc(m("lines_removed")) + `
+			WHEN 'codex_accepted_line_fingerprints' THEN ` + jsonTrunc(m("accepted_deleted_lines")) + ` END AS removed,
+		CASE WHEN e.name = 'tengu_file_operation' THEN ` + pyStr(m("filePathHash")) + ` END AS hash,
+		CASE WHEN e.name IN ('tengu_file_operation', 'tengu_git_operation') THEN ` + pyStr(m("operation")) + ` END AS op,
+		CASE WHEN e.name = 'tengu_session_linked_to_pr' THEN ` + pyStr(m("prNumber")) + ` END AS pr`
+	tn := "v.tn"
+	mcp := `(coalesce(` + m("isMcp") + ` #>> '{}' = 'true', false) OR ` + tn + ` = 'mcp_tool' OR starts_with(` + tn + `, 'mcp__'))`
 	return `SELECT e.session_id AS sid, e.ts_ns AS at, e.batch_call_id AS b, e.batch_cc_n AS bn, x.kind, x.key, x.n, x.exit
 	FROM events e CROSS JOIN LATERAL ` + fields("e.metadata", "m", "toolName", "isMcp", "mcpServerName", "fileExtension", "subagent_type",
 		"operation", "filePathHash", "lines_added", "lines_removed", "accepted_added_lines", "accepted_deleted_lines",
 		"bash_argv0", "bash_subcommand", "bash_last_argv0", "exit_code", "prNumber", "mcp_server_name") + `
-	CROSS JOIN LATERAL (SELECT ` + tk + ` AS tk) k
+	CROSS JOIN LATERAL (` + vals + ` OFFSET 0) v
+	CROSS JOIN LATERAL (SELECT CASE WHEN ` + tn + ` IS NOT NULL THEN ` + toolKind(tn, mcp) + ` END AS tk OFFSET 0) k
 	CROSS JOIN LATERAL (VALUES
-		(CASE WHEN e.name IN ('tengu_tool_use_success', 'tengu_tool_use_error') AND k.tk <> 'run' THEN 'w:' || k.tk
+		(CASE WHEN k.tk <> 'run' THEN 'w:' || k.tk
 		      WHEN e.name = 'codex_file_change_event' THEN 'w:edit' WHEN e.name = 'codex_mcp_tool_call_event' THEN 'w:mcp'
 		      WHEN e.name = 'codex_web_search_event' THEN 'w:web' WHEN e.name = 'codex_collab_agent_tool_call_event' THEN 'w:spawn' END,
 		 CASE WHEN e.name = 'codex_mcp_tool_call_event' THEN coalesce(` + pyStr(m("mcp_server_name")) + `, '')
@@ -103,17 +107,15 @@ func workItems(where string) string {
 		      WHEN k.tk = 'web' THEN ` + webKey(tn) + `
 		      WHEN k.tk = 'mcp' THEN ` + serverOf(pyStr(m("mcpServerName")), tn) + `
 		      WHEN k.tk = 'spawn' THEN coalesce(` + pyStr(m("subagent_type")) + `, '') ELSE '' END, 1::bigint, NULL::bigint),
-		(CASE WHEN e.name = 'tengu_file_operation' AND coalesce(` + hash + `, '') <> ''
-		      THEN CASE WHEN ` + op + ` = 'read' THEN 'w:read_file' WHEN ` + op + ` IN ('write', 'edit') THEN 'w:edit_file' END END,
-		 ` + hash + `, 1, NULL),
-		(CASE WHEN (` + added + `) IS NOT NULL THEN 'w:lines_added' END, '', ` + added + `, NULL),
-		(CASE WHEN (` + removed + `) IS NOT NULL THEN 'w:lines_removed' END, '', ` + removed + `, NULL),
-		(CASE WHEN ` + run + ` THEN 'w:run' END, ` + prog + `, 1, ` + exit + `),
-		(CASE WHEN ` + run + ` AND ` + exit + ` <> 0 THEN 'w:run_failed' END, ` + prog + `, 1, NULL),
-		(CASE WHEN e.name = 'tengu_git_operation' THEN CASE WHEN ` + op + ` IN ('commit', 'commit_amend') THEN 'w:commit'
-		      WHEN ` + op + ` = 'push' THEN 'w:push' END END, '', 1, NULL),
-		(CASE WHEN e.name = 'tengu_session_linked_to_pr' AND ` + pyStr(m("prNumber")) + ` ~ '^[0-9]+$' THEN 'w:pr' END,
-		 ` + pyStr(m("prNumber")) + `, 1, NULL)
+		(CASE WHEN coalesce(v.hash, '') <> '' THEN CASE WHEN v.op = 'read' THEN 'w:read_file' WHEN v.op IN ('write', 'edit') THEN 'w:edit_file' END END,
+		 v.hash, 1, NULL),
+		(CASE WHEN v.added IS NOT NULL THEN 'w:lines_added' END, '', v.added, NULL),
+		(CASE WHEN v.removed IS NOT NULL THEN 'w:lines_removed' END, '', v.removed, NULL),
+		(CASE WHEN v.prog IS NOT NULL THEN 'w:run' END, v.prog, 1, v.exit),
+		(CASE WHEN v.prog IS NOT NULL AND v.exit <> 0 THEN 'w:run_failed' END, v.prog, 1, NULL),
+		(CASE WHEN e.name = 'tengu_git_operation' THEN CASE WHEN v.op IN ('commit', 'commit_amend') THEN 'w:commit'
+		      WHEN v.op = 'push' THEN 'w:push' END END, '', 1, NULL),
+		(CASE WHEN v.pr ~ '^[0-9]+$' THEN 'w:pr' END, v.pr, 1, NULL)
 	) AS x(kind, key, n, exit)
 	WHERE ` + where + ` AND e.name IN ` + workEvents + ` AND x.kind IS NOT NULL`
 }
@@ -147,7 +149,14 @@ var stepItems = `SELECT x.o AS at, ''::text AS b, 0::bigint AS bn, w.kind, w.key
 // columns): counts summed, files counted distinct, types and programs and
 // servers listed, most first. With last, each command's last run's exit code
 // (by at, b, bn); a session's (from its keys) keeps none.
-func workObj(rel string, last bool) string {
+func workObj(raw string, last bool) string {
+	return `(WITH k AS MATERIALIZED (SELECT kind, key, sum(n)::bigint AS n FROM ` + raw + ` GROUP BY kind, key) SELECT ` +
+		workOf("k", raw, last) + `)`
+}
+
+// workOf is workObj over k, the pieces summed per (kind, key), and raw, the
+// pieces themselves (for the last exits).
+func workOf(rel, raw string, last bool) string {
 	sum := func(kind string) string {
 		return `(SELECT coalesce(sum(n), 0)::bigint FROM ` + rel + ` WHERE kind = '` + kind + `')`
 	}
@@ -171,7 +180,7 @@ func workObj(rel string, last bool) string {
 	}
 	lastExit := `NULL::bigint`
 	if last {
-		lastExit = `(SELECT l.exit FROM ` + rel + ` l WHERE l.kind = 'w:run' AND l.key = r.key
+		lastExit = `(SELECT l.exit FROM ` + raw + ` l WHERE l.kind = 'w:run' AND l.key = r.key
 			ORDER BY l.at DESC, l.b COLLATE "C" DESC, l.bn DESC LIMIT 1)`
 	}
 	web := func(key string) string {

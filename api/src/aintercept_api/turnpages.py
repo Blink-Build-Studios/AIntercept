@@ -108,7 +108,7 @@ def groups(rows: list[Row], live: bool, now: int, last_event: int | None) -> lis
                 kind=cast(WorkKind, kind),  # the rollup's kinds are WorkKind's
                 program=program,
                 server=server,
-                work=wk.turn_work(wk.add(r["work"] for r in rs)),
+                work=wk.turn_work(wk.from_pieces(p for r in rs for p in r["work_pieces"])),
                 exits=[x for s in steps for x in _exits(s)] if kind == "run" else [],
                 paths=list(dict.fromkeys(patched)) if patched else None,
                 startedAt=dt(rs[0]["t_ns"]),
@@ -140,7 +140,7 @@ def _subagents(rows: list[Row], live: bool, now: int, last_event: int | None) ->
                 name=rs[0]["agent_type"],
                 sessionId=None,
                 steps=len(rs),
-                work=wk.turn_work(wk.add(r["work"] for r in rs)),
+                work=wk.turn_work(wk.from_pieces(p for r in rs for p in r["work_pieces"])),
                 tokensIn=_opt_sum([_ctx(r) for r in rs]),
                 tokensOut=_opt_sum([r["tokens_output"] for r in rs]),
                 groups=groups(rs, live, now, last_event),

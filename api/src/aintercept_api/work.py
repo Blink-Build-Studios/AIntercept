@@ -4,7 +4,7 @@ from its steps', a subagent's from its steps', a repo's from its sessions'. Addi
 here; what counts as which kind is decided once, in the SQL."""
 
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from aintercept_api.models.work import CommandRuns, McpUse, SubagentSpawn, TurnWork, WebUse
@@ -130,6 +130,17 @@ def from_keys(rows: Iterable[tuple[str, str, int]]) -> dict[str, Any]:
         "prs": sorted(int(k) for k in n["w:pr"] if k.isdigit()),
     }
     return add([out])
+
+
+def from_pieces(pieces: Iterable[Sequence[Any]]) -> dict[str, Any]:
+    """A work from steps' pieces ([kind, key, n, exit], in order: steps.work_pieces, refresh/work.go stepWork):
+    from_keys's sums, and each command's last run's exit code."""
+    ps = list(pieces)
+    w = from_keys((k, key, n) for k, key, n, _ in ps)
+    last = {key: x for k, key, _, x in ps if k == "w:run"}
+    for c in w["commands"]:
+        c["lastExit"] = last.get(c["program"] or "")
+    return w
 
 
 def turn_work(w: Mapping[str, Any] | None) -> TurnWork:
