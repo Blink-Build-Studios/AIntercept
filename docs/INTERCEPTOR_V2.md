@@ -51,8 +51,12 @@ message Part {
 **Large content goes by reference.** A part over the inline limit (default
 64 KiB; a deployment setting) arrives without its content: its type, size,
 media type and a preview (the first 1 KiB of text, or nothing for binary). If
-a rule needs the rest, the Interceptor asks for it (Fetch, below). Messages
-therefore stay small whatever the conversation holds: no 33 MiB gRPC limits.
+a rule needs the rest, the Interceptor asks for it (Fetch, below). A call's
+inline content is also capped as a whole (3 MiB): past it, the largest parts go
+by reference, so many parts each under the limit can't add up to a large
+message. Messages therefore stay under gRPC's default 4 MiB whatever the
+conversation holds, and an Interceptor that never fetches needs no limit
+changes.
 
 ## What's new in a call
 
@@ -134,9 +138,11 @@ How it's delivered depends on whether the conversation lives with the client:
 ### Fetch
 
 `Fetch{part_ids}` makes AIntercept call the same callback again for the same
-messages, with those parts' content inline. A fetched part over 32 MiB isn't
-available (its size and preview are all there is). Fetch costs one more round
-trip, inside the same deadline.
+messages, with those parts' content inline (one Fetch per call). A fetched part
+over 32 MiB isn't available (its size and preview are all there is). Fetch costs
+one more round trip, inside the same deadline. A fetched part can be larger than
+gRPC's default 4 MiB, so an Interceptor that fetches raises its receive limit to
+33 MiB.
 
 ## Next: watches on streamed text
 
@@ -186,7 +192,7 @@ Codex; the web apps follow.
 | E2 | The Interceptor down or late: `onError` (allow passes through) |
 | E3 | Only reasoning and encrypted parts: present as Opaque, never changed |
 | E4 | Side calls (titles, token counts, quota checks) aren't broken |
-| E5 | Messages stay under the gRPC default 4 MiB, whatever the conversation holds |
+| E5 | Messages stay under the gRPC default 4 MiB, whatever the conversation holds (Fetch replies excepted) |
 
 ## Rollout
 
