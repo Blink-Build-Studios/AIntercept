@@ -214,7 +214,9 @@ body, up to 32 MiB, and clients resend the whole conversation on every call: a
 long Claude Code session's body is several MiB. gRPC servers take 4 MiB by
 default, and anything over that fails the callback (in enforce, the call is
 refused). Set the receive limit to 33 MiB: `grpc.MaxRecvMsgSize(33 << 20)` in
-Go, `grpc.max_receive_message_length` in Python.
+Go, `grpc.max_receive_message_length` in Python. This is v1 only: v2
+([`INTERCEPTOR_V2.md`](INTERCEPTOR_V2.md), proposed) sends only each call's new
+messages, with large parts by reference, so messages stay small.
 
 **The phrases** show a rule on what the user just said. Clients resend the
 whole conversation, so the examples look only at the newest user message
