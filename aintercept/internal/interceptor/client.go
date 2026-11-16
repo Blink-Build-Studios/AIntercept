@@ -133,6 +133,8 @@ type Client struct {
 
 	mu       sync.Mutex
 	verdicts map[string]*callVerdicts
+	// unparsedWhy counts the unparsed requests by reason.
+	unparsedWhy map[string]uint64
 
 	queued, dropped, delivered, failed, decided, decideFailed, unparsed atomic.Uint64
 	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
@@ -263,7 +265,17 @@ func (c *Client) Parser() convo.Parser { return convo.Parser{InlineLimit: c.cfg.
 
 // Unparsed counts a request (or client WebSocket message) v2 couldn't read:
 // it went upstream untouched, without OnRequest.
-func (c *Client) Unparsed() { c.unparsed.Add(1) }
+func (c *Client) Unparsed(reason string) {
+	c.unparsed.Add(1)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.unparsedWhy == nil {
+		c.unparsedWhy = map[string]uint64{}
+	}
+	if _, ok := c.unparsedWhy[reason]; ok || len(c.unparsedWhy) < 32 {
+		c.unparsedWhy[reason]++
+	}
+}
 
 // Close drains the queues (bounded by ObserveTimeout per call) and closes the
 // connection.
@@ -525,8 +537,10 @@ type Stats struct {
 	Failed       uint64 `json:"failed"`
 	Decided      uint64 `json:"decided"`
 	DecideFailed uint64 `json:"decide_failed"`
-	// Unparsed (v2): requests that went upstream untouched, without OnRequest.
-	Unparsed uint64 `json:"unparsed"`
+	// Unparsed (v2): requests that went upstream untouched, without
+	// OnRequest, and why.
+	Unparsed        uint64            `json:"unparsed"`
+	UnparsedReasons map[string]uint64 `json:"unparsed_reasons,omitempty"`
 }
 
 // Stats returns the counters.
@@ -535,6 +549,19 @@ func (c *Client) Stats() Stats {
 		Endpoint: c.cfg.Endpoint, Contract: c.cfg.Contract, Content: c.cfg.Content,
 		Queued: c.queued.Load(), Dropped: c.dropped.Load(), Delivered: c.delivered.Load(),
 		Failed: c.failed.Load(), Decided: c.decided.Load(), DecideFailed: c.decideFailed.Load(),
-		Unparsed: c.unparsed.Load(),
+		Unparsed: c.unparsed.Load(), UnparsedReasons: c.unparsedReasons(),
 	}
+}
+
+func (c *Client) unparsedReasons() map[string]uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.unparsedWhy) == 0 {
+		return nil
+	}
+	out := make(map[string]uint64, len(c.unparsedWhy))
+	for k, v := range c.unparsedWhy {
+		out[k] = v
+	}
+	return out
 }

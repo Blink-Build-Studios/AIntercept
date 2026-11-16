@@ -73,6 +73,7 @@ images, interrupts and a second model. Last reviewed 2026-11-08.
 | Chaining | message ids | `previous_response_id`, `prompt_cache_key` | mapped | shown / extracted |
 | Timing (TTFT, duration) | proxy timing | proxy timing; `responsesapi.websocket_timing`; turn `sampling_ms`; OTel `codex.turn.ttft` / `ttfm` / `e2e_duration_ms` | common | shown / extracted |
 | Context, compaction | context tokens per call, compaction events | cached tokens; turn `compaction_ms` | mapped (partial) | shown / captured |
+| The harness's text in the conversation | `system`-role messages mid-conversation (tools added with `tool_addition` blocks, a file changed, a background task done); in user turns `<system-reminder>`, `[Request interrupted by user…]`, the mid-turn note around the user's words, `<session>` and `[SUGGESTION MODE: …]` side requests | `developer` messages (permissions); `<environment_context>`, `<user_instructions>` in user items | mapped | Interceptor v2: `ROLE_SYSTEM` / `KindHarness`, the user's mid-turn words a prompt |
 
 ## Tools
 

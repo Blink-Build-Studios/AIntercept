@@ -113,6 +113,7 @@ func (r Request) rewrite(m Message, p Part, s string) (Span, []byte, error) {
 	v := r.at(p.Span)
 	switch p.Kind {
 	case KindText:
+		s = p.pre + s + p.post
 		if v.kind() == '"' { // the content is a plain string
 			return v.span, jsonString(s), nil
 		}

@@ -54,10 +54,16 @@ const (
 	KindToolCall                   // the model asks to run a tool
 	KindMedia                      // an image or a file, to the model
 	KindOpaque                     // reasoning, encrypted content: present, never readable or changeable
+	// KindHarness is the harness's own text going to the model, not the
+	// user's words: system and developer messages in the conversation (Claude
+	// Code's notes when tools are added or a file changes), and the notes it
+	// writes into the user's turn (a system reminder, an interrupted request,
+	// Codex's environment). It can be replaced like any message.
+	KindHarness
 )
 
 func (k Kind) String() string {
-	return [...]string{"", "prompt", "tool result", "text", "tool call", "media", "opaque"}[k]
+	return [...]string{"", "prompt", "tool result", "text", "tool call", "media", "opaque", "harness"}[k]
 }
 
 // Agent is the client making the call.
@@ -120,8 +126,9 @@ func (c *Call) Get(key string) any {
 type Message struct {
 	Direction Direction
 	Kind      Kind
-	// Text is the content: the prompt, the tool result, the reply text piece;
-	// a tool call's arguments as JSON. Empty for media and opaque parts, and
+	// Text is the content: the prompt (the user's own words, without the
+	// harness's wrapper around a message sent mid-turn), the tool result, the
+	// harness's note, the reply text piece; a tool call's arguments as JSON. Empty for media and opaque parts, and
 	// past the preview when Truncated.
 	Text string
 	// Tool is a tool call's name, or the name of the tool a result answers.

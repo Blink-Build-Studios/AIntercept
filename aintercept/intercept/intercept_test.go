@@ -262,3 +262,28 @@ func TestWatchObserve(t *testing.T) {
 		t.Fatalf("observe: %v", v)
 	}
 }
+
+// The harness's notes: OnRequest and OnMessage see them as KindHarness;
+// rules and watches act on them, Replace and Reply work; Prompt never
+// matches them.
+func TestHarnessNotes(t *testing.T) {
+	var kinds []string
+	h := intercepttest.New(
+		intercept.OnRequest(intercept.Prompt(intercept.Contains("magic word"))).Reply("No magic here."),
+		intercept.OnRequest(intercept.Contains("internal-only")).Replace("[removed]"),
+		intercept.Hooks{OnMessage: func(_ context.Context, m *intercept.Message) intercept.Answer {
+			kinds = append(kinds, m.Kind.String())
+			if m.Kind == intercept.KindHarness && strings.Contains(m.Text, "stop now") {
+				return intercept.Reply("stopped")
+			}
+			return nil
+		}},
+	)
+	h.Harness("<system-reminder>the magic word is in a file</system-reminder>").WantAccepted(t)
+	h.Harness("Note: internal-only.txt changed on disk.").WantReplaced(t, "Note: [removed].txt changed on disk.")
+	h.Harness("stop now").WantReply(t, "stopped")
+	h.Prompt("the magic word").WantReply(t, "No magic here.")
+	if strings.Join(kinds, ",") != "harness,harness" {
+		t.Fatalf("OnMessage saw %v", kinds)
+	}
+}

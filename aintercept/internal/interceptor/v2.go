@@ -238,6 +238,8 @@ func role(r convo.Role) pb2.Role {
 		return pb2.Role_ROLE_ASSISTANT
 	case convo.RoleTool:
 		return pb2.Role_ROLE_TOOL
+	case convo.RoleSystem:
+		return pb2.Role_ROLE_SYSTEM
 	}
 	return pb2.Role_ROLE_UNSPECIFIED
 }

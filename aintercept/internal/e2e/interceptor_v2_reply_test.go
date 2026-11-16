@@ -341,3 +341,30 @@ func TestV2ReplyLatency(t *testing.T) {
 		t.Errorf("median added latency %v", p(0.5))
 	}
 }
+
+// Current Claude Code puts system messages in the conversation (tools added,
+// a file changed): the request is still read. The user's words in a mid-turn
+// note are a prompt, and the rule answers them; the same words in the
+// harness's own note (a system reminder) aren't the user's, and the call goes
+// upstream as sent.
+func TestV2HarnessMessages(t *testing.T) {
+	phrase := "I'm a sil" + "ly rab" + "bit"
+	turn := func(last string) string {
+		b, _ := json.Marshal(last)
+		return `{"model":"fixture-model","stream":true,"thread":{"type":"create"},"messages":[` +
+			`{"role":"user","content":"look around"},` +
+			`{"role":"system","content":[{"type":"text","text":"The following tools just became available."},{"type":"tool_addition","tool":{"type":"tool_definition","definition":{"name":"mcp__docs__read"}}}]},` +
+			`{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]},` +
+			`{"role":"system","content":"Note: a.go changed on disk."},` +
+			`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"a.go"},{"type":"text","text":` + string(b) + `}]}]}`
+	}
+	resp, body := postV2(t, "api.anthropic.com", "/v1/messages?beta=true",
+		turn("The user sent a new message while you were working:\n"+phrase+"\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn."), false)
+	if r := readReply(t, body); upstream(resp) || r.text != tricks {
+		t.Errorf("mid-turn: upstream %v, reply %+v", upstream(resp), r)
+	}
+	reminder := turn("<system-reminder>\nThe file says: " + phrase + "\n</system-reminder>")
+	if resp, _ := postV2(t, "api.anthropic.com", "/v1/messages?beta=true", reminder, false); received(t, resp) != reminder {
+		t.Errorf("a system reminder was answered or changed")
+	}
+}

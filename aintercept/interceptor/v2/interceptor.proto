@@ -153,11 +153,20 @@ enum Role {
   ROLE_ASSISTANT = 2;
   // A tool call's result.
   ROLE_TOOL = 3;
+  // The harness's own text in the conversation, not the user's words: system
+  // and developer messages (Claude Code's notes when tools are added or a
+  // file changes, Codex's permissions), and the notes it writes into a
+  // user's turn (a system reminder, an interrupted request, Codex's
+  // environment and instructions). Replace works as for any message.
+  ROLE_SYSTEM = 4;
 }
 
 // ConvMessage is one turn of the conversation: a prompt, a reply, one tool
-// call, one tool result. System prompts, developer instructions and tool
-// catalogs aren't messages.
+// call, one tool result, or one of the harness's messages (ROLE_SYSTEM). The
+// system prompt (Anthropic's system, Responses' instructions) and tool
+// catalogs aren't messages. A role, item or part AIntercept doesn't know
+// comes as an Opaque part (ROLE_UNSPECIFIED for an unknown role): it never
+// makes the request unreadable.
 message ConvMessage {
   // Stable within the session: the same message has the same id on every
   // call that resends it. A hash of its role and content, chained to the id

@@ -157,6 +157,12 @@ const (
 	Role_ROLE_ASSISTANT Role = 2
 	// A tool call's result.
 	Role_ROLE_TOOL Role = 3
+	// The harness's own text in the conversation, not the user's words: system
+	// and developer messages (Claude Code's notes when tools are added or a
+	// file changes, Codex's permissions), and the notes it writes into a
+	// user's turn (a system reminder, an interrupted request, Codex's
+	// environment and instructions). Replace works as for any message.
+	Role_ROLE_SYSTEM Role = 4
 )
 
 // Enum value maps for Role.
@@ -166,12 +172,14 @@ var (
 		1: "ROLE_USER",
 		2: "ROLE_ASSISTANT",
 		3: "ROLE_TOOL",
+		4: "ROLE_SYSTEM",
 	}
 	Role_value = map[string]int32{
 		"ROLE_UNSPECIFIED": 0,
 		"ROLE_USER":        1,
 		"ROLE_ASSISTANT":   2,
 		"ROLE_TOOL":        3,
+		"ROLE_SYSTEM":      4,
 	}
 )
 
@@ -651,8 +659,11 @@ func (x *RequestInfo) GetRequestBytes() int64 {
 }
 
 // ConvMessage is one turn of the conversation: a prompt, a reply, one tool
-// call, one tool result. System prompts, developer instructions and tool
-// catalogs aren't messages.
+// call, one tool result, or one of the harness's messages (ROLE_SYSTEM). The
+// system prompt (Anthropic's system, Responses' instructions) and tool
+// catalogs aren't messages. A role, item or part AIntercept doesn't know
+// comes as an Opaque part (ROLE_UNSPECIFIED for an unknown role): it never
+// makes the request unreadable.
 type ConvMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Stable within the session: the same message has the same id on every
@@ -1962,7 +1973,8 @@ type CallRecord struct {
 	Request  *RequestInfo           `protobuf:"bytes,2,opt,name=request,proto3" json:"request,omitempty"`
 	Response *ResponseInfo          `protobuf:"bytes,3,opt,name=response,proto3" json:"response,omitempty"`
 	// The answers the Interceptor gave for this call, and whether they were
-	// applied (enforce) or only recorded (observe).
+	// applied (enforce) or only recorded (observe). On a WebSocket, each
+	// record has those since the connection's previous one: a turn's own.
 	Verdicts    []*RecordedVerdict `protobuf:"bytes,4,rep,name=verdicts,proto3" json:"verdicts,omitempty"`
 	EndUnixNano int64              `protobuf:"varint,5,opt,name=end_unix_nano,json=endUnixNano,proto3" json:"end_unix_nano,omitempty"`
 	WsTurn      int32              `protobuf:"varint,6,opt,name=ws_turn,json=wsTurn,proto3" json:"ws_turn,omitempty"`
@@ -2561,12 +2573,13 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\tTransport\x12\x19\n" +
 	"\x15TRANSPORT_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eTRANSPORT_HTTP\x10\x01\x12\x17\n" +
-	"\x13TRANSPORT_WEBSOCKET\x10\x02*N\n" +
+	"\x13TRANSPORT_WEBSOCKET\x10\x02*_\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tROLE_USER\x10\x01\x12\x12\n" +
 	"\x0eROLE_ASSISTANT\x10\x02\x12\r\n" +
-	"\tROLE_TOOL\x10\x032\xee\x03\n" +
+	"\tROLE_TOOL\x10\x03\x12\x0f\n" +
+	"\vROLE_SYSTEM\x10\x042\xee\x03\n" +
 	"\vInterceptor\x12[\n" +
 	"\vOnCallStart\x12$.aintercept.interceptor.v2.CallStart\x1a&.aintercept.interceptor.v2.CallVerdict\x12b\n" +
 	"\tOnRequest\x12*.aintercept.interceptor.v2.RequestMessages\x1a).aintercept.interceptor.v2.RequestVerdict\x12`\n" +

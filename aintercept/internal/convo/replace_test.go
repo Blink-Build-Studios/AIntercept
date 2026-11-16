@@ -88,22 +88,22 @@ func TestReplaceResponses(t *testing.T) {
 	}{{
 		name: "an input_text prompt", path: codexPath,
 		body: history + `{"type":"message","role":"user","content":[{"type":"input_text","text":"I'm a silly rabbit"}]}]}`,
-		msg:  2, content: "tricks",
+		msg:  3, content: "tricks",
 		want: history + `{"type":"message","role":"user","content":[{"type":"input_text","text":"tricks"}]}]}`,
 	}, {
 		name: "a function call's output", path: codexPath,
 		body: history + `{"type":"function_call","call_id":"c1","name":"shell","arguments":"{\"cmd\":\"ls\"}"},{"type":"function_call_output","call_id":"c1","output":"a\nb"}]}`,
-		msg:  3, content: "a",
+		msg:  4, content: "a",
 		want: history + `{"type":"function_call","call_id":"c1","name":"shell","arguments":"{\"cmd\":\"ls\"}"},{"type":"function_call_output","call_id":"c1","output":"a"}]}`,
 	}, {
 		name: "a function call's arguments", path: responsesPath,
 		body: history + `{"type":"function_call","call_id":"c1","name":"shell","arguments":"{\"cmd\":\"ls\"}"}]}`,
-		msg:  2, content: `{"cmd":"pwd"}`,
+		msg:  3, content: `{"cmd":"pwd"}`,
 		want: history + `{"type":"function_call","call_id":"c1","name":"shell","arguments":"{\"cmd\":\"pwd\"}"}]}`,
 	}, {
 		name: "a custom tool call's input", path: responsesPath,
 		body: history + `{"type":"custom_tool_call","call_id":"c1","name":"apply_patch","input":"*** Begin"}]}`,
-		msg:  2, content: `"*** End"`,
+		msg:  3, content: `"*** End"`,
 		want: history + `{"type":"custom_tool_call","call_id":"c1","name":"apply_patch","input":"*** End"}]}`,
 	}}
 	for _, c := range cases {
@@ -132,22 +132,22 @@ func TestReplaceChat(t *testing.T) {
 	}{{
 		name: "a string prompt",
 		body: history + `{"role":"assistant","content":"ok"},{"role":"user","content":"I'm a silly rabbit","name":"u"}]}`,
-		msg:  2, content: "tricks",
+		msg:  3, content: "tricks",
 		want: history + `{"role":"assistant","content":"ok"},{"role":"user","content":"tricks","name":"u"}]}`,
 	}, {
 		name: "a text part",
 		body: history + `{"role":"assistant","content":"ok"},{"role":"user","content":[{"type":"text","text":"I'm a silly rabbit"}]}]}`,
-		msg:  2, content: "tricks",
+		msg:  3, content: "tricks",
 		want: history + `{"role":"assistant","content":"ok"},{"role":"user","content":[{"type":"text","text":"tricks"}]}]}`,
 	}, {
 		name: "a tool message",
 		body: history + `{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}}]},{"role":"tool","tool_call_id":"c1","content":"out"}]}`,
-		msg:  2, content: "OUT",
+		msg:  3, content: "OUT",
 		want: history + `{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}}]},{"role":"tool","tool_call_id":"c1","content":"OUT"}]}`,
 	}, {
 		name: "a tool call's arguments",
 		body: history + `{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}}]}]}`,
-		msg:  1, content: `{"a":1}`,
+		msg:  2, content: `{"a":1}`,
 		want: history + `{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{\"a\":1}"}}]}]}`,
 	}}
 	for _, c := range cases {

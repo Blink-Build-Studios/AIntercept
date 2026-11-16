@@ -164,10 +164,10 @@ func TestAnthropicNew(t *testing.T) {
 			`assistant: call toolu_2 Read {"file_path":"a.go"}`,
 			`tool: result toolu_1 "ok"`,
 			`tool: result toolu_2 "no such file" error`,
-			`user: text "<system-reminder>be brief</system-reminder>"`,
+			`system: text "<system-reminder>be brief</system-reminder>"`,
 		},
 		new: []string{`tool: result toolu_1 "ok"`, `tool: result toolu_2 "no such file" error`,
-			`user: text "<system-reminder>be brief</system-reminder>"`},
+			`system: text "<system-reminder>be brief</system-reminder>"`},
 	}, {
 		name: "a message thread continuing a response: every message is new",
 		body: `{"thread":{"type":"continue","previous_message_id":"msg_prev"},"messages":[
@@ -243,9 +243,9 @@ func TestResponsesNew(t *testing.T) {
 			{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]},
 			{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>x</environment_context>"}]},
 			{"type":"message","role":"user","content":[{"type":"input_text","text":"now the docs"}]}]}`,
-		all: []string{`user: text "fix it"`, `assistant: text "Done."`,
-			`user: text "<environment_context>x</environment_context>"`, `user: text "now the docs"`},
-		new: []string{`user: text "<environment_context>x</environment_context>"`, `user: text "now the docs"`},
+		all: []string{`system: text "<permissions>"`, `user: text "fix it"`, `assistant: text "Done."`,
+			`system: text "<environment_context>x</environment_context>"`, `user: text "now the docs"`},
+		new: []string{`system: text "<environment_context>x</environment_context>"`, `user: text "now the docs"`},
 	}, {
 		name: "tool results after tool calls: only they are new",
 		body: `{"input":[
@@ -308,7 +308,7 @@ func TestChatNew(t *testing.T) {
 		body: `{"model":"gpt-x","messages":[{"role":"system","content":"be brief"},
 			{"role":"user","content":"hi"},{"role":"assistant","content":"Hello."},
 			{"role":"user","content":[{"type":"text","text":"fix it"}]}]}`,
-		all: []string{`user: text "hi"`, `assistant: text "Hello."`, `user: text "fix it"`},
+		all: []string{`system: text "be brief"`, `user: text "hi"`, `assistant: text "Hello."`, `user: text "fix it"`},
 		new: []string{`user: text "fix it"`},
 	}, {
 		name: "tool results after tool calls: only they are new",
@@ -569,22 +569,17 @@ func TestNotOK(t *testing.T) {
 		{anthropicHost, "/v1/complete", `{"prompt":"hi"}`},
 		{"example.com", "/v1/messages", `{"messages":[{"role":"user","content":"hi"}]}`},
 		{openaiHost, "/v1/embeddings", `{"input":"hi"}`},
-		// Empty and malformed bodies.
+		// Empty and malformed bodies, and bodies that aren't a conversation. (Parts
+		// of one it doesn't know are opaque: TestUnknownIsOpaque.)
 		{anthropicHost, anthropicPath, ``},
 		{anthropicHost, anthropicPath, `not json`},
 		{anthropicHost, anthropicPath, `[1,2]`},
 		{anthropicHost, anthropicPath, `{}`},
 		{anthropicHost, anthropicPath, `{"messages":"hi"}`},
-		{anthropicHost, anthropicPath, `{"messages":[1]}`},
-		{anthropicHost, anthropicPath, `{"messages":[{"role":"user","content":5}]}`},
-		{anthropicHost, anthropicPath, `{"messages":[{"role":"user","content":[7]}]}`},
 		{anthropicHost, anthropicPath, `{"messages":[{"role":"user","content":"hi"}]} trailing`},
 		{codexHost, codexPath, ``},
 		{codexHost, codexPath, `{"input":5}`},
-		{codexHost, codexPath, `{"input":[[]]}`},
-		{codexHost, codexPath, `{"input":[{"type":"message","role":"user","content":7}]}`},
 		{openaiHost, chatPath, `{"messages":{}}`},
-		{openaiHost, chatPath, `{"messages":[{"role":"user","content":true}]}`},
 		// A body for another format on an endpoint.
 		{anthropicHost, anthropicPath, `{"input":"hi"}`},
 		{codexHost, codexPath, `{"messages":[{"role":"user","content":"hi"}]}`},
