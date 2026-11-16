@@ -60,6 +60,10 @@ processor.
 | Drop | This SSE event or WebSocket message isn't forwarded. For a whole HTTP body it behaves like Deny. |
 | Deny{reason, http_status} | The call is refused **in the provider's own error format**, so clients fail through their normal error handling. Before the response has started: the HTTP status (default 403) with the provider's error body (Anthropic `permission_error`, OpenAI `blocked_by_policy`, Gemini `PERMISSION_DENIED`). In a streamed response: the provider's `error` event, then the stream ends. On a WebSocket: the error message, then close code 1008. |
 
+**Build on Allow and Replace.** Deny and Drop are being removed in the next
+version of the contract, in favour of Replace and a Respond answer (the
+Interceptor supplies the reply; the call never reaches the provider).
+
 `Verdict.annotations` (key/value) are recorded with the verdict.
 
 ## Modes
