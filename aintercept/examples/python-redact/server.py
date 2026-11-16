@@ -1,6 +1,9 @@
 """A minimal Interceptor in Python (docs/BUILDING_AN_INTERCEPTOR.md): redacts
-"silly clown" in both directions, refuses the model "forbidden-model", and
-checks the bearer token the observer sends when INTERCEPTOR_TOKEN is set."""
+"silly clown" in both directions, refuses the model "forbidden-model", answers
+the silly rabbit in what the client sends ("I'm a silly rabbit" asks the model
+for "Well, tricks are for kids."), and checks the bearer token the observer
+sends when INTERCEPTOR_TOKEN is set."""
+import json
 import logging
 import os
 import re
@@ -12,6 +15,47 @@ from interceptor.v1 import interceptor_pb2 as pb
 from interceptor.v1 import interceptor_pb2_grpc as pb_grpc
 
 PHRASE = re.compile(rb"(?i)silly clown")
+# The rabbit, with a straight or curly apostrophe (raw, or JSON-escaped), or none.
+_APOSTROPHE = "(?:'|\u2019|\\\\u0027|\\\\u2019)?".encode()
+SILLY_RABBIT = re.compile(rb"(?i)i" + _APOSTROPHE + rb"m a silly rabbit")
+# No quotes or backslashes: it goes inside JSON strings as it is.
+TRICKS = b"Reply with exactly this sentence and nothing else: Well, tricks are for kids."
+
+
+def newest(payload: bytes) -> str | None:
+    """The newest thing the user said in a request body we know (the last message or input item when it's
+    the user's, or claude.ai's prompt); None for any other body. Clients resend the whole conversation."""
+    try:
+        body = json.loads(payload)
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    if isinstance(body.get("prompt"), str):
+        return body["prompt"]
+    if isinstance(body.get("messages"), list) and body["messages"]:
+        return _user_text(body["messages"][-1])
+    items = body.get("input")
+    if isinstance(items, str):
+        return items
+    if isinstance(items, list):
+        return _user_text(items[-1]) if items else ""
+    return None
+
+
+def _user_text(m) -> str:
+    """A message's text when the user sent it: its content as a string, its text blocks (not tool results),
+    or ChatGPT's content parts."""
+    if not isinstance(m, dict) or "user" not in (m.get("role"), (m.get("author") or {}).get("role")):
+        return ""
+    c = m.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return "\n".join(b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") in ("text", "input_text"))
+    if isinstance(c, dict):
+        return "\n".join(p for p in c.get("parts") or [] if isinstance(p, str))
+    return ""
 TOKEN = os.environ.get("INTERCEPTOR_TOKEN", "")
 
 
@@ -35,11 +79,18 @@ class Interceptor(pb_grpc.InterceptorServicer):
     def OnMessage(self, request, context):
         if not self._authorized(context):
             context.abort(grpc.StatusCode.UNAUTHENTICATED, "bad token")
-        new, n = PHRASE.subn(b"[redacted]", request.payload)
-        if n == 0:
+        payload, notes = request.payload, []
+        if request.direction == pb.DIRECTION_CLIENT_TO_SERVER:
+            said = newest(payload)
+            if SILLY_RABBIT.search(payload if said is None else said.encode()):
+                payload = SILLY_RABBIT.sub(lambda _: TRICKS, payload)
+                notes.append(pb.Annotation(key="rabbit", value="silly"))
+        new, n = PHRASE.subn(b"[redacted]", payload)
+        if n == 0 and not notes:
             return pb.Verdict()
-        return pb.Verdict(replace=pb.Replace(payload=new),
-                          annotations=[pb.Annotation(key="redacted", value=str(n))])
+        if n:
+            notes.append(pb.Annotation(key="redacted", value=str(n)))
+        return pb.Verdict(replace=pb.Replace(payload=new), annotations=notes)
 
     def OnCallComplete(self, request, context):
         r = request.response
@@ -50,7 +101,9 @@ class Interceptor(pb_grpc.InterceptorServicer):
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=32))
+    # The observer sends request bodies up to 32 MiB; gRPC's default 4 MiB limit would fail a long session's.
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=32),
+                         options=[("grpc.max_receive_message_length", 33 << 20)])
     pb_grpc.add_InterceptorServicer_to_server(Interceptor(), server)
     server.add_insecure_port(os.environ.get("LISTEN", "[::]:9100"))
     server.start()

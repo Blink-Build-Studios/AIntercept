@@ -164,12 +164,19 @@ AIntercept's raw stream:
 The observer's `/stats` has an `interceptor` block: queued, dropped,
 delivered, failed, decided, decide_failed.
 
-## The example: redact "silly clown"
+## The example: redact "silly clown", and the silly rabbit
 
-`aintercept/examples/redact` is about 90 lines of Go:
+`aintercept/examples/redact` is a short Go service:
 - every message has "silly clown" replaced with `[redacted]`, in both
   directions;
 - calls asking for the model `forbidden-model` are refused at `OnCallStart`;
+- when the newest thing the user said contains "I'm a silly rabbit", the
+  request is rewritten to ask the model for "Well, tricks are for kids.".
+  Clients resend the
+  whole conversation, so only the newest user message counts (the last
+  message or input item, or claude.ai's `prompt`). This works the same for
+  Claude Code, Codex (HTTP or WebSocket), ChatGPT and claude.ai;
+- everything else goes through unchanged;
 - each call's start and record is logged.
 
 It's built into the `aintercept` image as `/redact-interceptor`:
@@ -201,6 +208,8 @@ python -m grpc_tools.protoc -I aintercept --python_out=. --grpc_python_out=. ain
 ```
 
 Implement the three methods, and return quickly from `OnCallStart` and
-`OnMessage`: in enforce mode they're in the request path. For Go, import
+`OnMessage`: in enforce mode they're in the request path. Raise your gRPC
+server's receive limit to 33 MiB: `OnMessage` carries request bodies up to 32
+MiB, and gRPC's default 4 MiB fails a long session's. For Go, import
 `…/aintercept/interceptor/v1` directly (see the example). Regenerate the Go code
 after changing the proto with `make proto`.

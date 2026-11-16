@@ -50,7 +50,7 @@ The same integration runs in two modes:
 - **Observe** (everywhere, by default): callbacks are asynchronous, verdicts are recorded as what would have happened, and traffic never waits.
 - **Enforce** (hosts and paths you list): AIntercept waits for your verdict and applies it. Refused calls fail in the provider's own error format, and a slow or unavailable Interceptor fails closed.
 
-Whether the Interceptor sees bodies is its own setting, independent of what AIntercept records: you can redact inline without storing anything. [`docs/INTERCEPTOR.md`](docs/INTERCEPTOR.md) is the reference, and [`docs/BUILDING_AN_INTERCEPTOR.md`](docs/BUILDING_AN_INTERCEPTOR.md) walks through building one and wiring it into a deployment. [`aintercept/examples/redact`](aintercept/examples/redact) is a complete example in about 90 lines: it redacts "silly clown" in both directions and refuses a model.
+Whether the Interceptor sees bodies is its own setting, independent of what AIntercept records: you can redact inline without storing anything. [`docs/INTERCEPTOR.md`](docs/INTERCEPTOR.md) is the reference, and [`docs/BUILDING_AN_INTERCEPTOR.md`](docs/BUILDING_AN_INTERCEPTOR.md) walks through building one and wiring it into a deployment. [`aintercept/examples/redact`](aintercept/examples/redact) is a complete example: it redacts "silly clown" in both directions, refuses a model, and rewrites or refuses a prompt by what the user just said.
 
 ---
 

@@ -6,7 +6,8 @@
 #   KEEP=1 leaves the stack running.
 #   INTERCEPTOR_COMPOSE_OVERRIDE=<compose file> runs your own Interceptor as the
 #   `redact` service instead (path relative to the repo root; the tests expect
-#   the example's rules: redact "silly clown", refuse "forbidden-model").
+#   the example's rules: redact "silly clown", refuse "forbidden-model", and
+#   the silly rabbit).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR="$ROOT/test/interceptor"
