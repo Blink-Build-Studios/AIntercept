@@ -111,6 +111,17 @@ func TestWorker(t *testing.T) {
 	if v := get(so, "spec", "triggers", "0", "metadata", "valueLocation"); v != "oldest_unloaded_seconds" {
 		t.Errorf("worker valueLocation %v", v)
 	}
+	// A schema change is just helm upgrade: the old workers all stop before the
+	// new ones start, and the first new one resets the database to its schema.
+	if s := get(find(docs, "Deployment", "worker"), "spec", "strategy"); fmt.Sprint(s) != "map[type:Recreate]" {
+		t.Errorf("worker strategy %v, want Recreate alone", s)
+	}
+	if env["WORKER_SCHEMA_RESET"] != "true" {
+		t.Errorf("WORKER_SCHEMA_RESET = %v, want true", env["WORKER_SCHEMA_RESET"])
+	}
+	if v := envOf(container(render(t, "worker.schemaReset=false"), "Deployment", "worker", "worker"))["WORKER_SCHEMA_RESET"]; v != "false" {
+		t.Errorf("worker.schemaReset=false: WORKER_SCHEMA_RESET = %v", v)
+	}
 	if env["WORKER_RETENTION_DAYS"] != "15" {
 		t.Errorf("WORKER_RETENTION_DAYS = %v, want 15", env["WORKER_RETENTION_DAYS"])
 	}

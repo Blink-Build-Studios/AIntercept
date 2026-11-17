@@ -42,3 +42,16 @@ func TestStatelessAPI(t *testing.T) {
 		t.Errorf("HPA %v: want CPU on the api Deployment", hpa["spec"])
 	}
 }
+
+// An upgrade's schema change never restarts the API: it's unready (503 on
+// /api/v1/status) until the workers have applied its schema, and its liveness
+// probe never reads the database.
+func TestAPIProbes(t *testing.T) {
+	c := byName(get(find(render(t, "api.enabled=true"), "Deployment", "api"), "spec", "template", "spec", "containers"))["api"]
+	if p := get(c, "readinessProbe", "httpGet", "path"); p != "/api/v1/status" {
+		t.Errorf("readiness probe %v, want /api/v1/status", p)
+	}
+	if p := get(c, "livenessProbe", "httpGet", "path"); p != "/healthz" {
+		t.Errorf("liveness probe %v, want /healthz", p)
+	}
+}

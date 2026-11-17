@@ -155,8 +155,8 @@ kubectl run lag --rm -i --restart=Never --image=curlimages/curl -- -s http://wor
 ```
 
 With the query API on (`api.enabled=true`), it reads Postgres too, through the Secret's
-`api-url`. It checks the schema's hash at start and refuses to start without
-the schema the workers apply, so it's ready only once they've run. Then the request shows up in it:
+`api-url`. It checks the schema's hash every few seconds and answers 503 (unready) until the
+database holds the schema the workers apply, so it's ready only once they've run. Then the request shows up in it:
 
 ```bash
 kubectl rollout status deploy/api
@@ -171,10 +171,16 @@ curl -s localhost:8787/api/v1/status
 
 Always `helm upgrade`, **never `helm uninstall`**: uninstalling deletes the Envoy Service and its
 load balancer (a new IP for every client), and once took down the tunnel people reach the UI
-through. The schema has no migrations: a release whose schema differs from the database's needs an
-empty Postgres, which the workers apply the schema to on their first start (the API refuses to
-start until they have). Facts aren't carried over; the raw files in `<prefix>/raw/` stay until the
-bucket's lifecycle rule expires them.
+through.
+
+A release that changes the schema is just `helm upgrade` too. The schema has no migrations: the
+workers' Deployment is `Recreate` (every old worker stops before a new one starts), and the first new
+worker finds another build's schema hash, drops the old schema and applies its own in one transaction
+(with the grants `logins.sql` gives), logging an `ALARM` line. `ingest_files` starts empty, so the
+workers reload every raw file still in `<prefix>/raw/` and the pages fill back in as they load. The API
+is unready (503 on `/api/v1/status`) for the seconds the reset takes, never restarted, and ready again
+once the database holds its schema. `worker.schemaReset: false` turns the reset off: the workers then
+refuse another build's schema.
 
 ## Teardown
 

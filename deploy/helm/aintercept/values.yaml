@@ -171,6 +171,11 @@ worker:
   loaders: 2           # files one replica loads at once
   refreshers: 2        # dirty rollup rows one replica refreshes at once
   listSeconds: 5       # how often the lister lists
+  # A release whose schema differs from the database's: its first worker drops
+  # the old schema and its data and applies its own (one transaction), and
+  # every fact reloads from the raw files. false: the workers refuse to start
+  # until the database is emptied by hand.
+  schemaReset: true
   autoscaling:
     keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
     minReplicas: 1

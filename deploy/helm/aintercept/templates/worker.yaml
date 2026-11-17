@@ -13,9 +13,11 @@ metadata:
     app: worker
     {{- include "aintercept.labels" . | nindent 4 }}
 spec:
+  # All the old workers stop before any new one starts: a new build's worker
+  # may reset the database to its schema (worker.schemaReset), and an old one
+  # beside it would write to, or refuse, the new schema.
   strategy:
-    type: RollingUpdate
-    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+    type: Recreate
   selector:
     matchLabels: { app: worker }
   template:
@@ -63,6 +65,7 @@ spec:
             - { name: WORKER_REFRESHERS, value: {{ .Values.worker.refreshers | quote }} }
             - { name: WORKER_LIST_SECONDS, value: {{ .Values.worker.listSeconds | quote }} }
             - { name: WORKER_RETENTION_DAYS, value: {{ .Values.retention.days | int | quote }} }
+            - { name: WORKER_SCHEMA_RESET, value: {{ .Values.worker.schemaReset | quote }} }
             - { name: WORKER_HTTP_LISTEN, value: "0.0.0.0:9005" }
             - name: GOMEMLIMIT
               valueFrom:

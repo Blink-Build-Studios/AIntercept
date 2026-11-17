@@ -7,11 +7,16 @@ one ranged GET (objects.py). The API's only store.
 """
 
 import contextlib
+import logging
+import threading
+import time
 import urllib.error
 from collections.abc import Iterator, Sequence
 from datetime import datetime
 from functools import partial
 from typing import Any, cast
+
+import psycopg
 
 from aintercept_api import directorypages, drawer, pages, personpages, sessionpages, turnpages
 from aintercept_api import request_detail as rd
@@ -29,6 +34,12 @@ from aintercept_api.reader import BEGIN, POOL_SIZE, Load, Reader, SchemaMismatch
 SCHEMA_HASH = "1dccee7b5be2bb956bdd206ffe1a51086ed532faf20e48c4ffb328749f1fbf60"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
+
+log = logging.getLogger("aintercept_api")
+
+# How often a pod checks the database's schema hash again: one waiting for the workers to apply its
+# schema (an upgrade), or one whose schema the workers just replaced (an older pod).
+RECHECK_SECONDS = 5.0
 
 # The drawer's lastDataAt (it's global, quirk 7): the newest record any observer pod sent (§6.4).
 _NEWEST = "SELECT max(last_ns) AS n FROM ingest_pods"
@@ -50,7 +61,32 @@ class PgStore:
         self.trace: list[Load] = []
         self.reader = Reader(dsn, pool_size=pool_size, trace=self.trace if trace else None)
         self.source, self.prefix = source, prefix  # the raw files (the drawer's calls' members)
-        self.reader.check_schema(SCHEMA_HASH)
+        self._checking = threading.Lock()
+        self._checked = -RECHECK_SECONDS
+        self._ready: bool | None = None
+        self.ready()
+
+    def ready(self) -> bool:
+        """Whether the database holds this build's schema (pg.Check), checked again every
+        RECHECK_SECONDS. Until it does the API answers 503 and its readiness probe fails (app.py), so
+        an upgrade's pods wait for the workers to apply their schema, and never restart for it."""
+        if time.monotonic() - self._checked < RECHECK_SECONDS or not self._checking.acquire(blocking=False):
+            return bool(self._ready)
+        try:
+            try:
+                self.reader.check_schema(SCHEMA_HASH)
+                ready, why = True, ""
+            except (SchemaMismatch, psycopg.Error) as e:
+                ready, why = False, str(e)
+            if ready != self._ready:
+                if ready:
+                    log.info("ready: the database holds this build's schema", extra={"fields": {"schema": SCHEMA_HASH}})
+                else:
+                    log.warning("not ready: waiting for this build's schema", extra={"fields": {"reason": why}})
+            self._ready, self._checked = ready, time.monotonic()
+            return ready
+        finally:
+            self._checking.release()
 
     @property
     def opened(self) -> int:

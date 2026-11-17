@@ -218,11 +218,14 @@ its rows from Postgres in one snapshot, through the API login (the Secret's
 `api-url`), and the drawer reads a call's raw member with one ranged GET of its
 raw file, so it keeps nothing, and an HPA on CPU sets its replica count
 (`api.stateless`):
-- **Startup and readiness:** the API checks the schema's hash at start and
-  refuses to start on a mismatch or without its DSN (a schema change needs a
-  fresh database, and the workers apply it first). Its readiness probe,
-  `/api/v1/status`, reads Postgres, so a pod that can't reach it leaves the
-  Service.
+- **Startup and readiness:** the API refuses to start without its DSN. It
+  checks the schema's hash every few seconds and answers 503 until the
+  database holds this build's schema (on an upgrade that changes it, the
+  workers reset the database and reload from the raw files: just
+  `helm upgrade`, docs/DEPLOY_DOKS.md "Upgrading"). Its readiness probe,
+  `/api/v1/status`, reads Postgres, so a pod that can't reach it, or whose
+  schema isn't there, leaves the Service; its liveness probe, `/healthz`,
+  never reads the database.
 - **Memory:** request = limit (`api.resources`, 1.5 Gi), so the scheduler
   reserves all of it and the pod is the last evicted. A page reads tens to a
   few hundred rows (docs/PIPELINE.md §6).

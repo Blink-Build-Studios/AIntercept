@@ -34,8 +34,8 @@ POOL_SIZE = 8
 
 
 class SchemaMismatch(RuntimeError):
-    """The database's schema isn't this build's (pg.ErrSchemaMismatch, pg.ErrNoSchema): the API
-    refuses to start."""
+    """The database's schema isn't this build's (pg.ErrSchemaMismatch, pg.ErrNoSchema): the API isn't
+    ready (PgStore.ready)."""
 
 
 # --- tracing (tests: what a request read) -----------------------------------------------------------
@@ -221,9 +221,7 @@ class Reader:
                 raise SchemaMismatch("the database has no schema (the workers apply it)")
             found = [h for (h,) in conn.execute("SELECT hash FROM schema_version").fetchall()]
         if found != [want]:
-            raise SchemaMismatch(
-                f"the database's schema {found} isn't this build's {want} (a schema change needs a fresh database)"
-            )
+            raise SchemaMismatch(f"the database's schema {found} isn't this build's {want} (the workers apply it)")
 
     def explain(self, statement: Statement) -> list[str]:
         """statement's plan with sequential scans priced out (what an index can serve), on a connection
