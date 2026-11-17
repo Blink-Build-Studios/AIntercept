@@ -22,6 +22,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg/pgtest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/refresh"
 )
 
 // Stage 2 of ingest (docs/PIPELINE.md §2.2): one worker at a time lists raw
@@ -378,5 +379,47 @@ func TestABadFileDoesNotHoldUpTheOthers(t *testing.T) {
 	var unloaded int
 	if err := db.QueryRow(ctx(t), "SELECT count(*) FROM ingest_files WHERE loaded_at IS NULL").Scan(&unloaded); err != nil || unloaded != 1 {
 		t.Fatalf("unloaded %d (%v), want the bad file", unloaded, err)
+	}
+}
+
+// A refresh that never finishes (a huge prompt, a lock it waits on) must not
+// hold up loading: new raw files keep landing in Postgres while refreshers
+// are stuck.
+func TestASlowRefreshDoesNotHoldUpLoading(t *testing.T) {
+	db := fresh(t)
+	root := t.TempDir()
+	s := process.DirStore{Root: root}
+	stuck, entered := make(chan struct{}), make(chan struct{}, 8)
+	defer close(stuck)
+	drain = func(c context.Context, _ *pgxpool.Pool) (int, error) {
+		entered <- struct{}{}
+		select {
+		case <-stuck:
+		case <-c.Done():
+		}
+		return 0, c.Err()
+	}
+	defer func() { drain = refresh.Drain }()
+	c, cancel := context.WithCancel(ctx(t))
+	done := make(chan struct{})
+	go func() { Loop(c, db, s, "", 1, 2, nil, 10*time.Millisecond); close(done) }()
+	defer func() { cancel(); <-done }()
+	<-entered // the refreshers are stuck before the file exists
+
+	k := rawKey(time.Now(), "pod-a", 1)
+	put(t, root, k, rawFile(t, "f1", 3))
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var loaded bool
+		if err := db.QueryRow(ctx(t), "SELECT coalesce(bool_or(loaded_at IS NOT NULL), false) FROM ingest_files WHERE key = $1", k).Scan(&loaded); err != nil {
+			t.Fatal(err)
+		}
+		if loaded {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a file listed while the refreshers were stuck never loaded")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
