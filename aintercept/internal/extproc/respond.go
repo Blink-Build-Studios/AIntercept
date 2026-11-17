@@ -152,7 +152,9 @@ func (srv *Server) answer(st *streamState, d interceptor.Decision) convo.Answer 
 }
 
 // holdReplyHeaders starts holding a successful reply: event by event for an
-// event stream, whole for JSON. Anything else passes.
+// event stream, whole for JSON. A reply without a content-type (Codex's over
+// HTTP) is held until its first bytes say which it is (sniffReply). Anything
+// else passes.
 func (srv *Server) holdReplyHeaders(st *streamState) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	ct := st.respHeaders["content-type"]
@@ -167,8 +169,36 @@ func (srv *Server) holdReplyHeaders(st *streamState) []*extprocv3.ProcessingResp
 	case strings.Contains(ct, "json"):
 		e.mode, e.respHeld = respToolsWhole, true
 		return nil
+	case ct == "":
+		e.mode, e.respHeld = respSniff, true
+		return nil
 	}
 	return []*extprocv3.ProcessingResponse{continueResponseHeaders()}
+}
+
+// sniffReply holds a reply without a content-type, headers and all, until
+// its first bytes say what it is: an event stream is then held event by
+// event, JSON whole, and anything else released as it came.
+func (srv *Server) sniffReply(st *streamState, chunk []byte, eos bool) []*extprocv3.ProcessingResponse {
+	e := st.enf
+	e.resp = append(e.resp, chunk...)
+	k := sniffKind(e.resp)
+	if k == kindUnknown && !eos && len(e.resp) <= sniffCap {
+		return nil
+	}
+	held := e.resp
+	e.resp = nil
+	switch k {
+	case kindSSE:
+		e.mode, e.respHeld = respToolsSSE, false
+		e.tools = convo.NewStream(st.ic.replyFormat, convo.SSE, srv.deciders(st))
+		return append([]*extprocv3.ProcessingResponse{headersResponse(false, []string{"content-length"})}, srv.toolsSSE(st, held, eos)...)
+	case kindJSON:
+		e.mode = respToolsWhole
+		return srv.toolsWhole(st, held, eos)
+	}
+	e.mode, e.respHeld = respPass, false
+	return []*extprocv3.ProcessingResponse{continueResponseHeaders(), bodyResponse(false, held, eos)}
 }
 
 // toolsSSE releases what an event stream's chunk lets go: text and each

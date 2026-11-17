@@ -45,7 +45,7 @@ func (r Request) IDs(seed string) []string {
 			if p.IsError {
 				field("error")
 			}
-			if p.Kind == KindOpaque {
+			if p.Kind == KindOpaque || p.Kind == KindToolAdded {
 				field(string(r.Body[p.Span.Start:p.Span.End]))
 			} else {
 				field(p.content)

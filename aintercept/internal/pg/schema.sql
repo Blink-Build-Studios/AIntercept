@@ -626,3 +626,23 @@ CREATE INDEX ON cred_minutes (minute_ns);
 CREATE INDEX ON calls (start_ns) WHERE synthetic;
 CREATE INDEX ON calls (end_ns) WHERE start_ns IS NULL;
 CREATE INDEX ON calls (start_ns) WHERE detail IS NOT NULL;
+
+-- Interceptor verdicts (docs/INTERCEPTOR_V2.md, "What's recorded"): one row per verdict a call's
+-- Interceptor returned (every answer other than a plain accept, and each error), keyed by its call
+-- and its record's sequence number. Written by the flush that writes the call; at most 1000 per call
+-- (the assembler drops the rest, counted).
+CREATE TABLE verdicts (
+    call_id text NOT NULL,
+    seq bigint NOT NULL,
+    ts_ns bigint NOT NULL,
+    callback text NOT NULL,
+    action text NOT NULL,
+    applied boolean NOT NULL,
+    mode text,
+    message_id text,
+    respond_mode text,
+    reason text,
+    annotations jsonb,
+    latency_ms bigint NOT NULL,
+    PRIMARY KEY (call_id, seq)
+);

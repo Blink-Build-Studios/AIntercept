@@ -109,6 +109,8 @@ func (b *builder) anthropicContent(role Role, content value) {
 			}
 			raw := string(blk["content"].raw) // a server tool's result is structured: its JSON
 			b.add(RoleTool, v.span, b.fill(Part{Kind: KindToolResult, CallID: c.ToolUseID, Size: len(raw), Span: v.span, content: raw}))
+		case typ == "tool_addition":
+			appendRun(b.toolAdded(v, blk), v.span)
 		default: // text, image, document; thinking, redacted_thinking and any block it doesn't know are opaque
 			p, isText := b.contentPart(v)
 			if isText && role == RoleUser {
@@ -124,4 +126,19 @@ func (b *builder) anthropicContent(role Role, content value) {
 		}
 	}
 	flush()
+}
+
+// toolAdded reads Claude Code's tool_addition block: a tool added to the
+// catalog mid-session. One it can't read is opaque.
+func (b *builder) toolAdded(v value, blk map[string]value) Part {
+	var t struct {
+		Type       string `json:"type"`
+		Definition struct {
+			Name string `json:"name"`
+		} `json:"definition"`
+	}
+	if json.Unmarshal(blk["tool"].raw, &t) != nil || t.Type != "tool_definition" || t.Definition.Name == "" {
+		return opaque(v)
+	}
+	return Part{Kind: KindToolAdded, Name: t.Definition.Name, Size: len(v.raw), Span: v.span}
 }

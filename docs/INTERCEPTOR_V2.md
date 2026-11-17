@@ -53,6 +53,7 @@ message Part {
     ToolCall tool_call = 3;   // the model asks to run a tool: name, arguments (JSON)
     ToolResult tool_result = 4;
     Opaque opaque = 5;        // reasoning, encrypted content: present, never inspectable
+    ToolAdded tool_added = 6; // a tool the harness added mid-session: its name
   }
   string id = 10;             // for Fetch and Replace
 }
@@ -100,11 +101,29 @@ message of its own, `ROLE_SYSTEM`, never the user's:
   title and next-prompt suggestion requests (`<session>`,
   `[SUGGESTION MODE: …]`), Codex's `<environment_context>` and
   `<user_instructions>`, and another sender's mid-turn note ("The
-  coordinator sent a message while you were working: …").
+  coordinator sent a message while you were working: …");
+- the output the harness puts in a user's turn: Claude Code's bash-mode
+  output (`<bash-stdout>`, `<bash-stderr>`; the command the user typed,
+  `<bash-input>`, is theirs), a skill's body ("Base directory for this
+  skill: …"), and a slash command's output and caveat
+  (`<local-command-stdout>`, `<local-command-caveat>`; the command itself is
+  the user's);
+- Codex's `configuration_update` and `compaction_trigger` items (opaque:
+  settings, not text).
+
+A tool Claude Code adds mid-session (a `tool_addition` block in a system
+message) is a `ToolAdded` part naming the tool; like the tool catalog, its
+definition isn't sent, and a Replace returns it as it came. What the user
+pastes (`<pasted_content>`) is the user's. A Codex `compaction` item (the
+provider's encrypted summary of the conversation so far) carries no role:
+it's an `Opaque` part with `ROLE_UNSPECIFIED`.
 
 A user's turn is split accordingly: each note is its own `ROLE_SYSTEM`
-message, the user's text a `ROLE_USER` one. When the user types while Claude
-Code is working, Claude Code wraps the words ("The user sent a new message
+message, the user's text a `ROLE_USER` one. Claude Code's image placeholders
+ahead of the user's words (`[Image #2] what is this?`) label the image blocks
+beside them: the `ROLE_USER` text is the words, and a Replace keeps the
+placeholders; placeholders alone are a `ROLE_SYSTEM` note. When the user
+types while Claude Code is working, Claude Code wraps the words ("The user sent a new message
 while you were working: … This is how Claude Code surfaces messages…"): the
 `ROLE_USER` text is just the user's words, and a Replace of them keeps the
 wrapper on the wire. The harness's messages can be replaced, and answered
@@ -124,7 +143,13 @@ upstream unread.)
 The **response** is split into messages as it streams: each text block (a
 content block, a Responses message's text part, a Chat Completion's content),
 each tool call, and each opaque part (reasoning). Every one reaches the
-Interceptor before the client sees it.
+Interceptor before the client sees it. A reply is read by what its body is,
+not only its headers: Codex's HTTP replies carry no `content-type`, so a
+reply without one is held until its first bytes say whether it's an event
+stream (an `event:` or `data:` line) or JSON. In observe mode a compressed
+reply (gzip, br, zstd), which observe can't ask to be sent plain, is decoded
+at its end and then read the same way; a request is read whole up to 32 MiB,
+as in enforce.
 
 ## Callbacks
 
@@ -142,7 +167,11 @@ service Interceptor {
   carries `Call` (as in v1: identity, client, model) and can **Respond**.
 - **`OnRequest`** fires once per call with the new messages, before they go
   upstream. Per message: **Accept**, or **Replace** it. For the call:
-  **Respond**. Or **Fetch** parts first.
+  **Respond**. Or **Fetch** parts first. A request that adds no message
+  (Claude Code resuming a thread with an empty `messages` list) gets no
+  `OnRequest`: there's nothing to decide. It still gets `OnCallStart` (which
+  can Respond), and its reply goes to `OnReply` and `OnToolCall`; the
+  observer counts these (`/stats`: `interceptor.no_new_messages`).
 - **`OnToolCall`** fires for each tool call in the model's reply, once it is
   complete and before the client sees it: **Accept**, **Replace** (for
   example, change the arguments), or **Respond** (end the reply here with your
@@ -314,7 +343,9 @@ Every answer other than a plain Accept is a verdict row (`callback`:
 `call_start`, `request`, `reply` or `tool_call`; `action`: `accept` with
 annotations, `replace`, `hold`, `respond` or `error`), with the message's id,
 in both modes (`applied: false` in observe). `CallRecord.verdicts` carries the
-call's rows: an HTTP call's, or on a WebSocket, each turn's own.
+call's rows: an HTTP call's, or on a WebSocket, each turn's own. Each row is
+also stored in Postgres (`verdicts`, keyed by the call and the row's sequence
+number; at most 1000 per call), written with the call.
 
 ### What an Interceptor can't see or change
 
@@ -327,9 +358,11 @@ call's rows: an HTTP call's, or on a WebSocket, each turn's own.
 - What a harness's note quotes is the harness's: a `<system-reminder>`
   quoting a file the user wrote is `ROLE_SYSTEM`, not the user's prompt. An
   unknown tag in a user's turn (a local hook's, say) stays the user's text.
-- Responses with a `content-encoding` AIntercept didn't remove, and WebSocket
-  connections where the server negotiated compression the client was never
-  offered: they pass unevaluated (counted).
+- In enforce, responses with a `content-encoding` AIntercept didn't remove
+  (it asks for them plain), and WebSocket connections where the server
+  negotiated compression the client was never offered: they pass unevaluated
+  (counted). In observe, a compressed or JSON reply over 32 MiB (decoded) is
+  counted (`reply over the buffer`), not read.
 - Only the first choice of a Chat Completion with several is decided.
 - ChatGPT and claude.ai on the web aren't parsed yet.
 
@@ -365,6 +398,8 @@ Codex; the web apps follow.
 | N5 | An unknown request format: passes through untouched and is counted, never broken |
 | N6 | The harness's messages (system messages in the conversation, notes in a user's turn) arrive as ROLE_SYSTEM; the user's mid-turn words as their prompt |
 | N7 | An unknown role, item, block or shape inside a conversation arrives as Opaque; the rest is read |
+| N8 | A request with no new messages gets OnCallStart, no OnRequest; its reply's callbacks as any |
+| N9 | A Codex HTTP reply (no content-type) reaches OnReply and OnToolCall, in both modes; a compressed reply in observe; a request over 4 MiB in observe |
 | **References** | |
 | R1 | A part over the inline limit arrives as a reference with size and preview |
 | R2 | Fetch returns its content; a second round trip, inside the deadline |

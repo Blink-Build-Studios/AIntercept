@@ -551,3 +551,55 @@ func TestV2CallIsV1s(t *testing.T) {
 		t.Fatalf("round trip lost fields: %v", back)
 	}
 }
+
+// A tool the harness adds mid-session arrives as a ToolAdded part naming it;
+// a Replace of its message changes the text beside it and must return the
+// tool as it came.
+func TestV2ToolAdded(t *testing.T) {
+	body := `{"model":"m","messages":[{"role":"user","content":"go"},{"role":"assistant","content":"ok"},` +
+		`{"role":"system","content":[{"type":"text","text":"Tools changed."},{"type":"tool_addition","tool":{"type":"tool_definition","definition":{"name":"mcp__docs__read"}}}]}]}`
+	f := &interceptortest.FakeV2{Request: replaceText("Tools changed.", "Tools moved.")}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	defer c.Close()
+	d := c.DecideRequest(context.Background(), call, parse(t, body))
+	if d.Action != interceptor.Replace || string(d.Payload) != strings.Replace(body, "Tools changed.", "Tools moved.", 1) {
+		t.Fatalf("decision %v %s", d.Action, d.Payload)
+	}
+	_, reqs, _ := f.Snapshot()
+	m := reqs[0].GetMessages()[0]
+	if p := m.GetParts()[1]; m.GetRole() != pb2.Role_ROLE_SYSTEM || p.GetToolAdded().GetName() != "mcp__docs__read" || p.GetSize() == 0 {
+		t.Fatalf("message %v", m)
+	}
+	// A Replace that changes the tool is refused.
+	f.Request = func(q *pb2.RequestMessages) *pb2.RequestVerdict {
+		m := proto.Clone(q.GetMessages()[0]).(*pb2.ConvMessage)
+		m.GetParts()[1].GetToolAdded().Name = "Other"
+		return &pb2.RequestVerdict{Messages: []*pb2.MessageVerdict{{MessageId: m.GetId(), Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m}}}}}
+	}
+	if d := c.DecideRequest(context.Background(), call, parse(t, body)); d.Action == interceptor.Replace {
+		t.Fatalf("a changed tool was applied: %s", d.Payload)
+	}
+}
+
+// A request with no new messages (Claude Code resuming a thread with an empty
+// messages list) gets no OnRequest: there's nothing to decide. OnCallStart
+// still fires (the caller's), and the reply still goes to OnReply.
+func TestV2NoNewMessagesSkipsOnRequest(t *testing.T) {
+	r, ok := convo.Parse("api.anthropic.com", "/v1/messages", []byte(`{"model":"m","thread":{"previous_message_id":"msg_0"},"messages":[]}`))
+	if !ok || len(r.New) != 0 || !r.Chained {
+		t.Fatalf("parsed %v %+v", ok, r)
+	}
+	f := &interceptortest.FakeV2{}
+	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	if d := c.DecideRequest(context.Background(), call, r); d.Action != interceptor.Allow {
+		t.Fatalf("decision %+v", d)
+	}
+	c.ObserveRequest(call, r)
+	c.Close()
+	if calls, _, _ := f.Snapshot(); len(calls) != 0 {
+		t.Fatalf("calls %v: OnRequest for no messages", calls)
+	}
+	if st := c.Stats(); st.NoNewMessages != 2 {
+		t.Fatalf("stats %+v", st)
+	}
+}

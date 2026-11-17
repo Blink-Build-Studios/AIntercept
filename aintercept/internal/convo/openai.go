@@ -72,13 +72,12 @@ func (b *builder) responses(top map[string]value) bool {
 			b.add(RoleAssistant, v.span, b.toolCall(firstOf(it.CallID, it.ID), firstOf(it.Name, strings.TrimSuffix(it.Type, "_call")), string(v.raw), v.span))
 		case it.Type == "additional_tools":
 			b.item(false)
-		default: // an item it doesn't know (agent_message, item_reference, …): present, not inspectable
+		case it.Type == "configuration_update", it.Type == "compaction_trigger": // Codex's own settings and markers: the harness's
+			b.item(false)
+			b.add(RoleSystem, v.span, opaque(v))
+		default: // compaction (the provider's encrypted summary), or an item it doesn't know: present, not inspectable
 			b.item(it.Role == "assistant")
-			role := RoleUser
-			if it.Role == "assistant" {
-				role = RoleAssistant
-			}
-			b.add(role, v.span, opaque(v))
+			b.add(itemRole(it.Role), v.span, opaque(v))
 		}
 	}
 	return true
@@ -177,4 +176,18 @@ func firstOf(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// itemRole is the role an item it doesn't know names; none (the wire doesn't
+// say whose it is) for one that names none or a role it doesn't know.
+func itemRole(r string) Role {
+	switch r {
+	case "user":
+		return RoleUser
+	case "assistant":
+		return RoleAssistant
+	case "developer", "system":
+		return RoleSystem
+	}
+	return RoleUnspecified
 }
