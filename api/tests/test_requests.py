@@ -1,5 +1,8 @@
 """/requests/{requestId}, /raw, /details and /events/{eventId} (handoff §5.2.10, §5.2.9), on the Postgres
-store: the drawer reads v9's facts and rollups, and the call's raw member (docs/PIPELINE.md §6.2)."""
+store: the drawer reads v9's facts and rollups, and the call's raw member (docs/PIPELINE.md §6.2).
+
+The datasets send Claude Code's analytics as it does; they stay in the raw files, so what only they said
+(TTFT, cost, content lengths, retries, the cross-check, the events themselves) is null or empty."""
 
 import json
 
@@ -110,62 +113,24 @@ def test_request_normal(dataset, pg_client_for, write_sample):
     assert d["prevRequestId"] is None and d["nextRequestId"] == nxt  # the chain: msg_01c3 follows msg_01b2
     k = d["keyStrip"]
     assert (k["model"], k["effort"], k["thinking"], k["stopReason"]) == ("claude-opus-5-5", "high", True, "tool_use")
-    assert (k["ttftMs"], k["proxyTtftMs"], k["streamEvents"], k["toolCalls"]) == (1912.0, 1850.0, 47, ["Edit"])
-    assert k["cachedPct"] == 100.0 and k["cost"] == {"usd": 0.21, "basis": "api-equivalent", "estimatedCalls": 0}
-    assert d["crossCheck"] == {"matched": True, "costAgrees": None}
+    assert (k["ttftMs"], k["proxyTtftMs"], k["ttftSource"], k["toolCalls"]) == (None, 1850.0, "proxy", ["Edit"])
+    assert k["cachedPct"] == 100.0 and k["cost"] == {"usd": None, "basis": "api-equivalent", "estimatedCalls": 0}
+    assert d["crossCheck"] == {"matched": False, "costAgrees": None}
     assert d["notice"] is None and d["retry"] is None and d["contentRetained"] is False
-    assert [x["label"] for x in d["received"]] == ["thinking", "text", "tool_use · Edit"]
-    assert d["received"][2]["tone"] == "tool" and all(x["body"] is None for x in d["sent"] + d["received"])
-
-
-def test_request_not_captured(dataset, pg_client_for, write_sample):
-    cc = ClaudeCode(dataset, S1)
-    prompt(cc, f"{H}:00:10", "p1", 1)
-    cc.call(f"{H}:01:00", prompt="p1")
-    cc.reported(
-        f"{H}:02:00",
-        "req_bypassed",
-        cc_prompt_id="p1",
-        model="claude-opus-5-5",
-        inputTokens=38_104,
-        cachedInputTokens=37_690,
-        uncachedInputTokens=414,
-        outputTokens=912,
-        costUSD="0.17",
-        ttftMs=2_011,
-        durationMs=7_702,
-    )
-    client = pg_client_for(dataset)
-    rows = client.get(f"/api/v1/sessions/{S1}/requests", params={"captured": "false"}).json()["data"]
-    (row,) = rows
-    r = client.get(f"/api/v1/requests/{row['requestId']}")
-    write_sample(client, r, "not_captured")
-    d = r.json()["data"]
-    assert d["requestId"] == "reported:req_bypassed" and d["kind"] == "notCaptured" and d["promptIndex"] == 1
-    assert d["notice"]["tone"] == "danger" and d["durationMs"] == 7702.0
-    k = d["keyStrip"]
-    assert (k["model"], k["ttftMs"], k["cost"]["usd"], k["proxyTtftMs"]) == ("claude-opus-5-5", 2011.0, 0.17, None)
-    assert k["tokens"]["cacheRead"] == 37_690 and k["tokens"]["accuracy"] == "estimated"
-    assert d["received"][0]["detail"] == "38,104 in (37,690 cached) → 912 out"
+    assert [x["label"] for x in d["received"]] == ["tool_use · Edit"]
+    assert d["received"][0]["tone"] == "tool" and all(x["body"] is None for x in d["sent"] + d["received"])
 
 
 def test_request_failed(dataset, pg_client_for, write_sample):
-    _, cid, ok, _ = failed_then_retried(dataset)
+    _, cid, _, _ = failed_then_retried(dataset)
     client = pg_client_for(dataset)
     r = client.get(f"/api/v1/requests/{cid}")
     write_sample(client, r, "failed")
     d = r.json()["data"]
     assert (d["kind"], d["status"], d["durationMs"]) == ("failed", "ERR", 600.0)
     assert d["notice"]["title"] == "✕ connection reset by upstream"
-    assert "attempt 1" in d["notice"]["body"] and "the retry succeeded" in d["notice"]["body"]
-    assert d["retry"] == {
-        "attempt": 1,
-        "of": 2,
-        "backoffMs": 1200.0,
-        "nextRequestId": ok,
-        "nextStatus": 200,
-        "nextAt": "2026-11-04T09:03:10Z",
-    }
+    assert d["notice"]["body"] == "The request was sent but no response arrived: the connection failed after 0.6 s."
+    assert d["retry"] is None  # Claude Code's tengu_api_retry isn't stored
     assert d["received"] == [
         {
             "label": "no response",
@@ -179,12 +144,12 @@ def test_request_failed(dataset, pg_client_for, write_sample):
     assert d["keyStrip"]["proxyTtftMs"] is None and d["keyStrip"]["cost"]["estimatedCalls"] == 0
 
 
-def test_request_rows_carry_their_retry(dataset, pg_client_for):
+def test_a_failed_rows_error_has_no_retry(dataset, pg_client_for):
     _, cid, _, _ = failed_then_retried(dataset)
     client = pg_client_for(dataset)
     (row,) = [x for x in client.get(f"/api/v1/sessions/{S1}/requests").json()["data"] if x["requestId"] == cid]
-    assert row["retries"] == 1
-    assert row["error"]["retries"] == 1 and row["error"]["retrySucceededAt"] == "2026-11-04T09:03:10Z"
+    assert row["retries"] is None and row["error"]["message"] == "connection reset by upstream"
+    assert row["error"]["retries"] is None and row["error"]["retrySucceededAt"] is None
 
 
 def retained(ds):
@@ -333,14 +298,15 @@ def test_raw_retained(dataset, pg_client_for, write_sample):
 
 
 def test_raw_unavailable(dataset, pg_client_for, write_sample):
-    cc = ClaudeCode(dataset, S1)
-    cc.call(f"{H}:01:00")
-    cc.reported(f"{H}:02:00", "req_bypassed")
+    """A call whose request headers aren't among its raw rows: the drawer shows its row, and says why."""
+    cid = dataset.transaction(f"{H}:06:00")
+    dataset.rows[:] = [r for r in dataset.rows if not (r["correlation_id"] == cid and r["phase"] == "request_headers")]
     client = pg_client_for(dataset)
-    r = client.get("/api/v1/requests/reported:req_bypassed/raw")
+    r = client.get(f"/api/v1/requests/{cid}/raw")
     write_sample(client, r, "unavailable")
     d = r.json()["data"]
-    assert d["unavailable"].startswith("No wire data") and d["requestHeaders"] == [] and d["requestLine"] is None
+    assert d["unavailable"].startswith("The raw files for this request can't be read here")
+    assert d["requestBody"] is None and d["stream"] is None
 
 
 def test_raw_failed_has_the_request_only(dataset, pg_client_for, write_sample):
@@ -385,19 +351,21 @@ def test_details_normal(dataset, pg_client_for, write_sample):
     assert v["Thread position"]["previous step"] == "msg_01a7" and v["Thread position"]["next step"] == "msg_01c3"
     assert v["What the model could use"]["MCP servers"] == 1
     assert v["Account limits at response"]["7-day utilization"] == 41.0
-    assert v["Cross-check & posture"]["permissionMode"] == "bypassPermissions"
-    (tool,) = d["tool"]
-    assert (tool["toolUseId"], tool["name"]) == (TOOL_ID, "Edit")
-    ex = {row["k"]: row["v"] for row in tool["execution"]}
-    assert ex["duration"] == 62.0 and ex["PreToolUse hook"] == 48.0
-    assert {row["k"]: row["v"] for row in tool["result"]}["delivered in"] == "step 2"
+    # What only Claude Code's analytics said is null: the cost, its TTFT, the permission mode.
+    assert v["Tokens & cost"]["costUSD (Claude Code)"] is None and v["Cross-check & posture"]["permissionMode"] is None
+    assert (
+        v["Cross-check & posture"]["ttft (Claude Code)"] is None
+        and v["Cross-check & posture"]["ttft (proxy)"] == 1850.0
+    )
+    (tool,) = d["tool"]  # the observer's tally: its name
+    assert (tool["toolUseId"], tool["name"], tool["execution"], tool["result"]) == (None, "Edit", [], [])
     phases = d["timing"]["proxy"]
     assert [p["label"] for p in phases] == ["accept + TLS", "upstream connect", "first byte", "streaming", "total"]
     assert phases[0]["durMs"] is None and phases[1]["startMs"] is None  # not recorded by the proxy: rows without a bar
-    assert {row["k"] for row in d["timing"]["client"]} == {"requestPrepareMs", "ttftMs", "durationMs", "attempt"}
-    assert [e["name"] for e in d["events"]] == ["tengu_api_query", "tengu_api_success", "tengu_tool_use_success"]
+    assert d["timing"]["client"] == [] and d["events"] == []
     fields = {f["key"]: f["value"] for f in d["fields"]}
-    assert fields["effort"] == "high" and fields["speed"] is None and fields["analytics.costUSD"] == "0.21"
+    assert fields["effort"] == "high" and fields["speed"] is None
+    assert not [k for k in fields if k.startswith("analytics.")]
 
 
 def test_details_error(dataset, pg_client_for, write_sample, monkeypatch):
@@ -410,70 +378,16 @@ def test_details_error(dataset, pg_client_for, write_sample, monkeypatch):
 # --- one event ----------------------------------------------------------------------------------
 
 
-def test_event_normal(dataset, pg_client_for, write_sample):
+def test_event_unknown_is_a_typed_404(dataset, pg_client_for):
+    """Analytics events stay in the raw files: no id opens one, a sent event's included."""
     cc = ClaudeCode(dataset, S1)
     prompt(cc, f"{H}:00:10", "p1", 1)
-    cc.event(f"{H}:00:10", "tengu_paste_text", env=ENV, pastedTextBytes=2_048, note=SECRET)
-    end_batches(dataset)  # a batch's raw rows are in its call's member, written when it ends
-    client = pg_client_for(dataset)
-    rows = client.get(f"/api/v1/sessions/{S1}/events").json()["data"]
-    paste = next(x for x in rows if x["name"] == "tengu_paste_text")
-    r = client.get(f"/api/v1/events/{paste['eventId']}")
-    write_sample(client, r, "normal")
-    d = r.json()["data"]
-    assert (d["eventId"], d["name"], d["sessionId"]) == (paste["eventId"], "tengu_paste_text", S1)
-    md = d["raw"]["data"]["additional_metadata"]
-    assert md["pastedTextBytes"] == 2_048 and SECRET not in json.dumps(d)
-
-
-def test_event_ids_are_unique_across_sessions_in_one_batch(dataset, pg_client_for):
-    # One process's batch can carry events from two sessions (after /clear or a
-    # resume); each event's id must open that event, not the other session's.
-    first, second = "00000000-0000-4000-8000-000000000001", S1
-    a, b = ClaudeCode(dataset, first), ClaudeCode(dataset, second)
-    prompt(a, f"{H}:00:05", "pa", 1)
-    prompt(b, f"{H}:00:06", "pb", 1)
-    a.event(f"{H}:00:10", "tengu_paste_text", env=ENV, batch="batch-shared", arrive=f"{H}:00:11", pastedTextBytes=1)
-    b.event(f"{H}:00:11", "tengu_paste_text", env=ENV, batch="batch-shared", arrive=f"{H}:00:11", pastedTextBytes=2)
+    cc.event(f"{H}:00:10", "tengu_paste_text", env=ENV, batch="batch-x", pastedTextBytes=2_048)
     end_batches(dataset)
     client = pg_client_for(dataset)
-    ids = set()
-    for sid, size in ((first, 1), (second, 2)):
-        rows = client.get(f"/api/v1/sessions/{sid}/events").json()["data"]
-        paste = next(x for x in rows if x["name"] == "tengu_paste_text")
-        ids.add(paste["eventId"])
-        d = client.get(f"/api/v1/events/{paste['eventId']}").json()["data"]
-        assert d["sessionId"] == sid
-        assert d["raw"]["data"]["additional_metadata"]["pastedTextBytes"] == size
-    assert len(ids) == 2
-
-
-def test_events_tied_on_every_order_key_number_by_event_key(dataset, pg_client_for):
-    # A batch can carry events alike in sequence, times, name and metadata that differ
-    # only in their raw body (their id, process stats). Their numbers must not depend on
-    # the order the rows are read in: the event key breaks the tie.
-    cc = ClaudeCode(dataset, S1)
-    prompt(cc, f"{H}:00:05", "p1", 1)
-    cc.event(f"{H}:00:10", "tengu_feature_ok", batch="batch-tie", feature="x")
-    row = next(r for r in dataset.rows if r["correlation_id"] == "batch-tie" and r["phase"] == "client_event")
-    dataset.rows.remove(row)
-    for ev_id, uptime in (("ev-b", 2), ("ev-a", 1)):  # the larger key arrives first
-        ev = json.loads(json.dumps(row))
-        ev["seq"] = 1
-        ev["client_event"]["id"] = ev_id
-        ev["client_event"]["data"]["process"] = {"uptime": uptime}
-        dataset.add(ev)
-    end_batches(dataset)
-    client = pg_client_for(dataset)
-    for n, ev_id in ((1, "ev-a"), (2, "ev-b")):
-        d = client.get(f"/api/v1/events/batch-tie:{n}").json()["data"]
-        assert d["raw"]["id"] == ev_id, (n, d["raw"])
-
-
-def test_event_unknown_is_a_typed_404(dataset, pg_client_for):
-    client = pg_client_for(dataset)
-    for eid in ("nope", "batch-x:1"):
-        assert client.get(f"/api/v1/events/{eid}").status_code == 404
+    for eid in ("nope", "batch-x:0", "batch-x:1"):
+        r = client.get(f"/api/v1/events/{eid}")
+        assert r.status_code == 404 and r.json()["error"]["code"] == "http_404"
 
 
 def test_event_error(dataset, pg_client_for, write_sample, monkeypatch):

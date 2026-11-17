@@ -24,9 +24,9 @@ const sample: components["schemas"]["PersonResponse"] = {
     "agentLimits": [
       {
         "agent": "claude-code",
-        "asOf": "2026-11-04T18:02:49.146000Z",
+        "asOf": "2026-11-04T18:02:33.797795Z",
         "credits": "overage rejected",
-        "plan": "max",
+        "plan": null,
         "windows": [
           {
             "name": "7d",
@@ -59,9 +59,9 @@ const sample: components["schemas"]["PersonResponse"] = {
     "devices": [
       {
         "deviceId": "5e8024215ed54d7fef870262205de55f82ac99815d210ca24bfc462a3208125b",
-        "platform": "darwin",
-        "shell": "fish",
-        "terminal": "iTerm.app"
+        "platform": null,
+        "shell": null,
+        "terminal": null
       }
     ],
     "email": null,
@@ -71,7 +71,7 @@ const sample: components["schemas"]["PersonResponse"] = {
       "experiments": null,
       "total": null
     },
-    "lastSeenAt": "2026-11-04T18:02:49.146000Z",
+    "lastSeenAt": "2026-11-04T18:02:33.797795Z",
     "limits": {
       "overage": "rejected",
       "status": "allowed",
@@ -79,20 +79,17 @@ const sample: components["schemas"]["PersonResponse"] = {
     },
     "linkedBy": null,
     "live": true,
-    "missed": 95,
+    "missed": null,
     "name": null,
-    "org": {
-      "id": "051f3708-80b9-4632-810e-ab3ca243b273",
-      "kind": "unset"
-    },
-    "orgIdShort": "051f\u2026b273",
+    "org": null,
+    "orgIdShort": null,
     "orgKind": "unknown",
     "personId": "7d2e0000-0000-4000-8000-00000000a41c",
-    "plan": "max",
+    "plan": null,
     "posture": {
-      "bypassPct": 99.7,
-      "proxyDetected": "custom_ca",
-      "sandbox": "off",
+      "bypassPct": null,
+      "proxyDetected": null,
+      "sandbox": null,
       "tokenStorage": null
     },
     "rateLimitTier": null,
@@ -101,7 +98,7 @@ const sample: components["schemas"]["PersonResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": null,
     "pageSize": null,
     "to": null,

@@ -82,47 +82,6 @@ func TestCollapseKeepsTheEndsStartWhenItHasNone(t *testing.T) {
 	}
 }
 
-func TestCollapseResentBatchKeepsTheEarliestCopy(t *testing.T) {
-	first := []records.Record{event("b1", 1, "e1", "s", t0), event("b1", 2, "e2", "s", t0)}
-	resent := []records.Record{event("b2", 1, "e1", "s", t0+minute), event("b2", 2, "e2", "s", t0+minute)}
-	for _, rs := range [][]records.Record{append(append([]records.Record{}, first...), resent...), append(append([]records.Record{}, resent...), first...)} {
-		rows := Collapse(rs)
-		if len(rows.Events) != 2 {
-			t.Fatalf("%d events, want 2", len(rows.Events))
-		}
-		for _, e := range rows.Events {
-			if e.Key != "claude_code/"+e.E.ClientEventID || e.Batch != "b1" {
-				t.Errorf("event %s from %s, want claude_code/<id> from b1", e.Key, e.Batch)
-			}
-		}
-	}
-}
-
-func TestCollapseEventWithoutAClientIDKeepsCanonsKey(t *testing.T) {
-	e := event("b1", 1, "", "s", t0)
-	e.Event.EventKey = "b1/h123"
-	rows := Collapse([]records.Record{e, e})
-	if len(rows.Events) != 1 || rows.Events[0].Key != "b1/h123" {
-		t.Fatalf("got %+v, want one event keyed b1/h123", rows.Events)
-	}
-}
-
-func TestCollapseEventDerivations(t *testing.T) {
-	tick := event("b1", 2, "e2", "s", t0)
-	tick.Event.Name, tick.Event.MetadataJSON = "tengu_tool_use_progress", `{"toolName":"Bash"}`
-	rows := Collapse([]records.Record{event("b1", 1, "e1", "s", t0), tick})
-	byKey := map[string]Event{}
-	for _, e := range rows.Events {
-		byKey[e.Key] = e
-	}
-	if e := byKey["claude_code/e1"]; e.Marker != "frustrated" || e.Internal || e.Summary == "" {
-		t.Errorf("input prompt: marker %q internal %v summary %q", e.Marker, e.Internal, e.Summary)
-	}
-	if e := byKey["claude_code/e2"]; !e.Internal {
-		t.Error("a tool-progress tick isn't internal (#69)")
-	}
-}
-
 func TestCollapseIdentity(t *testing.T) {
 	rows := Collapse([]records.Record{
 		end("a", "s", t0, t0+1), end("b", "s", t0+3*minute, t0+3*minute+1),
@@ -140,33 +99,22 @@ func TestCollapseIdentity(t *testing.T) {
 		t.Fatalf("accounts %+v", rows.Accounts)
 	}
 	a := rows.Accounts[0]
-	if a.Email.V != "new@example.com" || a.Name.V != "Old" || a.Plan.V != "max" || a.Seen != t0+2*minute {
-		t.Errorf("account %+v: want the newest email, the only name, the event's plan", a)
+	if a.Email.V != "new@example.com" || a.Name.V != "Old" || a.Seen != t0+minute {
+		t.Errorf("account %+v: want the newest email, the only name", a)
 	}
-	if len(rows.Devices) != 1 || !rows.Devices[0].OnEvents || rows.Devices[0].Platform.V != "darwin" || rows.Devices[0].Version.V != "2.0.1" {
+	if len(rows.Devices) != 1 || rows.Devices[0].Version.V != "2.0.1" {
 		t.Errorf("devices %+v", rows.Devices)
 	}
 }
 
-// A session's credentials are its visible calls' and those of the analytics posts that carried its
-// Claude Code events (process/requestrows.go callHashes, corrHashes): the person pages' scope.
-func TestSessionCredentialsOfItsEventsPosts(t *testing.T) {
+// Analytics events aren't loaded (docs/PIPELINE.md §3.2): an event names no
+// session, account, credential or device, and marks nothing.
+func TestCollapseSkipsAnalyticsEvents(t *testing.T) {
 	ev := event("b1", 1, "e1", "s2", t0+minute)
-	ev.Call.KeyHash = "kh-post"
-	rows := Collapse([]records.Record{end("a", "s", t0, t0+1), ev})
-	want := []Span{{A: "s", B: "kh1", First: t0, Last: t0}, {A: "s2", B: "kh-post", First: t0 + minute, Last: t0 + minute}}
-	if !reflect.DeepEqual(rows.SessionCredentials, want) {
-		t.Errorf("session_credentials %+v, want %+v", rows.SessionCredentials, want)
-	}
-}
-
-// An account's org is its Claude Code events' (process/personmap.go acctEvents), the newest.
-func TestAccountOrgFromItsEvents(t *testing.T) {
-	a, b := event("b1", 1, "e1", "s", t0), event("b1", 2, "e2", "s", t0+minute)
-	a.Event.OrgID, b.Event.OrgID = "org-1", "org-2"
-	rows := Collapse([]records.Record{b, a, sighting("acct1", "x@example.com", "", t0)})
-	if len(rows.Accounts) != 1 || rows.Accounts[0].Org.V != "org-2" {
-		t.Errorf("accounts %+v, want org-2", rows.Accounts)
+	ev.Event.OrgID = "org-1"
+	rows := Collapse([]records.Record{ev})
+	if len(rows.Calls)+len(rows.Accounts)+len(rows.SessionAccounts)+len(rows.SessionCredentials)+len(rows.Devices)+len(rows.Dirty) != 0 {
+		t.Errorf("an analytics event left rows: %+v", rows)
 	}
 }
 
@@ -179,14 +127,10 @@ func TestCollapseDirty(t *testing.T) {
 	want := []string{
 		fmt.Sprintf("cred_minute kh1/%d", t0),
 		fmt.Sprintf("minute s/%d", t0),
-		fmt.Sprintf("minute s/%d", t0+2*minute),
-		"prompt p-s",
+		"step a",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("dirty %v, want %v", got, want)
-	}
-	if !reflect.DeepEqual(rows.ReportIDs, []string{"req-a"}) {
-		t.Errorf("report ids %v, want the model call's request id", rows.ReportIDs)
 	}
 }
 
@@ -257,144 +201,33 @@ func TestDuplicateRecordsInOneFlush(t *testing.T) {
 	e := event("b1", 1, "e1", "s", t0)
 	write(t, db, start("a", "s", t0), end("a", "s", t0, t0+5), end("a", "s", t0, t0+5), e, e,
 		sighting("acct1", "x@example.com", "X", t0), sighting("acct1", "x@example.com", "X", t0))
-	for table, want := range map[string]int{"calls": 1, "events": 1, "accounts": 1, "session_accounts": 1} {
+	for table, want := range map[string]int{"calls": 1, "accounts": 1, "session_accounts": 1} {
 		if n := count(t, db, table); n != want {
 			t.Errorf("%s: %d rows, want %d", table, n, want)
 		}
 	}
 }
 
-func TestResentAnalyticsBatchCountsOnce(t *testing.T) {
-	first := []records.Record{event("b1", 1, "e1", "s", t0), event("b1", 2, "e2", "s", t0)}
-	resent := []records.Record{event("b2", 1, "e1", "s", t0+minute), event("b2", 2, "e2", "s", t0+minute)}
-	var sums []map[string]string
-	for _, order := range [][][]records.Record{{first, resent}, {resent, first}} {
-		db := fresh(t)
-		for _, rs := range order {
-			write(t, db, rs...)
-		}
-		if n := count(t, db, "events"); n != 2 {
-			t.Errorf("%d events, want 2", n)
-		}
-		var batches []string
-		if err := db.QueryRow(ctx(t), "SELECT array_agg(DISTINCT batch_call_id) FROM events").Scan(&batches); err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(batches, []string{"b1"}) {
-			t.Errorf("events from %v, want the first copy's batch", batches)
-		}
-		sums = append(sums, checksums(t, db))
-	}
-	if !reflect.DeepEqual(sums[0], sums[1]) {
-		t.Errorf("the order the copies came in changed the tables:\n%v\n%v", sums[0], sums[1])
-	}
-}
-
-func TestEqualEnvsAreStoredOnce(t *testing.T) {
+// A call carrying back a tool call's result marks the step of the call that
+// made the tool call, whatever its prompt (§5.3).
+func TestResultMarksTheStepThatMadeTheToolCall(t *testing.T) {
 	db := fresh(t)
-	a, b, c := event("b1", 1, "e1", "s", t0), event("b1", 2, "e2", "s", t0), event("b1", 3, "e3", "s", t0)
-	b.Event.EnvJSON = `{ "terminal": "x", "platform": "darwin" }` // a's, written otherwise
-	c.Event.EnvJSON = ""
-	write(t, db, a, b, c)
-	write(t, db, event("b2", 1, "e4", "s", t0)) // a later file with the same env
-	if n := count(t, db, "event_envs"); n != 1 {
-		t.Errorf("%d envs, want 1", n)
-	}
-	var shared, none int
-	if err := db.QueryRow(ctx(t), `SELECT count(*) FILTER (WHERE env_hash = (SELECT env_hash FROM event_envs)),
-		count(*) FILTER (WHERE env_hash IS NULL) FROM events`).Scan(&shared, &none); err != nil {
-		t.Fatal(err)
-	}
-	if shared != 3 || none != 1 {
-		t.Errorf("%d events point at the env and %d at none, want 3 and 1", shared, none)
-	}
-	var platform string
-	if err := db.QueryRow(ctx(t), "SELECT env->>'platform' FROM event_envs").Scan(&platform); err != nil || platform != "darwin" {
-		t.Errorf("env platform %q (%v)", platform, err)
-	}
-}
-
-func TestModelCallMarksItsReportsMinutes(t *testing.T) {
-	db := fresh(t)
-	rep := event("b1", 1, "e1", "s", t0+10*minute)
-	rep.Event.RequestID = "req-a"
-	write(t, db, rep)
+	a := end("a", "s", t0, t0+5)
+	a.Call.DetailJSON = `{"calls":[{"id":"tu1","tool":"Bash","commands":["go test"]}]}`
+	write(t, db, a)
 	if _, err := db.Exec(ctx(t), "DELETE FROM dirty"); err != nil {
 		t.Fatal(err)
 	}
-	write(t, db, end("a", "other", t0, t0+5))
-	var n int
-	if err := db.QueryRow(ctx(t), "SELECT count(*) FROM dirty WHERE kind = 'minute' AND key = $1",
-		fmt.Sprintf("s/%d", t0+10*minute)).Scan(&n); err != nil {
+	b := end("b", "s2", t0+minute, t0+minute+5)
+	b.Call.DetailJSON = `{"results":{"tu1":{"exit":[1]}}}`
+	write(t, db, b)
+	var keys []string
+	if err := db.QueryRow(ctx(t), "SELECT array_agg(key ORDER BY key) FROM dirty WHERE kind = 'step'").Scan(&keys); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("the report's minute isn't marked dirty")
+	if !reflect.DeepEqual(keys, []string{"a", "b"}) {
+		t.Errorf("steps marked %v, want the result's call and the call that made the tool call", keys)
 	}
-}
-
-func TestReportMarksItsCallsMinutes(t *testing.T) {
-	db := fresh(t)
-	write(t, db, end("a", "s", t0, t0+5))
-	if _, err := db.Exec(ctx(t), "DELETE FROM dirty"); err != nil {
-		t.Fatal(err)
-	}
-	rep := event("b1", 1, "e1", "s", t0+10*minute)
-	rep.Event.Name, rep.Event.RequestID = "tengu_api_success", "req-a"
-	write(t, db, rep)
-	var n int
-	if err := db.QueryRow(ctx(t), "SELECT count(*) FROM dirty WHERE kind = 'minute' AND key = $1",
-		fmt.Sprintf("s/%d", t0)).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Error("the reported call's minute isn't marked dirty")
-	}
-}
-
-// A step reads its report, tool and Bash events by their ids, whatever prompt
-// they name: each marks the prompt of its call.
-func TestStepEventsMarkTheirCallsPrompt(t *testing.T) {
-	db := fresh(t)
-	write(t, db, end("a", "s", t0, t0+5))
-	for _, x := range []struct{ name, field, md string }{
-		{"tengu_api_success", "req", `{}`},
-		{"tengu_tool_use_success", "req", `{"toolUseID":"tu1"}`},
-		{"tengu_tool_use_progress", "req", `{"toolUseID":"tu1"}`},
-		{"tengu_bash_tool_command_executed", "tool", `{"tool_use_id":"tu1"}`},
-	} {
-		if _, err := db.Exec(ctx(t), "DELETE FROM dirty"); err != nil {
-			t.Fatal(err)
-		}
-		e := event("b-"+x.name, 1, "e-"+x.name, "s", t0+minute)
-		e.Event.Name, e.Event.PromptID, e.Event.MetadataJSON = x.name, "other", x.md
-		if x.field == "req" {
-			e.Event.RequestID, e.Event.ToolUseID = "req-a", "tu1"
-		} else {
-			e.Event.ToolUseID = "tu1"
-		}
-		write(t, db, e)
-		var n int
-		if err := db.QueryRow(ctx(t), "SELECT count(*) FROM dirty WHERE kind = 'prompt' AND key = 'p-s'").Scan(&n); err != nil {
-			t.Fatal(err)
-		}
-		if n != 1 {
-			t.Errorf("%s naming prompt other doesn't mark its call's prompt", x.name)
-		}
-	}
-}
-
-// A typed prompt with no prompt id marks the prompt keyed by its place in its
-// batch.
-func TestCollapseMarksAnUnnamedInput(t *testing.T) {
-	e := event("b1", 4, "e1", "s", t0)
-	e.Event.PromptID = ""
-	for _, d := range Collapse([]records.Record{e}).Dirty {
-		if d.Kind == "prompt" && d.Key == "input:b1:4" {
-			return
-		}
-	}
-	t.Error("no input:b1:4 prompt mark")
 }
 
 // The credential rollups count coding agents' calls, with or without a
@@ -419,7 +252,7 @@ func TestDirtyIsMarkedAgain(t *testing.T) {
 	db := fresh(t)
 	write(t, db, start("a", "s", t0))
 	seq := func() (s int64) {
-		db.QueryRow(ctx(t), "SELECT seq FROM dirty WHERE kind = 'prompt'").Scan(&s)
+		db.QueryRow(ctx(t), "SELECT seq FROM dirty WHERE kind = 'step'").Scan(&s)
 		return
 	}
 	before := seq()
@@ -485,9 +318,9 @@ func TestReloadAndShuffleGiveIdenticalTables(t *testing.T) {
 	}
 }
 
-// TestFlushCostIsFlat times a flush of 1,000 events and 50 model calls (whose
-// reports it looks up) into a session that already has 1,000 events, then
-// 50,000 (docs/PIPELINE.md §9: flat). Timing: run on demand with
+// TestFlushCostIsFlat times a flush of 1,000 model calls (each carrying a tool
+// result, whose step it looks up) into a session that already has 1,000
+// calls, then 50,000 (docs/PIPELINE.md §9: flat). Timing: run on demand with
 // AINTERCEPT_FLUSH_COST=1.
 func TestFlushCostIsFlat(t *testing.T) {
 	if os.Getenv("AINTERCEPT_FLUSH_COST") == "" {
@@ -498,14 +331,8 @@ func TestFlushCostIsFlat(t *testing.T) {
 		rs := make([]records.Record, 1000)
 		for i := range rs {
 			k := n*1000 + i
-			rs[i] = event(fmt.Sprintf("b%d", n), int64(i+1), fmt.Sprintf("e%d", k), "big", t0+int64(k)*1e9)
-			rs[i].Event.RequestID = fmt.Sprintf("r%d", k)
-		}
-		for i := 0; i < 50; i++ {
-			k := n*1000 + i*20
-			c := end(fmt.Sprintf("c%d", k), "big", t0+int64(k)*1e9, t0+int64(k)*1e9+5)
-			c.Call.RequestID = fmt.Sprintf("r%d", k)
-			rs = append(rs, c)
+			rs[i] = end(fmt.Sprintf("c%d", k), "big", t0+int64(k)*1e9, t0+int64(k)*1e9+5)
+			rs[i].Call.DetailJSON = fmt.Sprintf(`{"calls":[{"id":"tu%d","tool":"Bash"}],"results":{"tu%d":{"exit":[0]}}}`, k, k-1)
 		}
 		return rs
 	}
@@ -528,10 +355,10 @@ func TestFlushCostIsFlat(t *testing.T) {
 		write(t, db, batch(n)...)
 	}
 	at50k := timed(n)
-	t.Logf("per record: %.1f µs at 1,000 events in the session, %.1f µs at 50,000",
-		float64(at1k.Microseconds())/1050, float64(at50k.Microseconds())/1050)
+	t.Logf("per record: %.1f µs at 1,000 calls in the session, %.1f µs at 50,000",
+		float64(at1k.Microseconds())/1000, float64(at50k.Microseconds())/1000)
 	if at50k > 3*at1k {
-		t.Errorf("a flush into a 50,000-event session took %v, %v at 1,000", at50k, at1k)
+		t.Errorf("a flush into a 50,000-call session took %v, %v at 1,000", at50k, at1k)
 	}
 }
 

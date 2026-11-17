@@ -164,6 +164,13 @@ func atomicCases() []atomicCase {
 	unknown.Phase = "something_new"
 	verdict := hdr("c1", false, nil)
 	verdict.Phase = events.PhaseVerdict
+	verdict.Verdict = &events.Verdict{Callback: "reply", Action: "replace", Applied: true, Mode: "enforce", MessageID: "msg_1/0",
+		Annotations: map[string]string{"rule": "rabbit"}, LatencyMS: 4}
+	overCap := make([]events.Event, MaxVerdictsPerCall+1)
+	overCap[0] = hdr("c1", false, ccHeaders)
+	for i := 1; i < len(overCap); i++ {
+		overCap[i] = verdict
+	}
 
 	return []atomicCase{
 		{label: CasePendingHeaders, row: row(hdr("c1", false, ccHeaders))},
@@ -319,7 +326,13 @@ func atomicCases() []atomicCase {
 			h.Path = "/api/oauth/profile"
 			return h
 		}()}, row: row(func() events.Event { e := reqChunk("f4", 3, false); e.BodyB64 = "YWJj"; return e }())},
-		{label: CaseVerdict, row: row(verdict)},
+		{label: CaseVerdict, row: row(verdict), want: []want{{KindVerdict, "c1", "c:c1", func(t *testing.T, r Record) {
+			if v := r.Verdict; v == nil || v.Callback != "reply" || v.Action != "replace" || !v.Applied || v.Mode != "enforce" || v.MessageID != "msg_1/0" ||
+				v.AnnotationsJSON != `{"rule":"rabbit"}` || v.LatencyMS != 4 || v.NS != verdict.TimestampNS || v.Seq == 0 {
+				t.Errorf("verdict %+v", v)
+			}
+		}}}},
+		{label: CaseVerdictOverCap, prior: overCap, row: row(verdict)},
 		{label: CaseUnknownPhase, row: row(unknown)},
 	}
 }

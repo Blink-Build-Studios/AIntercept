@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"context"
 	"strings"
 
@@ -38,10 +39,77 @@ type interceptState struct {
 	reply       *convo.Stream
 	replyBody   []byte
 	replyTrunc  bool
+	// replyKind is what the reply is (from its content-type, or sniffed from
+	// its first bytes, held in sniff, when it has none); replyEnc holds an
+	// encoded reply to its end, to decode it whole.
+	replyKind     bodyKind
+	sniff         []byte
+	replyEnc      []byte
+	replyEncTrunc bool
 }
 
-// interceptContentCap bounds a whole body sent to OnMessage in observe mode.
+// interceptContentCap bounds a whole body sent to OnMessage in observe mode
+// (v1).
 const interceptContentCap = 4 << 20
+
+// interceptBodyCap bounds a body observe mode holds whole to read it for the
+// Interceptor (v2): a request, a JSON reply, an encoded reply. The same as
+// enforce's.
+const interceptBodyCap = enforceBodyCap
+
+// bodyKind is what a reply's body is.
+type bodyKind byte
+
+const (
+	kindUnknown bodyKind = iota // not yet known: no content-type, too few bytes to tell
+	kindSSE                     // an event stream
+	kindJSON                    // a whole JSON body
+	kindOther                   // anything else: not read
+)
+
+// replyKindOf is what a reply's content-type says it is (kindUnknown without
+// one).
+func replyKindOf(contentType string) bodyKind {
+	switch {
+	case contentType == "":
+		return kindUnknown
+	case strings.Contains(contentType, "text/event-stream"):
+		return kindSSE
+	case strings.Contains(contentType, "json"):
+		return kindJSON
+	}
+	return kindOther
+}
+
+// sniffCap bounds the bytes held to tell what a reply without a
+// content-type is.
+const sniffCap = 4 << 10
+
+// sniffKind is what a reply without a content-type is, from its first bytes:
+// an event stream when it begins with an SSE field (Codex's replies over HTTP
+// carry no content-type), JSON when it begins with an object or array.
+// kindUnknown while the bytes so far can't tell.
+func sniffKind(b []byte) bodyKind {
+	t := bytes.TrimLeft(b, " \t\r\n")
+	switch {
+	case len(t) == 0:
+		return kindUnknown
+	case t[0] == '{' || t[0] == '[':
+		return kindJSON
+	}
+	fields := []string{"event:", "data:", "id:", "retry:", ":"}
+	for _, f := range fields {
+		if bytes.HasPrefix(t, []byte(f)) {
+			return kindSSE
+		}
+	}
+	for _, f := range fields {
+		if len(t) < len(f) && strings.HasPrefix(f, string(t)) {
+			return kindUnknown
+		}
+	}
+	return kindOther
+}
 
 // intercepting reports whether this stream's calls go to an Interceptor.
 func (srv *Server) intercepting(st *streamState) bool {
@@ -214,17 +282,59 @@ func (srv *Server) observers(st *streamState) convo.Deciders {
 	}
 }
 
-// observeReply follows a reply in observe mode (v2): an event stream event by
-// event, asking about its text as each chunk ends; a JSON body whole at its
-// end (capped).
+// observeReply follows a reply in observe mode (v2). Observe can't ask for
+// a plain reply, so an encoded one is held to its end and decoded whole, as
+// the extractors do; a plain one is read as it comes.
 func (srv *Server) observeReply(st *streamState, chunk []byte, eos bool) {
 	ic := st.ic
-	if ic.replyFormat == "" || st.status != 200 || st.respEncoding != "" {
+	if ic.replyFormat == "" || st.status != 200 {
 		return
 	}
-	ct := st.respHeaders["content-type"]
-	switch {
-	case strings.Contains(ct, "text/event-stream"):
+	enc := st.respEncoding
+	if enc == "" {
+		srv.followReply(st, chunk, eos)
+		return
+	}
+	ic.replyEnc, ic.replyEncTrunc = appendCapped(ic.replyEnc, chunk, ic.replyEncTrunc, interceptBodyCap)
+	if !eos {
+		return
+	}
+	body, trunc := ic.replyEnc, ic.replyEncTrunc
+	ic.replyEnc = nil
+	if trunc {
+		srv.ic.Unparsed("reply over the buffer")
+		return
+	}
+	plain, err := events.DecodeBody(body, enc)
+	if err != nil {
+		srv.ic.Unparsed("undecodable reply")
+		return
+	}
+	srv.followReply(st, plain, true)
+}
+
+// followReply reads a plain reply (observe): an event stream event by event,
+// asking about its text as each chunk ends; a JSON body whole at its end. A
+// reply without a content-type is sniffed from its first bytes.
+func (srv *Server) followReply(st *streamState, chunk []byte, eos bool) {
+	ic := st.ic
+	if ic.replyKind == kindUnknown {
+		if k := replyKindOf(st.respHeaders["content-type"]); k != kindUnknown {
+			ic.replyKind = k
+		} else {
+			ic.sniff = append(ic.sniff, chunk...)
+			k := sniffKind(ic.sniff)
+			if k == kindUnknown && !eos && len(ic.sniff) <= sniffCap {
+				return
+			}
+			if k == kindUnknown {
+				k = kindOther
+			}
+			ic.replyKind, chunk, ic.sniff = k, ic.sniff, nil
+		}
+	}
+	switch ic.replyKind {
+	case kindSSE:
 		if ic.reply == nil {
 			ic.reply = convo.NewStream(ic.replyFormat, convo.SSE, srv.observers(st))
 		}
@@ -235,9 +345,11 @@ func (srv *Server) observeReply(st *streamState, chunk []byte, eos bool) {
 		if eos {
 			ic.reply.Flush()
 		}
-	case strings.Contains(ct, "json"):
-		ic.replyBody, ic.replyTrunc = appendCapped(ic.replyBody, chunk, ic.replyTrunc, interceptContentCap)
-		if eos && !ic.replyTrunc {
+	case kindJSON:
+		ic.replyBody, ic.replyTrunc = appendCapped(ic.replyBody, chunk, ic.replyTrunc, interceptBodyCap)
+		if eos && ic.replyTrunc {
+			srv.ic.Unparsed("reply over the buffer")
+		} else if eos {
 			_, _, _ = convo.DecideBody(ic.replyFormat, ic.replyBody, srv.observers(st))
 		}
 		if eos {

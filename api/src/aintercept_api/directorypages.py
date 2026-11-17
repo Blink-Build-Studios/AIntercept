@@ -4,9 +4,9 @@
   difference 4): the UTC days the window touches, one row per (account, day, agent). A person is an email
   group under its least account with a session, as today. One statement groups, filters (`agent`, `q` on
   name, email, id and device), sorts and pages the rows in SQL; the page's rows then read their members
-  (`accounts`), devices (`account_devices`: the devices seen in the window), Codex limits (the newest Codex
-  session's) and, when they missed calls, their not-captured windows (`missed_reports`). The 14-day activity
-  strip is the last 14 days' rows; live is the newest day row's last activity.
+  (`accounts`), devices (`account_devices`: the devices seen in the window) and Codex limits (the newest
+  Codex session's). The 14-day activity strip is the last 14 days' rows; live is the newest day row's last
+  activity. Bypass % and coverage were Claude Code's analytics: null.
 - /overview: totals over the same rows; requests from `cred_hours` (whole hours inside the window, minutes at
   its edges); unattributed from `sessions`. An agent card's sessions are today's: those with a model call in
   the window (`account_days.call_session_ids`, and the unattributed sessions active in it).
@@ -28,7 +28,7 @@ from aintercept_api import agents
 from aintercept_api import claude_code as cc
 from aintercept_api import directory as dr
 from aintercept_api import sessionpages as sp
-from aintercept_api.models.common import AgentLimits, Coverage, CoverageWindow
+from aintercept_api.models.common import AgentLimits
 from aintercept_api.models.people import (
     AgentInfo,
     AgentOverview,
@@ -78,11 +78,8 @@ _PEOPLE = f"""WITH win AS (
     SELECT g.pid, count(DISTINCT x.sid) AS sessions FROM win w JOIN grp g USING (account_id),
       unnest(w.session_ids) x(sid) GROUP BY g.pid),
   rows AS (
-    SELECT g.pid, sum(w.sessions_with_events)::bigint AS with_events,
-      sum(w.prompts)::bigint AS prompts, sum(w.model_calls)::bigint AS calls,
+    SELECT g.pid, sum(w.prompts)::bigint AS prompts, sum(w.model_calls)::bigint AS calls,
       sum(w.outputs_known)::bigint AS outputs_known, sum(w.tokens_output)::bigint AS tokens_out,
-      sum(w.queries)::bigint AS queries, sum(w.bypassed)::bigint AS bypassed,
-      sum(w.reported)::bigint AS reported, sum(w.missed)::bigint AS missed,
       max(w.last_ns) AS last_ns, array_agg(DISTINCT w.agent) AS agents,
       array_agg(DISTINCT w.account_id) AS accts
     FROM win w JOIN grp g USING (account_id) GROUP BY g.pid),
@@ -130,9 +127,6 @@ _LIVE = """SELECT a.account_id, s.session_id, s.repo, s.last_ns, (
 FROM unnest(%(accts)s::text[]) a(account_id), LATERAL (
   SELECT s.session_id, s.repo, s.last_ns FROM session_accounts sa JOIN sessions s USING (session_id)
   WHERE sa.account_id = a.account_id AND s.last_ns >= %(since)s ORDER BY s.last_ns DESC LIMIT 1) s"""
-# The not-captured windows of an account's sessions in the window.
-_MISSED = """SELECT m.ts_ns FROM session_accounts sa JOIN missed_reports m USING (session_id)
-WHERE sa.account_id = ANY(%(accts)s) AND m.ts_ns >= %(lo)s AND m.ts_ns <= %(hi)s"""
 
 # The overview's requests: coding agents' calls in the window, whole hours inside it, minutes at its edges.
 _REQUESTS = """SELECT coalesce((SELECT sum(n) FROM cred_hours WHERE hour_ns >= %(hlo)s AND hour_ns < %(hhi)s), 0)
@@ -146,7 +140,7 @@ _STATUS = """SELECT
   least((SELECT min(start_ns) FROM calls WHERE NOT synthetic),
         (SELECT min(end_ns) FROM calls WHERE start_ns IS NULL AND NOT synthetic)) AS first_request_ns,
   EXISTS (SELECT 1 FROM calls) AS any_call,
-  EXISTS (SELECT 1 FROM calls WHERE detail IS NOT NULL) AS retained,
+  EXISTS (SELECT 1 FROM calls WHERE detail IS NOT NULL AND kind = 'model') AS retained,
   (SELECT max(last_ns) FROM ingest_pods) AS newest"""
 _EARLIEST = "SELECT min(start_ns) FROM calls WHERE synthetic"
 
@@ -195,7 +189,7 @@ class DirectoryReads:
     def _shape(
         self, rows: list[Row], now_dt: datetime, now: int, lo: int | None, hi: int | None
     ) -> list[PersonSummaryRow]:
-        """The rows as the API's: their members, devices, agents, limits and not-captured windows."""
+        """The rows as the API's: their members, devices, agents and limits."""
         if not rows:
             return []
         pids = [r["pid"] for r in rows]
@@ -254,20 +248,6 @@ class DirectoryReads:
                         devices=len({d["device_id"] for d in mine_devs}),
                     )
                 )
-            coverage = None
-            if r["with_events"]:
-                wins: list[tuple[int, int, int]] = []
-                if r["missed"]:
-                    ts = sorted(
-                        t for (t,) in self.snap.rows("missed", _MISSED, {"accts": r["accts"], "lo": lo_, "hi": hi_})
-                    )
-                    wins = _windows(ts)
-                coverage = Coverage(
-                    reported=r["reported"],
-                    captured=r["reported"] - r["missed"],
-                    notCaptured=r["missed"],
-                    windows=[CoverageWindow(from_=dt(a), to=dt(b), count=n) for a, b, n in wins],
-                )
             lim = limits.get(pid)
             agent_limits = []
             if lim is not None:
@@ -310,8 +290,8 @@ class DirectoryReads:
                     tokensOut=r["tokens_out"] if known else None,
                     tokensAccuracy="missing" if not known else "exact" if known == calls else "estimated",
                     activity=dr.activity(dict(strip), now_dt),
-                    bypassPct=round(100 * r["bypassed"] / r["queries"], 1) if r["queries"] else None,
-                    coverage=coverage,
+                    bypassPct=None,
+                    coverage=None,
                     agentInfo=info,
                     agentLimits=agent_limits,
                 )
@@ -372,7 +352,7 @@ class DirectoryReads:
                 sessions=sum(r.sessions for r in rows),
                 turns=sum(r.turns or 0 for r in rows),
                 requests=int(requests),
-                notCaptured=sum(r.coverage.notCaptured for r in rows if r.coverage),
+                notCaptured=0,
                 unattributed=Unattributed(
                     sessions=u["n"],
                     modelCalls=int(u["calls"]) if u["n"] else 0,
@@ -418,18 +398,6 @@ class DirectoryReads:
 
 def _overlaps(day: int, lo: int | None, hi: int | None) -> bool:
     return (lo is None or day + DAY > lo) and (hi is None or day <= hi)
-
-
-def _windows(ts: list[int]) -> list[tuple[int, int, int]]:
-    out: list[list[int]] = []
-    prev = None
-    for t in ts:
-        if prev is None or t - prev >= cc.GAP_SPLIT_NS:
-            out.append([t, t, 0])
-        out[-1][1] = t
-        out[-1][2] += 1
-        prev = t
-    return [(a, b, n) for a, b, n in out]
 
 
 def _json(v: Any) -> str:

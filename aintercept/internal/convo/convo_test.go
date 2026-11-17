@@ -42,6 +42,8 @@ func summary(m Message) string {
 			}
 		case KindOpaque:
 			s = "opaque"
+		case KindToolAdded:
+			s = "tool_added " + p.Name
 		default:
 			s = "?" + string(p.Kind)
 		}

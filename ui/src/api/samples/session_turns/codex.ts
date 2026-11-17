@@ -56,7 +56,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "input": 1200,
                 "output": 50
               },
-              "tools": [],
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "exec_command",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
               "ttftMs": null,
               "usageMissing": null
             }
@@ -129,7 +144,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "input": 1200,
                 "output": 50
               },
-              "tools": [],
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "apply_patch",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
               "ttftMs": null,
               "usageMissing": null
             }
@@ -202,18 +232,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "work": {
         "commands": [
           {
-            "failed": 1,
-            "lastExit": 0,
+            "failed": 0,
+            "lastExit": null,
             "program": null,
-            "runs": 2
+            "runs": 1
           }
         ],
         "commits": 0,
         "editTypes": {},
         "editedFiles": null,
         "edits": 1,
-        "linesAdded": 12,
-        "linesRemoved": 3,
+        "linesAdded": null,
+        "linesRemoved": null,
         "mcp": [],
         "otherTools": 0,
         "prs": [],

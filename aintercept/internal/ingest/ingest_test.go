@@ -22,6 +22,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg/pgtest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/process"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/records"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/refresh"
 )
 
 // Stage 2 of ingest (docs/PIPELINE.md §2.2): one worker at a time lists raw
@@ -134,13 +135,14 @@ func TestListThenLoad(t *testing.T) {
 	if got := loadAll(t, db, s); len(got) != 1 || got[0] != k {
 		t.Fatalf("loaded %v", got)
 	}
-	var calls, evs, ranged int
-	if err := db.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM calls), (SELECT count(*) FROM events),
-		(SELECT count(*) FROM calls WHERE raw_key = $1 AND raw_offset IS NOT NULL AND raw_len > 0)`, k).Scan(&calls, &evs, &ranged); err != nil {
+	// The analytics events stay in the raw file: none is loaded (docs/PIPELINE.md §3.2).
+	var calls, ranged int
+	if err := db.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM calls),
+		(SELECT count(*) FROM calls WHERE raw_key = $1 AND raw_offset IS NOT NULL AND raw_len > 0)`, k).Scan(&calls, &ranged); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 3 || evs != 3 || ranged != 3 {
-		t.Fatalf("calls %d, events %d, with a raw range %d", calls, evs, ranged)
+	if calls != 3 || ranged != 3 {
+		t.Fatalf("calls %d, with a raw range %d", calls, ranged)
 	}
 	// Each call's range is its member: the call's own row, read alone.
 	rows, err := db.Query(ctx(t), "SELECT call_id, raw_key, raw_offset, raw_len FROM calls")
@@ -378,5 +380,47 @@ func TestABadFileDoesNotHoldUpTheOthers(t *testing.T) {
 	var unloaded int
 	if err := db.QueryRow(ctx(t), "SELECT count(*) FROM ingest_files WHERE loaded_at IS NULL").Scan(&unloaded); err != nil || unloaded != 1 {
 		t.Fatalf("unloaded %d (%v), want the bad file", unloaded, err)
+	}
+}
+
+// A refresh that never finishes (a huge prompt, a lock it waits on) must not
+// hold up loading: new raw files keep landing in Postgres while refreshers
+// are stuck.
+func TestASlowRefreshDoesNotHoldUpLoading(t *testing.T) {
+	db := fresh(t)
+	root := t.TempDir()
+	s := process.DirStore{Root: root}
+	stuck, entered := make(chan struct{}), make(chan struct{}, 8)
+	defer close(stuck)
+	drain = func(c context.Context, _ *pgxpool.Pool) (int, error) {
+		entered <- struct{}{}
+		select {
+		case <-stuck:
+		case <-c.Done():
+		}
+		return 0, c.Err()
+	}
+	defer func() { drain = refresh.Drain }()
+	c, cancel := context.WithCancel(ctx(t))
+	done := make(chan struct{})
+	go func() { Loop(c, db, s, "", 1, 2, nil, 10*time.Millisecond); close(done) }()
+	defer func() { cancel(); <-done }()
+	<-entered // the refreshers are stuck before the file exists
+
+	k := rawKey(time.Now(), "pod-a", 1)
+	put(t, root, k, rawFile(t, "f1", 3))
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var loaded bool
+		if err := db.QueryRow(ctx(t), "SELECT coalesce(bool_or(loaded_at IS NOT NULL), false) FROM ingest_files WHERE key = $1", k).Scan(&loaded); err != nil {
+			t.Fatal(err)
+		}
+		if loaded {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a file listed while the refreshers were stuck never loaded")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

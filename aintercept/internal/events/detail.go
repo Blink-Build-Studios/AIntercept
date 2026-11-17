@@ -19,9 +19,28 @@ type CallDetail struct {
 	Text string `json:"text,omitempty"`
 	// Results are the outcomes of earlier calls this request carries back, by call id.
 	Results map[string]ToolResult `json:"results,omitempty"`
-	// Prompt is the person's newest message in the request (what the prompt said), when
-	// the request ends with one.
-	Prompt string `json:"prompt,omitempty"`
+	// Said is the text of the request's new messages (convo's New) from the person and the
+	// harness, in order, each piece typed: the person's words, or a harness note named by
+	// its marker (convo.HarnessNotes; "system" for a system message with none), so the
+	// pipeline and the Interceptor agree on who's speaking.
+	Said []SaidPart `json:"said,omitempty"`
+	// Prompt is the person's words among them (what the prompt said); PromptChars is their
+	// whole length (Prompt is its start).
+	Prompt      string `json:"prompt,omitempty"`
+	PromptChars int    `json:"promptChars,omitempty"`
+	// Interrupted: a new message is the harness's note that the turn before was interrupted
+	// (convo.InterruptNotes).
+	Interrupted bool `json:"interrupted,omitempty"`
+	// Side is a side request's kind by its harness note: "title" (Claude Code's <session>)
+	// or "suggestion" (its next-prompt suggestion); "" for a turn's own call.
+	Side string `json:"side,omitempty"`
+}
+
+// SaidPart is one text piece of a request's new messages.
+type SaidPart struct {
+	Role string `json:"role"`           // user, system
+	Note string `json:"note,omitempty"` // the harness note's marker; "" for the person's words
+	Text string `json:"text"`           // its first promptChars characters
 }
 
 // ToolCallDetail is one tool call: a Codex exec script can run several commands and patches.
@@ -30,6 +49,8 @@ type ToolCallDetail struct {
 	Tool     string      `json:"tool"`
 	Commands []string    `json:"commands,omitempty"` // each command's program, plus a runner's subcommand ("npm test")
 	Patches  []PatchFile `json:"patches,omitempty"`
+	File     string      `json:"file,omitempty"`     // the file a file tool reads or writes (file_path, notebook_path)
+	Subagent string      `json:"subagent,omitempty"` // the subagent type a spawn asks for (subagent_type)
 }
 
 // PatchFile is one file a call changed, with its added and removed lines.
@@ -60,9 +81,8 @@ func DetailFromBodies(req []byte, reqEnc string, resp []byte, respEnc string) *C
 	}
 	if raw, err := decodeBody(req, reqEnc); err == nil && len(raw) > 0 {
 		d.Results = resultsFromRequest(raw)
-		d.Prompt = promptFromRequest(raw)
 	}
-	if len(d.Calls) == 0 && d.Text == "" && len(d.Results) == 0 && d.Prompt == "" {
+	if d.Empty() {
 		return nil
 	}
 	return d
@@ -180,8 +200,16 @@ func (d *CallDetail) addItem(it detailItem) {
 		if cmd, ok := in["command"].(string); ok && cmd != "" {
 			c.Commands = commandWords(cmd)
 		}
-		if f, ok := in["file_path"].(string); ok && f != "" {
+		f, _ := in["file_path"].(string)
+		if nb, _ := in["notebook_path"].(string); f == "" {
+			f = nb
+		}
+		c.File = f
+		if f != "" && (in["content"] != nil || in["old_string"] != nil || in["new_string"] != nil || in["edits"] != nil) {
 			c.Patches = []PatchFile{editLines(f, in)}
+		}
+		if t, ok := in["subagent_type"].(string); ok {
+			c.Subagent = t
 		}
 		d.Calls = append(d.Calls, c)
 	}
@@ -405,82 +433,19 @@ func resultsFromRequest(raw []byte) map[string]ToolResult {
 	return out
 }
 
-// promptFromRequest is what the person said, when the request carries a new message: its
-// trailing messages (no tool call or answer after them) from the user. Codex follows the
-// prompt with its own context messages (<environment_context>, a developer message), and
-// Claude Code adds <system-reminder> blocks: those aren't the prompt, so they're skipped.
-// Tool results aren't a prompt either: a request ending in them has none.
-func promptFromRequest(raw []byte) string {
-	var body struct {
-		Input    json.RawMessage   `json:"input"`
-		Messages []json.RawMessage `json:"messages"`
-	}
-	if json.Unmarshal(raw, &body) != nil {
-		return ""
-	}
-	var items []json.RawMessage
-	switch {
-	case len(body.Input) > 0 && body.Input[0] == '[':
-		_ = json.Unmarshal(body.Input, &items)
-	case len(body.Messages) > 0:
-		items = body.Messages
-	}
-	for i := len(items) - 1; i >= 0; i-- {
-		var msg struct {
-			Type    string          `json:"type"`
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		}
-		if json.Unmarshal(items[i], &msg) != nil || (msg.Type != "" && msg.Type != "message") {
-			return "" // a tool call or its output: this request continues a turn
-		}
-		switch msg.Role {
-		case "developer", "system":
-			continue
-		case "user":
-			if text, results := userText(msg.Content); results {
-				return ""
-			} else if text != "" {
-				return truncateRunes(text, promptChars)
-			}
-		default:
-			return "" // the model's answer comes after: no new message
-		}
-	}
-	return ""
+// Empty is whether the detail holds nothing.
+func (d *CallDetail) Empty() bool {
+	return len(d.Calls) == 0 && d.Text == "" && len(d.Results) == 0 && len(d.Said) == 0
 }
 
-// contextBlock is a block the agent adds to a user message, not something the person (or an
-// agent messaging it) said: Codex's environment and instructions, Claude Code's reminders.
-var contextBlock = regexp.MustCompile(`^<(environment_context|user_instructions|developer_instructions|permissions|` +
-	`system-reminder|turn_aborted|local-command-stdout|local-command-stderr|INSTRUCTIONS)\b`)
-
-// userText is a user message's own words (context blocks left out), and whether it carries
-// tool results instead.
-func userText(content json.RawMessage) (string, bool) {
-	var text string
-	if json.Unmarshal(content, &text) == nil {
-		if contextBlock.MatchString(strings.TrimSpace(text)) {
-			return "", false
-		}
-		return strings.TrimSpace(text), false
-	}
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	_ = json.Unmarshal(content, &parts)
-	var b []string
-	for _, p := range parts {
-		switch {
-		case p.Type == "tool_result":
-			return "", true
-		case (p.Type == "input_text" || p.Type == "text") && !contextBlock.MatchString(strings.TrimSpace(p.Text)):
-			b = append(b, p.Text)
-		}
-	}
-	return strings.TrimSpace(strings.Join(b, "\n")), false
+// SetPrompt is the person's words among the request's new messages: Prompt their start,
+// PromptChars their whole length.
+func (d *CallDetail) SetPrompt(words string) {
+	d.Prompt, d.PromptChars = truncateRunes(words, promptChars), utf8.RuneCountInString(words)
 }
+
+// SaidText is a said piece's text as kept: its first promptChars characters.
+func SaidText(s string) string { return truncateRunes(s, promptChars) }
 
 // exitCodes finds the exit codes a tool output reports: Codex's structured
 // "exit_code": N, or the text forms "Process exited with code N" / "Exit code N".

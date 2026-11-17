@@ -57,7 +57,7 @@ func interceptorRoutes(mux *http.ServeMux) {
 // SHA-256 always is in X-Fixture-Received-Sha256.
 func messages(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	w.Header().Set("Content-Type", "text/event-stream")
+	eventStream(w, r.URL.Path)
 	if len(body) <= 16<<10 {
 		w.Header().Set("X-Fixture-Received", base64.StdEncoding.EncodeToString(body))
 	}
@@ -378,7 +378,7 @@ func toolReply(w http.ResponseWriter, path string, body []byte) bool {
 		_, _ = w.Write(whole)
 		return true
 	}
-	w.Header().Set("Content-Type", "text/event-stream")
+	eventStream(w, path)
 	f, _ := w.(http.Flusher)
 	gap := requestGap(body)
 	for _, e := range evs {
@@ -392,4 +392,15 @@ func toolReply(w http.ResponseWriter, path string, body []byte) bool {
 		time.Sleep(gap)
 	}
 	return true
+}
+
+// eventStream sets an event stream's content-type, except on Codex's path:
+// chatgpt.com sends Codex's event streams with no content-type at all (nor
+// does Go's server sniff one in).
+func eventStream(w http.ResponseWriter, path string) {
+	if strings.HasPrefix(path, "/backend-api/codex/") {
+		w.Header()["Content-Type"] = nil
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
 }

@@ -3,829 +3,13 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionTimelineResponse"] = {
   "data": {
-    "analytics": [
-      {
-        "count": 143,
-        "t": "2026-11-02T14:00:00Z",
-        "top": [
-          {
-            "count": 31,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 17,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 11,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 3445,
-        "t": "2026-11-02T15:00:00Z",
-        "top": [
-          {
-            "count": 1445,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 514,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 148,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 1034,
-        "t": "2026-11-02T16:00:00Z",
-        "top": [
-          {
-            "count": 219,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 217,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 50,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 1959,
-        "t": "2026-11-02T17:00:00Z",
-        "top": [
-          {
-            "count": 563,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 378,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 101,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 449,
-        "t": "2026-11-02T18:00:00Z",
-        "top": [
-          {
-            "count": 217,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 89,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 13,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 39,
-        "t": "2026-11-02T19:00:00Z",
-        "top": [
-          {
-            "count": 15,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_operation"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_read_limits_override"
-          }
-        ]
-      },
-      {
-        "count": 7,
-        "t": "2026-11-02T20:00:00Z",
-        "top": [
-          {
-            "count": 7,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 108,
-        "t": "2026-11-02T21:00:00Z",
-        "top": [
-          {
-            "count": 31,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 11,
-            "name": "tengu_keybinding_fired"
-          },
-          {
-            "count": 8,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 5088,
-        "t": "2026-11-02T22:00:00Z",
-        "top": [
-          {
-            "count": 1119,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 1054,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 296,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 15,
-        "t": "2026-11-02T23:00:00Z",
-        "top": [
-          {
-            "count": 7,
-            "name": "tengu_keybinding_fired"
-          },
-          {
-            "count": 5,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 2,
-            "name": "tengu_event_loop_stall"
-          }
-        ]
-      },
-      {
-        "count": 1160,
-        "t": "2026-11-03T00:00:00Z",
-        "top": [
-          {
-            "count": 231,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 170,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 72,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 8,
-        "t": "2026-11-03T04:00:00Z",
-        "top": [
-          {
-            "count": 4,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 1,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 32,
-        "t": "2026-11-03T05:00:00Z",
-        "top": [
-          {
-            "count": 16,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 7,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_dir_search"
-          }
-        ]
-      },
-      {
-        "count": 71,
-        "t": "2026-11-03T06:00:00Z",
-        "top": [
-          {
-            "count": 26,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 15,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 13,
-            "name": "tengu_dir_search"
-          }
-        ]
-      },
-      {
-        "count": 23,
-        "t": "2026-11-03T07:00:00Z",
-        "top": [
-          {
-            "count": 12,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 7,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 11,
-        "t": "2026-11-03T08:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 19,
-        "t": "2026-11-03T09:00:00Z",
-        "top": [
-          {
-            "count": 9,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 4,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 53,
-        "t": "2026-11-03T10:00:00Z",
-        "top": [
-          {
-            "count": 24,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 13,
-            "name": "tengu_dir_search"
-          },
-          {
-            "count": 8,
-            "name": "tengu_event_loop_stall"
-          }
-        ]
-      },
-      {
-        "count": 21,
-        "t": "2026-11-03T11:00:00Z",
-        "top": [
-          {
-            "count": 10,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 6,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 12,
-        "t": "2026-11-03T12:00:00Z",
-        "top": [
-          {
-            "count": 6,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 17,
-        "t": "2026-11-03T13:00:00Z",
-        "top": [
-          {
-            "count": 10,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 25,
-        "t": "2026-11-03T14:00:00Z",
-        "top": [
-          {
-            "count": 13,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 137,
-        "t": "2026-11-03T15:00:00Z",
-        "top": [
-          {
-            "count": 40,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 15,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 7,
-            "name": "tengu_keybinding_fired"
-          }
-        ]
-      },
-      {
-        "count": 1190,
-        "t": "2026-11-03T16:00:00Z",
-        "top": [
-          {
-            "count": 267,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 118,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 81,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 492,
-        "t": "2026-11-03T17:00:00Z",
-        "top": [
-          {
-            "count": 222,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 79,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 22,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 48,
-        "t": "2026-11-03T18:00:00Z",
-        "top": [
-          {
-            "count": 17,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_operation"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_read_limits_override"
-          }
-        ]
-      },
-      {
-        "count": 175,
-        "t": "2026-11-03T19:00:00Z",
-        "top": [
-          {
-            "count": 59,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 8,
-            "name": "tengu_attachment_compute_duration"
-          },
-          {
-            "count": 8,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 848,
-        "t": "2026-11-03T20:00:00Z",
-        "top": [
-          {
-            "count": 200,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 60,
-            "name": "tengu_attachment_compute_duration"
-          },
-          {
-            "count": 54,
-            "name": "tengu_tool_use_progress"
-          }
-        ]
-      },
-      {
-        "count": 3770,
-        "t": "2026-11-03T21:00:00Z",
-        "top": [
-          {
-            "count": 956,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 366,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 229,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 60,
-        "t": "2026-11-03T22:00:00Z",
-        "top": [
-          {
-            "count": 20,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_operation"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_read_limits_override"
-          }
-        ]
-      },
-      {
-        "count": 15,
-        "t": "2026-11-03T23:00:00Z",
-        "top": [
-          {
-            "count": 15,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 513,
-        "t": "2026-11-04T00:00:00Z",
-        "top": [
-          {
-            "count": 158,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 32,
-            "name": "tengu_attachment_compute_duration"
-          },
-          {
-            "count": 26,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 17,
-        "t": "2026-11-04T06:00:00Z",
-        "top": [
-          {
-            "count": 7,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_bad"
-          }
-        ]
-      },
-      {
-        "count": 16,
-        "t": "2026-11-04T07:00:00Z",
-        "top": [
-          {
-            "count": 6,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 4,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 10,
-        "t": "2026-11-04T08:00:00Z",
-        "top": [
-          {
-            "count": 4,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 14,
-        "t": "2026-11-04T09:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_sad"
-          }
-        ]
-      },
-      {
-        "count": 19,
-        "t": "2026-11-04T10:00:00Z",
-        "top": [
-          {
-            "count": 9,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 4,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 11,
-        "t": "2026-11-04T11:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 1,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 24,
-        "t": "2026-11-04T12:00:00Z",
-        "top": [
-          {
-            "count": 9,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 8,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 21,
-        "t": "2026-11-04T13:00:00Z",
-        "top": [
-          {
-            "count": 11,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 34,
-        "t": "2026-11-04T14:00:00Z",
-        "top": [
-          {
-            "count": 13,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 7,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 7,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 23,
-        "t": "2026-11-04T15:00:00Z",
-        "top": [
-          {
-            "count": 15,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 6,
-        "t": "2026-11-04T16:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 1,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 17,
-        "t": "2026-11-04T17:00:00Z",
-        "top": [
-          {
-            "count": 14,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 2,
-            "name": "tengu_keybinding_fired"
-          },
-          {
-            "count": 1,
-            "name": "tengu_dir_search"
-          }
-        ]
-      },
-      {
-        "count": 106,
-        "t": "2026-11-04T18:00:00Z",
-        "top": [
-          {
-            "count": 24,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 12,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 8,
-            "name": "tengu_keybinding_fired"
-          }
-        ]
-      }
-    ],
+    "analytics": [],
     "binSeconds": 3600,
-    "compactions": [
-      {
-        "from": 902823,
-        "idle": true,
-        "messages": null,
-        "t": "2026-11-02T19:01:00.352000Z",
-        "to": 64133,
-        "waitMs": 71384.0
-      },
-      {
-        "from": 346188,
-        "idle": true,
-        "messages": null,
-        "t": "2026-11-03T18:02:53.303000Z",
-        "to": 71998,
-        "waitMs": 74942.0
-      },
-      {
-        "from": 258393,
-        "idle": true,
-        "messages": null,
-        "t": "2026-11-03T22:50:23.432000Z",
-        "to": 73184,
-        "waitMs": 51714.0
-      }
-    ],
+    "compactions": [],
     "context": [
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 1,
         "requestId": "demo-000020",
         "t": "2026-11-02T05:31:51.155051Z",
         "thread": "main",
@@ -834,7 +18,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 1,
         "requestId": "demo-000021",
         "t": "2026-11-02T05:31:58.999116Z",
         "thread": "main",
@@ -843,7 +27,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000026",
         "t": "2026-11-02T05:33:55.724890Z",
         "thread": "main",
@@ -852,7 +36,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000027",
         "t": "2026-11-02T05:34:14.801410Z",
         "thread": "main",
@@ -861,7 +45,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000029",
         "t": "2026-11-02T05:34:33.792882Z",
         "thread": "main",
@@ -870,7 +54,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000035",
         "t": "2026-11-02T05:37:32.067767Z",
         "thread": "main",
@@ -879,7 +63,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000037",
         "t": "2026-11-02T05:37:37.298922Z",
         "thread": "main",
@@ -888,7 +72,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000038",
         "t": "2026-11-02T05:37:42.102923Z",
         "thread": "main",
@@ -897,7 +81,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000039",
         "t": "2026-11-02T05:37:45.651496Z",
         "thread": "main",
@@ -906,7 +90,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000044",
         "t": "2026-11-02T05:37:55.245320Z",
         "thread": "main",
@@ -915,7 +99,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000049",
         "t": "2026-11-02T05:38:11.158364Z",
         "thread": "main",
@@ -924,7 +108,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000050",
         "t": "2026-11-02T05:38:36.153482Z",
         "thread": "main",
@@ -933,7 +117,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000052",
         "t": "2026-11-02T05:39:04.252934Z",
         "thread": "main",
@@ -942,7 +126,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000054",
         "t": "2026-11-02T05:39:10.582787Z",
         "thread": "main",
@@ -951,7 +135,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000055",
         "t": "2026-11-02T05:39:23.837980Z",
         "thread": "main",
@@ -960,7 +144,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000056",
         "t": "2026-11-02T05:39:33.236427Z",
         "thread": "main",
@@ -969,7 +153,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000057",
         "t": "2026-11-02T05:39:38.605255Z",
         "thread": "main",
@@ -978,7 +162,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000059",
         "t": "2026-11-02T05:39:40.753425Z",
         "thread": "main",
@@ -987,7 +171,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000060",
         "t": "2026-11-02T05:39:55.764344Z",
         "thread": "main",
@@ -996,7 +180,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000061",
         "t": "2026-11-02T05:39:57.378654Z",
         "thread": "main",
@@ -1005,7 +189,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000063",
         "t": "2026-11-02T05:40:20.091404Z",
         "thread": "main",
@@ -1014,7 +198,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000064",
         "t": "2026-11-02T05:40:24.854175Z",
         "thread": "main",
@@ -1023,7 +207,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000065",
         "t": "2026-11-02T05:40:26.605665Z",
         "thread": "main",
@@ -1032,7 +216,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000066",
         "t": "2026-11-02T05:40:39.976498Z",
         "thread": "main",
@@ -1041,7 +225,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000067",
         "t": "2026-11-02T05:40:46.656118Z",
         "thread": "main",
@@ -1050,7 +234,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000069",
         "t": "2026-11-02T05:40:51.490593Z",
         "thread": "main",
@@ -1059,7 +243,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000076",
         "t": "2026-11-02T05:43:19.433202Z",
         "thread": "main",
@@ -1068,7 +252,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000079",
         "t": "2026-11-02T05:43:26.516870Z",
         "thread": "main",
@@ -1077,7 +261,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000083",
         "t": "2026-11-02T05:43:54.590464Z",
         "thread": "main",
@@ -1086,7 +270,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000084",
         "t": "2026-11-02T05:44:19.030820Z",
         "thread": "main",
@@ -1095,7 +279,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000086",
         "t": "2026-11-02T05:44:28.075515Z",
         "thread": "main",
@@ -1104,7 +288,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000087",
         "t": "2026-11-02T05:44:37.902892Z",
         "thread": "main",
@@ -1113,7 +297,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000088",
         "t": "2026-11-02T05:44:50.334867Z",
         "thread": "main",
@@ -1122,7 +306,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000090",
         "t": "2026-11-02T05:45:09.852040Z",
         "thread": "main",
@@ -1131,7 +315,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000091",
         "t": "2026-11-02T05:45:19.227258Z",
         "thread": "main",
@@ -1140,7 +324,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000092",
         "t": "2026-11-02T05:45:31.255976Z",
         "thread": "main",
@@ -1149,7 +333,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000094",
         "t": "2026-11-02T05:45:42.523239Z",
         "thread": "main",
@@ -1158,7 +342,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000095",
         "t": "2026-11-02T05:45:57.808875Z",
         "thread": "main",
@@ -1167,7 +351,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000097",
         "t": "2026-11-02T05:46:14.257502Z",
         "thread": "main",
@@ -1176,7 +360,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000098",
         "t": "2026-11-02T05:46:16.063169Z",
         "thread": "main",
@@ -1185,7 +369,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000099",
         "t": "2026-11-02T05:46:18.113608Z",
         "thread": "main",
@@ -1194,7 +378,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000100",
         "t": "2026-11-02T05:46:33.670994Z",
         "thread": "main",
@@ -1203,7 +387,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000101",
         "t": "2026-11-02T05:46:36.645299Z",
         "thread": "main",
@@ -1212,7 +396,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000102",
         "t": "2026-11-02T05:46:41.889888Z",
         "thread": "main",
@@ -1221,7 +405,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000108",
         "t": "2026-11-02T05:49:04.159264Z",
         "thread": "main",
@@ -1230,7 +414,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000109",
         "t": "2026-11-02T05:49:11.259247Z",
         "thread": "main",
@@ -1239,7 +423,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000111",
         "t": "2026-11-02T05:49:21.954050Z",
         "thread": "main",
@@ -1248,7 +432,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000112",
         "t": "2026-11-02T05:49:34.549564Z",
         "thread": "main",
@@ -1257,7 +441,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000113",
         "t": "2026-11-02T05:49:43.542925Z",
         "thread": "main",
@@ -1266,7 +450,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000115",
         "t": "2026-11-02T05:49:51.380761Z",
         "thread": "main",
@@ -1275,7 +459,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000116",
         "t": "2026-11-02T05:50:21.221997Z",
         "thread": "main",
@@ -1284,7 +468,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000118",
         "t": "2026-11-02T05:50:45.546357Z",
         "thread": "main",
@@ -1293,7 +477,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000125",
         "t": "2026-11-02T05:53:16.385490Z",
         "thread": "main",
@@ -1302,7 +486,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000126",
         "t": "2026-11-02T05:53:20.445874Z",
         "thread": "main",
@@ -1311,7 +495,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000127",
         "t": "2026-11-02T05:53:24.935695Z",
         "thread": "main",
@@ -1320,7 +504,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000129",
         "t": "2026-11-02T05:53:38.212491Z",
         "thread": "main",
@@ -1329,7 +513,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000130",
         "t": "2026-11-02T05:54:00.402703Z",
         "thread": "main",
@@ -1338,7 +522,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000136",
         "t": "2026-11-02T05:56:21.994433Z",
         "thread": "main",
@@ -1347,7 +531,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000138",
         "t": "2026-11-02T05:56:26.943565Z",
         "thread": "main",
@@ -1356,7 +540,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000140",
         "t": "2026-11-02T05:56:33.429573Z",
         "thread": "main",
@@ -1365,7 +549,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000141",
         "t": "2026-11-02T05:56:37.584169Z",
         "thread": "main",
@@ -1374,7 +558,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000144",
         "t": "2026-11-02T05:57:38.039254Z",
         "thread": "main",
@@ -1383,7 +567,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000146",
         "t": "2026-11-02T05:58:05.780827Z",
         "thread": "main",
@@ -1392,7 +576,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000148",
         "t": "2026-11-02T05:58:39.748082Z",
         "thread": "main",
@@ -1401,7 +585,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000149",
         "t": "2026-11-02T05:59:02.427190Z",
         "thread": "main",
@@ -1410,7 +594,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000155",
         "t": "2026-11-02T06:01:29.288518Z",
         "thread": "main",
@@ -1419,7 +603,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000156",
         "t": "2026-11-02T06:01:32.162370Z",
         "thread": "main",
@@ -1428,7 +612,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000157",
         "t": "2026-11-02T06:01:36.971200Z",
         "thread": "main",
@@ -1437,7 +621,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 2,
         "requestId": "demo-000160",
         "t": "2026-11-02T06:02:03.749972Z",
         "thread": "main",
@@ -1446,7 +630,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 3,
         "requestId": "demo-000241",
         "t": "2026-11-02T14:14:18.359649Z",
         "thread": "main",
@@ -1455,7 +639,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 3,
         "requestId": "demo-000242",
         "t": "2026-11-02T14:14:47.192984Z",
         "thread": "main",
@@ -1464,7 +648,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 3,
         "requestId": "demo-000244",
         "t": "2026-11-02T14:15:05.647146Z",
         "thread": "main",
@@ -1473,7 +657,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 4,
         "requestId": "demo-000246",
         "t": "2026-11-02T14:15:21.690677Z",
         "thread": "main",
@@ -1482,7 +666,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 4,
         "requestId": "demo-000248",
         "t": "2026-11-02T14:15:51.024149Z",
         "thread": "main",
@@ -1491,7 +675,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000251",
         "t": "2026-11-02T14:16:38.366412Z",
         "thread": "main",
@@ -1500,7 +684,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000253",
         "t": "2026-11-02T14:16:59.030371Z",
         "thread": "main",
@@ -1509,7 +693,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000254",
         "t": "2026-11-02T14:17:06.037234Z",
         "thread": "main",
@@ -1518,7 +702,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000255",
         "t": "2026-11-02T14:17:21.238900Z",
         "thread": "main",
@@ -1527,7 +711,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000256",
         "t": "2026-11-02T14:17:25.241240Z",
         "thread": "main",
@@ -1536,7 +720,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000258",
         "t": "2026-11-02T14:17:30.704832Z",
         "thread": "main",
@@ -1545,7 +729,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000259",
         "t": "2026-11-02T14:17:42.554931Z",
         "thread": "main",
@@ -1554,7 +738,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000260",
         "t": "2026-11-02T14:17:49.211266Z",
         "thread": "main",
@@ -1563,7 +747,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000267",
         "t": "2026-11-02T14:20:36.018787Z",
         "thread": "main",
@@ -1572,7 +756,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000270",
         "t": "2026-11-02T14:20:42.884049Z",
         "thread": "main",
@@ -1581,7 +765,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000272",
         "t": "2026-11-02T14:21:00.535545Z",
         "thread": "main",
@@ -1590,7 +774,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000274",
         "t": "2026-11-02T14:21:06.673961Z",
         "thread": "main",
@@ -1599,7 +783,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000276",
         "t": "2026-11-02T14:22:04.943273Z",
         "thread": "main",
@@ -1608,7 +792,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000278",
         "t": "2026-11-02T14:22:14.076120Z",
         "thread": "main",
@@ -1617,7 +801,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000279",
         "t": "2026-11-02T14:22:18.339464Z",
         "thread": "main",
@@ -1626,7 +810,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000280",
         "t": "2026-11-02T14:22:26.891702Z",
         "thread": "main",
@@ -1635,7 +819,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000281",
         "t": "2026-11-02T14:22:39.334669Z",
         "thread": "main",
@@ -1644,7 +828,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 5,
         "requestId": "demo-000283",
         "t": "2026-11-02T14:23:00.311984Z",
         "thread": "main",
@@ -1653,7 +837,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000303",
         "t": "2026-11-02T14:54:01.049618Z",
         "thread": "main",
@@ -1662,7 +846,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000304",
         "t": "2026-11-02T14:54:21.127335Z",
         "thread": "main",
@@ -1671,7 +855,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000307",
         "t": "2026-11-02T14:55:04.353932Z",
         "thread": "main",
@@ -1680,7 +864,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000309",
         "t": "2026-11-02T14:55:29.488573Z",
         "thread": "main",
@@ -1689,7 +873,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000310",
         "t": "2026-11-02T14:55:46.589304Z",
         "thread": "main",
@@ -1698,7 +882,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000316",
         "t": "2026-11-02T14:58:11.366621Z",
         "thread": "main",
@@ -1707,7 +891,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000318",
         "t": "2026-11-02T14:58:36.303014Z",
         "thread": "main",
@@ -1716,7 +900,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000319",
         "t": "2026-11-02T14:58:56.982823Z",
         "thread": "main",
@@ -1725,7 +909,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000321",
         "t": "2026-11-02T14:59:24.340193Z",
         "thread": "main",
@@ -1734,7 +918,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000323",
         "t": "2026-11-02T14:59:55.037907Z",
         "thread": "main",
@@ -1743,7 +927,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000324",
         "t": "2026-11-02T15:00:15.715192Z",
         "thread": "main",
@@ -1752,7 +936,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000326",
         "t": "2026-11-02T15:00:25.430948Z",
         "thread": "main",
@@ -1761,7 +945,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000327",
         "t": "2026-11-02T15:00:27.739427Z",
         "thread": "main",
@@ -1770,7 +954,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000350",
         "t": "2026-11-02T15:10:46.038268Z",
         "thread": "main",
@@ -1779,7 +963,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000351",
         "t": "2026-11-02T15:10:53.820206Z",
         "thread": "main",
@@ -1788,7 +972,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000352",
         "t": "2026-11-02T15:11:04.116593Z",
         "thread": "main",
@@ -1797,7 +981,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000355",
         "t": "2026-11-02T15:12:00.989885Z",
         "thread": "main",
@@ -1806,7 +990,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000356",
         "t": "2026-11-02T15:12:17.074232Z",
         "thread": "main",
@@ -1815,7 +999,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000357",
         "t": "2026-11-02T15:12:24.030084Z",
         "thread": "main",
@@ -1824,7 +1008,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000358",
         "t": "2026-11-02T15:12:28.872447Z",
         "thread": "main",
@@ -1833,7 +1017,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000360",
         "t": "2026-11-02T15:12:34.125038Z",
         "thread": "main",
@@ -1842,7 +1026,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000361",
         "t": "2026-11-02T15:12:38.148250Z",
         "thread": "main",
@@ -1851,7 +1035,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000365",
         "t": "2026-11-02T15:14:27.274673Z",
         "thread": "main",
@@ -1860,7 +1044,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000369",
         "t": "2026-11-02T15:15:06.388918Z",
         "thread": "main",
@@ -1869,7 +1053,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000370",
         "t": "2026-11-02T15:15:13.556387Z",
         "thread": "main",
@@ -1878,7 +1062,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": null,
+        "promptIndex": 6,
         "requestId": "demo-000371",
         "t": "2026-11-02T15:15:20.769251Z",
         "thread": "main",
@@ -4479,7 +3663,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 28,
+        "promptIndex": 19,
         "requestId": "demo-001364",
         "t": "2026-11-03T19:25:40.222056Z",
         "thread": "main",
@@ -4488,7 +3672,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 28,
+        "promptIndex": 19,
         "requestId": "demo-001368",
         "t": "2026-11-03T19:25:43.034819Z",
         "thread": "main",
@@ -4497,7 +3681,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 28,
+        "promptIndex": 19,
         "requestId": "demo-001374",
         "t": "2026-11-03T19:25:47.011862Z",
         "thread": "main",
@@ -4506,7 +3690,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 28,
+        "promptIndex": 19,
         "requestId": "demo-001375",
         "t": "2026-11-03T19:25:49.047491Z",
         "thread": "main",
@@ -4515,7 +3699,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 28,
+        "promptIndex": 19,
         "requestId": "demo-001376",
         "t": "2026-11-03T19:25:51.206218Z",
         "thread": "main",
@@ -4524,7 +3708,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 29,
+        "promptIndex": 20,
         "requestId": "demo-001396",
         "t": "2026-11-03T20:30:36.490984Z",
         "thread": "main",
@@ -4533,7 +3717,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 29,
+        "promptIndex": 20,
         "requestId": "demo-001397",
         "t": "2026-11-03T20:30:39.347057Z",
         "thread": "main",
@@ -4542,7 +3726,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 30,
+        "promptIndex": 21,
         "requestId": "demo-001400",
         "t": "2026-11-03T20:31:10.843062Z",
         "thread": "main",
@@ -4551,7 +3735,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 30,
+        "promptIndex": 21,
         "requestId": "demo-001401",
         "t": "2026-11-03T20:31:12.635988Z",
         "thread": "main",
@@ -4560,7 +3744,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001404",
         "t": "2026-11-03T20:32:20.642198Z",
         "thread": "main",
@@ -4569,7 +3753,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001405",
         "t": "2026-11-03T20:32:24.325803Z",
         "thread": "main",
@@ -4578,7 +3762,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001406",
         "t": "2026-11-03T20:32:27.727316Z",
         "thread": "main",
@@ -4587,7 +3771,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001408",
         "t": "2026-11-03T20:32:34.743938Z",
         "thread": "main",
@@ -4596,7 +3780,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001411",
         "t": "2026-11-03T20:33:01.130777Z",
         "thread": "main",
@@ -4605,7 +3789,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001413",
         "t": "2026-11-03T20:33:20.711670Z",
         "thread": "main",
@@ -4614,7 +3798,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001416",
         "t": "2026-11-03T20:33:33.777907Z",
         "thread": "main",
@@ -4623,7 +3807,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001418",
         "t": "2026-11-03T20:33:47.405099Z",
         "thread": "main",
@@ -4632,7 +3816,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001420",
         "t": "2026-11-03T20:33:55.186227Z",
         "thread": "main",
@@ -4641,7 +3825,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001423",
         "t": "2026-11-03T20:34:08.564445Z",
         "thread": "main",
@@ -4650,7 +3834,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 31,
+        "promptIndex": 22,
         "requestId": "demo-001425",
         "t": "2026-11-03T20:34:26.241888Z",
         "thread": "main",
@@ -4659,7 +3843,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 32,
+        "promptIndex": 23,
         "requestId": "demo-001430",
         "t": "2026-11-03T20:36:12.680983Z",
         "thread": "main",
@@ -4668,7 +3852,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001432",
         "t": "2026-11-03T20:37:45.810638Z",
         "thread": "main",
@@ -4677,7 +3861,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001439",
         "t": "2026-11-03T20:47:30.505890Z",
         "thread": "main",
@@ -4686,7 +3870,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001444",
         "t": "2026-11-03T20:50:51.608874Z",
         "thread": "main",
@@ -4695,7 +3879,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001445",
         "t": "2026-11-03T20:50:56.660047Z",
         "thread": "main",
@@ -4704,7 +3888,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001446",
         "t": "2026-11-03T20:50:59.050001Z",
         "thread": "main",
@@ -4713,7 +3897,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001450",
         "t": "2026-11-03T20:51:54.603982Z",
         "thread": "main",
@@ -4722,7 +3906,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001451",
         "t": "2026-11-03T20:51:59.870281Z",
         "thread": "main",
@@ -4731,7 +3915,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001455",
         "t": "2026-11-03T20:59:07.626539Z",
         "thread": "main",
@@ -4740,7 +3924,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001456",
         "t": "2026-11-03T20:59:29.393486Z",
         "thread": "main",
@@ -4749,7 +3933,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001459",
         "t": "2026-11-03T20:59:43.918008Z",
         "thread": "main",
@@ -4758,7 +3942,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001461",
         "t": "2026-11-03T20:59:52.145748Z",
         "thread": "main",
@@ -4767,7 +3951,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001463",
         "t": "2026-11-03T21:00:02.115467Z",
         "thread": "main",
@@ -4776,7 +3960,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001466",
         "t": "2026-11-03T21:00:15.377947Z",
         "thread": "main",
@@ -4785,7 +3969,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001468",
         "t": "2026-11-03T21:00:25.523963Z",
         "thread": "main",
@@ -4794,7 +3978,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001475",
         "t": "2026-11-03T21:02:52.444417Z",
         "thread": "main",
@@ -4803,7 +3987,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001477",
         "t": "2026-11-03T21:02:55.220998Z",
         "thread": "main",
@@ -4812,7 +3996,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001478",
         "t": "2026-11-03T21:02:57.043331Z",
         "thread": "main",
@@ -4821,7 +4005,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001480",
         "t": "2026-11-03T21:03:01.923368Z",
         "thread": "main",
@@ -4830,7 +4014,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001481",
         "t": "2026-11-03T21:03:06.503900Z",
         "thread": "main",
@@ -4839,7 +4023,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001483",
         "t": "2026-11-03T21:03:12.265926Z",
         "thread": "main",
@@ -4848,7 +4032,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001486",
         "t": "2026-11-03T21:04:36.332175Z",
         "thread": "main",
@@ -4857,7 +4041,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 33,
+        "promptIndex": 24,
         "requestId": "demo-001488",
         "t": "2026-11-03T21:04:41.097255Z",
         "thread": "main",
@@ -4866,7 +4050,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 34,
+        "promptIndex": 25,
         "requestId": "demo-001492",
         "t": "2026-11-03T21:06:48.327254Z",
         "thread": "main",
@@ -4875,7 +4059,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 34,
+        "promptIndex": 25,
         "requestId": "demo-001498",
         "t": "2026-11-03T21:07:21.311423Z",
         "thread": "main",
@@ -4884,7 +4068,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 34,
+        "promptIndex": 25,
         "requestId": "demo-001501",
         "t": "2026-11-03T21:07:25.782182Z",
         "thread": "main",
@@ -4893,7 +4077,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 34,
+        "promptIndex": 25,
         "requestId": "demo-001504",
         "t": "2026-11-03T21:07:30.593857Z",
         "thread": "main",
@@ -4902,7 +4086,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 35,
+        "promptIndex": 26,
         "requestId": "demo-001601",
         "t": "2026-11-03T21:11:19.428705Z",
         "thread": "main",
@@ -4911,7 +4095,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001611",
         "t": "2026-11-03T21:12:31.509058Z",
         "thread": "main",
@@ -4920,7 +4104,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001612",
         "t": "2026-11-03T21:12:41.813014Z",
         "thread": "main",
@@ -4929,7 +4113,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001615",
         "t": "2026-11-03T21:12:53.358396Z",
         "thread": "main",
@@ -4938,7 +4122,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001617",
         "t": "2026-11-03T21:13:07.633680Z",
         "thread": "main",
@@ -4947,7 +4131,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001620",
         "t": "2026-11-03T21:13:19.860563Z",
         "thread": "main",
@@ -4956,7 +4140,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001622",
         "t": "2026-11-03T21:13:30.385570Z",
         "thread": "main",
@@ -4965,7 +4149,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001624",
         "t": "2026-11-03T21:13:39.498577Z",
         "thread": "main",
@@ -4974,7 +4158,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001627",
         "t": "2026-11-03T21:14:16.851064Z",
         "thread": "main",
@@ -4983,7 +4167,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001630",
         "t": "2026-11-03T21:14:37.245145Z",
         "thread": "main",
@@ -4992,7 +4176,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001632",
         "t": "2026-11-03T21:14:48.566512Z",
         "thread": "main",
@@ -5001,7 +4185,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001634",
         "t": "2026-11-03T21:14:57.833608Z",
         "thread": "main",
@@ -5010,7 +4194,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001637",
         "t": "2026-11-03T21:15:18.739153Z",
         "thread": "main",
@@ -5019,7 +4203,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001638",
         "t": "2026-11-03T21:15:23.343440Z",
         "thread": "main",
@@ -5028,7 +4212,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 36,
+        "promptIndex": 27,
         "requestId": "demo-001642",
         "t": "2026-11-03T21:17:27.269607Z",
         "thread": "main",
@@ -5037,7 +4221,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001646",
         "t": "2026-11-03T21:18:45.123543Z",
         "thread": "main",
@@ -5046,7 +4230,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001647",
         "t": "2026-11-03T21:19:04.873847Z",
         "thread": "main",
@@ -5055,7 +4239,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001648",
         "t": "2026-11-03T21:19:06.800457Z",
         "thread": "main",
@@ -5064,7 +4248,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001649",
         "t": "2026-11-03T21:19:08.346158Z",
         "thread": "main",
@@ -5073,7 +4257,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001652",
         "t": "2026-11-03T21:19:23.171624Z",
         "thread": "main",
@@ -5082,7 +4266,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001655",
         "t": "2026-11-03T21:19:52.422905Z",
         "thread": "main",
@@ -5091,7 +4275,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001658",
         "t": "2026-11-03T21:19:56.013063Z",
         "thread": "main",
@@ -5100,7 +4284,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001660",
         "t": "2026-11-03T21:20:01.638793Z",
         "thread": "main",
@@ -5109,7 +4293,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001663",
         "t": "2026-11-03T21:20:22.208157Z",
         "thread": "main",
@@ -5118,7 +4302,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001666",
         "t": "2026-11-03T21:20:31.778493Z",
         "thread": "main",
@@ -5127,7 +4311,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001670",
         "t": "2026-11-03T21:20:46.444183Z",
         "thread": "main",
@@ -5136,7 +4320,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001671",
         "t": "2026-11-03T21:20:48.495415Z",
         "thread": "main",
@@ -5145,7 +4329,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001673",
         "t": "2026-11-03T21:20:52.394276Z",
         "thread": "main",
@@ -5154,7 +4338,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 37,
+        "promptIndex": 28,
         "requestId": "demo-001674",
         "t": "2026-11-03T21:20:56.501378Z",
         "thread": "main",
@@ -5181,7 +4365,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 38,
+        "promptIndex": 29,
         "requestId": "demo-001680",
         "t": "2026-11-03T21:22:12.550233Z",
         "thread": "main",
@@ -5190,7 +4374,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 38,
+        "promptIndex": 29,
         "requestId": "demo-001682",
         "t": "2026-11-03T21:22:15.471070Z",
         "thread": "main",
@@ -5199,7 +4383,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 39,
+        "promptIndex": 30,
         "requestId": "demo-001687",
         "t": "2026-11-03T21:24:43.985779Z",
         "thread": "main",
@@ -5208,7 +4392,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 39,
+        "promptIndex": 30,
         "requestId": "demo-001688",
         "t": "2026-11-03T21:24:48.684684Z",
         "thread": "main",
@@ -5217,7 +4401,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001693",
         "t": "2026-11-03T21:28:02.450093Z",
         "thread": "main",
@@ -5226,7 +4410,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001694",
         "t": "2026-11-03T21:28:06.345511Z",
         "thread": "main",
@@ -5235,7 +4419,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001696",
         "t": "2026-11-03T21:28:23.886984Z",
         "thread": "main",
@@ -5244,7 +4428,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001698",
         "t": "2026-11-03T21:28:30.762074Z",
         "thread": "main",
@@ -5253,7 +4437,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001700",
         "t": "2026-11-03T21:28:33.585707Z",
         "thread": "main",
@@ -5262,7 +4446,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001705",
         "t": "2026-11-03T21:30:07.309151Z",
         "thread": "main",
@@ -5271,7 +4455,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001707",
         "t": "2026-11-03T21:30:15.904356Z",
         "thread": "main",
@@ -5280,7 +4464,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 40,
+        "promptIndex": 31,
         "requestId": "demo-001709",
         "t": "2026-11-03T21:30:23.661733Z",
         "thread": "main",
@@ -5289,7 +4473,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 42,
+        "promptIndex": 33,
         "requestId": "demo-001726",
         "t": "2026-11-03T21:55:32.142244Z",
         "thread": "main",
@@ -5298,7 +4482,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 43,
+        "promptIndex": 34,
         "requestId": "demo-001761",
         "t": "2026-11-04T00:17:17.653708Z",
         "thread": "main",
@@ -5307,7 +4491,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 43,
+        "promptIndex": 34,
         "requestId": "demo-001762",
         "t": "2026-11-04T00:17:22.349380Z",
         "thread": "main",
@@ -5316,7 +4500,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 43,
+        "promptIndex": 34,
         "requestId": "demo-001763",
         "t": "2026-11-04T00:17:26.782505Z",
         "thread": "main",
@@ -5325,7 +4509,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 43,
+        "promptIndex": 34,
         "requestId": "demo-001765",
         "t": "2026-11-04T00:17:31.291335Z",
         "thread": "main",
@@ -5334,7 +4518,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 43,
+        "promptIndex": 34,
         "requestId": "demo-001768",
         "t": "2026-11-04T00:17:37.385908Z",
         "thread": "main",
@@ -5343,7 +4527,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 43,
+        "promptIndex": 34,
         "requestId": "demo-001770",
         "t": "2026-11-04T00:17:45.729988Z",
         "thread": "main",
@@ -5352,7 +4536,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 44,
+        "promptIndex": 35,
         "requestId": "demo-001775",
         "t": "2026-11-04T00:20:51.281862Z",
         "thread": "main",
@@ -5361,7 +4545,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 44,
+        "promptIndex": 35,
         "requestId": "demo-001776",
         "t": "2026-11-04T00:21:00.851204Z",
         "thread": "main",
@@ -5370,7 +4554,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 44,
+        "promptIndex": 35,
         "requestId": "demo-001777",
         "t": "2026-11-04T00:21:04.390573Z",
         "thread": "main",
@@ -5379,7 +4563,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 44,
+        "promptIndex": 35,
         "requestId": "demo-001779",
         "t": "2026-11-04T00:21:09.319666Z",
         "thread": "main",
@@ -5388,7 +4572,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 45,
+        "promptIndex": 36,
         "requestId": "demo-001786",
         "t": "2026-11-04T00:25:40.888348Z",
         "thread": "main",
@@ -5397,7 +4581,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 45,
+        "promptIndex": 36,
         "requestId": "demo-001787",
         "t": "2026-11-04T00:25:46.714224Z",
         "thread": "main",
@@ -5406,7 +4590,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 45,
+        "promptIndex": 36,
         "requestId": "demo-001788",
         "t": "2026-11-04T00:25:49.536198Z",
         "thread": "main",
@@ -5415,7 +4599,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 46,
+        "promptIndex": 37,
         "requestId": "demo-001791",
         "t": "2026-11-04T00:26:48.380611Z",
         "thread": "main",
@@ -5424,7 +4608,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 46,
+        "promptIndex": 37,
         "requestId": "demo-001792",
         "t": "2026-11-04T00:26:56.258122Z",
         "thread": "main",
@@ -5433,7 +4617,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 46,
+        "promptIndex": 37,
         "requestId": "demo-001793",
         "t": "2026-11-04T00:27:02.576621Z",
         "thread": "main",
@@ -5442,7 +4626,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 46,
+        "promptIndex": 37,
         "requestId": "demo-001796",
         "t": "2026-11-04T00:27:25.723728Z",
         "thread": "main",
@@ -5451,7 +4635,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 47,
+        "promptIndex": 38,
         "requestId": "demo-001899",
         "t": "2026-11-04T18:02:23.313984Z",
         "thread": "main",
@@ -5460,7 +4644,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 47,
+        "promptIndex": 38,
         "requestId": "demo-001900",
         "t": "2026-11-04T18:02:29.428723Z",
         "thread": "main",
@@ -5469,7 +4653,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "model": "claude-opus-5-5",
-        "promptIndex": 47,
+        "promptIndex": 38,
         "requestId": "demo-001901",
         "t": "2026-11-04T18:02:33.797795Z",
         "thread": "main",
@@ -5477,104 +4661,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "windowTokens": null
       }
     ],
-    "friction": [
-      {
-        "count": 2,
-        "detail": "rm_recursive_force \u00b7 outside_cwd, rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 7,
-        "t": "2026-11-02T15:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 9,
-        "t": "2026-11-02T16:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 4,
-        "detail": "rm_force \u00b7 unknown, rm_recursive_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 12,
-        "t": "2026-11-02T17:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 4,
-        "detail": "rm_recursive_force \u00b7 unknown, rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 18,
-        "t": "2026-11-02T22:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "prompt flagged negative",
-        "kind": "frustrated",
-        "promptIndex": 15,
-        "t": "2026-11-02T22:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 17,
-        "t": "2026-11-02T22:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 3,
-        "detail": "rm_recursive_force \u00b7 unknown, rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 19,
-        "t": "2026-11-03T00:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "rm_recursive_force \u00b7 cwd",
-        "kind": "destructive",
-        "promptIndex": 27,
-        "t": "2026-11-03T16:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 26,
-        "t": "2026-11-03T16:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "prompt flagged negative",
-        "kind": "frustrated",
-        "promptIndex": 34,
-        "t": "2026-11-03T21:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 41,
-        "t": "2026-11-03T21:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "rm_recursive_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 43,
-        "t": "2026-11-04T00:00:00Z",
-        "tool": "Bash"
-      }
-    ],
+    "friction": [],
     "from": "2026-11-02T05:31:51.155051Z",
     "modelCalls": [
       {
@@ -5696,58 +4783,6 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 37,
-        "t": "2026-11-03T00:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 4,
-        "t": "2026-11-03T15:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 43,
-        "t": "2026-11-03T16:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 10,
-        "t": "2026-11-03T17:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
           "auxiliary": 1,
           "main": 0,
           "subagent": 0
@@ -5792,7 +4827,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "subagent": 55
         },
         "count": 135,
-        "notCaptured": 1,
+        "notCaptured": 0,
         "t": "2026-11-03T21:00:00Z",
         "tokens": 109193,
         "tokensIn": 20408769,
@@ -5838,61 +4873,122 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1015
       }
     ],
-    "notCaptured": [
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 37,
-        "from": "2026-11-03T00:48:55.710000Z",
-        "reported": 37,
-        "to": "2026-11-03T00:57:10.792000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 4,
-        "from": "2026-11-03T15:13:59.125000Z",
-        "reported": 4,
-        "to": "2026-11-03T15:17:48.778000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 3,
-        "from": "2026-11-03T16:14:56.406000Z",
-        "reported": 3,
-        "to": "2026-11-03T16:24:30.091000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 50,
-        "from": "2026-11-03T16:51:31.940000Z",
-        "reported": 50,
-        "to": "2026-11-03T17:03:02.686000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 1,
-        "from": "2026-11-03T21:17:26.955000Z",
-        "reported": 1,
-        "to": "2026-11-03T21:17:26.955000Z"
-      }
-    ],
+    "notCaptured": [],
     "now": "2026-11-04T18:05:00Z",
     "prompts": [
       {
-        "durationMs": 1621477.0,
+        "durationMs": 18418.5,
+        "index": 1,
+        "promptId": "c58abde5-3897-4c35-8172-4845478aeac0",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 2,
+        "t": "2026-11-02T05:31:51.155051Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 610026,
+        "tokensOut": 1508
+      },
+      {
+        "durationMs": 1713314.0,
+        "index": 2,
+        "promptId": "d0ade961-81cc-4c69-88c2-0588963b7eeb",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 80,
+        "t": "2026-11-02T05:33:55.724890Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 26985262,
+        "tokensOut": 75973
+      },
+      {
+        "durationMs": 55266.0,
+        "index": 3,
+        "promptId": "4339d50f-2ba6-4d3e-812c-31cecf3f8900",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 4,
+        "t": "2026-11-02T14:14:18.066135Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 1414287,
+        "tokensOut": 3637
+      },
+      {
+        "durationMs": 34415.8,
+        "index": 4,
+        "promptId": "5c0e414f-fcb7-4c22-89ad-54639c6775d9",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 2,
+        "t": "2026-11-02T14:15:21.690677Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 950312,
+        "tokensOut": 3256
+      },
+      {
+        "durationMs": 401928.2,
+        "index": 5,
+        "promptId": "358731e5-8ce1-46ff-87cf-f255a519239b",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 21,
+        "t": "2026-11-02T14:16:38.366412Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 8934629,
+        "tokensOut": 19424
+      },
+      {
+        "durationMs": 1301932.1,
+        "index": 6,
+        "promptId": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 28,
+        "t": "2026-11-02T14:54:00.717725Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 14180990,
+        "tokensOut": 42368
+      },
+      {
+        "durationMs": 1438524.9,
         "index": 7,
         "promptId": "fbbf55bb-2fda-44c3-8f72-4a1d30e13b54",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 56,
-        "t": "2026-11-02T15:22:33.399000Z",
+        "t": "2026-11-02T15:22:33.703063Z",
         "text": {
-          "chars": 661,
-          "images": 0,
-          "pastedBytes": 1218,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -5900,16 +4996,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 77593
       },
       {
-        "durationMs": 24196.0,
+        "durationMs": 23825.1,
         "index": 8,
         "promptId": "f458706f-dc1b-4754-8614-704bf7fa4723",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-02T15:57:13.078000Z",
+        "t": "2026-11-02T15:57:13.399358Z",
         "text": {
-          "chars": 90,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -5917,16 +5013,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1794
       },
       {
-        "durationMs": 954427.0,
+        "durationMs": 509240.6,
         "index": 9,
         "promptId": "a61c7c87-346d-485b-848f-7e97870cfbbc",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 19,
-        "t": "2026-11-02T15:59:22.621000Z",
+        "t": "2026-11-02T15:59:22.741964Z",
         "text": {
-          "chars": 1179,
-          "images": 0,
-          "pastedBytes": 1121,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -5934,16 +5030,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 32699
       },
       {
-        "durationMs": 194528.0,
+        "durationMs": 194116.5,
         "index": 10,
         "promptId": "0e390491-a3a7-4804-83af-0436ce5dd82e",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 7,
-        "t": "2026-11-02T16:29:48.586000Z",
+        "t": "2026-11-02T16:29:49.005960Z",
         "text": {
-          "chars": 353,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -5951,16 +5047,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 17253
       },
       {
-        "durationMs": 605482.0,
+        "durationMs": 133525.9,
         "index": 11,
         "promptId": "481d2b3a-2184-4b6b-8f7d-ff69c478ba77",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 5,
-        "t": "2026-11-02T16:36:04.156000Z",
+        "t": "2026-11-02T16:36:04.361288Z",
         "text": {
-          "chars": 467,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -5968,16 +5064,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 13390
       },
       {
-        "durationMs": 950205.0,
+        "durationMs": 766705.3,
         "index": 12,
         "promptId": "835ec244-0109-4f5d-83f7-3c33617d6954",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 28,
-        "t": "2026-11-02T17:12:21.353000Z",
+        "t": "2026-11-02T17:12:21.715933Z",
         "text": {
-          "chars": 64,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -5985,16 +5081,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 49474
       },
       {
-        "durationMs": 4350805.0,
+        "durationMs": 1053374.8,
         "index": 13,
         "promptId": "d9ed62b2-96dd-4ff5-832a-da12626b4944",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 31,
-        "t": "2026-11-02T17:48:28.892000Z",
+        "t": "2026-11-02T17:48:29.165394Z",
         "text": {
-          "chars": 851,
-          "images": 0,
-          "pastedBytes": 793,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6002,16 +5098,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 65158
       },
       {
-        "durationMs": 65952.0,
+        "durationMs": 64136.2,
         "index": 14,
         "promptId": "ddd5d65e-ec44-4085-8698-c82bda540a89",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-02T21:58:29.308000Z",
+        "t": "2026-11-02T21:58:29.787689Z",
         "text": {
-          "chars": 191,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6019,16 +5115,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 6135
       },
       {
-        "durationMs": 492311.0,
+        "durationMs": 310171.5,
         "index": 15,
         "promptId": "fb85f4ed-668d-4d45-81c9-c027ae9c48ed",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 26,
-        "t": "2026-11-02T22:02:08.487000Z",
+        "t": "2026-11-02T22:02:08.629688Z",
         "text": {
-          "chars": 678,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6036,16 +5132,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 15824
       },
       {
-        "durationMs": 884328.0,
+        "durationMs": 884188.2,
         "index": 16,
         "promptId": "8f2526a8-9437-4c0d-8f72-566570ea8621",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 58,
-        "t": "2026-11-02T22:14:29.126000Z",
+        "t": "2026-11-02T22:14:29.206782Z",
         "text": {
-          "chars": 91,
-          "images": 1,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6053,16 +5149,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 34159
       },
       {
-        "durationMs": 73639.0,
+        "durationMs": 51322.6,
         "index": 17,
         "promptId": "eb8d0d45-e6d5-4eae-8965-92ba8cd8fbb1",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 5,
-        "t": "2026-11-02T22:36:54.820000Z",
+        "t": "2026-11-02T22:36:55.072769Z",
         "text": {
-          "chars": 257,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6070,16 +5166,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1253
       },
       {
-        "durationMs": 1198407.0,
+        "durationMs": 1015904.9,
         "index": 18,
         "promptId": "6fc1234a-3930-4d65-8d58-46527684487c",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 57,
-        "t": "2026-11-02T22:38:10.929000Z",
+        "t": "2026-11-02T22:38:11.320182Z",
         "text": {
-          "chars": 1,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6087,101 +5183,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 64754
       },
       {
-        "durationMs": null,
+        "durationMs": 14726.1,
         "index": 19,
-        "promptId": "99c1137a-c477-4dab-86a0-8cd22f88908e",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T00:47:51.180000Z",
-        "text": {
-          "chars": 318,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 254228.0,
-        "index": 24,
-        "promptId": "4d07dfde-59e1-4d73-8d15-77b53f9ac11e",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T15:13:34.553000Z",
-        "text": {
-          "chars": 68,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 605146.0,
-        "index": 25,
-        "promptId": "e8006f5c-4e39-4a3f-80f0-58e45a68fd23",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T16:14:24.950000Z",
-        "text": {
-          "chars": 464,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 242786.0,
-        "index": 26,
-        "promptId": "5b068420-565c-4bae-8354-8832fdcc2a2a",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T16:51:12.678000Z",
-        "text": {
-          "chars": 532,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 4038868.0,
-        "index": 27,
-        "promptId": "5370b9aa-8f83-40ea-8f32-000f56b66bf8",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T16:55:33.399000Z",
-        "text": {
-          "chars": 213,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 197014.0,
-        "index": 28,
         "promptId": "3a3b20c1-1265-41c6-8577-2211c37fce54",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 5,
-        "t": "2026-11-03T19:25:39.691000Z",
+        "t": "2026-11-03T19:25:40.222056Z",
         "text": {
-          "chars": 182,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6189,16 +5200,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 789
       },
       {
-        "durationMs": 9498.0,
-        "index": 29,
+        "durationMs": 9162.6,
+        "index": 20,
         "promptId": "c0199871-cf41-407c-8b57-50275551a8c1",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 3,
-        "t": "2026-11-03T20:30:35.921000Z",
+        "t": "2026-11-03T20:30:36.206181Z",
         "text": {
-          "chars": 113,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6206,16 +5217,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 853
       },
       {
-        "durationMs": 11357.0,
-        "index": 30,
+        "durationMs": 11175.0,
+        "index": 21,
         "promptId": "08a85c1c-d4d7-43e2-8f43-c6c30792fb8d",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T20:31:10.710000Z",
+        "t": "2026-11-03T20:31:10.843062Z",
         "text": {
-          "chars": 49,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6223,16 +5234,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1018
       },
       {
-        "durationMs": 142453.0,
-        "index": 31,
+        "durationMs": 142313.3,
+        "index": 22,
         "promptId": "3f1f2c61-5c10-49e9-8740-48658b0a8ca0",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 11,
-        "t": "2026-11-03T20:32:20.510000Z",
+        "t": "2026-11-03T20:32:20.642198Z",
         "text": {
-          "chars": 169,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6240,16 +5251,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 9799
       },
       {
-        "durationMs": 17936.0,
-        "index": 32,
+        "durationMs": 17737.6,
+        "index": 23,
         "promptId": "dd242b48-f327-426a-8dc8-889ff80496fb",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 1,
-        "t": "2026-11-03T20:36:12.541000Z",
+        "t": "2026-11-03T20:36:12.680983Z",
         "text": {
-          "chars": 345,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6257,16 +5268,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1548
       },
       {
-        "durationMs": 1622734.0,
-        "index": 33,
+        "durationMs": 1622611.8,
+        "index": 24,
         "promptId": "c0cf46fa-e9f5-4f99-80cb-9c8da77407c4",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 24,
-        "t": "2026-11-03T20:37:45.673000Z",
+        "t": "2026-11-03T20:37:45.810638Z",
         "text": {
-          "chars": 249,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6274,16 +5285,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 26172
       },
       {
-        "durationMs": 271105.0,
-        "index": 34,
+        "durationMs": 343031.7,
+        "index": 25,
         "promptId": "5ba3b328-8563-4188-8a6e-33f476820c88",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 76,
-        "t": "2026-11-03T21:06:48.151000Z",
+        "t": "2026-11-03T21:06:48.327254Z",
         "text": {
-          "chars": 744,
-          "images": 0,
-          "pastedBytes": 686,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6291,15 +5302,15 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 58587
       },
       {
-        "durationMs": 72063.0,
-        "index": 35,
+        "durationMs": 1533.6,
+        "index": 26,
         "promptId": "90842aad-eea9-4222-8be4-ba92cc61b098",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 1,
-        "t": "2026-11-03T21:11:19.287000Z",
+        "t": "2026-11-03T21:11:19.428705Z",
         "text": {
-          "chars": 11439,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -6308,15 +5319,15 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 86
       },
       {
-        "durationMs": 308321.0,
-        "index": 36,
+        "durationMs": 308175.3,
+        "index": 27,
         "promptId": "3b893496-021b-40d0-8826-11d9f00fe1b0",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 14,
-        "t": "2026-11-03T21:12:31.373000Z",
+        "t": "2026-11-03T21:12:31.509058Z",
         "text": {
-          "chars": 8331,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -6325,16 +5336,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 13847
       },
       {
-        "durationMs": 140935.0,
-        "index": 37,
+        "durationMs": 140770.9,
+        "index": 28,
         "promptId": "28883e56-61fc-48b8-8124-a61e74567528",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 14,
-        "t": "2026-11-03T21:18:44.974000Z",
+        "t": "2026-11-03T21:18:45.123543Z",
         "text": {
-          "chars": 124,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6342,16 +5353,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 14628
       },
       {
-        "durationMs": 7469.0,
-        "index": 38,
+        "durationMs": 7334.9,
+        "index": 29,
         "promptId": "a7377f08-f5b2-41e3-8c36-b6c48fccc7a4",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T21:22:12.426000Z",
+        "t": "2026-11-03T21:22:12.550233Z",
         "text": {
-          "chars": 20,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6359,16 +5370,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 612
       },
       {
-        "durationMs": 10316.0,
-        "index": 39,
+        "durationMs": 10151.3,
+        "index": 30,
         "promptId": "85404ed2-4328-4d55-82ba-613cc636cf2f",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T21:24:43.861000Z",
+        "t": "2026-11-03T21:24:43.985779Z",
         "text": {
-          "chars": 46,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6376,16 +5387,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 866
       },
       {
-        "durationMs": 357255.0,
-        "index": 40,
+        "durationMs": 144735.3,
+        "index": 31,
         "promptId": "494f37d2-d9db-4daf-8e7b-0c5ef78d7bf2",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 8,
-        "t": "2026-11-03T21:27:33.197000Z",
+        "t": "2026-11-03T21:28:02.450093Z",
         "text": {
-          "chars": 14,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6393,16 +5404,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 4580
       },
       {
-        "durationMs": 3750.0,
-        "index": 41,
+        "durationMs": 623.0,
+        "index": 32,
         "promptId": "0928aadd-16c4-4cb9-837b-81a6a49378f2",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T21:55:24.662000Z",
+        "t": "2026-11-03T21:55:25.055803Z",
         "text": {
-          "chars": 47,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6410,16 +5421,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": null
       },
       {
-        "durationMs": 3291188.0,
-        "index": 42,
+        "durationMs": 7387.4,
+        "index": 33,
         "promptId": "8f7df8e5-4914-4a1a-8b05-186a140e6216",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 1,
-        "t": "2026-11-03T21:55:31.605000Z",
+        "t": "2026-11-03T21:55:32.142244Z",
         "text": {
-          "chars": 49,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6427,16 +5438,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 196
       },
       {
-        "durationMs": 39390.0,
-        "index": 43,
+        "durationMs": 38838.9,
+        "index": 34,
         "promptId": "ca81b717-47f4-4129-88af-d566119ea789",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 6,
-        "t": "2026-11-04T00:17:17.184000Z",
+        "t": "2026-11-04T00:17:17.653708Z",
         "text": {
-          "chars": 130,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6444,16 +5455,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 2729
       },
       {
-        "durationMs": 208591.0,
-        "index": 44,
+        "durationMs": 25974.3,
+        "index": 35,
         "promptId": "61a95e80-e0dc-4b19-8852-fbeba7152d91",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 4,
-        "t": "2026-11-04T00:20:50.969000Z",
+        "t": "2026-11-04T00:20:51.281862Z",
         "text": {
-          "chars": 454,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6461,16 +5472,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1707
       },
       {
-        "durationMs": 24133.0,
-        "index": 45,
+        "durationMs": 23569.3,
+        "index": 36,
         "promptId": "2503ea47-8212-48d9-8cfc-fa0d53c67471",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 3,
-        "t": "2026-11-04T00:25:40.428000Z",
+        "t": "2026-11-04T00:25:40.888348Z",
         "text": {
-          "chars": 487,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6478,16 +5489,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 1968
       },
       {
-        "durationMs": 44090.0,
-        "index": 46,
+        "durationMs": 43710.7,
+        "index": 37,
         "promptId": "d78fb4f3-2a16-4662-8572-4e81f88e3fb2",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 4,
-        "t": "2026-11-04T00:26:48.025000Z",
+        "t": "2026-11-04T00:26:48.380611Z",
         "text": {
-          "chars": 74,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6495,16 +5506,16 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "tokensOut": 4086
       },
       {
-        "durationMs": null,
-        "index": 47,
+        "durationMs": 15232.6,
+        "index": 38,
         "promptId": "06fd054b-17f2-49d1-845a-d28a65b4c6ef",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 4,
-        "t": "2026-11-04T18:02:22.533000Z",
+        "t": "2026-11-04T18:02:22.789979Z",
         "text": {
-          "chars": 4937,
-          "images": 0,
-          "pastedBytes": 4476,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -6515,12 +5526,12 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
     "sessions": [
       {
         "branch": null,
-        "capturedFromPrompt": 7,
+        "capturedFromPrompt": null,
         "end": null,
         "label": "Session d7ee5e66",
         "live": true,
         "modelCalls": 640,
-        "prompts": 43,
+        "prompts": 38,
         "repo": null,
         "row": 0,
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
@@ -6532,7 +5543,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "endedAt": "2026-11-02T05:32:09.573527Z",
         "live": false,
-        "n": null,
+        "n": 1,
         "promptId": "c58abde5-3897-4c35-8172-4845478aeac0",
         "startedAt": "2026-11-02T05:31:51.155051Z",
         "steps": 2
@@ -6540,7 +5551,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "endedAt": "2026-11-02T06:02:29.038849Z",
         "live": false,
-        "n": null,
+        "n": 2,
         "promptId": "d0ade961-81cc-4c69-88c2-0588963b7eeb",
         "startedAt": "2026-11-02T05:33:55.724890Z",
         "steps": 80
@@ -6548,7 +5559,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "endedAt": "2026-11-02T14:15:13.332153Z",
         "live": false,
-        "n": null,
+        "n": 3,
         "promptId": "4339d50f-2ba6-4d3e-812c-31cecf3f8900",
         "startedAt": "2026-11-02T14:14:18.066135Z",
         "steps": 4
@@ -6556,7 +5567,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "endedAt": "2026-11-02T14:15:56.106474Z",
         "live": false,
-        "n": null,
+        "n": 4,
         "promptId": "5c0e414f-fcb7-4c22-89ad-54639c6775d9",
         "startedAt": "2026-11-02T14:15:21.690677Z",
         "steps": 2
@@ -6564,7 +5575,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "endedAt": "2026-11-02T14:23:20.294638Z",
         "live": false,
-        "n": null,
+        "n": 5,
         "promptId": "358731e5-8ce1-46ff-87cf-f255a519239b",
         "startedAt": "2026-11-02T14:16:38.366412Z",
         "steps": 21
@@ -6572,7 +5583,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "endedAt": "2026-11-02T15:15:42.649789Z",
         "live": false,
-        "n": null,
+        "n": 6,
         "promptId": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
         "startedAt": "2026-11-02T14:54:00.717725Z",
         "steps": 28
@@ -6582,7 +5593,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 7,
         "promptId": "fbbf55bb-2fda-44c3-8f72-4a1d30e13b54",
-        "startedAt": "2026-11-02T15:22:33.399000Z",
+        "startedAt": "2026-11-02T15:22:33.703063Z",
         "steps": 56
       },
       {
@@ -6590,7 +5601,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 8,
         "promptId": "f458706f-dc1b-4754-8614-704bf7fa4723",
-        "startedAt": "2026-11-02T15:57:13.078000Z",
+        "startedAt": "2026-11-02T15:57:13.399358Z",
         "steps": 2
       },
       {
@@ -6598,7 +5609,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 9,
         "promptId": "a61c7c87-346d-485b-848f-7e97870cfbbc",
-        "startedAt": "2026-11-02T15:59:22.621000Z",
+        "startedAt": "2026-11-02T15:59:22.741964Z",
         "steps": 19
       },
       {
@@ -6606,7 +5617,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 10,
         "promptId": "0e390491-a3a7-4804-83af-0436ce5dd82e",
-        "startedAt": "2026-11-02T16:29:48.586000Z",
+        "startedAt": "2026-11-02T16:29:49.005960Z",
         "steps": 7
       },
       {
@@ -6614,7 +5625,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 11,
         "promptId": "481d2b3a-2184-4b6b-8f7d-ff69c478ba77",
-        "startedAt": "2026-11-02T16:36:04.156000Z",
+        "startedAt": "2026-11-02T16:36:04.361288Z",
         "steps": 5
       },
       {
@@ -6622,7 +5633,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 12,
         "promptId": "835ec244-0109-4f5d-83f7-3c33617d6954",
-        "startedAt": "2026-11-02T17:12:21.353000Z",
+        "startedAt": "2026-11-02T17:12:21.715933Z",
         "steps": 28
       },
       {
@@ -6630,7 +5641,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 13,
         "promptId": "d9ed62b2-96dd-4ff5-832a-da12626b4944",
-        "startedAt": "2026-11-02T17:48:28.892000Z",
+        "startedAt": "2026-11-02T17:48:29.165394Z",
         "steps": 31
       },
       {
@@ -6638,7 +5649,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 14,
         "promptId": "ddd5d65e-ec44-4085-8698-c82bda540a89",
-        "startedAt": "2026-11-02T21:58:29.308000Z",
+        "startedAt": "2026-11-02T21:58:29.787689Z",
         "steps": 2
       },
       {
@@ -6646,7 +5657,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 15,
         "promptId": "fb85f4ed-668d-4d45-81c9-c027ae9c48ed",
-        "startedAt": "2026-11-02T22:02:08.487000Z",
+        "startedAt": "2026-11-02T22:02:08.629688Z",
         "steps": 26
       },
       {
@@ -6654,7 +5665,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 16,
         "promptId": "8f2526a8-9437-4c0d-8f72-566570ea8621",
-        "startedAt": "2026-11-02T22:14:29.126000Z",
+        "startedAt": "2026-11-02T22:14:29.206782Z",
         "steps": 58
       },
       {
@@ -6662,7 +5673,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 17,
         "promptId": "eb8d0d45-e6d5-4eae-8965-92ba8cd8fbb1",
-        "startedAt": "2026-11-02T22:36:54.820000Z",
+        "startedAt": "2026-11-02T22:36:55.072769Z",
         "steps": 5
       },
       {
@@ -6670,235 +5681,222 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "live": false,
         "n": 18,
         "promptId": "6fc1234a-3930-4d65-8d58-46527684487c",
-        "startedAt": "2026-11-02T22:38:10.929000Z",
+        "startedAt": "2026-11-02T22:38:11.320182Z",
         "steps": 57
-      },
-      {
-        "endedAt": null,
-        "live": false,
-        "n": 19,
-        "promptId": "99c1137a-c477-4dab-86a0-8cd22f88908e",
-        "startedAt": "2026-11-03T00:47:51.180000Z",
-        "steps": 0
-      },
-      {
-        "endedAt": "2026-11-03T15:17:48.781000Z",
-        "live": false,
-        "n": 24,
-        "promptId": "4d07dfde-59e1-4d73-8d15-77b53f9ac11e",
-        "startedAt": "2026-11-03T15:13:34.553000Z",
-        "steps": 0
-      },
-      {
-        "endedAt": "2026-11-03T16:24:30.096000Z",
-        "live": false,
-        "n": 25,
-        "promptId": "e8006f5c-4e39-4a3f-80f0-58e45a68fd23",
-        "startedAt": "2026-11-03T16:14:24.950000Z",
-        "steps": 0
-      },
-      {
-        "endedAt": "2026-11-03T16:55:15.464000Z",
-        "live": false,
-        "n": 26,
-        "promptId": "5b068420-565c-4bae-8354-8832fdcc2a2a",
-        "startedAt": "2026-11-03T16:51:12.678000Z",
-        "steps": 0
-      },
-      {
-        "endedAt": "2026-11-03T18:02:52.267000Z",
-        "live": false,
-        "n": 27,
-        "promptId": "5370b9aa-8f83-40ea-8f32-000f56b66bf8",
-        "startedAt": "2026-11-03T16:55:33.399000Z",
-        "steps": 0
       },
       {
         "endedAt": "2026-11-03T19:25:54.948205Z",
         "live": false,
-        "n": 28,
+        "n": 19,
         "promptId": "3a3b20c1-1265-41c6-8577-2211c37fce54",
-        "startedAt": "2026-11-03T19:25:39.691000Z",
+        "startedAt": "2026-11-03T19:25:40.222056Z",
         "steps": 5
       },
       {
         "endedAt": "2026-11-03T20:30:45.368761Z",
         "live": false,
-        "n": 29,
+        "n": 20,
         "promptId": "c0199871-cf41-407c-8b57-50275551a8c1",
-        "startedAt": "2026-11-03T20:30:35.921000Z",
+        "startedAt": "2026-11-03T20:30:36.206181Z",
         "steps": 3
       },
       {
         "endedAt": "2026-11-03T20:31:22.018021Z",
         "live": false,
-        "n": 30,
+        "n": 21,
         "promptId": "08a85c1c-d4d7-43e2-8f43-c6c30792fb8d",
-        "startedAt": "2026-11-03T20:31:10.710000Z",
+        "startedAt": "2026-11-03T20:31:10.843062Z",
         "steps": 2
       },
       {
         "endedAt": "2026-11-03T20:34:42.955501Z",
         "live": false,
-        "n": 31,
+        "n": 22,
         "promptId": "3f1f2c61-5c10-49e9-8740-48658b0a8ca0",
-        "startedAt": "2026-11-03T20:32:20.510000Z",
+        "startedAt": "2026-11-03T20:32:20.642198Z",
         "steps": 11
       },
       {
         "endedAt": "2026-11-03T20:36:30.418542Z",
         "live": false,
-        "n": 32,
+        "n": 23,
         "promptId": "dd242b48-f327-426a-8dc8-889ff80496fb",
-        "startedAt": "2026-11-03T20:36:12.541000Z",
+        "startedAt": "2026-11-03T20:36:12.680983Z",
         "steps": 1
       },
       {
         "endedAt": "2026-11-03T21:04:48.422402Z",
         "live": false,
-        "n": 33,
+        "n": 24,
         "promptId": "c0cf46fa-e9f5-4f99-80cb-9c8da77407c4",
-        "startedAt": "2026-11-03T20:37:45.673000Z",
+        "startedAt": "2026-11-03T20:37:45.810638Z",
         "steps": 24
       },
       {
         "endedAt": "2026-11-03T21:12:31.358946Z",
         "live": false,
-        "n": 34,
+        "n": 25,
         "promptId": "5ba3b328-8563-4188-8a6e-33f476820c88",
-        "startedAt": "2026-11-03T21:06:48.151000Z",
+        "startedAt": "2026-11-03T21:06:48.327254Z",
         "steps": 76
       },
       {
         "endedAt": "2026-11-03T21:11:20.962271Z",
         "live": false,
-        "n": 35,
+        "n": 26,
         "promptId": "90842aad-eea9-4222-8be4-ba92cc61b098",
-        "startedAt": "2026-11-03T21:11:19.287000Z",
+        "startedAt": "2026-11-03T21:11:19.428705Z",
         "steps": 1
       },
       {
         "endedAt": "2026-11-03T21:17:39.684408Z",
         "live": false,
-        "n": 36,
+        "n": 27,
         "promptId": "3b893496-021b-40d0-8826-11d9f00fe1b0",
-        "startedAt": "2026-11-03T21:12:31.373000Z",
+        "startedAt": "2026-11-03T21:12:31.509058Z",
         "steps": 14
       },
       {
         "endedAt": "2026-11-03T21:21:05.894458Z",
         "live": false,
-        "n": 37,
+        "n": 28,
         "promptId": "28883e56-61fc-48b8-8124-a61e74567528",
-        "startedAt": "2026-11-03T21:18:44.974000Z",
+        "startedAt": "2026-11-03T21:18:45.123543Z",
         "steps": 14
       },
       {
         "endedAt": "2026-11-03T21:22:19.885147Z",
         "live": false,
-        "n": 38,
+        "n": 29,
         "promptId": "a7377f08-f5b2-41e3-8c36-b6c48fccc7a4",
-        "startedAt": "2026-11-03T21:22:12.426000Z",
+        "startedAt": "2026-11-03T21:22:12.550233Z",
         "steps": 2
       },
       {
         "endedAt": "2026-11-03T21:24:54.137062Z",
         "live": false,
-        "n": 39,
+        "n": 30,
         "promptId": "85404ed2-4328-4d55-82ba-613cc636cf2f",
-        "startedAt": "2026-11-03T21:24:43.861000Z",
+        "startedAt": "2026-11-03T21:24:43.985779Z",
         "steps": 2
       },
       {
         "endedAt": "2026-11-03T21:30:27.185403Z",
         "live": false,
-        "n": 40,
+        "n": 31,
         "promptId": "494f37d2-d9db-4daf-8e7b-0c5ef78d7bf2",
-        "startedAt": "2026-11-03T21:27:33.197000Z",
+        "startedAt": "2026-11-03T21:28:02.450093Z",
         "steps": 8
       },
       {
         "endedAt": "2026-11-03T21:55:25.678838Z",
         "live": false,
-        "n": 41,
+        "n": 32,
         "promptId": "0928aadd-16c4-4cb9-837b-81a6a49378f2",
-        "startedAt": "2026-11-03T21:55:24.662000Z",
+        "startedAt": "2026-11-03T21:55:25.055803Z",
         "steps": 2
       },
       {
         "endedAt": "2026-11-03T21:55:39.529685Z",
         "live": false,
-        "n": 42,
+        "n": 33,
         "promptId": "8f7df8e5-4914-4a1a-8b05-186a140e6216",
-        "startedAt": "2026-11-03T21:55:31.605000Z",
+        "startedAt": "2026-11-03T21:55:32.142244Z",
         "steps": 1
       },
       {
         "endedAt": "2026-11-04T00:17:56.492579Z",
         "live": false,
-        "n": 43,
+        "n": 34,
         "promptId": "ca81b717-47f4-4129-88af-d566119ea789",
-        "startedAt": "2026-11-04T00:17:17.184000Z",
+        "startedAt": "2026-11-04T00:17:17.653708Z",
         "steps": 6
       },
       {
         "endedAt": "2026-11-04T00:21:17.256168Z",
         "live": false,
-        "n": 44,
+        "n": 35,
         "promptId": "61a95e80-e0dc-4b19-8852-fbeba7152d91",
-        "startedAt": "2026-11-04T00:20:50.969000Z",
+        "startedAt": "2026-11-04T00:20:51.281862Z",
         "steps": 4
       },
       {
         "endedAt": "2026-11-04T00:26:04.457607Z",
         "live": false,
-        "n": 45,
+        "n": 36,
         "promptId": "2503ea47-8212-48d9-8cfc-fa0d53c67471",
-        "startedAt": "2026-11-04T00:25:40.428000Z",
+        "startedAt": "2026-11-04T00:25:40.888348Z",
         "steps": 3
       },
       {
         "endedAt": "2026-11-04T00:27:32.091292Z",
         "live": false,
-        "n": 46,
+        "n": 37,
         "promptId": "d78fb4f3-2a16-4662-8572-4e81f88e3fb2",
-        "startedAt": "2026-11-04T00:26:48.025000Z",
+        "startedAt": "2026-11-04T00:26:48.380611Z",
         "steps": 4
       },
       {
-        "endedAt": null,
-        "live": true,
-        "n": 47,
+        "endedAt": "2026-11-04T18:02:38.022616Z",
+        "live": false,
+        "n": 38,
         "promptId": "06fd054b-17f2-49d1-845a-d28a65b4c6ef",
-        "startedAt": "2026-11-04T18:02:22.533000Z",
+        "startedAt": "2026-11-04T18:02:22.789979Z",
         "steps": 4
       }
     ],
     "work": [
       {
         "edits": 0,
-        "other": 5,
-        "steps": 39,
-        "t": "2026-11-02T14:00:00Z",
+        "other": 13,
+        "steps": 79,
+        "t": "2026-11-02T05:00:00Z",
         "work": {
           "commands": [
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 3
-            },
+              "program": null,
+              "runs": 12
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [
+            {
+              "count": 1,
+              "name": null
+            }
+          ],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 2,
+        "steps": 5,
+        "t": "2026-11-02T06:00:00Z",
+        "work": {
+          "commands": [
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cat",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 1
+              "program": null,
+              "runs": 2
             }
           ],
           "commits": 0,
@@ -6922,6 +5920,45 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         }
       },
       {
+        "edits": 1,
+        "other": 33,
+        "steps": 39,
+        "t": "2026-11-02T14:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": null,
+              "runs": 32
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 1,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [
+            {
+              "count": 1,
+              "name": null
+            }
+          ],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
         "edits": 3,
         "other": 70,
         "steps": 79,
@@ -6929,121 +5966,13 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "work": {
           "commands": [
             {
-              "failed": 3,
-              "lastExit": null,
-              "program": "python",
-              "runs": 21
-            },
-            {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 10
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cp",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "helm",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "go",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "ls",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "pkill",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "tail",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "which",
-              "runs": 1
+              "program": null,
+              "runs": 70
             }
           ],
-          "commits": 4,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 3,
@@ -7052,7 +5981,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 2,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 0,
@@ -7065,7 +5994,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 1,
-        "other": 24,
+        "other": 23,
         "steps": 30,
         "t": "2026-11-02T16:00:00Z",
         "work": {
@@ -7073,65 +6002,11 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 9
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "bash",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 1
+              "program": null,
+              "runs": 23
             }
           ],
-          "commits": 2,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 1,
@@ -7140,7 +6015,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 2,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 0,
@@ -7153,7 +6028,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 48,
+        "other": 50,
         "steps": 54,
         "t": "2026-11-02T17:00:00Z",
         "work": {
@@ -7161,89 +6036,11 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "python",
-              "runs": 10
-            },
-            {
-              "failed": 1,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 4
-            },
-            {
-              "failed": 1,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "awk",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "date",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "find",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "helm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "rm",
-              "runs": 1
+              "program": null,
+              "runs": 49
             }
           ],
-          "commits": 3,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 0,
@@ -7252,7 +6049,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 1,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 1,
@@ -7265,7 +6062,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 2,
-        "other": 6,
+        "other": 5,
         "steps": 8,
         "t": "2026-11-02T18:00:00Z",
         "work": {
@@ -7273,35 +6070,11 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 1
+              "program": null,
+              "runs": 4
             }
           ],
-          "commits": 3,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 2,
@@ -7310,7 +6083,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 2,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 1,
@@ -7331,7 +6104,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "grep",
+              "program": null,
               "runs": 1
             }
           ],
@@ -7357,115 +6130,19 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 7,
-        "other": 137,
+        "other": 146,
         "steps": 148,
         "t": "2026-11-02T22:00:00Z",
         "work": {
           "commands": [
             {
-              "failed": 1,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 30
-            },
-            {
               "failed": 0,
               "lastExit": null,
-              "program": "python",
-              "runs": 24
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 15
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 12
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "bash",
-              "runs": 7
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 6
-            },
-            {
-              "failed": 1,
-              "lastExit": null,
-              "program": "other",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sleep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cp",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "ls",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "head",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "helm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
+              "program": null,
+              "runs": 135
             }
           ],
-          "commits": 3,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 7,
@@ -7473,10 +6150,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "linesRemoved": null,
           "mcp": [],
           "otherTools": 0,
-          "prs": [
-            2
-          ],
-          "pushes": 4,
+          "prs": [],
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 11,
@@ -7489,299 +6164,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 35,
-        "steps": 0,
-        "t": "2026-11-03T00:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 9
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 9
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cp",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
-            }
-          ],
-          "commits": 1,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 2,
-        "steps": 0,
-        "t": "2026-11-03T15:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "awk",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 1
-            }
-          ],
-          "commits": 0,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 37,
-        "steps": 0,
-        "t": "2026-11-03T16:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 7
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "go",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "rm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "seq",
-              "runs": 1
-            }
-          ],
-          "commits": 0,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 1,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 2,
-            "searches": 1
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 11,
-        "steps": 0,
-        "t": "2026-11-03T17:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "head",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 1
-            }
-          ],
-          "commits": 1,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 4,
+        "other": 3,
         "steps": 6,
         "t": "2026-11-03T19:00:00Z",
         "work": {
@@ -7792,12 +6175,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
           "edits": 0,
           "linesAdded": null,
           "linesRemoved": null,
-          "mcp": [
-            {
-              "calls": 1,
-              "server": ""
-            }
-          ],
+          "mcp": [],
           "otherTools": 3,
           "prs": [],
           "pushes": 0,
@@ -7813,7 +6191,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 22,
+        "other": 23,
         "steps": 30,
         "t": "2026-11-03T20:00:00Z",
         "work": {
@@ -7821,38 +6199,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 7
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "ls",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
+              "program": null,
+              "runs": 19
             }
           ],
           "commits": 0,
@@ -7876,8 +6224,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         }
       },
       {
-        "edits": 17,
-        "other": 94,
+        "edits": 16,
+        "other": 100,
         "steps": 135,
         "t": "2026-11-03T21:00:00Z",
         "work": {
@@ -7885,82 +6233,20 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 61
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "gh",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "bash",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "wc",
-              "runs": 1
+              "program": null,
+              "runs": 96
             }
           ],
-          "commits": 1,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
-          "edits": 17,
+          "edits": 16,
           "linesAdded": null,
           "linesRemoved": null,
           "mcp": [],
           "otherTools": 0,
-          "prs": [
-            2
-          ],
-          "pushes": 2,
+          "prs": [],
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 2,
@@ -7986,38 +6272,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "gh",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "rm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "wc",
-              "runs": 1
+              "program": null,
+              "runs": 12
             }
           ],
           "commits": 0,
@@ -8042,7 +6298,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 1,
+        "other": 3,
         "steps": 4,
         "t": "2026-11-04T18:00:00Z",
         "work": {
@@ -8050,8 +6306,8 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "sed",
-              "runs": 1
+              "program": null,
+              "runs": 3
             }
           ],
           "commits": 0,
@@ -8079,7 +6335,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-02T05:31:51.155051Z",
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": null,
     "pageSize": null,
     "to": "2026-11-04T18:05:00Z",

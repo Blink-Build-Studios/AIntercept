@@ -28,16 +28,47 @@ var finalEvents = map[string]bool{
 // usage); the usage the extractors need most often comes last, so without
 // this a response over the cap lost its token counts and stop reason.
 type sseTail struct {
+	started bool
 	pending []byte // the bytes since the last event boundary
 	partial bool   // pending began mid-event (where the buffer's cap cut it)
 	kept    []byte // the final events, each ending in a blank line
+	// cut is where in the response buffer the event begun gave the tail its
+	// start: the buffer's bytes from there are that event's partial head.
+	cut int
 }
 
-// feed takes the bytes past the cap. The first call's bytes start wherever
-// the cap cut the stream, so their first event is partial and isn't kept.
+// begin starts the tail at the cap: buf is the response buffer, full. The
+// event the cap cuts through is taken whole from its start in buf, so a
+// final event that straddles the cap (Codex's response.completed repeats the
+// turn's output, so on a large reply it often does) is kept.
+func (t *sseTail) begin(buf []byte) {
+	t.started = true
+	t.cut = lastEventBoundary(buf)
+	if len(buf)-t.cut > finalEventCap {
+		t.partial, t.cut = true, len(buf)
+		return
+	}
+	t.pending = append([]byte(nil), buf[t.cut:]...)
+}
+
+// lastEventBoundary is where the last whole event in b ends (0: none does).
+func lastEventBoundary(b []byte) int {
+	end := 0
+	if i := bytes.LastIndex(b, []byte("\n\n")); i >= 0 {
+		end = i + 2
+	}
+	if i := bytes.LastIndex(b, []byte("\r\n\r\n")); i >= 0 && i+4 > end {
+		end = i + 4
+	}
+	return end
+}
+
+// feed takes the bytes past the cap. Without begin, the first call's bytes
+// start wherever the cap cut the stream, so their first event is partial and
+// isn't kept.
 func (t *sseTail) feed(b []byte) {
-	if t.pending == nil && t.kept == nil {
-		t.partial = true
+	if !t.started {
+		t.started, t.partial = true, true
 	}
 	t.pending = append(t.pending, b...)
 	for {
@@ -88,10 +119,15 @@ func sseType(ev []byte) string {
 }
 
 // withTail is the response buffer with the kept final events after it, on
-// lines of their own (the buffer may end mid-line where the cap cut it).
+// lines of their own (the buffer may end mid-line where the cap cut it). The
+// buffer's partial head of the event the tail began with is left out: the
+// tail has that event whole, if it's a final one.
 func withTail(buf []byte, t *sseTail) []byte {
 	if t == nil || len(t.kept) == 0 {
 		return buf
+	}
+	if t.cut > 0 && t.cut <= len(buf) {
+		buf = buf[:t.cut]
 	}
 	out := make([]byte, 0, len(buf)+2+len(t.kept))
 	return append(append(append(out, buf...), '\n', '\n'), t.kept...)

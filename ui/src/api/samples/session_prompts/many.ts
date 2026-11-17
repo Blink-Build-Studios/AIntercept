@@ -5,9 +5,9 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
   "data": [
     {
       "prompt": {
-        "durationMs": 170000.0,
+        "durationMs": 60002.0,
         "friction": {
-          "destructive": 1,
+          "destructive": 0,
           "frustrated": false,
           "interrupted": false
         },
@@ -16,11 +16,11 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
         "index": 1,
         "promptId": "p1",
         "steps": 2,
-        "t": "2026-11-04T09:00:10Z",
+        "t": "2026-11-04T09:01:00Z",
         "text": {
-          "chars": 42,
-          "images": 0,
-          "pastedBytes": 2048,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -35,16 +35,12 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
       "steps": [
         {
           "agentType": null,
-          "commands": [
-            "rm"
-          ],
-          "costUsd": 0.25,
-          "does": "text",
+          "commands": [],
+          "costUsd": null,
+          "does": "exec",
           "durationMs": 2.0,
           "eventsPending": false,
-          "exitCodes": [
-            0
-          ],
+          "exitCodes": [],
           "kind": "model",
           "model": "claude-opus-5-5",
           "patches": [],
@@ -58,45 +54,42 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
             "accuracy": "exact",
             "cacheRead": 100000,
             "cacheWrite": 1000,
-            "cacheWrite1h": 1000,
+            "cacheWrite1h": null,
             "cacheWrite5m": null,
             "input": 3,
             "output": 100
           },
           "tools": [
             {
-              "command": "rm",
-              "destructive": {
-                "category": "rm_recursive_force",
-                "scope": "outside_cwd"
-              },
-              "durationMs": 120.0,
-              "exitCode": 0,
+              "command": null,
+              "destructive": null,
+              "durationMs": null,
+              "exitCode": null,
               "fileType": null,
               "mcpServer": null,
               "name": "Bash",
-              "program": "rm",
-              "resultBytes": 512,
+              "program": null,
+              "resultBytes": null,
               "status": "ok",
               "target": null,
-              "toolUseId": "toolu_0001_0"
+              "toolUseId": null
             },
             {
               "command": null,
               "destructive": null,
-              "durationMs": 120.0,
+              "durationMs": null,
               "exitCode": null,
               "fileType": null,
               "mcpServer": "github",
               "name": "mcp__github__create_pr",
               "program": null,
-              "resultBytes": 512,
+              "resultBytes": null,
               "status": "ok",
               "target": null,
-              "toolUseId": "toolu_0001_1"
+              "toolUseId": null
             }
           ],
-          "ttftMs": 900.0,
+          "ttftMs": null,
           "usageMissing": null
         },
         {
@@ -146,21 +139,21 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
     },
     {
       "prompt": {
-        "durationMs": 65000.0,
+        "durationMs": 2.0,
         "friction": {
           "destructive": 0,
-          "frustrated": true,
-          "interrupted": true
+          "frustrated": false,
+          "interrupted": false
         },
         "hidden": {},
         "inFlight": false,
         "index": 2,
         "promptId": "p2",
         "steps": 1,
-        "t": "2026-11-04T09:10:00Z",
+        "t": "2026-11-04T09:10:30Z",
         "text": {
-          "chars": 42,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -176,8 +169,8 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
         {
           "agentType": null,
           "commands": [],
-          "costUsd": 0.25,
-          "does": "text",
+          "costUsd": null,
+          "does": "tool",
           "durationMs": 2.0,
           "eventsPending": false,
           "exitCodes": [],
@@ -194,7 +187,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
             "accuracy": "exact",
             "cacheRead": 100000,
             "cacheWrite": 1000,
-            "cacheWrite1h": 1000,
+            "cacheWrite1h": null,
             "cacheWrite5m": null,
             "input": 3,
             "output": 100
@@ -203,19 +196,19 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
             {
               "command": null,
               "destructive": null,
-              "durationMs": 120.0,
+              "durationMs": null,
               "exitCode": null,
               "fileType": null,
               "mcpServer": null,
               "name": "Read",
               "program": null,
-              "resultBytes": 512,
-              "status": "error",
+              "resultBytes": null,
+              "status": "ok",
               "target": null,
-              "toolUseId": "toolu_0004_0"
+              "toolUseId": null
             }
           ],
-          "ttftMs": 900.0,
+          "ttftMs": null,
           "usageMissing": null
         }
       ],
@@ -224,11 +217,11 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
   ],
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
-    "from": "2026-11-04T09:00:00Z",
-    "lastDataAt": "2026-11-04T09:11:05Z",
+    "from": "2026-11-04T09:01:00Z",
+    "lastDataAt": "2026-11-04T09:10:30Z",
     "page": 1,
     "pageSize": 20,
-    "to": "2026-11-04T09:11:59.999999Z",
+    "to": "2026-11-04T09:10:59.999999Z",
     "total": 3
   }
 };

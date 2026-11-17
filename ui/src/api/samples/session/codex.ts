@@ -43,12 +43,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "clientVersion": "0.164.0",
     "commit": "1aa2f42",
     "costUsd": null,
-    "coverage": {
-      "captured": 3,
-      "notCaptured": 0,
-      "reported": null,
-      "windows": []
-    },
+    "coverage": null,
     "device": {
       "deviceId": "1a5e0000-0000-4000-8000-0000000001a5",
       "platform": null,
@@ -59,7 +54,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "end": "2026-11-04T15:56:00Z",
     "events": null,
     "facts": {
-      "approval": "never",
+      "approval": null,
       "cwd": "/work/pomodoro",
       "sandbox": "danger-full-access",
       "shell": null,

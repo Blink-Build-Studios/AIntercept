@@ -1,7 +1,13 @@
 """The turn ledger (handoff §11R): /sessions/{id}/turns, /people/{id}/work, and the turn and work values the
-session and person pages and the People page add, on the Postgres store (docs/PIPELINE.md §6.1, §6.3)."""
+session and person pages and the People page add, on the Postgres store (docs/PIPELINE.md §6.1, §6.3).
 
-from tests.builders import ACCOUNT, ClaudeCode, Codex
+The datasets send Claude Code's analytics as it does; they stay in the raw files. A turn and its work come
+from its model calls: the tools each asked for and, with recorded content, their commands, files and exit
+codes. Without content a command has no program, a file no type, and nothing counts commits or PRs."""
+
+import json
+
+from tests.builders import ACCOUNT, ClaudeCode, Codex, body_chunks, cid_of
 from tests.test_session import error_on_query
 
 S = "22222222-2222-4222-8222-222222222222"
@@ -128,12 +134,14 @@ def test_turns_one(dataset, pg_client_for, write_sample):
     r = client.get(TURNS, params={"to": "2026-11-04T10:01:00Z"})
     write_sample(client, r, "one")
     (t,) = r.json()["data"]
-    assert (t["n"], t["steps"], t["asked"]["chars"]) == (1, 6, 212)
+    assert (t["n"], t["steps"], t["asked"]["chars"]) == (1, 6, None)
     assert [g["kind"] for g in t["groups"]] == ["read", "edit", "run", "reply"]
     assert [len(g["steps"]) for g in t["groups"]] == [2, 1, 2, 1]
-    assert t["groups"][2]["exits"] == [1, 0] and t["groups"][2]["program"] == "npm test"
-    assert t["costUsd"] == 1.5 and t["live"] is False
-    assert t["endedAt"] == "2026-11-04T10:00:50.002000Z" and t["durationMs"] == 50002.0
+    assert t["groups"][2]["exits"] == [] and t["groups"][2]["program"] is None  # without content
+    assert t["costUsd"] is None and t["live"] is False
+    # From its first step to its last step's end.
+    assert t["startedAt"] == "2026-11-04T10:00:05Z" and t["endedAt"] == "2026-11-04T10:00:50.002000Z"
+    assert t["durationMs"] == 45002.0
 
 
 def test_turns_many(dataset, pg_client_for, write_sample):
@@ -142,9 +150,9 @@ def test_turns_many(dataset, pg_client_for, write_sample):
     r = client.get(TURNS)
     write_sample(client, r, "many")
     one, two = r.json()["data"]
-    assert two["friction"] == {"frustrated": True, "interrupted": True, "destructive": 0}
-    assert [g["kind"] for g in two["groups"]] == ["mcp", "web", "spawn"]
-    assert two["groups"][0]["server"] == "linear-server"
+    assert two["friction"] == {"frustrated": False, "interrupted": False, "destructive": 0}
+    # The builder names the MCP tool as a built-in, so it's another tool here (test_codex covers MCP).
+    assert [g["kind"] for g in two["groups"]] == ["tool", "web", "spawn"]
     # paged by turn: the page that holds #2
     r = client.get(TURNS, params={"pageSize": 1, "turn": 2})
     assert r.json()["meta"]["page"] == 2 and r.json()["data"][0]["n"] == 2
@@ -293,59 +301,95 @@ def test_work_error(dataset, pg_client_for, write_sample, monkeypatch):
 def test_session_header_and_outcome(dataset, pg_client_for):
     work_session(dataset)
     h = pg_client_for(dataset).get(f"/api/v1/sessions/{S}").json()["data"]
-    assert (h["turns"], h["turnsInterrupted"], h["activeMs"], h["costUsd"]) == (2, 1, 90004.0, 2.5)
+    assert (h["turns"], h["turnsInterrupted"], h["activeMs"], h["costUsd"]) == (2, 0, 75004.0, None)
     w = h["work"]
-    assert (w["reads"], w["readFiles"], w["readTypes"]) == (2, 2, {"ts": 2})
+    assert (w["reads"], w["readFiles"], w["readTypes"]) == (2, None, {})
     assert (w["edits"], w["editedFiles"], w["editTypes"], w["linesAdded"], w["linesRemoved"]) == (
         2,
-        1,
-        {"ts": 2},
-        31,
-        9,
+        None,
+        {},
+        None,
+        None,
     )
-    assert w["commands"] == [{"program": "npm test", "runs": 2, "failed": 1, "lastExit": None}]
-    assert w["mcp"] == [{"server": "linear-server", "calls": 1}] and w["web"] == {"searches": 1, "fetches": 0}
-    assert w["subagents"] == [{"name": None, "count": 1}] and (w["commits"], w["prs"]) == (1, [2])
+    assert w["commands"] == [{"program": None, "runs": 2, "failed": 0, "lastExit": None}]
+    assert w["web"] == {"searches": 1, "fetches": 0} and w["otherTools"] == 1
+    assert w["subagents"] == [{"name": None, "count": 1}] and (w["commits"], w["prs"]) == (0, [])
     o = h["outcome"]
-    assert (o["commits"], o["headFrom"], o["headTo"], o["editedFiles"], o["prs"]) == (1, "a41f0000", "9c020000", 1, [2])
-    assert o["lastTest"] == {"program": "npm test", "exitCode": 0, "t": "2026-11-04T10:00:40Z"}
+    assert (o["commits"], o["headFrom"], o["headTo"], o["editedFiles"], o["prs"], o["lastTest"]) == (
+        0,
+        None,
+        None,
+        None,
+        [],
+        None,
+    )
 
 
-def test_turn_work_is_its_analytics(dataset, pg_client_for):
-    """A turn's work line comes from its own analytics (its subagent's included); its groups' from their steps."""
+def test_turn_work_is_its_steps_tool_calls(dataset, pg_client_for):
+    """A turn's work line comes from its steps' tool calls (its subagent's included); its groups' from theirs."""
     work_session(dataset)
     one, two = pg_client_for(dataset).get(TURNS).json()["data"]
     w = one["work"]
-    assert (w["reads"], w["readFiles"], w["edits"], w["editedFiles"], w["linesAdded"]) == (2, 2, 1, 1, 31)
-    assert w["commands"] == [{"program": "npm test", "runs": 2, "failed": 1, "lastExit": 0}]
-    assert (w["commits"], w["prs"]) == (1, [2])
+    assert (w["reads"], w["readFiles"], w["edits"], w["editedFiles"], w["linesAdded"]) == (2, None, 1, None, None)
+    assert w["commands"] == [{"program": None, "runs": 2, "failed": 0, "lastExit": None}]
     read, edit, run, reply = one["groups"]
-    assert (read["work"]["reads"], read["work"]["readTypes"]) == (2, {"ts": 2})
-    assert edit["work"]["edits"] == 1 and edit["work"]["linesAdded"] is None  # lines are the turn's (no tool id)
-    assert run["work"]["commands"] == [{"program": "npm test", "runs": 2, "failed": 1, "lastExit": 0}]
-    assert reply["steps"][0]["step"] == 6 and reply["text"] is None  # no content recorded
-    assert two["work"]["edits"] == 1 and two["work"]["editTypes"] == {"ts": 1}  # the subagent's Write
+    assert (read["work"]["reads"], read["work"]["readTypes"]) == (2, {})
+    assert edit["work"]["edits"] == 1 and run["work"]["commands"][0]["runs"] == 2
+    assert [s["step"] for g in one["groups"] for s in g["steps"]] == [1, 2, 3, 4, 5, 6]
+    assert reply["text"] is None  # no content recorded
+    assert two["work"]["edits"] == 1  # the subagent's Write
+
+
+def test_a_turn_is_interrupted_when_it_stops_on_one_or_the_next_says_so(dataset, pg_client_for):
+    """Interrupted: a step stopped on an interrupt (#1), or the next turn's request carries the harness's note
+    that the turn before it was interrupted (#2, from #3's recorded request)."""
+    cc = ClaudeCode(dataset, S)
+    cc.call(f"{H}:00:05", prompt="p1", stop_reason="interrupted", cache_read=1_000)
+    cc.call(f"{H}:01:00", prompt="p2", stop_reason="end_turn", cache_read=1_000)
+    rid = cc.call(f"{H}:02:00", prompt="p3", stop_reason="end_turn", cache_read=1_000)
+    body = {
+        "messages": [
+            {"role": "user", "content": "fix it"},
+            {"role": "assistant", "content": [{"type": "text", "text": "On it."}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "[Request interrupted by user]"},
+                    {"type": "text", "text": "try the other test"},
+                ],
+            },
+        ]
+    }
+    cid = cid_of(dataset, rid)
+    body_chunks(dataset, cid, "request_body_chunk", [json.dumps(body).encode()], start_ms=1, step_ms=1)
+    client = pg_client_for(dataset)
+    turns = client.get(TURNS).json()["data"]
+    assert [(t["n"], t["friction"]["interrupted"]) for t in turns] == [(1, True), (2, True), (3, False)]
+    assert turns[2]["asked"]["text"] == "try the other test"
+    assert client.get(f"/api/v1/sessions/{S}").json()["data"]["turnsInterrupted"] == 2
+    prompts = [i["prompt"] for i in client.get(f"/api/v1/sessions/{S}/prompts").json()["data"]]
+    assert [p["friction"]["interrupted"] for p in prompts] == [True, True, False]
 
 
 def test_timeline_turns_and_work_lanes(dataset, pg_client_for):
     work_session(dataset)
     d = pg_client_for(dataset).get(f"/api/v1/sessions/{S}/timeline", params={"bin": 60}).json()["data"]
     assert [(b["n"], b["startedAt"], b["endedAt"]) for b in d["turns"]] == [
-        (1, "2026-11-04T10:00:00Z", "2026-11-04T10:00:50.002000Z"),
-        (2, "2026-11-04T10:05:00Z", "2026-11-04T10:05:40.002000Z"),
+        (1, "2026-11-04T10:00:05Z", "2026-11-04T10:00:50.002000Z"),
+        (2, "2026-11-04T10:05:10Z", "2026-11-04T10:05:40.002000Z"),
     ]
     assert sum(b["edits"] for b in d["work"]) == 2 and sum(b["other"] for b in d["work"]) == 7
     first = d["work"][0]
     assert (first["t"], first["steps"], first["edits"], first["other"]) == ("2026-11-04T10:00:00Z", 6, 1, 4)
-    assert first["work"]["commands"] == [{"program": "npm test", "runs": 2, "failed": 1, "lastExit": None}]
+    assert first["work"]["commands"] == [{"program": None, "runs": 2, "failed": 0, "lastExit": None}]
 
 
 def test_person_summary_work(dataset, pg_client_for):
     work_session(dataset)
     w = pg_client_for(dataset).get(f"/api/v1/people/{ACCOUNT}/summary").json()["data"]["work"]
-    assert (w["turns"], w["activeMs"], w["repos"]) == (2, 90004.0, 0)
-    assert (w["work"]["edits"], w["work"]["commits"]) == (2, 1)
-    assert w["outcome"]["lastTest"]["program"] == "npm test" and w["outcome"]["headFrom"] is None
+    assert (w["turns"], w["activeMs"], w["repos"]) == (2, 75004.0, 0)
+    assert (w["work"]["edits"], w["work"]["commits"]) == (2, 0)
+    assert w["outcome"]["lastTest"] is None and w["outcome"]["headFrom"] is None
 
 
 def test_person_timeline_work_lane(dataset, pg_client_for):

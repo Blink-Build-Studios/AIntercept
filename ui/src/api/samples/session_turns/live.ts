@@ -5,14 +5,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "data": [
     {
       "asked": {
-        "chars": 212,
-        "images": 0,
+        "chars": null,
+        "images": null,
         "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 0.5,
-      "durationMs": 20002.0,
+      "costUsd": null,
+      "durationMs": 10002.0,
       "endedAt": "2026-11-04T18:00:20.002000Z",
       "friction": {
         "destructive": 0,
@@ -32,7 +32,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -60,16 +60,16 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
-                  "fileType": "py",
+                  "fileType": null,
                   "mcpServer": null,
                   "name": "Read",
                   "program": null,
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0001"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -92,9 +92,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "prs": [],
             "pushes": 0,
             "readFiles": null,
-            "readTypes": {
-              "py": 1
-            },
+            "readTypes": {},
             "reads": 1,
             "subagents": [],
             "web": {
@@ -115,7 +113,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "text",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -173,7 +171,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "live": false,
       "n": 1,
       "promptId": "p1",
-      "startedAt": "2026-11-04T18:00:00Z",
+      "startedAt": "2026-11-04T18:00:10Z",
       "steps": 2,
       "subagents": [],
       "tokensIn": 2006,
@@ -191,9 +189,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "prs": [],
         "pushes": 0,
         "readFiles": null,
-        "readTypes": {
-          "py": 1
-        },
+        "readTypes": {},
         "reads": 1,
         "subagents": [],
         "web": {
@@ -204,8 +200,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
     },
     {
       "asked": {
-        "chars": 212,
-        "images": 0,
+        "chars": null,
+        "images": null,
         "pastedBytes": null,
         "retained": false,
         "text": null
@@ -234,7 +230,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
               "costUsd": null,
               "does": "text",
               "durationMs": null,
-              "eventsPending": true,
+              "eventsPending": false,
               "exitCodes": [],
               "kind": "model",
               "model": null,
@@ -289,7 +285,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "live": true,
       "n": 2,
       "promptId": "p2",
-      "startedAt": "2026-11-04T18:04:00Z",
+      "startedAt": "2026-11-04T18:04:30Z",
       "steps": 1,
       "subagents": [],
       "tokensIn": null,

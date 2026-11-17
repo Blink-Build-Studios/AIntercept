@@ -266,6 +266,8 @@ func part(p convo.Part, id string, fetch bool) *pb2.Part {
 		pp.Kind = &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: p.CallID, Name: p.Name, Arguments: args}}
 	case convo.KindToolResult:
 		pp.Kind = &pb2.Part_ToolResult{ToolResult: &pb2.ToolResult{CallId: p.CallID, Text: text, IsError: p.IsError}}
+	case convo.KindToolAdded:
+		pp.Kind = &pb2.Part_ToolAdded{ToolAdded: &pb2.ToolAdded{Name: p.Name}}
 	default:
 		pp.Kind = &pb2.Part_Opaque{Opaque: &pb2.Opaque{}}
 	}
@@ -403,6 +405,11 @@ func (q *Request) replace(i int, rm *pb2.ConvMessage) ([]convo.Edit, error) {
 				return nil, invalid("part %q: media comes back unchanged", rp.GetId())
 			}
 			continue
+		case convo.KindToolAdded:
+			if rp.GetToolAdded().GetName() != p.Name || rp.GetToolAdded() == nil {
+				return nil, invalid("part %q: an added tool comes back unchanged", rp.GetId())
+			}
+			continue
 		default:
 			if rp.GetOpaque() == nil {
 				return nil, invalid("part %q: opaque parts come back unchanged", rp.GetId())
@@ -468,9 +475,22 @@ func (q *Request) apply(edits []convo.Edit) ([]byte, error) {
 	return b, nil
 }
 
-// ObserveRequest queues OnRequest (observe mode). No-op without content.
+// asks reports whether a request goes to OnRequest: one that adds no
+// message (Claude Code resuming a thread with an empty messages list) has
+// nothing to decide, and is counted instead. Its OnCallStart and its reply's
+// callbacks are made as for any call.
+func (c *Client) asks(r convo.Request) bool {
+	if len(r.New) == 0 {
+		c.noNew.Add(1)
+		return false
+	}
+	return true
+}
+
+// ObserveRequest queues OnRequest (observe mode). No-op without content, and
+// for a request with no new messages.
 func (c *Client) ObserveRequest(call *pb.Call, r convo.Request) {
-	if c.Content() && c.V2() {
+	if c.Content() && c.V2() && c.asks(r) {
 		c.enqueue(job{callID: call.GetCallId(), req: NewRequest(call, r)})
 	}
 }
@@ -502,8 +522,9 @@ func (c *Client) onRequestObserved(ctx context.Context, q *Request) error {
 // within the deadline, Fetch included. Replace: Payload is the body to
 // forward. Respond: the caller delivers it and records it with Responded. A
 // failure, a missed deadline or an answer that can't be applied is onError.
+// A request with no new messages is allowed without OnRequest.
 func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Request) Decision {
-	if !c.Content() || !c.V2() {
+	if !c.Content() || !c.V2() || !c.asks(r) {
 		return Decision{Action: Allow}
 	}
 	q := NewRequest(call, r)

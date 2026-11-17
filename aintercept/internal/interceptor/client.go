@@ -137,6 +137,8 @@ type Client struct {
 	unparsedWhy map[string]uint64
 
 	queued, dropped, delivered, failed, decided, decideFailed, unparsed atomic.Uint64
+	// noNew counts requests with no new messages: no OnRequest (v2).
+	noNew atomic.Uint64
 	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
 	// OnReply (v2).
 	noToolCall, noReply atomic.Bool
@@ -538,9 +540,13 @@ type Stats struct {
 	Decided      uint64 `json:"decided"`
 	DecideFailed uint64 `json:"decide_failed"`
 	// Unparsed (v2): requests that went upstream untouched, without
-	// OnRequest, and why.
+	// OnRequest, and replies that couldn't be read for OnReply and
+	// OnToolCall (observe), and why.
 	Unparsed        uint64            `json:"unparsed"`
 	UnparsedReasons map[string]uint64 `json:"unparsed_reasons,omitempty"`
+	// NoNewMessages (v2): requests read whole that add no message (a
+	// chained request resuming a turn), so had no OnRequest.
+	NoNewMessages uint64 `json:"no_new_messages"`
 }
 
 // Stats returns the counters.
@@ -549,7 +555,7 @@ func (c *Client) Stats() Stats {
 		Endpoint: c.cfg.Endpoint, Contract: c.cfg.Contract, Content: c.cfg.Content,
 		Queued: c.queued.Load(), Dropped: c.dropped.Load(), Delivered: c.delivered.Load(),
 		Failed: c.failed.Load(), Decided: c.decided.Load(), DecideFailed: c.decideFailed.Load(),
-		Unparsed: c.unparsed.Load(), UnparsedReasons: c.unparsedReasons(),
+		Unparsed: c.unparsed.Load(), UnparsedReasons: c.unparsedReasons(), NoNewMessages: c.noNew.Load(),
 	}
 }
 

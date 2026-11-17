@@ -5,7 +5,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
   "data": [
     {
       "prompt": {
-        "durationMs": 60000.0,
+        "durationMs": 2.0,
         "friction": {
           "destructive": 0,
           "frustrated": false,
@@ -16,10 +16,10 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
         "index": 1,
         "promptId": "p1",
         "steps": 1,
-        "t": "2026-11-04T18:00:00Z",
+        "t": "2026-11-04T18:00:30Z",
         "text": {
-          "chars": 42,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -35,8 +35,8 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
         {
           "agentType": null,
           "commands": [],
-          "costUsd": 0.25,
-          "does": "text",
+          "costUsd": null,
+          "does": "exec",
           "durationMs": 2.0,
           "eventsPending": false,
           "exitCodes": [],
@@ -53,7 +53,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
             "accuracy": "exact",
             "cacheRead": 100000,
             "cacheWrite": 1000,
-            "cacheWrite1h": 1000,
+            "cacheWrite1h": null,
             "cacheWrite5m": null,
             "input": 3,
             "output": 100
@@ -62,19 +62,19 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
             {
               "command": null,
               "destructive": null,
-              "durationMs": 120.0,
+              "durationMs": null,
               "exitCode": null,
               "fileType": null,
               "mcpServer": null,
               "name": "Bash",
               "program": null,
-              "resultBytes": 512,
+              "resultBytes": null,
               "status": "ok",
               "target": null,
-              "toolUseId": "toolu_0001_0"
+              "toolUseId": null
             }
           ],
-          "ttftMs": 900.0,
+          "ttftMs": null,
           "usageMissing": null
         }
       ],
@@ -93,10 +93,10 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
         "index": 2,
         "promptId": "p2",
         "steps": 1,
-        "t": "2026-11-04T18:03:00Z",
+        "t": "2026-11-04T18:03:10Z",
         "text": {
-          "chars": 42,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -113,7 +113,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
           "costUsd": null,
           "does": "text",
           "durationMs": null,
-          "eventsPending": true,
+          "eventsPending": false,
           "exitCodes": [],
           "kind": "model",
           "model": null,
@@ -133,22 +133,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
             "input": null,
             "output": null
           },
-          "tools": [
-            {
-              "command": null,
-              "destructive": null,
-              "durationMs": null,
-              "exitCode": null,
-              "fileType": null,
-              "mcpServer": null,
-              "name": "Bash",
-              "program": null,
-              "resultBytes": null,
-              "status": "running",
-              "target": null,
-              "toolUseId": null
-            }
-          ],
+          "tools": [],
           "ttftMs": null,
           "usageMissing": "streamCut"
         }

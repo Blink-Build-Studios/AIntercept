@@ -48,8 +48,7 @@ const ready = (detail: Detail, raw: Raw = rawNormal.data): Args => ({ detail: re
 
 /** A captured model call. */
 export const Normal: Story = { args: ready(normal.data) };
-/** Reported by Claude Code, never seen by the proxy: Raw has nothing. */
-/** The connection failed; Claude Code retried. */
+/** The connection failed. */
 export const Failed: Story = { args: ready(failed.data, rawFailed.data) };
 /** Experimentation mode: bodies are kept (opens on Raw). */
 export const Retained: Story = { args: { ...ready(retained.data, rawRetained.data), initialTab: "raw" } };

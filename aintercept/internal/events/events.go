@@ -378,6 +378,11 @@ func (e *Event) ExtractDeferred() {
 			e.ReasoningTokens = u.ReasoningTokens
 		}
 	}
+	// A rejected call says why: the provider's error, unless the call already
+	// has its own (a denial, a disconnect).
+	if e.Status >= 400 && e.Error == "" && len(resp) > 0 && respEnc == "" {
+		e.Error = APIError(resp)
+	}
 	// Consumer chat apps: runs last so the model that served a ChatGPT turn
 	// replaces the "auto" its request named.
 	e.applyWebChat(e.Path, e.rawReq, resp, respEnc)

@@ -3,10 +3,10 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
-    "activeMs": 40002.0,
+    "activeMs": 2.0,
     "agent": "claude-code",
     "branch": null,
-    "bypassPct": 100.0,
+    "bypassPct": null,
     "capabilities": [
       "bypass",
       "missed",
@@ -36,22 +36,17 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
-    "costUsd": 0.25,
-    "coverage": {
-      "captured": 1,
-      "notCaptured": 0,
-      "reported": 1,
-      "windows": []
-    },
+    "costUsd": null,
+    "coverage": null,
     "device": {
       "deviceId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "platform": "darwin",
-      "shell": "zsh",
-      "terminal": "iTerm.app"
+      "platform": null,
+      "shell": null,
+      "terminal": null
     },
     "effort": null,
     "end": null,
-    "events": 8,
+    "events": null,
     "facts": null,
     "fieldsMissing": false,
     "friction": {
@@ -68,7 +63,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "live": true,
     "modelCalls": 2,
     "networks": null,
-    "notCaptured": 0,
+    "notCaptured": null,
     "origin": null,
     "outcome": {
       "commits": 0,
@@ -84,7 +79,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "prompts": 2,
     "repo": null,
     "sessionId": "11111111-1111-4111-8111-111111111111",
-    "start": "2026-11-04T18:00:00Z",
+    "start": "2026-11-04T18:00:30Z",
     "tokens": {
       "accuracy": "estimated",
       "cacheRead": 100000,
@@ -94,11 +89,18 @@ const sample: components["schemas"]["SessionResponse"] = {
       "input": 3,
       "output": 100
     },
-    "toolCalls": null,
+    "toolCalls": 1,
     "turns": 2,
     "turnsInterrupted": 0,
     "work": {
-      "commands": [],
+      "commands": [
+        {
+          "failed": 0,
+          "lastExit": null,
+          "program": null,
+          "runs": 1
+        }
+      ],
       "commits": 0,
       "editTypes": {},
       "editedFiles": null,

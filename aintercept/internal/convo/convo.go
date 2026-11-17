@@ -35,6 +35,9 @@ const (
 	// system reminder, an interrupted request, its environment). Not the
 	// user's words.
 	RoleSystem Role = "system"
+	// RoleUnspecified: the wire doesn't say whose the message is (an item
+	// with no role, a role AIntercept doesn't know). ROLE_UNSPECIFIED.
+	RoleUnspecified Role = ""
 )
 
 // Kind is what a Part holds.
@@ -46,6 +49,11 @@ const (
 	KindToolCall   Kind = "tool_call"   // the model asks to run a tool
 	KindToolResult Kind = "tool_result" // what the tool returned
 	KindOpaque     Kind = "opaque"      // reasoning, encrypted content: present, never inspectable
+	// KindToolAdded is a tool the harness adds to the conversation's catalog
+	// mid-session (Claude Code's tool_addition block, in a system message):
+	// Name is the tool. Like the request's tool catalog, its definition isn't
+	// inspectable, and it can't be replaced.
+	KindToolAdded Kind = "tool_added"
 )
 
 // DefaultInlineLimit is the size over which a part's content goes by
@@ -98,12 +106,13 @@ type Part struct {
 	MediaType string // KindMedia: image/png, application/pdf, … ("" when the request doesn't say)
 	URL       string // KindMedia sent by reference (a URL or a file id): no bytes in the body
 	CallID    string // KindToolCall, KindToolResult, and KindMedia inside a tool result
-	Name      string // KindToolCall: the tool
+	Name      string // KindToolCall, KindToolAdded: the tool
 	Arguments string // KindToolCall: its arguments as JSON (a custom tool's free-form input as a JSON string). Empty when Ref.
 	IsError   bool   // KindToolResult: the client marked it an error
 
 	// Size is the content's size in bytes: the text (UTF-8), the arguments, the
-	// media's decoded bytes. For KindOpaque, the size of its bytes in Body.
+	// media's decoded bytes. For KindOpaque and KindToolAdded, the size of its
+	// bytes in Body.
 	Size int
 	// Ref: the content is over the inline limit, so Text and Arguments are left
 	// empty and Preview holds its start. Content still returns all of it.
@@ -118,7 +127,8 @@ type Part struct {
 	content string // the full content: text, arguments, or media (base64 when b64)
 	b64     bool
 	// pre and post wrap the content in the body: the harness's words around
-	// the user's (Claude Code's mid-turn note). A Replace keeps them.
+	// the user's (Claude Code's mid-turn note, its image placeholders). A
+	// Replace keeps them.
 	pre, post string
 }
 
@@ -302,7 +312,7 @@ func (b *builder) add(role Role, span Span, parts ...Part) {
 // fill sets a part's inline content, or makes it a reference when the
 // content is over the limit.
 func (b *builder) fill(p Part) Part {
-	if p.Kind == KindOpaque || p.content == "" {
+	if p.Kind == KindOpaque || p.Kind == KindToolAdded || p.content == "" {
 		return p
 	}
 	if p.Size > b.limit {
@@ -332,7 +342,7 @@ func (b *builder) userText(s string, span Span) (Part, Role) {
 	if harnessNote(s) {
 		return b.text(s, span), RoleSystem
 	}
-	if pre, words, post, ok := midTurn(s); ok {
+	if pre, words, post, ok := wrapped(s); ok {
 		p := b.text(words, span)
 		p.pre, p.post = pre, post
 		return p, RoleUser
@@ -340,25 +350,57 @@ func (b *builder) userText(s string, span Span) (Part, Role) {
 	return b.text(s, span), RoleUser
 }
 
-// harnessNotes are how the harness's own notes in a user's turn begin:
-// Claude Code's system reminders, interrupted requests, and its title and
-// next-prompt suggestion requests; Codex's environment and instructions.
-var harnessNotes = []string{"<system-reminder", "[Request interrupted by user", "<session>", "[SUGGESTION MODE:",
-	"<environment_context>", "<user_instructions>", "<permissions instructions>"}
+// HarnessNotes are how the harness's own notes in a user's turn begin, by
+// what the wire shows. Claude Code: system reminders, interrupted requests,
+// its title and next-prompt suggestion requests, a bash-mode command's output
+// (the command the user typed, <bash-input>, is theirs), a skill's body, a
+// slash command's output and caveat (the command, <command-name>, is the
+// user's). Codex: its environment, instructions and aborted turns. What the
+// user pastes (<pasted_content>) is theirs. This is the one list of the
+// harness's markers: the pipeline names a turn's typed parts by it too
+// (records/said.go), so the pipeline and the Interceptor agree on who's speaking.
+var HarnessNotes = []string{"<system-reminder", "[Request interrupted by user", "<session>", "[SUGGESTION MODE:",
+	"<bash-stdout>", "<bash-stderr>", "Base directory for this skill:",
+	"<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat>",
+	"<environment_context>", "<user_instructions>", "<permissions instructions>", "<turn_aborted>"}
 
-func harnessNote(s string) bool {
+// MidTurnNote names another sender's mid-turn note (an agent's, not the user's);
+// ImageNote, a text of image placeholders alone.
+const (
+	MidTurnNote = "mid-turn"
+	ImageNote   = "[Image #"
+)
+
+// Notes that say something about the turn they're in: the harness says the
+// turn before was interrupted (Claude Code's note, Codex's <turn_aborted>), or
+// the request is a side request for the session's title or a suggested next
+// prompt.
+var (
+	InterruptNotes = []string{"[Request interrupted by user", "<turn_aborted>"}
+	TitleNote      = "<session>"
+	SuggestionNote = "[SUGGESTION MODE:"
+)
+
+// Note is the harness note text s begins with: one of HarnessNotes,
+// MidTurnNote, or "" for none.
+func Note(s string) string {
 	t := strings.TrimSpace(s)
-	for _, h := range harnessNotes {
+	for _, h := range HarnessNotes {
 		if strings.HasPrefix(t, h) {
-			return true
+			return h
 		}
 	}
-	// Another sender's mid-turn note (an agent's, not the user's).
 	if i := strings.Index(t, " sent a message while you were working:"); i > 0 && i < 80 && !strings.HasPrefix(t, "The user ") {
-		return true
+		return MidTurnNote
 	}
-	return false
+	// Image placeholders alone: the harness's labels for the image blocks.
+	if n := imagePlaceholders(t); n > 0 && n == len(t) {
+		return ImageNote
+	}
+	return ""
 }
+
+func harnessNote(s string) bool { return Note(s) != "" }
 
 // Claude Code's note for a message the user sends while it's working: the
 // user's words between a lead line and a trailing paragraph.
@@ -367,18 +409,46 @@ const (
 	midTurnTrail = "\n\nThis is how Claude Code surfaces messages the user sends mid-turn"
 )
 
-// midTurn splits Claude Code's mid-turn note into its wrapper and the user's
-// words.
-func midTurn(s string) (pre, words, post string, ok bool) {
-	if !strings.HasPrefix(s, midTurnLead) {
-		return "", "", "", false
+// wrapped splits the harness's wrapper from the user's words: Claude Code's
+// mid-turn note, or the image placeholders ([Image #2]) it puts ahead of the
+// words for the image blocks beside them. A placeholder inside the words is
+// where the user put it, and stays theirs.
+func wrapped(s string) (pre, words, post string, ok bool) {
+	if rest, ok := strings.CutPrefix(s, midTurnLead); ok {
+		i := strings.Index(rest, midTurnTrail)
+		if i < 0 {
+			return midTurnLead, rest, "", true
+		}
+		return midTurnLead, rest[:i], rest[i:], true
 	}
-	rest := s[len(midTurnLead):]
-	i := strings.Index(rest, midTurnTrail)
-	if i < 0 {
-		return midTurnLead, rest, "", true
+	if n := imagePlaceholders(s); n > 0 {
+		return s[:n], s[n:], "", true
 	}
-	return midTurnLead, rest[:i], rest[i:], true
+	return "", "", "", false
+}
+
+// imagePlaceholders is the length of the run of Claude Code's image
+// placeholders ("[Image #2] ") s begins with, the spaces after each included
+// (0: none).
+func imagePlaceholders(s string) int {
+	n := 0
+	for {
+		rest, ok := strings.CutPrefix(s[n:], "[Image #")
+		if !ok {
+			return n
+		}
+		d := 0
+		for d < len(rest) && rest[d] >= '0' && rest[d] <= '9' {
+			d++
+		}
+		if d == 0 || d >= len(rest) || rest[d] != ']' {
+			return n
+		}
+		n += len("[Image #") + d + 1
+		for n < len(s) && (s[n] == ' ' || s[n] == '\n') {
+			n++
+		}
+	}
 }
 
 func (b *builder) toolCall(id, name, args string, span Span) Part {

@@ -8,7 +8,7 @@ const sample: components["schemas"]["RequestResponse"] = {
     "contentRetained": false,
     "crossCheck": {
       "costAgrees": null,
-      "matched": true
+      "matched": false
     },
     "durationMs": 1853.6,
     "keyStrip": {
@@ -16,7 +16,7 @@ const sample: components["schemas"]["RequestResponse"] = {
       "cost": {
         "basis": "api-equivalent",
         "estimatedCalls": 0,
-        "usd": 0.36944540000000003
+        "usd": null
       },
       "effort": "medium",
       "model": "claude-opus-5-5",
@@ -29,16 +29,16 @@ const sample: components["schemas"]["RequestResponse"] = {
         "accuracy": "exact",
         "cacheRead": 26827,
         "cacheWrite": 45169,
-        "cacheWrite1h": 45169,
-        "cacheWrite5m": 0,
+        "cacheWrite1h": null,
+        "cacheWrite5m": null,
         "input": 2,
         "output": 136
       },
       "toolCalls": [
         "Artifact"
       ],
-      "ttftMs": 1185.0,
-      "ttftSource": "client",
+      "ttftMs": null,
+      "ttftSource": "proxy",
       "usageMissing": null
     },
     "kind": "normal",
@@ -47,7 +47,7 @@ const sample: components["schemas"]["RequestResponse"] = {
     "notice": null,
     "path": "/v1/messages?beta=true",
     "prevRequestId": null,
-    "promptIndex": 28,
+    "promptIndex": 19,
     "received": [
       {
         "body": null,

@@ -6,20 +6,15 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
     {
       "agent": "claude-code",
       "branch": null,
-      "bypassPct": 100.0,
+      "bypassPct": null,
       "capturedFromPrompt": null,
       "children": null,
       "client": "cli",
       "clientVersion": "2.1.308",
       "commit": null,
-      "coverage": {
-        "captured": 3,
-        "notCaptured": 0,
-        "reported": 3,
-        "windows": []
-      },
-      "end": "2026-11-04T09:03:05Z",
-      "events": 7,
+      "coverage": null,
+      "end": "2026-11-04T09:03:00Z",
+      "events": null,
       "fieldsMissing": false,
       "friction": {
         "destructive": 0,
@@ -37,13 +32,13 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "prompts": 1,
       "repo": null,
       "sessionId": "11111111-1111-4111-8111-111111111111",
-      "start": "2026-11-04T09:00:00Z"
+      "start": "2026-11-04T09:01:00Z"
     }
   ],
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:03:05Z",
+    "lastDataAt": "2026-11-04T09:03:00Z",
     "page": 1,
     "pageSize": 20,
     "to": null,

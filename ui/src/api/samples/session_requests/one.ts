@@ -20,7 +20,7 @@ const sample: components["schemas"]["SessionRequestsResponse"] = {
       "method": "POST",
       "model": "claude-opus-5-5",
       "path": "/v1/messages?beta=true",
-      "promptIndex": null,
+      "promptIndex": 1,
       "requestId": "observer-test-0-1",
       "retries": null,
       "sessionId": "11111111-1111-4111-8111-111111111111",

@@ -4,15 +4,13 @@ their types and colors (zero counts) until their traffic has a data shape.
 Accounts with the same email are one person: one row (handoff §11J.5)."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
-from aintercept_api.models.common import Agent, Coverage, CoverageWindow
+from aintercept_api.models.common import Agent
 from aintercept_api.models.people import (
     ActivityDay,
     PersonSummaryRow,
     TraceShape,
 )
-from aintercept_api.rows import dt
 
 ACTIVITY_DAYS = 14
 # AgentCard order, and how each agent's work is shaped (handoff §1.1).
@@ -22,7 +20,7 @@ SHAPES: dict[Agent, TraceShape] = {
     "chatgpt": "conversations→messages",
     "claude-ai": "conversations→messages",
 }
-UNATTRIBUTED_REASON = "No account id on any of its model calls or analytics events."
+UNATTRIBUTED_REASON = "No account id on any of its model calls."
 
 
 def activity(days: dict[str, int], now: datetime) -> list[ActivityDay]:
@@ -32,18 +30,6 @@ def activity(days: dict[str, int], now: datetime) -> list[ActivityDay]:
         ActivityDay(day=d, count=days.get(d, 0))
         for d in ((today - timedelta(days=i)).isoformat() for i in range(ACTIVITY_DAYS - 1, -1, -1))
     ]
-
-
-def coverage(row: dict[str, Any]) -> Coverage | None:
-    """Reported, captured and missed calls over the rollup's sessions with analytics; None without any."""
-    if not row["with_events"]:
-        return None
-    return Coverage(
-        reported=row["reported"],
-        captured=row["reported"] - row["missed"],
-        notCaptured=row["missed"],
-        windows=[CoverageWindow(from_=dt(a), to=dt(b), count=n) for a, b, n in row["windows"]],
-    )
 
 
 # The People page's rows' sessions: each row's (person_map's directory members'), less those
@@ -68,15 +54,10 @@ WHERE session_id IN (SELECT session_id FROM person_sessions WHERE person_id = ?)
 
 
 def _headline(agent: str, rows: list[PersonSummaryRow]) -> dict[str, float | int | None]:
-    """An agent card's headline (handoff §11L.1): Claude Code's missed calls and bypass share,
-    Codex's highest weekly limit; None where the agent has no such field or no data yet."""
+    """An agent card's headline (handoff §11L.1): Codex's highest weekly limit; None where the agent has no
+    such field or no data yet (Claude Code's missed calls and bypass share were its analytics')."""
     out: dict[str, float | int | None] = {"missedCalls": None, "bypassPct": None, "highestWeekPct": None}
-    if agent == "claude-code":
-        covs = [r.coverage for r in rows if r.coverage and r.coverage.reported is not None]
-        out["missedCalls"] = sum(c.notCaptured for c in covs) if covs else None
-        pcts = [r.bypassPct for r in rows if r.bypassPct is not None]
-        out["bypassPct"] = round(sum(pcts) / len(pcts), 1) if pcts else None
-    elif agent == "codex":
+    if agent == "codex":
         weeks = [
             w.usedPct
             for r in rows

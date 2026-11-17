@@ -1,4 +1,5 @@
-"""/overview and /people (handoff §5.2.1, §5.2.2): the People page."""
+"""/overview and /people (handoff §5.2.1, §5.2.2): the People page. Claude Code's analytics stay in the raw
+files: its missed calls, bypass share and coverage are null."""
 
 from tests.builders import ACCOUNT, ClaudeCode, load_fixture
 from tests.test_session import error_on_query
@@ -62,8 +63,8 @@ def test_overview_one(dataset, pg_client_for, write_sample):
         "sessions": 1,
         "tokenAccuracy": "exact",
         "shape": "sessions→prompts→steps",
-        "missedCalls": 0,
-        "bypassPct": 100.0,
+        "missedCalls": None,
+        "bypassPct": None,
         "highestWeekPct": None,
     }
 
@@ -89,16 +90,6 @@ def test_overview_unattributed(dataset, pg_client_for, write_sample):
     assert r.json()["data"]["people"] == 1
 
 
-def test_overview_coverage_gap(dataset, pg_client_for, write_sample):
-    cc = person(dataset, S1)
-    for minute in (10, 12, 14):
-        cc.reported(f"2026-11-04T09:{minute}:00", f"req_bypassed_{minute}")
-    client = pg_client_for(dataset)
-    r = client.get("/api/v1/overview")
-    write_sample(client, r, "coverage_gap")
-    assert r.json()["data"]["notCaptured"] == 3
-
-
 def test_overview_error(dataset, pg_client_for, write_sample, monkeypatch):
     client = pg_client_for(dataset, raise_server_exceptions=False)
     error_on_query(client, monkeypatch)
@@ -121,15 +112,14 @@ def test_people_one(dataset, pg_client_for, write_sample):
     r = client.get("/api/v1/people")
     write_sample(client, r, "one")
     (p,) = r.json()["data"]
-    assert p["personId"] == ACCOUNT and p["accountIdShort"] == "0000…acc1" and p["orgIdShort"] == "0000…00a9"
+    assert p["personId"] == ACCOUNT and p["accountIdShort"] == "0000…acc1" and p["orgIdShort"] is None
     assert (p["sessions"], p["prompts"], p["devices"], p["tokensOut"], p["tokensAccuracy"]) == (1, 1, 1, 300, "exact")
-    assert p["agents"] == ["claude-code"] and p["live"] is False and p["lastSeenAt"] == "2026-11-04T09:03:05Z"
-    assert p["bypassPct"] == 100.0 and p["linkedBy"] is None and p["name"] is None
-    assert p["coverage"] == {"reported": 3, "captured": 3, "notCaptured": 0, "windows": []}
+    assert p["agents"] == ["claude-code"] and p["live"] is False and p["lastSeenAt"] == "2026-11-04T09:03:00Z"
+    assert p["bypassPct"] is None and p["linkedBy"] is None and p["name"] is None and p["coverage"] is None
     assert len(p["activity"]) == 14 and p["activity"][-1] == {"day": "2026-11-04", "count": 3}
     assert sum(d["count"] for d in p["activity"]) == 3 and p["activity"][0]["day"] == "2026-10-22"
     assert p["agentInfo"] == [
-        {"agent": "claude-code", "version": "2.1.308", "firstSeenAt": "2026-11-04T09:00:00Z", "devices": 1}
+        {"agent": "claude-code", "version": "2.1.308", "firstSeenAt": "2026-11-04T09:01:00Z", "devices": 1}
     ]
 
 
@@ -178,7 +168,7 @@ def test_overview_demo(dataset, pg_client_for, write_sample):
     write_sample(client, r, "demo")
     o = r.json()["data"]
     # The window's activity (§8, difference 4): its one session, active on three days, counts once.
-    assert (o["people"], o["activeNow"], o["sessions"], o["notCaptured"]) == (1, 1, 1, 95)
+    assert (o["people"], o["activeNow"], o["sessions"], o["notCaptured"]) == (1, 1, 1, 0)
 
 
 def test_people_demo(dataset, pg_client_for, write_sample):
@@ -187,8 +177,8 @@ def test_people_demo(dataset, pg_client_for, write_sample):
     r = client.get("/api/v1/people")
     write_sample(client, r, "demo")
     (p,) = r.json()["data"]
-    assert p["personId"] == DEMO_ACCOUNT and p["live"] is True and p["bypassPct"] == 99.7
-    assert p["coverage"]["notCaptured"] == 95 and p["agentInfo"][0]["agent"] == "claude-code"
+    assert p["personId"] == DEMO_ACCOUNT and p["live"] is True and p["bypassPct"] is None
+    assert p["coverage"] is None and p["agentInfo"][0]["agent"] == "claude-code"
     assert p["sessions"] == 1  # one session, active on three days: counted once
 
 

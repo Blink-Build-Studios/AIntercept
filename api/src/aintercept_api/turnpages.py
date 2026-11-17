@@ -2,10 +2,12 @@
 the rollups that hold it and shaped here.
 
 - /sessions/{id}/turns: a page of the session's turns (`prompt_items`' prompts in range, by seq) with each
-  turn's `prompts` row (its work, end and cost) and `steps` (each step's work kind, program and server, by
-  which consecutive steps group, and its work), and for a Codex thread its subagent threads (`session_edges`
+  turn's `prompts` row (its work and end; interrupted when it stopped on one or the next prompt says so)
+  and `steps` (numbered at read by (t_ns, ord); each step's work kind, program and server, by which
+  consecutive steps group, and its work), and for a Codex thread its subagent threads (`session_edges`
   and their `sessions` rows).
-- The session header's turns, active time, cost, work, head range and last test: its `sessions` row.
+- The session header's turns, active time and work: its `sessions` row (cost, the head range and the last
+  test were analytics': null).
 - The timeline's Turns lane: the session's `prompts` (one block each, prompt to last step); the Work lane:
   the work key rows (`w:*`) of `session_minute_keys` (bins under an hour) or `session_keys`.
 - /people/{id}/work: the person's `sessions` rows in range, grouped by repo; their work, turns and active
@@ -32,7 +34,7 @@ from aintercept_api.models.turns import (
     WorkGroup,
     WorkKind,
 )
-from aintercept_api.models.work import LastTest, OutcomeFacts, TurnBlock, WorkBin
+from aintercept_api.models.work import OutcomeFacts, TurnBlock, WorkBin
 from aintercept_api.reader import Snapshot
 from aintercept_api.rows import dt, session_row_from_table
 
@@ -45,13 +47,12 @@ _TURN_AT = """SELECT count(*) FROM prompt_items
 WHERE session_id = %(sid)s AND type = 'prompt' AND t_ns BETWEEN %(lo)s AND %(hi)s
   AND seq < (SELECT min(seq) FROM prompt_items WHERE session_id = %(sid)s AND type = 'prompt'
              AND t_ns BETWEEN %(lo)s AND %(hi)s AND prompt_index = %(n)s)"""
-_TURNS = """SELECT i.seq, i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, i.pasted_bytes, i.images,
-    p.has_input, p.text, p.text_chars, p.frustrated, p.steps, p.unfinished_max_ns, p.turn_end_ns, p.tokens_in,
-    p.tokens_out, p.interrupted, p.destructive, p.turn_report, p.ended_ns, p.cost_usd, p.work, p.product
+_TURNS = f"""SELECT i.seq, i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, p.text, p.text_chars, p.steps,
+    p.unfinished_max_ns, p.tokens_in, p.tokens_out, p.interrupted OR {sp.NEXT_FOLLOWS_INTERRUPT} AS interrupted,
+    p.ended_ns, p.work, p.product
 FROM prompt_items i JOIN prompts p ON p.prompt_id = i.prompt_id AND p.session_id = i.session_id
 WHERE i.session_id = %(sid)s AND i.type = 'prompt' AND i.t_ns BETWEEN %(lo)s AND %(hi)s
-ORDER BY i.seq LIMIT %(n)s OFFSET %(skip)s"""
-_STEPS = """SELECT * FROM steps WHERE session_id = %(sid)s AND prompt_id = ANY(%(pids)s) ORDER BY prompt_id, step"""
+ORDER BY i.seq LIMIT %(n)s OFFSET %(skip)s"""  # noqa: S608 (fixed text)
 # A Codex thread's subagent threads, each under the parent's turn that was running when it started (the
 # parent's last turn to start by then).
 _THREADS = """SELECT s.session_id, s.origin, s.model_calls, s.work, s.tokens_input, s.tokens_cache_read,
@@ -82,7 +83,7 @@ def _group_key(s: Row) -> tuple[str, str | None, str | None]:
 
 
 def _exits(s: TurnStep) -> list[int]:
-    """A step's commands' exit codes: Claude Code's analytics per tool call, else the recorded results."""
+    """A step's commands' exit codes: its tool calls', else the recorded results."""
     got = [t.exitCode for t in s.tools if t.command is not None and t.exitCode is not None]
     return got or list(s.exitCodes)
 
@@ -92,14 +93,14 @@ def _opt_sum(xs: Sequence[int | None]) -> int | None:
     return sum(known) if known else None
 
 
-def groups(rows: list[Row], live: bool, now: int, last_event: int | None) -> list[WorkGroup]:
+def groups(rows: list[Row], live: bool, now: int) -> list[WorkGroup]:
     """A thread's steps (its rows, in order) as WorkGroups: consecutive steps with the same kind, program and
     server. A finished turn's last step with no tool is its reply."""
     out = []
     keyed = [(_group_key(r), r) for r in rows]
     for (kind, program, server), run in itertools.groupby(keyed, key=lambda x: x[0]):
         rs = [r for _, r in run]
-        steps = [TurnStep(**dict(sp._step(r, live, now, last_event)), step=r["step"]) for r in rs]
+        steps = [TurnStep(**dict(sp.step_data(r, live, now)), step=r["step"]) for r in rs]
         ends = [r["end_ns"] for r in rs]
         patched = [p.file for s in steps for p in s.patches]
         texts = [s.text for s in steps if s.text]
@@ -127,13 +128,13 @@ def _ctx(r: Row) -> int | None:
     return sum(x or 0 for x in parts) or None
 
 
-def _subagents(rows: list[Row], live: bool, now: int, last_event: int | None) -> list[SubagentRow]:
+def _subagents(rows: list[Row], live: bool, now: int) -> list[SubagentRow]:
     """Claude Code's subagents in a turn: its subagent steps by subagent (its id, else its type)."""
     by: dict[str | None, list[Row]] = defaultdict(list)
     for r in rows:
         by[r["agent_id"] or r["agent_type"]].append(r)
     out = []
-    for rs in sorted(by.values(), key=lambda rs: (rs[0]["t_ns"], rs[0]["step"])):
+    for rs in sorted(by.values(), key=lambda rs: (rs[0]["t_ns"], rs[0]["ord"])):
         out.append(
             SubagentRow(
                 agentId=rs[0]["agent_id"],
@@ -143,7 +144,7 @@ def _subagents(rows: list[Row], live: bool, now: int, last_event: int | None) ->
                 work=wk.turn_work(wk.from_pieces(p for r in rs for p in r["work_pieces"])),
                 tokensIn=_opt_sum([_ctx(r) for r in rs]),
                 tokensOut=_opt_sum([r["tokens_output"] for r in rs]),
-                groups=groups(rs, live, now, last_event),
+                groups=groups(rs, live, now),
             )
         )
     return out
@@ -196,9 +197,8 @@ class TurnReads:
         ps = self.snap.dicts("turns", _TURNS, {**span, "n": size, "skip": (page - 1) * size})
         s = self.sessions.stored(sid) or {}
         live = self.sessions._live(sid, now)
-        last_event = s.get("prompt_event_last_ns")
         steps: dict[str, list[Row]] = defaultdict(list)
-        for r in self.snap.dicts("turn_steps", _STEPS, {"sid": sid, "pids": [p["prompt_id"] for p in ps]}):
+        for r in self.snap.dicts("turn_steps", sp.STEPS, {"sid": sid, "pids": [p["prompt_id"] for p in ps]}):
             steps[r["prompt_id"]].append(r)
         threads: dict[str, list[SubagentRow]] = defaultdict(list)
         if s.get("product") == "codex":
@@ -211,7 +211,6 @@ class TurnReads:
             main = [r for r in rs if r["kind"] != "subagent"]
             running = sp._in_flight(p, live, now)
             ended = None if running else _ended(p, rs)
-            codex = p["product"] == "codex"
             out.append(
                 TurnRow(
                     promptId=p["prompt_id"],
@@ -224,13 +223,11 @@ class TurnReads:
                     steps=p["steps"],
                     tokensIn=p["tokens_in"],
                     tokensOut=p["tokens_out"],
-                    costUsd=None if codex else p["cost_usd"],
-                    friction=PromptFriction(
-                        frustrated=p["frustrated"], interrupted=p["interrupted"], destructive=p["destructive"]
-                    ),
+                    costUsd=None,
+                    friction=PromptFriction(frustrated=False, interrupted=bool(p["interrupted"]), destructive=0),
                     work=wk.turn_work(p["work"]),
-                    groups=_with_reply(groups(main, live, now, last_event), running),
-                    subagents=_subagents([r for r in rs if r["kind"] == "subagent"], live, now, last_event)
+                    groups=_with_reply(groups(main, live, now), running),
+                    subagents=_subagents([r for r in rs if r["kind"] == "subagent"], live, now)
                     + threads.get(p["prompt_id"], []),
                 )
             )
@@ -286,16 +283,16 @@ def work_bins(rows: dict[int, list[tuple[str, str, int]]], steps: dict[int, int]
 
 
 def outcome(s: Row) -> OutcomeFacts:
-    """A session's OutcomeSlot facts: its `sessions` row."""
+    """A session's OutcomeSlot facts: its `sessions` row's work (the head range and the last test were
+    Claude Code's analytics: null)."""
     w = wk.add([s.get("work")])
-    test = s.get("last_test")
     return OutcomeFacts(
         commits=w["commits"],
-        headFrom=s.get("head_from"),
-        headTo=s.get("head_to"),
+        headFrom=None,
+        headTo=None,
         editedFiles=w["editedFiles"],
         editTypes=w["editTypes"],
-        lastTest=LastTest(program=test["program"], exitCode=test["exit"], t=dt(test["t"])) if test else None,
+        lastTest=None,
         pushes=w["pushes"],
         prs=w["prs"],
     )
@@ -344,7 +341,7 @@ def _work_row(r: Row) -> SessionWorkRow:
         live=row.live,
         label=row.label,
         turns=int(r["turns"] or 0),
-        capturedFromPrompt=row.capturedFromPrompt,
+        capturedFromPrompt=None,
         activeMs=(r["active_ns"] or 0) / 1e6,
         work=wk.turn_work(r["work"]),
         friction=row.friction,

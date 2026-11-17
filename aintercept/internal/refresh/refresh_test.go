@@ -36,19 +36,14 @@ func call(id, s string, at int64) records.Record {
 	}}
 }
 
-// ev is a Claude Code event of session s at `at`: name with metadata.
+// ev is a Claude Code analytics event of session s at `at`: name with
+// metadata. Analytics events aren't loaded (docs/PIPELINE.md §3.2): a test
+// writes them to show they change nothing.
 func ev(batch string, n int64, s string, at int64, name, md string) records.Record {
 	id := fmt.Sprintf("%s-%d", batch, n)
 	return records.Record{Kind: records.KindClientEvent, BatchID: batch, BatchN: n, BatchCCN: n, Call: &canon.Request{KeyHash: "kh1"},
 		Event: &canon.Event{EventKey: batch + "/" + id, CorrelationID: batch, RowNS: at, NS: at, Seq: n,
-			Source: canon.ProductClaudeCode, Name: name, ClientEventID: id, SessionID: s, MetadataJSON: md}}
-}
-
-// rep is a report (tengu_api_success) of request rid.
-func rep(batch string, n int64, s string, at int64, rid string) records.Record {
-	r := ev(batch, n, s, at, "tengu_api_success", fmt.Sprintf(`{"requestId":%q,"costUSD":0.5,"cache_creation_5m_input_tokens":"7"}`, rid))
-	r.Event.RequestID = rid
-	return r
+			Source: canon.ProductClaudeCode, Name: name, ClientEventID: id, SessionID: s, PromptID: "p-" + s, MetadataJSON: md}}
 }
 
 // --- Postgres -----------------------------------------------------------------------------------
@@ -152,35 +147,30 @@ func TestSessionMinute(t *testing.T) {
 	title.Call.HiddenKind = "title"
 	count := call("n", "s", t0+4e9)
 	count.Call.Path = "/v1/messages/count_tokens"
-	post := call("post", "", t0+5e9) // an analytics post scoped to s by its batch
-	post.Call.Path, post.BatchSession = "/api/event_logging/batch", "s"
+	post := call("post", "s", t0+5e9) // an analytics post: a call like any other
+	post.Call.Path = "/api/event_logging/batch"
 	other := call("o", "s", t0+minute) // the next minute
 	write(t, db, a, b, title, count, post, other,
-		rep("B", 1, "s", t0+6e9, "req-a"),
-		rep("B", 2, "s", t0+7e9, "req-gone"), // no call: missed
-		ev("B", 3, "s", t0+8e9, "tengu_input_prompt", `{"is_negative":"true","cc_prompt_id":"p1"}`),
-		ev("B", 4, "s", t0+9e9, "tengu_cancel", `{}`),
-		ev("B", 5, "s", t0+10e9, "tengu_bash_tool_command_executed",
-			`{"destructive_category":"rm_force","destructive_target_scope":"outside_cwd","bash_argv0":"rm"}`),
-		ev("B", 6, "s", t0+11e9, "tengu_api_query", `{"permissionMode":"bypassPermissions"}`),
-		ev("B", 7, "s", t0+12e9, "tengu_api_query", `{"permissionMode":"default"}`),
-		ev("B", 8, "s", t0+13e9, "tengu_tool_use_success", `{"toolName":"Bash","preToolHookDurationMs":" 4.5 "}`),
-		ev("B", 9, "s", t0+14e9, "tengu_tool_use_progress", `{}`), // internal
+		ev("B", 1, "s", t0+6e9, "tengu_api_success", `{"requestId":"req-a","costUSD":0.5}`),
+		ev("B", 2, "s", t0+8e9, "tengu_input_prompt", `{"is_negative":"true"}`),
+		ev("B", 3, "s", t0+9e9, "tengu_cancel", `{}`),
 	)
 	drain(t, db)
 	m := row(t, db, "SELECT * FROM session_minutes WHERE session_id = 's' AND minute_ns = $1", t0)
 	expect(t, m, map[string]any{
-		"model_calls": 2, "main_calls": 1, "subagent_calls": 1, "hidden_calls": 1, "unreported": 1,
+		"model_calls": 2, "main_calls": 1, "subagent_calls": 1, "hidden_calls": 1,
 		"input_tokens": 10, "cache_read_tokens": 20, "cache_write_tokens": nil, "output_tokens": 5, "outputs_known": 1,
 		"context_sum": 30, "tool_calls": 4,
-		"events": 9, "events_shown": 8, "frustrated": 1, "interrupted": 1, "destructive": 1, "outside_cwd": 1,
-		"queries": 2, "bypassed": 1, "reported": 2, "missed": 1,
-		"hook_ms_sum": 4.5, "hook_ms_n": 1, "cache_5m": 14, "cache_1h": nil, "cost_usd": 1.0,
 		"requests":        map[string]any{"model/kh1": float64(2), "count/kh1": float64(1), "analytics/kh1": float64(1)},
 		"requests_hidden": map[string]any{"model/kh1": float64(1)},
 	})
+	for _, gone := range []string{"events", "unreported", "missed", "cost_usd", "frustrated"} {
+		if _, ok := m[gone]; ok {
+			t.Errorf("session_minutes still has %s (analytics)", gone)
+		}
+	}
 	h := row(t, db, "SELECT * FROM session_hours WHERE session_id = 's' AND hour_ns = $1", t0)
-	expect(t, h, map[string]any{"model_calls": 3, "output_tokens": 10, "events": 9, "missed": 1,
+	expect(t, h, map[string]any{"model_calls": 3, "output_tokens": 10,
 		"requests": map[string]any{"model/kh1": float64(3), "count/kh1": float64(1), "analytics/kh1": float64(1)}})
 	checkScratch(t, db)
 }
@@ -211,23 +201,10 @@ func TestSessionKeys(t *testing.T) {
 	db := fresh(t)
 	c := call("a", "s", t0)
 	c.Call.ToolUsesJSON = `[{"kind":"mcp","server":"gh","tool":"pr"},{"kind":"builtin","tool":"Bash"}]`
-	head := ev("B", 4, "s", t0+4e9, "tengu_git_operation", `{"operation":"commit"}`)
-	head.Event.HeadSHA = "abc"
-	write(t, db, c,
-		ev("B", 1, "s", t0+1e9, "tengu_tool_use_success", `{"toolName":"mcp__gh__list","isMcp":true}`),
-		ev("B", 2, "s", t0+2e9, "tengu_tool_use_success", `{"toolName":"Read","isMcp":false}`),
-		ev("B", 3, "s", t0+3e9, "tengu_run_hook", `{"hookName":"pre"}`),
-		head,
-		ev("B", 5, "s", t0+5e9, "tengu_input_prompt", `{}`),
-		ev("B", 6, "s", t0+6e9, "tengu_session_linked_to_pr", `{"prNumber":12}`),
-		ev("B", 7, "s", t0+2*minute, "tengu_run_hook", `{"hookName":"pre"}`),     // another minute of the hour
-		ev("B", 8, "s", t0+7e9, "tengu_tool_use_success", `{"toolName":"Glob"}`), // no isMcp: a built-in tool
-	)
+	d := call("b", "s", t0+2*minute) // another minute of the hour, its tool calls recorded
+	d.Call.DetailJSON = `{"calls":[{"id":"t1","tool":"Read","file":"a.go"},{"id":"t2","tool":"Bash","commands":["git commit"]}]}`
+	write(t, db, c, d, ev("B", 1, "s", t0+1e9, "tengu_run_hook", `{"hookName":"pre"}`))
 	drain(t, db)
-	var minuteHooks int
-	if err := db.QueryRow(ctx(t), "SELECT n FROM session_minute_keys WHERE session_id = 's' AND minute_ns = $1 AND kind = 'hook'", t0).Scan(&minuteHooks); err != nil || minuteHooks != 1 {
-		t.Errorf("minute t0's hook count %d (%v), want 1", minuteHooks, err)
-	}
 	rows, err := db.Query(ctx(t), "SELECT kind || ' ' || key || ' ' || n FROM session_keys WHERE session_id = 's' AND hour_ns = $1 ORDER BY 1", t0)
 	if err != nil {
 		t.Fatal(err)
@@ -239,49 +216,14 @@ func TestSessionKeys(t *testing.T) {
 		got = append(got, s)
 	}
 	want := []string{
-		"batch B 8", "call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 1",
-		"event_builtin Glob 1", "event_builtin Read 1", `event_mcp ["gh", "mcp__gh__list"] 1`, "git commit 1", "head abc 1", "hook pre 2",
-		fmt.Sprintf("input_prompt input:%d 1", t0+5e9), "ip 10.0.0.1 1", "mcp_tool mcp__gh__list 1",
-		"name tengu_git_operation 1", "name tengu_input_prompt 1", "name tengu_run_hook 2",
-		"name tengu_session_linked_to_pr 1", "name tengu_tool_use_success 3", "pr 12 1", "tool Glob 1", "tool Read 1",
-		// The work the hour's events show (work.go workItems): a commit, an MCP call, PR #12, two reads.
-		"w:commit  1", "w:mcp gh 1", "w:pr 12 1", "w:read  2",
+		"call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 2", "ip 10.0.0.1 2",
+		// The work its steps' tool calls show (prompts.go stepItems): an MCP call and a Bash call
+		// (content-free), a read of a.go and a git commit (recorded).
+		"w:commit  1", "w:mcp gh 1", "w:read go 1", "w:read_file a.go 1", "w:run  1", "w:run git commit 1",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("keys:\n got %q\nwant %q", got, want)
 	}
-	checkScratch(t, db)
-}
-
-// A report that came before its call stops being missed once the call
-// arrives; a call stops being unreported once its report arrives.
-func TestMissedAndUnreportedFollowLateArrivals(t *testing.T) {
-	db := fresh(t)
-	write(t, db, rep("B", 1, "s", t0+10*minute, "req-a"))
-	drain(t, db)
-	missed := func() (n int) {
-		db.QueryRow(ctx(t), "SELECT count(*) FROM missed_reports WHERE session_id = 's'").Scan(&n)
-		return
-	}
-	if missed() != 1 {
-		t.Fatal("the report isn't missed before its call")
-	}
-	write(t, db, call("a", "s", t0)) // its call, ten minutes earlier
-	drain(t, db)
-	if n := missed(); n != 0 {
-		t.Errorf("%d missed after the call came", n)
-	}
-	m := row(t, db, "SELECT unreported, missed FROM session_hours WHERE session_id = 's' AND hour_ns = $1", t0)
-	expect(t, m, map[string]any{"unreported": 0, "missed": 0})
-
-	write(t, db, call("b", "s", t0+minute))
-	drain(t, db)
-	expect(t, row(t, db, "SELECT unreported FROM session_minutes WHERE session_id = 's' AND minute_ns = $1", t0+minute),
-		map[string]any{"unreported": 1})
-	write(t, db, rep("C", 1, "s", t0+30*minute, "req-b"))
-	drain(t, db)
-	expect(t, row(t, db, "SELECT unreported FROM session_minutes WHERE session_id = 's' AND minute_ns = $1", t0+minute),
-		map[string]any{"unreported": 0})
 	checkScratch(t, db)
 }
 
@@ -462,11 +404,10 @@ func TestConcurrentWorkers(t *testing.T) {
 	r := rand.New(rand.NewSource(1))
 	for i := 0; i < 60; i++ {
 		at := t0 + int64(r.Intn(60))*minute + int64(i)
-		rs := []records.Record{call(fmt.Sprintf("c%d", i), "s", at)}
-		if i%3 == 0 {
-			rs = append(rs, rep(fmt.Sprintf("B%d", i), 1, "s", at+int64(r.Intn(120))*minute, fmt.Sprintf("req-c%d", i-3)))
-		}
-		write(t, db, rs...)
+		c := call(fmt.Sprintf("c%d", i), "s", at)
+		c.Call.PromptID = fmt.Sprintf("p%d", i%4) // four prompts, their steps refreshed by both workers
+		c.Call.DetailJSON = fmt.Sprintf(`{"calls":[{"id":"tu%d","tool":"Bash","commands":["go test"]}],"results":{"tu%d":{"exit":[%d]}}}`, i, i-1, i%2)
+		write(t, db, c)
 	}
 	close(stop)
 	wg.Wait()
@@ -510,28 +451,54 @@ func TestStaleClaimIsTakenAgain(t *testing.T) {
 	expect(t, row(t, db, "SELECT model_calls FROM session_minutes WHERE session_id = 's'"), map[string]any{"model_calls": 1})
 }
 
-// Loaded in any order, with refreshes in between, the rollups equal the facts
-// from scratch.
-func TestShuffledLoadsEqualScratch(t *testing.T) {
+// corpus is three sessions' calls, their starts and ends apart: prompts of
+// several steps (some subagents'), recorded tool calls whose results a later
+// call carries back (one a later prompt's), a turn after an interrupt, a
+// title side request, and analytics events (not loaded).
+func corpus() []records.Record {
 	var rs []records.Record
 	for s := 0; s < 3; s++ {
 		sid := fmt.Sprintf("s%d", s)
 		for c := 0; c < 20; c++ {
 			at := t0 + int64(c)*7*minute + int64(s)
 			x := call(fmt.Sprintf("%s-c%d", sid, c), sid, at)
-			if c%5 == 0 {
+			x.Call.PromptID = fmt.Sprintf("%s-p%d", sid, c/6)
+			switch {
+			case c%5 == 0:
 				x.Call.HiddenKind = "title"
+			case c%4 == 1:
+				x.Call.RequestClass = "subagent"
 			}
+			cmd := []string{"go test", "npm test", "git commit"}[c%3]
+			detail := fmt.Sprintf(`{"calls":[{"id":"%s-t%d","tool":"Bash","commands":[%q]},{"id":"%s-r%d","tool":"Read","file":"f%d.go"}]`,
+				sid, c, cmd, sid, c, c%4)
+			if c > 0 {
+				detail += fmt.Sprintf(`,"results":{"%s-t%d":{"exit":[%d]},"%s-r%d":{"error":true}}`, sid, c-1, c%3, sid, c-1)
+			}
+			if c%6 == 0 {
+				detail += fmt.Sprintf(`,"said":[{"role":"user","text":"turn %d"}],"prompt":"turn %d","promptChars":%d`, c, c, 6+len(fmt.Sprint(c)))
+				if c == 12 {
+					detail += `,"interrupted":true`
+				}
+			}
+			x.Call.DetailJSON = detail + "}"
 			st := x
 			st.Kind, st.Call = records.KindCallStart, &canon.Request{CallID: x.CallID, CorrelationID: x.CallID, SessionID: sid,
-				StartNS: at, Host: x.Call.Host, Path: x.Call.Path, Method: "POST", Product: x.Call.Product, KeyHash: "kh1"}
+				PromptID: x.Call.PromptID, StartNS: at, Host: x.Call.Host, Path: x.Call.Path, Method: "POST", Product: x.Call.Product, KeyHash: "kh1"}
 			rs = append(rs, st, x)
 			if c%2 == 0 {
-				rs = append(rs, rep("B"+sid, int64(c+1), sid, at+int64(c)*minute, "req-"+x.CallID))
+				rs = append(rs, ev("B"+sid, int64(c+1), sid, at+int64(c)*minute, "tengu_tool_use_success", `{"toolName":"Edit"}`))
 			}
 		}
-		rs = append(rs, rep("B"+sid, 100, sid, t0+5*minute, "req-nothing"))
 	}
+	return rs
+}
+
+// Loaded in any order, with refreshes in between, the rollups (each step
+// refreshed alone and added to its prompt) equal the facts from scratch (each
+// prompt computed from all its calls at once).
+func TestShuffledLoadsEqualScratch(t *testing.T) {
+	rs := corpus()
 	for seed := int64(1); seed <= 3; seed++ {
 		shuffled := append([]records.Record(nil), rs...)
 		rand.New(rand.NewSource(seed)).Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
@@ -591,12 +558,12 @@ func TestSweepClosesOpenCallsInDataTime(t *testing.T) {
 func TestRetainDeletesOldFactsAndRollups(t *testing.T) {
 	db := fresh(t)
 	now := time.Unix(0, t0+20*24*hourNS)
-	write(t, db, call("old", "s", t0), rep("B", 1, "s", t0, "req-x"), call("new", "s", now.UnixNano()-hourNS))
+	write(t, db, call("old", "s", t0), ev("B", 1, "s", t0, "tengu_api_success", `{}`), call("new", "s", now.UnixNano()-hourNS))
 	drain(t, db)
 	if _, err := Retain(ctx(t), db, 15, now); err != nil {
 		t.Fatal(err)
 	}
-	for table, want := range map[string]int{"calls": 1, "events": 0, "missed_reports": 0, "session_minutes": 1, "session_hours": 1,
+	for table, want := range map[string]int{"calls": 1, "session_minutes": 1, "session_hours": 1,
 		"session_minute_keys": 2, "session_keys": 2, "cred_minutes": 1, "cred_hours": 1} {
 		var n int
 		db.QueryRow(ctx(t), "SELECT count(*) FROM "+table).Scan(&n)
@@ -618,84 +585,75 @@ func TestLagCoversDirtyRows(t *testing.T) {
 	}
 }
 
-// TestRefreshCostIsFlat times the refresh a flush causes (100 events, 5 model
-// calls and their reports landing in the session's newest minute and prompt:
-// its minute, hour and credential rows, its prompt, the session and its
-// account's day) when the session already has 1,000 events, then 50,000
-// (docs/PIPELINE.md §9: flat). A prompt holds 500 events and 25 calls (the
-// capture's busiest session has one prompt per ~320 events), so the session's
-// prompts grow from 2 to 100. A refresh reads one minute's facts, an hour's 60
-// minute rows, one prompt's calls and events, and the session's hours and
-// prompts, never the session's facts. Timing: run on demand with
-// AINTERCEPT_REFRESH_COST=1.
+// TestRefreshCostIsFlat times the refresh one new call causes (its step, its
+// prompt's row, its minute, hour and credential rows, the session and its
+// account's day) in a prompt that already has 1,000 steps, then 25,000
+// (docs/PIPELINE.md §9: flat). Each step has recorded tool calls, and carries
+// back the previous one's results. A step refresh reads its own call and its
+// tool calls' results; its prompt's row reads the prompt's keys (its distinct
+// tools, files and commands) and a few indexed rows of its steps, never the
+// prompt's other steps. Timing: run on demand with AINTERCEPT_REFRESH_COST=1.
 func TestRefreshCostIsFlat(t *testing.T) {
 	if os.Getenv("AINTERCEPT_REFRESH_COST") == "" {
 		t.Skip("set AINTERCEPT_REFRESH_COST=1 to time refreshes")
 	}
 	db := fresh(t)
-	const perHour = 1000
-	n := 0 // events so far
-	names := []string{"tengu_tool_use_success", "tengu_api_query", "tengu_bash_tool_command_executed", "tengu_api_success"}
-	prompt := func(n int) string { return fmt.Sprintf("q%d", n/500) }
-	big := func(id string, at int64, p string) records.Record {
-		c := call(id, "big", at)
-		c.Call.PromptID, c.Call.PersonID = p, "acct"
+	n := 0 // steps so far
+	step := func(i int) records.Record {
+		c := call(fmt.Sprintf("g%06d", i), "big", t0+int64(i)*1e9)
+		c.Call.PromptID, c.Call.PersonID = "big-prompt", "acct"
+		c.Call.DetailJSON = fmt.Sprintf(`{"calls":[{"id":"t%d","tool":"Bash","commands":["go test","rg"]},{"id":"r%d","tool":"Read","file":"src/f%d.go"}],`+
+			`"results":{"t%d":{"exit":[%d]},"r%d":{}}}`, i, i, i%200, i-1, i%2, i-1)
 		return c
 	}
 	grow := func(to int) {
 		for n < to {
 			var rs []records.Record
 			for i := 0; i < 1000 && n < to; i, n = i+1, n+1 {
-				at := t0 + int64(n/perHour)*hourNS + int64(n%perHour)*hourNS/perHour
-				name := names[n%len(names)]
-				if n%500 == 0 {
-					name = "tengu_input_prompt"
-				}
-				e := ev(fmt.Sprintf("G%d", n/100), int64(n%100+1), "big", at, name,
-					`{"toolName":"Bash","permissionMode":"default","bash_argv0":"ls","sandbox_enabled":false}`)
-				e.Event.PromptID, e.Event.RequestID = prompt(n), fmt.Sprintf("req-g%d", n-n%20) // a report names its call
-				e.Event.PersonID, e.Event.DeviceID, e.Event.EnvJSON = "acct", "dev", `{"platform":"linux","terminal":"tmux","shell":"zsh"}`
-				rs = append(rs, e)
-				if n%20 == 0 {
-					rs = append(rs, big(fmt.Sprintf("g%d", n), at, prompt(n)))
-				}
+				rs = append(rs, step(n))
 			}
 			write(t, db, rs...)
+			drain(t, db)
 		}
-		drain(t, db)
 		if _, err := db.Exec(ctx(t), "ANALYZE"); err != nil { // as autovacuum keeps a live database's statistics
 			t.Fatal(err)
 		}
 	}
 	timed := func() time.Duration {
 		var best time.Duration
-		for k := 0; k < 3; k++ {
-			last := t0 + int64((n-1)/perHour)*hourNS + int64((n-1)%perHour)*hourNS/perHour // the newest event's minute
-			var rs []records.Record
-			for i := 0; i < 100; i++ {
-				e := ev(fmt.Sprintf("T%d-%d", n, k), int64(i+1), "big", last, names[i%len(names)], `{"toolName":"Read"}`)
-				e.Event.PromptID = prompt(n - 1)
-				rs = append(rs, e)
-			}
-			for i := 0; i < 5; i++ {
-				id := fmt.Sprintf("t%d-%d-%d", n, k, i)
-				rs = append(rs, big(id, last, prompt(n-1)), rep(fmt.Sprintf("R%d-%d-%d", n, k, i), 1, "big", last, "req-"+id))
-			}
-			write(t, db, rs...)
+		var kinds map[string]time.Duration
+		for k := 0; k < 5; k++ {
+			write(t, db, step(n))
+			n++
 			start := time.Now()
-			drain(t, db)
+			byKind := map[string]time.Duration{}
+			for {
+				claims, err := ClaimRows(ctx(t), db, 100)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(claims) == 0 {
+					break
+				}
+				for _, c := range claims {
+					s := time.Now()
+					refreshAndRelease(t, db, c)
+					byKind[c.Kind] += time.Since(s)
+				}
+			}
 			if d := time.Since(start); best == 0 || d < best {
-				best = d
+				best, kinds = d, byKind
 			}
 		}
+		t.Logf("at %d steps: %v by kind", n, kinds)
 		return best
 	}
 	grow(1000)
 	at1k := timed()
-	grow(50000)
-	at50k := timed()
-	t.Logf("refresh after a flush: %v at 1,000 events in the session, %v at 50,000", at1k, at50k)
-	if at50k > 3*at1k {
-		t.Errorf("a refresh in a 50,000-event session took %v, %v at 1,000", at50k, at1k)
+	grow(25000)
+	at25k := timed()
+	t.Logf("refresh after one new call: %v at 1,000 steps in the prompt, %v at 25,000", at1k, at25k)
+	if at25k > 3*at1k {
+		t.Errorf("a refresh in a 25,000-step prompt took %v, %v at 1,000", at25k, at1k)
 	}
 }

@@ -15,20 +15,20 @@ describe("groupLine (handoff §11R, CompTurns: title, then types or paths, steps
     expect(turn.groups.map((g) => [g.kind, groupLine(g).title])).toEqual([
       ["read", "Read 2 files"],
       ["edit", "Edited 1 file"],
-      ["run", "Ran npm test ×2"],
+      ["run", "Ran commands ×2"], // no program without content
       ["reply", "Reply"],
     ]);
   });
 
   it("puts file types (metadata) or paths (content) before steps and time", () => {
     const read = turn.groups[0];
-    expect(read && groupLine(read).meta).toMatch(/^\.ts ×2 · 2 steps · /);
+    expect(read && groupLine(read).meta).toMatch(/^2 steps · /); // no file types without content
     const edit = { ...(turn.groups[1] as NonNullable<(typeof turn.groups)[1]>), paths: ["src/auth/cache.ts", "src/auth/refresh.ts"] };
     expect(groupLine(edit).meta).toBe("src/auth/cache.ts, src/auth/refresh.ts · 1 step");
   });
 
-  it("names MCP servers, web use and spawns", () => {
-    expect(subagents.data[0]?.groups.map((g) => groupLine(g).title)).toEqual(["MCP linear-server ×1", expect.stringMatching(/^(Searched|Fetched)/), "Spawned 1 subagent"]);
+  it("names other tools, web use and spawns", () => {
+    expect(subagents.data[0]?.groups.map((g) => groupLine(g).title)).toEqual(["Used 1 tool", expect.stringMatching(/^(Searched|Fetched)/), "Spawned 1 subagent"]);
   });
 
   it("types read as `.ts ×5`, most first", () => {
@@ -40,7 +40,7 @@ describe("groupLine (handoff §11R, CompTurns: title, then types or paths, steps
 describe("turnView", () => {
   it("numbers steps as the API does and keeps a command group's exit codes", () => {
     const v = turnView(turn);
-    expect(v.groups[2]?.exits).toEqual([1, 0]);
+    expect(v.groups[2]?.exits).toEqual([]); // exit codes need content
     expect(v.groups[0]?.steps.map((s) => s.label)).toEqual(["step 1", "step 2"]);
   });
 
@@ -57,7 +57,7 @@ describe("turnView", () => {
   });
 
   it("asks with the prompt's size without content, its text with it", () => {
-    expect(askedText(turn)).toEqual({ text: "212 chars", recorded: false });
+    expect(askedText(turn)).toEqual({ text: "—", recorded: false }); // its size needs content
     expect(askedText({ asked: { retained: true, text: "fix it", chars: 6, images: 0, pastedBytes: null } })).toEqual({ text: "“fix it”", recorded: true });
   });
 

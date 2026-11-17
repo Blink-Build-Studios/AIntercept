@@ -13,4 +13,3 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = { args: { detail: normal.data, details: details.data } };
-/** Not captured: only Claude Code's own report exists. */

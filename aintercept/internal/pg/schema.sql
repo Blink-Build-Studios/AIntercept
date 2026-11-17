@@ -77,9 +77,6 @@ CREATE TABLE calls (
     client_request_id text,
     message_id text,
     parent_message_id text,
-    batch_events integer,
-    batch_name text,
-    batch_other_sessions jsonb,
     raw_key text,
     raw_offset bigint,
     raw_len bigint
@@ -95,55 +92,6 @@ CREATE INDEX ON calls (parent_message_id);
 CREATE INDEX ON calls (start_ns) WHERE end_ns IS NULL;
 CREATE INDEX ON calls (start_ns) WHERE NOT synthetic;
 
--- An event's environment, stored once: keyed by the sha256 of its canonical JSON (jsonb's
--- text), so equal environments share a row.
-CREATE TABLE event_envs (
-    env_hash bytea PRIMARY KEY,
-    env jsonb NOT NULL
-);
-
--- §3.2 One row per analytics event, keyed <source>/<client event id> where the client sends
--- one, else as canon keys it (corr/h<hash>). A resent batch lands on the same rows.
-CREATE TABLE events (
-    event_key text PRIMARY KEY,
-    batch_call_id text NOT NULL,
-    batch_n integer NOT NULL,
-    batch_cc_n integer,
-    session_id text,
-    prompt_id text,
-    prompt_index bigint,
-    request_id text,
-    client_request_id text,
-    tool_use_id text,
-    device_id text,
-    account_id text,
-    org_id text,
-    agent_id text,
-    agent_type text,
-    key_hash text,
-    source text NOT NULL,
-    name text,
-    type text,
-    client_event_id text,
-    model text,
-    permission_mode text,
-    head_sha text,
-    ts_ns bigint NOT NULL,
-    row_ns bigint NOT NULL,
-    seq bigint NOT NULL,
-    metadata jsonb,
-    env_hash bytea REFERENCES event_envs,
-    summary text NOT NULL,
-    internal boolean NOT NULL,
-    marker text
-);
-CREATE INDEX ON events (session_id, ts_ns);
-CREATE INDEX ON events (session_id, name, ts_ns);
-CREATE INDEX ON events (request_id);
-CREATE INDEX ON events (client_request_id);
-CREATE INDEX ON events (tool_use_id);
-CREATE INDEX ON events (batch_call_id, batch_n);
-
 -- §3.3 Identity. Each value with an _ns column is the newest sighting that says it (the greater
 -- value at the same time); first_ns and last_ns are the earliest and latest.
 CREATE TABLE accounts (
@@ -154,8 +102,6 @@ CREATE TABLE accounts (
     name_ns bigint,
     org text,
     org_ns bigint,
-    plan text,
-    plan_ns bigint,
     codex_plan text,
     codex_plan_ns bigint,
     seen_ns bigint NOT NULL
@@ -181,13 +127,6 @@ CREATE TABLE session_credentials (
 CREATE TABLE account_devices (
     account_id text NOT NULL,
     device_id text NOT NULL,
-    on_events boolean NOT NULL,
-    platform text,
-    platform_ns bigint,
-    terminal text,
-    terminal_ns bigint,
-    shell text,
-    shell_ns bigint,
     agent text,
     agent_ns bigint,
     version text,
@@ -224,14 +163,12 @@ CREATE INDEX ON dirty (since);
 -- §5.5 Retention deletes facts by time: block-range indexes, nearly free to keep (rows arrive
 -- roughly in time order).
 CREATE INDEX ON calls USING brin (start_ns);
-CREATE INDEX ON events USING brin (ts_ns);
 
 -- §5.2 Rollups, written only by the refresher (internal/refresh), each row recomputed from the
 -- facts (or a lower rollup) for one dirty key. Times are UTC minute and hour starts in ns.
 
--- A session's minute: its visible model calls (cc_calls) by start, else end; its Claude Code
--- events; its reports and those not captured; its Requests tab rows (by scope_session_id) per
--- kind. A NULL sum had nothing to add (as today's marks: a zero token count is NULL).
+-- A session's minute: its visible model calls (cc_calls) by start, else end, and its Requests
+-- tab rows (by scope_session_id) per kind. A NULL sum had nothing to add (as today's marks: a zero token count is NULL).
 CREATE TABLE session_minutes (
     session_id text NOT NULL,
     minute_ns bigint NOT NULL,
@@ -239,7 +176,6 @@ CREATE TABLE session_minutes (
     main_calls bigint NOT NULL,
     subagent_calls bigint NOT NULL,
     hidden_calls bigint NOT NULL,
-    unreported bigint NOT NULL,
     input_tokens bigint,
     cache_read_tokens bigint,
     cache_write_tokens bigint,
@@ -247,22 +183,6 @@ CREATE TABLE session_minutes (
     outputs_known bigint NOT NULL,
     context_sum bigint,
     tool_calls bigint,
-    events bigint NOT NULL,
-    events_shown bigint NOT NULL,
-    frustrated bigint NOT NULL,
-    interrupted bigint NOT NULL,
-    destructive bigint NOT NULL,
-    outside_cwd bigint NOT NULL,
-    queries bigint NOT NULL,
-    bypassed bigint NOT NULL,
-    reported bigint NOT NULL,
-    missed bigint NOT NULL,
-    hook_ms_sum double precision,
-    hook_ms_n bigint NOT NULL,
-    cache_5m bigint,
-    cache_1h bigint,
-    cost_usd double precision,
-    custom_ca bigint NOT NULL,
     requests jsonb NOT NULL,
     requests_hidden jsonb NOT NULL,
     PRIMARY KEY (session_id, minute_ns)
@@ -276,7 +196,6 @@ CREATE TABLE session_hours (
     main_calls bigint NOT NULL,
     subagent_calls bigint NOT NULL,
     hidden_calls bigint NOT NULL,
-    unreported bigint NOT NULL,
     input_tokens bigint,
     cache_read_tokens bigint,
     cache_write_tokens bigint,
@@ -284,22 +203,6 @@ CREATE TABLE session_hours (
     outputs_known bigint NOT NULL,
     context_sum bigint,
     tool_calls bigint,
-    events bigint NOT NULL,
-    events_shown bigint NOT NULL,
-    frustrated bigint NOT NULL,
-    interrupted bigint NOT NULL,
-    destructive bigint NOT NULL,
-    outside_cwd bigint NOT NULL,
-    queries bigint NOT NULL,
-    bypassed bigint NOT NULL,
-    reported bigint NOT NULL,
-    missed bigint NOT NULL,
-    hook_ms_sum double precision,
-    hook_ms_n bigint NOT NULL,
-    cache_5m bigint,
-    cache_1h bigint,
-    cost_usd double precision,
-    custom_ca bigint NOT NULL,
     requests jsonb NOT NULL,
     requests_hidden jsonb NOT NULL,
     PRIMARY KEY (session_id, hour_ns)
@@ -326,19 +229,9 @@ CREATE TABLE session_keys (
     n bigint NOT NULL,
     PRIMARY KEY (session_id, hour_ns, kind, key)
 );
-
--- One per Claude Code report (tengu_api_success) whose session has no visible model call with
--- its request id or client request id.
-CREATE TABLE missed_reports (
-    event_key text PRIMARY KEY,
-    session_id text NOT NULL,
-    minute_ns bigint NOT NULL,
-    ts_ns bigint NOT NULL,
-    request_id text,
-    client_request_id text
-);
-CREATE INDEX ON missed_reports (session_id, ts_ns);
-CREATE INDEX ON missed_reports (session_id, minute_ns);
+-- A session's first and newest hour with a key: where its session refresh reads a newest value
+-- (kind 'has', refresh/sessions.go hasKeys).
+CREATE INDEX ON session_keys (session_id, kind, key, hour_ns);
 
 -- A credential's coding-agent calls (Claude Code's and Codex's, not probes) per minute and
 -- hour: n of them, n_tx the request log's transactions (a WebSocket's turns, not its
@@ -366,8 +259,6 @@ CREATE TABLE cred_hours (
 );
 CREATE INDEX ON cred_hours (hour_ns);
 
--- A prompt's events by name (its input, turn end, cancels, tools): what a prompt refresh reads.
-CREATE INDEX ON events (prompt_id, name);
 -- A session's calls with no prompt or a hidden kind (the Prompts page's call rows and hidden
 -- counts): what a session refresh reads, without the rest of the session's calls.
 CREATE INDEX ON calls (session_id, start_ns) WHERE prompt_id IS NULL OR hidden_kind IS NOT NULL;
@@ -387,49 +278,23 @@ CREATE INDEX ON calls USING gin ((detail -> 'calls') jsonb_path_ops) WITH (fastu
 -- in its first five minutes, by account and time.
 CREATE INDEX ON calls (account_id, start_ns) WHERE hidden_kind = 'title';
 
--- One per prompt of a session (process/promptrows.go rows): a tengu_input_prompt, or a prompt
--- id seen only on visible model calls; an input with no prompt id is keyed input:<batch>:<n>.
--- What the session's other prompts decide (its place, the Codex number, open tail, pastes and
--- images, hidden calls) is in prompt_items. turn_report is Codex's codex_turn_event.
-CREATE TABLE prompts (
-    prompt_id text NOT NULL,
-    session_id text NOT NULL,
-    t_ns bigint NOT NULL,
-    product text,
-    has_input boolean NOT NULL,
-    prompt_index bigint,
-    text_chars bigint,
-    frustrated boolean NOT NULL,
-    steps bigint NOT NULL,
-    unfinished_max_ns bigint,
-    turn_end_ns bigint,
-    text text,
-    tokens_in bigint,
-    tokens_out bigint,
-    tool_counts jsonb NOT NULL,
-    interrupted boolean NOT NULL,
-    destructive bigint NOT NULL,
-    turn_report jsonb,
-    -- The turn (handoff §11R): its last step's end (NULL while one is open), Claude Code's cost
-    -- estimate over its steps, and its work (refresh/work.go: TurnWork's JSON) from its events.
-    ended_ns bigint,
-    cost_usd double precision,
-    work jsonb,
-    PRIMARY KEY (prompt_id, session_id)
-);
-CREATE INDEX ON prompts (session_id);
--- A person's turns in a range (the header row's Active): their sessions' prompts by time.
-CREATE INDEX ON prompts (session_id, t_ns);
-
--- One per visible model call with a prompt, numbered within its prompt by (time, call id): a
--- step (process/promptrows.go step). end_ns is a real end (not the sweep's). reported is
--- whether a tengu_api_success names it; tools and tools_live are its tool events.
+-- A step (docs/PIPELINE.md §5.2): one per visible model call with a prompt, keyed by its call.
+-- A step's number in its prompt isn't stored: it's its place by (t_ns, ord), counted at read
+-- (ord is its call id with '#' written '~', compared byte-wise). end_ns is a real end (not the
+-- sweep's). Everything here is read from the call itself: its tool calls (tool_uses: names and
+-- counts; tool_counts by name), and with recorded content (detail) their commands, files and
+-- patches, and the exit codes or errors their results carry back in a later call, matched by tool
+-- call id.
+-- interrupted: the call stopped on an interrupt; follows_interrupt: its request carries the
+-- harness's note that the turn before it was interrupted. prompt_chars is set when its request's
+-- new messages say something (detail's said: the person's words and the harness's notes, typed):
+-- the length of the person's words (0 for none).
 CREATE TABLE steps (
+    call_id text PRIMARY KEY,
     prompt_id text NOT NULL,
     session_id text NOT NULL,
-    step bigint NOT NULL,
-    call_id text NOT NULL,
     t_ns bigint NOT NULL,
+    ord text COLLATE "C" NOT NULL,
     end_ns bigint,
     kind text NOT NULL,
     model text,
@@ -437,26 +302,21 @@ CREATE TABLE steps (
     tokens_input bigint,
     tokens_cache_read bigint,
     tokens_cache_write bigint,
-    tokens_cache_write_5m bigint,
-    tokens_cache_write_1h bigint,
     tokens_output bigint,
-    ttft_ms double precision,
     stop_reason text,
-    cost_usd double precision,
     failed boolean NOT NULL,
-    reported boolean NOT NULL,
     agent_type text,
     tools jsonb NOT NULL,
-    tools_live jsonb,
+    tool_counts jsonb NOT NULL,
     does text NOT NULL,
     commands text[] NOT NULL,
     exit_codes bigint[] NOT NULL,
-    content_live boolean NOT NULL,
-    commands_live text[] NOT NULL,
-    exit_codes_live bigint[] NOT NULL,
     patches jsonb NOT NULL,
     text text,
     usage_missing text,
+    interrupted boolean NOT NULL,
+    follows_interrupt boolean NOT NULL,
+    prompt_chars bigint,
     -- The step's work (handoff §11R): what it did (read, edit, run, web, mcp, spawn, tool, think),
     -- its first command's program or MCP server (a new group starts where these change), its
     -- subagent's id, and its pieces of work from its tool calls ([kind, key, n, exit], refresh/work.go).
@@ -464,14 +324,84 @@ CREATE TABLE steps (
     program text,
     server text,
     agent_id text,
-    work_pieces jsonb,
-    PRIMARY KEY (prompt_id, session_id, step)
+    work_pieces jsonb
 );
-CREATE INDEX ON steps (call_id);
+-- A prompt's steps in order (their numbers, counted at read; its first step), its open steps, its
+-- last end, and its first step that says the prompt: each an indexed LIMIT 1 or count.
+CREATE INDEX ON steps (prompt_id, session_id, t_ns, ord);
+CREATE INDEX ON steps (prompt_id, session_id, t_ns) WHERE end_ns IS NULL;
+CREATE INDEX ON steps (prompt_id, session_id, (coalesce(end_ns, t_ns)));
+CREATE INDEX ON steps (prompt_id, session_id, t_ns, ord) WHERE prompt_chars IS NOT NULL;
+-- A minute's steps (its work keys).
+CREATE INDEX ON steps (session_id, t_ns);
 
--- The Prompts page's list of a session (process/promptrows.go rows): its prompts in order
--- (their values in prompts) with the between rows (compactions, recaps, calls with no prompt)
--- interleaved. prompt_index is the prompt's number: its input's, or a Codex turn's place.
+-- What one step adds to its prompt, summed per (kind, key): s:steps, s:tokens_in, s:tokens_out,
+-- s:interrupted, s:follows_interrupt (n), tool (its tool calls by name) and its work pieces (w:…,
+-- refresh/work.go). For a w:run key, at/ord/i/exit are its last run (by the step's order, then its
+-- place in the step) and that run's exit code.
+CREATE TABLE step_keys (
+    call_id text NOT NULL,
+    prompt_id text NOT NULL,
+    session_id text NOT NULL,
+    kind text NOT NULL,
+    key text NOT NULL,
+    n bigint NOT NULL,
+    t_ns bigint NOT NULL,
+    ord text COLLATE "C" NOT NULL,
+    i bigint NOT NULL,
+    exit bigint,
+    PRIMARY KEY (call_id, kind, key)
+);
+-- A command's last run in a prompt (its last exit code): an indexed LIMIT 1.
+CREATE INDEX ON step_keys (prompt_id, session_id, kind, key, t_ns, ord, i) WHERE kind = 'w:run';
+
+-- A prompt's keys: its steps' step_keys summed (steps: how many steps have the key). A step's
+-- refresh adds what it adds now and takes away what it added before, so its prompt's row is
+-- recomputed from these (tens to a few hundred rows) and a few indexed lookups, never from the
+-- prompt's other steps.
+CREATE TABLE prompt_keys (
+    prompt_id text NOT NULL,
+    session_id text NOT NULL,
+    kind text NOT NULL,
+    key text NOT NULL,
+    steps bigint NOT NULL,
+    n bigint NOT NULL,
+    PRIMARY KEY (prompt_id, session_id, kind, key)
+);
+
+-- One per prompt of a session: a prompt id (Claude Code's prompt-id header, a Codex turn id) seen
+-- on its visible model calls, from its prompt_keys and a few lookups on its steps. Its time is its
+-- first step's. Its text is what its first main-class step's new messages say: the person's words
+-- (text, text_chars) and every piece typed (parts: [{role, note, text}], the harness's notes named
+-- by convo's markers). interrupted: a step stopped on an interrupt; follows_interrupt: a step's
+-- request says the turn before it was interrupted (a page marks that turn: the one before it).
+CREATE TABLE prompts (
+    prompt_id text NOT NULL,
+    session_id text NOT NULL,
+    t_ns bigint NOT NULL,
+    product text,
+    text_chars bigint,
+    steps bigint NOT NULL,
+    unfinished_max_ns bigint,
+    text text,
+    parts jsonb,
+    tokens_in bigint,
+    tokens_out bigint,
+    tool_counts jsonb NOT NULL,
+    interrupted boolean NOT NULL,
+    follows_interrupt boolean NOT NULL,
+    -- The turn (handoff §11R): its last step's end, and its work (refresh/work.go: TurnWork's JSON)
+    -- from its steps' tool calls.
+    ended_ns bigint,
+    work jsonb,
+    PRIMARY KEY (prompt_id, session_id)
+);
+CREATE INDEX ON prompts (session_id);
+-- A person's turns in a range (the header row's Active): their sessions' prompts by time.
+CREATE INDEX ON prompts (session_id, t_ns);
+
+-- The Prompts page's list of a session: its prompts in order (their values in prompts) with its
+-- visible calls with no prompt interleaved. prompt_index is the prompt's place.
 CREATE TABLE prompt_items (
     session_id text NOT NULL,
     seq bigint NOT NULL,
@@ -480,15 +410,10 @@ CREATE TABLE prompt_items (
     prompt_id text,
     prompt_index bigint,
     open_tail boolean NOT NULL,
-    pasted_bytes bigint,
-    images bigint,
     hidden jsonb,
     between_kind text,
     detail text,
     call_id text,
-    tokens_from bigint,
-    tokens_to bigint,
-    attempt_ns bigint,
     PRIMARY KEY (session_id, seq)
 );
 CREATE INDEX ON prompt_items (session_id, prompt_id);
@@ -496,9 +421,8 @@ CREATE INDEX ON prompt_items (session_id, prompt_id);
 -- seqs).
 CREATE INDEX ON prompt_items (session_id, t_ns);
 
--- One per session with a visible model call or a Claude Code event: today's session row
--- (process/sessionrows.go sessionRow). Sums from session_hours, distinct counts from
--- session_keys, coverage from missed_reports, newest values by index. limits is the newest
+-- One per session with a visible model call: its row. Sums from session_hours, distinct counts
+-- from session_keys, newest values by index. limits is the newest
 -- Codex response's x-codex-* headers (agents.codex_limits renders them).
 CREATE TABLE sessions (
     session_id text PRIMARY KEY,
@@ -516,26 +440,10 @@ CREATE TABLE sessions (
     repo text,
     commit text,
     prompts bigint,
-    captured_from_prompt bigint,
     model_calls bigint NOT NULL,
-    events bigint,
-    frustrated bigint NOT NULL,
-    interrupted bigint NOT NULL,
-    destructive bigint NOT NULL,
-    queries bigint NOT NULL,
-    bypassed bigint NOT NULL,
-    cov_reported bigint,
-    cov_captured bigint NOT NULL,
-    cov_not_captured bigint NOT NULL,
-    cov_window_from bigint[],
-    cov_window_to bigint[],
-    cov_window_count bigint[],
     fields_missing boolean NOT NULL,
     person_id text,
     device_id text,
-    device_platform text,
-    device_terminal text,
-    device_shell text,
     networks bigint,
     effort text,
     tokens_input bigint,
@@ -557,22 +465,13 @@ CREATE TABLE sessions (
     rl_util double precision,
     rl_overage text,
     rl_ns bigint,
-    sandbox text,
-    sandbox_ns bigint,
-    custom_ca boolean NOT NULL,
     unattributed boolean NOT NULL,
-    prompt_event_last_ns bigint,
     -- The turn ledger's header (handoff §11R): its turns (prompts rows), those interrupted, their
-    -- times summed (prompt to last step), Claude Code's cost estimate, its work from its session_keys
-    -- (TurnWork's JSON), the first and last head, and the last test program's run.
+    -- times summed (prompt to last step) and its work from its session_keys (TurnWork's JSON).
     turns bigint,
     turns_interrupted bigint,
     active_ns bigint,
-    cost_usd double precision,
-    work jsonb,
-    head_from text,
-    head_to text,
-    last_test jsonb
+    work jsonb
 );
 
 -- An account's activity in one UTC day, per agent (the directory's numbers, owner decision 2):
@@ -586,7 +485,6 @@ CREATE TABLE account_days (
     sessions bigint NOT NULL,
     session_ids text[] NOT NULL,
     call_session_ids text[] NOT NULL,
-    sessions_with_events bigint NOT NULL,
     prompts bigint NOT NULL,
     model_calls bigint NOT NULL,
     outputs_known bigint NOT NULL,
@@ -594,10 +492,6 @@ CREATE TABLE account_days (
     tokens_cache_read bigint,
     tokens_cache_write bigint,
     tokens_output bigint,
-    queries bigint NOT NULL,
-    bypassed bigint NOT NULL,
-    reported bigint NOT NULL,
-    missed bigint NOT NULL,
     first_ns bigint NOT NULL,
     last_ns bigint NOT NULL,
     -- The day's sessions' repos (the People page's Working on, handoff §11R).
@@ -625,4 +519,28 @@ CREATE INDEX ON sessions (start_ns) WHERE unattributed;
 CREATE INDEX ON cred_minutes (minute_ns);
 CREATE INDEX ON calls (start_ns) WHERE synthetic;
 CREATE INDEX ON calls (end_ns) WHERE start_ns IS NULL;
-CREATE INDEX ON calls (start_ns) WHERE detail IS NOT NULL;
+-- Whether any call kept its content (/status). Its predicate names the kind so the step refresh's
+-- lookup of a tool call's result (detail's results, by id) can't take it for a scan of every call
+-- with content: on the cluster it did, 22,933 rows per tool call, and a long turn's refresh never
+-- finished. That lookup uses the GIN index on detail's results.
+CREATE INDEX ON calls (start_ns) WHERE detail IS NOT NULL AND kind = 'model';
+
+-- Interceptor verdicts (docs/INTERCEPTOR_V2.md, "What's recorded"): one row per verdict a call's
+-- Interceptor returned (every answer other than a plain accept, and each error), keyed by its call
+-- and its record's sequence number. Written by the flush that writes the call; at most 1000 per call
+-- (the assembler drops the rest, counted).
+CREATE TABLE verdicts (
+    call_id text NOT NULL,
+    seq bigint NOT NULL,
+    ts_ns bigint NOT NULL,
+    callback text NOT NULL,
+    action text NOT NULL,
+    applied boolean NOT NULL,
+    mode text,
+    message_id text,
+    respond_mode text,
+    reason text,
+    annotations jsonb,
+    latency_ms bigint NOT NULL,
+    PRIMARY KEY (call_id, seq)
+);

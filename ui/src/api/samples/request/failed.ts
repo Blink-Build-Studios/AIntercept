@@ -43,7 +43,7 @@ const sample: components["schemas"]["RequestResponse"] = {
     "method": "POST",
     "nextRequestId": "observer-test-0-2",
     "notice": {
-      "body": "The request was sent but no response arrived: the connection failed after 0.6 s. Claude Code waited 1.2 s and sent the request again (tengu_api_retry, attempt 1); the retry succeeded.",
+      "body": "The request was sent but no response arrived: the connection failed after 0.6 s.",
       "title": "\u2715 connection reset by upstream",
       "tone": "neutral"
     },
@@ -62,14 +62,7 @@ const sample: components["schemas"]["RequestResponse"] = {
     ],
     "requestClass": "main",
     "requestId": "observer-test-0-1",
-    "retry": {
-      "attempt": 1,
-      "backoffMs": 1200.0,
-      "nextAt": "2026-11-04T09:03:10Z",
-      "nextRequestId": "observer-test-0-2",
-      "nextStatus": 200,
-      "of": 2
-    },
+    "retry": null,
     "sent": [
       {
         "body": null,
@@ -89,7 +82,7 @@ const sample: components["schemas"]["RequestResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:03:38Z",
+    "lastDataAt": "2026-11-04T09:03:37Z",
     "page": null,
     "pageSize": null,
     "to": null,
