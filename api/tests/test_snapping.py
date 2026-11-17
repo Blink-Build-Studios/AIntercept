@@ -83,7 +83,8 @@ def _shown(t: int) -> str:
 
 
 def _dataset(ds):
-    """S1 ended at 09:0x (unaligned times), S2 live at 18:0x (the frozen clock is 18:05:00)."""
+    """S1 ended at 09:0x (unaligned times), S2 live at 18:0x (the frozen clock is 18:05:00). A session's span is
+    its model calls' (its analytics events aren't kept)."""
     a = ClaudeCode(ds, S1)
     prompt(a, f"{H}:03:17.250", "p1", 1)
     a.call(f"{H}:03:21.5", prompt="p1")
@@ -244,7 +245,7 @@ def test_defaults_snap_too(spied):
     client, store = spied
     pid = _person(client)
     now = cc.to_ns(FROZEN_NOW)
-    s1_start = ns(f"{H}:03:17.250")
+    s1_start = ns(f"{H}:03:21.5")
     for page in ("session/state", "session/prompts", "session/events"):
         store.seen.clear()
         meta = client.get(RANGED[page]).json()["meta"]
@@ -263,7 +264,7 @@ def test_defaults_snap_too(spied):
 def test_a_live_sessions_default_end_is_nows_minute(spied):
     client, store = spied
     meta = client.get(f"/api/v1/sessions/{S2}/events").json()["meta"]
-    assert meta["from"] == "2026-11-04T18:01:00Z" and meta["to"] == "2026-11-04T18:05:59.999999Z", meta
+    assert meta["from"] == "2026-11-04T18:02:00Z" and meta["to"] == "2026-11-04T18:05:59.999999Z", meta
 
 
 def test_an_open_default_stays_open(spied):
@@ -282,7 +283,7 @@ def test_the_session_header_and_timeline_dont_snap(spied):
     # Their lanes cover every row: the timeline's from and to are the session's span, as stored.
     client, _ = spied
     meta = client.get(f"/api/v1/sessions/{S1}/timeline").json()["meta"]
-    assert meta["from"] == "2026-11-04T09:03:17.250000Z", meta
+    assert meta["from"] == "2026-11-04T09:03:21.500000Z", meta
     assert not meta["to"].endswith(":59.999999Z"), meta
     header = client.get(f"/api/v1/sessions/{S1}").json()["meta"]
     assert header.get("from") is None and header.get("to") is None, header

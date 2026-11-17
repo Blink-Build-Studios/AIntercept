@@ -3,71 +3,9 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["PersonTimelineResponse"] = {
   "data": {
-    "analytics": [
-      {
-        "count": 12,
-        "t": "2026-11-04T09:00:00Z",
-        "top": [
-          {
-            "count": 3,
-            "name": "tengu_api_query"
-          },
-          {
-            "count": 3,
-            "name": "tengu_api_success"
-          },
-          {
-            "count": 2,
-            "name": "tengu_bash_tool_command_executed"
-          }
-        ]
-      },
-      {
-        "count": 3,
-        "t": "2026-11-04T11:00:00Z",
-        "top": [
-          {
-            "count": 1,
-            "name": "tengu_api_query"
-          },
-          {
-            "count": 1,
-            "name": "tengu_api_success"
-          },
-          {
-            "count": 1,
-            "name": "tengu_input_prompt"
-          }
-        ]
-      }
-    ],
+    "analytics": [],
     "binSeconds": 300,
-    "friction": [
-      {
-        "count": 2,
-        "detail": "rm_recursive_force \u00b7 outside_cwd, rm_force",
-        "kind": "destructive",
-        "promptIndex": null,
-        "t": "2026-11-04T09:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "prompt flagged negative",
-        "kind": "frustrated",
-        "promptIndex": 4,
-        "t": "2026-11-04T09:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 4,
-        "t": "2026-11-04T09:00:00Z",
-        "tool": null
-      }
-    ],
+    "friction": [],
     "from": "2026-11-04T08:00:00Z",
     "modelCalls": [
       {
@@ -101,15 +39,15 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "now": null,
     "prompts": [
       {
-        "durationMs": null,
+        "durationMs": 120002.0,
         "index": 1,
         "promptId": "p1",
         "sessionId": "11111111-1111-4111-8111-111111111111",
         "steps": 3,
-        "t": "2026-11-04T09:00:00Z",
+        "t": "2026-11-04T09:01:00Z",
         "text": {
           "chars": null,
-          "images": 0,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -118,15 +56,15 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 300
       },
       {
-        "durationMs": null,
-        "index": 4,
-        "promptId": "q4",
+        "durationMs": 2.0,
+        "index": 1,
+        "promptId": "p1",
         "sessionId": "22222222-2222-4222-8222-222222222222",
         "steps": 1,
-        "t": "2026-11-04T09:01:30Z",
+        "t": "2026-11-04T09:02:00Z",
         "text": {
           "chars": null,
-          "images": 0,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -135,15 +73,32 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 100
       },
       {
-        "durationMs": null,
+        "durationMs": 2.0,
+        "index": 2,
+        "promptId": "q4",
+        "sessionId": "22222222-2222-4222-8222-222222222222",
+        "steps": 1,
+        "t": "2026-11-04T09:02:50Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 3,
+        "tokensOut": 100
+      },
+      {
+        "durationMs": 2.0,
         "index": 1,
         "promptId": "p1",
         "sessionId": "33333333-3333-4333-8333-333333333333",
         "steps": 1,
-        "t": "2026-11-04T11:00:00Z",
+        "t": "2026-11-04T11:01:00Z",
         "text": {
           "chars": null,
-          "images": 0,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -156,7 +111,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       {
         "branch": null,
         "capturedFromPrompt": null,
-        "end": "2026-11-04T09:03:05Z",
+        "end": "2026-11-04T09:03:00Z",
         "label": "Session 11111111",
         "live": false,
         "modelCalls": 3,
@@ -164,11 +119,11 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "repo": null,
         "row": 0,
         "sessionId": "11111111-1111-4111-8111-111111111111",
-        "start": "2026-11-04T09:00:00Z"
+        "start": "2026-11-04T09:01:00Z"
       },
       {
         "branch": null,
-        "capturedFromPrompt": 4,
+        "capturedFromPrompt": null,
         "end": "2026-11-04T09:02:55Z",
         "label": "Session 22222222",
         "live": false,
@@ -177,12 +132,12 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "repo": null,
         "row": 1,
         "sessionId": "22222222-2222-4222-8222-222222222222",
-        "start": "2026-11-04T09:01:30Z"
+        "start": "2026-11-04T09:02:00Z"
       },
       {
         "branch": null,
         "capturedFromPrompt": null,
-        "end": "2026-11-04T11:01:05Z",
+        "end": "2026-11-04T11:01:00Z",
         "label": "Session 33333333",
         "live": false,
         "modelCalls": 1,
@@ -190,51 +145,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "repo": null,
         "row": 0,
         "sessionId": "33333333-3333-4333-8333-333333333333",
-        "start": "2026-11-04T11:00:00Z"
+        "start": "2026-11-04T11:01:00Z"
       }
     ],
     "to": "2026-11-04T12:00:59.999999Z",
-    "work": [
-      {
-        "edits": 0,
-        "other": 2,
-        "steps": 6,
-        "t": "2026-11-04T09:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": null,
-              "runs": 2
-            }
-          ],
-          "commits": 0,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      }
-    ]
+    "work": []
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T08:00:00Z",
-    "lastDataAt": "2026-11-04T11:01:05Z",
+    "lastDataAt": "2026-11-04T11:01:00Z",
     "page": null,
     "pageSize": null,
     "to": "2026-11-04T12:00:59.999999Z",

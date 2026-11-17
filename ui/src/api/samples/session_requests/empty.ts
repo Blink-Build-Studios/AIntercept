@@ -8,7 +8,7 @@ const sample: components["schemas"]["SessionRequestsResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T12:00:00Z",
-    "lastDataAt": "2026-11-04T09:11:05Z",
+    "lastDataAt": "2026-11-04T09:10:30Z",
     "page": 1,
     "pageSize": 20,
     "to": null,

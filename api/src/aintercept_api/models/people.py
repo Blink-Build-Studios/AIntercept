@@ -458,8 +458,9 @@ class RequestRow(Model):
     kind: RequestKind
     agent: Agent | None
     client: str | None
-    hiddenKind: Literal["prewarm", "title"] | None
-    """A call the user never sees (Codex): the Requests tab hides these unless asked."""
+    hiddenKind: Literal["prewarm", "title", "suggestion"] | None
+    """A call the user never sees (Codex's prewarm and title, Claude Code's next-prompt suggestion): the
+    Requests tab hides these unless asked."""
     sessionId: str | None
     sessionLabel: str | None
     """The session's branch, else its repo (handoff §11A.6). Null until M7 extraction."""

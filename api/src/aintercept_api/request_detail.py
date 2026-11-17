@@ -1,6 +1,5 @@
 """The request drawer (handoff §5.2.10): one transaction's summary, raw wire data
-and every known fact, plus a reported-only (not captured) call built from
-Claude Code's analytics alone.
+and every known fact.
 
 Sources, per transaction (correlation_id):
 - request_headers / response_headers rows: headers (the observer already
@@ -10,15 +9,17 @@ Sources, per transaction (correlation_id):
   thinking, max_tokens, stream), the message-id chain, service tier, inference
   geo, the tool catalog and the tools the response used;
 - body chunks: byte totals and timestamps (proxy timing); the bytes themselves
-  only when the observer ran with full-body capture (`contents`);
-- Claude Code's analytics for the call: tengu_api_success by requestId (else
-  clientRequestId), the tools it ran, tengu_api_retry and stall summaries.
+  only when the observer ran with full-body capture (`contents`).
+
+Claude Code's analytics (tengu_api_success, its tool events, retries, stall
+summaries) aren't in the database, so what only they said (its TTFT, cost, the
+cache write split, content lengths, client timings, the cross-check, retries)
+is null, and there are no reported-only (`reported:`) calls.
 
 Envoy's own connection timings (accept, upstream connect, TLS) aren't recorded,
 so proxy timing starts at the request headers.
 
-What the drawer reads comes through `Reads`: today's stores' (StoreReads: SQL over the tables a store
-loaded, a call's raw rows from its lineage), or v9's indexed reads of Postgres and one ranged GET of the
+What the drawer reads comes through `Reads`: v9's indexed reads of Postgres and one ranged GET of the
 call's raw member (drawer.PgReads, docs/PIPELINE.md §6.2).
 """
 
@@ -33,7 +34,6 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from aintercept_api import agents, rows
-from aintercept_api import claude_code as cc
 from aintercept_api import person as pp
 from aintercept_api import session as ss
 from aintercept_api.models.people import Cost, TokenCount
@@ -49,15 +49,12 @@ from aintercept_api.models.requests import (
     RequestDetail,
     RequestDetails,
     RequestRaw,
-    RetryInfo,
     StreamEvent,
     Timing,
     TimingPhase,
     ToolCallDetail,
 )
-from aintercept_api.models.sessions import EventRow
 
-REPORTED = "reported:"
 MARKER = "<redacted>"  # the observer's marker for a credential header (aintercept/internal/events)
 # Header names that carry credentials, redacted whatever the observer did.
 SECRET_HEADER = re.compile(r"authorization|cookie|api[-_]?key|token|secret|password|session[-_]?key", re.I)
@@ -196,11 +193,6 @@ class Wire:
 
 
 WS_TURN = "~"  # a WebSocket turn's id is <connection>~<turn> (its call_id, <connection>#<turn>, URL-safe)
-
-
-# An analytics request's session, as its request row has it: the one its batch's earliest event names.
-_BATCH_SESSION = """SELECT session_id FROM analytics WHERE correlation_id = ? AND coalesce(session_id, '') <> ''
-                    ORDER BY ns, session_id LIMIT 1"""
 
 
 def wire_from_row(cid: str, r: dict[str, Any]) -> Wire:
@@ -440,93 +432,20 @@ def response_blocks(w: Wire) -> list[Block]:
     return out
 
 
-# --- analytics for the call ----------------------------------------------------------------------
-
-
-@dataclass
-class Facts:
-    """Claude Code's analytics around one call."""
-
-    success: ss.Event | None
-    query: ss.Event | None
-    stall: ss.Event | None
-    tools: list[ss.Event]
-    retry: ss.Event | None
-    joins: Any
-    events: list[ss.Event]
-
-
-def _near_query(evs: list[ss.Event], prompt: str | None, ts: int) -> ss.Event | None:
-    """The tengu_api_query just before the call (it carries no request id): same prompt, within 60 s."""
-    best = None
-    for e in evs:
-        if e.name == "tengu_api_query" and e.prompt_id == prompt and ts - 60 * cc.NS <= e.ts <= ts + 2 * cc.NS:
-            best = e
-    return best
-
-
-def facts(reads: "Reads", sid: str | None, rid: str | None, crid: str | None, w: Wire | None) -> Facts:
-    if not sid:
-        return Facts(None, None, None, [], None, None, [])
-    # Only this call's events: its prompt's (the query and retries carry no request
-    # id), those naming its ids, then the Bash events its tool uses point at.
-    ids = [x for x in (rid, crid) if x]
-    evs = reads.call_events(sid, w, ids)
-    tool_ids = [t for e in evs if _str_id(e.md.get("requestId")) in ids and (t := _str_id(e.md.get("toolUseID")))]
-    if tool_ids:
-        seen = {e.id for e in evs}
-        more = [e for e in reads.tool_events(sid, tool_ids) if e.id not in seen]
-        evs = sorted(evs + more, key=lambda e: (e.ts, e.id))
-    j = ss._joins(evs)
-    succ = (j.success.get(rid) if rid else None) or (j.success.get(crid) if crid else None)
-    stall = next(
-        (e for e in evs if e.name == "tengu_streaming_stall_summary" and rid and e.md.get("request_id") == rid), None
-    )
-    tools = j.tools.get(rid, []) if rid else []
-    ts = w.ts if w else (succ.ts if succ else 0)
-    prompt = w.prompt_id if w else (succ.prompt_id if succ else None)
-    query = _near_query(evs, prompt, ts)
-    retry = None
-    if w is not None and w.failed:
-        retry = retry_event([e for e in evs if e.name == "tengu_api_retry"], w.ts, w.end_ts, w.prompt_id)
-    mine = [e for e in (query, succ, retry, stall) if e is not None] + tools
-    return Facts(succ, query, stall, tools, retry, j, sorted(mine, key=lambda e: (e.ts, e.id)))
-
-
-def _str_id(v: Any) -> str | None:
-    return None if v is None or isinstance(v, dict | list) else str(v)
-
-
-def retry_event(retries: list[ss.Event], ts: int, end_ts: int | None, prompt: str | None) -> ss.Event | None:
-    return pp.nearest_retry(retries, lambda e: (e.ts, e.prompt_id), ts, end_ts, prompt)
-
-
 # --- shared pieces ----------------------------------------------------------------------------
 
 
-def _tokens(w: Wire | None, md: dict[str, Any]) -> TokenCount:
+def _tokens(w: Wire) -> TokenCount:
     def num(key: str) -> int | None:
-        return ss._int(w.c(key)) if w else None
+        return ss._int(w.c(key))
 
-    out = num("output_tokens") if w else ss._int(md.get("outputTokens"))
-    if w is None:  # reported only: Claude Code's own counts
-        cached = ss._int(md.get("cachedInputTokens"))
-        uncached = ss._int(md.get("uncachedInputTokens"))
-        return TokenCount(
-            input=uncached,
-            cacheRead=cached,
-            cacheWrite=None,
-            cacheWrite5m=ss._int(md.get("cache_creation_5m_input_tokens")),
-            cacheWrite1h=ss._int(md.get("cache_creation_1h_input_tokens")),
-            output=out,
-            accuracy="estimated" if out is not None else "missing",
-        )
+    out = num("output_tokens")
     return TokenCount(
         input=num("input_tokens"),
         cacheRead=num("cache_read_tokens"),
         cacheWrite=num("cache_write_tokens"),
-        cacheWrite5m=ss._int(md.get("cache_creation_5m_input_tokens")),
-        cacheWrite1h=ss._int(md.get("cache_creation_1h_input_tokens")),
+        cacheWrite5m=None,
+        cacheWrite1h=None,
         output=out,
         accuracy="exact" if out is not None else "missing",
     )
@@ -546,9 +465,9 @@ def _thinking(v: Any) -> bool | None:
     return str(v) != "disabled"
 
 
-def _tool_counts(w: Wire | None) -> list[str]:
+def _tool_counts(w: Wire) -> list[str]:
     out = []
-    for u in (w.c("tool_uses") if w else None) or []:
+    for u in w.c("tool_uses") or []:
         if isinstance(u, dict) and u.get("name"):
             n = ss._int(u.get("count")) or 1
             out.append(str(u["name"]) if n == 1 else f"{u['name']} ×{n}")
@@ -568,26 +487,7 @@ class Position:
     """The step its tool results are delivered in: the next call's."""
 
 
-def _retry_info(reads: "Reads", sid: str | None, w: Wire, f: Facts) -> RetryInfo | None:
-    if f.retry is None:
-        return None
-    attempt = ss._int(f.retry.md.get("attempt")) or 1
-    nxt = reads.next_attempt(sid, w) if sid and w.kind == "model" else None
-    status: int | str | None = None
-    if nxt is not None:
-        status = nxt.status if nxt.status is not None else ("ERR" if nxt.end_ts is not None else None)
-    done = nxt is not None and isinstance(status, int) and status < 400
-    return RetryInfo(
-        attempt=attempt,
-        of=attempt + 1 if done else None,
-        backoffMs=ss._float(f.retry.md.get("delayMs")),
-        nextRequestId=nxt.correlation_id if nxt else None,
-        nextStatus=status,
-        nextAt=rows.dt(nxt.ts) if nxt else None,
-    )
-
-
-def _notice(w: Wire, retry: RetryInfo | None) -> Notice | None:
+def _notice(w: Wire) -> Notice | None:
     if not w.failed:
         return None
     took = _ms(w.ts, w.end_ts)
@@ -599,16 +499,6 @@ def _notice(w: Wire, retry: RetryInfo | None) -> Notice | None:
         phrase = rows._phrase(w.status)
         title = f"✕ {w.status}{f' {phrase}' if phrase else ''}"
         body = f"Anthropic answered {w.status}" + (f" after {_secs(took)}." if took is not None else ".")
-    if retry:
-        wait = f" waited {_secs(retry.backoffMs)} and" if retry.backoffMs is not None else ""
-        outcome = (
-            "the retry succeeded."
-            if retry.of is not None
-            else "the retry failed too."
-            if retry.nextStatus is not None
-            else "no retry was captured."
-        )
-        body += f" Claude Code{wait} sent the request again (tengu_api_retry, attempt {retry.attempt}); {outcome}"
     return Notice(tone="neutral", title=title, body=body)
 
 
@@ -698,20 +588,15 @@ def _received_retained(w: Wire) -> list[ContentRow]:
     return out
 
 
-def _sent_shape(w: Wire, md: dict[str, Any]) -> list[ContentRow]:
-    n = ss._int(md.get("messageCount"))
-    detail = f"{n} messages · not retained" if n is not None else "not retained"
-    return [ContentRow(label="request body", detail=detail, size=w.up, unit="bytes" if w.up is not None else None)]
+def _sent_shape(w: Wire) -> list[ContentRow]:
+    return [
+        ContentRow(label="request body", detail="not retained", size=w.up, unit="bytes" if w.up is not None else None)
+    ]
 
 
-def _received_shape(w: Wire, md: dict[str, Any]) -> list[ContentRow]:
-    """What the response held, from Claude Code's content lengths and the observer's tool tally."""
+def _received_shape(w: Wire) -> list[ContentRow]:
+    """What the response held, from the observer's tool tally."""
     out = []
-    thinking, text = ss._int(md.get("thinkingContentLength")), ss._int(md.get("textContentLength"))
-    if thinking:
-        out.append(ContentRow(label="thinking", detail="not retained", size=thinking, unit="chars"))
-    if text:
-        out.append(ContentRow(label="text", detail="not retained", size=text, unit="chars"))
     for name in _tool_counts(w):
         out.append(ContentRow(label=f"tool_use · {name}", detail="not retained", size=None, unit=None, tone="tool"))
     if not out:
@@ -728,41 +613,13 @@ def _received_shape(w: Wire, md: dict[str, Any]) -> list[ContentRow]:
 
 
 class Reads(Protocol):
-    """What the drawer reads of one call (or report, or event), whichever store holds it."""
+    """What the drawer reads of one call."""
 
     def wire(self, cid: str) -> Wire | None:
-        """The call as the observer recorded it (with its analytics batch's session); None for no call."""
-        ...
-
-    def call_events(self, sid: str, w: Wire | None, ids: list[str]) -> list[ss.Event]:
-        """The session's Claude Code events about the call, oldest first: those naming one of ids (its
-        request id, client request id), its stall summary, and the query and retries of its prompt (by
-        name and time; at least those `facts` picks from)."""
-        ...
-
-    def tool_events(self, sid: str, tool_ids: list[str]) -> list[ss.Event]:
-        """The session's Claude Code events of these tool uses (their Bash events), oldest first."""
+        """The call as the observer recorded it (an analytics post with its scope session); None for no call."""
         ...
 
     def position(self, sid: str | None, w: Wire) -> Position: ...
-
-    def next_attempt(self, sid: str, w: Wire) -> ss.Step | None:
-        """The first call after w of its prompt and request class (the retry of a failed one)."""
-        ...
-
-    def event_rows(self, sid: str, evs: list[ss.Event]) -> list[EventRow]:
-        """The events as the session's Events tab lists them (link, summary, marker)."""
-        ...
-
-    def sandbox(self, sid: str, until_ns: int) -> str | None:
-        """The newest Bash event's sandbox_enabled up to until_ns."""
-        ...
-
-    def report(self, key: str) -> tuple[str, ss.Event] | None:
-        """A report's (session, tengu_api_success) by request id, client request id or time."""
-        ...
-
-    def prompt_index(self, sid: str, prompt_id: str | None) -> int | None: ...
 
 
 # --- RequestDetail ------------------------------------------------------------------------------
@@ -774,8 +631,7 @@ class _Drawn:
 
     d: RequestDetail
     sid: str | None
-    w: Wire | None
-    f: Facts
+    w: Wire
     pos: Position
 
 
@@ -785,25 +641,19 @@ def detail(reads: Reads, cid: str) -> RequestDetail | None:
 
 
 def _draw(reads: Reads, cid: str) -> _Drawn | None:
-    if cid.startswith(REPORTED):
-        return reported_detail(reads, cid)
     w = reads.wire(cid)
     if w is None:
         return None
     sid = w.session_id
-    f = facts(reads, sid, w.request_id, w.client_request_id, w)
     pos = reads.position(sid, w)
-    md = f.success.md if f.success else {}
     model = w.kind == "model"
-    tokens = _tokens(w, md)
-    retry = _retry_info(reads, sid, w, f)
+    tokens = _tokens(w)
     status: int | str | None = w.status if w.status is not None else ("ERR" if w.end_ts is not None else None)
     retained = w.retained
-    sent = (_sent_retained(w) if retained else None) or (_sent_shape(w, md) if model else [])
-    received = [] if w.failed else (_received_retained(w) if retained else (_received_shape(w, md) if model else []))
+    sent = (_sent_retained(w) if retained else None) or (_sent_shape(w) if model else [])
+    received = [] if w.failed else (_received_retained(w) if retained else (_received_shape(w) if model else []))
     if w.failed:
         received = [ContentRow(label="no response", detail=w.error or f"HTTP {w.status}", size=None, unit=None)]
-    client_ttft = ss._float(md.get("ttftMs"))
     proxy_ttft = _ms(w.ts, w.down_first or w.resp_ts) if not w.failed else None
     d = RequestDetail(
         requestId=w.cid,
@@ -823,19 +673,15 @@ def _draw(reads: Reads, cid: str) -> _Drawn | None:
         prevRequestId=pos.prev,
         nextRequestId=pos.next,
         keyStrip=KeyStrip(
-            model=w.c("model") or ss._str(md.get("model")),
-            effort=w.c("effort") or ss._str(md.get("effort_level")),
+            model=w.c("model"),
+            effort=w.c("effort"),
             thinking=_thinking(w.c("thinking_type")),
             tokens=tokens,
             cachedPct=_cached_pct(tokens),
-            cost=Cost(
-                usd=ss._float(md.get("costUSD")),
-                basis="api-equivalent",
-                estimatedCalls=1 if model and f.success is None and not w.failed else 0,
-            ),
-            ttftMs=client_ttft,
+            cost=Cost(usd=None, basis="api-equivalent", estimatedCalls=0),
+            ttftMs=None,
             proxyTtftMs=proxy_ttft,
-            ttftSource="client" if client_ttft is not None else "proxy" if proxy_ttft is not None else None,
+            ttftSource="proxy" if proxy_ttft is not None else None,
             reasoningTokens=ss._int(w.c("reasoning_tokens")),
             usageMissing=rows.usage_missing(
                 tokens.output,
@@ -847,83 +693,18 @@ def _draw(reads: Reads, cid: str) -> _Drawn | None:
             )
             if model
             else None,
-            streamEvents=ss._int(md.get("streamEventCount")) or (len(sse_events(w)) or None),
-            stopReason=w.c("stop_reason") or ss._str(md.get("stop_reason")),
+            streamEvents=len(sse_events(w)) or None,
+            stopReason=w.c("stop_reason"),
             toolCalls=_tool_counts(w),
         ),
-        crossCheck=CrossCheck(matched=f.success is not None, costAgrees=None),
-        notice=_notice(w, retry),
-        retry=retry,
+        crossCheck=CrossCheck(matched=False, costAgrees=None),
+        notice=_notice(w),
+        retry=None,
         sent=sent,
         received=received,
         contentRetained=retained,
     )
-    return _Drawn(d, sid, w, f, pos)
-
-
-def reported_detail(reads: Reads, cid: str) -> _Drawn | None:
-    """A call Claude Code reported that the proxy never saw: everything comes from its tengu_api_success."""
-    hit = reads.report(cid.removeprefix(REPORTED))
-    if hit is None:
-        return None
-    sid, e = hit
-    md = e.md
-    tokens = _tokens(None, md)
-    inp, out = ss._int(md.get("inputTokens")), ss._int(md.get("outputTokens"))
-    cached = ss._int(md.get("cachedInputTokens"))
-    usage = (
-        f"{inp:,} in" + (f" ({cached:,} cached)" if cached is not None else "") + f" → {out:,} out"
-        if inp is not None and out is not None
-        else "usage not reported"
-    )
-    d = RequestDetail(
-        requestId=cid,
-        kind="notCaptured",
-        t=rows.dt(e.ts),
-        method=None,
-        path="/v1/messages",
-        status=None,
-        durationMs=ss._float(md.get("durationMs")),
-        bytesUp=None,
-        bytesDown=None,
-        sessionId=sid,
-        promptIndex=reads.prompt_index(sid, e.prompt_id),
-        stepIndex=None,
-        stepCount=None,
-        requestClass=None,
-        prevRequestId=None,
-        nextRequestId=None,
-        keyStrip=KeyStrip(
-            model=ss._str(md.get("model")),
-            effort=ss._str(md.get("effort_level")),
-            thinking=None,
-            tokens=tokens,
-            cachedPct=_cached_pct(tokens),
-            cost=Cost(usd=ss._float(md.get("costUSD")), basis="api-equivalent", estimatedCalls=0),
-            ttftMs=ss._float(md.get("ttftMs")),
-            proxyTtftMs=None,
-            ttftSource="client" if ss._float(md.get("ttftMs")) is not None else None,
-            reasoningTokens=None,
-            usageMissing=None,
-            streamEvents=ss._int(md.get("streamEventCount")),
-            stopReason=ss._str(md.get("stop_reason")),
-            toolCalls=[],
-        ),
-        crossCheck=CrossCheck(matched=False, costAgrees=None),
-        notice=Notice(
-            tone="danger",
-            title="▲ This call bypassed the proxy",
-            body=(
-                "Claude Code’s own analytics (tengu_api_success) report a model call the proxy never saw. "
-                "Tokens, cost and timing come from Claude Code’s report; there is no request or response to show."
-            ),
-        ),
-        retry=None,
-        sent=[ContentRow(label="messages", detail="not captured", size=None, unit=None)],
-        received=[ContentRow(label="usage", detail=usage, size=out, unit="tokens" if out is not None else None)],
-        contentRetained=False,
-    )
-    return _Drawn(d, sid, None, Facts(e, None, None, [], None, None, [e]), Position())
+    return _Drawn(d, sid, w, pos)
 
 
 # --- raw --------------------------------------------------------------------------------------
@@ -976,29 +757,7 @@ def _fold(events: list[Sse]) -> list[StreamEvent]:
 
 
 def raw(reads: Reads, cid: str) -> RequestRaw | None:
-    if cid.startswith(REPORTED):
-        if reads.report(cid.removeprefix(REPORTED)) is None:
-            return None
-        return reported_raw()
     return wire_raw(reads.wire(cid))
-
-
-def reported_raw() -> RequestRaw:
-    """A reported-only call's raw view: there's no wire data."""
-    return RequestRaw(
-        unavailable=(
-            "No wire data: this call never passed through the proxy, so there are no headers, body or stream."
-        ),
-        requestLine=None,
-        requestHeaders=[],
-        requestBody=None,
-        responseLine=None,
-        responseHeaders=[],
-        responseBody=None,
-        stream=None,
-        keyHash=None,
-        contentRetained=False,
-    )
 
 
 def wire_raw(w: Wire | None) -> RequestRaw | None:
@@ -1067,79 +826,36 @@ def _flatten(prefix: str, v: Any, out: list[FieldEntry]) -> None:
         )
 
 
-def _fields(w: Wire | None, md: dict[str, Any]) -> list[FieldEntry]:
+def _fields(w: Wire) -> list[FieldEntry]:
     out: list[FieldEntry] = []
-    if w is not None:
-        c = {k: v for k, v in (w.complete or {}).items() if k not in CONTENT_KEYS}
-        for k in COMPLETE_FIELDS:
-            c.setdefault(k, None)
-        _flatten("", c, out)
-    if md:
-        _flatten("analytics", md, out)
+    c = {k: v for k, v in (w.complete or {}).items() if k not in CONTENT_KEYS}
+    for k in COMPLETE_FIELDS:
+        c.setdefault(k, None)
+    _flatten("", c, out)
     return out
 
 
-def _tool_details(w: Wire | None, f: Facts, pos: Position) -> list[ToolCallDetail]:
-    inputs = {b.id: b for b in response_blocks(w) if b.type == "tool_use"} if w and w.retained else {}
-    out = []
-    for e in f.tools:
-        tool = ss._tool(e, f.joins)
-        block = inputs.get(tool.toolUseId)
-        params = block.input if block is not None and isinstance(block.input, dict) else None
-        out.append(
-            ToolCallDetail(
-                toolUseId=tool.toolUseId,
-                name=tool.name,
-                mcpServer=tool.mcpServer,
-                input=[_input_row(k, v) for k, v in params.items()] if params else [],
-                execution=[
-                    _row("status", tool.status),
-                    _row("duration", tool.durationMs, "ms"),
-                    _row("PreToolUse hook", ss._float(e.md.get("preToolHookDurationMs")), "ms"),
-                    _row("permission wait", ss._float(e.md.get("permissionDurationMs")), "ms"),
-                    *([_row("exit code", tool.exitCode)] if tool.exitCode is not None else []),
-                    *([_row("destructive", tool.destructive.category)] if tool.destructive else []),
-                ],
-                result=[
-                    _row("delivered in", f"step {pos.delivered}" if pos.delivered is not None else None, note=pos.next),
-                    _row("size", tool.resultBytes, "bytes"),
-                    _row("is_error", tool.status == "error"),
-                ],
-            )
-        )
-    if not out and w is not None:  # the observer's tally only: names, no execution facts
-        for name in _tool_counts(w):
-            out.append(ToolCallDetail(toolUseId=None, name=name, mcpServer=None, input=[], execution=[], result=[]))
-    return out
-
-
-def _input_row(k: str, v: Any) -> DetailRow:
-    text = v if isinstance(v, str) else json.dumps(_scrub(v))
-    text = redact(text)
-    if len(text) <= 120 and "\n" not in text:
-        return _row(k, text)
-    return _row(k, f"{_lines(text)} · {len(text)} chars", tone="muted")
+def _tool_details(w: Wire) -> list[ToolCallDetail]:
+    """The observer's tally of the tools the response asked to run: names only (their execution facts were
+    Claude Code's analytics)."""
+    return [
+        ToolCallDetail(toolUseId=None, name=name, mcpServer=None, input=[], execution=[], result=[])
+        for name in _tool_counts(w)
+    ]
 
 
 def details(reads: Reads, cid: str) -> RequestDetails | None:
     drawn = _draw(reads, cid)
     if drawn is None:
         return None
-    d, sid, w, f, pos = drawn.d, drawn.sid, drawn.w, drawn.f, drawn.pos
-    md = f.success.md if f.success else {}
+    d, w, pos = drawn.d, drawn.w, drawn.pos
     k = d.keyStrip
-    rh = w.resp_headers if w else None
+    rh = w.resp_headers
     t = k.tokens
-    stalls = ss._int(f.stall.md.get("stall_count")) if f.stall else (0 if f.success else None)
-    sandbox = reads.sandbox(sid, cc.to_ns(d.t) + cc.NS) if sid else None
     mcp = sorted(
-        {
-            str(x.get("server"))
-            for x in (w.c("tools_available") if w else None) or []
-            if isinstance(x, dict) and x.get("server")
-        }
+        {str(x.get("server")) for x in w.c("tools_available") or [] if isinstance(x, dict) and x.get("server")}
     )
-    tools_available = w.c("tools_available") if w else None
+    tools_available = w.c("tools_available")
     sections = [
         DetailSection(
             title="Tokens & cost",
@@ -1151,8 +867,8 @@ def details(reads: Reads, cid: str) -> RequestDetails | None:
                 _row("cache write 5m", t.cacheWrite5m, "tokens"),
                 _row("cache write 1h", t.cacheWrite1h, "tokens"),
                 _row("output", t.output, "tokens"),
-                _row("thinking", ss._int(md.get("thinkingContentLength")), "chars"),
-                _row("costUSD (Claude Code)", k.cost.usd, "usd", tone="ok" if d.crossCheck.matched else None),
+                _row("thinking", None, "chars"),
+                _row("costUSD (Claude Code)", None, "usd"),
             ],
         ),
         DetailSection(
@@ -1160,14 +876,11 @@ def details(reads: Reads, cid: str) -> RequestDetails | None:
             accent=None,
             rows=[
                 _row("model", k.model),
-                _row("max_tokens", ss._int(w.c("max_tokens")) if w else None, "tokens"),
-                _row("thinking", w.c("thinking_type") if w else None),
+                _row("max_tokens", ss._int(w.c("max_tokens")), "tokens"),
+                _row("thinking", w.c("thinking_type")),
                 _row("effort", k.effort),
-                _row("stream", w.c("stream") if w and w.complete and "stream" in w.complete else None),
-                _row(
-                    "tools",
-                    ss._int(md.get("toolsCount")) if md else (len(tools_available) if tools_available else None),
-                ),
+                _row("stream", w.c("stream") if w.complete and "stream" in w.complete else None),
+                _row("tools", len(tools_available) if tools_available else None),
             ],
         ),
         DetailSection(
@@ -1175,22 +888,22 @@ def details(reads: Reads, cid: str) -> RequestDetails | None:
             accent=None,
             rows=[
                 _row("previous step", pos.prev_message or pos.prev),
-                _row("this step", w.c("message_id") if w else None),
+                _row("this step", w.c("message_id")),
                 _row("next step", pos.next_message or pos.next),
-                _row("thread type", w.c("thread_type") if w else None),
-                _row("messages", ss._int(md.get("messageCount"))),
-                _row("query depth", ss._int(md.get("queryDepth"))),
+                _row("thread type", w.c("thread_type")),
+                _row("messages", None),
+                _row("query depth", None),
             ],
         ),
         DetailSection(
             title="What the model could use",
             accent="skills",
             rows=[
-                _row("tools", len(tools_available) if tools_available else ss._int(md.get("toolsCount"))),
-                _row("deferred MCP tools", ss._int(md.get("deferredToolsCount"))),
+                _row("tools", len(tools_available) if tools_available else None),
+                _row("deferred MCP tools", None),
                 _row("MCP servers", len(mcp) if tools_available else None, note=", ".join(mcp) or None),
-                _row("system prompt", ss._int(md.get("systemCharLength")), "chars"),
-                _row("tool schemas", ss._int(md.get("toolsCharLength")), "chars"),
+                _row("system prompt", None, "chars"),
+                _row("tool schemas", None, "chars"),
                 _row("skills", None, note="not extracted yet"),
             ],
         ),
@@ -1198,13 +911,13 @@ def details(reads: Reads, cid: str) -> RequestDetails | None:
             title="Response service",
             accent=None,
             rows=[
-                _row("service tier", w.c("service_tier") if w else None),
-                _row("inference geo", w.c("inference_geo") if w else None),
-                _row("speed", w.c("speed") if w else None),
-                _row("status", w.status if w else None),
-                _row("request-id", (w.request_id if w else None) or ss._str(md.get("requestId"))),
-                _row("retries", (ss._int(md.get("attempt")) or 1) - 1 if md.get("attempt") is not None else None),
-                _row("streaming stalls", stalls),
+                _row("service tier", w.c("service_tier")),
+                _row("inference geo", w.c("inference_geo")),
+                _row("speed", w.c("speed")),
+                _row("status", w.status),
+                _row("request-id", w.request_id),
+                _row("retries", None),
+                _row("streaming stalls", None),
             ],
         ),
         DetailSection(
@@ -1223,25 +936,25 @@ def details(reads: Reads, cid: str) -> RequestDetails | None:
             title="Network & proxy",
             accent=None,
             rows=[
-                _row("client", w.ip if w else None),
-                _row("device", w.c("device_id") if w else None),
-                _row("TLS", "intercepted by the proxy" if w else None),
+                _row("client", w.ip),
+                _row("device", w.c("device_id")),
+                _row("TLS", "intercepted by the proxy"),
                 _row("upstream connect", None, "ms", note="not recorded by the proxy"),
                 _row("bytes up", d.bytesUp, "bytes"),
                 _row("bytes down", d.bytesDown, "bytes"),
-                _row("credential", w.key_hash if w else None, tone="muted", note="key_hash (refreshes; not identity)"),
+                _row("credential", w.key_hash, tone="muted", note="key_hash (refreshes; not identity)"),
             ],
         ),
         DetailSection(
             title="Cross-check & posture",
             accent=None,
             rows=[
-                _row("analytics match", d.crossCheck.matched, tone="ok" if d.crossCheck.matched else None),
-                _row("cost agreement", None, note="no price table (costUSD is Claude Code’s own)"),
-                _row("ttft (Claude Code)", k.ttftMs, "ms"),
+                _row("analytics match", None, note="analytics aren't stored"),
+                _row("cost agreement", None, note="no price table"),
+                _row("ttft (Claude Code)", None, "ms"),
                 _row("ttft (proxy)", k.proxyTtftMs, "ms"),
-                _row("permissionMode", ss._str(md.get("permissionMode"))),
-                _row("sandbox", {"true": "on", "false": "off"}.get(sandbox or "")),
+                _row("permissionMode", None),
+                _row("sandbox", None),
                 _row(
                     "content retention",
                     "full content (experimentation mode)" if d.contentRetained else "shape only",
@@ -1250,44 +963,27 @@ def details(reads: Reads, cid: str) -> RequestDetails | None:
             ],
         ),
     ]
-    if w is not None and isinstance(w.c("client_metadata"), dict):
+    if isinstance(w.c("client_metadata"), dict):
         sections.append(_codex_section(w))
     proxy: list[TimingPhase] = []
-    if w is not None:
-        end = w.end_ts or w.down_last
-        # The proxy doesn't record these: their rows stay, with no bar (handoff §11D).
-        proxy.append(TimingPhase(label="accept + TLS", startMs=None, durMs=None))
-        proxy.append(TimingPhase(label="upstream connect", startMs=None, durMs=None))
-        first = w.down_first or w.resp_ts
-        if first:
-            proxy.append(TimingPhase(label="first byte", startMs=0, durMs=_ms(w.ts, first) or 0))
-            if end and end > first:
-                proxy.append(TimingPhase(label="streaming", startMs=_ms(w.ts, first) or 0, durMs=_ms(first, end) or 0))
-        if end:
-            proxy.append(TimingPhase(label="total", startMs=0, durMs=_ms(w.ts, end) or 0))
-    client = [
-        _row(
-            key,
-            ss._float(md.get(key)) if key != "attempt" else ss._int(md.get(key)),
-            "ms" if key != "attempt" else None,
-        )
-        for key in (
-            "requestPrepareMs",
-            "ttftMs",
-            "firstContentMs",
-            "durationMs",
-            "durationMsIncludingRetries",
-            "attempt",
-        )
-        if md.get(key) is not None
-    ]
+    end = w.end_ts or w.down_last
+    # The proxy doesn't record these: their rows stay, with no bar (handoff §11D).
+    proxy.append(TimingPhase(label="accept + TLS", startMs=None, durMs=None))
+    proxy.append(TimingPhase(label="upstream connect", startMs=None, durMs=None))
+    first = w.down_first or w.resp_ts
+    if first:
+        proxy.append(TimingPhase(label="first byte", startMs=0, durMs=_ms(w.ts, first) or 0))
+        if end and end > first:
+            proxy.append(TimingPhase(label="streaming", startMs=_ms(w.ts, first) or 0, durMs=_ms(first, end) or 0))
+    if end:
+        proxy.append(TimingPhase(label="total", startMs=0, durMs=_ms(w.ts, end) or 0))
     return RequestDetails(
         composition=t,
         sections=sections,
-        tool=_tool_details(w, f, pos),
-        timing=Timing(proxy=proxy, client=client),
-        events=reads.event_rows(sid, f.events) if sid else [],
-        fields=_fields(w, md),
+        tool=_tool_details(w),
+        timing=Timing(proxy=proxy, client=[]),
+        events=[],
+        fields=_fields(w),
     )
 
 
@@ -1311,6 +1007,3 @@ def _codex_section(w: Wire) -> DetailSection:
             _row("plan", limits.plan if limits else None),
         ],
     )
-
-
-# --- one event -------------------------------------------------------------------------------

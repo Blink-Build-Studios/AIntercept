@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
-import gap from "../../api/samples/person_sessions/coverage_gap";
 import demo from "../../api/samples/person_sessions/demo";
 import live from "../../api/samples/person_sessions/live";
 import many from "../../api/samples/person_sessions/many";
-import pre from "../../api/samples/person_sessions/pre_parser";
+import pre from "../../api/samples/session/pre_parser";
 import { NOW as AGENTS_NOW, sessions } from "../AgentSectionHead/agentSpecimens";
 import { mixedSessions, PEOPLE_NOW } from "../ProviderMark/providerSpecimens";
 import { DataTable } from "../DataTable/DataTable";
@@ -33,11 +32,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The real main session: live, 95 calls not captured. */
+/** The real main session, live. (Its calls not captured were Claude Code's analytics: not kept.) */
 export const LiveWithGap: Story = {};
 export const Ended: Story = { args: { session: first(many) } };
-export const Hover: Story = { args: { session: first(gap), "data-force": "hover" } };
-export const FieldsMissing: Story = { args: { session: first(pre) } };
+export const Hover: Story = { args: { session: first(many), "data-force": "hover" } };
+/** Calls with no identity: no person's session, so the row is drawn from the session page's sample. */
+export const FieldsMissing: Story = { args: { session: pre.data } };
 export const NoRecap: Story = { args: { session: first(many) } };
 export const SeenFrom: Story = { args: { session: first(live), now: live.meta.asOf } };
 /** The timeline points at this session (its band hovered): hover fill and an ink-muted rule (§6B.5). */

@@ -29,7 +29,7 @@ def _missing(what: str, id_: str) -> HTTPException:
 
 @router.get("/requests/{requestId}", response_model=RequestResponse)
 def get_request(request: Request, requestId: str) -> RequestResponse:  # noqa: N803 (the contract's camelCase)
-    """A captured transaction (its correlation id), or `reported:<requestId>` for a call only Claude Code reported."""
+    """A captured transaction (its correlation id)."""
     with pages.read(request, "request") as reader:
         d = reader.request(requestId)
         if d is None:
@@ -57,7 +57,7 @@ def get_request_details(request: Request, requestId: str) -> RequestDetailsRespo
 
 @router.get("/events/{eventId}", response_model=EventResponse)
 def get_event(request: Request, eventId: str) -> EventResponse:  # noqa: N803
-    """An EventRow's `eventId` (`<batch>:<n>`): the client event in full."""
+    """An EventRow's `eventId`: none since analytics events aren't stored (always a 404)."""
     with pages.read(request, "event") as reader:
         e = reader.event(eventId)
         if e is None:

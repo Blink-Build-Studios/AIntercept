@@ -5,326 +5,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "data": [
     {
       "asked": {
-        "chars": 68,
-        "images": 0,
-        "pastedBytes": 0,
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
         "retained": false,
         "text": null
       },
       "costUsd": null,
-      "durationMs": 254228.0,
-      "endedAt": "2026-11-03T15:17:48.781000Z",
-      "friction": {
-        "destructive": 0,
-        "frustrated": false,
-        "interrupted": false
-      },
-      "groups": [],
-      "live": false,
-      "n": 24,
-      "promptId": "4d07dfde-59e1-4d73-8d15-77b53f9ac11e",
-      "startedAt": "2026-11-03T15:13:34.553000Z",
-      "steps": 0,
-      "subagents": [],
-      "tokensIn": null,
-      "tokensOut": null,
-      "work": {
-        "commands": [
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "awk",
-            "runs": 1
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "grep",
-            "runs": 1
-          }
-        ],
-        "commits": 0,
-        "editTypes": {},
-        "editedFiles": null,
-        "edits": 0,
-        "linesAdded": null,
-        "linesRemoved": null,
-        "mcp": [],
-        "otherTools": 0,
-        "prs": [],
-        "pushes": 0,
-        "readFiles": null,
-        "readTypes": {},
-        "reads": 0,
-        "subagents": [],
-        "web": {
-          "fetches": 0,
-          "searches": 0
-        }
-      }
-    },
-    {
-      "asked": {
-        "chars": 464,
-        "images": 0,
-        "pastedBytes": 0,
-        "retained": false,
-        "text": null
-      },
-      "costUsd": null,
-      "durationMs": 605146.0,
-      "endedAt": "2026-11-03T16:24:30.096000Z",
-      "friction": {
-        "destructive": 0,
-        "frustrated": false,
-        "interrupted": false
-      },
-      "groups": [],
-      "live": false,
-      "n": 25,
-      "promptId": "e8006f5c-4e39-4a3f-80f0-58e45a68fd23",
-      "startedAt": "2026-11-03T16:14:24.950000Z",
-      "steps": 0,
-      "subagents": [],
-      "tokensIn": null,
-      "tokensOut": null,
-      "work": {
-        "commands": [
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "kubectl",
-            "runs": 1
-          }
-        ],
-        "commits": 0,
-        "editTypes": {},
-        "editedFiles": null,
-        "edits": 0,
-        "linesAdded": null,
-        "linesRemoved": null,
-        "mcp": [],
-        "otherTools": 0,
-        "prs": [],
-        "pushes": 0,
-        "readFiles": null,
-        "readTypes": {},
-        "reads": 0,
-        "subagents": [],
-        "web": {
-          "fetches": 0,
-          "searches": 0
-        }
-      }
-    },
-    {
-      "asked": {
-        "chars": 532,
-        "images": 0,
-        "pastedBytes": 0,
-        "retained": false,
-        "text": null
-      },
-      "costUsd": null,
-      "durationMs": 242786.0,
-      "endedAt": "2026-11-03T16:55:15.464000Z",
-      "friction": {
-        "destructive": 0,
-        "frustrated": false,
-        "interrupted": true
-      },
-      "groups": [],
-      "live": false,
-      "n": 26,
-      "promptId": "5b068420-565c-4bae-8354-8832fdcc2a2a",
-      "startedAt": "2026-11-03T16:51:12.678000Z",
-      "steps": 0,
-      "subagents": [],
-      "tokensIn": null,
-      "tokensOut": null,
-      "work": {
-        "commands": [
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "python",
-            "runs": 4
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "cd",
-            "runs": 2
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "go",
-            "runs": 2
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "mkdir",
-            "runs": 2
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "sed",
-            "runs": 2
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "cat",
-            "runs": 1
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "grep",
-            "runs": 1
-          }
-        ],
-        "commits": 0,
-        "editTypes": {},
-        "editedFiles": null,
-        "edits": 0,
-        "linesAdded": null,
-        "linesRemoved": null,
-        "mcp": [],
-        "otherTools": 1,
-        "prs": [],
-        "pushes": 0,
-        "readFiles": null,
-        "readTypes": {},
-        "reads": 0,
-        "subagents": [],
-        "web": {
-          "fetches": 2,
-          "searches": 1
-        }
-      }
-    },
-    {
-      "asked": {
-        "chars": 213,
-        "images": 0,
-        "pastedBytes": 0,
-        "retained": false,
-        "text": null
-      },
-      "costUsd": null,
-      "durationMs": 4038868.0,
-      "endedAt": "2026-11-03T18:02:52.267000Z",
-      "friction": {
-        "destructive": 1,
-        "frustrated": false,
-        "interrupted": false
-      },
-      "groups": [],
-      "live": false,
-      "n": 27,
-      "promptId": "5370b9aa-8f83-40ea-8f32-000f56b66bf8",
-      "startedAt": "2026-11-03T16:55:33.399000Z",
-      "steps": 0,
-      "subagents": [],
-      "tokensIn": null,
-      "tokensOut": null,
-      "work": {
-        "commands": [
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "docker",
-            "runs": 5
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "python",
-            "runs": 5
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "sed",
-            "runs": 5
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "cat",
-            "runs": 4
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "grep",
-            "runs": 4
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "curl",
-            "runs": 2
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "cd",
-            "runs": 1
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "head",
-            "runs": 1
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "rm",
-            "runs": 1
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "seq",
-            "runs": 1
-          }
-        ],
-        "commits": 1,
-        "editTypes": {},
-        "editedFiles": null,
-        "edits": 0,
-        "linesAdded": null,
-        "linesRemoved": null,
-        "mcp": [],
-        "otherTools": 0,
-        "prs": [],
-        "pushes": 0,
-        "readFiles": null,
-        "readTypes": {},
-        "reads": 0,
-        "subagents": [],
-        "web": {
-          "fetches": 0,
-          "searches": 0
-        }
-      }
-    },
-    {
-      "asked": {
-        "chars": 182,
-        "images": 0,
-        "pastedBytes": 0,
-        "retained": false,
-        "text": null
-      },
-      "costUsd": 0.5201066,
-      "durationMs": 15257.2,
+      "durationMs": 14726.1,
       "endedAt": "2026-11-03T19:25:54.948205Z",
       "friction": {
         "destructive": 0,
@@ -333,7 +21,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       },
       "groups": [
         {
-          "durationMs": 10036.6,
+          "durationMs": 8592.8,
           "exits": [],
           "kind": "tool",
           "paths": null,
@@ -344,7 +32,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.36944540000000003,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 1853.6,
               "eventsPending": false,
@@ -363,26 +51,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 26827,
                 "cacheWrite": 45169,
-                "cacheWrite1h": 45169,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 136
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 732.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Artifact",
-                  "program": null,
-                  "resultBytes": 3746,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_92f71082bcb6b9708e77"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -393,18 +67,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Artifact",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 1185.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0361552,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 1746.3,
               "eventsPending": false,
@@ -423,26 +97,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 71996,
                 "cacheWrite": 2321,
-                "cacheWrite1h": 2321,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 159
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 1477.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Artifact",
-                  "program": null,
-                  "resultBytes": 17009,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_3455c67ecaad62c3e529"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -453,18 +113,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Artifact",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 623.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0661754,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 1803.0,
               "eventsPending": false,
@@ -483,26 +143,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 74317,
                 "cacheWrite": 6033,
-                "cacheWrite1h": 6033,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 152
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 1.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "ToolSearch",
-                  "program": null,
-                  "resultBytes": 74,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_eb366756237a5e37e557"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -513,18 +159,53 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "ToolSearch",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 710.0,
+              "ttftMs": null,
               "usageMissing": null
-            },
+            }
+          ],
+          "text": null,
+          "tokensIn": 226669,
+          "tokensOut": 447,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 3,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 5900.7,
+          "exits": [],
+          "kind": "reply",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T19:25:49.047491Z",
+          "steps": [
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.022570000000000003,
+              "costUsd": null,
               "does": "text",
               "durationMs": 1211.2,
               "eventsPending": false,
@@ -543,83 +224,19 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 80350,
                 "cacheWrite": 553,
-                "cacheWrite1h": 553,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 4,
                 "output": 103
               },
-              "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 704.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "mcp_tool",
-                  "program": null,
-                  "resultBytes": 988,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_398341fed56208f226c6"
-                },
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": null,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "mcp_tool",
-                  "program": null,
-                  "resultBytes": null,
-                  "status": "running",
-                  "target": null,
-                  "toolUseId": null
-                }
-              ],
-              "ttftMs": 798.0,
+              "tools": [],
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 307576,
-          "tokensOut": 550,
-          "work": {
-            "commands": [],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 4,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 3742.0,
-          "exits": [],
-          "kind": "reply",
-          "paths": null,
-          "program": null,
-          "server": null,
-          "startedAt": "2026-11-03T19:25:51.206218Z",
-          "steps": [
+            },
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0257606,
+              "costUsd": null,
               "does": "text",
               "durationMs": 3742.0,
               "eventsPending": false,
@@ -638,19 +255,19 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 80903,
                 "cacheWrite": 599,
-                "cacheWrite1h": 599,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 239
               },
               "tools": [],
-              "ttftMs": 938.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
           "text": null,
-          "tokensIn": 81504,
-          "tokensOut": 239,
+          "tokensIn": 162411,
+          "tokensOut": 342,
           "work": {
             "commands": [],
             "commits": 0,
@@ -675,9 +292,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         }
       ],
       "live": false,
-      "n": 28,
+      "n": 19,
       "promptId": "3a3b20c1-1265-41c6-8577-2211c37fce54",
-      "startedAt": "2026-11-03T19:25:39.691000Z",
+      "startedAt": "2026-11-03T19:25:40.222056Z",
       "steps": 5,
       "subagents": [],
       "tokensIn": 389080,
@@ -690,12 +307,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "edits": 0,
         "linesAdded": null,
         "linesRemoved": null,
-        "mcp": [
-          {
-            "calls": 1,
-            "server": ""
-          }
-        ],
+        "mcp": [],
         "otherTools": 3,
         "prs": [],
         "pushes": 0,
@@ -711,14 +323,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
     },
     {
       "asked": {
-        "chars": 113,
-        "images": 0,
-        "pastedBytes": 0,
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 0.4848144,
-      "durationMs": 9447.8,
+      "costUsd": null,
+      "durationMs": 9162.6,
       "endedAt": "2026-11-03T20:30:45.368761Z",
       "friction": {
         "destructive": 0,
@@ -794,27 +406,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         },
         {
           "durationMs": 2444.0,
-          "exits": [
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "ls",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T20:30:36.490984Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "ls"
-              ],
-              "costUsd": 0.4496254,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 2444.0,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -829,26 +435,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 26827,
                 "cacheWrite": 54958,
-                "cacheWrite1h": 54958,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 4,
                 "output": 229
               },
               "tools": [
-                {
-                  "command": "ls",
-                  "destructive": null,
-                  "durationMs": 172.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "ls",
-                  "resultBytes": 1081,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_b3f0f73c2002f9c04789"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -859,12 +451,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 1005.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -875,8 +467,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "ls",
+                "lastExit": null,
+                "program": null,
                 "runs": 1
               }
             ],
@@ -912,7 +504,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.035189,
+              "costUsd": null,
               "does": "text",
               "durationMs": 6021.7,
               "eventsPending": false,
@@ -931,13 +523,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 81785,
                 "cacheWrite": 793,
-                "cacheWrite1h": 793,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 624
               },
               "tools": [],
-              "ttftMs": 660.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -968,9 +560,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         }
       ],
       "live": false,
-      "n": 29,
+      "n": 20,
       "promptId": "c0199871-cf41-407c-8b57-50275551a8c1",
-      "startedAt": "2026-11-03T20:30:35.921000Z",
+      "startedAt": "2026-11-03T20:30:36.206181Z",
       "steps": 3,
       "subagents": [],
       "tokensIn": 164369,
@@ -979,8 +571,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "commands": [
           {
             "failed": 0,
-            "lastExit": 0,
-            "program": "ls",
+            "lastExit": null,
+            "program": null,
             "runs": 1
           }
         ],
@@ -1006,14 +598,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
     },
     {
       "asked": {
-        "chars": 49,
-        "images": 0,
-        "pastedBytes": 0,
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 0.08952760000000001,
-      "durationMs": 11308.0,
+      "costUsd": null,
+      "durationMs": 11175.0,
       "endedAt": "2026-11-03T20:31:22.018021Z",
       "friction": {
         "destructive": 0,
@@ -1023,27 +615,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "groups": [
         {
           "durationMs": 1514.9,
-          "exits": [
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "sed",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T20:31:10.843062Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "sed"
-              ],
-              "costUsd": 0.0239676,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 1514.9,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1058,26 +644,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 82578,
                 "cacheWrite": 642,
-                "cacheWrite1h": 642,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 4,
                 "output": 115
               },
               "tools": [
-                {
-                  "command": "sed",
-                  "destructive": null,
-                  "durationMs": 30.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "sed",
-                  "resultBytes": 8672,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_1d1226291dfe7a37db10"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1088,12 +660,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 740.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -1104,8 +676,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "sed",
+                "lastExit": null,
+                "program": null,
                 "runs": 1
               }
             ],
@@ -1141,7 +713,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.06556000000000001,
+              "costUsd": null,
               "does": "text",
               "durationMs": 9382.0,
               "eventsPending": false,
@@ -1160,13 +732,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 83220,
                 "cacheWrite": 3856,
-                "cacheWrite1h": 3856,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 903
               },
               "tools": [],
-              "ttftMs": 630.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -1197,9 +769,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         }
       ],
       "live": false,
-      "n": 30,
+      "n": 21,
       "promptId": "08a85c1c-d4d7-43e2-8f43-c6c30792fb8d",
-      "startedAt": "2026-11-03T20:31:10.710000Z",
+      "startedAt": "2026-11-03T20:31:10.843062Z",
       "steps": 2,
       "subagents": [],
       "tokensIn": 170302,
@@ -1208,8 +780,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "commands": [
           {
             "failed": 0,
-            "lastExit": 0,
-            "program": "sed",
+            "lastExit": null,
+            "program": null,
             "runs": 1
           }
         ],
@@ -1235,14 +807,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
     },
     {
       "asked": {
-        "chars": 169,
-        "images": 0,
-        "pastedBytes": 0,
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 0.7050494,
-      "durationMs": 142445.5,
+      "costUsd": null,
+      "durationMs": 142313.3,
       "endedAt": "2026-11-03T20:34:42.955501Z",
       "friction": {
         "destructive": 0,
@@ -1251,30 +823,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       },
       "groups": [
         {
-          "durationMs": 11420.1,
-          "exits": [
-            0,
-            0,
-            0
-          ],
+          "durationMs": 112886.5,
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "cd",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T20:32:20.642198Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.030611200000000005,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 3369.1,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1289,26 +853,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 87076,
                 "cacheWrite": 955,
-                "cacheWrite1h": 955,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 4,
                 "output": 277
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 97.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 623,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_358084c9c3d7283cf345"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1319,26 +869,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 693.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.0284982,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 3023.0,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1353,26 +899,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 88031,
                 "cacheWrite": 668,
-                "cacheWrite1h": 668,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 277
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 166.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 1786,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_734fb45a128e2a596cd6"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1383,26 +915,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 710.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.0359158,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4334.9,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1417,26 +945,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 88699,
                 "cacheWrite": 1191,
-                "cacheWrite1h": 1191,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 432
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 2480.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 1731,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_bc53da8eff4016ee314e"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1447,70 +961,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 647.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 266628,
-          "tokensOut": 986,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cd",
-                "runs": 3
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 14719.6,
-          "exits": [
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "mkdir",
-          "server": null,
-          "startedAt": "2026-11-03T20:32:34.743938Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "mkdir"
-              ],
-              "costUsd": 0.063238,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 14719.6,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1525,26 +991,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 89890,
                 "cacheWrite": 1314,
-                "cacheWrite1h": 1314,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1737
               },
               "tools": [
-                {
-                  "command": "mkdir",
-                  "destructive": null,
-                  "durationMs": 11465.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "mkdir",
-                  "resultBytes": 3655,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_645916b360e51d0051ac"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1555,72 +1007,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 693.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 91206,
-          "tokensOut": 1737,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "mkdir",
-                "runs": 1
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 45911.3,
-          "exits": [
-            0,
-            0,
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "cat",
-          "server": null,
-          "startedAt": "2026-11-03T20:33:01.130777Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.0808888,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 14683.6,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1635,26 +1037,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 91204,
                 "cacheWrite": 3760,
-                "cacheWrite1h": 3760,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1628
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 4691.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 3138,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_07b3eeb08699e041ed3a"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1665,26 +1053,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 673.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.06815280000000001,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 9296.9,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1699,26 +1083,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 94964,
                 "cacheWrite": 3504,
-                "cacheWrite1h": 3504,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1056
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 3527.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 13917,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_6ff9c27d0641ea99c243"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1729,26 +1099,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 697.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.1146496,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 13264.2,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1763,26 +1129,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 98468,
                 "cacheWrite": 8071,
-                "cacheWrite1h": 8071,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1519
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 130.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 342,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_33b526c214d7f13df923"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1793,72 +1145,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 669.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 299977,
-          "tokensOut": 4203,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cat",
-                "runs": 3
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 26123.6,
-          "exits": [
-            0,
-            0,
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "cd",
-          "server": null,
-          "startedAt": "2026-11-03T20:33:47.405099Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.040099800000000005,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 3016.0,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1873,26 +1175,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 106539,
                 "cacheWrite": 1693,
-                "cacheWrite1h": 1693,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 262
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 4530.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 12735,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_3777b72e51ea870d195a"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1903,26 +1191,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 711.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.0869104,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 6338.3,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -1937,26 +1221,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 108232,
                 "cacheWrite": 6442,
-                "cacheWrite1h": 6442,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 686
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 6783.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 10029,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_b89533cfe5bcc1feb184"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -1967,26 +1237,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 807.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.0755108,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4964.3,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -2001,26 +1267,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 114674,
                 "cacheWrite": 5496,
-                "cacheWrite1h": 5496,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 430
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 12490.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 5280,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_e20ab0c864d49ed7a0fa"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2031,25 +1283,25 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 688.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
           "text": null,
-          "tokensIn": 343082,
-          "tokensOut": 1378,
+          "tokensIn": 1000893,
+          "tokensOut": 8304,
           "work": {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "cd",
-                "runs": 3
+                "lastExit": null,
+                "program": null,
+                "runs": 10
               }
             ],
             "commits": 0,
@@ -2084,7 +1336,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.080574,
+              "costUsd": null,
               "does": "text",
               "durationMs": 16713.6,
               "eventsPending": false,
@@ -2103,13 +1355,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 120170,
                 "cacheWrite": 3329,
-                "cacheWrite1h": 3329,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1495
               },
               "tools": [],
-              "ttftMs": 764.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2140,9 +1392,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         }
       ],
       "live": false,
-      "n": 31,
+      "n": 22,
       "promptId": "3f1f2c61-5c10-49e9-8740-48658b0a8ca0",
-      "startedAt": "2026-11-03T20:32:20.510000Z",
+      "startedAt": "2026-11-03T20:32:20.642198Z",
       "steps": 11,
       "subagents": [],
       "tokensIn": 1124394,
@@ -2151,21 +1403,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "commands": [
           {
             "failed": 0,
-            "lastExit": 0,
-            "program": "cd",
-            "runs": 6
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "cat",
-            "runs": 3
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "mkdir",
-            "runs": 1
+            "lastExit": null,
+            "program": null,
+            "runs": 10
           }
         ],
         "commits": 0,
@@ -2190,14 +1430,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
     },
     {
       "asked": {
-        "chars": 345,
-        "images": 0,
-        "pastedBytes": 0,
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 0.0685238,
-      "durationMs": 17877.5,
+      "costUsd": null,
+      "durationMs": 17737.6,
       "endedAt": "2026-11-03T20:36:30.418542Z",
       "friction": {
         "destructive": 0,
@@ -2217,7 +1457,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0685238,
+              "costUsd": null,
               "does": "text",
               "durationMs": 17737.6,
               "eventsPending": false,
@@ -2236,13 +1476,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 123499,
                 "cacheWrite": 1606,
-                "cacheWrite1h": 1606,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 4,
                 "output": 1548
               },
               "tools": [],
-              "ttftMs": 738.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2273,9 +1513,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         }
       ],
       "live": false,
-      "n": 32,
+      "n": 23,
       "promptId": "dd242b48-f327-426a-8dc8-889ff80496fb",
-      "startedAt": "2026-11-03T20:36:12.541000Z",
+      "startedAt": "2026-11-03T20:36:12.680983Z",
       "steps": 1,
       "subagents": [],
       "tokensIn": 125109,
@@ -2304,14 +1544,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
     },
     {
       "asked": {
-        "chars": 249,
-        "images": 0,
-        "pastedBytes": 0,
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 1.5197367999999998,
-      "durationMs": 1622749.4,
+      "costUsd": null,
+      "durationMs": 1622611.8,
       "endedAt": "2026-11-03T21:04:48.422402Z",
       "friction": {
         "destructive": 0,
@@ -2331,7 +1571,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.057332999999999995,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 11168.2,
               "eventsPending": false,
@@ -2350,26 +1590,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 125105,
                 "cacheWrite": 1617,
-                "cacheWrite1h": 1617,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 4,
                 "output": 968
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 1.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "AskUserQuestion",
-                  "program": null,
-                  "resultBytes": 2115,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_c26c456dec99ab23f82b"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2380,12 +1606,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "AskUserQuestion",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 689.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2492,7 +1718,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0706924,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 18311.7,
               "eventsPending": false,
@@ -2511,26 +1737,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 126722,
                 "cacheWrite": 1645,
-                "cacheWrite1h": 1645,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1609
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 1.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "AskUserQuestion",
-                  "program": null,
-                  "resultBytes": 2268,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_378e712a950e79fa6c44"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2541,12 +1753,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "AskUserQuestion",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 1153.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2577,28 +1789,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         },
         {
           "durationMs": 7123.3,
-          "exits": [
-            0,
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "python",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T20:50:51.608874Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "python"
-              ],
-              "costUsd": 0.0531214,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4707.1,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -2613,26 +1818,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 128367,
                 "cacheWrite": 2365,
-                "cacheWrite1h": 2365,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 426
               },
               "tools": [
-                {
-                  "command": "python",
-                  "destructive": null,
-                  "durationMs": 127.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "python",
-                  "resultBytes": 658,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_5f5949d011b81db7c486"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2643,26 +1834,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 805.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "python"
-              ],
-              "costUsd": 0.0358344,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 2072.2,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -2677,26 +1864,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 130732,
                 "cacheWrite": 705,
-                "cacheWrite1h": 705,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 202
               },
               "tools": [
-                {
-                  "command": "python",
-                  "destructive": null,
-                  "durationMs": 86.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "python",
-                  "resultBytes": 3555,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_8a4848864033bcacc1f8"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2707,12 +1880,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 770.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2723,8 +1896,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "python",
+                "lastExit": null,
+                "program": null,
                 "runs": 2
               }
             ],
@@ -2760,7 +1933,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.08203540000000001,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 20471.5,
               "eventsPending": false,
@@ -2779,26 +1952,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 131437,
                 "cacheWrite": 1975,
-                "cacheWrite1h": 1975,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1997
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 1.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "AskUserQuestion",
-                  "program": null,
-                  "resultBytes": 893,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_c1f85c3e12de3855fa89"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2809,12 +1968,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "AskUserQuestion",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 704.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2845,27 +2004,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         },
         {
           "durationMs": 5002.7,
-          "exits": [
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "sed",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T20:51:54.603982Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "sed"
-              ],
-              "costUsd": 0.0536464,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 5002.7,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -2880,26 +2033,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 133412,
                 "cacheWrite": 2342,
-                "cacheWrite1h": 2342,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 411
               },
               "tools": [
-                {
-                  "command": "sed",
-                  "destructive": null,
-                  "durationMs": 27.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "sed",
-                  "resultBytes": 4668,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_e42209c17a830d45bc00"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -2910,12 +2049,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 776.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -2926,8 +2065,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "sed",
+                "lastExit": null,
+                "program": null,
                 "runs": 1
               }
             ],
@@ -2963,7 +2102,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0726548,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 13471.7,
               "eventsPending": false,
@@ -2982,26 +2121,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 135754,
                 "cacheWrite": 2382,
-                "cacheWrite1h": 2382,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1322
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 2.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "AskUserQuestion",
-                  "program": null,
-                  "resultBytes": 863,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_328c6d5bb692d73a6fef"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3012,12 +2137,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "AskUserQuestion",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 681.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -3113,29 +2238,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           }
         },
         {
-          "durationMs": 32332.0,
-          "exits": [
-            0,
-            0
-          ],
+          "durationMs": 227465.0,
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "cat",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T20:59:07.626539Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.0709072,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 16729.7,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3150,26 +2268,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 138136,
                 "cacheWrite": 1579,
-                "cacheWrite1h": 1579,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1532
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 4813.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 3425,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_fdc5365254017dcc3b12"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3180,26 +2284,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 2684.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.077431,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 10565.1,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3214,26 +2314,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 139715,
                 "cacheWrite": 3245,
-                "cacheWrite1h": 3245,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1176
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 3742.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 4322,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_7ff867be0e208ee86a7a"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3244,70 +2330,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 691.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 282679,
-          "tokensOut": 2708,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cat",
-                "runs": 2
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 4761.1,
-          "exits": [
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "cd",
-          "server": null,
-          "startedAt": "2026-11-03T20:59:43.918008Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.063448,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4761.1,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3322,26 +2360,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 142960,
                 "cacheWrite": 3216,
-                "cacheWrite1h": 3216,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 456
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 3237.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 1138,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_00d6a13719dfb6bb2141"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3352,70 +2376,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 661.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 146178,
-          "tokensOut": 456,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cd",
-                "runs": 1
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 9677.9,
-          "exits": [
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "python",
-          "server": null,
-          "startedAt": "2026-11-03T20:59:52.145748Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "python"
-              ],
-              "costUsd": 0.0582232,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 9677.9,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3430,26 +2406,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 146176,
                 "cacheWrite": 1100,
-                "cacheWrite1h": 1100,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1009
               },
               "tools": [
-                {
-                  "command": "python",
-                  "destructive": null,
-                  "durationMs": 96.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "python",
-                  "resultBytes": 8640,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_48015c59947c233e2e49"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3460,70 +2422,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 694.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 147278,
-          "tokensOut": 1009,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "python",
-                "runs": 1
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 9824.1,
-          "exits": [
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "cat",
-          "server": null,
-          "startedAt": "2026-11-03T21:00:02.115467Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.0925472,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 9824.1,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3538,26 +2452,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 147276,
                 "cacheWrite": 5298,
-                "cacheWrite1h": 5298,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 1035
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 3228.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 471,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_3e37a803dbc57958531b"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3568,70 +2468,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 662.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 152576,
-          "tokensOut": 1035,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cat",
-                "runs": 1
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 6870.2,
-          "exits": [
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "cd",
-          "server": null,
-          "startedAt": "2026-11-03T21:00:15.377947Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.0536228,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 6870.2,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3646,26 +2498,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 152574,
                 "cacheWrite": 1280,
-                "cacheWrite1h": 1280,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 643
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 3077.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 256,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_fc28b5aceec557cb47ad"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3676,70 +2514,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 723.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 153856,
-          "tokensOut": 643,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cd",
-                "runs": 1
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 26465.4,
-          "exits": [
-            0
-          ],
-          "kind": "run",
-          "paths": null,
-          "program": "cat",
-          "server": null,
-          "startedAt": "2026-11-03T21:00:25.523963Z",
-          "steps": [
+            },
             {
               "agentType": null,
-              "commands": [
-                "cat"
-              ],
-              "costUsd": 0.08960280000000001,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 26465.4,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -3754,26 +2544,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 153854,
                 "cacheWrite": 788,
-                "cacheWrite1h": 788,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 2626
               },
               "tools": [
-                {
-                  "command": "cat",
-                  "destructive": null,
-                  "durationMs": 120118.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cat",
-                  "resultBytes": 464,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_056b143fac1e0cc36169"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3784,60 +2560,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 754.0,
+              "ttftMs": null,
               "usageMissing": null
-            }
-          ],
-          "text": null,
-          "tokensIn": 154644,
-          "tokensOut": 2626,
-          "work": {
-            "commands": [
-              {
-                "failed": 0,
-                "lastExit": 0,
-                "program": "cat",
-                "runs": 1
-              }
-            ],
-            "commits": 0,
-            "editTypes": {},
-            "editedFiles": null,
-            "edits": 0,
-            "linesAdded": null,
-            "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 0,
-            "prs": [],
-            "pushes": 0,
-            "readFiles": null,
-            "readTypes": {},
-            "reads": 0,
-            "subagents": [],
-            "web": {
-              "fetches": 0,
-              "searches": 0
-            }
-          }
-        },
-        {
-          "durationMs": 2647.2,
-          "exits": [],
-          "kind": "run",
-          "paths": null,
-          "program": null,
-          "server": null,
-          "startedAt": "2026-11-03T21:02:52.444417Z",
-          "steps": [
+            },
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0578924,
+              "costUsd": null,
               "does": "exec",
               "durationMs": 2647.2,
               "eventsPending": false,
@@ -3856,8 +2590,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 154642,
                 "cacheWrite": 2812,
-                "cacheWrite1h": 2812,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 223
               },
@@ -3872,25 +2606,25 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "error",
+                  "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_demo_33e68404e2e1567443bd"
+                  "toolUseId": null
                 }
               ],
-              "ttftMs": 752.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
           "text": null,
-          "tokensIn": 157456,
-          "tokensOut": 223,
+          "tokensIn": 1194667,
+          "tokensOut": 8700,
           "work": {
             "commands": [
               {
                 "failed": 0,
                 "lastExit": null,
                 "program": null,
-                "runs": 1
+                "runs": 8
               }
             ],
             "commits": 0,
@@ -3925,7 +2659,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0370788,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 1585.1,
               "eventsPending": false,
@@ -3944,26 +2678,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 157454,
                 "cacheWrite": 410,
-                "cacheWrite1h": 410,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 115
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 5.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Read",
-                  "program": null,
-                  "resultBytes": 964,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_2f1890414c79bf4485b3"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -3974,12 +2694,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Read",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 717.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -4010,29 +2730,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         },
         {
           "durationMs": 11422.4,
-          "exits": [
-            0,
-            0,
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "cd",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T21:02:57.043331Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.04457280000000001,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4575.7,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -4047,26 +2759,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 157864,
                 "cacheWrite": 644,
-                "cacheWrite1h": 644,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 392
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 110.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 944,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_a078db48be8c6ef0f0ef"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -4077,26 +2775,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 666.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.0471096,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4267.8,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -4111,26 +2805,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 158508,
                 "cacheWrite": 905,
-                "cacheWrite1h": 905,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 408
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 89.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 85,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_42f90b223f5fa95f780e"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -4141,26 +2821,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 665.0,
+              "ttftMs": null,
               "usageMissing": null
             },
             {
               "agentType": null,
-              "commands": [
-                "cd"
-              ],
-              "costUsd": 0.039250600000000004,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 1961.9,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -4175,26 +2851,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 159413,
                 "cacheWrite": 450,
-                "cacheWrite1h": 450,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 188
               },
               "tools": [
-                {
-                  "command": "cd",
-                  "destructive": null,
-                  "durationMs": 3598.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "cd",
-                  "resultBytes": 485,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_1805f1cf8937f0474ee1"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -4205,12 +2867,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 733.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -4221,8 +2883,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "cd",
+                "lastExit": null,
+                "program": null,
                 "runs": 3
               }
             ],
@@ -4258,7 +2920,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.20249260000000002,
+              "costUsd": null,
               "does": "patch",
               "durationMs": 83726.9,
               "eventsPending": false,
@@ -4277,26 +2939,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 159863,
                 "cacheWrite": 499,
-                "cacheWrite1h": 499,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 8326
               },
               "tools": [
-                {
-                  "command": null,
-                  "destructive": null,
-                  "durationMs": 14.0,
-                  "exitCode": null,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Write",
-                  "program": null,
-                  "resultBytes": 160,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_ba1c4f233eed8dafd6ac"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -4307,12 +2955,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Write",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 637.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -4343,27 +2991,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         },
         {
           "durationMs": 4378.9,
-          "exits": [
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "sed",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-03T21:04:36.332175Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "sed"
-              ],
-              "costUsd": 0.1080484,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 4378.9,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -4378,26 +3020,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 160362,
                 "cacheWrite": 8396,
-                "cacheWrite1h": 8396,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 440
               },
               "tools": [
-                {
-                  "command": "sed",
-                  "destructive": null,
-                  "durationMs": 161.0,
-                  "exitCode": 0,
-                  "fileType": null,
-                  "mcpServer": null,
-                  "name": "Bash",
-                  "program": "sed",
-                  "resultBytes": 143,
-                  "status": "ok",
-                  "target": null,
-                  "toolUseId": "toolu_demo_836892d512760e1431ab"
-                },
                 {
                   "command": null,
                   "destructive": null,
@@ -4408,12 +3036,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "name": "Bash",
                   "program": null,
                   "resultBytes": null,
-                  "status": "running",
+                  "status": "ok",
                   "target": null,
                   "toolUseId": null
                 }
               ],
-              "ttftMs": 781.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -4424,8 +3052,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "commands": [
               {
                 "failed": 0,
-                "lastExit": 0,
-                "program": "sed",
+                "lastExit": null,
+                "program": null,
                 "runs": 1
               }
             ],
@@ -4461,7 +3089,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.0521916,
+              "costUsd": null,
               "does": "text",
               "durationMs": 7325.1,
               "eventsPending": false,
@@ -4480,13 +3108,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "accuracy": "exact",
                 "cacheRead": 168758,
                 "cacheWrite": 634,
-                "cacheWrite1h": 634,
-                "cacheWrite5m": 0,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
                 "input": 2,
                 "output": 668
               },
               "tools": [],
-              "ttftMs": 679.0,
+              "ttftMs": null,
               "usageMissing": null
             }
           ],
@@ -4517,9 +3145,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         }
       ],
       "live": false,
-      "n": 33,
+      "n": 24,
       "promptId": "c0cf46fa-e9f5-4f99-80cb-9c8da77407c4",
-      "startedAt": "2026-11-03T20:37:45.673000Z",
+      "startedAt": "2026-11-03T20:37:45.810638Z",
       "steps": 24,
       "subagents": [],
       "tokensIn": 3253417,
@@ -4528,27 +3156,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "commands": [
           {
             "failed": 0,
-            "lastExit": 0,
-            "program": "cd",
-            "runs": 5
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "cat",
-            "runs": 4
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "python",
-            "runs": 3
-          },
-          {
-            "failed": 0,
-            "lastExit": 0,
-            "program": "sed",
-            "runs": 2
+            "lastExit": null,
+            "program": null,
+            "runs": 15
           }
         ],
         "commits": 0,
@@ -4570,16 +3180,5536 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "searches": 0
         }
       }
+    },
+    {
+      "asked": {
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
+        "retained": false,
+        "text": null
+      },
+      "costUsd": null,
+      "durationMs": 343031.7,
+      "endedAt": "2026-11-03T21:12:31.358946Z",
+      "friction": {
+        "destructive": 0,
+        "frustrated": false,
+        "interrupted": false
+      },
+      "groups": [
+        {
+          "durationMs": 32507.4,
+          "exits": [],
+          "kind": "spawn",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:06:48.327254Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "spawn",
+              "durationMs": 32507.4,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001492",
+              "status": "done",
+              "step": 1,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:06:48.327254Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 169392,
+                "cacheWrite": 883,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 4,
+                "output": 3257
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Agent",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 170279,
+          "tokensOut": 3257,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [
+              {
+                "count": 2,
+                "name": null
+              }
+            ],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 8987.6,
+          "exits": [],
+          "kind": "run",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:07:21.311423Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 4199.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001498",
+              "status": "done",
+              "step": 6,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:07:21.311423Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 170275,
+                "cacheWrite": 4064,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 416
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 4516.8,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001501",
+              "status": "done",
+              "step": 8,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:07:25.782182Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 174339,
+                "cacheWrite": 972,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 493
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 349654,
+          "tokensOut": 909,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 3
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 289192.7,
+          "exits": [],
+          "kind": "reply",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:07:30.593857Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 4823.3,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001504",
+              "status": "done",
+              "step": 11,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:07:30.593857Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 175311,
+                "cacheWrite": 2894,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 348
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 671.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001508",
+              "status": "done",
+              "step": 14,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:07:38.959742Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 56670,
+                "cacheWrite": 1682,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 434,
+                "output": 16
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1009.7,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001514",
+              "status": "done",
+              "step": 17,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:07:51.063257Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 68302,
+                "cacheWrite": 1248,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 7907,
+                "output": 22
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 714.0,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001521",
+              "status": "done",
+              "step": 23,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:08:09.796631Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 69188,
+                "cacheWrite": 1351,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 1157,
+                "output": 15
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1142.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001526",
+              "status": "done",
+              "step": 26,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:08:22.219139Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 79409,
+                "cacheWrite": 2593,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 447,
+                "output": 23
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 805.5,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001533",
+              "status": "done",
+              "step": 31,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:08:40.664618Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 73319,
+                "cacheWrite": 1465,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 3258,
+                "output": 17
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1095.5,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001542",
+              "status": "done",
+              "step": 37,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:08:53.503341Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 109071,
+                "cacheWrite": 604,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 5377,
+                "output": 19
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 770.3,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001550",
+              "status": "done",
+              "step": 42,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:09:11.638462Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 81511,
+                "cacheWrite": 991,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 10713,
+                "output": 16
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1476.7,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001556",
+              "status": "done",
+              "step": 46,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:09:24.761332Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 129036,
+                "cacheWrite": 583,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 4534,
+                "output": 21
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 775.3,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001564",
+              "status": "done",
+              "step": 51,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:09:42.546512Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 96332,
+                "cacheWrite": 1561,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 753,
+                "output": 18
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 792.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001573",
+              "status": "done",
+              "step": 56,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:09:56.367519Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 143193,
+                "cacheWrite": 456,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2938,
+                "output": 16
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1210.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001581",
+              "status": "done",
+              "step": 61,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:10:13.437683Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 100372,
+                "cacheWrite": 1103,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 1059,
+                "output": 20
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 789.1,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001587",
+              "status": "done",
+              "step": 65,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:10:27.317061Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 153593,
+                "cacheWrite": 262,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 416,
+                "output": 14
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 816.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001593",
+              "status": "done",
+              "step": 68,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:10:44.798991Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 114942,
+                "cacheWrite": 427,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 597,
+                "output": 23
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 995.0,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001597",
+              "status": "done",
+              "step": 70,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:10:58.230863Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 153855,
+                "cacheWrite": null,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 414,
+                "output": 18
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 799.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001600",
+              "status": "done",
+              "step": 72,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:11:15.764003Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 118179,
+                "cacheWrite": 979,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 656,
+                "output": 20
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1346.8,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001608",
+              "status": "done",
+              "step": 75,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:11:46.688506Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 122416,
+                "cacheWrite": 454,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 686,
+                "output": 19
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1577.7,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "auxiliary",
+              "requestId": "demo-001610",
+              "status": "done",
+              "step": 76,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:12:18.208838Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 122870,
+                "cacheWrite": null,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 685,
+                "output": 14
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 2028255,
+          "tokensOut": 659,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        }
+      ],
+      "live": false,
+      "n": 25,
+      "promptId": "5ba3b328-8563-4188-8a6e-33f476820c88",
+      "startedAt": "2026-11-03T21:06:48.327254Z",
+      "steps": 76,
+      "subagents": [
+        {
+          "agentId": "36f33922-c251-4c03-82d3-35a0ac0b53c4",
+          "groups": [
+            {
+              "durationMs": 266383.7,
+              "exits": [],
+              "kind": "run",
+              "paths": null,
+              "program": null,
+              "server": null,
+              "startedAt": "2026-11-03T21:07:09.322862Z",
+              "steps": [
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 3082.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001493",
+                  "status": "done",
+                  "step": 2,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:09.322862Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": null,
+                    "cacheWrite": 40809,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 365
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 3133.1,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001494",
+                  "status": "done",
+                  "step": 3,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:12.668844Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 40809,
+                    "cacheWrite": 12089,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 312
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 14161.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001495",
+                  "status": "done",
+                  "step": 4,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:16.191398Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 52898,
+                    "cacheWrite": 3772,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1680
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5270.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001507",
+                  "status": "done",
+                  "step": 13,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:38.857146Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 56670,
+                    "cacheWrite": 1903,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 561
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 6061.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001510",
+                  "status": "done",
+                  "step": 15,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:44.798463Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 58573,
+                    "cacheWrite": 2159,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 678
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 3845.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001515",
+                  "status": "done",
+                  "step": 18,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:51.452135Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 60732,
+                    "cacheWrite": 3287,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 383
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 2009.6,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001517",
+                  "status": "done",
+                  "step": 20,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:55.517328Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 64019,
+                    "cacheWrite": 2197,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 219
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 10595.1,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001519",
+                  "status": "done",
+                  "step": 21,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:57.728956Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 66216,
+                    "cacheWrite": 2972,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1349
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 11104.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001520",
+                  "status": "done",
+                  "step": 22,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:08.933490Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 69188,
+                    "cacheWrite": 2267,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1271
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 13205.0,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001524",
+                  "status": "done",
+                  "step": 25,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:20.653701Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 71455,
+                    "cacheWrite": 1864,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1463
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 8568.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001530",
+                  "status": "done",
+                  "step": 29,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:34.487093Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 73319,
+                    "cacheWrite": 4483,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 867
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 3380.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001536",
+                  "status": "done",
+                  "step": 33,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:44.283978Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 77802,
+                    "cacheWrite": 1371,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 337
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 8205.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001538",
+                  "status": "done",
+                  "step": 35,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:49.098427Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 79173,
+                    "cacheWrite": 2338,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 989
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 23383.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001543",
+                  "status": "done",
+                  "step": 38,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:57.851219Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 81511,
+                    "cacheWrite": 11462,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 2549
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 15441.6,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001554",
+                  "status": "done",
+                  "step": 45,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:22.041156Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 92973,
+                    "cacheWrite": 3359,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1559
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 8666.5,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001562",
+                  "status": "done",
+                  "step": 50,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:38.384130Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 96332,
+                    "cacheWrite": 2073,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 834
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 12117.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001567",
+                  "status": "done",
+                  "step": 53,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:47.651670Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 98405,
+                    "cacheWrite": 1967,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1101
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 9800.1,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001575",
+                  "status": "done",
+                  "step": 57,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:00.945359Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 100372,
+                    "cacheWrite": 1919,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 916
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 10719.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001582",
+                  "status": "done",
+                  "step": 62,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:14.266195Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 102291,
+                    "cacheWrite": 8700,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1002
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 8116.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001586",
+                  "status": "done",
+                  "step": 64,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:27.050004Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 110991,
+                    "cacheWrite": 1999,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 833
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4696.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001589",
+                  "status": "done",
+                  "step": 66,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:35.433193Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 112990,
+                    "cacheWrite": 1952,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 425
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 9103.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001591",
+                  "status": "done",
+                  "step": 67,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:40.362743Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 114942,
+                    "cacheWrite": 779,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 902
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 10093.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001594",
+                  "status": "done",
+                  "step": 69,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:52.894019Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 115721,
+                    "cacheWrite": 2458,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 977
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 25200.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001598",
+                  "status": "done",
+                  "step": 71,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:11:03.613945Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 118179,
+                    "cacheWrite": 1387,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 2577
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4640.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001604",
+                  "status": "done",
+                  "step": 73,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:11:31.065840Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 119566,
+                    "cacheWrite": 2850,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 452
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                }
+              ],
+              "text": null,
+              "tokensIn": 2157593,
+              "tokensOut": 24601,
+              "work": {
+                "commands": [
+                  {
+                    "failed": 0,
+                    "lastExit": null,
+                    "program": null,
+                    "runs": 25
+                  }
+                ],
+                "commits": 0,
+                "editTypes": {},
+                "editedFiles": null,
+                "edits": 0,
+                "linesAdded": null,
+                "linesRemoved": null,
+                "mcp": [],
+                "otherTools": 0,
+                "prs": [],
+                "pushes": 0,
+                "readFiles": null,
+                "readTypes": {},
+                "reads": 0,
+                "subagents": [],
+                "web": {
+                  "fetches": 0,
+                  "searches": 0
+                }
+              }
+            },
+            {
+              "durationMs": 55062.7,
+              "exits": [],
+              "kind": "think",
+              "paths": null,
+              "program": null,
+              "server": null,
+              "startedAt": "2026-11-03T21:11:36.296208Z",
+              "steps": [
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "text",
+                  "durationMs": 55062.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001606",
+                  "status": "done",
+                  "step": 74,
+                  "stopReason": "end_turn",
+                  "t": "2026-11-03T21:11:36.296208Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 122416,
+                    "cacheWrite": 895,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 5749
+                  },
+                  "tools": [],
+                  "ttftMs": null,
+                  "usageMissing": null
+                }
+              ],
+              "text": null,
+              "tokensIn": 123313,
+              "tokensOut": 5749,
+              "work": {
+                "commands": [],
+                "commits": 0,
+                "editTypes": {},
+                "editedFiles": null,
+                "edits": 0,
+                "linesAdded": null,
+                "linesRemoved": null,
+                "mcp": [],
+                "otherTools": 0,
+                "prs": [],
+                "pushes": 0,
+                "readFiles": null,
+                "readTypes": {},
+                "reads": 0,
+                "subagents": [],
+                "web": {
+                  "fetches": 0,
+                  "searches": 0
+                }
+              }
+            }
+          ],
+          "name": "general-purpose",
+          "sessionId": null,
+          "steps": 26,
+          "tokensIn": 2280906,
+          "tokensOut": 30350,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 25
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "agentId": "4cb1832d-b24f-4b57-85e8-7f19ed00b91b",
+          "groups": [
+            {
+              "durationMs": 174022.9,
+              "exits": [],
+              "kind": "run",
+              "paths": null,
+              "program": null,
+              "server": null,
+              "startedAt": "2026-11-03T21:07:21.087958Z",
+              "steps": [
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 3511.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001497",
+                  "status": "done",
+                  "step": 5,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:21.087958Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 18277,
+                    "cacheWrite": 22431,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 399
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 2286.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001500",
+                  "status": "done",
+                  "step": 7,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:24.828791Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 40708,
+                    "cacheWrite": 12151,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 253
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 1725.5,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001502",
+                  "status": "done",
+                  "step": 9,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:27.410781Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 52859,
+                    "cacheWrite": 1887,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 182
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 2665.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001503",
+                  "status": "done",
+                  "step": 10,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:29.426505Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 54746,
+                    "cacheWrite": 10919,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 253
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 12245.5,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001505",
+                  "status": "done",
+                  "step": 12,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:32.313215Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 65665,
+                    "cacheWrite": 2637,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 1246
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5510.5,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001511",
+                  "status": "done",
+                  "step": 16,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:47.063498Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 68302,
+                    "cacheWrite": 8942,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 616
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 21437.5,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001516",
+                  "status": "done",
+                  "step": 19,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:07:54.899830Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 77244,
+                    "cacheWrite": 2165,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 2591
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4615.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001523",
+                  "status": "done",
+                  "step": 24,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:20.642746Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 79409,
+                    "cacheWrite": 2793,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 448
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5376.1,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001527",
+                  "status": "done",
+                  "step": 27,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:25.529297Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 82202,
+                    "cacheWrite": 8918,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 562
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5858.9,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001529",
+                  "status": "done",
+                  "step": 28,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:31.179673Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 91120,
+                    "cacheWrite": 2673,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 736
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 3558.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001532",
+                  "status": "done",
+                  "step": 30,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:37.282898Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 93793,
+                    "cacheWrite": 2935,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 389
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5611.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001534",
+                  "status": "done",
+                  "step": 32,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:41.145149Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 96728,
+                    "cacheWrite": 7744,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 621
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5729.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001537",
+                  "status": "done",
+                  "step": 34,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:47.036293Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 104472,
+                    "cacheWrite": 4599,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 602
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5010.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001541",
+                  "status": "done",
+                  "step": 36,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:53.033155Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 109071,
+                    "cacheWrite": 5733,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 476
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5584.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001545",
+                  "status": "done",
+                  "step": 39,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:08:58.277706Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 114804,
+                    "cacheWrite": 3871,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 549
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 6514.6,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001547",
+                  "status": "done",
+                  "step": 40,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:04.110697Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 118675,
+                    "cacheWrite": 2662,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 686
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4164.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001549",
+                  "status": "done",
+                  "step": 41,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:10.887289Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 121337,
+                    "cacheWrite": 5904,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 396
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5622.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001551",
+                  "status": "done",
+                  "step": 43,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:15.318720Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 127241,
+                    "cacheWrite": 1795,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 581
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4979.9,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001553",
+                  "status": "done",
+                  "step": 44,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:21.236239Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 129036,
+                    "cacheWrite": 4873,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 512
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 6568.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001558",
+                  "status": "done",
+                  "step": 47,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:26.477109Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 133909,
+                    "cacheWrite": 3125,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 651
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4586.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001560",
+                  "status": "done",
+                  "step": 48,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:33.249137Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 137034,
+                    "cacheWrite": 1379,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 439
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 5315.2,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001561",
+                  "status": "done",
+                  "step": 49,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:37.992063Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 138413,
+                    "cacheWrite": 1133,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 470
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 6611.1,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001565",
+                  "status": "done",
+                  "step": 52,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:43.571639Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 139546,
+                    "cacheWrite": 1244,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 641
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4905.4,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001569",
+                  "status": "done",
+                  "step": 54,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:50.433581Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 140790,
+                    "cacheWrite": 2403,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 454
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 6963.5,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001572",
+                  "status": "done",
+                  "step": 55,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:09:55.654989Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 143193,
+                    "cacheWrite": 3148,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 730
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4996.7,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001576",
+                  "status": "done",
+                  "step": 58,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:02.918045Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 146341,
+                    "cacheWrite": 5605,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 463
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 4177.3,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001578",
+                  "status": "done",
+                  "step": 59,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:08.186263Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 151946,
+                    "cacheWrite": 822,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 401
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                },
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "exec",
+                  "durationMs": 2394.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001579",
+                  "status": "done",
+                  "step": 60,
+                  "stopReason": "tool_use",
+                  "t": "2026-11-03T21:10:12.716044Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 152768,
+                    "cacheWrite": 825,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 260
+                  },
+                  "tools": [
+                    {
+                      "command": null,
+                      "destructive": null,
+                      "durationMs": null,
+                      "exitCode": null,
+                      "fileType": null,
+                      "mcpServer": null,
+                      "name": "Bash",
+                      "program": null,
+                      "resultBytes": null,
+                      "status": "ok",
+                      "target": null,
+                      "toolUseId": null
+                    }
+                  ],
+                  "ttftMs": null,
+                  "usageMissing": null
+                }
+              ],
+              "text": null,
+              "tokensIn": 3065001,
+              "tokensOut": 16607,
+              "work": {
+                "commands": [
+                  {
+                    "failed": 0,
+                    "lastExit": null,
+                    "program": null,
+                    "runs": 28
+                  }
+                ],
+                "commits": 0,
+                "editTypes": {},
+                "editedFiles": null,
+                "edits": 0,
+                "linesAdded": null,
+                "linesRemoved": null,
+                "mcp": [],
+                "otherTools": 0,
+                "prs": [],
+                "pushes": 0,
+                "readFiles": null,
+                "readTypes": {},
+                "reads": 0,
+                "subagents": [],
+                "web": {
+                  "fetches": 0,
+                  "searches": 0
+                }
+              }
+            },
+            {
+              "durationMs": 63829.8,
+              "exits": [],
+              "kind": "think",
+              "paths": null,
+              "program": null,
+              "server": null,
+              "startedAt": "2026-11-03T21:10:15.448666Z",
+              "steps": [
+                {
+                  "agentType": "general-purpose",
+                  "commands": [],
+                  "costUsd": null,
+                  "does": "text",
+                  "durationMs": 63829.8,
+                  "eventsPending": false,
+                  "exitCodes": [],
+                  "kind": "subagent",
+                  "model": "claude-opus-5-5",
+                  "patches": [],
+                  "requestClass": "subagent",
+                  "requestId": "demo-001583",
+                  "status": "done",
+                  "step": 63,
+                  "stopReason": "end_turn",
+                  "t": "2026-11-03T21:10:15.448666Z",
+                  "text": null,
+                  "tokens": {
+                    "accuracy": "exact",
+                    "cacheRead": 153593,
+                    "cacheWrite": 437,
+                    "cacheWrite1h": null,
+                    "cacheWrite5m": null,
+                    "input": 2,
+                    "output": 6805
+                  },
+                  "tools": [],
+                  "ttftMs": null,
+                  "usageMissing": null
+                }
+              ],
+              "text": null,
+              "tokensIn": 154032,
+              "tokensOut": 6805,
+              "work": {
+                "commands": [],
+                "commits": 0,
+                "editTypes": {},
+                "editedFiles": null,
+                "edits": 0,
+                "linesAdded": null,
+                "linesRemoved": null,
+                "mcp": [],
+                "otherTools": 0,
+                "prs": [],
+                "pushes": 0,
+                "readFiles": null,
+                "readTypes": {},
+                "reads": 0,
+                "subagents": [],
+                "web": {
+                  "fetches": 0,
+                  "searches": 0
+                }
+              }
+            }
+          ],
+          "name": "general-purpose",
+          "sessionId": null,
+          "steps": 29,
+          "tokensIn": 3219033,
+          "tokensOut": 23412,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 28
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        }
+      ],
+      "tokensIn": 8048127,
+      "tokensOut": 58587,
+      "work": {
+        "commands": [
+          {
+            "failed": 0,
+            "lastExit": null,
+            "program": null,
+            "runs": 56
+          }
+        ],
+        "commits": 0,
+        "editTypes": {},
+        "editedFiles": null,
+        "edits": 0,
+        "linesAdded": null,
+        "linesRemoved": null,
+        "mcp": [],
+        "otherTools": 0,
+        "prs": [],
+        "pushes": 0,
+        "readFiles": null,
+        "readTypes": {},
+        "reads": 0,
+        "subagents": [
+          {
+            "count": 2,
+            "name": null
+          }
+        ],
+        "web": {
+          "fetches": 0,
+          "searches": 0
+        }
+      }
+    },
+    {
+      "asked": {
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
+        "retained": false,
+        "text": null
+      },
+      "costUsd": null,
+      "durationMs": 1533.6,
+      "endedAt": "2026-11-03T21:11:20.962271Z",
+      "friction": {
+        "destructive": 0,
+        "frustrated": false,
+        "interrupted": false
+      },
+      "groups": [
+        {
+          "durationMs": 1533.6,
+          "exits": [],
+          "kind": "reply",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:11:19.428705Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 1533.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001601",
+              "status": "done",
+              "step": 1,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:11:19.428705Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 178205,
+                "cacheWrite": 5219,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 4,
+                "output": 86
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 183428,
+          "tokensOut": 86,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        }
+      ],
+      "live": false,
+      "n": 26,
+      "promptId": "90842aad-eea9-4222-8be4-ba92cc61b098",
+      "startedAt": "2026-11-03T21:11:19.428705Z",
+      "steps": 1,
+      "subagents": [],
+      "tokensIn": 183428,
+      "tokensOut": 86,
+      "work": {
+        "commands": [],
+        "commits": 0,
+        "editTypes": {},
+        "editedFiles": null,
+        "edits": 0,
+        "linesAdded": null,
+        "linesRemoved": null,
+        "mcp": [],
+        "otherTools": 0,
+        "prs": [],
+        "pushes": 0,
+        "readFiles": null,
+        "readTypes": {},
+        "reads": 0,
+        "subagents": [],
+        "web": {
+          "fetches": 0,
+          "searches": 0
+        }
+      }
+    },
+    {
+      "asked": {
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
+        "retained": false,
+        "text": null
+      },
+      "costUsd": null,
+      "durationMs": 308175.3,
+      "endedAt": "2026-11-03T21:17:39.684408Z",
+      "friction": {
+        "destructive": 0,
+        "frustrated": false,
+        "interrupted": false
+      },
+      "groups": [
+        {
+          "durationMs": 171526.1,
+          "exits": [],
+          "kind": "run",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:12:31.509058Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 9274.1,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001611",
+              "status": "done",
+              "step": 1,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:12:31.509058Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 183512,
+                "cacheWrite": 3573,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 4,
+                "output": 900
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 6300.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001612",
+              "status": "done",
+              "step": 2,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:12:41.813014Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 187085,
+                "cacheWrite": 1255,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 694
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 8748.0,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001615",
+              "status": "done",
+              "step": 3,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:12:53.358396Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 188340,
+                "cacheWrite": 1281,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 993
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 10480.7,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001617",
+              "status": "done",
+              "step": 4,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:13:07.633680Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 189621,
+                "cacheWrite": 2042,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1019
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 8915.3,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001620",
+              "status": "done",
+              "step": 5,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:13:19.860563Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 191663,
+                "cacheWrite": 5640,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 813
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 7004.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001622",
+              "status": "done",
+              "step": 6,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:13:30.385570Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 197303,
+                "cacheWrite": 1716,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 678
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 7069.8,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001624",
+              "status": "done",
+              "step": 7,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:13:39.498577Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 199019,
+                "cacheWrite": 1036,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 770
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 19919.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001627",
+              "status": "done",
+              "step": 8,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:14:16.851064Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 200055,
+                "cacheWrite": 2097,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1822
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 11043.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001630",
+              "status": "done",
+              "step": 9,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:14:37.245145Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 202152,
+                "cacheWrite": 3234,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1034
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 8342.7,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001632",
+              "status": "done",
+              "step": 10,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:14:48.566512Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 205386,
+                "cacheWrite": 1452,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 859
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 18791.4,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001634",
+              "status": "done",
+              "step": 11,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:14:57.833608Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 206838,
+                "cacheWrite": 934,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1727
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 4296.0,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001637",
+              "status": "done",
+              "step": 12,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:15:18.739153Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 207772,
+                "cacheWrite": 1847,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 402
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 2384879,
+          "tokensOut": 11711,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 12
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 7704.4,
+          "exits": [],
+          "kind": "edit",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:15:23.343440Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "patch",
+              "durationMs": 7704.4,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001638",
+              "status": "done",
+              "step": 13,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:15:23.343440Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 209619,
+                "cacheWrite": 1268,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 855
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Edit",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 210889,
+          "tokensOut": 855,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 1,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 12414.8,
+          "exits": [],
+          "kind": "reply",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:17:27.269607Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 12414.8,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001642",
+              "status": "done",
+              "step": 14,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:17:27.269607Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 211790,
+                "cacheWrite": 12973,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1281
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 224765,
+          "tokensOut": 1281,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        }
+      ],
+      "live": false,
+      "n": 27,
+      "promptId": "3b893496-021b-40d0-8826-11d9f00fe1b0",
+      "startedAt": "2026-11-03T21:12:31.509058Z",
+      "steps": 14,
+      "subagents": [],
+      "tokensIn": 2820533,
+      "tokensOut": 13847,
+      "work": {
+        "commands": [
+          {
+            "failed": 0,
+            "lastExit": null,
+            "program": null,
+            "runs": 12
+          }
+        ],
+        "commits": 0,
+        "editTypes": {},
+        "editedFiles": null,
+        "edits": 1,
+        "linesAdded": null,
+        "linesRemoved": null,
+        "mcp": [],
+        "otherTools": 0,
+        "prs": [],
+        "pushes": 0,
+        "readFiles": null,
+        "readTypes": {},
+        "reads": 0,
+        "subagents": [],
+        "web": {
+          "fetches": 0,
+          "searches": 0
+        }
+      }
+    },
+    {
+      "asked": {
+        "chars": null,
+        "images": null,
+        "pastedBytes": null,
+        "retained": false,
+        "text": null
+      },
+      "costUsd": null,
+      "durationMs": 140770.9,
+      "endedAt": "2026-11-03T21:21:05.894458Z",
+      "friction": {
+        "destructive": 0,
+        "frustrated": false,
+        "interrupted": false
+      },
+      "groups": [
+        {
+          "durationMs": 21422.5,
+          "exits": [],
+          "kind": "run",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:18:45.123543Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 19399.1,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001646",
+              "status": "done",
+              "step": 1,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:18:45.123543Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 224763,
+                "cacheWrite": 1330,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 4,
+                "output": 1897
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 1672.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001647",
+              "status": "done",
+              "step": 2,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:19:04.873847Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 226093,
+                "cacheWrite": 1928,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 148
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 454120,
+          "tokensOut": 2045,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 2
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 1304.1,
+          "exits": [],
+          "kind": "read",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:19:06.800457Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "tool",
+              "durationMs": 1304.1,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001648",
+              "status": "done",
+              "step": 3,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:19:06.800457Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 228021,
+                "cacheWrite": 2145,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 78
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Read",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 230168,
+          "tokensOut": 78,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 1,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 14138.8,
+          "exits": [],
+          "kind": "run",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:19:08.346158Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 14138.8,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001649",
+              "status": "done",
+              "step": 4,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:19:08.346158Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 230166,
+                "cacheWrite": 2546,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1402
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 232714,
+          "tokensOut": 1402,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 1
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 29035.9,
+          "exits": [],
+          "kind": "edit",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:19:23.171624Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "patch",
+              "durationMs": 29035.9,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001652",
+              "status": "done",
+              "step": 5,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:19:23.171624Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 232712,
+                "cacheWrite": 1460,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 3999
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Edit",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 234174,
+          "tokensOut": 3999,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 5,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 8909.1,
+          "exits": [],
+          "kind": "run",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:19:52.422905Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 3025.4,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001655",
+              "status": "done",
+              "step": 6,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:19:52.422905Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 234172,
+                "cacheWrite": 4420,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 274
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 5319.0,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001658",
+              "status": "done",
+              "step": 7,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:19:56.013063Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 238592,
+                "cacheWrite": 400,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 535
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 477588,
+          "tokensOut": 809,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 2
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 20272.6,
+          "exits": [],
+          "kind": "edit",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:20:01.638793Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "patch",
+              "durationMs": 20272.6,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001660",
+              "status": "done",
+              "step": 8,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:20:01.638793Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 238992,
+                "cacheWrite": 2971,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 2690
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Edit",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 241965,
+          "tokensOut": 2690,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 7,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 31745.2,
+          "exits": [],
+          "kind": "run",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:20:22.208157Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 9080.3,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001663",
+              "status": "done",
+              "step": 9,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:20:22.208157Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 241963,
+                "cacheWrite": 3119,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 933
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "patch",
+              "durationMs": 11212.2,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001666",
+              "status": "done",
+              "step": 10,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:20:31.778493Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 245082,
+                "cacheWrite": 1255,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 1238
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                },
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Edit",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 1156.3,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001670",
+              "status": "done",
+              "step": 11,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:20:46.444183Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 246337,
+                "cacheWrite": 1525,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 94
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 2955.4,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001671",
+              "status": "done",
+              "step": 12,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:20:48.495415Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 247862,
+                "cacheWrite": 165,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 256
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            },
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "exec",
+              "durationMs": 1559.1,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001673",
+              "status": "done",
+              "step": 13,
+              "stopReason": "tool_use",
+              "t": "2026-11-03T21:20:52.394276Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 248027,
+                "cacheWrite": 521,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 146
+              },
+              "tools": [
+                {
+                  "command": null,
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": null,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "Bash",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "ok",
+                  "target": null,
+                  "toolUseId": null
+                }
+              ],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 1235866,
+          "tokensOut": 2667,
+          "work": {
+            "commands": [
+              {
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
+                "runs": 6
+              }
+            ],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 1,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        },
+        {
+          "durationMs": 9393.1,
+          "exits": [],
+          "kind": "reply",
+          "paths": null,
+          "program": null,
+          "server": null,
+          "startedAt": "2026-11-03T21:20:56.501378Z",
+          "steps": [
+            {
+              "agentType": null,
+              "commands": [],
+              "costUsd": null,
+              "does": "text",
+              "durationMs": 9393.1,
+              "eventsPending": false,
+              "exitCodes": [],
+              "kind": "model",
+              "model": "claude-opus-5-5",
+              "patches": [],
+              "requestClass": "main",
+              "requestId": "demo-001674",
+              "status": "done",
+              "step": 14,
+              "stopReason": "end_turn",
+              "t": "2026-11-03T21:20:56.501378Z",
+              "text": null,
+              "tokens": {
+                "accuracy": "exact",
+                "cacheRead": 248548,
+                "cacheWrite": 223,
+                "cacheWrite1h": null,
+                "cacheWrite5m": null,
+                "input": 2,
+                "output": 938
+              },
+              "tools": [],
+              "ttftMs": null,
+              "usageMissing": null
+            }
+          ],
+          "text": null,
+          "tokensIn": 248773,
+          "tokensOut": 938,
+          "work": {
+            "commands": [],
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
+            "edits": 0,
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 0,
+            "prs": [],
+            "pushes": 0,
+            "readFiles": null,
+            "readTypes": {},
+            "reads": 0,
+            "subagents": [],
+            "web": {
+              "fetches": 0,
+              "searches": 0
+            }
+          }
+        }
+      ],
+      "live": false,
+      "n": 28,
+      "promptId": "28883e56-61fc-48b8-8124-a61e74567528",
+      "startedAt": "2026-11-03T21:18:45.123543Z",
+      "steps": 14,
+      "subagents": [],
+      "tokensIn": 3355368,
+      "tokensOut": 14628,
+      "work": {
+        "commands": [
+          {
+            "failed": 0,
+            "lastExit": null,
+            "program": null,
+            "runs": 11
+          }
+        ],
+        "commits": 0,
+        "editTypes": {},
+        "editedFiles": null,
+        "edits": 13,
+        "linesAdded": null,
+        "linesRemoved": null,
+        "mcp": [],
+        "otherTools": 0,
+        "prs": [],
+        "pushes": 0,
+        "readFiles": null,
+        "readTypes": {},
+        "reads": 1,
+        "subagents": [],
+        "web": {
+          "fetches": 0,
+          "searches": 0
+        }
+      }
     }
   ],
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-03T14:20:00Z",
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": 1,
     "pageSize": 10,
     "to": "2026-11-03T22:40:59.999999Z",
-    "total": 19
+    "total": 15
   }
 };
 

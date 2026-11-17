@@ -6,89 +6,46 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "capabilitiesAt": {
       "builtin": {
         "total": null,
-        "used": 10
+        "used": 8
       },
-      "hooks": 23,
+      "hooks": null,
       "mcpServers": [],
       "mcpTools": {
         "total": null,
-        "used": 0
+        "used": null
       },
-      "poolChangesInRange": 5,
+      "poolChangesInRange": null,
       "skills": null
     },
     "counts": {
-      "compactions": 3,
-      "events": 21305,
+      "compactions": 0,
+      "events": 0,
       "modelCalls": 640,
-      "prompts": 43,
-      "requests": 1709,
+      "prompts": 38,
+      "requests": 649,
       "steps": 640,
-      "turns": 43
+      "turns": 38
     },
     "experimentsAt": null,
     "flagFetchesInRange": null,
     "flagsChangedInRange": null,
-    "recapsInRange": [
-      {
-        "t": "2026-11-02T15:57:13.082000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-02T17:12:21.357000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-02T17:48:28.897000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-02T22:14:36.548000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-03T00:47:51.182000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-03T15:13:34.557000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-03T16:14:24.955000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-03T16:51:12.682000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-03T20:30:35.927000Z",
-        "text": null
-      },
-      {
-        "t": "2026-11-03T21:55:24.669000Z",
-        "text": null
-      }
-    ],
-    "recapsTotal": 10,
+    "recapsInRange": null,
+    "recapsTotal": null,
     "repoInRange": {
       "branch": null,
-      "commits": 18,
+      "commits": 0,
       "cwdTrail": null,
-      "headChanges": 23,
-      "headFrom": "b81e6e1c56b801e901fad5631be634f68628c90b",
-      "headTo": "fa97e3b2e72acf47adc7d12d11c1734ca22135d1",
-      "prs": [
-        2
-      ],
-      "pushed": true
+      "headChanges": null,
+      "headFrom": null,
+      "headTo": null,
+      "prs": [],
+      "pushed": false
     }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-02T05:31:00Z",
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": null,
     "pageSize": null,
     "to": "2026-11-04T18:05:59.999999Z",

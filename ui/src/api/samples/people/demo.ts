@@ -76,71 +76,35 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "agents": [
         "claude-code"
       ],
-      "bypassPct": 99.7,
-      "coverage": {
-        "captured": 507,
-        "notCaptured": 95,
-        "reported": 602,
-        "windows": [
-          {
-            "cause": null,
-            "count": 37,
-            "from": "2026-11-03T00:48:55.710000Z",
-            "to": "2026-11-03T00:57:10.792000Z"
-          },
-          {
-            "cause": null,
-            "count": 4,
-            "from": "2026-11-03T15:13:59.125000Z",
-            "to": "2026-11-03T15:17:48.778000Z"
-          },
-          {
-            "cause": null,
-            "count": 3,
-            "from": "2026-11-03T16:14:56.406000Z",
-            "to": "2026-11-03T16:24:30.091000Z"
-          },
-          {
-            "cause": null,
-            "count": 50,
-            "from": "2026-11-03T16:51:31.940000Z",
-            "to": "2026-11-03T17:03:02.686000Z"
-          },
-          {
-            "cause": null,
-            "count": 1,
-            "from": "2026-11-03T21:17:26.955000Z",
-            "to": "2026-11-03T21:17:26.955000Z"
-          }
-        ]
-      },
+      "bypassPct": null,
+      "coverage": null,
       "devices": 1,
       "email": null,
-      "lastSeenAt": "2026-11-04T18:02:49.146000Z",
+      "lastSeenAt": "2026-11-04T18:02:33.797795Z",
       "linkedBy": null,
       "live": true,
       "name": null,
-      "orgIdShort": "051f\u2026b273",
+      "orgIdShort": null,
       "orgKind": "unknown",
       "personId": "7d2e0000-0000-4000-8000-00000000a41c",
-      "prompts": 43,
+      "prompts": 38,
       "sessions": 1,
       "tokensAccuracy": "estimated",
       "tokensOut": 694376,
-      "turns": 43,
+      "turns": 38,
       "workingOn": {
         "live": true,
         "repo": null,
         "repos": [],
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "turn": 47
+        "turn": 38
       }
     }
   ],
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": 1,
     "pageSize": 50,
     "to": null,

@@ -110,7 +110,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
     "unattributed": {
       "firstSeen": null,
       "modelCalls": 0,
-      "reason": "No account id on any of its model calls or analytics events.",
+      "reason": "No account id on any of its model calls.",
       "sessions": 0
     }
   },

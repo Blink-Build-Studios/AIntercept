@@ -75,18 +75,14 @@ def _range(r: dict[str, Any], from_: datetime | None, to: datetime | None, now: 
 
 
 def header_from_table(r: dict[str, Any]) -> SessionHeader:
-    """A session_rows row (with `live`) as the session page header: field copies only."""
+    """A session_rows row (with `live`) as the session page header: field copies only. What only analytics fed
+    (not-captured calls, the device's platform, terminal and shell, cost) is null."""
     row = session_row_from_table(r, alone=True)
     return SessionHeader(
         **dict(row),
         personId=r["person_id"],
-        notCaptured=r["cov_not_captured"] if r["cov_reported"] is not None else None,
-        device=DeviceInfo(
-            deviceId=r["device_id"],
-            platform=r["device_platform"],
-            terminal=r["device_terminal"],
-            shell=r["device_shell"],
-        )
+        notCaptured=None,
+        device=DeviceInfo(deviceId=r["device_id"], platform=None, terminal=None, shell=None)
         if r["device_id"]
         else None,
         networks=r["networks"],
@@ -112,7 +108,7 @@ def header_from_table(r: dict[str, Any]) -> SessionHeader:
         turns=int(r["turns"] or 0),
         turnsInterrupted=int(r["turns_interrupted"] or 0),
         activeMs=(r["active_ns"] or 0) / 1e6,
-        costUsd=r["cost_usd"] if row.agent == "claude-code" else None,
+        costUsd=None,
         work=wk.turn_work(r["work"]),
         outcome=turnpages.outcome(r),
     )
@@ -237,7 +233,7 @@ def get_session_requests(
     hidden: bool = Query(False, description="Include the calls the user never sees (Codex prewarm, title)."),
 ) -> SessionRequestsResponse:
     now_dt, now = _now(request)
-    # The tab's range is open-ended by default: analytics batches arrive after the events they carry.
+    # The tab's range is open-ended by default.
     lo, hi = ranges.given(from_, to)
     with pages.read(request, "session/requests") as reader:
         found = _load(reader, sessionId, now)

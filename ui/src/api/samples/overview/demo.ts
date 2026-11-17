@@ -7,9 +7,9 @@ const sample: components["schemas"]["OverviewResponse"] = {
     "agents": [
       {
         "agent": "claude-code",
-        "bypassPct": 99.7,
+        "bypassPct": null,
         "highestWeekPct": null,
-        "missedCalls": 95,
+        "missedCalls": null,
         "people": 1,
         "sessions": 2,
         "shape": "sessions\u2192prompts\u2192steps",
@@ -102,22 +102,22 @@ const sample: components["schemas"]["OverviewResponse"] = {
       ]
     },
     "devices": 1,
-    "notCaptured": 95,
+    "notCaptured": 0,
     "people": 1,
     "requests": 1903,
     "sessions": 1,
-    "turns": 43,
+    "turns": 38,
     "unattributed": {
       "firstSeen": "2026-11-02T05:31:43.390999Z",
       "modelCalls": 1,
-      "reason": "No account id on any of its model calls or analytics events.",
+      "reason": "No account id on any of its model calls.",
       "sessions": 1
     }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": null,
     "pageSize": null,
     "to": null,

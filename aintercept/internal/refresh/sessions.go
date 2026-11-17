@@ -1,13 +1,16 @@
 package refresh
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // The session rollups (docs/PIPELINE.md §5.2): a session's row and its
 // Prompts page list, recomputed together from its hours, its keys, its
 // prompts and a few index lookups on its facts. They mean what today's
 // session row (process/sessionrows.go sessionRow) and prompt rows
 // (process/promptrows.go rows) mean. Values a page computes from the stored
-// ones aren't stored: the agent (from product), bypass % (queries, bypassed),
+// ones aren't stored: the agent (from product),
 // durations (from their times), live, the label (§6.1) and the children
 // (session_edges, §5.4).
 
@@ -17,6 +20,59 @@ import "fmt"
 // no account appears on the session (session_accounts).
 func newestCall(cond, order, cols string) string {
 	return `(SELECT ` + cols + ` FROM calls c WHERE c.session_id = $1 AND ` + cond + ` ORDER BY ` + order + ` LIMIT 1)`
+}
+
+// hasKeys are the values a session row looks up on its newest (or first) call
+// that has one, each with what makes a call have it. A minute's calls that
+// have one give it a key (kind "has", keyItems), so the session's lookup
+// reads only the calls of the newest (first) hour its keys show it in, and
+// none when no call has it: never the session's other calls.
+var hasKeys = []struct{ key, cond string }{
+	{"client", visible + ` AND coalesce(c.client_mode, '') <> ''`},
+	{"version", visible + ` AND coalesce(c.client_version, '') <> ''`},
+	{"title", `c.hidden_kind = 'title' AND ` + modelCall + ` AND jsonb_typeof(c.detail -> 'text') = 'string' AND c.detail ->> 'text' <> ''`},
+	{"account", visible + ` AND c.account_id IS NOT NULL`},
+	{"device", visible + ` AND c.device_id IS NOT NULL`},
+	{"effort", visible + ` AND coalesce(c.effort, '') <> ''`},
+	{"cli", visible + ` AND starts_with(c.user_agent, 'claude-cli/')`},
+	{"ratelimit", visible + ` AND jsonb_typeof(c.provider -> 'anthropic-ratelimit-unified-status') = 'string'`},
+	{"workspaces", codexCall + ` AND c.ext ? 'workspaces'`},
+	{"sandbox", codexCall + ` AND ` + jsonText(`c.ext -> 'sandbox_mode'`) + ` IS NOT NULL`},
+	{"limits", codexCall + ` AND c.provider::text LIKE '%x-codex-%'`},
+}
+
+func hasCond(key string) string {
+	for _, h := range hasKeys {
+		if h.key == key {
+			return h.cond
+		}
+	}
+	panic("refresh: no has key " + key)
+}
+
+// hasItems is the has keys of the model calls c `where` keeps (keyItems' columns).
+func hasItems(where string) string {
+	vals := make([]string, len(hasKeys))
+	for i, h := range hasKeys {
+		vals[i] = `(CASE WHEN ` + h.cond + ` THEN '` + h.key + `' END)`
+	}
+	return `SELECT c.session_id, ` + at + `, 'has', x.v, 1 FROM calls c, LATERAL (VALUES ` + strings.Join(vals, ", ") + `) AS x(v)
+	WHERE ` + where + ` AND ` + modelCall + ` AND x.v IS NOT NULL`
+}
+
+// inHour is the session's call c that has key (hasKeys) first by order (a SQL
+// ORDER BY over c), among the calls of the newest hour (first: the earliest)
+// its keys show one in; slack widens that hour backwards (an order by a time
+// other than the call's).
+func inHour(key string, first bool, slack int64, order, cols string) string {
+	agg := "max"
+	if first {
+		agg = "min"
+	}
+	return `(SELECT ` + cols + ` FROM calls c, (SELECT ` + agg + `(hour_ns) AS h FROM session_keys
+		WHERE session_id = $1 AND kind = 'has' AND key = '` + key + `') k
+	WHERE c.session_id = $1 AND ` + at + ` >= k.h - ` + fmt.Sprint(slack) + ` AND ` + at + ` < k.h + ` + fmt.Sprint(hourNS) + `
+	  AND ` + hasCond(key) + ` ORDER BY ` + order + ` LIMIT 1)`
 }
 
 // ctx is call c's context: input + cache read + cache write, NULL when all are
@@ -36,45 +92,26 @@ const codexCall = `(` + modelCall + ` AND c.source = 'codex')`
 
 // sessionCols are sessions' columns.
 const sessionCols = `session_id, start_ns, last_ns, product, client, client_version, client_version_ns, hidden_calls,
-	own_title, origin_kind, origin_session_id, origin, repo, commit, prompts, captured_from_prompt, model_calls, events,
-	frustrated, interrupted, destructive, queries, bypassed, cov_reported, cov_captured, cov_not_captured,
-	cov_window_from, cov_window_to, cov_window_count, fields_missing, person_id, device_id, device_platform,
-	device_terminal, device_shell, networks, effort, tokens_input, tokens_cache_read, tokens_cache_write, tokens_output,
+	own_title, origin_kind, origin_session_id, origin, repo, commit, prompts, model_calls, fields_missing, person_id, device_id,
+	networks, effort, tokens_input, tokens_cache_read, tokens_cache_write, tokens_output,
 	outputs_known, tokens_accuracy, tool_calls, has_facts, facts_cwd, facts_approval, facts_sandbox, limits, limits_ns,
-	cli_version, cli_version_ns, rl_status, rl_util, rl_overage, rl_ns, sandbox, sandbox_ns, custom_ca, unattributed,
-	prompt_event_last_ns, turns, turns_interrupted, active_ns, cost_usd, work, head_from, head_to, last_test`
+	cli_version, cli_version_ns, rl_status, rl_util, rl_overage, rl_ns, unattributed,
+	turns, turns_interrupted, active_ns, work`
 
 // newestDesc is today's "newest call" order: latest time, then the latest id.
 const newestDesc = at + ` DESC, replace(c.call_id, '#', '~') COLLATE "C" DESC`
 
-// envOf is the newest Claude Code event's env field k (sessionrows.go
-// sessEvents.add: env, the greatest value at the same time).
-func envOf(k string) string {
-	v := jsonText(`v.env -> '` + k + `'`)
-	return `(SELECT ` + v + ` FROM events e JOIN event_envs v USING (env_hash)
-		WHERE e.session_id = $1 AND e.source = 'claude_code' AND ` + v + ` IS NOT NULL
-		ORDER BY e.ts_ns DESC, ` + v + ` COLLATE "C" DESC LIMIT 1)`
-}
-
-// sessionSelect is session $1's row, when it has a visible model call or a
-// Claude Code event (the API's load_session).
+// sessionSelect is session $1's row, when it has a visible model call (the
+// API's load_session). A turn is interrupted when one of its steps stopped on
+// an interrupt or the next turn's request says it was (prompts.follows_interrupt).
 var sessionSelect = `WITH h AS (SELECT coalesce(sum(model_calls), 0) AS model_calls, coalesce(sum(hidden_calls), 0) AS hidden_calls,
-		coalesce(sum(events), 0) AS events, coalesce(sum(frustrated), 0) AS frustrated, coalesce(sum(interrupted), 0) AS interrupted,
-		coalesce(sum(destructive), 0) AS destructive, coalesce(sum(queries), 0) AS queries, coalesce(sum(bypassed), 0) AS bypassed,
-		coalesce(sum(reported), 0) AS reported, coalesce(sum(missed), 0) AS missed,
 		sum(input_tokens) AS input_tokens, sum(cache_read_tokens) AS cache_read_tokens, sum(cache_write_tokens) AS cache_write_tokens,
-		sum(output_tokens) AS output_tokens, coalesce(sum(outputs_known), 0) AS outputs_known, sum(tool_calls) AS tool_calls,
-		coalesce(sum(custom_ca), 0) AS custom_ca, sum(cost_usd ORDER BY hour_ns) AS cost_usd
+		sum(output_tokens) AS output_tokens, coalesce(sum(outputs_known), 0) AS outputs_known, sum(tool_calls) AS tool_calls
 	FROM session_hours WHERE session_id = $1),
-k AS (SELECT nullif(count(DISTINCT key) FILTER (WHERE kind IN ('call_prompt', 'input_prompt')), 0) AS prompts,
+k AS (SELECT nullif(count(DISTINCT key) FILTER (WHERE kind = 'call_prompt'), 0) AS prompts,
 		nullif(count(DISTINCT key) FILTER (WHERE kind = 'ip'), 0) AS networks
-	FROM session_keys WHERE session_id = $1),
-w AS (SELECT array_agg(f ORDER BY f) AS f, array_agg(l ORDER BY f) AS l, array_agg(n ORDER BY f) AS n FROM (
-	SELECT min(ts_ns) AS f, max(ts_ns) AS l, count(*) AS n FROM (
-		SELECT ts_ns, sum(CASE WHEN prev IS NULL OR ts_ns - prev >= ` + gapSplit + ` THEN 1 ELSE 0 END) OVER (ORDER BY ts_ns, event_key) AS g
-		FROM (SELECT ts_ns, event_key, lag(ts_ns) OVER (ORDER BY ts_ns, event_key) AS prev FROM missed_reports WHERE session_id = $1) a) b
-	GROUP BY g) x)
-SELECT $1, least(ev.first, fc.at), greatest(ev.last, lc.at), fc.product, cl.client, cv.version, cv.ns, h.hidden_calls,
+	FROM session_keys WHERE session_id = $1)
+SELECT $1, fc.at, lc.at, fc.product, cl.client, cv.version, cv.ns, h.hidden_calls,
 	` + pyStrip(`ttl.text`) + `,
 	CASE WHEN o.kind IS NOT NULL OR o.init = 'cold_resume' THEN coalesce(o.kind, 'resume') END,
 	CASE WHEN o.kind IS NOT NULL OR o.init = 'cold_resume' THEN o.parent END,
@@ -84,79 +121,49 @@ SELECT $1, least(ev.first, fc.at), greatest(ev.last, lc.at), fc.product, cl.clie
 	CASE WHEN coalesce(ws.cwd, '') <> '' THEN regexp_replace(rtrim(ws.cwd, '/'), '^.*/', '') END,
 	CASE WHEN coalesce(ws.cwd, '') <> '' AND jsonb_typeof(cx.ws -> ws.cwd -> 'latest_git_commit_hash') = 'string'
 		THEN left(cx.ws -> ws.cwd ->> 'latest_git_commit_hash', 7) END,
-	k.prompts, ip.captured_from,
-	h.model_calls, nullif(h.events, 0), h.frustrated, h.interrupted, h.destructive, h.queries, h.bypassed,
-	CASE WHEN h.events > 0 THEN h.reported END,
-	CASE WHEN h.events > 0 THEN h.reported - h.missed ELSE h.model_calls END,
-	CASE WHEN h.events > 0 THEN h.missed ELSE 0 END,
-	CASE WHEN h.events > 0 THEN coalesce(w.f, '{}') ELSE '{}' END,
-	CASE WHEN h.events > 0 THEN coalesce(w.l, '{}') ELSE '{}' END,
-	CASE WHEN h.events > 0 THEN coalesce(w.n, '{}') ELSE '{}' END,
-	h.model_calls > 0 AND NOT EXISTS (SELECT 1 FROM calls c WHERE c.session_id = $1 AND ` + visible + `
-		AND (c.account_id IS NOT NULL OR c.device_id IS NOT NULL)),
-	coalesce(ea.account_id, ca.account_id), coalesce(ed.device_id, cd.device_id),
-	CASE WHEN coalesce(ed.device_id, cd.device_id) IS NOT NULL THEN ` + envOf("platform") + ` END,
-	CASE WHEN coalesce(ed.device_id, cd.device_id) IS NOT NULL THEN ` + envOf("terminal") + ` END,
-	CASE WHEN coalesce(ed.device_id, cd.device_id) IS NOT NULL THEN ` + envOf("shell") + ` END,
+	k.prompts, h.model_calls,
+	h.model_calls > 0 AND NOT EXISTS (SELECT 1 FROM session_keys WHERE session_id = $1 AND kind = 'has' AND key IN ('account', 'device')),
+	ca.account_id, cd.device_id,
 	k.networks, ef.effort,
 	h.input_tokens, h.cache_read_tokens, h.cache_write_tokens, h.output_tokens, h.outputs_known,
 	CASE WHEN h.model_calls > 0 AND h.outputs_known = h.model_calls THEN 'exact' WHEN h.outputs_known = 0 THEN 'missing' ELSE 'estimated' END,
 	h.tool_calls,
-	ws.cwd IS NOT NULL OR ` + jsonStrOnly(`cx.turn -> 'approval_policy'`) + ` IS NOT NULL OR fs.v IS NOT NULL,
-	ws.cwd, ` + jsonStrOnly(`cx.turn -> 'approval_policy'`) + `, fs.v,
+	ws.cwd IS NOT NULL OR cx.sandbox IS NOT NULL, ws.cwd, NULL, cx.sandbox,
 	lim.provider, lim.ns,
-	cli.v, cli.ns, rl.status, rl.util, rl.overage, rl.ns, sb.v, sb.ns,
-	h.custom_ca > 0,
+	cli.v, cli.ns, rl.status, rl.util, rl.overage, rl.ns,
 	h.model_calls > 0 AND NOT acct.any,
-	(SELECT max(l.ts_ns) FROM unnest(ARRAY[` + promptEventNames + `]) n(name), LATERAL (SELECT e.ts_ns FROM events e
-		WHERE e.session_id = $1 AND e.name = n.name AND e.source = 'claude_code' ORDER BY e.ts_ns DESC LIMIT 1) l),
-	tn.turns, tn.interrupted, tn.active, h.cost_usd,
-	(WITH i AS MATERIALIZED (SELECT kind, key, n, NULL::bigint AS exit, 0::bigint AS at, ''::text AS b, 0::bigint AS bn
-		FROM session_keys WHERE session_id = $1 AND starts_with(kind, 'w:')) SELECT ` + workObj("i", false) + `),
-	` + headOf("") + `, ` + headOf("DESC") + `, ` + lastTest + `
-FROM h, k, w
-LEFT JOIN LATERAL (SELECT count(*) AS turns, count(*) FILTER (WHERE interrupted) AS interrupted,
-	coalesce(sum(greatest(ended_ns - t_ns, 0)), 0) AS active FROM prompts WHERE session_id = $1) tn ON true
-LEFT JOIN LATERAL (SELECT (SELECT min(ts_ns) FROM events WHERE session_id = $1 AND source = 'claude_code') AS first,
-	(SELECT max(ts_ns) FROM events WHERE session_id = $1 AND source = 'claude_code') AS last) ev ON true
+	tn.turns, tn.interrupted, tn.active,
+	` + workObj(`(SELECT kind, key, n FROM session_keys WHERE session_id = $1 AND starts_with(kind, 'w:'))`) + `
+FROM h, k
+LEFT JOIN LATERAL (SELECT count(*) AS turns, count(*) FILTER (WHERE interrupted OR next_follows) AS interrupted,
+	coalesce(sum(greatest(ended_ns - t_ns, 0)), 0) AS active
+	FROM (SELECT interrupted, ended_ns, t_ns,
+		coalesce(lead(follows_interrupt) OVER (ORDER BY t_ns, prompt_id COLLATE "C"), false) AS next_follows
+		FROM prompts WHERE session_id = $1) p) tn ON true
 LEFT JOIN LATERAL ` + newestCall(visible, callOrder, at+` AS at, `+agent+` AS product`) + ` fc ON true
 LEFT JOIN LATERAL ` + newestCall(visible, newestDesc, at+` AS at`) + ` lc ON true
-LEFT JOIN LATERAL ` + newestCall(visible+` AND coalesce(c.client_mode, '') <> ''`, newestDesc, `c.client_mode AS client`) + ` cl ON true
-LEFT JOIN LATERAL ` + newestCall(visible+` AND coalesce(c.client_version, '') <> ''`, newestDesc, `c.client_version AS version, `+at+` AS ns`) + ` cv ON true
-LEFT JOIN LATERAL ` + newestCall(`c.hidden_kind = 'title' AND `+modelCall+` AND jsonb_typeof(c.detail -> 'text') = 'string' AND c.detail ->> 'text' <> ''`,
-	newestDesc, `c.detail ->> 'text' AS text`) + ` ttl ON true
-LEFT JOIN LATERAL (SELECT CASE WHEN min(` + jsonInt(md("prompt_index")) + `) > 1 THEN min(` + jsonInt(md("prompt_index")) + `) END AS captured_from
-	FROM events e WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.name = 'tengu_input_prompt') ip ON true
+LEFT JOIN LATERAL ` + inHour("client", false, 0, newestDesc, `c.client_mode AS client`) + ` cl ON true
+LEFT JOIN LATERAL ` + inHour("version", false, 0, newestDesc, `c.client_version AS version, `+at+` AS ns`) + ` cv ON true
+LEFT JOIN LATERAL ` + inHour("title", false, 0, newestDesc, `c.detail ->> 'text' AS text`) + ` ttl ON true
 LEFT JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM session_accounts WHERE session_id = $1) AS any) acct ON true
-LEFT JOIN LATERAL (SELECT e.account_id FROM events e WHERE acct.any AND e.session_id = $1 AND e.source = 'claude_code' AND e.account_id IS NOT NULL
-	ORDER BY e.ts_ns, e.account_id COLLATE "C" LIMIT 1) ea ON true
-LEFT JOIN LATERAL (SELECT c.account_id FROM calls c WHERE acct.any AND c.session_id = $1 AND ` + visible + ` AND c.account_id IS NOT NULL
-	ORDER BY ` + at + `, c.account_id COLLATE "C" LIMIT 1) ca ON true
-LEFT JOIN LATERAL (SELECT e.device_id FROM events e WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.device_id IS NOT NULL
-	AND e.name IN ('tengu_api_success', 'tengu_api_query', 'tengu_input_prompt', 'tengu_cancel',
-	               'tengu_bash_tool_command_executed', 'tengu_return_to_session', 'tengu_event_loop_stall')
-	ORDER BY e.ts_ns, e.device_id COLLATE "C" LIMIT 1) ed ON true
-LEFT JOIN LATERAL ` + newestCall(visible+` AND c.device_id IS NOT NULL`, at+`, c.device_id COLLATE "C"`, `c.device_id`) + ` cd ON true
-LEFT JOIN LATERAL ` + newestCall(visible+` AND coalesce(c.effort, '') <> ''`, at+` DESC, replace(c.call_id, '#', '~') COLLATE "C"`, `c.effort`) + ` ef ON true
-LEFT JOIN LATERAL ` + newestCall(visible+` AND starts_with(c.user_agent, 'claude-cli/')`,
+LEFT JOIN LATERAL (SELECT ca.account_id FROM ` + inHour("account", true, 0, at+`, c.account_id COLLATE "C"`, `c.account_id`) + ` ca(account_id)
+	WHERE acct.any) ca ON true
+LEFT JOIN LATERAL ` + inHour("device", true, 0, at+`, c.device_id COLLATE "C"`, `c.device_id`) + ` cd ON true
+LEFT JOIN LATERAL ` + inHour("effort", false, 0, at+` DESC, replace(c.call_id, '#', '~') COLLATE "C"`, `c.effort`) + ` ef ON true
+LEFT JOIN LATERAL ` + inHour("cli", false, 0,
 	at+` DESC, coalesce(substring(c.user_agent from 'claude-cli/([^ ]+)'), '') COLLATE "C" DESC`,
 	`coalesce(substring(c.user_agent from 'claude-cli/([^ ]+)'), '') AS v, `+at+` AS ns`) + ` cli ON true
-LEFT JOIN LATERAL ` + newestCall(visible+` AND jsonb_typeof(c.provider -> 'anthropic-ratelimit-unified-status') = 'string'`,
+LEFT JOIN LATERAL ` + inHour("ratelimit", false, hourNS,
 	`coalesce(c.response_start_ns, `+at+`) DESC, `+newestDesc,
 	`c.provider ->> 'anthropic-ratelimit-unified-status' AS status, `+jsonDouble(`c.provider -> 'anthropic-ratelimit-unified-7d-utilization'`)+` AS util,
 	`+jsonStrOnly(`c.provider -> 'anthropic-ratelimit-unified-overage-status'`)+` AS overage, coalesce(c.response_start_ns, `+at+`) AS ns`) + ` rl ON true
-LEFT JOIN LATERAL (SELECT ` + jsonText(md("sandbox_enabled")) + ` AS v, e.ts_ns AS ns FROM events e
-	WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.name = 'tengu_bash_tool_command_executed' AND ` + jsonText(md("sandbox_enabled")) + ` IS NOT NULL
-	ORDER BY e.ts_ns DESC, ` + jsonText(md("sandbox_enabled")) + ` COLLATE "C" DESC LIMIT 1) sb ON true
 LEFT JOIN LATERAL (SELECT
-	` + newestCall(codexCall+` AND c.ext ? 'workspaces'`, at+` DESC, c.ext::text COLLATE "C" DESC`, `c.ext -> 'workspaces'`) + ` AS ws,
-	(SELECT e.metadata FROM events e WHERE e.session_id = $1 AND e.source = 'codex' AND e.name = 'codex_turn_event' AND e.metadata IS NOT NULL
-		ORDER BY e.ts_ns DESC, e.metadata::text COLLATE "C" DESC LIMIT 1) AS turn,
-	` + newestCall(codexCall+` AND `+jsonText(`c.ext -> 'sandbox_mode'`)+` IS NOT NULL`,
-	at+` DESC, `+jsonText(`c.ext -> 'sandbox_mode'`)+` COLLATE "C" DESC`, jsonText(`c.ext -> 'sandbox_mode'`)) + ` AS sandbox
+	` + inHour("workspaces", false, 0, at+` DESC, c.ext::text COLLATE "C" DESC`, `c.ext -> 'workspaces'`) + ` AS ws,
+	nullif(` + inHour("sandbox", false, 0,
+	at+` DESC, `+jsonText(`c.ext -> 'sandbox_mode'`)+` COLLATE "C" DESC`, jsonText(`c.ext -> 'sandbox_mode'`)) + `, '') AS sandbox
 	WHERE fc.product = 'codex') cx ON true
-LEFT JOIN LATERAL (SELECT c.provider, ` + at + ` AS ns FROM calls c WHERE fc.product = 'codex' AND c.session_id = $1 AND ` + codexCall + `
-	AND c.provider::text LIKE '%x-codex-%' ORDER BY ` + newestDesc + ` LIMIT 1) lim ON true
+LEFT JOIN LATERAL (SELECT l.* FROM ` + inHour("limits", false, 0, newestDesc, `c.provider, `+at+` AS ns`) + ` l(provider, ns)
+	WHERE fc.product = 'codex') lim ON true
 LEFT JOIN LATERAL (SELECT min(lk.kind) AS kind, min(lk.parent) AS parent, max(lk.ordinal) AS ordinal,
 		min(l.init) FILTER (WHERE l.init NOT IN ('', 'new')) AS init,
 		min(l.agent_name) FILTER (WHERE l.agent_name NOT IN ('', '/root')) AS agent_name
@@ -170,76 +177,23 @@ LEFT JOIN LATERAL (SELECT min(lk.kind) AS kind, min(lk.parent) AS parent, max(lk
 	WHERE fc.product = 'codex' AND c.session_id = $1 AND ` + codexCall + ` AND c.ext IS NOT NULL) o ON true
 LEFT JOIN LATERAL (SELECT (SELECT key FROM jsonb_object_keys(cx.ws) key LIMIT 1) AS cwd
 	WHERE jsonb_typeof(cx.ws) = 'object' AND cx.ws <> '{}') ws ON true
-LEFT JOIN LATERAL (SELECT CASE WHEN coalesce(cx.sandbox, '') <> '' THEN cx.sandbox
-	ELSE ` + jsonStrOnly(`cx.turn -> 'sandbox_policy'`) + ` END AS v) fs ON true
-WHERE h.model_calls > 0 OR h.events > 0`
-
-// headOf is the session's first (order "") or last (DESC) head_sha (the
-// OutcomeSlot's head range, handoff §11R): its Claude Code events by time,
-// from the first (or to the end of the last) hour its keys have a head in, so
-// a session with none, or heads only late, reads one hour's events at most.
-func headOf(order string) string {
-	bound := `e.ts_ns >= (SELECT min(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'head')`
-	if order == "DESC" {
-		bound = `e.ts_ns < (SELECT max(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'head') + ` + fmt.Sprint(hourNS)
-	}
-	return `(SELECT e.head_sha FROM events e WHERE e.session_id = $1 AND ` + bound + ` AND e.source = 'claude_code' AND e.head_sha IS NOT NULL
-		ORDER BY e.ts_ns ` + order + `, e.batch_call_id COLLATE "C" ` + order + `, e.batch_cc_n ` + order + ` LIMIT 1)`
-}
-
-// lastTest is the session's last run of a test program (the OutcomeSlot's
-// last test, handoff §11R): its newest Bash command whose program is a test
-// run, with its exit code and time, read back from the end of the last hour
-// whose work keys hold a test program's run.
-var lastTest = func() string {
-	md := func(k string) string { return pyStr(emd("e", k)) }
-	p := programOf(md("bash_argv0"), md("bash_subcommand"), md("bash_last_argv0"))
-	return `(SELECT jsonb_build_object('program', ` + p + `, 'exit', ` + jsonTrunc(emd("e", "exit_code")) + `, 't', e.ts_ns) FROM events e
-		WHERE e.session_id = $1 AND e.name = 'tengu_bash_tool_command_executed' AND e.source = 'claude_code'
-		  AND e.ts_ns < (SELECT max(hour_ns) FROM session_keys WHERE session_id = $1 AND kind = 'w:run' AND ` + isTest("key") + `) + ` + fmt.Sprint(hourNS) + `
-		  AND ` + isTest(p) + ` AND ` + jsonTrunc(emd("e", "exit_code")) + ` IS NOT NULL
-		ORDER BY e.ts_ns DESC, e.batch_call_id COLLATE "C" DESC, e.batch_cc_n DESC LIMIT 1)`
-}()
-
-// gapSplit is claude_code.py GAP_SPLIT_NS: coverage windows split at gaps this
-// long (sessionrows.go coverageWindows).
-const gapSplit = `900000000000`
-
-// promptEventNames are the events the prompt rows read (promptrows.go
-// promptEventNames): the newest's time decides whether a step's events are
-// still pending while the session is live.
-const promptEventNames = `'tengu_input_prompt', 'tengu_turn_end', 'tengu_cancel', 'tengu_bash_tool_command_executed',
-	'tengu_tool_use_success', 'tengu_tool_use_error', 'tengu_tool_use_progress', 'tengu_api_success', 'tengu_paste_text',
-	'tengu_paste_image', 'tengu_return_to_session', 'tengu_reactive_compact_attempt', 'tengu_reactive_compact_succeeded',
-	'tengu_idle_compact_fired'`
+WHERE h.model_calls > 0`
 
 // --- the Prompts page's list ---------------------------------------------------------------------
 
 // itemCols are prompt_items' columns.
-const itemCols = `session_id, seq, t_ns, type, prompt_id, prompt_index, open_tail, pasted_bytes, images, hidden,
-	between_kind, detail, call_id, tokens_from, tokens_to, attempt_ns`
-
-// kTokens is session.py _k: 1234 -> "1k" (Python's round, half to even).
-func kTokens(n string) string {
-	return `CASE WHEN ` + n + ` >= 1000 THEN (CASE WHEN ` + n + ` % 1000 > 500 OR ` + n + ` % 1000 = 500 AND (` + n + ` / 1000) % 2 = 1
-		THEN ` + n + ` / 1000 + 1 ELSE ` + n + ` / 1000 END)::text || 'k' ELSE ` + n + `::text END`
-}
+const itemCols = `session_id, seq, t_ns, type, prompt_id, prompt_index, open_tail, hidden, between_kind, detail, call_id`
 
 // modelFamily is process/requestrows.go modelFamily: opus, sonnet or haiku.
 const modelFamily = `CASE WHEN coalesce(c.model, '') = '' THEN '—' ELSE coalesce(substring(c.model from '^claude-(opus|sonnet|haiku)'), c.model) END`
 
-// itemsSelect is session $1's Prompts page list (promptrows.go rows), in
-// today's order (by time, then type; prompts by start and id, the between rows
-// in their events' or calls' order):
-//   - its prompts, with what the session's other prompts decide: the Codex
-//     number (its place), the open tail (the last, with no turn end or turn
-//     report status), the pastes and images since the typed prompt before it,
-//     and the hidden calls it's given (a prewarm the next prompt to start, others
-//     the last started before them: _hidden_by_prompt);
-//   - each compaction (session.py compactions: its attempt, its call, the
-//     context before and after it from the main calls);
-//   - each recap shown on return;
-//   - each visible call with no prompt that isn't a compaction's.
+// itemsSelect is session $1's Prompts page list, by time (then type; prompts
+// by start and id, the calls by id):
+//   - its prompts, with their places (the number), the open tail (the last,
+//     while a step of it is open), and the hidden calls it's given (a prewarm
+//     the next prompt to start, others the last started before them:
+//     _hidden_by_prompt);
+//   - each visible call with no prompt.
 var itemsSelect = `WITH p AS (SELECT p.*, row_number() OVER (ORDER BY p.t_ns, p.prompt_id COLLATE "C") AS n, count(*) OVER () AS total
 	FROM prompts p WHERE p.session_id = $1),
 hc AS (SELECT c.hidden_kind AS kind, ` + at + ` AS t FROM calls c WHERE c.session_id = $1 AND c.hidden_kind IS NOT NULL AND ` + modelCall + `),
@@ -247,53 +201,24 @@ hp AS (SELECT CASE WHEN hc.kind = 'prewarm' THEN coalesce(a.pid, b.pid) ELSE coa
 	FROM hc LEFT JOIN LATERAL (SELECT p.prompt_id AS pid FROM p WHERE p.t_ns >= hc.t ORDER BY p.n LIMIT 1) a ON true
 		LEFT JOIN LATERAL (SELECT p.prompt_id AS pid FROM p WHERE p.t_ns < hc.t ORDER BY p.n DESC LIMIT 1) b ON true
 	GROUP BY 1, 2),
-comp AS (SELECT e.ts_ns AS t, e.batch_call_id AS b, e.batch_cc_n AS bn, lag(e.ts_ns) OVER (ORDER BY ` + evOrder("e") + `) AS prev
-	FROM events e WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.name = 'tengu_reactive_compact_succeeded'),
-comp2 AS (SELECT comp.*, att.a AS attempt, coalesce(att.a, comp.t) AS start FROM comp
-	LEFT JOIN LATERAL (SELECT max(a.ts_ns) AS a FROM events a WHERE a.session_id = $1 AND a.source = 'claude_code'
-		AND a.name = 'tengu_reactive_compact_attempt' AND a.ts_ns > coalesce(comp.prev, -1) AND a.ts_ns <= comp.t) att ON true),
-comp3 AS (SELECT comp2.*, rq.call_id, fr.ctx AS tokens_from, tt.ctx AS tokens_to,
-		EXISTS (SELECT 1 FROM events f WHERE f.session_id = $1 AND f.source = 'claude_code' AND f.name = 'tengu_idle_compact_fired'
-			AND f.ts_ns >= comp2.start - 10000000000 AND f.ts_ns <= comp2.start) AS idle
-	FROM comp2
-	LEFT JOIN LATERAL ` + newestCall(visible+` AND c.request_class = 'compaction' AND `+at+` >= comp2.start AND `+at+` <= comp2.t`, callOrder, `c.call_id`) + ` rq(call_id) ON true
-	LEFT JOIN LATERAL ` + newestCall(visible+` AND c.request_class = 'main' AND `+callCtx+` IS NOT NULL AND `+at+` < comp2.start`, newestDesc, callCtx) + ` fr(ctx) ON true
-	LEFT JOIN LATERAL ` + newestCall(visible+` AND c.request_class = 'main' AND `+callCtx+` IS NOT NULL AND `+at+` > comp2.t`, callOrder, callCtx) + ` tt(ctx) ON true),
 items AS (
-	SELECT p.t_ns, 'prompt' AS type, 0 AS grp, p.prompt_id AS ord, 0::bigint AS ord_n, p.prompt_id,
-		CASE WHEN p.has_input THEN p.prompt_index WHEN p.product = 'codex' THEN p.n END AS prompt_index,
-		p.n = p.total AND p.turn_end_ns IS NULL AND coalesce(p.turn_report ->> 'status', '') = '' AS open_tail,
-		pa.pasted, pa.images, coalesce(hj.hidden, '{}') AS hidden,
-		NULL AS between_kind, NULL AS detail, NULL AS call_id, NULL::bigint AS tokens_from, NULL::bigint AS tokens_to, NULL::bigint AS attempt_ns
+	SELECT p.t_ns, 'prompt' AS type, 0 AS grp, p.prompt_id AS ord, p.prompt_id, p.n AS prompt_index,
+		p.n = p.total AND p.unfinished_max_ns IS NOT NULL AS open_tail, coalesce(hj.hidden, '{}') AS hidden,
+		NULL AS between_kind, NULL AS detail, NULL AS call_id
 	FROM p
-	LEFT JOIN LATERAL (SELECT sum(` + jsonTrunc(md("pastedTextBytes")) + `) FILTER (WHERE e.name = 'tengu_paste_text') AS pasted,
-			count(*) FILTER (WHERE e.name = 'tengu_paste_image') AS images
-		FROM events e WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.name IN ('tengu_paste_text', 'tengu_paste_image')
-		  AND e.ts_ns > coalesce((SELECT max(q.t_ns) FROM p q WHERE q.has_input AND q.t_ns < p.t_ns), -1) AND e.ts_ns <= p.t_ns) pa ON p.has_input
 	LEFT JOIN (SELECT pid, jsonb_object_agg(kind, n) AS hidden FROM hp WHERE pid IS NOT NULL GROUP BY pid) hj ON hj.pid = p.prompt_id
 	UNION ALL
-	SELECT t, 'between', 1, b, bn, NULL, NULL, false, NULL, NULL, NULL,
-		CASE WHEN idle THEN 'idle-compaction' ELSE 'compaction' END,
-		CASE WHEN idle THEN 'idle compaction' ELSE 'compaction' END
-			|| CASE WHEN tokens_from <> 0 AND tokens_to <> 0 THEN ' · context ' || ` + kTokens("tokens_from") + ` || ' → ' || ` + kTokens("tokens_to") + ` || ' tokens' ELSE '' END,
-		call_id, tokens_from, tokens_to, attempt
-	FROM comp3
-	UNION ALL
-	SELECT e.ts_ns, 'between', 2, e.batch_call_id, e.batch_cc_n, NULL, NULL, false, NULL, NULL, NULL, 'recap', 'recap shown on return', NULL, NULL, NULL, NULL
-	FROM events e WHERE e.session_id = $1 AND e.source = 'claude_code' AND e.name = 'tengu_return_to_session' AND ` + pyTrue(md("hadRecap")) + `
-	UNION ALL
-	SELECT ` + at + `, 'between', 3, replace(c.call_id, '#', '~'), 0, NULL, NULL, false, NULL, NULL, NULL, 'call',
+	SELECT ` + at + `, 'between', 3, replace(c.call_id, '#', '~'), NULL, NULL, false, NULL, 'call',
 		coalesce(nullif(c.request_class, ''), '—') || ' · ' || ` + modelFamily + ` || ' · ' || coalesce(nullif(c.stop_reason, ''), '—'),
-		c.call_id, NULL, NULL, NULL
-	FROM calls c WHERE c.session_id = $1 AND c.prompt_id IS NULL AND ` + visible + `
-	  AND c.call_id NOT IN (SELECT call_id FROM comp3 WHERE call_id IS NOT NULL))
-SELECT $1, row_number() OVER (ORDER BY t_ns, type COLLATE "C", grp, ord COLLATE "C", ord_n), t_ns, type, prompt_id, prompt_index,
-	open_tail, pasted, images, hidden, between_kind, detail, call_id, tokens_from, tokens_to, attempt_ns
+		c.call_id
+	FROM calls c WHERE c.session_id = $1 AND c.prompt_id IS NULL AND ` + visible + `)
+SELECT $1, row_number() OVER (ORDER BY t_ns, type COLLATE "C", grp, ord COLLATE "C"), t_ns, type, prompt_id, prompt_index,
+	open_tail, hidden, between_kind, detail, call_id
 FROM items`
 
 // sessionRefresh recomputes session $1's row and its Prompts page list.
-// Both are replaced: a session's row leaves when its calls and events have
-// (retention), and its list renumbers as prompts arrive.
+// Both are replaced: a session's row leaves when its calls have (retention),
+// and its list renumbers as prompts arrive.
 var sessionRefresh = []string{
 	`DELETE FROM sessions WHERE session_id = $1`,
 	`INSERT INTO sessions (` + sessionCols + `) ` + sessionSelect,

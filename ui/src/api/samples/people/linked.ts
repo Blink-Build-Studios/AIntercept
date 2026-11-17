@@ -68,7 +68,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
         {
           "agent": "claude-code",
           "devices": 1,
-          "firstSeenAt": "2026-11-04T08:00:00Z",
+          "firstSeenAt": "2026-11-04T08:00:10Z",
           "version": "2.1.308"
         },
         {
@@ -103,19 +103,14 @@ const sample: components["schemas"]["PeopleResponse"] = {
         "codex"
       ],
       "bypassPct": null,
-      "coverage": {
-        "captured": 0,
-        "notCaptured": 0,
-        "reported": 0,
-        "windows": []
-      },
+      "coverage": null,
       "devices": 2,
       "email": "ada@example.com",
       "lastSeenAt": "2026-11-04T16:10:00Z",
       "linkedBy": "email",
       "live": false,
       "name": "Ada Lovelace",
-      "orgIdShort": "0000\u202600a9",
+      "orgIdShort": null,
       "orgKind": "unknown",
       "personId": "00000000-0000-4000-8000-00000000acc1",
       "prompts": 6,

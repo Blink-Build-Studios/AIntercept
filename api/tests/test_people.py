@@ -1,6 +1,6 @@
-"""/people/{personId}/sessions and /timeline, from Claude Code-shaped traffic."""
+"""/people/{personId}/sessions and /timeline, from Claude Code-shaped traffic. Its analytics stay in the raw
+files: what only they fed (events, coverage, bypass %, friction, the analytics lane) is null or empty."""
 
-from aintercept_api.timeline import BYPASS_CAUSE
 from tests.builders import ACCOUNT, ClaudeCode
 from tests.test_session import error_on_query
 
@@ -38,10 +38,11 @@ def test_sessions_one(dataset, pg_client_for, write_sample):
     r = client.get(SESSIONS)
     write_sample(client, r, "one")
     (s,) = r.json()["data"]
-    assert s["sessionId"] == S1 and s["modelCalls"] == 3 and s["prompts"] == 1 and s["events"] == 7
-    assert s["coverage"] == {"reported": 3, "captured": 3, "notCaptured": 0, "windows": []}
-    assert s["bypassPct"] == 100.0 and s["live"] is False and s["end"] == "2026-11-04T09:03:05Z"
+    assert s["sessionId"] == S1 and s["modelCalls"] == 3 and s["prompts"] == 1 and s["events"] is None
+    assert s["coverage"] is None and s["bypassPct"] is None
+    assert s["live"] is False and s["end"] == "2026-11-04T09:03:00Z"  # its last model call
     assert s["capturedFromPrompt"] is None and s["fieldsMissing"] is False
+    assert s["friction"] == {"frustrated": 0, "interrupted": 0, "destructive": 0}
 
 
 def test_sessions_many_newest_first_and_paged(dataset, pg_client_for, write_sample):
@@ -57,33 +58,8 @@ def test_sessions_many_newest_first_and_paged(dataset, pg_client_for, write_samp
     assert [s["sessionId"] for s in ranged["data"]] == [S2]
 
 
-def test_sessions_pre_parser(dataset, pg_client_for, write_sample):
-    """Model calls without identity; the session is attributed through its analytics."""
-    cc = ClaudeCode(dataset, S1)
-    cc.call("2026-11-04T09:01:00", prompt=None, parsed=False)
-    cc.event("2026-11-04T09:05:00", "tengu_turn_end")
-    client = pg_client_for(dataset)
-    r = client.get(SESSIONS)
-    write_sample(client, r, "pre_parser")
-    (s,) = r.json()["data"]
-    assert s["fieldsMissing"] is True and s["prompts"] is None and s["modelCalls"] == 1
-
-
-def test_sessions_coverage_gap(dataset, pg_client_for, write_sample):
-    """Claude Code reports calls the proxy never saw (the IPv6 bypass): one window."""
-    cc = a_session(dataset, calls=2)
-    for minute in (10, 12, 14):
-        cc.reported(f"2026-11-04T09:{minute}:00", f"req_bypassed_{minute}")
-    client = pg_client_for(dataset)
-    r = client.get(SESSIONS)
-    write_sample(client, r, "coverage_gap")
-    cov = r.json()["data"][0]["coverage"]
-    assert (cov["reported"], cov["captured"], cov["notCaptured"]) == (5, 2, 3)
-    assert cov["windows"] == [{"from": "2026-11-04T09:10:00Z", "to": "2026-11-04T09:14:00Z", "count": 3, "cause": None}]
-
-
-def test_sessions_live_with_friction(dataset, pg_client_for, write_sample):
-    """Activity within 5 minutes of now (18:05): live, no end. Friction and a mid-session capture start."""
+def test_sessions_live(dataset, pg_client_for, write_sample):
+    """Activity within 5 minutes of now (18:05): live, no end. Claude Code's friction events aren't kept."""
     cc = ClaudeCode(dataset, S1)
     cc.event("2026-11-04T17:40:00", "tengu_input_prompt", prompt_index=12, is_negative=True)
     cc.call("2026-11-04T17:41:00")
@@ -96,8 +72,8 @@ def test_sessions_live_with_friction(dataset, pg_client_for, write_sample):
     write_sample(client, r, "live")
     (s,) = r.json()["data"]
     assert s["live"] is True and s["end"] is None
-    assert s["friction"] == {"frustrated": 1, "interrupted": 1, "destructive": 1}
-    assert s["capturedFromPrompt"] == 12
+    assert s["friction"] == {"frustrated": 0, "interrupted": 0, "destructive": 0}
+    assert s["capturedFromPrompt"] is None
 
 
 def test_sessions_error(dataset, pg_client_for, write_sample, monkeypatch):
@@ -140,16 +116,11 @@ def test_timeline_one_session(dataset, pg_client_for, write_sample):
     assert (band["prompts"], band["modelCalls"], band["repo"], band["branch"]) == (1, 3, None, None)
     (p,) = d["prompts"]
     assert (p["promptId"], p["index"], p["steps"], p["tokensIn"], p["tokensOut"]) == ("p1", 1, 3, 9, 300)
-    assert p["durationMs"] is None and p["text"]["retained"] is False  # no tengu_turn_end; content is off
+    assert p["text"]["retained"] is False  # content is off
     (b,) = d["modelCalls"]
     assert b["byClass"] == {"main": 3, "subagent": 0, "auxiliary": 0}
     assert (b["tokensIn"], b["tokensOut"], b["notCaptured"]) == (9, 300, 0)
-    (a,) = d["analytics"]
-    assert a["count"] == 7 and a["top"] == [
-        {"name": "tengu_api_query", "count": 3},
-        {"name": "tengu_api_success", "count": 3},
-        {"name": "tengu_input_prompt", "count": 1},
-    ]
+    assert d["analytics"] == [] and d["notCaptured"] == [] and d["friction"] == []
 
 
 def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, pg_client_for, write_sample):
@@ -176,38 +147,9 @@ def test_timeline_many_overlapping_sessions_pack_into_rows(dataset, pg_client_fo
     d = r.json()["data"]
     rows = {s["sessionId"]: s["row"] for s in d["sessions"]}
     assert rows == {S1: 0, S2: 1, S3: 0}
-    marks = {m["kind"]: m for m in d["friction"]}
-    assert {k: (m["count"], m["promptIndex"], m["tool"]) for k, m in marks.items()} == {
-        "frustrated": (1, 4, None),
-        "interrupted": (1, 4, None),
-        "destructive": (2, None, "Bash"),  # the commands carry no cc_prompt_id here
-    }
-    assert marks["destructive"]["detail"] == "rm_recursive_force · outside_cwd, rm_force"
-    assert marks["frustrated"]["detail"] == "prompt flagged negative"
+    assert d["friction"] == []  # Claude Code's friction events aren't kept
     first_bin = d["modelCalls"][0]
     assert first_bin["count"] == 6 and first_bin["byClass"] == {"main": 4, "subagent": 1, "auxiliary": 1}
-
-
-def test_timeline_coverage_gap(dataset, pg_client_for, write_sample):
-    cc = a_session(dataset, calls=1)
-    cc.reported("2026-11-04T09:20:00", "req_bypassed")
-    cc.call("2026-11-04T09:45:00")
-    client = pg_client_for(dataset)
-    r = client.get(TIMELINE, params={"from": "2026-11-04T09:00:00Z", "to": "2026-11-04T10:00:00Z"})
-    write_sample(client, r, "coverage_gap")
-    d = r.json()["data"]
-    assert d["notCaptured"] == [
-        {
-            "from": "2026-11-04T09:20:00Z",
-            "to": "2026-11-04T09:20:00Z",
-            "count": 1,
-            "reported": 1,
-            "captured": 0,
-            "cause": BYPASS_CAUSE,  # no model call captured in the window while analytics were
-        }
-    ]
-    gap_bin = next(b for b in d["modelCalls"] if b["t"] == "2026-11-04T09:20:00Z")
-    assert (gap_bin["count"], gap_bin["notCaptured"], gap_bin["tokensIn"]) == (0, 1, None)
 
 
 def test_timeline_error(dataset, pg_client_for, write_sample, monkeypatch):

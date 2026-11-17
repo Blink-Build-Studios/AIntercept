@@ -5,93 +5,65 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
   "data": {
     "capabilities": {
       "builtinTools": null,
-      "builtinUsed": 1,
-      "hookOverheadMs": 50.0,
-      "hooks": 0,
-      "mcpServers": [
-        {
-          "name": "github",
-          "riskyVerbs": [],
-          "tools": null,
-          "toolsUsed": 1
-        }
-      ],
+      "builtinUsed": null,
+      "hookOverheadMs": null,
+      "hooks": null,
+      "mcpServers": [],
       "mcpToolsTotal": null,
-      "mcpToolsUsed": 1,
-      "memoryWrites": 0,
+      "mcpToolsUsed": null,
+      "memoryWrites": null,
       "skills": null,
       "variesBySession": null
     },
     "coverage": {
-      "captured": 6,
-      "notCaptured": 1,
-      "reported": 7,
-      "windows": [
-        {
-          "cause": null,
-          "count": 1,
-          "from": "2026-11-04T09:06:08Z",
-          "to": "2026-11-04T09:06:08Z"
-        }
-      ]
+      "captured": 4,
+      "notCaptured": 0,
+      "reported": null,
+      "windows": []
     },
     "footprint": {
       "codeShipped": {
-        "commits": 1,
+        "commits": 0,
         "headChanges": null,
-        "prs": [
-          2
-        ],
-        "pushes": 1
+        "prs": [],
+        "pushes": 0
       },
-      "commands": 2,
+      "commands": null,
       "destructive": {
-        "outsideCwd": 1,
+        "outsideCwd": 0,
         "rmF": 0,
-        "rmRf": 1,
-        "total": 1
+        "rmRf": 0,
+        "total": 0
       },
       "failures": {
-        "apiRetries": 1,
+        "apiRetries": 0,
         "commands": 0,
         "toolErrors": 0
       },
       "prompts": 1,
       "subagentCalls": 1,
-      "toolCalls": 2,
-      "toolsByName": {
-        "Bash": 1,
-        "mcp__github__create_pr": 1
-      },
-      "topCommandWords": [
-        {
-          "count": 1,
-          "word": "git"
-        },
-        {
-          "count": 1,
-          "word": "rm"
-        }
-      ],
+      "toolCalls": null,
+      "toolsByName": {},
+      "topCommandWords": [],
       "turns": 1
     },
     "ribbon": {
       "accountCalls": 1,
-      "analyticsBatches": 16,
-      "analyticsEvents": 19,
+      "analyticsBatches": 0,
+      "analyticsEvents": 0,
       "cost": {
         "basis": "api-equivalent",
-        "estimatedCalls": 1,
-        "usd": 0.75
+        "estimatedCalls": 0,
+        "usd": null
       },
-      "eventTypes": 8,
+      "eventTypes": 0,
       "modelCalls": 4,
       "sessions": 1,
       "tokens": {
         "accuracy": "exact",
         "cacheRead": null,
         "cacheWrite": null,
-        "cacheWrite1h": 3000,
+        "cacheWrite1h": null,
         "cacheWrite5m": null,
         "input": 12,
         "output": 700
@@ -99,53 +71,31 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
       "toolsReachable": null
     },
     "work": {
-      "activeMs": 300002.0,
+      "activeMs": 240002.0,
       "outcome": {
-        "commits": 1,
+        "commits": 0,
         "editTypes": {},
         "editedFiles": null,
         "headFrom": null,
         "headTo": null,
         "lastTest": null,
-        "prs": [
-          2
-        ],
-        "pushes": 1
+        "prs": [],
+        "pushes": 0
       },
       "repos": 0,
       "turns": 1,
       "work": {
-        "commands": [
-          {
-            "failed": 0,
-            "lastExit": null,
-            "program": "git",
-            "runs": 1
-          },
-          {
-            "failed": 0,
-            "lastExit": null,
-            "program": "rm",
-            "runs": 1
-          }
-        ],
-        "commits": 1,
+        "commands": [],
+        "commits": 0,
         "editTypes": {},
         "editedFiles": null,
         "edits": 0,
         "linesAdded": null,
         "linesRemoved": null,
-        "mcp": [
-          {
-            "calls": 1,
-            "server": "github"
-          }
-        ],
+        "mcp": [],
         "otherTools": 0,
-        "prs": [
-          2
-        ],
-        "pushes": 1,
+        "prs": [],
+        "pushes": 0,
         "readFiles": null,
         "readTypes": {},
         "reads": 0,
@@ -159,8 +109,8 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
-    "from": "2026-11-04T09:00:00Z",
-    "lastDataAt": "2026-11-04T09:06:08Z",
+    "from": "2026-11-04T09:01:00Z",
+    "lastDataAt": "2026-11-04T09:05:00Z",
     "page": null,
     "pageSize": null,
     "to": "2026-11-04T18:05:59.999999Z",

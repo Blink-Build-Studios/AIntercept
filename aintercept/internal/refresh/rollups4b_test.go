@@ -1,11 +1,8 @@
 package refresh
 
 import (
-	"cmp"
-	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,22 +26,10 @@ func pcall(id, s, p string, at int64) records.Record {
 	return r
 }
 
-// pev is a Claude Code event of session s in prompt p, with the tool use id
-// canon reads from its metadata.
+// pev is a Claude Code analytics event of session s in prompt p (not loaded).
 func pev(batch string, n int64, s, p string, at int64, name, md string) records.Record {
 	r := ev(batch, n, s, at, name, md)
 	r.Event.PromptID = p
-	var m struct{ ToolUseID, ToolUseID2 string }
-	if err := json.Unmarshal([]byte(strings.ReplaceAll(md, `"tool_use_id"`, `"ToolUseID2"`)), &m); err == nil {
-		r.Event.ToolUseID = cmp.Or(m.ToolUseID, m.ToolUseID2)
-	}
-	return r
-}
-
-// tool is a tool event of request rid (tengu_tool_use_success, _error or _progress).
-func tool(batch string, n int64, s, p string, at int64, name, rid, md string) records.Record {
-	r := pev(batch, n, s, p, at, name, md)
-	r.Event.RequestID = rid
 	return r
 }
 
@@ -55,105 +40,108 @@ func open(r records.Record) records.Record {
 	return r
 }
 
+// stepNumbers is a prompt's steps' numbers as the API counts them at read:
+// each step's place in its prompt by (t_ns, ord).
+const stepNumbers = `SELECT jsonb_object_agg(call_id, n) AS s, (SELECT steps FROM prompts WHERE prompt_id = $1) AS n
+	FROM (SELECT call_id, row_number() OVER (ORDER BY t_ns, ord) AS n FROM steps WHERE prompt_id = $1) x`
+
 func TestPromptAndSteps(t *testing.T) {
 	db := fresh(t)
 	a := pcall("a", "s", "p1", t0+1*sec)
 	a.Call.InputTokens, a.Call.CacheReadTokens = 10, 20
 	a.Call.ToolUsesJSON, a.Call.StopReason, a.Call.Model = `[{"tool":"Bash","name":"Bash"}]`, "tool_use", "claude-opus-4"
+	a.Call.DetailJSON = `{"said":[{"role":"system","note":"<system-reminder","text":"<system-reminder>x</system-reminder>"},{"role":"user","text":"fix it"}],` +
+		`"prompt":"fix it","promptChars":6,"calls":[{"id":"tu1","tool":"Bash","commands":["rm"]},{"id":"tu2","tool":"Read","file":"src/A.TS"}]}`
 	b := pcall("b", "s", "p1", t0+2*sec)
 	b.Call.RequestClass, b.Call.OutputTokens, b.Call.AgentType = "subagent", 0, "Explore"
 	b.Call.ToolUsesJSON = `[{"tool":"apply_patch"}]`
-	b.Call.DetailJSON = `{"calls":[{"id":"x1","tool":"exec","commands":["go test","ls"],"patches":[{"file":"a.go","added":2,"removed":1},{"file":"","added":1}]}],"text":"Done.","prompt":"fix it"}`
+	b.Call.DetailJSON = `{"said":[{"role":"user","text":"look"}],"prompt":"look","promptChars":4,` +
+		`"calls":[{"id":"x1","tool":"exec","commands":["go test","ls"],"patches":[{"file":"a.go","added":2,"removed":1},{"file":"","added":1}]}],` +
+		`"text":"Done.","results":{"tu1":{"exit":[1]},"tu2":{}}}`
 	c := pcall("c", "s", "p1", t0+3*sec)
 	c.Call.DetailJSON = `{"results":{"x1":{"exit":[0,2]}}}`
 	d := open(pcall("d", "s", "p1", t0+4*sec))
 	write(t, db, a, b, c, d,
 		pev("B", 1, "s", "p1", t0, "tengu_input_prompt", `{"prompt_index":3,"prompt_length":"12","is_negative":"true"}`),
-		rep("B", 2, "s", t0+1*sec, "req-a"),
-		tool("B", 3, "s", "p1", t0+1*sec, "tengu_tool_use_success", "req-a", `{"toolUseID":"tu1","toolName":"Bash","durationMs":15}`),
-		tool("B", 4, "s", "p1", t0+1*sec, "tengu_tool_use_progress", "req-a", `{"toolUseID":"tu1","toolName":"Bash"}`),
-		tool("B", 5, "s", "p1", t0+1*sec, "tengu_tool_use_progress", "req-a", `{"toolUseID":"tu2","toolName":"Read"}`),
-		pev("B", 6, "s", "p1", t0+1*sec, "tengu_bash_tool_command_executed",
-			`{"tool_use_id":"tu1","bash_argv0":"rm","exit_code":1,"destructive_category":"rm_force","destructive_target_scope":"cwd"}`),
-		pev("B", 7, "s", "p1", t0+5*sec, "tengu_turn_end", `{}`),
-		pev("B", 8, "s", "p1", t0+5*sec, "tengu_cancel", `{}`),
+		pev("B", 2, "s", "p1", t0+5*sec, "tengu_cancel", `{}`),
 	)
-	// The report's rep() has no prompt id, and its metadata names its cost.
 	drain(t, db)
 	expect(t, row(t, db, "SELECT * FROM prompts WHERE prompt_id = 'p1'"), map[string]any{
-		"session_id": "s", "t_ns": float64(t0), "product": "claude_code", "has_input": true, "prompt_index": 3, "text_chars": 12,
-		"frustrated": true, "steps": 4, "unfinished_max_ns": float64(t0 + 4*sec), "turn_end_ns": float64(t0 + 5*sec),
-		"text": "fix it", "tokens_in": 30, "tokens_out": 10, "tool_counts": map[string]any{"Bash": float64(1)},
-		"interrupted": true, "destructive": 1, "turn_report": nil,
+		"session_id": "s", "t_ns": float64(t0 + 1*sec), "product": "claude_code", "text_chars": 6,
+		"steps": 4, "unfinished_max_ns": float64(t0 + 4*sec), "text": "fix it", "tokens_in": 30, "tokens_out": 10,
+		"tool_counts": map[string]any{"Bash": float64(1), "Read": float64(1), "exec": float64(1)},
+		"interrupted": false, "follows_interrupt": false, "ended_ns": float64(t0 + 4*sec),
+		"parts": []any{map[string]any{"role": "system", "note": "<system-reminder", "text": "<system-reminder>x</system-reminder>"},
+			map[string]any{"role": "user", "text": "fix it"}},
 	})
-	bash := map[string]any{"toolUseId": "tu1", "name": "Bash", "mcpServer": nil, "target": nil, "status": "ok", "durationMs": float64(15),
-		"exitCode": float64(1), "command": "rm", "program": "rm", "fileType": nil, "resultBytes": nil,
-		"destructive": map[string]any{"category": "rm_force", "scope": "cwd"}}
-	read := map[string]any{"toolUseId": "tu2", "name": "Read", "mcpServer": nil, "target": nil, "status": "running", "durationMs": nil,
-		"exitCode": nil, "command": nil, "program": nil, "fileType": nil, "resultBytes": nil, "destructive": nil}
-	expect(t, row(t, db, "SELECT * FROM steps WHERE prompt_id = 'p1' AND step = 1"), map[string]any{
-		"call_id": "a", "kind": "model", "model": "claude-opus-4", "request_class": "main", "tokens_input": 10, "tokens_cache_read": 20,
-		"tokens_cache_write": nil, "tokens_cache_write_5m": 7, "tokens_output": 5, "ttft_ms": nil, "cost_usd": 0.5, "reported": true,
-		"failed": false, "end_ns": float64(t0 + 2*sec), "does": "exec", "stop_reason": "tool_use",
-		"tools": []any{bash}, "tools_live": []any{bash, read},
-		"commands": []any{"rm"}, "exit_codes": []any{float64(1)}, "content_live": false, "usage_missing": nil,
+	bash := map[string]any{"toolUseId": "tu1", "name": "Bash", "mcpServer": nil, "target": nil, "status": "error", "durationMs": nil,
+		"exitCode": float64(1), "command": "rm", "program": "rm", "fileType": nil, "resultBytes": nil, "destructive": nil}
+	read := map[string]any{"toolUseId": "tu2", "name": "Read", "mcpServer": nil, "target": "src/A.TS", "status": "ok", "durationMs": nil,
+		"exitCode": nil, "command": nil, "program": nil, "fileType": "ts", "resultBytes": nil, "destructive": nil}
+	expect(t, row(t, db, "SELECT * FROM steps WHERE call_id = 'a'"), map[string]any{
+		"prompt_id": "p1", "ord": "a", "kind": "model", "model": "claude-opus-4", "request_class": "main", "tokens_input": 10,
+		"tokens_cache_read": 20, "tokens_cache_write": nil, "tokens_output": 5, "failed": false, "end_ns": float64(t0 + 2*sec),
+		"does": "exec", "stop_reason": "tool_use", "tools": []any{bash, read}, "commands": []any{"rm"}, "exit_codes": []any{float64(1)},
+		"usage_missing": nil, "prompt_chars": 6, "work_kind": "run", "program": "rm",
+		"work_pieces": []any{[]any{"w:run", "rm", float64(1), float64(1)}, []any{"w:run_failed", "rm", float64(1), nil},
+			[]any{"w:read", "ts", float64(1), nil}, []any{"w:read_file", "src/A.TS", float64(1), nil}},
 	})
-	expect(t, row(t, db, "SELECT * FROM steps WHERE prompt_id = 'p1' AND step = 2"), map[string]any{
-		"call_id": "b", "kind": "subagent", "request_class": "subagent", "agent_type": "Explore", "tokens_output": nil,
-		"reported": false, "does": "patch", "tools": []any{}, "tools_live": nil,
-		"commands": []any{"go test", "ls"}, "exit_codes": []any{float64(0), float64(2)},
+	expect(t, row(t, db, "SELECT * FROM steps WHERE call_id = 'b'"), map[string]any{
+		"kind": "subagent", "request_class": "subagent", "agent_type": "Explore", "tokens_output": nil,
+		"does": "patch", "commands": []any{"go test", "ls"}, "exit_codes": []any{float64(0), float64(2)},
 		"patches": []any{map[string]any{"file": "a.go", "added": float64(2), "removed": float64(1)}}, "text": "Done.", "usage_missing": "streamCut",
 	})
-	expect(t, row(t, db, "SELECT * FROM steps WHERE prompt_id = 'p1' AND step = 4"), map[string]any{
-		"call_id": "d", "end_ns": nil, "failed": true, "does": "text", "tokens_output": nil, "model": nil})
+	expect(t, row(t, db, "SELECT * FROM steps WHERE call_id = 'd'"), map[string]any{
+		"end_ns": nil, "failed": true, "does": "text", "tokens_output": nil, "model": nil, "prompt_chars": nil, "work_kind": "think"})
+	// The turn's work: its steps' pieces added up, each command with its last run's exit code.
+	work := row(t, db, "SELECT work FROM prompts WHERE prompt_id = 'p1'")["work"].(map[string]any)
+	expect(t, work, map[string]any{"reads": 1, "readFiles": 1, "readTypes": map[string]any{"ts": float64(1)}, "editedFiles": 1,
+		"linesAdded": 2, "linesRemoved": 1})
+	expect(t, work["commands"].([]any)[0].(map[string]any), map[string]any{"program": "go test", "runs": 1, "failed": 0, "lastExit": float64(0)})
 	checkScratch(t, db)
 }
 
-// A call arriving after a later step of its prompt renumbers the steps.
+// A call arriving after a later step of its prompt takes its place: the
+// numbers counted at read follow.
 func TestLateCallRenumbersSteps(t *testing.T) {
 	db := fresh(t)
 	write(t, db, pcall("b", "s", "p", t0+2*sec), pcall("c", "s", "p", t0+3*sec))
 	drain(t, db)
-	steps := func() map[string]any {
-		return row(t, db, "SELECT jsonb_object_agg(call_id, step) AS s, (SELECT steps FROM prompts WHERE prompt_id = 'p') AS n FROM steps WHERE prompt_id = 'p'")
-	}
-	expect(t, steps(), map[string]any{"s": map[string]any{"b": float64(1), "c": float64(2)}, "n": 2})
+	expect(t, row(t, db, stepNumbers, "p"), map[string]any{"s": map[string]any{"b": float64(1), "c": float64(2)}, "n": 2})
 	write(t, db, pcall("a", "s", "p", t0+1*sec))
 	drain(t, db)
-	expect(t, steps(), map[string]any{"s": map[string]any{"a": float64(1), "b": float64(2), "c": float64(3)}, "n": 3})
+	expect(t, row(t, db, stepNumbers, "p"), map[string]any{"s": map[string]any{"a": float64(1), "b": float64(2), "c": float64(3)}, "n": 3})
 	checkScratch(t, db)
 }
 
-// A late input event sets the prompt's number, its time and its typed values.
-func TestLateInputSetsPromptNumber(t *testing.T) {
+// A call that moves to another prompt (its end names one its start didn't)
+// leaves the first: both prompts' rows follow.
+func TestStepMovesBetweenPrompts(t *testing.T) {
 	db := fresh(t)
-	write(t, db, pcall("a", "s", "p", t0+2*sec))
+	a, b := pcall("a", "s", "p", t0), pcall("b", "s", "p", t0+sec)
+	b.Kind, b.Call.EndNS = records.KindCallStart, 0
+	write(t, db, a, b)
 	drain(t, db)
-	expect(t, row(t, db, "SELECT p.prompt_index, p.has_input, p.t_ns, i.prompt_index AS number FROM prompts p JOIN prompt_items i USING (session_id, prompt_id)"),
-		map[string]any{"prompt_index": nil, "has_input": false, "t_ns": float64(t0 + 2*sec), "number": nil})
-	write(t, db, pev("B", 1, "s", "p", t0, "tengu_input_prompt", `{"prompt_index":7,"prompt_length":5}`))
+	moved := pcall("b", "s", "q", t0+sec)
+	write(t, db, moved)
 	drain(t, db)
-	expect(t, row(t, db, "SELECT p.prompt_index, p.has_input, p.t_ns, p.text_chars, i.prompt_index AS number FROM prompts p JOIN prompt_items i USING (session_id, prompt_id)"),
-		map[string]any{"prompt_index": 7, "has_input": true, "t_ns": float64(t0), "text_chars": 5, "number": 7})
+	expect(t, row(t, db, "SELECT steps, tokens_out FROM prompts WHERE prompt_id = 'p'"), map[string]any{"steps": 1, "tokens_out": 5})
+	expect(t, row(t, db, "SELECT steps, tokens_out FROM prompts WHERE prompt_id = 'q'"), map[string]any{"steps": 1, "tokens_out": 5})
 	checkScratch(t, db)
 }
 
-// A step's tool, report and Bash events can name another prompt (a subagent's
-// call): arriving late, they still refresh the step's prompt.
-func TestLateEventsOfAnotherPromptRefreshTheStep(t *testing.T) {
+// Analytics events change nothing: a prompt's input event makes no prompt,
+// and a step's tool and report events add nothing to it.
+func TestAnalyticsMakeNoPrompts(t *testing.T) {
 	db := fresh(t)
-	write(t, db, pcall("a", "s", "p", t0))
+	write(t, db, pcall("a", "s", "p", t0+sec),
+		ev("B", 3, "s", t0, "tengu_input_prompt", `{"prompt_index":2,"prompt_length":9}`),
+		pev("B", 4, "s", "q", t0, "tengu_input_prompt", `{"prompt_index":3}`),
+		pev("B", 5, "s", "p", t0, "tengu_tool_use_success", `{"toolName":"Edit"}`))
 	drain(t, db)
-	write(t, db, tool("B", 1, "s", "q", t0, "tengu_tool_use_success", "req-a", `{"toolUseID":"tu1","toolName":"Bash"}`))
-	drain(t, db)
-	write(t, db, pev("C", 1, "s", "q", t0, "tengu_bash_tool_command_executed", `{"tool_use_id":"tu1","bash_argv0":"ls","exit_code":0}`))
-	drain(t, db)
-	r := rep("D", 1, "s", t0, "req-a")
-	r.Event.PromptID = "q"
-	write(t, db, r)
-	drain(t, db)
-	expect(t, row(t, db, "SELECT commands, exit_codes, reported FROM steps WHERE call_id = 'a'"),
-		map[string]any{"commands": []any{"ls"}, "exit_codes": []any{float64(0)}, "reported": true})
+	expect(t, row(t, db, "SELECT count(*) AS n, jsonb_agg(prompt_id) AS ids, min(tool_counts::text) AS tools FROM prompts"),
+		map[string]any{"n": 1, "ids": []any{"p"}, "tools": "{}"})
+	expect(t, row(t, db, "SELECT prompts FROM sessions WHERE session_id = 's'"), map[string]any{"prompts": 1})
 	checkScratch(t, db)
 }
 
@@ -181,49 +169,67 @@ func TestResultCarriedByAnotherPromptsCall(t *testing.T) {
 			drain(t, db)
 			expect(t, row(t, db, "SELECT commands, exit_codes FROM steps WHERE call_id = 'a'"),
 				map[string]any{"commands": []any{"make", "ls"}, "exit_codes": []any{float64(2), float64(1)}})
+			work := row(t, db, "SELECT work FROM prompts WHERE prompt_id = 'p1'")["work"].(map[string]any)
+			expect(t, work["commands"].([]any)[1].(map[string]any), map[string]any{"program": "make", "runs": 1, "failed": 1, "lastExit": float64(2)})
 			checkScratch(t, db)
 		})
 	}
 }
 
+// The harness's interrupt note in a turn's request marks it as following an
+// interrupted turn; a step that stopped on an interrupt marks its own.
+func TestInterrupts(t *testing.T) {
+	db := fresh(t)
+	a := pcall("a", "s", "p1", t0)
+	b := pcall("b", "s", "p2", t0+10*sec)
+	b.Call.DetailJSON = `{"said":[{"role":"system","note":"[Request interrupted by user","text":"[Request interrupted by user]"},{"role":"user","text":"stop"}],"prompt":"stop","promptChars":4,"interrupted":true}`
+	c := codex("c", "x", "t1", t0)
+	c.Call.StopReason = "incomplete:interrupted"
+	write(t, db, a, b, c)
+	drain(t, db)
+	expect(t, row(t, db, "SELECT jsonb_object_agg(prompt_id, jsonb_build_array(interrupted, follows_interrupt)) AS p FROM prompts"),
+		map[string]any{"p": map[string]any{"p1": []any{false, false}, "p2": []any{false, true}, "t1": []any{true, false}}})
+	expect(t, row(t, db, "SELECT turns, turns_interrupted FROM sessions WHERE session_id = 's'"), map[string]any{"turns": 2, "turns_interrupted": 1})
+	expect(t, row(t, db, "SELECT turns, turns_interrupted FROM sessions WHERE session_id = 'x'"), map[string]any{"turns": 1, "turns_interrupted": 1})
+	checkScratch(t, db)
+}
+
+// A turn's text is its first main-class step's: a subagent's request that
+// came first doesn't give it.
+func TestTurnTextFromItsMainCall(t *testing.T) {
+	db := fresh(t)
+	sub := pcall("a", "s", "p", t0)
+	sub.Call.RequestClass = "subagent"
+	sub.Call.DetailJSON = `{"said":[{"role":"user","text":"explore the repo"}],"prompt":"explore the repo","promptChars":16}`
+	main := pcall("b", "s", "p", t0+sec)
+	main.Call.DetailJSON = `{"said":[{"role":"system","note":"system","text":"background task done"}],"promptChars":0}`
+	write(t, db, sub, main)
+	drain(t, db)
+	expect(t, row(t, db, "SELECT text, text_chars, parts FROM prompts WHERE prompt_id = 'p'"), map[string]any{
+		"text": nil, "text_chars": 0, "parts": []any{map[string]any{"role": "system", "note": "system", "text": "background task done"}}})
+	checkScratch(t, db)
+}
+
 func TestPromptItems(t *testing.T) {
 	db := fresh(t)
-	main := func(id, p string, at, ctx int64) records.Record {
-		r := pcall(id, "s", p, at)
-		r.Call.InputTokens = ctx
-		return r
-	}
-	comp := pcall("k", "s", "", t0+101*sec)
-	comp.Call.RequestClass = "compaction"
 	aux := pcall("x", "s", "", t0+120*sec)
 	aux.Call.RequestClass, aux.Call.Model, aux.Call.StopReason = "auxiliary", "claude-haiku-4-5", "end_turn"
 	title := pcall("t", "s", "", t0+50*sec)
 	title.Call.HiddenKind = "title"
 	prewarm := pcall("w", "s", "", t0+50*sec)
 	prewarm.Call.HiddenKind = "prewarm"
-	write(t, db,
-		pev("B", 1, "s", "p1", t0, "tengu_input_prompt", `{"prompt_index":1}`), main("a", "p1", t0+1*sec, 1000),
-		ev("B", 2, "s", t0+30*sec, "tengu_paste_text", `{"pastedTextBytes":40}`), ev("B", 3, "s", t0+31*sec, "tengu_paste_image", `{}`),
-		pev("B", 4, "s", "p2", t0+60*sec, "tengu_input_prompt", `{"prompt_index":2}`), main("b", "p2", t0+61*sec, 200000),
-		title, prewarm,
-		ev("B", 5, "s", t0+95*sec, "tengu_idle_compact_fired", `{}`),
-		ev("B", 6, "s", t0+100*sec, "tengu_reactive_compact_attempt", `{}`), comp,
-		ev("B", 7, "s", t0+102*sec, "tengu_reactive_compact_succeeded", `{}`),
-		main("c", "p2", t0+103*sec, 50000),
-		ev("B", 8, "s", t0+110*sec, "tengu_return_to_session", `{"hadRecap":true}`),
-		aux,
-	)
+	suggestion := pcall("g", "s", "p2", t0+130*sec)
+	suggestion.Call.HiddenKind = "suggestion"
+	last := open(pcall("c", "s", "p2", t0+103*sec))
+	write(t, db, pcall("a", "s", "p1", t0+1*sec), pcall("b", "s", "p2", t0+61*sec), title, prewarm, last, aux, suggestion,
+		ev("B", 8, "s", t0+110*sec, "tengu_return_to_session", `{"hadRecap":true}`))
 	drain(t, db)
 	rows := row(t, db, `SELECT jsonb_agg(jsonb_build_object('seq', seq, 'type', type, 'prompt', prompt_id, 'n', prompt_index, 'tail', open_tail,
-		'pasted', pasted_bytes, 'images', images, 'hidden', hidden, 'kind', between_kind, 'detail', detail, 'call', call_id,
-		'from', tokens_from, 'to', tokens_to, 'attempt', attempt_ns) ORDER BY seq) AS items FROM prompt_items WHERE session_id = 's'`)["items"].([]any)
+		'hidden', hidden, 'kind', between_kind, 'detail', detail, 'call', call_id) ORDER BY seq) AS items FROM prompt_items WHERE session_id = 's'`)["items"].([]any)
 	want := []map[string]any{
-		{"seq": 1, "type": "prompt", "prompt": "p1", "n": 1, "tail": false, "pasted": nil, "images": 0, "hidden": map[string]any{"title": float64(1)}},
-		{"seq": 2, "type": "prompt", "prompt": "p2", "n": 2, "tail": true, "pasted": 40, "images": 1, "hidden": map[string]any{"prewarm": float64(1)}},
-		{"seq": 3, "type": "between", "kind": "idle-compaction", "detail": "idle compaction · context 200k → 50k tokens", "call": "k",
-			"from": 200000, "to": 50000, "attempt": float64(t0 + 100*sec)},
-		{"seq": 4, "type": "between", "kind": "recap", "detail": "recap shown on return"},
-		{"seq": 5, "type": "between", "kind": "call", "detail": "auxiliary · haiku · end_turn", "call": "x"},
+		{"seq": 1, "type": "prompt", "prompt": "p1", "n": 1, "tail": false, "hidden": map[string]any{"title": float64(1)}},
+		{"seq": 2, "type": "prompt", "prompt": "p2", "n": 2, "tail": true, "hidden": map[string]any{"prewarm": float64(1), "suggestion": float64(1)}},
+		{"seq": 3, "type": "between", "kind": "call", "detail": "auxiliary · haiku · end_turn", "call": "x"},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("%d items, want %d: %v", len(rows), len(want), rows)
@@ -238,34 +244,24 @@ func TestPromptItems(t *testing.T) {
 func codex(id, x, p string, at int64) records.Record {
 	r := pcall(id, x, p, at)
 	r.Call.Product, r.Call.Host, r.Call.Path = canon.ProductCodex, "chatgpt.com", "/backend-api/codex/responses"
+	r.Call.RequestClass = ""
 	return r
 }
 
-func codexEvent(batch string, n int64, x, p string, at int64, md string) records.Record {
-	return records.Record{Kind: records.KindClientEvent, BatchID: batch, BatchN: n, Call: &canon.Request{KeyHash: "kh1"},
-		Event: &canon.Event{EventKey: fmt.Sprintf("%s/%d", batch, n), CorrelationID: batch, RowNS: at, NS: at, Seq: n,
-			Source: canon.ProductCodex, Name: "codex_turn_event", SessionID: x, PromptID: p, MetadataJSON: md}}
-}
-
-// A Codex turn's number is its place in the thread; its report gives its
-// duration and status.
+// A Codex turn's number is its place in the thread; its facts are its calls'.
 func TestCodexPrompts(t *testing.T) {
 	db := fresh(t)
 	b := codex("b", "x", "t2", t0+10*sec)
 	b.Call.ExtJSON = `{"workspaces":{"/home/u/repo/":{"latest_git_commit_hash":"0123456789"}},"sandbox_mode":"workspace-write","history_initialization":"cold_resume"}`
 	b.Call.ProviderJSON = `{"x-codex-plan-type":"pro","x-codex-primary-used-percent":"12"}`
-	write(t, db, codex("a", "x", "t1", t0), b,
-		codexEvent("E", 1, "x", "t1", t0+5*sec, `{"status":"completed","duration_ms":1500,"shell_command_count":2,"mcp_tool_call_count":0,"turn_trigger":"user","approval_policy":"never"}`))
+	write(t, db, codex("a", "x", "t1", t0), b)
 	drain(t, db)
-	expect(t, row(t, db, "SELECT turn_report, product, has_input FROM prompts WHERE prompt_id = 't1'"), map[string]any{
-		"product": "codex", "has_input": false,
-		"turn_report": map[string]any{"status": "completed", "durationMs": float64(1500), "samplingMs": nil, "requests": nil, "retries": nil,
-			"toolCalls": map[string]any{"shell": float64(2)}, "steers": nil, "compactionMs": nil, "trigger": "user"}})
+	expect(t, row(t, db, "SELECT product FROM prompts WHERE prompt_id = 't1'"), map[string]any{"product": "codex"})
 	expect(t, row(t, db, "SELECT jsonb_object_agg(prompt_id, jsonb_build_array(prompt_index, open_tail)) AS n FROM prompt_items WHERE session_id = 'x'"),
-		map[string]any{"n": map[string]any{"t1": []any{float64(1), false}, "t2": []any{float64(2), true}}})
+		map[string]any{"n": map[string]any{"t1": []any{float64(1), false}, "t2": []any{float64(2), false}}})
 	expect(t, row(t, db, "SELECT * FROM sessions WHERE session_id = 'x'"), map[string]any{
 		"product": "codex", "repo": "repo", "commit": "0123456", "has_facts": true, "facts_cwd": "/home/u/repo/",
-		"facts_approval": "never", "facts_sandbox": "workspace-write", "limits_ns": float64(t0 + 10*sec),
+		"facts_approval": nil, "facts_sandbox": "workspace-write", "limits_ns": float64(t0 + 10*sec),
 		"limits":      map[string]any{"x-codex-plan-type": "pro", "x-codex-primary-used-percent": "12"},
 		"origin_kind": "resume", "origin": map[string]any{"kind": "resume", "sessionId": nil, "turn": nil, "init": "cold_resume", "agentName": nil},
 	})
@@ -283,39 +279,24 @@ func TestSessionRow(t *testing.T) {
 	title := pcall("t", "s", "", t0+30*sec)
 	title.Call.HiddenKind, title.Call.DetailJSON = "title", `{"text":"  \"Fix the build\" "}`
 	env := ev("B", 2, "s", t0+5*sec, "tengu_api_query", `{"permissionMode":"bypassPermissions"}`)
-	env.Event.DeviceID, env.Event.PersonID, env.Event.EnvJSON = "dev-ev", "acct", `{"platform":"darwin","terminal":"iTerm"}`
-	ca := ev("B", 9, "s", t0+51*sec, "tengu_api_success", `{"gzipSkipReason":"custom_ca"}`)
-	ca.Event.ClientRequestID = "creq-b"
-	b.Call.ClientRequestID = "creq-b"
-	write(t, db, a, b, title, env, ca,
-		pev("B", 1, "s", "p1", t0, "tengu_input_prompt", `{"prompt_index":4,"is_negative":"true"}`),
-		ev("B", 3, "s", t0+6*sec, "tengu_api_query", `{"permissionMode":"default"}`),
-		ev("B", 4, "s", t0+7*sec, "tengu_bash_tool_command_executed", `{"sandbox_enabled":true,"destructive_category":"git_reset"}`),
-		rep("B", 5, "s", t0+40*sec, "req-a"),
-		rep("B", 6, "s", t0+41*sec, "req-gone"),
-		rep("B", 7, "s", t0+41*sec+int64(20*time.Minute), "req-gone-2"),
-		rep("B", 8, "s", t0+50*sec, "req-b"),
-	)
+	env.Event.DeviceID, env.Event.PersonID = "dev-ev", "acct"
+	write(t, db, a, b, title, env, pev("B", 1, "s", "p1", t0, "tengu_input_prompt", `{"prompt_index":4}`))
 	drain(t, db)
 	expect(t, row(t, db, "SELECT * FROM sessions WHERE session_id = 's'"), map[string]any{
-		"start_ns": float64(t0), "last_ns": float64(t0 + 41*sec + int64(20*time.Minute)), "product": "claude_code",
+		"start_ns": float64(t0 + 10*sec), "last_ns": float64(t0 + 20*sec), "product": "claude_code",
 		"client": "cli", "client_version": "2.0.1", "client_version_ns": float64(t0 + 10*sec), "hidden_calls": 1,
-		"own_title": "Fix the build", "prompts": 2, "captured_from_prompt": 4, "model_calls": 2, "events": 9,
-		"frustrated": 1, "interrupted": 0, "destructive": 1, "queries": 2, "bypassed": 1,
-		"cov_reported": 5, "cov_captured": 3, "cov_not_captured": 2,
-		"cov_window_from":  []any{float64(t0 + 41*sec), float64(t0 + 41*sec + int64(20*time.Minute))},
-		"cov_window_count": []any{float64(1), float64(1)},
-		"fields_missing":   false, "person_id": "acct", "device_id": "dev-ev", "device_platform": "darwin", "device_terminal": "iTerm",
-		"device_shell": nil, "networks": 2, "effort": "high", "tokens_input": 100, "tokens_output": 5, "outputs_known": 1,
+		"own_title": "Fix the build", "prompts": 2, "model_calls": 2,
+		"fields_missing": false, "person_id": "acct", "device_id": "dev-call", "networks": 2, "effort": "high",
+		"tokens_input": 100, "tokens_output": 5, "outputs_known": 1,
 		"tokens_accuracy": "estimated", "has_facts": false, "cli_version": "2.0.1", "rl_status": "allowed", "rl_util": 0.25,
-		"rl_ns": float64(t0 + 10*sec), "sandbox": "true", "custom_ca": true, "unattributed": false,
-		"prompt_event_last_ns": float64(t0 + 41*sec + int64(20*time.Minute)),
+		"rl_ns": float64(t0 + 10*sec), "unattributed": false, "turns": 2, "turns_interrupted": 0,
 	})
-	// A session no account appears on is unattributed.
-	write(t, db, pcall("z", "u", "pz", t0))
+	// A session no account appears on is unattributed; one with only analytics has no row.
+	write(t, db, pcall("z", "u", "pz", t0), ev("C", 1, "only-events", t0, "tengu_api_query", `{}`))
 	drain(t, db)
-	expect(t, row(t, db, "SELECT unattributed, fields_missing, events, cov_reported, cov_captured FROM sessions WHERE session_id = 'u'"),
-		map[string]any{"unattributed": true, "fields_missing": true, "events": nil, "cov_reported": nil, "cov_captured": 1})
+	expect(t, row(t, db, "SELECT unattributed, fields_missing FROM sessions WHERE session_id = 'u'"),
+		map[string]any{"unattributed": true, "fields_missing": true})
+	expect(t, row(t, db, "SELECT count(*) AS n FROM sessions WHERE session_id = 'only-events'"), map[string]any{"n": 0})
 	checkScratch(t, db)
 }
 
@@ -326,29 +307,25 @@ func TestAccountDays(t *testing.T) {
 	db := fresh(t)
 	day := t0 - t0%dayNS
 	late := day + dayNS - 30*sec // just before midnight
-	write(t, db, pcall("a", "s", "p1", late), pcall("b", "s", "p2", day+dayNS+30*sec),
-		pev("B", 1, "s", "p1", late, "tengu_input_prompt", `{}`))
+	write(t, db, pcall("a", "s", "p1", late), pcall("b", "s", "p2", day+dayNS+30*sec))
 	drain(t, db)
 	var n int
 	db.QueryRow(ctx(t), "SELECT count(*) FROM account_days").Scan(&n)
 	if n != 0 {
 		t.Fatalf("%d day rows before any account appears", n)
 	}
-	seen := pev("C", 1, "s", "p2", day+dayNS+40*sec, "tengu_api_query", `{"permissionMode":"bypassPermissions"}`)
-	seen.Event.PersonID = "acct"
-	quiet := pev("D", 1, "s", "p2", day+2*dayNS+10*sec, "tengu_feature_ok", `{}`) // a day with events and no model call
-	write(t, db, seen, quiet)
+	seen := pcall("c", "s", "p2", day+dayNS+40*sec)
+	seen.Call.PersonID = "acct"
+	write(t, db, seen)
 	drain(t, db)
-	days := row(t, db, `SELECT jsonb_object_agg(day_ns::text, jsonb_build_object('agent', agent, 'sessions', sessions, 'ids', session_ids, 'call_ids', call_session_ids, 'with_events', sessions_with_events,
-		'prompts', prompts, 'calls', model_calls, 'out', tokens_output, 'queries', queries, 'bypassed', bypassed, 'first', first_ns, 'last', last_ns)) AS d
+	days := row(t, db, `SELECT jsonb_object_agg(day_ns::text, jsonb_build_object('agent', agent, 'sessions', sessions, 'ids', session_ids, 'call_ids', call_session_ids,
+		'prompts', prompts, 'calls', model_calls, 'out', tokens_output, 'first', first_ns, 'last', last_ns)) AS d
 		FROM account_days WHERE account_id = 'acct'`)["d"].(map[string]any)
-	expect(t, days[fmt.Sprint(day)].(map[string]any), map[string]any{"agent": "claude-code", "sessions": 1, "ids": []any{"s"}, "call_ids": []any{"s"}, "with_events": 1, "prompts": 1,
-		"calls": 1, "out": 5, "queries": 0, "first": float64(late), "last": float64(late)})
+	expect(t, days[fmt.Sprint(day)].(map[string]any), map[string]any{"agent": "claude-code", "sessions": 1, "ids": []any{"s"}, "call_ids": []any{"s"}, "prompts": 1,
+		"calls": 1, "out": 5, "first": float64(late), "last": float64(late)})
 	// The session is in both days' ids: a window over both counts it once (the directory's distinct sessions).
-	expect(t, days[fmt.Sprint(day+dayNS)].(map[string]any), map[string]any{"sessions": 1, "ids": []any{"s"}, "with_events": 1, "prompts": 1, "calls": 1,
-		"queries": 1, "bypassed": 1, "first": float64(day + dayNS + 30*sec), "last": float64(day + dayNS + 40*sec)})
-	// The overview's agent cards count sessions with a model call in the window: not this day's.
-	expect(t, days[fmt.Sprint(day+2*dayNS)].(map[string]any), map[string]any{"sessions": 1, "ids": []any{"s"}, "call_ids": []any{}, "calls": 0})
+	expect(t, days[fmt.Sprint(day+dayNS)].(map[string]any), map[string]any{"sessions": 1, "ids": []any{"s"}, "prompts": 1, "calls": 2,
+		"first": float64(day + dayNS + 30*sec), "last": float64(day + dayNS + 40*sec)})
 	checkScratch(t, db)
 }
 
@@ -367,21 +344,8 @@ func TestRetainRecomputesPromptsAndSessions(t *testing.T) {
 	}
 	drain(t, db)
 	expect(t, row(t, db, "SELECT steps, t_ns FROM prompts WHERE prompt_id = 'p'"), map[string]any{"steps": 1, "t_ns": float64(recent)})
+	expect(t, row(t, db, "SELECT count(*) AS n FROM steps"), map[string]any{"n": 1})
 	expect(t, row(t, db, "SELECT model_calls, start_ns FROM sessions WHERE session_id = 's'"), map[string]any{"model_calls": 1, "start_ns": float64(recent)})
 	expect(t, row(t, db, "SELECT count(*) AS n, min(day_ns) AS d FROM account_days"), map[string]any{"n": 1, "d": float64(recent - recent%dayNS)})
-	checkScratch(t, db)
-}
-
-// A typed prompt with no prompt id is a prompt of its own, keyed by its place
-// in its batch (promptrows.go: "input:" + its event id).
-func TestUnnamedInputIsItsOwnPrompt(t *testing.T) {
-	db := fresh(t)
-	write(t, db, ev("B", 3, "s", t0, "tengu_input_prompt", `{"prompt_index":2,"prompt_length":9}`), pcall("a", "s", "p", t0+sec))
-	drain(t, db)
-	expect(t, row(t, db, "SELECT * FROM prompts WHERE prompt_id = 'input:B:3'"), map[string]any{
-		"session_id": "s", "t_ns": float64(t0), "has_input": true, "prompt_index": 2, "text_chars": 9, "steps": 0})
-	expect(t, row(t, db, "SELECT jsonb_agg(prompt_id ORDER BY seq) AS ids FROM prompt_items WHERE session_id = 's'"),
-		map[string]any{"ids": []any{"input:B:3", "p"}})
-	expect(t, row(t, db, "SELECT prompts FROM sessions WHERE session_id = 's'"), map[string]any{"prompts": 2})
 	checkScratch(t, db)
 }

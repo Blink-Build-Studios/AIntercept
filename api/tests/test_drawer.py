@@ -2,9 +2,9 @@
 ranged GET of its raw member and a few indexed lookups.
 
 For each dataset, a fresh Postgres holds its facts and rollups, loaded from raw files as the workers load
-them (conftest.PgDataset). Every kind of drawer is drawn (a WebSocket turn from its row, `reported:` ids,
-an ended batch spanning sessions), and what a drawer reads stays a few rows and at most one ranged GET,
-whatever the session's size, through an index."""
+them (conftest.PgDataset). Every kind of drawer is drawn (a WebSocket turn from its row, an ended analytics
+batch), and what a drawer reads stays a few rows and at most one ranged GET, whatever the session's size,
+through an index. Analytics events stay in the raw files: the datasets send them, nothing reads them."""
 
 import contextlib
 import pathlib
@@ -168,47 +168,22 @@ def _q(rid: str) -> str:
 
 
 def request_ids(side: Side) -> list[str]:
-    """Every request id: every call held and every missed report."""
-    held = side.query(
-        """SELECT replace(call_id, '#', '~') FROM calls
-           UNION SELECT 'reported:' || coalesce(request_id, client_request_id, ts_ns::text) FROM missed_reports"""
-    )
-    return sorted(r for (r,) in held)
-
-
-def event_ids(side: Side) -> list[str]:
-    """Every Claude Code event's id."""
-    held = side.query("SELECT batch_call_id || ':' || batch_cc_n FROM events WHERE source = 'claude_code'")
-    return sorted(e for (e,) in held)
+    """Every request id: every call held."""
+    return sorted(r for (r,) in side.query("SELECT replace(call_id, '#', '~') FROM calls"))
 
 
 def _subset(rids: list[str]) -> list[str]:
-    """A request id of each kind (a turn, a reported call, a batch, a model call; a failed, retained,
-    gone or out-of-reach call where the dataset has one) and every tenth."""
-    picks = {
-        next((r for r in rids if "~" in r), None),
-        next((r for r in rids if r.startswith("reported:")), None),
-        next((r for r in rids if r.startswith("batch-")), None),
-    }
+    """A request id of each kind (a turn, a batch, a model call; a failed, retained, gone or out-of-reach
+    call where the dataset has one) and every tenth."""
+    picks = {next((r for r in rids if "~" in r), None), next((r for r in rids if r.startswith("batch-")), None)}
     return sorted({r for r in picks if r} | set(rids[::10]) | {r for r in rids if r.startswith("observer-test-0-")})
-
-
-def _event_subset(eids: list[str]) -> list[str]:
-    by_batch: dict[str, list[str]] = {}
-    for e in eids:
-        by_batch.setdefault(e.rpartition(":")[0], []).append(e)
-    return sorted({e for es in by_batch.values() for e in es[:2]} | set(eids[::10]))
 
 
 def test_the_cases_are_all_there(sides):
     # Not vacuous: the drawer dataset holds every kind of drawer, and v9 draws each.
     side = sides["drawer cases"]
     rids = request_ids(side)
-    kinds = {
-        "turn": any("~" in r for r in rids),
-        "reported": any(r.startswith("reported:") for r in rids),
-        "batch": "batch-span-ended" in rids,
-    }
+    kinds = {"turn": any("~" in r for r in rids), "batch": "batch-span-ended" in rids}
     assert all(kinds.values()), kinds
     shapes: Counter[str] = Counter()
     for rid in rids:
@@ -217,16 +192,17 @@ def test_the_cases_are_all_there(sides):
         d = r.json()["data"]
         shapes[d["kind"]] += 1
         shapes["retained"] += d["contentRetained"]
-        shapes["retry"] += d["retry"] is not None
         shapes["stepped"] += d["stepIndex"] is not None
-        shapes["matched"] += d["crossCheck"]["matched"]
-    wanted = ("normal", "failed", "notCaptured", "retained", "retry", "stepped", "matched")
+        # What only Claude Code's analytics said: no retry, no cross-check, no cost.
+        assert d["retry"] is None and d["crossCheck"]["matched"] is False and d["keyStrip"]["cost"]["usd"] is None
+    wanted = ("normal", "failed", "retained", "stepped")
     assert all(shapes[k] for k in wanted), shapes
     for rid in rids:
         for sub in ("/details", "/raw"):
             assert side.new.get(f"/api/v1/requests/{_q(rid)}{sub}").status_code == 200, (rid, sub)
-    for eid in event_ids(side):
-        assert side.new.get(f"/api/v1/events/{_q(eid)}").status_code == 200, eid
+    # Neither reported-only calls nor events are held: their ids are 404s.
+    assert side.new.get("/api/v1/requests/reported:req_bypass_1").status_code == 404
+    assert side.new.get("/api/v1/events/batch-span-ended:0").status_code == 404
 
 
 def test_a_websocket_turn_is_drawn_from_its_row(sides):
@@ -242,28 +218,18 @@ def test_a_websocket_turn_is_drawn_from_its_row(sides):
     assert raw["unavailable"].startswith("This is one turn of a WebSocket connection")
 
 
-# What a drawer page reads (§6.2): the call, the events about it, its place, and for /details the
-# sandbox setting; /events/{id} its event. Each ends with the drawer's lastDataAt (its pods' newest).
+# What a drawer page reads (§6.2): the call and its place. Each ends with the drawer's lastDataAt (its
+# pods' newest).
 DRAWER_READS = {
-    "": {"call", "call_events", "tool_events", "position", "next_attempt", "newest"},
-    "/details": {
-        "call",
-        "call_events",
-        "tool_events",
-        "position",
-        "next_attempt",
-        "sandbox",
-        "linked",
-        "prompt_indexes",
-        "newest",
-    },  # fmt: skip
+    "": {"call", "position", "newest"},
+    "/details": {"call", "position", "newest"},
     "/raw": {"call", "newest"},
 }
 
 
 def test_a_drawer_reads_a_few_rows_whatever_the_session(sides):
     """Bound (§6.2): one snapshot, a fixed set of statements, each a few rows, and at most one ranged GET,
-    for every call of a 120-step prompt in a session of hundreds of events."""
+    for every call of a 120-step prompt (its step numbers counted at read)."""
     side = sides["big prompt"]
     gets: list[int] = []
     read = side.store.read_range
@@ -290,10 +256,6 @@ def test_a_drawer_reads_a_few_rows_whatever_the_session(sides):
                 assert len(gets) <= 1, gets
     finally:
         side.store.read_range = read
-    side.store.trace.clear()
-    eid = side.query("SELECT batch_call_id || ':' || batch_cc_n FROM events LIMIT 1")[0][0]
-    assert side.new.get(f"/api/v1/events/{_q(eid)}").status_code == 200
-    assert [s.name for s in side.store.trace[0].statements] == ["event", "newest"]
 
 
 # v9's tables an index serves: any statement that scans one of the rest whole fails.
@@ -305,7 +267,6 @@ def test_every_drawer_statement_can_use_an_index(sides):
     table whole."""
     side = sides["drawer cases"]
     urls = [f"/api/v1/requests/{_q(rid)}{sub}" for rid in _subset(request_ids(side)) for sub in DRAWER_READS]
-    urls += [f"/api/v1/events/{_q(eid)}" for eid in _event_subset(event_ids(side))[:5]]
     plans = []
     for url in urls:
         side.store.trace.clear()
@@ -315,9 +276,12 @@ def test_every_drawer_statement_can_use_an_index(sides):
     assert plans and not scans, scans
 
 
-def test_an_ended_batch_spanning_sessions_is_its_earliest_events_session(sides):
-    """Its call is A's (A holds its earliest event); B holds four of its five events."""
+def test_an_ended_analytics_batch_is_no_sessions(sides):
+    """An analytics post names no session (its events, whichever sessions they're from, aren't kept): its
+    drawer is the call's own, with no session, step or events."""
     side = sides["drawer cases"]
     d = side.new.get("/api/v1/requests/batch-span-ended").json()["data"]
-    assert d["sessionId"] == SPAN_A and d["status"] == 200, d
+    assert d["sessionId"] is None and d["status"] == 200 and d["stepIndex"] is None, d
+    details = side.new.get("/api/v1/requests/batch-span-ended/details").json()["data"]
+    assert details["events"] == [] and details["tool"] == []
     assert drawer.VISIBLE  # the drawer's visible-call predicate is the rollups' (refresh/sql.go)

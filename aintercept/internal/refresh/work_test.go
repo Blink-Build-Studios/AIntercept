@@ -24,84 +24,79 @@ func tcall(id, s, p string, at int64, tools ...string) records.Record {
 	return r
 }
 
-// workTurn is one turn of session s (prompt p1): it reads a file, edits it
-// (+31 −9), runs `npm test` twice (fails, then passes, the second as `cd ui &&
-// npm test`), commits, links PR #7 and replies; Claude Code's analytics for
-// each, and its reports' costs.
+// rcall is call id of prompt p in session s at `at` with its tool calls
+// recorded (detail's calls, JSON) and the results of earlier ones it carries
+// back (detail's results, JSON).
+func rcall(id, s, p string, at int64, calls, results string) records.Record {
+	r := pcall(id, s, p, at)
+	d := `{"calls":` + calls
+	if results != "" {
+		d += `,"results":` + results
+	}
+	r.Call.DetailJSON = d + "}"
+	return r
+}
+
+// workTurn is one turn of session s (prompt p1), recorded: it reads a file,
+// edits it (+31 −9), runs `npm test` twice (fails, then passes), commits and
+// replies, each tool call's result carried back by the next call.
 func workTurn(s string, base int64) []records.Record {
 	at := func(n int64) int64 { return base + n*sec }
-	b := "W" + s
 	return []records.Record{
-		pev(b, 1, s, "p1", at(0), "tengu_input_prompt", `{"prompt_index":1,"prompt_length":212}`),
-		tcall("r"+s, s, "p1", at(1), "Read"),
-		tool(b, 2, s, "p1", at(1), "tengu_tool_use_success", "req-r"+s, `{"toolName":"Read","toolUseID":"tu-r","fileExtension":"TS"}`),
-		pev(b, 3, s, "p1", at(1), "tengu_file_operation", `{"operation":"read","filePathHash":"h1"}`),
-		tcall("e"+s, s, "p1", at(2), "Edit"),
-		tool(b, 4, s, "p1", at(2), "tengu_tool_use_success", "req-e"+s, `{"toolName":"Edit","toolUseID":"tu-e","fileExtension":"ts"}`),
-		pev(b, 5, s, "p1", at(2), "tengu_file_operation", `{"operation":"edit","filePathHash":"h1"}`),
-		pev(b, 6, s, "p1", at(2), "tengu_file_changed", `{"lines_added":31,"lines_removed":9}`),
-		tcall("x"+s, s, "p1", at(3), "Bash"),
-		tool(b, 7, s, "p1", at(3), "tengu_tool_use_success", "req-x"+s, `{"toolName":"Bash","toolUseID":"tu-x`+s+`","bash_argv0":"npm","bash_subcommand":"test"}`),
-		pev(b, 8, s, "p1", at(3), "tengu_bash_tool_command_executed", `{"tool_use_id":"tu-x`+s+`","bash_argv0":"npm","bash_subcommand":"test","exit_code":1}`),
-		tcall("y"+s, s, "p1", at(4), "Bash"),
-		tool(b, 9, s, "p1", at(4), "tengu_tool_use_success", "req-y"+s, `{"toolName":"Bash","toolUseID":"tu-y`+s+`","bash_argv0":"cd"}`),
-		pev(b, 10, s, "p1", at(4), "tengu_bash_tool_command_executed", `{"tool_use_id":"tu-y`+s+`","bash_argv0":"cd","bash_last_argv0":"npm","exit_code":0}`),
-		pev(b, 11, s, "p1", at(5), "tengu_git_operation", `{"operation":"commit"}`),
-		pev(b, 12, s, "p1", at(6), "tengu_session_linked_to_pr", `{"prNumber":7}`),
-		tcall("z"+s, s, "p1", at(6)),
-		rep(b, 13, s, at(6), "req-z"+s),
-		rep(b, 14, s, at(6), "req-x"+s),
+		rcall("r"+s, s, "p1", at(1), `[{"id":"tr","tool":"Read","file":"ui/a.TS"}]`, ""),
+		rcall("e"+s, s, "p1", at(2), `[{"id":"te","tool":"Edit","file":"ui/a.TS","patches":[{"file":"ui/a.TS","added":31,"removed":9}]}]`, `{"tr":{}}`),
+		rcall("x"+s, s, "p1", at(3), `[{"id":"tx","tool":"Bash","commands":["npm test"]}]`, `{"te":{}}`),
+		rcall("y"+s, s, "p1", at(4), `[{"id":"ty","tool":"Bash","commands":["npm test"]}]`, `{"tx":{"exit":[1]}}`),
+		rcall("c"+s, s, "p1", at(5), `[{"id":"tc","tool":"Bash","commands":["git commit"]}]`, `{"ty":{"exit":[0]}}`),
+		rcall("z"+s, s, "p1", at(6), `[]`, `{"tc":{"exit":[0]}}`),
+		pev("W"+s, 1, s, "p1", at(6), "tengu_session_linked_to_pr", `{"prNumber":7}`), // analytics: not loaded
 	}
 }
 
 func TestTurnWork(t *testing.T) {
 	db := fresh(t)
-	rs := workTurn("s", t0)
-	rs[len(rs)-5].Event.HeadSHA = "a41f"
-	rs[len(rs)-4].Event.HeadSHA = "9c02"
-	write(t, db, rs...)
+	write(t, db, workTurn("s", t0)...)
 	drain(t, db)
 	turn := map[string]any{
 		"reads": 1, "readFiles": 1, "readTypes": map[string]any{"ts": 1.0}, "edits": 1, "editedFiles": 1, "editTypes": map[string]any{"ts": 1.0},
 		"linesAdded": 31, "linesRemoved": 9,
 		"commands": []any{
-			map[string]any{"program": "npm", "runs": 1.0, "failed": 0.0, "lastExit": 0.0},
-			map[string]any{"program": "npm test", "runs": 1.0, "failed": 1.0, "lastExit": 1.0},
+			map[string]any{"program": "npm test", "runs": 2.0, "failed": 1.0, "lastExit": 0.0},
+			map[string]any{"program": "git commit", "runs": 1.0, "failed": 0.0, "lastExit": 0.0},
 		},
 		"subagents": []any{}, "web": map[string]any{"searches": 0.0, "fetches": 0.0}, "mcp": []any{},
-		"otherTools": 0, "commits": 1, "pushes": 0, "prs": []any{7.0},
+		"otherTools": 0, "commits": 1, "pushes": 0, "prs": []any{},
 	}
-	p := row(t, db, "SELECT ended_ns, cost_usd, work FROM prompts WHERE prompt_id = 'p1'")
-	expect(t, p, map[string]any{"ended_ns": float64(t0 + 7*sec), "cost_usd": 1.0})
+	p := row(t, db, "SELECT ended_ns, work FROM prompts WHERE prompt_id = 'p1'")
+	expect(t, p, map[string]any{"ended_ns": float64(t0 + 7*sec)})
 	expect(t, p["work"].(map[string]any), turn)
 
-	// Each step's kind, program and pieces of work (its tool calls, as its tool events report them).
+	// Each step's kind, program and pieces of work (its tool calls, with the exit codes their results carried back).
 	for _, want := range []struct {
-		step          int
+		call          string
 		kind, program any
 		pieces        []any
 	}{
-		{1, "read", nil, []any{[]any{"w:read", "ts", 1.0, nil}}},
-		{2, "edit", nil, []any{[]any{"w:edit", "ts", 1.0, nil}}},
-		{3, "run", "npm test", []any{[]any{"w:run", "npm test", 1.0, 1.0}, []any{"w:run_failed", "npm test", 1.0, nil}}},
-		{4, "run", "npm", []any{[]any{"w:run", "npm", 1.0, 0.0}}},
-		{5, "think", nil, []any{}},
+		{"rs", "read", nil, []any{[]any{"w:read", "ts", 1.0, nil}, []any{"w:read_file", "ui/a.TS", 1.0, nil}}},
+		{"es", "edit", nil, []any{[]any{"w:edit", "ts", 1.0, nil}, []any{"w:edit_file", "ui/a.TS", 1.0, nil},
+			[]any{"w:lines_added", "", 31.0, nil}, []any{"w:lines_removed", "", 9.0, nil}}},
+		{"xs", "run", "npm test", []any{[]any{"w:run", "npm test", 1.0, 1.0}, []any{"w:run_failed", "npm test", 1.0, nil}}},
+		{"ys", "run", "npm test", []any{[]any{"w:run", "npm test", 1.0, 0.0}}},
+		{"cs", "run", "git commit", []any{[]any{"w:commit", "", 1.0, nil}, []any{"w:run", "git commit", 1.0, 0.0}}},
+		{"zs", "think", nil, []any{}},
 	} {
-		got := row(t, db, "SELECT work_kind, program, work_pieces FROM steps WHERE prompt_id = 'p1' AND step = $1", want.step)
+		got := row(t, db, "SELECT work_kind, program, work_pieces FROM steps WHERE call_id = $1", want.call)
 		expect(t, got, map[string]any{"work_kind": want.kind, "program": want.program, "work_pieces": want.pieces})
 	}
 
-	// The session: its turns, their time, its cost and its work from its keys (no last exits: a
-	// session keeps totals), its head range and its last test.
-	s := row(t, db, "SELECT turns, turns_interrupted, active_ns, cost_usd, head_from, head_to, last_test, work FROM sessions WHERE session_id = 's'")
-	expect(t, s, map[string]any{"turns": 1, "turns_interrupted": 0, "active_ns": float64(7 * sec), "cost_usd": 1.0,
-		"head_from": "a41f", "head_to": "9c02",
-		"last_test": map[string]any{"program": "npm test", "exit": 1.0, "t": float64(t0 + 3*sec)}})
+	// The session: its turns, their time, and its work from its keys (no last exits: a session keeps totals).
+	s := row(t, db, "SELECT turns, turns_interrupted, active_ns, work FROM sessions WHERE session_id = 's'")
+	expect(t, s, map[string]any{"turns": 1, "turns_interrupted": 0, "active_ns": float64(6 * sec)})
 	sw := s["work"].(map[string]any)
-	expect(t, sw, map[string]any{"reads": 1, "readFiles": 1, "editedFiles": 1, "linesAdded": 31, "commits": 1, "prs": []any{7.0}})
+	expect(t, sw, map[string]any{"reads": 1, "readFiles": 1, "editedFiles": 1, "linesAdded": 31, "commits": 1, "prs": []any{}})
 	expect(t, sw, map[string]any{"commands": []any{
-		map[string]any{"program": "npm", "runs": 1.0, "failed": 0.0, "lastExit": nil},
-		map[string]any{"program": "npm test", "runs": 1.0, "failed": 1.0, "lastExit": nil},
+		map[string]any{"program": "npm test", "runs": 2.0, "failed": 1.0, "lastExit": nil},
+		map[string]any{"program": "git commit", "runs": 1.0, "failed": 0.0, "lastExit": nil},
 	}})
 
 	// The minute keys the Work lane reads.
@@ -118,8 +113,8 @@ func TestTurnWork(t *testing.T) {
 		}
 		keys = append(keys, k)
 	}
-	want := []string{"w:commit=:1", "w:edit=ts:1", "w:edit_file=h1:1", "w:lines_added=:31", "w:lines_removed=:9",
-		"w:pr=7:1", "w:read=ts:1", "w:read_file=h1:1", "w:run=npm test:1", "w:run=npm:1", "w:run_failed=npm test:1"}
+	want := []string{"w:commit=:1", "w:edit=ts:1", "w:edit_file=ui/a.TS:1", "w:lines_added=:31", "w:lines_removed=:9",
+		"w:read=ts:1", "w:read_file=ui/a.TS:1", "w:run=git commit:1", "w:run=npm test:2", "w:run_failed=npm test:1"}
 	sort.Strings(want)
 	sort.Strings(keys)
 	if fmt.Sprint(keys) != fmt.Sprint(want) {
@@ -128,38 +123,30 @@ func TestTurnWork(t *testing.T) {
 	checkScratch(t, db)
 }
 
-// A subagent's steps carry its id; a Codex turn's work is its own events'
-// (commands with exit codes, file changes, accepted lines) and its steps' kinds
-// are its calls' tools.
+// A content-free call's work is its tools' names and counts; a subagent's
+// steps carry its id; a Codex exec script's commands are run pieces with the
+// exit codes its result carries back.
 func TestSubagentAndCodexWork(t *testing.T) {
 	db := fresh(t)
 	sub := tcall("sa", "s", "p1", t0+sec, "Write")
 	sub.Call.RequestClass, sub.Call.AgentID, sub.Call.AgentType = "subagent", "agent-1", "test-writer"
-	cx := func(id string, at int64, tools string) records.Record {
-		r := tcall(id, "cx", "turn-1", at)
-		r.Call.Product, r.Call.Host, r.Call.Path, r.Call.Method, r.Call.ToolUsesJSON = canon.ProductCodex, "chatgpt.com", "/backend-api/codex/responses", "POST", tools
+	cx := func(r records.Record) records.Record {
+		r.Call.Product, r.Call.Host, r.Call.Path, r.Call.Method = canon.ProductCodex, "chatgpt.com", "/backend-api/codex/responses", "POST"
+		r.Call.RequestClass = ""
 		return r
 	}
-	cev := func(n int64, at int64, name, md string) records.Record {
-		r := pev("C", n, "cx", "turn-1", at, name, md)
-		r.Event.Source = canon.ProductCodex
-		return r
-	}
-	write(t, db, sub,
-		cx("c1", t0, `[{"name":"exec","tool":"exec","kind":"builtin","count":1},{"name":"exec_command","tool":"exec_command","kind":"builtin","count":2}]`),
-		cx("c2", t0+10*sec, `[{"name":"apply_patch","tool":"apply_patch","kind":"builtin","count":1}]`),
-		cev(1, t0+1*sec, "codex_command_execution_event", `{"exit_code":1}`),
-		cev(2, t0+2*sec, "codex_command_execution_event", `{"exit_code":0}`),
-		cev(3, t0+11*sec, "codex_file_change_event", `{"tool_name":"apply_patch"}`),
-		cev(4, t0+12*sec, "codex_accepted_line_fingerprints", `{"accepted_added_lines":12,"accepted_deleted_lines":3}`),
-	)
+	c1 := cx(rcall("c1", "cx", "turn-1", t0, `[{"id":"e1","tool":"exec","commands":["go test","ls"]}]`, ""))
+	c2 := cx(rcall("c2", "cx", "turn-1", t0+10*sec, `[{"id":"p1","tool":"apply_patch","patches":[{"file":"a.go","added":12,"removed":3}]}]`,
+		`{"e1":{"exit":[1,0]}}`))
+	write(t, db, sub, c1, c2)
 	drain(t, db)
 	expect(t, row(t, db, "SELECT agent_id, work_kind FROM steps WHERE prompt_id = 'p1'"), map[string]any{"agent_id": "agent-1", "work_kind": "edit"})
-	expect(t, row(t, db, "SELECT work_kind FROM steps WHERE prompt_id = 'turn-1' AND step = 1"), map[string]any{"work_kind": "run"})
-	expect(t, row(t, db, "SELECT work_kind FROM steps WHERE prompt_id = 'turn-1' AND step = 2"), map[string]any{"work_kind": "edit"})
+	expect(t, row(t, db, "SELECT work_kind FROM steps WHERE call_id = 'c1'"), map[string]any{"work_kind": "run"})
+	expect(t, row(t, db, "SELECT work_kind FROM steps WHERE call_id = 'c2'"), map[string]any{"work_kind": "edit"})
 	w := row(t, db, "SELECT work FROM prompts WHERE prompt_id = 'turn-1'")["work"].(map[string]any)
-	expect(t, w, map[string]any{"edits": 1, "editedFiles": nil, "linesAdded": 12, "linesRemoved": 3,
-		"commands": []any{map[string]any{"program": nil, "runs": 2.0, "failed": 1.0, "lastExit": 0.0}}})
+	expect(t, w, map[string]any{"edits": 1, "editedFiles": 1, "linesAdded": 12, "linesRemoved": 3,
+		"commands": []any{map[string]any{"program": "go test", "runs": 1.0, "failed": 1.0, "lastExit": 1.0},
+			map[string]any{"program": "ls", "runs": 1.0, "failed": 0.0, "lastExit": 0.0}}})
 	checkScratch(t, db)
 }
 

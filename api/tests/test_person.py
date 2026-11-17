@@ -1,4 +1,6 @@
-"""/people/{personId}, /summary, /requests and /coverage."""
+"""/people/{personId}, /summary and /requests. The datasets send Claude Code's analytics as it does; they
+stay in the raw files, so what only they fed (plan, device details, posture, cost, coverage, the summary's
+event counts, TTFT, reported-only calls) is null, empty or 0."""
 
 from tests.builders import ACCOUNT, ClaudeCode, account_call, end_batches, limits_on_last_call
 from tests.test_session import error_on_query
@@ -62,7 +64,7 @@ def working_session(ds, sid=S1, hour=9, bypassed=0):
     )
     for m in range(bypassed):
         cc.reported(f"{h}:{20 + m}:00", f"req_missed_{m}", ttftMs=2400, cache_creation_1h_input_tokens=512)
-    account_call(cc, f"{h}:00:30")
+    account_call(cc, f"{h}:01:30")
     return cc
 
 
@@ -75,21 +77,22 @@ def test_person_identified(dataset, pg_client_for, write_sample):
     r = client.get(BASE)
     write_sample(client, r, "identified")
     p = r.json()["data"]
-    assert p["plan"] == "max" and p["orgIdShort"] == "0000…00a9"
-    assert p["devices"] == [{"deviceId": "d" * 64, "platform": "darwin", "terminal": "iTerm.app", "shell": "zsh"}]
+    assert p["plan"] is None and p["orgIdShort"] is None and p["org"] is None  # Claude Code's org was its analytics'
+    assert p["devices"] == [{"deviceId": "d" * 64, "platform": None, "terminal": None, "shell": None}]
     assert p["limits"] == {"status": "allowed", "utilization7d": 0.05, "overage": "rejected"}
-    assert p["posture"]["sandbox"] == "off" and p["posture"]["proxyDetected"] == "custom_ca"
+    assert p["posture"] == {"bypassPct": None, "sandbox": None, "tokenStorage": None, "proxyDetected": None}
+    assert p["missed"] is None
     assert p["name"] is None and p["flags"]["total"] is None  # need body extraction (M7): unknown, never 0
 
 
 def test_person_unidentified(dataset, pg_client_for, write_sample):
-    """Calls with identity but no analytics: almost everything is unknown."""
+    """One call with identity: almost everything is unknown."""
     ClaudeCode(dataset, S1).call("2026-11-04T09:01:00")
     client = pg_client_for(dataset)
     r = client.get(BASE)
     write_sample(client, r, "unidentified")
     p = r.json()["data"]
-    assert p["plan"] is None and p["devices"] == [] and p["posture"]["bypassPct"] is None and p["lastSeenAt"]
+    assert p["plan"] is None and p["posture"]["bypassPct"] is None and p["lastSeenAt"]
 
 
 def test_person_error(dataset, pg_client_for, write_sample, monkeypatch):
@@ -109,15 +112,17 @@ def test_summary_one_session(dataset, pg_client_for, write_sample):
     d = r.json()["data"]
     rb = d["ribbon"]
     assert (rb["modelCalls"], rb["sessions"], rb["accountCalls"]) == (4, 1, 1)
-    assert rb["tokens"]["output"] == 700 and rb["tokens"]["cacheWrite1h"] == 3000 and rb["cost"]["usd"] == 0.75
-    assert rb["cost"]["estimatedCalls"] == 1  # the subagent call has no tengu_api_success: its cost isn't in usd
+    assert rb["tokens"]["output"] == 700 and rb["tokens"]["cacheWrite1h"] is None
+    assert rb["cost"] == {"usd": None, "basis": "api-equivalent", "estimatedCalls": 0}
+    assert (rb["analyticsEvents"], rb["analyticsBatches"], rb["eventTypes"]) == (0, 0, 0)
     fp = d["footprint"]
-    assert fp["toolsByName"] == {"Bash": 1, "mcp__github__create_pr": 1}
-    assert fp["destructive"] == {"total": 1, "rmF": 0, "rmRf": 1, "outsideCwd": 1}
-    assert fp["codeShipped"] == {"headChanges": None, "commits": 1, "pushes": 1, "prs": [2]}
-    assert fp["failures"]["apiRetries"] == 1 and fp["subagentCalls"] == 1
-    assert d["capabilities"]["mcpServers"] == [{"name": "github", "tools": None, "toolsUsed": 1, "riskyVerbs": []}]
-    assert d["capabilities"]["hookOverheadMs"] == 50.0
+    assert fp["toolsByName"] == {} and fp["toolCalls"] is None and fp["commands"] is None
+    assert fp["destructive"] == {"total": 0, "rmF": 0, "rmRf": 0, "outsideCwd": 0}
+    assert fp["codeShipped"] == {"headChanges": None, "commits": 0, "pushes": 0, "prs": []}
+    assert fp["failures"] == {"commands": 0, "toolErrors": 0, "apiRetries": 0} and fp["subagentCalls"] == 1
+    assert fp["prompts"] == 1 and fp["turns"] == 1
+    assert d["coverage"] == {"reported": None, "captured": 4, "notCaptured": 0, "windows": []}
+    assert d["capabilities"]["hookOverheadMs"] is None and d["capabilities"]["skills"] is None
 
 
 def test_summary_many_follows_the_range(dataset, pg_client_for, write_sample):
@@ -129,15 +134,6 @@ def test_summary_many_follows_the_range(dataset, pg_client_for, write_sample):
     assert r.json()["data"]["ribbon"]["sessions"] == 2 and r.json()["data"]["ribbon"]["modelCalls"] == 8
     morning = client.get(f"{BASE}/summary", params={"from": "2026-11-04T08:00:00Z", "to": "2026-11-04T12:00:00Z"})
     assert morning.json()["data"]["ribbon"]["modelCalls"] == 4
-
-
-def test_summary_coverage_gap(dataset, pg_client_for, write_sample):
-    working_session(dataset, bypassed=3)
-    client = pg_client_for(dataset)
-    r = client.get(f"{BASE}/summary")
-    write_sample(client, r, "coverage_gap")
-    cov = r.json()["data"]["coverage"]
-    assert cov["notCaptured"] == 4 and [w["count"] for w in cov["windows"]] == [4]  # req_x + 3 missed, one window
 
 
 def test_summary_error(dataset, pg_client_for, write_sample, monkeypatch):
@@ -158,8 +154,7 @@ def test_requests_empty(dataset, pg_client_for, write_sample):
 
 def test_requests_one(dataset, pg_client_for, write_sample):
     cc = ClaudeCode(dataset, S1)
-    rid = cc.call("2026-11-04T09:01:00", stop_reason="end_turn", cache_read=40_000, content_encoding="gzip")
-    cc.event("2026-11-04T09:01:05", "tengu_api_success", requestId=rid, ttftMs=1900, cache_creation_5m_input_tokens=0)
+    cc.call("2026-11-04T09:01:00", stop_reason="end_turn", cache_read=40_000, content_encoding="gzip")
     client = pg_client_for(dataset)
     r = client.get(f"{BASE}/requests", params={"kind": "model"})
     write_sample(client, r, "one")
@@ -170,14 +165,14 @@ def test_requests_one(dataset, pg_client_for, write_sample):
     assert (row["statusText"], row["stopReason"], row["ttftMs"], row["contentEncoding"]) == (
         "OK",
         "end_turn",
-        1900.0,
+        None,
         "gzip",
     )
     assert row["tokens"] == {
         "input": 3,
         "cacheRead": 40_000,
         "cacheWrite": None,
-        "cacheWrite5m": 0,
+        "cacheWrite5m": None,
         "cacheWrite1h": None,
         "output": 100,
         "accuracy": "exact",
@@ -200,7 +195,7 @@ def test_requests_failed(dataset, pg_client_for, write_sample):
         "message": "connection reset",
         "afterMs": 2.0,
         "bytesReceived": 2_048,
-        "retries": None,  # until tengu_api_retry is joined to requests (M4)
+        "retries": None,  # Claude Code's tengu_api_retry isn't stored
         "retrySucceededAt": None,
     }
     assert internal["statusText"] == "Internal Server Error" and internal["error"]["message"] == "Internal Server Error"
@@ -219,7 +214,7 @@ def test_requests_many_newest_first_filtered_and_paged(dataset, pg_client_for, w
     kinds = {x["kind"] for x in rows}
     assert kinds == {"model", "analytics", "account"}
     batch = next(x for x in rows if x["kind"] == "analytics")
-    assert batch["background"] is True and batch["detail"].endswith(" events") and batch["sessionId"] == S1
+    assert batch["background"] is True and batch["detail"] == "batch"
     assert batch["tokens"] is None and batch["stopReason"] is None  # model calls only
     assert batch["statusText"] == "OK"  # the batch's answer
     model = [x for x in rows if x["kind"] == "model" and x["captured"]]
@@ -228,21 +223,6 @@ def test_requests_many_newest_first_filtered_and_paged(dataset, pg_client_for, w
     only_model = client.get(f"{BASE}/requests", params={"kind": "model"}).json()["data"]
     assert {x["kind"] for x in only_model} == {"model"}
     assert client.get(f"{BASE}/requests", params={"q": "kind=account"}).json()["meta"]["total"] == 1
-
-
-def test_requests_not_captured(dataset, pg_client_for, write_sample):
-    working_session(dataset, bypassed=2)
-    client = pg_client_for(dataset)
-    r = client.get(f"{BASE}/requests", params={"captured": "false"})
-    write_sample(client, r, "not_captured")
-    rows = r.json()["data"]
-    assert len(rows) == 3 and all(x["captured"] is False and x["method"] is None for x in rows)
-    # Only what the tengu_api_success carries: no response was seen.
-    assert all(x["statusText"] is None and x["stopReason"] is None and x["error"] is None for x in rows)
-    missed = next(x for x in rows if x["requestId"] == "reported:req_missed_0")
-    assert missed["ttftMs"] == 2400.0 and missed["tokens"]["cacheWrite1h"] == 512
-    assert missed["tokens"]["output"] is None and missed["tokens"]["accuracy"] == "missing"
-    assert {x["requestId"] for x in rows} >= {"reported:req_missed_0", "reported:req_missed_1"}
 
 
 def test_requests_account_calls(dataset, pg_client_for, write_sample):

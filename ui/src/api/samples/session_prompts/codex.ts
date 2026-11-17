@@ -5,7 +5,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
   "data": [
     {
       "prompt": {
-        "durationMs": 58000.0,
+        "durationMs": 18000.0,
         "friction": {
           "destructive": 0,
           "frustrated": false,
@@ -30,20 +30,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
         "tokensIn": 4200,
         "tokensOut": 100,
         "toolCounts": {},
-        "turnReport": {
-          "compactionMs": null,
-          "durationMs": 58000.0,
-          "requests": 2,
-          "retries": 0,
-          "samplingMs": 41000.0,
-          "status": "completed",
-          "steers": 1,
-          "toolCalls": {
-            "fileChange": 1,
-            "shell": 4
-          },
-          "trigger": "exec"
-        }
+        "turnReport": null
       },
       "steps": [
         {
@@ -111,7 +98,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
     },
     {
       "prompt": {
-        "durationMs": null,
+        "durationMs": 0.0,
         "friction": {
           "destructive": 0,
           "frustrated": false,

@@ -5,7 +5,6 @@ import personLinked from "../../api/samples/person/linked_codex";
 import workCodex from "../../api/samples/person_work/codex";
 import requestsDemo from "../../api/samples/person_requests/demo";
 import requestsEmpty from "../../api/samples/person_requests/empty";
-import requestsNotCaptured from "../../api/samples/person_requests/not_captured";
 import workDemo from "../../api/samples/person_work/demo";
 import workEmpty from "../../api/samples/person_work/empty";
 import workMany from "../../api/samples/person_work/many";
@@ -69,8 +68,6 @@ export const Linked: Story = { args: { person: readyRegion(personLinked.data), w
 export const LinkedCodex: Story = { args: { person: readyRegion(personLinked.data), work: readyRegion(workCodex), agentScope: "codex", onAgentScope: fn() } };
 /** A linked person's All requests in All agents: the shared chips and the agent-dot column. */
 export const LinkedAllRequests: Story = { args: { person: readyRegion(personLinked.data), tab: "requests", agentScope: "all", onAgentScope: fn(), onShowHidden: fn() } };
-/** "view N calls" (or the timeline's hatch): All requests filtered to calls the proxy didn't capture (handoff §11E.2). */
-export const NotCaptured: Story = { args: { tab: "requests", notCaptured: true, requests: readyRegion(requestsNotCaptured) } };
 /** The filter matched nothing in the range: what coverage says, and ways out. */
 export const NoUncaptured: Story = {
   args: {

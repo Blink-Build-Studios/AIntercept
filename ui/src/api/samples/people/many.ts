@@ -68,7 +68,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
         {
           "agent": "claude-code",
           "devices": 1,
-          "firstSeenAt": "2026-11-04T18:00:00Z",
+          "firstSeenAt": "2026-11-04T18:01:00Z",
           "version": "2.1.308"
         }
       ],
@@ -76,20 +76,15 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "agents": [
         "claude-code"
       ],
-      "bypassPct": 100.0,
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": 1,
-        "windows": []
-      },
+      "bypassPct": null,
+      "coverage": null,
       "devices": 1,
       "email": null,
-      "lastSeenAt": "2026-11-04T18:01:05Z",
+      "lastSeenAt": "2026-11-04T18:01:00Z",
       "linkedBy": null,
       "live": true,
       "name": null,
-      "orgIdShort": "0000\u202600a9",
+      "orgIdShort": null,
       "orgKind": "unknown",
       "personId": "00000000-0000-4000-8000-00000000acc2",
       "prompts": 1,
@@ -170,7 +165,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
         {
           "agent": "claude-code",
           "devices": 1,
-          "firstSeenAt": "2026-11-04T09:00:00Z",
+          "firstSeenAt": "2026-11-04T09:01:00Z",
           "version": "2.1.308"
         }
       ],
@@ -178,20 +173,15 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "agents": [
         "claude-code"
       ],
-      "bypassPct": 100.0,
-      "coverage": {
-        "captured": 3,
-        "notCaptured": 0,
-        "reported": 3,
-        "windows": []
-      },
+      "bypassPct": null,
+      "coverage": null,
       "devices": 1,
       "email": null,
-      "lastSeenAt": "2026-11-04T09:03:05Z",
+      "lastSeenAt": "2026-11-04T09:03:00Z",
       "linkedBy": null,
       "live": false,
       "name": null,
-      "orgIdShort": "0000\u202600a9",
+      "orgIdShort": null,
       "orgKind": "unknown",
       "personId": "00000000-0000-4000-8000-00000000acc1",
       "prompts": 1,
@@ -266,7 +256,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
         {
           "agent": "claude-code",
           "devices": 1,
-          "firstSeenAt": "2026-11-01T09:00:00Z",
+          "firstSeenAt": "2026-11-01T09:01:00Z",
           "version": "2.1.308"
         }
       ],
@@ -274,20 +264,15 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "agents": [
         "claude-code"
       ],
-      "bypassPct": 0.0,
-      "coverage": {
-        "captured": 2,
-        "notCaptured": 0,
-        "reported": 2,
-        "windows": []
-      },
+      "bypassPct": null,
+      "coverage": null,
       "devices": 1,
       "email": null,
-      "lastSeenAt": "2026-11-01T09:02:05Z",
+      "lastSeenAt": "2026-11-01T09:02:00Z",
       "linkedBy": null,
       "live": false,
       "name": null,
-      "orgIdShort": "0000\u202600a9",
+      "orgIdShort": null,
       "orgKind": "unknown",
       "personId": "00000000-0000-4000-8000-00000000acc3",
       "prompts": 1,
@@ -301,7 +286,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:01:05Z",
+    "lastDataAt": "2026-11-04T18:01:00Z",
     "page": 1,
     "pageSize": 50,
     "to": null,

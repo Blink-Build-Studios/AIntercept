@@ -29,7 +29,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "paths": [
             "src/a.ts"
           ],
-          "program": null,
+          "program": "npm test",
           "server": null,
           "startedAt": "2026-11-04T10:30:00Z",
           "steps": [
@@ -70,7 +70,22 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 "input": 1200,
                 "output": 40
               },
-              "tools": [],
+              "tools": [
+                {
+                  "command": "npm test",
+                  "destructive": null,
+                  "durationMs": null,
+                  "exitCode": 1,
+                  "fileType": null,
+                  "mcpServer": null,
+                  "name": "exec",
+                  "program": null,
+                  "resultBytes": null,
+                  "status": "error",
+                  "target": null,
+                  "toolUseId": "call_1"
+                }
+              ],
               "ttftMs": null,
               "usageMissing": null
             }
@@ -81,18 +96,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "work": {
             "commands": [
               {
-                "failed": 0,
-                "lastExit": null,
-                "program": null,
+                "failed": 1,
+                "lastExit": 1,
+                "program": "npm test",
                 "runs": 1
               }
             ],
             "commits": 0,
             "editTypes": {},
-            "editedFiles": null,
-            "edits": 1,
-            "linesAdded": null,
-            "linesRemoved": null,
+            "editedFiles": 1,
+            "edits": 0,
+            "linesAdded": 1,
+            "linesRemoved": 0,
             "mcp": [],
             "otherTools": 0,
             "prs": [],
@@ -183,13 +198,20 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "tokensIn": 2400,
       "tokensOut": 80,
       "work": {
-        "commands": [],
+        "commands": [
+          {
+            "failed": 1,
+            "lastExit": 1,
+            "program": "npm test",
+            "runs": 1
+          }
+        ],
         "commits": 0,
         "editTypes": {},
-        "editedFiles": null,
+        "editedFiles": 1,
         "edits": 0,
-        "linesAdded": null,
-        "linesRemoved": null,
+        "linesAdded": 1,
+        "linesRemoved": 0,
         "mcp": [],
         "otherTools": 0,
         "prs": [],

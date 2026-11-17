@@ -3,897 +3,9 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["PersonTimelineResponse"] = {
   "data": {
-    "analytics": [
-      {
-        "count": 143,
-        "t": "2026-11-02T14:00:00Z",
-        "top": [
-          {
-            "count": 31,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 17,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 11,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 3445,
-        "t": "2026-11-02T15:00:00Z",
-        "top": [
-          {
-            "count": 1445,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 514,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 148,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 1034,
-        "t": "2026-11-02T16:00:00Z",
-        "top": [
-          {
-            "count": 219,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 217,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 50,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 1959,
-        "t": "2026-11-02T17:00:00Z",
-        "top": [
-          {
-            "count": 563,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 378,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 101,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 449,
-        "t": "2026-11-02T18:00:00Z",
-        "top": [
-          {
-            "count": 217,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 89,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 13,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 39,
-        "t": "2026-11-02T19:00:00Z",
-        "top": [
-          {
-            "count": 15,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_operation"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_read_limits_override"
-          }
-        ]
-      },
-      {
-        "count": 7,
-        "t": "2026-11-02T20:00:00Z",
-        "top": [
-          {
-            "count": 7,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 108,
-        "t": "2026-11-02T21:00:00Z",
-        "top": [
-          {
-            "count": 31,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 11,
-            "name": "tengu_keybinding_fired"
-          },
-          {
-            "count": 8,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 5088,
-        "t": "2026-11-02T22:00:00Z",
-        "top": [
-          {
-            "count": 1119,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 1054,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 296,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 15,
-        "t": "2026-11-02T23:00:00Z",
-        "top": [
-          {
-            "count": 7,
-            "name": "tengu_keybinding_fired"
-          },
-          {
-            "count": 5,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 2,
-            "name": "tengu_event_loop_stall"
-          }
-        ]
-      },
-      {
-        "count": 1160,
-        "t": "2026-11-03T00:00:00Z",
-        "top": [
-          {
-            "count": 231,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 170,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 72,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 8,
-        "t": "2026-11-03T04:00:00Z",
-        "top": [
-          {
-            "count": 4,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 1,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 32,
-        "t": "2026-11-03T05:00:00Z",
-        "top": [
-          {
-            "count": 16,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 7,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_dir_search"
-          }
-        ]
-      },
-      {
-        "count": 71,
-        "t": "2026-11-03T06:00:00Z",
-        "top": [
-          {
-            "count": 26,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 15,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 13,
-            "name": "tengu_dir_search"
-          }
-        ]
-      },
-      {
-        "count": 23,
-        "t": "2026-11-03T07:00:00Z",
-        "top": [
-          {
-            "count": 12,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 7,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 11,
-        "t": "2026-11-03T08:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 19,
-        "t": "2026-11-03T09:00:00Z",
-        "top": [
-          {
-            "count": 9,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 4,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 53,
-        "t": "2026-11-03T10:00:00Z",
-        "top": [
-          {
-            "count": 24,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 13,
-            "name": "tengu_dir_search"
-          },
-          {
-            "count": 8,
-            "name": "tengu_event_loop_stall"
-          }
-        ]
-      },
-      {
-        "count": 21,
-        "t": "2026-11-03T11:00:00Z",
-        "top": [
-          {
-            "count": 10,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 6,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 12,
-        "t": "2026-11-03T12:00:00Z",
-        "top": [
-          {
-            "count": 6,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 17,
-        "t": "2026-11-03T13:00:00Z",
-        "top": [
-          {
-            "count": 10,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 25,
-        "t": "2026-11-03T14:00:00Z",
-        "top": [
-          {
-            "count": 13,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 137,
-        "t": "2026-11-03T15:00:00Z",
-        "top": [
-          {
-            "count": 40,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 15,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 7,
-            "name": "tengu_keybinding_fired"
-          }
-        ]
-      },
-      {
-        "count": 1190,
-        "t": "2026-11-03T16:00:00Z",
-        "top": [
-          {
-            "count": 267,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 118,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 81,
-            "name": "tengu_attachment_compute_duration"
-          }
-        ]
-      },
-      {
-        "count": 492,
-        "t": "2026-11-03T17:00:00Z",
-        "top": [
-          {
-            "count": 222,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 79,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 22,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 48,
-        "t": "2026-11-03T18:00:00Z",
-        "top": [
-          {
-            "count": 17,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_operation"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_read_limits_override"
-          }
-        ]
-      },
-      {
-        "count": 175,
-        "t": "2026-11-03T19:00:00Z",
-        "top": [
-          {
-            "count": 59,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 8,
-            "name": "tengu_attachment_compute_duration"
-          },
-          {
-            "count": 8,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 848,
-        "t": "2026-11-03T20:00:00Z",
-        "top": [
-          {
-            "count": 200,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 60,
-            "name": "tengu_attachment_compute_duration"
-          },
-          {
-            "count": 54,
-            "name": "tengu_tool_use_progress"
-          }
-        ]
-      },
-      {
-        "count": 3770,
-        "t": "2026-11-03T21:00:00Z",
-        "top": [
-          {
-            "count": 956,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 366,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 229,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 60,
-        "t": "2026-11-03T22:00:00Z",
-        "top": [
-          {
-            "count": 20,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_operation"
-          },
-          {
-            "count": 5,
-            "name": "tengu_file_read_limits_override"
-          }
-        ]
-      },
-      {
-        "count": 15,
-        "t": "2026-11-03T23:00:00Z",
-        "top": [
-          {
-            "count": 15,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 513,
-        "t": "2026-11-04T00:00:00Z",
-        "top": [
-          {
-            "count": 158,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 32,
-            "name": "tengu_attachment_compute_duration"
-          },
-          {
-            "count": 26,
-            "name": "tengu_repl_hook_finished"
-          }
-        ]
-      },
-      {
-        "count": 17,
-        "t": "2026-11-04T06:00:00Z",
-        "top": [
-          {
-            "count": 7,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_bad"
-          }
-        ]
-      },
-      {
-        "count": 16,
-        "t": "2026-11-04T07:00:00Z",
-        "top": [
-          {
-            "count": 6,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 4,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 10,
-        "t": "2026-11-04T08:00:00Z",
-        "top": [
-          {
-            "count": 4,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 14,
-        "t": "2026-11-04T09:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 2,
-            "name": "tengu_feature_sad"
-          }
-        ]
-      },
-      {
-        "count": 19,
-        "t": "2026-11-04T10:00:00Z",
-        "top": [
-          {
-            "count": 9,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 4,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 11,
-        "t": "2026-11-04T11:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 4,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 1,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 24,
-        "t": "2026-11-04T12:00:00Z",
-        "top": [
-          {
-            "count": 9,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 8,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 21,
-        "t": "2026-11-04T13:00:00Z",
-        "top": [
-          {
-            "count": 11,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 6,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 34,
-        "t": "2026-11-04T14:00:00Z",
-        "top": [
-          {
-            "count": 13,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 7,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 7,
-            "name": "tengu_skills_sync_resync_skipped"
-          }
-        ]
-      },
-      {
-        "count": 23,
-        "t": "2026-11-04T15:00:00Z",
-        "top": [
-          {
-            "count": 15,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 5,
-            "name": "tengu_skills_sync_resync_skipped"
-          },
-          {
-            "count": 3,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 6,
-        "t": "2026-11-04T16:00:00Z",
-        "top": [
-          {
-            "count": 5,
-            "name": "tengu_event_loop_stall"
-          },
-          {
-            "count": 1,
-            "name": "tengu_feature_ok"
-          }
-        ]
-      },
-      {
-        "count": 17,
-        "t": "2026-11-04T17:00:00Z",
-        "top": [
-          {
-            "count": 14,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 2,
-            "name": "tengu_keybinding_fired"
-          },
-          {
-            "count": 1,
-            "name": "tengu_dir_search"
-          }
-        ]
-      },
-      {
-        "count": 106,
-        "t": "2026-11-04T18:00:00Z",
-        "top": [
-          {
-            "count": 24,
-            "name": "tengu_feature_ok"
-          },
-          {
-            "count": 12,
-            "name": "tengu_tool_use_progress"
-          },
-          {
-            "count": 8,
-            "name": "tengu_keybinding_fired"
-          }
-        ]
-      }
-    ],
+    "analytics": [],
     "binSeconds": 3600,
-    "friction": [
-      {
-        "count": 2,
-        "detail": "rm_recursive_force \u00b7 outside_cwd, rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 7,
-        "t": "2026-11-02T15:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 9,
-        "t": "2026-11-02T16:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 4,
-        "detail": "rm_force \u00b7 unknown, rm_recursive_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 12,
-        "t": "2026-11-02T17:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 4,
-        "detail": "rm_recursive_force \u00b7 unknown, rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 18,
-        "t": "2026-11-02T22:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "prompt flagged negative",
-        "kind": "frustrated",
-        "promptIndex": 15,
-        "t": "2026-11-02T22:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 17,
-        "t": "2026-11-02T22:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 3,
-        "detail": "rm_recursive_force \u00b7 unknown, rm_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 19,
-        "t": "2026-11-03T00:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "rm_recursive_force \u00b7 cwd",
-        "kind": "destructive",
-        "promptIndex": 27,
-        "t": "2026-11-03T16:00:00Z",
-        "tool": "Bash"
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 26,
-        "t": "2026-11-03T16:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "prompt flagged negative",
-        "kind": "frustrated",
-        "promptIndex": 34,
-        "t": "2026-11-03T21:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "turn interrupted",
-        "kind": "interrupted",
-        "promptIndex": 41,
-        "t": "2026-11-03T21:00:00Z",
-        "tool": null
-      },
-      {
-        "count": 1,
-        "detail": "rm_recursive_force \u00b7 unknown",
-        "kind": "destructive",
-        "promptIndex": 43,
-        "t": "2026-11-04T00:00:00Z",
-        "tool": "Bash"
-      }
-    ],
+    "friction": [],
     "from": "2026-11-02T05:31:00Z",
     "modelCalls": [
       {
@@ -1015,58 +127,6 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 37,
-        "t": "2026-11-03T00:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 4,
-        "t": "2026-11-03T15:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 43,
-        "t": "2026-11-03T16:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
-          "auxiliary": 0,
-          "main": 0,
-          "subagent": 0
-        },
-        "count": 0,
-        "notCaptured": 10,
-        "t": "2026-11-03T17:00:00Z",
-        "tokens": 0,
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "byClass": {
           "auxiliary": 1,
           "main": 0,
           "subagent": 0
@@ -1111,7 +171,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "subagent": 55
         },
         "count": 135,
-        "notCaptured": 1,
+        "notCaptured": 0,
         "t": "2026-11-03T21:00:00Z",
         "tokens": 109193,
         "tokensIn": 20408769,
@@ -1157,61 +217,122 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1015
       }
     ],
-    "notCaptured": [
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 37,
-        "from": "2026-11-03T00:48:55.710000Z",
-        "reported": 37,
-        "to": "2026-11-03T00:57:10.792000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 4,
-        "from": "2026-11-03T15:13:59.125000Z",
-        "reported": 4,
-        "to": "2026-11-03T15:17:48.778000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 3,
-        "from": "2026-11-03T16:14:56.406000Z",
-        "reported": 3,
-        "to": "2026-11-03T16:24:30.091000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 50,
-        "from": "2026-11-03T16:51:31.940000Z",
-        "reported": 50,
-        "to": "2026-11-03T17:03:02.686000Z"
-      },
-      {
-        "captured": 0,
-        "cause": "Model calls went around the proxy: none was captured in this window while Claude Code's analytics were (a direct route, e.g. over IPv6)",
-        "count": 1,
-        "from": "2026-11-03T21:17:26.955000Z",
-        "reported": 1,
-        "to": "2026-11-03T21:17:26.955000Z"
-      }
-    ],
+    "notCaptured": [],
     "now": "2026-11-04T18:05:00Z",
     "prompts": [
       {
-        "durationMs": 1621477.0,
+        "durationMs": 18418.5,
+        "index": 1,
+        "promptId": "c58abde5-3897-4c35-8172-4845478aeac0",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 2,
+        "t": "2026-11-02T05:31:51.155051Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 610026,
+        "tokensOut": 1508
+      },
+      {
+        "durationMs": 1713314.0,
+        "index": 2,
+        "promptId": "d0ade961-81cc-4c69-88c2-0588963b7eeb",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 80,
+        "t": "2026-11-02T05:33:55.724890Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 26985262,
+        "tokensOut": 75973
+      },
+      {
+        "durationMs": 55266.0,
+        "index": 3,
+        "promptId": "4339d50f-2ba6-4d3e-812c-31cecf3f8900",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 4,
+        "t": "2026-11-02T14:14:18.066135Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 1414287,
+        "tokensOut": 3637
+      },
+      {
+        "durationMs": 34415.8,
+        "index": 4,
+        "promptId": "5c0e414f-fcb7-4c22-89ad-54639c6775d9",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 2,
+        "t": "2026-11-02T14:15:21.690677Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 950312,
+        "tokensOut": 3256
+      },
+      {
+        "durationMs": 401928.2,
+        "index": 5,
+        "promptId": "358731e5-8ce1-46ff-87cf-f255a519239b",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 21,
+        "t": "2026-11-02T14:16:38.366412Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 8934629,
+        "tokensOut": 19424
+      },
+      {
+        "durationMs": 1301932.1,
+        "index": 6,
+        "promptId": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
+        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
+        "steps": 28,
+        "t": "2026-11-02T14:54:00.717725Z",
+        "text": {
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
+          "retained": false,
+          "text": null
+        },
+        "tokensIn": 14180990,
+        "tokensOut": 42368
+      },
+      {
+        "durationMs": 1438524.9,
         "index": 7,
         "promptId": "fbbf55bb-2fda-44c3-8f72-4a1d30e13b54",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 56,
-        "t": "2026-11-02T15:22:33.399000Z",
+        "t": "2026-11-02T15:22:33.703063Z",
         "text": {
-          "chars": 661,
-          "images": 0,
-          "pastedBytes": 1218,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1219,16 +340,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 77593
       },
       {
-        "durationMs": 24196.0,
+        "durationMs": 23825.1,
         "index": 8,
         "promptId": "f458706f-dc1b-4754-8614-704bf7fa4723",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-02T15:57:13.078000Z",
+        "t": "2026-11-02T15:57:13.399358Z",
         "text": {
-          "chars": 90,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1236,16 +357,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1794
       },
       {
-        "durationMs": 954427.0,
+        "durationMs": 509240.6,
         "index": 9,
         "promptId": "a61c7c87-346d-485b-848f-7e97870cfbbc",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 19,
-        "t": "2026-11-02T15:59:22.621000Z",
+        "t": "2026-11-02T15:59:22.741964Z",
         "text": {
-          "chars": 1179,
-          "images": 0,
-          "pastedBytes": 1121,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1253,16 +374,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 32699
       },
       {
-        "durationMs": 194528.0,
+        "durationMs": 194116.5,
         "index": 10,
         "promptId": "0e390491-a3a7-4804-83af-0436ce5dd82e",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 7,
-        "t": "2026-11-02T16:29:48.586000Z",
+        "t": "2026-11-02T16:29:49.005960Z",
         "text": {
-          "chars": 353,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1270,16 +391,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 17253
       },
       {
-        "durationMs": 605482.0,
+        "durationMs": 133525.9,
         "index": 11,
         "promptId": "481d2b3a-2184-4b6b-8f7d-ff69c478ba77",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 5,
-        "t": "2026-11-02T16:36:04.156000Z",
+        "t": "2026-11-02T16:36:04.361288Z",
         "text": {
-          "chars": 467,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1287,16 +408,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 13390
       },
       {
-        "durationMs": 950205.0,
+        "durationMs": 766705.3,
         "index": 12,
         "promptId": "835ec244-0109-4f5d-83f7-3c33617d6954",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 28,
-        "t": "2026-11-02T17:12:21.353000Z",
+        "t": "2026-11-02T17:12:21.715933Z",
         "text": {
-          "chars": 64,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1304,16 +425,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 49474
       },
       {
-        "durationMs": 4350805.0,
+        "durationMs": 1053374.8,
         "index": 13,
         "promptId": "d9ed62b2-96dd-4ff5-832a-da12626b4944",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 31,
-        "t": "2026-11-02T17:48:28.892000Z",
+        "t": "2026-11-02T17:48:29.165394Z",
         "text": {
-          "chars": 851,
-          "images": 0,
-          "pastedBytes": 793,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1321,16 +442,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 65158
       },
       {
-        "durationMs": 65952.0,
+        "durationMs": 64136.2,
         "index": 14,
         "promptId": "ddd5d65e-ec44-4085-8698-c82bda540a89",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-02T21:58:29.308000Z",
+        "t": "2026-11-02T21:58:29.787689Z",
         "text": {
-          "chars": 191,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1338,16 +459,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 6135
       },
       {
-        "durationMs": 492311.0,
+        "durationMs": 310171.5,
         "index": 15,
         "promptId": "fb85f4ed-668d-4d45-81c9-c027ae9c48ed",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 26,
-        "t": "2026-11-02T22:02:08.487000Z",
+        "t": "2026-11-02T22:02:08.629688Z",
         "text": {
-          "chars": 678,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1355,16 +476,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 15824
       },
       {
-        "durationMs": 884328.0,
+        "durationMs": 884188.2,
         "index": 16,
         "promptId": "8f2526a8-9437-4c0d-8f72-566570ea8621",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 58,
-        "t": "2026-11-02T22:14:29.126000Z",
+        "t": "2026-11-02T22:14:29.206782Z",
         "text": {
-          "chars": 91,
-          "images": 1,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1372,16 +493,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 34159
       },
       {
-        "durationMs": 73639.0,
+        "durationMs": 51322.6,
         "index": 17,
         "promptId": "eb8d0d45-e6d5-4eae-8965-92ba8cd8fbb1",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 5,
-        "t": "2026-11-02T22:36:54.820000Z",
+        "t": "2026-11-02T22:36:55.072769Z",
         "text": {
-          "chars": 257,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1389,16 +510,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1253
       },
       {
-        "durationMs": 1198407.0,
+        "durationMs": 1015904.9,
         "index": 18,
         "promptId": "6fc1234a-3930-4d65-8d58-46527684487c",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 57,
-        "t": "2026-11-02T22:38:10.929000Z",
+        "t": "2026-11-02T22:38:11.320182Z",
         "text": {
-          "chars": 1,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1406,101 +527,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 64754
       },
       {
-        "durationMs": null,
+        "durationMs": 14726.1,
         "index": 19,
-        "promptId": "99c1137a-c477-4dab-86a0-8cd22f88908e",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T00:47:51.180000Z",
-        "text": {
-          "chars": 318,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 254228.0,
-        "index": 24,
-        "promptId": "4d07dfde-59e1-4d73-8d15-77b53f9ac11e",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T15:13:34.553000Z",
-        "text": {
-          "chars": 68,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 605146.0,
-        "index": 25,
-        "promptId": "e8006f5c-4e39-4a3f-80f0-58e45a68fd23",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T16:14:24.950000Z",
-        "text": {
-          "chars": 464,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 242786.0,
-        "index": 26,
-        "promptId": "5b068420-565c-4bae-8354-8832fdcc2a2a",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T16:51:12.678000Z",
-        "text": {
-          "chars": 532,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 4038868.0,
-        "index": 27,
-        "promptId": "5370b9aa-8f83-40ea-8f32-000f56b66bf8",
-        "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
-        "steps": 0,
-        "t": "2026-11-03T16:55:33.399000Z",
-        "text": {
-          "chars": 213,
-          "images": 0,
-          "pastedBytes": 0,
-          "retained": false,
-          "text": null
-        },
-        "tokensIn": null,
-        "tokensOut": null
-      },
-      {
-        "durationMs": 197014.0,
-        "index": 28,
         "promptId": "3a3b20c1-1265-41c6-8577-2211c37fce54",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 5,
-        "t": "2026-11-03T19:25:39.691000Z",
+        "t": "2026-11-03T19:25:40.222056Z",
         "text": {
-          "chars": 182,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1508,16 +544,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 789
       },
       {
-        "durationMs": 9498.0,
-        "index": 29,
+        "durationMs": 9162.6,
+        "index": 20,
         "promptId": "c0199871-cf41-407c-8b57-50275551a8c1",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 3,
-        "t": "2026-11-03T20:30:35.921000Z",
+        "t": "2026-11-03T20:30:36.206181Z",
         "text": {
-          "chars": 113,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1525,16 +561,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 853
       },
       {
-        "durationMs": 11357.0,
-        "index": 30,
+        "durationMs": 11175.0,
+        "index": 21,
         "promptId": "08a85c1c-d4d7-43e2-8f43-c6c30792fb8d",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T20:31:10.710000Z",
+        "t": "2026-11-03T20:31:10.843062Z",
         "text": {
-          "chars": 49,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1542,16 +578,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1018
       },
       {
-        "durationMs": 142453.0,
-        "index": 31,
+        "durationMs": 142313.3,
+        "index": 22,
         "promptId": "3f1f2c61-5c10-49e9-8740-48658b0a8ca0",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 11,
-        "t": "2026-11-03T20:32:20.510000Z",
+        "t": "2026-11-03T20:32:20.642198Z",
         "text": {
-          "chars": 169,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1559,16 +595,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 9799
       },
       {
-        "durationMs": 17936.0,
-        "index": 32,
+        "durationMs": 17737.6,
+        "index": 23,
         "promptId": "dd242b48-f327-426a-8dc8-889ff80496fb",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 1,
-        "t": "2026-11-03T20:36:12.541000Z",
+        "t": "2026-11-03T20:36:12.680983Z",
         "text": {
-          "chars": 345,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1576,16 +612,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1548
       },
       {
-        "durationMs": 1622734.0,
-        "index": 33,
+        "durationMs": 1622611.8,
+        "index": 24,
         "promptId": "c0cf46fa-e9f5-4f99-80cb-9c8da77407c4",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 24,
-        "t": "2026-11-03T20:37:45.673000Z",
+        "t": "2026-11-03T20:37:45.810638Z",
         "text": {
-          "chars": 249,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1593,16 +629,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 26172
       },
       {
-        "durationMs": 271105.0,
-        "index": 34,
+        "durationMs": 343031.7,
+        "index": 25,
         "promptId": "5ba3b328-8563-4188-8a6e-33f476820c88",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 76,
-        "t": "2026-11-03T21:06:48.151000Z",
+        "t": "2026-11-03T21:06:48.327254Z",
         "text": {
-          "chars": 744,
-          "images": 0,
-          "pastedBytes": 686,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1610,15 +646,15 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 58587
       },
       {
-        "durationMs": 72063.0,
-        "index": 35,
+        "durationMs": 1533.6,
+        "index": 26,
         "promptId": "90842aad-eea9-4222-8be4-ba92cc61b098",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 1,
-        "t": "2026-11-03T21:11:19.287000Z",
+        "t": "2026-11-03T21:11:19.428705Z",
         "text": {
-          "chars": 11439,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -1627,15 +663,15 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 86
       },
       {
-        "durationMs": 308321.0,
-        "index": 36,
+        "durationMs": 308175.3,
+        "index": 27,
         "promptId": "3b893496-021b-40d0-8826-11d9f00fe1b0",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 14,
-        "t": "2026-11-03T21:12:31.373000Z",
+        "t": "2026-11-03T21:12:31.509058Z",
         "text": {
-          "chars": 8331,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -1644,16 +680,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 13847
       },
       {
-        "durationMs": 140935.0,
-        "index": 37,
+        "durationMs": 140770.9,
+        "index": 28,
         "promptId": "28883e56-61fc-48b8-8124-a61e74567528",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 14,
-        "t": "2026-11-03T21:18:44.974000Z",
+        "t": "2026-11-03T21:18:45.123543Z",
         "text": {
-          "chars": 124,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1661,16 +697,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 14628
       },
       {
-        "durationMs": 7469.0,
-        "index": 38,
+        "durationMs": 7334.9,
+        "index": 29,
         "promptId": "a7377f08-f5b2-41e3-8c36-b6c48fccc7a4",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T21:22:12.426000Z",
+        "t": "2026-11-03T21:22:12.550233Z",
         "text": {
-          "chars": 20,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1678,16 +714,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 612
       },
       {
-        "durationMs": 10316.0,
-        "index": 39,
+        "durationMs": 10151.3,
+        "index": 30,
         "promptId": "85404ed2-4328-4d55-82ba-613cc636cf2f",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T21:24:43.861000Z",
+        "t": "2026-11-03T21:24:43.985779Z",
         "text": {
-          "chars": 46,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1695,16 +731,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 866
       },
       {
-        "durationMs": 357255.0,
-        "index": 40,
+        "durationMs": 144735.3,
+        "index": 31,
         "promptId": "494f37d2-d9db-4daf-8e7b-0c5ef78d7bf2",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 8,
-        "t": "2026-11-03T21:27:33.197000Z",
+        "t": "2026-11-03T21:28:02.450093Z",
         "text": {
-          "chars": 14,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1712,16 +748,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 4580
       },
       {
-        "durationMs": 3750.0,
-        "index": 41,
+        "durationMs": 623.0,
+        "index": 32,
         "promptId": "0928aadd-16c4-4cb9-837b-81a6a49378f2",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 2,
-        "t": "2026-11-03T21:55:24.662000Z",
+        "t": "2026-11-03T21:55:25.055803Z",
         "text": {
-          "chars": 47,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1729,16 +765,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": null
       },
       {
-        "durationMs": 3291188.0,
-        "index": 42,
+        "durationMs": 7387.4,
+        "index": 33,
         "promptId": "8f7df8e5-4914-4a1a-8b05-186a140e6216",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 1,
-        "t": "2026-11-03T21:55:31.605000Z",
+        "t": "2026-11-03T21:55:32.142244Z",
         "text": {
-          "chars": 49,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1746,16 +782,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 196
       },
       {
-        "durationMs": 39390.0,
-        "index": 43,
+        "durationMs": 38838.9,
+        "index": 34,
         "promptId": "ca81b717-47f4-4129-88af-d566119ea789",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 6,
-        "t": "2026-11-04T00:17:17.184000Z",
+        "t": "2026-11-04T00:17:17.653708Z",
         "text": {
-          "chars": 130,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1763,16 +799,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 2729
       },
       {
-        "durationMs": 208591.0,
-        "index": 44,
+        "durationMs": 25974.3,
+        "index": 35,
         "promptId": "61a95e80-e0dc-4b19-8852-fbeba7152d91",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 4,
-        "t": "2026-11-04T00:20:50.969000Z",
+        "t": "2026-11-04T00:20:51.281862Z",
         "text": {
-          "chars": 454,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1780,16 +816,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1707
       },
       {
-        "durationMs": 24133.0,
-        "index": 45,
+        "durationMs": 23569.3,
+        "index": 36,
         "promptId": "2503ea47-8212-48d9-8cfc-fa0d53c67471",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 3,
-        "t": "2026-11-04T00:25:40.428000Z",
+        "t": "2026-11-04T00:25:40.888348Z",
         "text": {
-          "chars": 487,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1797,16 +833,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 1968
       },
       {
-        "durationMs": 44090.0,
-        "index": 46,
+        "durationMs": 43710.7,
+        "index": 37,
         "promptId": "d78fb4f3-2a16-4662-8572-4e81f88e3fb2",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 4,
-        "t": "2026-11-04T00:26:48.025000Z",
+        "t": "2026-11-04T00:26:48.380611Z",
         "text": {
-          "chars": 74,
-          "images": 0,
-          "pastedBytes": 0,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1814,16 +850,16 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "tokensOut": 4086
       },
       {
-        "durationMs": null,
-        "index": 47,
+        "durationMs": 15232.6,
+        "index": 38,
         "promptId": "06fd054b-17f2-49d1-845a-d28a65b4c6ef",
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
         "steps": 4,
-        "t": "2026-11-04T18:02:22.533000Z",
+        "t": "2026-11-04T18:02:22.789979Z",
         "text": {
-          "chars": 4937,
-          "images": 0,
-          "pastedBytes": 4476,
+          "chars": null,
+          "images": null,
+          "pastedBytes": null,
           "retained": false,
           "text": null
         },
@@ -1834,12 +870,12 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "sessions": [
       {
         "branch": null,
-        "capturedFromPrompt": 7,
+        "capturedFromPrompt": null,
         "end": null,
         "label": "Session d7ee5e66",
         "live": true,
         "modelCalls": 640,
-        "prompts": 43,
+        "prompts": 38,
         "repo": null,
         "row": 0,
         "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
@@ -1850,28 +886,55 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
     "work": [
       {
         "edits": 0,
-        "other": 5,
-        "steps": 39,
-        "t": "2026-11-02T14:00:00Z",
+        "other": 13,
+        "steps": 79,
+        "t": "2026-11-02T05:00:00Z",
         "work": {
           "commands": [
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 3
-            },
+              "program": null,
+              "runs": 12
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 0,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [
+            {
+              "count": 1,
+              "name": null
+            }
+          ],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
+        "edits": 0,
+        "other": 2,
+        "steps": 5,
+        "t": "2026-11-02T06:00:00Z",
+        "work": {
+          "commands": [
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cat",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 1
+              "program": null,
+              "runs": 2
             }
           ],
           "commits": 0,
@@ -1895,6 +958,45 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         }
       },
       {
+        "edits": 1,
+        "other": 33,
+        "steps": 39,
+        "t": "2026-11-02T14:00:00Z",
+        "work": {
+          "commands": [
+            {
+              "failed": 0,
+              "lastExit": null,
+              "program": null,
+              "runs": 32
+            }
+          ],
+          "commits": 0,
+          "editTypes": {},
+          "editedFiles": null,
+          "edits": 1,
+          "linesAdded": null,
+          "linesRemoved": null,
+          "mcp": [],
+          "otherTools": 0,
+          "prs": [],
+          "pushes": 0,
+          "readFiles": null,
+          "readTypes": {},
+          "reads": 0,
+          "subagents": [
+            {
+              "count": 1,
+              "name": null
+            }
+          ],
+          "web": {
+            "fetches": 0,
+            "searches": 0
+          }
+        }
+      },
+      {
         "edits": 3,
         "other": 70,
         "steps": 79,
@@ -1902,121 +1004,13 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         "work": {
           "commands": [
             {
-              "failed": 3,
-              "lastExit": null,
-              "program": "python",
-              "runs": 21
-            },
-            {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 10
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cp",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "helm",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "go",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "ls",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "pkill",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "tail",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "which",
-              "runs": 1
+              "program": null,
+              "runs": 70
             }
           ],
-          "commits": 4,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 3,
@@ -2025,7 +1019,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 2,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 0,
@@ -2038,7 +1032,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 1,
-        "other": 24,
+        "other": 23,
         "steps": 30,
         "t": "2026-11-02T16:00:00Z",
         "work": {
@@ -2046,65 +1040,11 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 9
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "bash",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 1
+              "program": null,
+              "runs": 23
             }
           ],
-          "commits": 2,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 1,
@@ -2113,7 +1053,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 2,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 0,
@@ -2126,7 +1066,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 48,
+        "other": 50,
         "steps": 54,
         "t": "2026-11-02T17:00:00Z",
         "work": {
@@ -2134,89 +1074,11 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "python",
-              "runs": 10
-            },
-            {
-              "failed": 1,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 4
-            },
-            {
-              "failed": 1,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "awk",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "date",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "find",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "helm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "rm",
-              "runs": 1
+              "program": null,
+              "runs": 49
             }
           ],
-          "commits": 3,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 0,
@@ -2225,7 +1087,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 1,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 1,
@@ -2238,7 +1100,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 2,
-        "other": 6,
+        "other": 5,
         "steps": 8,
         "t": "2026-11-02T18:00:00Z",
         "work": {
@@ -2246,35 +1108,11 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 1
+              "program": null,
+              "runs": 4
             }
           ],
-          "commits": 3,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 2,
@@ -2283,7 +1121,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "mcp": [],
           "otherTools": 0,
           "prs": [],
-          "pushes": 2,
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 1,
@@ -2304,7 +1142,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "grep",
+              "program": null,
               "runs": 1
             }
           ],
@@ -2330,115 +1168,19 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 7,
-        "other": 137,
+        "other": 146,
         "steps": 148,
         "t": "2026-11-02T22:00:00Z",
         "work": {
           "commands": [
             {
-              "failed": 1,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 30
-            },
-            {
               "failed": 0,
               "lastExit": null,
-              "program": "python",
-              "runs": 24
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 15
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 12
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "bash",
-              "runs": 7
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 6
-            },
-            {
-              "failed": 1,
-              "lastExit": null,
-              "program": "other",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sleep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cp",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "ls",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "head",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "helm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
+              "program": null,
+              "runs": 135
             }
           ],
-          "commits": 3,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
           "edits": 7,
@@ -2446,10 +1188,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "linesRemoved": null,
           "mcp": [],
           "otherTools": 0,
-          "prs": [
-            2
-          ],
-          "pushes": 4,
+          "prs": [],
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 11,
@@ -2462,299 +1202,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 35,
-        "steps": 0,
-        "t": "2026-11-03T00:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 9
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 9
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "echo",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cp",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
-            }
-          ],
-          "commits": 1,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 2,
-        "steps": 0,
-        "t": "2026-11-03T15:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "awk",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 1
-            }
-          ],
-          "commits": 0,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 37,
-        "steps": 0,
-        "t": "2026-11-03T16:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 7
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 6
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cd",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "go",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "kubectl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "rm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "seq",
-              "runs": 1
-            }
-          ],
-          "commits": 0,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 1,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 2,
-            "searches": 1
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 11,
-        "steps": 0,
-        "t": "2026-11-03T17:00:00Z",
-        "work": {
-          "commands": [
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "docker",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "curl",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "head",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 1
-            }
-          ],
-          "commits": 1,
-          "editTypes": {},
-          "editedFiles": null,
-          "edits": 0,
-          "linesAdded": null,
-          "linesRemoved": null,
-          "mcp": [],
-          "otherTools": 0,
-          "prs": [],
-          "pushes": 0,
-          "readFiles": null,
-          "readTypes": {},
-          "reads": 0,
-          "subagents": [],
-          "web": {
-            "fetches": 0,
-            "searches": 0
-          }
-        }
-      },
-      {
-        "edits": 0,
-        "other": 4,
+        "other": 3,
         "steps": 6,
         "t": "2026-11-03T19:00:00Z",
         "work": {
@@ -2765,12 +1213,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
           "edits": 0,
           "linesAdded": null,
           "linesRemoved": null,
-          "mcp": [
-            {
-              "calls": 1,
-              "server": ""
-            }
-          ],
+          "mcp": [],
           "otherTools": 3,
           "prs": [],
           "pushes": 0,
@@ -2786,7 +1229,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 22,
+        "other": 23,
         "steps": 30,
         "t": "2026-11-03T20:00:00Z",
         "work": {
@@ -2794,38 +1237,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 7
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "ls",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 1
+              "program": null,
+              "runs": 19
             }
           ],
           "commits": 0,
@@ -2849,8 +1262,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
         }
       },
       {
-        "edits": 17,
-        "other": 94,
+        "edits": 16,
+        "other": 100,
         "steps": 135,
         "t": "2026-11-03T21:00:00Z",
         "work": {
@@ -2858,82 +1271,20 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "cd",
-              "runs": 61
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 5
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "other",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "cat",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "python",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "gh",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "mkdir",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "bash",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "wc",
-              "runs": 1
+              "program": null,
+              "runs": 96
             }
           ],
-          "commits": 1,
+          "commits": 0,
           "editTypes": {},
           "editedFiles": null,
-          "edits": 17,
+          "edits": 16,
           "linesAdded": null,
           "linesRemoved": null,
           "mcp": [],
           "otherTools": 0,
-          "prs": [
-            2
-          ],
-          "pushes": 2,
+          "prs": [],
+          "pushes": 0,
           "readFiles": null,
           "readTypes": {},
           "reads": 2,
@@ -2959,38 +1310,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "gh",
-              "runs": 4
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "git",
-              "runs": 3
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "grep",
-              "runs": 2
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "rm",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "sed",
-              "runs": 1
-            },
-            {
-              "failed": 0,
-              "lastExit": null,
-              "program": "wc",
-              "runs": 1
+              "program": null,
+              "runs": 12
             }
           ],
           "commits": 0,
@@ -3015,7 +1336,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
       },
       {
         "edits": 0,
-        "other": 1,
+        "other": 3,
         "steps": 4,
         "t": "2026-11-04T18:00:00Z",
         "work": {
@@ -3023,8 +1344,8 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
             {
               "failed": 0,
               "lastExit": null,
-              "program": "sed",
-              "runs": 1
+              "program": null,
+              "runs": 3
             }
           ],
           "commits": 0,
@@ -3052,7 +1373,7 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-02T05:31:00Z",
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": null,
     "pageSize": null,
     "to": "2026-11-04T18:05:59.999999Z",

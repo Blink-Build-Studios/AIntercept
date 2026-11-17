@@ -9,9 +9,6 @@ from aintercept_api.models.people import (
 )
 from aintercept_api.rows import dt
 
-TOP_EVENTS = 3
-FRICTION_DETAIL = {"frustrated": "prompt flagged negative", "interrupted": "turn interrupted"}
-
 
 def band_from_table(r: Mapping[str, Any], row: int, alone: bool = False) -> TimelineSession:
     """A session_rows row (with `live`) as its timeline band: field copies only."""
@@ -22,15 +19,9 @@ def band_from_table(r: Mapping[str, Any], row: int, alone: bool = False) -> Time
         label=r["label_text_alone" if alone else "label_text"],
         row=row,
         live=r["live"],
-        capturedFromPrompt=r["captured_from_prompt"],
+        capturedFromPrompt=None,  # the first prompt number seen was Claude Code's analytics
         repo=None,  # M7 extraction
         branch=None,
         prompts=r["prompts"],
         modelCalls=r["model_calls"],
     )
-
-
-BYPASS_CAUSE = (
-    "Model calls went around the proxy: none was captured in this window while Claude Code's "
-    "analytics were (a direct route, e.g. over IPv6)"
-)

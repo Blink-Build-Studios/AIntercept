@@ -8,7 +8,7 @@ const sample: components["schemas"]["RequestResponse"] = {
     "contentRetained": false,
     "crossCheck": {
       "costAgrees": null,
-      "matched": true
+      "matched": false
     },
     "durationMs": 9300.0,
     "keyStrip": {
@@ -16,29 +16,29 @@ const sample: components["schemas"]["RequestResponse"] = {
       "cost": {
         "basis": "api-equivalent",
         "estimatedCalls": 0,
-        "usd": 0.21
+        "usd": null
       },
       "effort": "high",
       "model": "claude-opus-5-5",
       "proxyTtftMs": 1850.0,
       "reasoningTokens": null,
       "stopReason": "tool_use",
-      "streamEvents": 47,
+      "streamEvents": null,
       "thinking": true,
       "tokens": {
         "accuracy": "exact",
         "cacheRead": 42611,
         "cacheWrite": 0,
-        "cacheWrite1h": 0,
-        "cacheWrite5m": 0,
+        "cacheWrite1h": null,
+        "cacheWrite5m": null,
         "input": 3,
         "output": 1204
       },
       "toolCalls": [
         "Edit"
       ],
-      "ttftMs": 1912.0,
-      "ttftSource": "client",
+      "ttftMs": null,
+      "ttftSource": "proxy",
       "usageMissing": null
     },
     "kind": "normal",
@@ -49,22 +49,6 @@ const sample: components["schemas"]["RequestResponse"] = {
     "prevRequestId": null,
     "promptIndex": 1,
     "received": [
-      {
-        "body": null,
-        "detail": "not retained",
-        "label": "thinking",
-        "size": 380,
-        "tone": null,
-        "unit": "chars"
-      },
-      {
-        "body": null,
-        "detail": "not retained",
-        "label": "text",
-        "size": 212,
-        "tone": null,
-        "unit": "chars"
-      },
       {
         "body": null,
         "detail": "not retained",
@@ -80,7 +64,7 @@ const sample: components["schemas"]["RequestResponse"] = {
     "sent": [
       {
         "body": null,
-        "detail": "24 messages \u00b7 not retained",
+        "detail": "not retained",
         "label": "request body",
         "size": null,
         "tone": null,
@@ -96,7 +80,7 @@ const sample: components["schemas"]["RequestResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:01:40Z",
+    "lastDataAt": "2026-11-04T09:01:39Z",
     "page": null,
     "pageSize": null,
     "to": null,

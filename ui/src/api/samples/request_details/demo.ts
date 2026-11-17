@@ -7,55 +7,12 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
       "accuracy": "exact",
       "cacheRead": 26827,
       "cacheWrite": 45169,
-      "cacheWrite1h": 45169,
-      "cacheWrite5m": 0,
+      "cacheWrite1h": null,
+      "cacheWrite5m": null,
       "input": 2,
       "output": 136
     },
-    "events": [
-      {
-        "eventId": "demo-001377:34",
-        "internal": false,
-        "linkedTo": {
-          "id": "3a3b20c1-1265-41c6-8577-2211c37fce54",
-          "kind": "prompt",
-          "label": "#28"
-        },
-        "marker": null,
-        "name": "tengu_api_query",
-        "promptIndex": 28,
-        "summary": "permissionMode bypassPermissions",
-        "t": "2026-11-03T19:25:39.808000Z"
-      },
-      {
-        "eventId": "demo-001377:38",
-        "internal": false,
-        "linkedTo": {
-          "id": "demo-001364",
-          "kind": "request",
-          "label": "main \u00b7 opus \u00b7 tool_use"
-        },
-        "marker": null,
-        "name": "tengu_api_success",
-        "promptIndex": 28,
-        "summary": "cache_creation_1h_input_tokens 45169 \u00b7 cache_creation_5m_input_tokens 0 \u00b7 costUSD 0.36944540000000003 \u00b7 durationMs 2267 \u00b7 gzipSkipReason custom_ca \u00b7 permissionMode bypassPermissions",
-        "t": "2026-11-03T19:25:42.076000Z"
-      },
-      {
-        "eventId": "demo-001377:54",
-        "internal": false,
-        "linkedTo": {
-          "id": "toolu_demo_92f71082bcb6b9708e77",
-          "kind": "tool",
-          "label": "Artifact"
-        },
-        "marker": null,
-        "name": "tengu_tool_use_success",
-        "promptIndex": 28,
-        "summary": "durationMs 732 \u00b7 isMcp false \u00b7 preToolHookDurationMs 61 \u00b7 toolName Artifact \u00b7 toolResultSizeBytes 3746",
-        "t": "2026-11-03T19:25:42.872000Z"
-      }
-    ],
+    "events": [],
     "fields": [
       {
         "key": "account_uuid",
@@ -180,50 +137,6 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
       {
         "key": "tools_available",
         "value": "[{\"kind\":\"builtin\",\"name\":\"Agent\",\"tool\":\"Agent\"},{\"kind\":\"builtin\",\"name\":\"Artifact\",\"tool\":\"Artifact\"},{\"kind\":\"builtin\",\"name\":\"AskUserQuestion\",\"tool\":\"AskUserQuestion\"},{\"kind\":\"builtin\",\"name\":\"Bash\",\"tool\":\"Bash\"},{\"kind\":\"builtin\",\"name\":\"Edit\",\"tool\":\"Edit\"},{\"kind\":\"builtin\",\"name\":\"ListAgents\",\"tool\":\"ListAgents\"},{\"kind\":\"builtin\",\"name\":\"Read\",\"tool\":\"Read\"},{\"kind\":\"builtin\",\"name\":\"ReportFindings\",\"tool\":\"ReportFindings\"},{\"kind\":\"builtin\",\"name\":\"ScheduleWakeup\",\"tool\":\"ScheduleWakeup\"},{\"kind\":\"builtin\",\"name\":\"SendFeedback\",\"tool\":\"SendFeedback\"},{\"kind\":\"builtin\",\"name\":\"Skill\",\"tool\":\"Skill\"},{\"kind\":\"builtin\",\"name\":\"ToolSearch\",\"tool\":\"ToolSearch\"},{\"kind\":\"builtin\",\"name\":\"WebFetch\",\"tool\":\"WebFetch\"},{\"kind\":\"builtin\",\"name\":\"WebSearch\",\"tool\":\"WebSearch\"},{\"kind\":\"builtin\",\"name\":\"Workflow\",\"tool\":\"Workflow\"},{\"kind\":\"builtin\",\"name\":\"Write\",\"tool\":\"Write\"},{\"kind\":\"builtin\",\"name\":\"DeferredToolPlaceholder\",\"tool\":\"DeferredToolPlaceholder\"},{\"kind\":\"builtin\",\"name\":\"advisor\",\"tool\":\"advisor\"}]"
-      },
-      {
-        "key": "analytics.cache_creation_1h_input_tokens",
-        "value": "45169"
-      },
-      {
-        "key": "analytics.cache_creation_5m_input_tokens",
-        "value": "0"
-      },
-      {
-        "key": "analytics.cc_prompt_id",
-        "value": "3a3b20c1-1265-41c6-8577-2211c37fce54"
-      },
-      {
-        "key": "analytics.clientRequestId",
-        "value": "16b187da-3fd6-4dd1-8b47-f1f13d973a69"
-      },
-      {
-        "key": "analytics.costUSD",
-        "value": "0.36944540000000003"
-      },
-      {
-        "key": "analytics.durationMs",
-        "value": "2267"
-      },
-      {
-        "key": "analytics.gzipSkipReason",
-        "value": "custom_ca"
-      },
-      {
-        "key": "analytics.permissionMode",
-        "value": "bypassPermissions"
-      },
-      {
-        "key": "analytics.requestId",
-        "value": "req_demo_55eac1268a72b474d8f6"
-      },
-      {
-        "key": "analytics.subscription_type",
-        "value": "max"
-      },
-      {
-        "key": "analytics.ttftMs",
-        "value": "1185"
       }
     ],
     "sections": [
@@ -256,14 +169,14 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": "tokens",
-            "v": 0
+            "v": null
           },
           {
             "k": "cache write 1h",
             "note": null,
             "tone": null,
             "unit": "tokens",
-            "v": 45169
+            "v": null
           },
           {
             "k": "output",
@@ -282,9 +195,9 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
           {
             "k": "costUSD (Claude Code)",
             "note": null,
-            "tone": "ok",
+            "tone": null,
             "unit": "usd",
-            "v": 0.36944540000000003
+            "v": null
           }
         ],
         "title": "Tokens & cost"
@@ -332,7 +245,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": null
+            "v": 18
           }
         ],
         "title": "Request settings"
@@ -483,7 +396,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": 0
+            "v": null
           }
         ],
         "title": "Response service"
@@ -596,14 +509,14 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
         "rows": [
           {
             "k": "analytics match",
-            "note": null,
-            "tone": "ok",
+            "note": "analytics aren't stored",
+            "tone": null,
             "unit": null,
-            "v": true
+            "v": null
           },
           {
             "k": "cost agreement",
-            "note": "no price table (costUSD is Claude Code\u2019s own)",
+            "note": "no price table",
             "tone": null,
             "unit": null,
             "v": null
@@ -613,7 +526,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": "ms",
-            "v": 1185.0
+            "v": null
           },
           {
             "k": "ttft (proxy)",
@@ -627,7 +540,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": "bypassPermissions"
+            "v": null
           },
           {
             "k": "sandbox",
@@ -648,22 +561,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
       }
     ],
     "timing": {
-      "client": [
-        {
-          "k": "ttftMs",
-          "note": null,
-          "tone": null,
-          "unit": "ms",
-          "v": 1185.0
-        },
-        {
-          "k": "durationMs",
-          "note": null,
-          "tone": null,
-          "unit": "ms",
-          "v": 2267.0
-        }
-      ],
+      "client": [],
       "proxy": [
         {
           "durMs": null,
@@ -694,63 +592,12 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
     },
     "tool": [
       {
-        "execution": [
-          {
-            "k": "status",
-            "note": null,
-            "tone": null,
-            "unit": null,
-            "v": "ok"
-          },
-          {
-            "k": "duration",
-            "note": null,
-            "tone": null,
-            "unit": "ms",
-            "v": 732.0
-          },
-          {
-            "k": "PreToolUse hook",
-            "note": null,
-            "tone": null,
-            "unit": "ms",
-            "v": 61.0
-          },
-          {
-            "k": "permission wait",
-            "note": null,
-            "tone": null,
-            "unit": "ms",
-            "v": null
-          }
-        ],
+        "execution": [],
         "input": [],
         "mcpServer": null,
         "name": "Artifact",
-        "result": [
-          {
-            "k": "delivered in",
-            "note": "demo-001368",
-            "tone": null,
-            "unit": null,
-            "v": "step 2"
-          },
-          {
-            "k": "size",
-            "note": null,
-            "tone": null,
-            "unit": "bytes",
-            "v": 3746
-          },
-          {
-            "k": "is_error",
-            "note": null,
-            "tone": null,
-            "unit": null,
-            "v": false
-          }
-        ],
-        "toolUseId": "toolu_demo_92f71082bcb6b9708e77"
+        "result": [],
+        "toolUseId": null
       }
     ]
   },

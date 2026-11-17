@@ -37,12 +37,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "clientVersion": "2.1.308",
     "commit": null,
     "costUsd": null,
-    "coverage": {
-      "captured": 2,
-      "notCaptured": 0,
-      "reported": null,
-      "windows": []
-    },
+    "coverage": null,
     "device": null,
     "effort": null,
     "end": "2026-11-04T09:02:00Z",

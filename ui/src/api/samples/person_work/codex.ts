@@ -72,18 +72,18 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           "work": {
             "commands": [
               {
-                "failed": 1,
+                "failed": 0,
                 "lastExit": null,
                 "program": null,
-                "runs": 2
+                "runs": 1
               }
             ],
             "commits": 0,
             "editTypes": {},
             "editedFiles": null,
             "edits": 1,
-            "linesAdded": 12,
-            "linesRemoved": 3,
+            "linesAdded": null,
+            "linesRemoved": null,
             "mcp": [],
             "otherTools": 0,
             "prs": [],
@@ -104,18 +104,18 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
       "work": {
         "commands": [
           {
-            "failed": 1,
+            "failed": 0,
             "lastExit": null,
             "program": null,
-            "runs": 2
+            "runs": 1
           }
         ],
         "commits": 0,
         "editTypes": {},
         "editedFiles": null,
         "edits": 1,
-        "linesAdded": 12,
-        "linesRemoved": 3,
+        "linesAdded": null,
+        "linesRemoved": null,
         "mcp": [],
         "otherTools": 0,
         "prs": [],

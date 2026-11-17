@@ -6,15 +6,13 @@ from datetime import datetime
 from http import HTTPStatus
 from typing import Any
 
-from aintercept_api import person as pp
-from aintercept_api.models.common import Coverage, CoverageWindow, UsageMissing
+from aintercept_api.models.common import UsageMissing
 from aintercept_api.models.people import (
     Friction,
     SessionLabel,
     SessionOrigin,
     SessionRow,
     ThreadChildren,
-    TokenCount,
 )
 from aintercept_api.timeutil import ns_to_dt
 
@@ -72,20 +70,14 @@ def session_row_from_table(r: Mapping[str, Any], alone: bool = False) -> Session
             source=r["label_source_alone" if alone else "label_source"],
         ),
         prompts=r["prompts"],
-        capturedFromPrompt=r["captured_from_prompt"],
+        # What only analytics fed (the first prompt number, events, frustration, destructive commands,
+        # bypass, coverage) isn't kept: analytics stay in the raw files. A turn's interrupt is the wire's.
+        capturedFromPrompt=None,
         modelCalls=r["model_calls"],
-        events=r["events"],
-        friction=Friction(frustrated=r["frustrated"], interrupted=r["interrupted"], destructive=r["destructive"]),
-        bypassPct=r["bypass_pct"],
-        coverage=Coverage(
-            reported=r["cov_reported"],
-            captured=r["cov_captured"],
-            notCaptured=r["cov_not_captured"],
-            windows=[
-                CoverageWindow(from_=dt(a), to=dt(b), count=n)
-                for a, b, n in zip(r["cov_window_from"], r["cov_window_to"], r["cov_window_count"], strict=True)
-            ],
-        ),
+        events=None,
+        friction=Friction(frustrated=0, interrupted=int(r["turns_interrupted"] or 0), destructive=0),
+        bypassPct=None,
+        coverage=None,
         fieldsMissing=r["fields_missing"],
     )
 
@@ -95,22 +87,3 @@ def _phrase(status: int) -> str | None:
         return HTTPStatus(status).phrase
     except ValueError:  # not a registered code (e.g. Anthropic's 529)
         return None
-
-
-def _tokens(t: pp.Tx, rep: pp.Reported | None) -> TokenCount | None:
-    if t.kind != "model":
-        return None
-    return TokenCount(
-        input=t.input,
-        cacheRead=t.cache_read,
-        cacheWrite=t.cache_write,
-        cacheWrite5m=rep.cache_5m if rep else None,
-        cacheWrite1h=rep.cache_1h if rep else None,
-        # A prewarm produces nothing (handoff §11M part 4): its output is 0, not unknown.
-        output=0 if t.output is None and t.hidden_kind == "prewarm" else t.output,
-        accuracy="exact" if t.output is not None or t.hidden_kind == "prewarm" else "missing",
-    )
-
-
-def failed(t: pp.Tx) -> bool:
-    return t.status is None and t.end_ts is not None or t.status is not None and t.status >= 400

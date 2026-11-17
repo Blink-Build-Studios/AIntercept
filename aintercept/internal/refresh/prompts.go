@@ -2,36 +2,30 @@ package refresh
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
-// The prompt and step rollups (docs/PIPELINE.md §5.2): one prompt's rows,
-// recomputed from its visible model calls (by prompt_id) and its events (by
-// prompt_id, and its calls' request ids). They mean what today's prompt rows
-// mean (process/promptrows.go rows and step, session.py items and _step),
-// except what depends on the session's other prompts, which prompt_items
-// holds (sessions.go). A refresh's key is the prompt id, or input:<batch>:<n>
-// for a tengu_input_prompt with none (promptrows.go: "input:" + its event id).
-
-// as is a predicate over calls c written for another alias.
-func as(alias, pred string) string {
-	return regexp.MustCompile(`\bc\.`).ReplaceAllString(pred, alias+".")
-}
+// The step and prompt rollups (docs/PIPELINE.md §5.2). The unit is the step:
+// one visible model call with a prompt, refreshed from that call alone (its
+// row, and the results of its tool calls that later calls carry back, one
+// index lookup per tool call). A step adds its keys (step_keys) to its
+// prompt's (prompt_keys), taking away what it added before, and its prompt's
+// row is recomputed from those sums and a few indexed lookups on its steps:
+// a new call in a long prompt never reads the prompt's other steps.
+//
+// Everything comes from the wire: analytics events aren't loaded (§3.2).
 
 // realEnd is a call's end as today's row has it: none for one still open or
 // one the sweep closed (the start alone).
 const realEnd = `(CASE WHEN c.swept THEN NULL ELSE c.end_ns END)`
 
-// callOrder is today's order of a session's calls: time, then id with '#'
-// written '~' (process/requestrows.go callFromRequest: the row's request id).
-const callOrder = at + `, replace(c.call_id, '#', '~') COLLATE "C"`
+// ordOf is a call's place among calls at the same time: its id with '#'
+// written '~' (process/requestrows.go callFromRequest: the row's request id),
+// compared byte-wise.
+const ordOf = `replace(c.call_id, '#', '~')`
 
-// evOrder is today's order of a session's events: time, batch, place in the
-// batch (promptrows.go promptRows: ts, corr, n; batch_cc_n is n).
-func evOrder(e string) string {
-	return e + `.ts_ns, ` + e + `.batch_call_id COLLATE "C", ` + e + `.batch_cc_n`
-}
+// callOrder is the order of a session's calls: time, then ordOf.
+const callOrder = at + `, ` + ordOf + ` COLLATE "C"`
 
 // jsonTrunc is session.py _int (promptrows.go pyIntOf): int(float(v)), toward
 // zero, for a number or a numeric string; NULL otherwise (or out of range).
@@ -42,128 +36,33 @@ func jsonTrunc(v string) string {
 		                        THEN trunc(btrim(%[1]s #>> '{}')::numeric)::bigint END END)`, v, numeric)
 }
 
-// jsonNum is agents._num (promptrows.go pyNum): a JSON number only.
-func jsonNum(v string) string {
-	return fmt.Sprintf(`(CASE WHEN jsonb_typeof(%[1]s) = 'number' THEN (%[1]s #>> '{}')::float8 END)`, v)
-}
-
 // jsonStrOnly is a JSON string's value (promptrows.go jsonStr); NULL otherwise.
 func jsonStrOnly(v string) string {
 	return fmt.Sprintf(`(CASE WHEN jsonb_typeof(%[1]s) = 'string' THEN %[1]s #>> '{}' END)`, v)
 }
 
-// pyTrue is session.py _true (promptrows.go pyTrue): true or "true".
-func pyTrue(v string) string { return `coalesce(` + v + ` IN ('true'::jsonb, '"true"'::jsonb), false)` }
-
-// emd is event x's metadata field k.
-func emd(x, k string) string { return "(" + x + ".metadata -> '" + k + "')" }
-
 // --- a step --------------------------------------------------------------------------------------
 
-// fields is jsonb_to_record over a metadata object, each field as jsonb: one
-// read of the (often compressed) object for all the fields a row needs.
-func fields(md, alias string, ks ...string) string {
-	cols := make([]string, len(ks))
-	for i, k := range ks {
-		cols[i] = `"` + k + `" jsonb`
-	}
-	return `jsonb_to_record(CASE jsonb_typeof(` + md + `) WHEN 'object' THEN ` + md + ` ELSE '{}' END) AS ` + alias + `(` + strings.Join(cols, ", ") + `)`
-}
-
-// f is field k of a fields record.
-func f(alias, k string) string { return alias + `."` + k + `"` }
-
-// tf is a tool event's metadata field k, as a column of the tool rows.
-func tf(k string) string { return f("t", k) }
-
-// toolObj is the API's ToolCallData of tool event t, its metadata tm
-// (promptrows.go joins.tool), with its Bash event b (the session's last
-// tengu_bash_tool_command_executed with its tool use id).
-var toolObj = `jsonb_build_object(
-	'toolUseId', ` + pyStr(tf("toolUseID")) + `,
-	'name', coalesce(nullif(` + pyStr(tf("toolName")) + `, ''), '—'),
-	'mcpServer', CASE WHEN coalesce(` + pyStr(tf("mcpServerName")) + `, '') <> '' THEN ` + pyStr(tf("mcpServerName")) + `
-		WHEN starts_with(` + pyStr(tf("toolName")) + `, 'mcp__') AND cardinality(string_to_array(` + pyStr(tf("toolName")) + `, '__')) >= 3
-		THEN split_part(` + pyStr(tf("toolName")) + `, '__', 2) END,
-	'target', NULL,
-	'status', CASE t.name WHEN 'tengu_tool_use_success' THEN 'ok' WHEN 'tengu_tool_use_progress' THEN 'running' ELSE 'error' END,
-	'durationMs', ` + jsonDouble(tf("durationMs")) + `,
-	'exitCode', b.exit_code, 'command', b.argv0,
-	'program', CASE WHEN ` + pyStr(tf("toolName")) + ` = 'Bash'
-		THEN coalesce(b.program, ` + programOf(pyStr(tf("bash_argv0")), pyStr(tf("bash_subcommand")), "NULL") + `) END,
-	'fileType', ` + fileType(pyStr(tf("toolName")), pyStr(tf("fileExtension"))) + `,
-	'resultBytes', ` + jsonTrunc(tf("toolResultSizeBytes")) + `,
-	'destructive', CASE WHEN b.category IS NOT NULL THEN jsonb_build_object('category', b.category, 'scope', b.scope) END)`
-
-// toolFields is a tool event t's metadata fields the tools read.
-var toolFields = fields("t.metadata", "tm", "toolUseID", "toolName", "mcpServerName", "durationMs", "toolResultSizeBytes",
-	"fileExtension", "bash_argv0", "bash_subcommand")
-
-// bashOf is tool event t's Bash event (promptrows.go joins: bash, by
-// str(tool_use_id) when truthy; the last in the session's order).
-var bashOf = `LEFT JOIN LATERAL (SELECT ` + pyStr(f("xm", "bash_argv0")) + ` AS argv0, ` + jsonTrunc(f("xm", "exit_code")) + ` AS exit_code,
-		` + programOf(pyStr(f("xm", "bash_argv0")), pyStr(f("xm", "bash_subcommand")), pyStr(f("xm", "bash_last_argv0"))) + ` AS program,
-		CASE WHEN ` + pyStr(f("xm", "destructive_category")) + ` NOT IN ('none', '') THEN ` + pyStr(f("xm", "destructive_category")) + ` END AS category,
-		` + pyStr(f("xm", "destructive_target_scope")) + ` AS scope
-	FROM (SELECT x.metadata FROM events x
-		WHERE coalesce(` + pyStr(tf("toolUseID")) + `, '') <> '' AND x.tool_use_id = ` + pyStr(tf("toolUseID")) + `
-		  AND x.session_id = t.session_id AND x.source = 'claude_code' AND x.name = 'tengu_bash_tool_command_executed'
-		  AND ` + pyTruthy(emd("x", "tool_use_id")) + ` AND ` + pyStr(emd("x", "tool_use_id")) + ` = ` + pyStr(tf("toolUseID")) + `
-		ORDER BY ` + strings.ReplaceAll(evOrder("x"), ",", " DESC,") + ` DESC LIMIT 1) x,
-		` + fields("x.metadata", "xm", "bash_argv0", "exit_code", "destructive_category", "destructive_target_scope",
-	"bash_subcommand", "bash_last_argv0") + `) b ON true`
-
-// toolKey is a tool event's identity among a step's tools (promptrows.go
-// toolsOf: _str(toolUseID) or _str(toolName)).
-var toolKey = `CASE WHEN coalesce(` + pyStr(f("tm", "toolUseID")) + `, '') <> '' THEN 's' || ` + pyStr(f("tm", "toolUseID")) + `
-	WHEN ` + pyStr(f("tm", "toolName")) + ` IS NOT NULL THEN 's' || ` + pyStr(f("tm", "toolName")) + ` ELSE 'n' END`
-
-// stepTools is call c's tools (promptrows.go toolsOf): its request id's
-// finished tool events in the session's order, and those plus the tools its
-// progress ticks show still running (the first tick of each tool not
-// finished). A tick that isn't one of those is dropped before its tool and
-// Bash event are read.
-var stepTools = `LEFT JOIN LATERAL (SELECT coalesce(jsonb_agg(obj ORDER BY ts_ns, b, n) FILTER (WHERE NOT tick), '[]') AS tools,
-		coalesce(jsonb_agg(obj ORDER BY tick, ts_ns, b, n), '[]') AS live
-	FROM (SELECT t.*, ` + toolObj + ` AS obj FROM (
-		SELECT e.* FROM (SELECT e.*, row_number() OVER (PARTITION BY k, tick ORDER BY ts_ns, b, n) = 1 AS first,
-				bool_or(NOT tick) OVER (PARTITION BY k) AS done
-			FROM (SELECT t.name = 'tengu_tool_use_progress' AS tick, t.name, t.session_id, ` + toolKey + ` AS k, tm.*,
-					t.ts_ns, t.batch_call_id COLLATE "C" AS b, t.batch_cc_n AS n
-				FROM events t CROSS JOIN LATERAL ` + toolFields + `
-				WHERE c.request_id IS NOT NULL AND t.request_id = c.request_id AND t.session_id = c.session_id AND t.source = 'claude_code'
-				  AND t.name IN ('tengu_tool_use_success', 'tengu_tool_use_error', 'tengu_tool_use_progress')) e) e
-		WHERE NOT tick OR first AND NOT done) t ` + bashOf + `) x) tl ON true`
-
-// stepReport is call c's tengu_api_success (promptrows.go joins.success): the
-// session's first naming its request id (as its request or client request
-// id), else its client request id. Found by the request id indexes: the
-// session is compared with IS NOT DISTINCT FROM so it isn't an index condition
-// (a (session, name) scan per step costs more than the few ids' rows).
-var stepReport = `LEFT JOIN LATERAL (SELECT true AS found, ` + jsonTrunc(f("rm", "cache_creation_5m_input_tokens")) + ` AS cache5m,
-		` + jsonTrunc(f("rm", "cache_creation_1h_input_tokens")) + ` AS cache1h,
-		` + jsonDouble(f("rm", "ttftMs")) + ` AS ttft, ` + jsonDouble(f("rm", "costUSD")) + ` AS cost
-	FROM (SELECT r.metadata FROM events r
-		WHERE r.session_id IS NOT DISTINCT FROM c.session_id AND r.source = 'claude_code' AND r.name = 'tengu_api_success'
-		  AND (r.request_id IN (c.request_id, c.client_request_id) OR r.client_request_id IN (c.request_id, c.client_request_id))
-		ORDER BY (c.request_id IN (r.request_id, r.client_request_id)) IS TRUE DESC, ` + evOrder("r") + ` LIMIT 1) r,
-		` + fields("r.metadata", "rm", "cache_creation_5m_input_tokens", "cache_creation_1h_input_tokens", "ttftMs", "costUSD") + `) rep ON true`
-
-// detailCalls is call c's recorded tool calls (promptrows.go readDetail: calls).
+// detailCalls is call c's recorded tool calls (events.CallDetail's calls).
 const detailCalls = `(CASE jsonb_typeof(c.detail -> 'calls') WHEN 'array' THEN c.detail -> 'calls' ELSE '[]' END)`
 
-// results is the exit codes of the prompt's recorded tool calls, by tool
-// call id: for each, the session's first visible call, in order, that carries
-// its result back with codes or as an error (promptrows.go joins.results, the
-// session's steps). That call can be a later prompt's (the prompt after an
-// interrupt), so it's found through the index on detail's results, one lookup
-// per tool call (OFFSET 0 keeps the planner from mixing in the session's
-// index), and its flush marks this prompt (flush: ResultIDs).
-var results = `res AS MATERIALIZED (SELECT ids.session_id, ids.k, r.codes
+// recorded is whether call c's tool calls were recorded (full interception).
+var recorded = `jsonb_array_length(` + detailCalls + `) > 0`
+
+// results is the exit codes of the steps' recorded tool calls, by tool call
+// id: for each, the session's first visible call, in order, that carries its
+// result back with codes or as an error. That call can be a later prompt's
+// (the prompt after an interrupt), so it's found through the index on
+// detail's results, one lookup per tool call (OFFSET 0 keeps the planner from
+// mixing in the session's index), and its flush marks this step (flush:
+// ResultIDs). codes is the exit codes ({1} for an error with none), err
+// whether the client marked it an error.
+var results = `res AS MATERIALIZED (SELECT ids.session_id, ids.k, r.codes, r.err
 	FROM (SELECT DISTINCT c.session_id, x ->> 'id' AS k FROM pc c, jsonb_array_elements(` + detailCalls + `) x
 		WHERE x ->> 'id' IS NOT NULL) ids
 	CROSS JOIN LATERAL (SELECT CASE WHEN jsonb_typeof(v -> 'exit') = 'array' AND jsonb_array_length(v -> 'exit') > 0
-			THEN ARRAY(SELECT jsonb_array_elements_text(v -> 'exit')::bigint) ELSE ARRAY[1::bigint] END AS codes
+			THEN ARRAY(SELECT jsonb_array_elements_text(v -> 'exit')::bigint) ELSE ARRAY[1::bigint] END AS codes,
+			coalesce(v -> 'error' = 'true', false) AS err
 		FROM (SELECT c.detail -> 'results' -> ids.k AS v
 			FROM (SELECT * FROM calls c WHERE c.detail -> 'results' ? ids.k OFFSET 0) c
 			WHERE c.session_id = ids.session_id AND ` + visible + `
@@ -172,40 +71,110 @@ var results = `res AS MATERIALIZED (SELECT ids.session_id, ids.k, r.codes
 			    OR c.detail -> 'results' -> ids.k -> 'error' = 'true')
 			ORDER BY ` + callOrder + ` LIMIT 1) r) r)`
 
-// resultCodes is detail call x's exit codes (results).
-const resultCodes = `LEFT JOIN res ON res.session_id = c.session_id AND res.k = x ->> 'id'`
+// fileExt is a path's extension, lower case (” for none).
+func fileExt(p string) string {
+	return `coalesce(lower(substring(` + p + ` from '\.([^./]+)$')), '')`
+}
 
-// The step's commands, exit codes and patches (promptrows.go step): from its
-// recorded tool calls; without them, what Claude Code's Bash events report of
-// its tools (bashContent), and the running ones' too (toolContent) when they
-// add to it. Each is evaluated only where it's used.
+// stepTools is call c's tool calls, one row each in order (o): its recorded
+// ones (detail's calls: name, id, commands, file, patches, subagent, and the
+// result a later call carried back), else the ones its response's metadata
+// names (tool_uses: name, MCP server, count).
+var stepTools = `SELECT x.o, nullif(x.x ->> 'id', '') AS id, coalesce(x.x ->> 'tool', '') AS name,
+		starts_with(coalesce(x.x ->> 'tool', ''), 'mcp__') AS mcp, ` + serverOf(`''`, `coalesce(x.x ->> 'tool', '')`) + ` AS server,
+		ARRAY(SELECT jsonb_array_elements_text(CASE jsonb_typeof(x.x -> 'commands') WHEN 'array' THEN x.x -> 'commands' ELSE '[]' END)) AS cmds,
+		nullif(` + jsonStrOnly(`x.x -> 'file'`) + `, '') AS file,
+		CASE jsonb_typeof(x.x -> 'patches') WHEN 'array' THEN x.x -> 'patches' ELSE '[]' END AS patches,
+		coalesce(` + jsonStrOnly(`x.x -> 'subagent'`) + `, '') AS subagent, res.codes, coalesce(res.err, false) AS err, 1::bigint AS n
+	FROM jsonb_array_elements(` + detailCalls + `) WITH ORDINALITY x(x, o)
+	LEFT JOIN res ON res.session_id = c.session_id AND res.k = x.x ->> 'id'
+	WHERE jsonb_typeof(x.x) = 'object'
+	UNION ALL
+	SELECT o, NULL, nm.n, u ->> 'kind' = 'mcp', ` + serverOf(`u ->> 'server'`, `nm.n`) + `, '{}', NULL, '[]', '', NULL, false,
+		CASE WHEN jsonb_typeof(u -> 'count') = 'number' AND (u ->> 'count')::numeric >= 1 THEN trunc((u ->> 'count')::numeric)::bigint ELSE 1 END
+	FROM jsonb_array_elements(CASE WHEN NOT ` + recorded + ` AND jsonb_typeof(c.tool_uses) = 'array' THEN c.tool_uses ELSE '[]' END)
+		WITH ORDINALITY u(u, o),
+		LATERAL (SELECT coalesce(nullif(CASE WHEN jsonb_typeof(u -> 'name') = 'string' THEN u ->> 'name' END, ''),
+			CASE WHEN jsonb_typeof(u -> 'tool') = 'string' THEN u ->> 'tool' END, '') AS n) nm
+	WHERE jsonb_typeof(u) = 'object'`
+
+// toolObj is the API's ToolCallData of tool row t (stepTools'), its kind tk:
+// what the wire says (no duration, result size or destructive mark: those
+// were analytics').
+var toolObj = `jsonb_build_object(
+	'toolUseId', t.id, 'name', coalesce(nullif(t.name, ''), '—'), 'mcpServer', nullif(t.server, ''),
+	'target', t.file,
+	'status', CASE WHEN t.err OR 0 <> ANY(coalesce(t.codes, '{}')) THEN 'error' ELSE 'ok' END,
+	'durationMs', NULL, 'exitCode', t.codes[1], 'command', t.cmds[1],
+	'program', CASE WHEN t.tk = 'run' THEN t.cmds[1] END,
+	'fileType', ` + fileType(`t.name`, fileExt(`t.file`)) + `,
+	'resultBytes', NULL, 'destructive', NULL)`
+
+// stepItems is step c's pieces of work, from its tool rows t (with tk, their
+// kind), one row each (at: its place in the step; kind, key, n; exit: a
+// command's exit code):
+//   - w:read, w:edit (key: the file type), w:web (search, fetch), w:mcp (the
+//     server), w:spawn (the subagent type), w:tool: one per tool call (n: its
+//     count), but for a shell call, counted by its commands;
+//   - w:read_file (key: the file a read tool reads), w:edit_file (each file a
+//     patch changes), counted distinct;
+//   - w:lines_added, w:lines_removed (n: a patch's lines);
+//   - w:run, w:run_failed (key: the program; ” when not recorded): each
+//     command a shell call (or a Codex exec script) runs, with the exit code
+//     its result carried back at its place;
+//   - w:commit, w:push: a git commit or push command.
+var stepItems = `SELECT t.o * 1000 AS at, 'w:' || t.tk AS kind,
+		CASE WHEN t.tk IN ('read', 'edit') THEN coalesce(` + fileType(`t.name`, fileExt(`t.file`)) + `, '')
+			ELSE CASE t.tk
+			WHEN 'web' THEN ` + webKey("t.name") + ` WHEN 'mcp' THEN t.server
+			WHEN 'spawn' THEN t.subagent ELSE '' END END AS key, t.n, NULL::bigint AS exit
+	FROM t WHERE t.tk IS NOT NULL AND t.tk <> 'run'
+	UNION ALL
+	SELECT t.o * 1000, 'w:read_file', t.file, 1, NULL FROM t WHERE t.tk = 'read' AND t.file IS NOT NULL
+	UNION ALL
+	SELECT t.o * 1000 + p.j, x.kind, x.key, x.n, NULL FROM t, jsonb_array_elements(t.patches) WITH ORDINALITY p(p, j),
+		LATERAL (VALUES ('w:edit_file', p.p ->> 'file', 1::bigint),
+			('w:lines_added', '', ` + jsonTrunc(`p.p -> 'added'`) + `), ('w:lines_removed', '', ` + jsonTrunc(`p.p -> 'removed'`) + `)) x(kind, key, n)
+	WHERE jsonb_typeof(p.p) = 'object' AND coalesce(p.p ->> 'file', '') <> '' AND x.n IS NOT NULL
+	UNION ALL
+	SELECT t.o * 1000 + r.j, x.kind, x.key, x.n, x.exit
+	FROM t CROSS JOIN LATERAL (SELECT j, cmd, t.codes[j] AS code FROM unnest(t.cmds) WITH ORDINALITY u(cmd, j)
+			UNION ALL SELECT 1, '', t.codes[1] WHERE cardinality(t.cmds) = 0 AND t.tk = 'run') r,
+		LATERAL (VALUES ('w:run', r.cmd, t.n, r.code),
+			(CASE WHEN r.code <> 0 THEN 'w:run_failed' END, r.cmd, 1, NULL),
+			(CASE WHEN r.cmd = 'git commit' THEN 'w:commit' WHEN r.cmd = 'git push' THEN 'w:push' END, '', 1, NULL)) x(kind, key, n, exit)
+	WHERE (t.tk = 'run' OR t.tk IS NULL AND t.name = 'exec') AND x.kind IS NOT NULL`
+
+// stepKinds are the pieces a step's kind is named by (its first of them).
+const stepKinds = `('w:read', 'w:edit', 'w:run', 'w:web', 'w:mcp', 'w:spawn', 'w:tool')`
+
+// stepWork is call c's tools and work (handoff §11R): its tool list (the API's
+// ToolCallData), its tool counts by name, its pieces ([kind, key, n, exit], in
+// order) and what the first of them is (the step's kind: a new group starts
+// where it, or its program or server, changes). The API adds a group's steps'
+// pieces up (work.py from_keys, the same rules as workObj).
+var stepWork = `LEFT JOIN LATERAL (WITH t AS MATERIALIZED (SELECT t.*, ` + toolKind("t.name", "t.mcp") + ` AS tk
+			FROM (` + stepTools + `) t),
+		i AS MATERIALIZED (` + stepItems + `)
+	SELECT (SELECT coalesce(jsonb_agg(` + toolObj + ` ORDER BY t.o), '[]') FROM t) AS tools,
+		(SELECT coalesce(jsonb_object_agg(name, n), '{}') FROM (SELECT coalesce(nullif(t.name, ''), '—') AS name, sum(t.n)::bigint AS n
+			FROM t GROUP BY 1) x) AS tool_counts,
+		(SELECT substr(kind, 3) FROM i WHERE kind IN ` + stepKinds + ` ORDER BY at, kind COLLATE "C" LIMIT 1) AS kind,
+		(SELECT key FROM i WHERE kind IN ` + stepKinds + ` ORDER BY at, kind COLLATE "C" LIMIT 1) AS key,
+		(SELECT coalesce(jsonb_agg(jsonb_build_array(kind, key, n, exit) ORDER BY at, kind COLLATE "C"), '[]') FROM i) AS pieces) sw ON true`
+
+// The step's commands, exit codes and patches: from its recorded tool calls.
 var (
-	recorded   = `jsonb_array_length(` + detailCalls + `) > 0`
 	detailCmds = `ARRAY(SELECT cmd FROM jsonb_array_elements(` + detailCalls + `) WITH ORDINALITY a(x, i),
 		jsonb_array_elements_text(CASE jsonb_typeof(x -> 'commands') WHEN 'array' THEN x -> 'commands' ELSE '[]' END) WITH ORDINALITY b(cmd, j)
 		ORDER BY i, j)`
-	detailCodes = `ARRAY(SELECT code FROM jsonb_array_elements(` + detailCalls + `) WITH ORDINALITY a(x, i) ` + resultCodes + `,
+	detailCodes = `ARRAY(SELECT code FROM jsonb_array_elements(` + detailCalls + `) WITH ORDINALITY a(x, i)
+		LEFT JOIN res ON res.session_id = c.session_id AND res.k = x ->> 'id',
 		unnest(res.codes) WITH ORDINALITY u(code, j) ORDER BY i, j)`
 	detailPatches = `coalesce((SELECT jsonb_agg(p ORDER BY i, j) FROM jsonb_array_elements(` + detailCalls + `) WITH ORDINALITY a(x, i),
 		jsonb_array_elements(CASE jsonb_typeof(x -> 'patches') WHEN 'array' THEN x -> 'patches' ELSE '[]' END) WITH ORDINALITY b(p, j)
 		WHERE coalesce(p ->> 'file', '') <> ''), '[]')`
-	// liveAdds: the running tools add to the finished ones (toolContent).
-	liveAdds = `(jsonb_array_length(tl.live) > jsonb_array_length(tl.tools)
-		AND (cardinality(` + bashCmds("tl.live") + `) <> cardinality(` + bashCmds("tl.tools") + `)
-		  OR cardinality(` + bashCodes("tl.live") + `) <> cardinality(` + bashCodes("tl.tools") + `)))`
 )
-
-// bashCmds is the commands Claude Code's Bash events name of tools (bashContent).
-func bashCmds(tools string) string {
-	return `ARRAY(SELECT x ->> 'command' FROM jsonb_array_elements(` + tools + `) WITH ORDINALITY a(x, i)
-		WHERE coalesce(x ->> 'command', '') <> '' ORDER BY i)`
-}
-
-// bashCodes is their exit codes (bashContent).
-func bashCodes(tools string) string {
-	return `ARRAY(SELECT (x ->> 'exitCode')::bigint FROM jsonb_array_elements(` + tools + `) WITH ORDINALITY a(x, i)
-		WHERE coalesce(x ->> 'command', '') <> '' AND x ->> 'exitCode' IS NOT NULL ORDER BY i)`
-}
 
 // stepDoes is what call c did (promptrows.go stepKind, the API's rows.step_kind).
 const stepDoes = `CASE WHEN strpos(coalesce(c.stop_reason, ''), 'interrupt') > 0 THEN 'interrupt' ELSE (
@@ -228,135 +197,166 @@ const usageMissing = `CASE WHEN coalesce(c.output_tokens, 0) <> 0 THEN NULL
 	ELSE 'streamCut' END`
 
 // stepCols are steps' columns.
-const stepCols = `prompt_id, session_id, step, call_id, t_ns, end_ns, kind, model, request_class,
-	tokens_input, tokens_cache_read, tokens_cache_write, tokens_cache_write_5m, tokens_cache_write_1h, tokens_output,
-	ttft_ms, stop_reason, cost_usd, failed, reported, agent_type, tools, tools_live, does,
-	commands, exit_codes, content_live, commands_live, exit_codes_live, patches, text, usage_missing,
+const stepCols = `call_id, prompt_id, session_id, t_ns, ord, end_ns, kind, model, request_class,
+	tokens_input, tokens_cache_read, tokens_cache_write, tokens_output, stop_reason, failed, agent_type,
+	tools, tool_counts, does, commands, exit_codes, patches, text, usage_missing, interrupted, follows_interrupt, prompt_chars,
 	work_kind, program, server, agent_id, work_pieces`
 
-// stepSelect is the steps of the prompts whose visible calls c `where` keeps:
-// one per call, numbered within its prompt by (time, call id) (§8 difference 7;
-// promptrows.go rows: steps by time and id).
+// stepSelect is the steps of the visible calls c with a prompt that `where`
+// keeps: each from its own call (and its tool calls' results).
 func stepSelect(where string) string {
 	return `WITH pc AS MATERIALIZED (SELECT * FROM calls c WHERE ` + where + ` AND c.prompt_id IS NOT NULL AND ` + visible + `),
 ` + results + `
-SELECT c.prompt_id, c.session_id,
-	row_number() OVER (PARTITION BY c.prompt_id, c.session_id ORDER BY ` + callOrder + `),
-	c.call_id, ` + at + `, ` + realEnd + `,
+SELECT c.call_id, c.prompt_id, c.session_id, ` + at + `, ` + ordOf + `, ` + realEnd + `,
 	CASE WHEN c.request_class = 'subagent' THEN 'subagent' ELSE 'model' END,
 	nullif(c.model, ''), CASE WHEN c.request_class IN ('main', 'subagent', 'auxiliary', 'compaction') THEN c.request_class END,
-	nullif(c.input_tokens, 0), nullif(c.cache_read_tokens, 0), nullif(c.cache_write_tokens, 0),
-	rep.cache5m, rep.cache1h, nullif(c.output_tokens, 0),
-	rep.ttft, nullif(c.stop_reason, ''), rep.cost,
-	coalesce(c.status, 0) = 0 OR c.status >= 400,
-	coalesce(rep.found, false),
-	nullif(c.agent_type, ''),
-	tl.tools, CASE WHEN jsonb_array_length(tl.live) > jsonb_array_length(tl.tools) THEN tl.live END,
-	` + stepDoes + `,
-	CASE WHEN ` + recorded + ` THEN ` + detailCmds + ` ELSE ` + bashCmds("tl.tools") + ` END,
-	CASE WHEN ` + recorded + ` THEN ` + detailCodes + ` ELSE ` + bashCodes("tl.tools") + ` END,
-	NOT ` + recorded + ` AND ` + liveAdds + `,
-	CASE WHEN NOT ` + recorded + ` AND ` + liveAdds + ` THEN ` + bashCmds("tl.live") + ` ELSE '{}' END,
-	CASE WHEN NOT ` + recorded + ` AND ` + liveAdds + ` THEN ` + bashCodes("tl.live") + ` ELSE '{}' END,
+	nullif(c.input_tokens, 0), nullif(c.cache_read_tokens, 0), nullif(c.cache_write_tokens, 0), nullif(c.output_tokens, 0),
+	nullif(c.stop_reason, ''), coalesce(c.status, 0) = 0 OR c.status >= 400, nullif(c.agent_type, ''),
+	sw.tools, sw.tool_counts, ` + stepDoes + `,
+	CASE WHEN ` + recorded + ` THEN ` + detailCmds + ` ELSE '{}' END,
+	CASE WHEN ` + recorded + ` THEN ` + detailCodes + ` ELSE '{}' END,
 	CASE WHEN ` + recorded + ` THEN ` + detailPatches + ` ELSE '[]' END,
 	nullif(` + jsonStrOnly("c.detail -> 'text'") + `, ''),
 	` + usageMissing + `,
+	strpos(coalesce(c.stop_reason, ''), 'interrupt') > 0,
+	coalesce(c.detail -> 'interrupted' = 'true', false),
+	CASE WHEN jsonb_typeof(c.detail -> 'said') = 'array' AND jsonb_array_length(c.detail -> 'said') > 0
+		THEN coalesce(` + jsonTrunc(`c.detail -> 'promptChars'`) + `, 0) END,
 	coalesce(sw.kind, 'think'), CASE WHEN sw.kind = 'run' THEN nullif(sw.key, '') END,
 	CASE WHEN sw.kind = 'mcp' THEN nullif(sw.key, '') END, nullif(c.agent_id, ''), sw.pieces
-FROM pc c ` + stepReport + ` ` + stepTools + ` ` + stepWork
+FROM pc c ` + stepWork
 }
 
-// stepWork is call c's work (handoff §11R): its pieces (stepItems: [kind,
-// key, n, exit], in order), and what the first of them is (the step's kind: a
-// new group starts where it, or its program or server, changes). The API adds
-// a group's steps' pieces up (work.py from_keys, the same rules as workObj).
-var stepWork = `LEFT JOIN LATERAL (WITH i AS MATERIALIZED (` + stepItems + `)
-	SELECT (SELECT substr(kind, 3) FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS kind,
-		(SELECT key FROM i WHERE kind <> 'w:run_failed' ORDER BY at LIMIT 1) AS key,
-		(SELECT coalesce(jsonb_agg(jsonb_build_array(kind, key, n, exit) ORDER BY at, kind COLLATE "C"), '[]') FROM i) AS pieces) sw ON true`
+// stepKeys is what the steps s `where` keeps add to their prompts, per (kind,
+// key): s:steps, s:tokens_in (input, cache read and cache write, when any is
+// known), s:tokens_out, s:interrupted, s:follows_interrupt; tool (its tool
+// calls by name); and its work pieces summed per key, with a command's last
+// run (its place and exit code).
+func stepKeys(where string) string {
+	return `SELECT s.call_id, s.prompt_id, s.session_id, k.kind, k.key, k.n, s.t_ns, s.ord, k.i, k.exit
+	FROM steps s CROSS JOIN LATERAL (
+		SELECT 's:steps' AS kind, '' AS key, 1::bigint AS n, 0::bigint AS i, NULL::bigint AS exit
+		UNION ALL SELECT 's:tokens_in', '', nullif(coalesce(s.tokens_input, 0) + coalesce(s.tokens_cache_read, 0) + coalesce(s.tokens_cache_write, 0), 0), 0, NULL
+		UNION ALL SELECT 's:tokens_out', '', s.tokens_output, 0, NULL
+		UNION ALL SELECT 's:interrupted', '', 1, 0, NULL WHERE s.interrupted
+		UNION ALL SELECT 's:follows_interrupt', '', 1, 0, NULL WHERE s.follows_interrupt
+		UNION ALL SELECT 'tool', t.key, t.value::bigint, 0, NULL FROM jsonb_each_text(s.tool_counts) t
+		UNION ALL SELECT kind, key, sum(n)::bigint, max(i), (array_agg(exit ORDER BY i DESC))[1]
+		FROM (SELECT p ->> 0 AS kind, p ->> 1 AS key, (p ->> 2)::bigint AS n, (p ->> 3)::bigint AS exit, i
+			FROM jsonb_array_elements(s.work_pieces) WITH ORDINALITY w(p, i)) x GROUP BY kind, key) k
+	WHERE ` + where + ` AND k.n IS NOT NULL`
+}
 
 // --- a prompt ------------------------------------------------------------------------------------
 
 // promptCols are prompts' columns.
-const promptCols = `prompt_id, session_id, t_ns, product, has_input, prompt_index, text_chars, frustrated, steps,
-	unfinished_max_ns, turn_end_ns, text, tokens_in, tokens_out, tool_counts, interrupted, destructive, turn_report,
-	ended_ns, cost_usd, work`
+const promptCols = `prompt_id, session_id, t_ns, product, text_chars, steps, unfinished_max_ns, text, parts, tokens_in, tokens_out,
+	tool_counts, interrupted, follows_interrupt, ended_ns, work`
 
-// turnReport is agents.turn_report of a codex_turn_event's metadata m
-// (promptrows.go turnReport): numbers only from JSON numbers.
-func turnReport(m string) string {
-	md := func(k string) string { return "(" + m + " -> '" + k + "')" }
-	integer := func(k string) string { return `trunc(` + jsonNum(md(k)) + `)::bigint` }
-	tool := func(k, name string) string {
-		return `CASE WHEN ` + integer(k) + ` <> 0 THEN jsonb_build_object('` + name + `', ` + integer(k) + `) ELSE '{}' END`
-	}
-	return `jsonb_build_object('status', ` + jsonStrOnly(md("status")) + `, 'durationMs', ` + jsonNum(md("duration_ms")) + `,
-		'samplingMs', ` + jsonNum(md("sampling_ms")) + `, 'requests', ` + integer("sampling_request_count") + `,
-		'retries', ` + integer("sampling_retry_count") + `,
-		'toolCalls', ` + tool("shell_command_count", "shell") + ` || ` + tool("mcp_tool_call_count", "mcp") + ` || ` +
-		tool("file_change_count", "fileChange") + ` || ` + tool("web_search_count", "webSearch") + ` || ` +
-		tool("subagent_tool_call_count", "subagent") + ` || ` + tool("dynamic_tool_call_count", "dynamic") + `,
-		'steers', ` + integer("steer_count") + `,
-		'compactionMs', CASE WHEN ` + jsonNum(md("compaction_ms")) + ` <> 0 THEN ` + jsonNum(md("compaction_ms")) + ` END,
-		'trigger', ` + jsonStrOnly(md("turn_trigger")) + `)`
+// pk is a prompt key's sum for prompt k (k.prompt_id, k.session_id).
+func pk(kind string) string {
+	return `(SELECT n FROM prompt_keys x WHERE x.prompt_id = k.prompt_id AND x.session_id = k.session_id AND x.kind = '` + kind + `' AND x.key = '')`
 }
 
-// promptEvent is whether event e is one of prompt $1's in its session s
-// (promptrows.go joins.byPrompt).
-const promptEvent = `e.prompt_id = $1 AND e.session_id = s.session_id AND e.source = 'claude_code'`
+// promptSelect is the rows of the prompts ($1, an array) from their keys
+// (prompt_keys: a few hundred rows at most, its distinct tools, files and
+// commands) and indexed lookups on their steps: the first (its time, its
+// product), the first main-class one whose new messages say something (its
+// text and typed parts), the last open one and the last end. Its work's commands' last exit codes are one indexed lookup
+// each on step_keys.
+var promptSelect = `SELECT k.prompt_id, k.session_id, f.t_ns, f.product, said.chars, k.n, un.t, said.text, said.parts,
+	` + pk("s:tokens_in") + `, ` + pk("s:tokens_out") + `,
+	coalesce((SELECT jsonb_object_agg(x.key, x.n) FROM prompt_keys x
+		WHERE x.prompt_id = k.prompt_id AND x.session_id = k.session_id AND x.kind = 'tool'), '{}'),
+	coalesce(` + pk("s:interrupted") + ` > 0, false), coalesce(` + pk("s:follows_interrupt") + ` > 0, false), en.e,
+	(WITH w AS MATERIALIZED (SELECT x.kind, x.key, x.n FROM prompt_keys x
+		WHERE x.prompt_id = k.prompt_id AND x.session_id = k.session_id AND starts_with(x.kind, 'w:'))
+	SELECT ` + workOf("w", `(SELECT l.exit FROM step_keys l WHERE l.prompt_id = k.prompt_id AND l.session_id = k.session_id
+			AND l.kind = 'w:run' AND l.key = r.key ORDER BY l.t_ns DESC, l.ord DESC, l.i DESC LIMIT 1)`) + `)
+FROM prompt_keys k
+CROSS JOIN LATERAL (SELECT s.t_ns, ` + agent + ` AS product FROM steps s JOIN calls c USING (call_id)
+	WHERE s.prompt_id = k.prompt_id AND s.session_id = k.session_id ORDER BY s.t_ns, s.ord LIMIT 1) f
+LEFT JOIN LATERAL (SELECT s.t_ns AS t FROM steps s WHERE s.prompt_id = k.prompt_id AND s.session_id = k.session_id AND s.end_ns IS NULL
+	ORDER BY s.t_ns DESC LIMIT 1) un ON true
+LEFT JOIN LATERAL (SELECT coalesce(s.end_ns, s.t_ns) AS e FROM steps s WHERE s.prompt_id = k.prompt_id AND s.session_id = k.session_id
+	ORDER BY coalesce(s.end_ns, s.t_ns) DESC LIMIT 1) en ON true
+LEFT JOIN LATERAL (SELECT nullif(` + jsonStrOnly(`c.detail -> 'prompt'`) + `, '') AS text, s.prompt_chars AS chars, c.detail -> 'said' AS parts
+	FROM steps s JOIN calls c USING (call_id)
+	WHERE s.prompt_id = k.prompt_id AND s.session_id = k.session_id AND s.prompt_chars IS NOT NULL
+	  AND (s.request_class = 'main' OR s.request_class IS NULL)
+	ORDER BY s.t_ns, s.ord LIMIT 1) said ON true
+WHERE k.prompt_id = ANY($1) AND k.kind = 's:steps' AND k.key = '' AND k.steps > 0`
 
-// promptSelect is prompt $1's rows, one per session it's in (an input with no
-// prompt id: $2 its batch, $3 its place in it), after its steps: its first
-// input, else its first step, gives its time; its steps, its events and,
-// for a Codex thread's turn, its last turn report give the rest
-// (promptrows.go rows).
-var promptSelect = `WITH inp AS (
-	SELECT DISTINCT ON (e.session_id) e.session_id, e.ts_ns, e.metadata FROM events e
-	WHERE e.source = 'claude_code' AND e.name = 'tengu_input_prompt' AND e.session_id IS NOT NULL
-	  AND (e.prompt_id = $1 OR e.prompt_id IS NULL AND e.batch_call_id = $2 AND e.batch_cc_n = $3)
-	ORDER BY e.session_id, ` + evOrder("e") + `),
-st AS (SELECT session_id, count(*) AS n, min(t_ns) AS t, max(t_ns) FILTER (WHERE end_ns IS NULL) AS unfinished,
-		sum(nullif(coalesce(tokens_input, 0) + coalesce(tokens_cache_read, 0) + coalesce(tokens_cache_write, 0), 0)) AS tin,
-		sum(tokens_output) AS tout, max(coalesce(end_ns, t_ns)) AS ended, sum(cost_usd ORDER BY step) AS cost
-	FROM steps WHERE prompt_id = $1 GROUP BY session_id),
-s AS (SELECT session_id FROM inp UNION SELECT session_id FROM st)
-SELECT $1, s.session_id, coalesce(inp.ts_ns, st.t), f.product, inp.session_id IS NOT NULL,
-	` + jsonTrunc(`inp.metadata -> 'prompt_index'`) + `,
-	CASE WHEN inp.session_id IS NOT NULL THEN ` + jsonTrunc(`inp.metadata -> 'prompt_length'`) + ` ELSE char_length(said.text) END,
-	` + pyTrue(`inp.metadata -> 'is_negative'`) + `,
-	coalesce(st.n, 0), st.unfinished, ev.turn_end, said.text, st.tin, st.tout,
-	coalesce(tc.counts, '{}'), coalesce(ev.cancelled, false), coalesce(ev.destructive, 0),
-	CASE WHEN f.product = 'codex' THEN (SELECT ` + turnReport("e.metadata") + ` FROM events e
-		WHERE e.prompt_id = $1 AND e.session_id = s.session_id AND e.source = 'codex' AND e.name = 'codex_turn_event'
-		ORDER BY e.ts_ns DESC, e.event_key COLLATE "C" DESC LIMIT 1) END,
-	coalesce(st.ended, ev.turn_end), st.cost,
-	(WITH i AS MATERIALIZED (` + workItems(`e.prompt_id = $1 AND e.session_id = s.session_id`) + `) SELECT ` + workObj("i", true) + `)
-FROM s LEFT JOIN inp USING (session_id) LEFT JOIN st USING (session_id)
-LEFT JOIN LATERAL (SELECT ` + agent + ` AS product FROM calls c
-	WHERE c.prompt_id = $1 AND c.session_id = s.session_id AND ` + visible + ` ORDER BY ` + callOrder + ` LIMIT 1) f ON true
-LEFT JOIN LATERAL (SELECT c.detail ->> 'prompt' AS text FROM calls c
-	WHERE c.prompt_id = $1 AND c.session_id = s.session_id AND ` + visible + `
-	  AND jsonb_typeof(c.detail -> 'prompt') = 'string' AND c.detail ->> 'prompt' <> ''
-	ORDER BY ` + callOrder + ` LIMIT 1) said ON true
-LEFT JOIN LATERAL (SELECT max(e.ts_ns) FILTER (WHERE e.name = 'tengu_turn_end') AS turn_end,
-		bool_or(e.name = 'tengu_cancel') AS cancelled,
-		count(*) FILTER (WHERE e.name = 'tengu_bash_tool_command_executed'
-			AND ` + pyStr(md("destructive_category")) + ` NOT IN ('none', '')) AS destructive
-	FROM events e WHERE ` + promptEvent + ` AND e.name IN ('tengu_turn_end', 'tengu_cancel', 'tengu_bash_tool_command_executed')) ev ON true
-LEFT JOIN LATERAL (SELECT jsonb_object_agg(n, k) AS counts FROM (
-	SELECT coalesce(nullif(` + pyStr(md("toolName")) + `, ''), '—') AS n, count(*) AS k FROM events e
-	WHERE ` + promptEvent + ` AND e.name IN ('tengu_tool_use_success', 'tengu_tool_use_error') GROUP BY 1) x) tc ON true`
+// addKeys adds the step keys a statement returns as rel (sign 1) or takes
+// them away (-1) in their prompts' prompt_keys.
+func addKeys(rel string, sign int) string {
+	return fmt.Sprintf(`INSERT INTO prompt_keys (prompt_id, session_id, kind, key, steps, n)
+	SELECT prompt_id, session_id, kind, key, %[1]d, %[1]d * n FROM %[2]s ORDER BY 1, 2, 3, 4
+	ON CONFLICT (prompt_id, session_id, kind, key) DO UPDATE SET steps = prompt_keys.steps + excluded.steps, n = prompt_keys.n + excluded.n`, sign, rel)
+}
 
-// promptRefresh recomputes prompt $1's rows ($2, $3: an unnamed input's batch
-// and place): its steps, then its prompts row from them. Both are replaced,
-// since a prompt's calls can renumber and its rows can leave.
-var promptRefresh = []string{
-	// The planner prices the results lookup by GIN's default selectivity, which
-	// puts a large prompt's statement over JIT's threshold; compiling it costs
-	// seconds, running it milliseconds.
-	`SET LOCAL jit = off`,
-	`DELETE FROM steps WHERE prompt_id = $1`,
-	`DELETE FROM prompts WHERE prompt_id = $1`,
-	`INSERT INTO steps (` + stepCols + `) ` + stepSelect(`c.prompt_id = $1`),
+// stepRefresh recomputes step $1 (a call id): its step_keys taken away from
+// its prompt's keys, its row and keys recomputed from its call, and added back.
+// Its prompts' rows (it was in and is in now: $2) are recomputed after it
+// (promptRows). The prompts are locked first (lockPrompts), so two steps of
+// one prompt refresh one after the other.
+var stepRefresh = []string{
+	`WITH o AS (DELETE FROM step_keys WHERE call_id = $1 RETURNING *) ` + addKeys("o", -1),
+	`DELETE FROM steps WHERE call_id = $1`,
+	`INSERT INTO steps (` + stepCols + `) ` + stepSelect(`c.call_id = $1`),
+	`WITH k AS (INSERT INTO step_keys ` + stepKeys(`s.call_id = $1`) + ` RETURNING *) ` + addKeys("k", 1),
+}
+
+// promptRows recomputes the rows of prompts $1 (an array) from their keys.
+var promptRows = []string{
+	`DELETE FROM prompt_keys WHERE prompt_id = ANY($1) AND steps = 0`,
+	`DELETE FROM prompts WHERE prompt_id = ANY($1)`,
 	`INSERT INTO prompts (` + promptCols + `) ` + promptSelect,
+}
+
+// promptFull recomputes prompt $1 from all its calls: its steps, their keys,
+// its keys and its rows. Only retention uses it (a prompt that lost calls), and
+// the from-scratch check.
+var promptFull = []string{
+	`DELETE FROM step_keys WHERE prompt_id = $1`,
+	`DELETE FROM steps WHERE prompt_id = $1`,
+	`DELETE FROM prompt_keys WHERE prompt_id = $1`,
+	`INSERT INTO steps (` + stepCols + `) ` + stepSelect(`c.prompt_id = $1`),
+	`INSERT INTO step_keys ` + stepKeys(`s.prompt_id = $1`),
+	`INSERT INTO prompt_keys (prompt_id, session_id, kind, key, steps, n)
+	SELECT prompt_id, session_id, kind, key, count(*), sum(n) FROM step_keys WHERE prompt_id = $1 GROUP BY 1, 2, 3, 4`,
+}
+
+// lockPrompts is the transaction-scoped lock on each prompt a refresh changes
+// ($1, sorted, so two refreshes take them in one order).
+const lockPrompts = `SELECT count(pg_advisory_xact_lock(hashtextextended(p, 0))) FROM unnest($1::text[]) p`
+
+func promptList(ids ...string) []string {
+	var out []string
+	for _, id := range ids {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return sortedUnique(out)
+}
+
+func sortedUnique(ss []string) []string {
+	if len(ss) == 0 {
+		return ss
+	}
+	out := append([]string(nil), ss...)
+	for i := 1; i < len(out); i++ { // small: insertion sort
+		for j := i; j > 0 && strings.Compare(out[j-1], out[j]) > 0; j-- {
+			out[j-1], out[j] = out[j], out[j-1]
+		}
+	}
+	w := 1
+	for i := 1; i < len(out); i++ {
+		if out[i] != out[w-1] {
+			out[w] = out[i]
+			w++
+		}
+	}
+	return out[:w]
 }

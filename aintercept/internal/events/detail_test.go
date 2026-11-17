@@ -61,7 +61,7 @@ func TestDetailFromAnthropicBodies(t *testing.T) {
 	}
 	want := []ToolCallDetail{
 		{ID: "toolu_1", Tool: "Bash", Commands: []string{"go test"}},
-		{ID: "toolu_2", Tool: "Edit", Patches: []PatchFile{{File: "a.go", Added: 2, Removed: 1}}},
+		{ID: "toolu_2", Tool: "Edit", Patches: []PatchFile{{File: "a.go", Added: 2, Removed: 1}}, File: "a.go"},
 	}
 	if !reflect.DeepEqual(d.Calls, want) {
 		t.Fatalf("calls: %+v", d.Calls)
@@ -92,20 +92,18 @@ func TestNoDetailWithoutBodies(t *testing.T) {
 	}
 }
 
-// The prompt is the request's last item when it's the person's message; tool results and
-// context blocks (<environment_context>, <system-reminder>) aren't.
-func TestPromptFromRequest(t *testing.T) {
-	for body, want := range map[string]string{
-		`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>x</environment_context>"},{"type":"input_text","text":"fix the flaky timer test"}]}]}`:                                                                                                                           "fix the flaky timer test",
-		`{"input":[{"type":"message","role":"user"},{"type":"custom_tool_call_output","call_id":"c","output":"x"}]}`:                                                                                                                                                                                                             "",
-		`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"fix it"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>x</environment_context>"}]},{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions>"}]}]}`: "fix it",
-		`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"old"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}]}`:                                                                                                                                     "",
-		`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"<hcom>review PR 4</hcom>"}]},{"type":"message","role":"developer","content":[{"type":"input_text","text":"<hcom>x</hcom>"}]}]}`:                                                                                                       "<hcom>review PR 4</hcom>",
-		`{"messages":[{"role":"user","content":"why is CI red?"}]}`:                                          "why is CI red?",
-		`{"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"}]}]}`: "",
-	} {
-		if got := promptFromRequest([]byte(body)); got != want {
-			t.Errorf("promptFromRequest(%s) = %q, want %q", body, got, want)
-		}
+// A file tool names its file; a spawn its subagent type; only an edit is a patch.
+func TestDetailFilesAndSubagents(t *testing.T) {
+	resp := []byte(`{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"src/a.ts"}},` +
+		`{"type":"tool_use","id":"t2","name":"Task","input":{"subagent_type":"Explore","prompt":"look"}},` +
+		`{"type":"tool_use","id":"t3","name":"Write","input":{"file_path":"b.md","content":"x\ny\n"}}]}`)
+	d := DetailFromBodies(nil, "", resp, "")
+	want := []ToolCallDetail{
+		{ID: "t1", Tool: "Read", File: "src/a.ts"},
+		{ID: "t2", Tool: "Task", Subagent: "Explore"},
+		{ID: "t3", Tool: "Write", File: "b.md", Patches: []PatchFile{{File: "b.md", Added: 2}}},
+	}
+	if d == nil || !reflect.DeepEqual(d.Calls, want) {
+		t.Fatalf("calls: %+v", d)
 	}
 }

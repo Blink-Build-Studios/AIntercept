@@ -4,22 +4,22 @@ import type { components } from "../../spec";
 const sample: components["schemas"]["PersonWorkResponse"] = {
   "data": [
     {
-      "activeMs": 90004.0,
+      "activeMs": 75004.0,
       "agents": [
         "claude-code"
       ],
-      "lastActiveAt": "2026-11-04T10:05:46Z",
+      "lastActiveAt": "2026-11-04T10:05:40Z",
       "repo": null,
       "rows": [
         {
-          "activeMs": 90004.0,
+          "activeMs": 75004.0,
           "agent": "claude-code",
           "capturedFromPrompt": null,
-          "end": "2026-11-04T10:05:46Z",
+          "end": "2026-11-04T10:05:40Z",
           "friction": {
             "destructive": 0,
-            "frustrated": 1,
-            "interrupted": 1
+            "frustrated": 0,
+            "interrupted": 0
           },
           "label": {
             "source": "none",
@@ -27,40 +27,29 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           },
           "live": false,
           "sessionId": "22222222-2222-4222-8222-222222222222",
-          "start": "2026-11-04T10:00:00Z",
+          "start": "2026-11-04T10:00:05Z",
           "turns": 2,
           "work": {
             "commands": [
               {
-                "failed": 1,
+                "failed": 0,
                 "lastExit": null,
-                "program": "npm test",
+                "program": null,
                 "runs": 2
               }
             ],
-            "commits": 1,
-            "editTypes": {
-              "ts": 2
-            },
-            "editedFiles": 1,
+            "commits": 0,
+            "editTypes": {},
+            "editedFiles": null,
             "edits": 2,
-            "linesAdded": 31,
-            "linesRemoved": 9,
-            "mcp": [
-              {
-                "calls": 1,
-                "server": "linear-server"
-              }
-            ],
-            "otherTools": 0,
-            "prs": [
-              2
-            ],
+            "linesAdded": null,
+            "linesRemoved": null,
+            "mcp": [],
+            "otherTools": 1,
+            "prs": [],
             "pushes": 0,
-            "readFiles": 2,
-            "readTypes": {
-              "ts": 2
-            },
+            "readFiles": null,
+            "readTypes": {},
             "reads": 2,
             "subagents": [
               {
@@ -80,35 +69,24 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
       "work": {
         "commands": [
           {
-            "failed": 1,
+            "failed": 0,
             "lastExit": null,
-            "program": "npm test",
+            "program": null,
             "runs": 2
           }
         ],
-        "commits": 1,
-        "editTypes": {
-          "ts": 2
-        },
-        "editedFiles": 1,
+        "commits": 0,
+        "editTypes": {},
+        "editedFiles": null,
         "edits": 2,
-        "linesAdded": 31,
-        "linesRemoved": 9,
-        "mcp": [
-          {
-            "calls": 1,
-            "server": "linear-server"
-          }
-        ],
-        "otherTools": 0,
-        "prs": [
-          2
-        ],
+        "linesAdded": null,
+        "linesRemoved": null,
+        "mcp": [],
+        "otherTools": 1,
+        "prs": [],
         "pushes": 0,
-        "readFiles": 2,
-        "readTypes": {
-          "ts": 2
-        },
+        "readFiles": null,
+        "readTypes": {},
         "reads": 2,
         "subagents": [
           {
@@ -126,7 +104,7 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T10:05:46Z",
+    "lastDataAt": "2026-11-04T10:05:40Z",
     "page": null,
     "pageSize": null,
     "to": null,

@@ -6,8 +6,9 @@ datasets the person pages show every shape they have, and each page reads cells 
 an index, whatever the person's history.
 
 The directory and the overview sum each account's activity inside the window (§8, difference 4), so
-they're held to a from-scratch computation over the facts (`from_scratch`): calls, events and who they
-name, never a rollup. /coverage is gone (difference 5)."""
+they're held to a from-scratch computation over the facts (`from_scratch`): calls and who they name, never
+a rollup. /coverage is gone (difference 5), and so is everything only analytics fed: they stay in the raw
+files."""
 
 import contextlib
 import os
@@ -45,9 +46,10 @@ def many_sessions(ds: Dataset) -> None:
         for k in range(3 if i not in (7, 23) else 60):
             rid = c.call(f"{at}:{1 + k // 60:02d}:{k % 60:02d}", prompt=f"p{i}")
             c.event(f"{at}:{1 + k // 60:02d}:{k % 60:02d}", "tengu_api_success", cc_prompt_id=f"p{i}", requestId=rid)
-            if k == 0 and i % 10 == 7:  # an MCP tool, as Claude Code names one
-                c.event(f"{at}:01:00", "tengu_tool_use_success", cc_prompt_id=f"p{i}", requestId=rid,
-                        toolName="mcp__playwright__browser_click", isMcp=True)  # fmt: skip
+            if k == 0 and i % 10 == 7:  # a call that asks for an MCP tool
+                complete = [r for r in ds.rows if r["phase"] == "complete"][-1]
+                complete["tool_uses"] = [{"name": "mcp__playwright__browser_click", "server": "playwright",
+                                          "tool": "browser_click", "kind": "mcp", "count": 1}]  # fmt: skip
 
 
 DATASETS = {**SESSION_DATASETS, "many sessions": many_sessions}
@@ -157,25 +159,27 @@ def test_the_cases_are_all_there(sides):
             seen["codex"] += any(a["agent"] == "codex" for a in d["agentInfo"])
             seen["linked"] += d["linkedBy"] == "email"
             seen["limits"] += bool(d["agentLimits"])
-            seen["missed"] += bool(d["missed"])
+            assert d["missed"] is None and d["plan"] is None and d["posture"]["bypassPct"] is None, pid
             seen["devices"] += bool(d["devices"])
             for s in side.new.get(f"{base}/sessions?pageSize=200").json()["data"]:
                 seen["children"] += s["children"] is not None
                 seen["live"] += s["live"]
             t = side.new.get(f"{base}/timeline").json()["data"]
-            for lane in ("prompts", "modelCalls", "analytics", "notCaptured", "friction"):
+            for lane in ("prompts", "modelCalls"):
                 seen[lane] += bool(t[lane])
+            assert not any(t[lane] for lane in ("analytics", "notCaptured", "friction")), pid
             s = side.new.get(f"{base}/summary").json()["data"]
             seen["mcp"] += bool(s["capabilities"]["mcpServers"])
             seen["account calls"] += bool(s["ribbon"]["accountCalls"])
+            assert s["ribbon"]["analyticsEvents"] == 0 and s["coverage"]["notCaptured"] == 0, pid
             r = side.new.get(f"{base}/requests?hidden=true&pageSize=200").json()
             seen["hidden"] += r["hiddenCount"]
             for row in r["data"]:
-                seen["not captured"] += not row["captured"]
+                assert row["captured"], row["requestId"]
                 seen["errors"] += row["error"] is not None
-                seen["analytics"] += row["kind"] == "analytics"
-    wanted = ("codex", "linked", "limits", "missed", "devices", "children", "prompts", "modelCalls", "analytics",
-              "notCaptured", "friction", "mcp", "account calls", "hidden", "not captured", "errors")  # fmt: skip
+                seen["analytics posts"] += row["kind"] == "analytics"
+    wanted = ("codex", "linked", "limits", "devices", "children", "prompts", "modelCalls", "mcp", "account calls",
+              "hidden", "errors", "analytics posts")  # fmt: skip
     assert all(seen[k] for k in wanted), seen
 
 
@@ -190,34 +194,19 @@ _VISIBLE = """NOT c.synthetic AND c.session_id IS NOT NULL AND c.hidden_kind IS 
         AND (c.ws_turn IS NOT NULL OR c.method = 'POST')))"""
 
 # Each (account, UTC day, session) with activity that day: its visible model calls (count, outputs known,
-# output tokens), its Claude Code events (queries, bypassed, reports, missed reports), its prompts and its
-# first and last activity; and the session's agent. From the facts alone.
+# output tokens, prompt ids, first and last); and the session's agent. From the facts alone.
 _ACTIVITY = f"""WITH sa AS (SELECT DISTINCT session_id, account_id FROM session_accounts),
 agent AS (SELECT c.session_id, CASE WHEN (array_agg(c.source ORDER BY coalesce(c.start_ns, c.end_ns), c.call_id))[1]
           = 'codex' THEN 'codex' ELSE 'claude-code' END AS agent
           FROM calls c WHERE {_VISIBLE} GROUP BY 1),
 act AS (
-  SELECT c.session_id, coalesce(c.start_ns, c.end_ns) AS t, 1 AS calls, (c.output_tokens IS NOT NULL)::int AS known,
-         c.output_tokens AS out, 0 AS q, 0 AS byp, 0 AS rep, 0 AS ev, c.prompt_id AS p, NULL::text AS ip
-  FROM calls c WHERE {_VISIBLE}
-  UNION ALL
-  SELECT e.session_id, e.ts_ns, 0, 0, NULL,
-         (e.name = 'tengu_api_query' AND coalesce(e.metadata ->> 'permissionMode', '') <> '')::int,
-         (e.name = 'tengu_api_query' AND e.metadata ->> 'permissionMode' = 'bypassPermissions')::int,
-         (e.name = 'tengu_api_success')::int, 1, NULL,
-         CASE WHEN e.name = 'tengu_input_prompt' THEN coalesce(e.prompt_id, 'input:' || e.ts_ns) END
-  FROM events e WHERE e.source = 'claude_code' AND e.session_id IS NOT NULL)
+  SELECT c.session_id, coalesce(c.start_ns, c.end_ns) AS t, (c.output_tokens IS NOT NULL)::int AS known,
+         c.output_tokens AS out, c.prompt_id AS p
+  FROM calls c WHERE {_VISIBLE})
 SELECT sa.account_id, a.t - a.t % {DAY} AS day, sa.session_id, coalesce(g.agent, 'claude-code') AS agent,
-       sum(a.calls), sum(a.known), sum(a.out), sum(a.q), sum(a.byp), sum(a.rep), sum(a.ev),
-       count(DISTINCT coalesce(a.p, a.ip)), min(a.t), max(a.t)
+       count(*), sum(a.known), sum(a.out), count(DISTINCT a.p), min(a.t), max(a.t)
 FROM act a JOIN sa USING (session_id) LEFT JOIN agent g USING (session_id)
 GROUP BY 1, 2, 3, 4"""  # noqa: S608 (fixed text)
-
-# Each session's missed reports (a Claude Code report no visible call of its session has the id of).
-_MISSED = f"""SELECT e.session_id, e.ts_ns FROM events e
-WHERE e.source = 'claude_code' AND e.name = 'tengu_api_success' AND e.session_id IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM calls c WHERE c.session_id = e.session_id AND {_VISIBLE}
-                    AND (c.request_id = e.request_id OR c.client_request_id = e.client_request_id))"""  # noqa: S608
 
 
 def from_scratch(side: Side, lo: int | None, hi: int | None, now: int) -> dict[str, dict[str, Any]]:
@@ -230,25 +219,17 @@ def from_scratch(side: Side, lo: int | None, hi: int | None, now: int) -> dict[s
     for a in accounts:
         mates = [b for b in accounts if emails.get(a) and emails.get(b) == emails.get(a)]
         groups[a] = min(mates) if len(mates) > 1 else a
-    missed: dict[str, list[int]] = defaultdict(list)
-    for s, t in side.query(_MISSED):
-        missed[s].append(t)
     out: dict[str, dict[str, Any]] = {}
     first_day = None if lo is None else lo - lo % DAY
-    for acct, day, sid, agent, calls, known, tokens, q, byp, rep, ev, prompts, _, last in side.query(_ACTIVITY):
+    for acct, day, sid, agent, calls, known, tokens, prompts, _, last in side.query(_ACTIVITY):
         if (first_day is not None and day < first_day) or (hi is not None and day > hi):
             continue
         p = out.setdefault(groups[acct], Counter(sessions=0))
         p.setdefault("sids", set()).add(sid)
         p["sessions"] = len(p["sids"])
-        p["with_events"] += bool(ev)
         p["calls"] += calls
         p["known"] += known
         p["tokens"] += tokens or 0
-        p["queries"] += q
-        p["bypassed"] += byp
-        p["reported"] += rep
-        p["missed"] += sum(1 for t in missed[sid] if day <= t < day + DAY)
         p["prompts"] += prompts
         p.setdefault("agents", set()).add(agent)
         p["last"] = max(p.get("last", 0), last)
@@ -269,15 +250,7 @@ def _check_directory(side: Side, url: str, lo: int | None, hi: int | None) -> in
         assert r["tokensOut"] == (w["tokens"] if w["known"] else None), (url, pid, r["tokensOut"], dict(w))
         acc = "missing" if not w["known"] else "exact" if w["known"] == w["calls"] else "estimated"
         assert r["tokensAccuracy"] == acc, (url, pid)
-        pct = round(100 * w["bypassed"] / w["queries"], 1) if w["queries"] else None
-        assert r["bypassPct"] == pct, (url, pid, r["bypassPct"], pct)
-        if w["with_events"]:
-            assert r["coverage"]["reported"] == w["reported"] and r["coverage"]["notCaptured"] == w["missed"], (
-                url,
-                pid,
-            )
-        else:
-            assert r["coverage"] is None, (url, pid)
+        assert r["bypassPct"] is None and r["coverage"] is None, (url, pid)
         assert set(r["agents"]) == w["agents"], (url, pid)
         assert r["lastSeenAt"] == _µs(w["last"]).isoformat().replace("+00:00", "Z"), (url, pid)
     return len(rows)
@@ -299,18 +272,17 @@ def test_the_directory_is_the_windows_activity_from_scratch(sides):
             assert o["people"] == len(people)
             assert o["sessions"] == sum(r["sessions"] for r in people)
             assert o["activeNow"] == sum(r["live"] for r in people)
-            assert o["notCaptured"] == sum(r["coverage"]["notCaptured"] for r in people if r["coverage"])
+            assert o["notCaptured"] == 0
             cards = {c["agent"]: c["sessions"] for c in o["agents"] if c["people"]}
             want = cards_from_scratch(side, *ranges.snap(lo, hi))
             assert cards == {a: n for a, n in want.items() if a in cards}, (side.name, q, cards, want)
     assert checked
 
 
-# Each session's agent (its first visible call's) and the span of its activity (visible calls and Claude Code
-# events), with whether an account appears on it.
+# Each session's agent (its first visible call's) and the span of its visible calls, with whether an account
+# appears on it.
 _SESSION_SPANS = f"""WITH act AS (
-  SELECT c.session_id, coalesce(c.start_ns, c.end_ns) AS t FROM calls c WHERE {_VISIBLE}
-  UNION ALL SELECT e.session_id, e.ts_ns FROM events e WHERE e.source = 'claude_code' AND e.session_id IS NOT NULL)
+  SELECT c.session_id, coalesce(c.start_ns, c.end_ns) AS t FROM calls c WHERE {_VISIBLE})
 SELECT a.session_id, min(a.t), max(a.t), EXISTS (SELECT 1 FROM session_accounts sa WHERE sa.session_id = a.session_id)
 FROM act a GROUP BY 1"""  # noqa: S608 (fixed text)
 _CALL_DAYS = f"""SELECT DISTINCT c.session_id, coalesce(c.start_ns, c.end_ns) - coalesce(c.start_ns, c.end_ns) % {DAY}
@@ -365,13 +337,10 @@ SCOPE = {"group", "sessions_of"}
 READS = {
     "": SCOPE | {"devices", "session_accounts"},
     "/sessions": SCOPE | {"children", "title"},
-    "/timeline": SCOPE | {"children", "title", "cells", "names", "typed", "missed", "window", "friction_minutes",
-                          "friction", "work_bins"},
-    "/summary": SCOPE | {"cells", "keys", "key_counts", "missed", "latest", "credentials", "cred_cells",
-                         "person_turns", "work_keys"},
+    "/timeline": SCOPE | {"children", "title", "cells", "typed", "work_bins"},
+    "/summary": SCOPE | {"cells", "keys", "key_counts", "credentials", "cred_cells", "person_turns", "work_keys"},
     "/work": SCOPE | {"children", "title"},
-    "/requests": SCOPE | {"credentials", "cred_cells", "cred_minutes", "missed_cells", "missed_minutes", "call_rows",
-                          "missed_rows", "reports", "prompt_indexes", "step_numbers", "retries", "next_attempt"},
+    "/requests": SCOPE | {"credentials", "cred_cells", "cred_minutes", "call_rows", "prompt_indexes", "step_numbers"},
 }  # fmt: skip
 # What a page draws, whatever it reads: the timeline's typed prompts.
 DRAWN = {"typed"}
@@ -379,8 +348,8 @@ DRAWN = {"typed"}
 
 def test_a_person_page_reads_cells_and_a_page_whatever_the_history(sides):
     """Bound (§6.3): one snapshot, the page's own statements, each reading cells, a page or what the page
-    draws. The person has 30 sessions over three days, two of them busy: a page that read their calls or
-    events would read hundreds of rows."""
+    draws. The person has 30 sessions over three days, two of them busy: a page that read their calls would
+    read hundreds of rows."""
     side = sides["many sessions"]
     side.at(FROZEN_NOW)
     (pid,) = {a for (a,) in side.query("SELECT DISTINCT account_id FROM session_accounts")}

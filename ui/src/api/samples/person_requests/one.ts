@@ -20,7 +20,7 @@ const sample: components["schemas"]["PersonRequestsResponse"] = {
       "method": "POST",
       "model": "claude-opus-5-5",
       "path": "/v1/messages?beta=true",
-      "promptIndex": null,
+      "promptIndex": 1,
       "requestId": "observer-test-0-1",
       "retries": null,
       "sessionId": "11111111-1111-4111-8111-111111111111",
@@ -36,24 +36,23 @@ const sample: components["schemas"]["PersonRequestsResponse"] = {
         "cacheRead": 40000,
         "cacheWrite": null,
         "cacheWrite1h": null,
-        "cacheWrite5m": 0,
+        "cacheWrite5m": null,
         "input": 3,
         "output": 100
       },
       "toolCalls": [],
-      "ttftMs": 1900.0,
+      "ttftMs": null,
       "usageMissing": null
     }
   ],
   "hiddenCount": 0,
   "kindCounts": {
-    "analytics": 1,
     "model": 1
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:01:05Z",
+    "lastDataAt": "2026-11-04T09:01:00Z",
     "page": 1,
     "pageSize": 20,
     "to": null,

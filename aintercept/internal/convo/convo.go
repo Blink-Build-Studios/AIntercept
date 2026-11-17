@@ -350,36 +350,57 @@ func (b *builder) userText(s string, span Span) (Part, Role) {
 	return b.text(s, span), RoleUser
 }
 
-// harnessNotes are how the harness's own notes in a user's turn begin, by
+// HarnessNotes are how the harness's own notes in a user's turn begin, by
 // what the wire shows. Claude Code: system reminders, interrupted requests,
 // its title and next-prompt suggestion requests, a bash-mode command's output
 // (the command the user typed, <bash-input>, is theirs), a skill's body, a
 // slash command's output and caveat (the command, <command-name>, is the
 // user's). Codex: its environment, instructions and aborted turns. What the
 // user pastes (<pasted_content>) is theirs. This is the one list of the
-// harness's markers.
-var harnessNotes = []string{"<system-reminder", "[Request interrupted by user", "<session>", "[SUGGESTION MODE:",
+// harness's markers: the pipeline names a turn's typed parts by it too
+// (records/said.go), so the pipeline and the Interceptor agree on who's speaking.
+var HarnessNotes = []string{"<system-reminder", "[Request interrupted by user", "<session>", "[SUGGESTION MODE:",
 	"<bash-stdout>", "<bash-stderr>", "Base directory for this skill:",
 	"<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat>",
 	"<environment_context>", "<user_instructions>", "<permissions instructions>", "<turn_aborted>"}
 
-func harnessNote(s string) bool {
+// MidTurnNote names another sender's mid-turn note (an agent's, not the user's);
+// ImageNote, a text of image placeholders alone.
+const (
+	MidTurnNote = "mid-turn"
+	ImageNote   = "[Image #"
+)
+
+// Notes that say something about the turn they're in: the harness says the
+// turn before was interrupted (Claude Code's note, Codex's <turn_aborted>), or
+// the request is a side request for the session's title or a suggested next
+// prompt.
+var (
+	InterruptNotes = []string{"[Request interrupted by user", "<turn_aborted>"}
+	TitleNote      = "<session>"
+	SuggestionNote = "[SUGGESTION MODE:"
+)
+
+// Note is the harness note text s begins with: one of HarnessNotes,
+// MidTurnNote, or "" for none.
+func Note(s string) string {
 	t := strings.TrimSpace(s)
-	for _, h := range harnessNotes {
+	for _, h := range HarnessNotes {
 		if strings.HasPrefix(t, h) {
-			return true
+			return h
 		}
 	}
-	// Another sender's mid-turn note (an agent's, not the user's).
 	if i := strings.Index(t, " sent a message while you were working:"); i > 0 && i < 80 && !strings.HasPrefix(t, "The user ") {
-		return true
+		return MidTurnNote
 	}
 	// Image placeholders alone: the harness's labels for the image blocks.
 	if n := imagePlaceholders(t); n > 0 && n == len(t) {
-		return true
+		return ImageNote
 	}
-	return false
+	return ""
 }
+
+func harnessNote(s string) bool { return Note(s) != "" }
 
 // Claude Code's note for a message the user sends while it's working: the
 // user's words between a lead line and a trailing paragraph.

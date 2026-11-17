@@ -6,56 +6,20 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
     {
       "agent": "claude-code",
       "branch": null,
-      "bypassPct": 99.7,
-      "capturedFromPrompt": 7,
+      "bypassPct": null,
+      "capturedFromPrompt": null,
       "children": null,
       "client": "cli",
       "clientVersion": "2.1.308",
       "commit": null,
-      "coverage": {
-        "captured": 507,
-        "notCaptured": 95,
-        "reported": 602,
-        "windows": [
-          {
-            "cause": null,
-            "count": 37,
-            "from": "2026-11-03T00:48:55.710000Z",
-            "to": "2026-11-03T00:57:10.792000Z"
-          },
-          {
-            "cause": null,
-            "count": 4,
-            "from": "2026-11-03T15:13:59.125000Z",
-            "to": "2026-11-03T15:17:48.778000Z"
-          },
-          {
-            "cause": null,
-            "count": 3,
-            "from": "2026-11-03T16:14:56.406000Z",
-            "to": "2026-11-03T16:24:30.091000Z"
-          },
-          {
-            "cause": null,
-            "count": 50,
-            "from": "2026-11-03T16:51:31.940000Z",
-            "to": "2026-11-03T17:03:02.686000Z"
-          },
-          {
-            "cause": null,
-            "count": 1,
-            "from": "2026-11-03T21:17:26.955000Z",
-            "to": "2026-11-03T21:17:26.955000Z"
-          }
-        ]
-      },
+      "coverage": null,
       "end": null,
-      "events": 21305,
+      "events": null,
       "fieldsMissing": false,
       "friction": {
-        "destructive": 16,
-        "frustrated": 2,
-        "interrupted": 3
+        "destructive": 0,
+        "frustrated": 0,
+        "interrupted": 0
       },
       "hiddenCalls": 0,
       "label": {
@@ -65,7 +29,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "live": true,
       "modelCalls": 640,
       "origin": null,
-      "prompts": 43,
+      "prompts": 38,
       "repo": null,
       "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
       "start": "2026-11-02T05:31:51.155051Z"
@@ -74,7 +38,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": 1,
     "pageSize": 20,
     "to": null,

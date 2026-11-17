@@ -12,12 +12,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "client": "tui",
       "clientVersion": "0.167.0",
       "commit": "1aa2f42",
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": null,
-        "windows": []
-      },
+      "coverage": null,
       "end": "2026-11-04T16:10:00Z",
       "events": null,
       "fieldsMissing": false,
@@ -61,12 +56,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "client": "exec",
       "clientVersion": "0.164.0",
       "commit": "1aa2f42",
-      "coverage": {
-        "captured": 3,
-        "notCaptured": 0,
-        "reported": null,
-        "windows": []
-      },
+      "coverage": null,
       "end": "2026-11-04T15:56:00Z",
       "events": null,
       "fieldsMissing": false,
@@ -97,12 +87,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "client": "exec",
       "clientVersion": "0.164.0",
       "commit": "1aa2f42",
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": null,
-        "windows": []
-      },
+      "coverage": null,
       "end": "2026-11-04T15:56:30Z",
       "events": null,
       "fieldsMissing": false,
@@ -139,12 +124,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "client": "exec",
       "clientVersion": "0.164.0",
       "commit": "1aa2f42",
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": null,
-        "windows": []
-      },
+      "coverage": null,
       "end": "2026-11-04T15:57:00Z",
       "events": null,
       "fieldsMissing": false,

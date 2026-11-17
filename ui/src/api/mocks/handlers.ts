@@ -1,5 +1,4 @@
 import { delay, http, HttpResponse } from "msw";
-import eventDemo from "../samples/event/demo";
 import overviewDemo from "../samples/overview/demo";
 import peopleDemo from "../samples/people/demo";
 import requestDemo from "../samples/request/demo";
@@ -34,7 +33,6 @@ export const handlers = [
   mock("/sessions/:sessionId/prompts", sessionPromptsDemo),
   mock("/sessions/:sessionId/requests", sessionRequestsDemo),
   mock("/sessions/:sessionId/events", sessionEventsDemo),
-  mock("/events/:eventId", eventDemo),
   mock("/requests/:requestId", requestDemo),
   mock("/requests/:requestId/raw", requestRawDemo),
   mock("/requests/:requestId/details", requestDetailsDemo),

@@ -3,26 +3,7 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionTimelineResponse"] = {
   "data": {
-    "analytics": [
-      {
-        "count": 8,
-        "t": "2026-11-04T09:00:00Z",
-        "top": [
-          {
-            "count": 3,
-            "name": "tengu_api_query"
-          },
-          {
-            "count": 3,
-            "name": "tengu_api_success"
-          },
-          {
-            "count": 1,
-            "name": "tengu_input_prompt"
-          }
-        ]
-      }
-    ],
+    "analytics": [],
     "binSeconds": 300,
     "compactions": [],
     "context": [
@@ -55,7 +36,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       }
     ],
     "friction": [],
-    "from": "2026-11-04T09:00:00Z",
+    "from": "2026-11-04T09:01:00Z",
     "modelCalls": [
       {
         "byClass": {
@@ -75,15 +56,15 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
     "now": null,
     "prompts": [
       {
-        "durationMs": 240000.0,
+        "durationMs": 120002.0,
         "index": 1,
         "promptId": "p1",
         "sessionId": "11111111-1111-4111-8111-111111111111",
         "steps": 3,
-        "t": "2026-11-04T09:00:00Z",
+        "t": "2026-11-04T09:01:00Z",
         "text": {
-          "chars": 42,
-          "images": 0,
+          "chars": null,
+          "images": null,
           "pastedBytes": null,
           "retained": false,
           "text": null
@@ -96,7 +77,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       {
         "branch": null,
         "capturedFromPrompt": null,
-        "end": "2026-11-04T09:04:00Z",
+        "end": "2026-11-04T09:03:00Z",
         "label": "Session 11111111",
         "live": false,
         "modelCalls": 3,
@@ -104,17 +85,17 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "repo": null,
         "row": 0,
         "sessionId": "11111111-1111-4111-8111-111111111111",
-        "start": "2026-11-04T09:00:00Z"
+        "start": "2026-11-04T09:01:00Z"
       }
     ],
-    "to": "2026-11-04T09:04:00Z",
+    "to": "2026-11-04T09:03:00Z",
     "turns": [
       {
         "endedAt": "2026-11-04T09:03:00.002000Z",
         "live": false,
         "n": 1,
         "promptId": "p1",
-        "startedAt": "2026-11-04T09:00:00Z",
+        "startedAt": "2026-11-04T09:01:00Z",
         "steps": 3
       }
     ],
@@ -122,11 +103,11 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
-    "from": "2026-11-04T09:00:00Z",
-    "lastDataAt": "2026-11-04T09:04:00Z",
+    "from": "2026-11-04T09:01:00Z",
+    "lastDataAt": "2026-11-04T09:03:00Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T09:04:00Z",
+    "to": "2026-11-04T09:03:00Z",
     "total": null
   }
 };

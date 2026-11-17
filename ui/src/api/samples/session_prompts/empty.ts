@@ -6,10 +6,10 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T12:00:00Z",
-    "lastDataAt": "2026-11-04T09:11:05Z",
+    "lastDataAt": "2026-11-04T09:10:30Z",
     "page": 1,
     "pageSize": 20,
-    "to": "2026-11-04T09:11:59.999999Z",
+    "to": "2026-11-04T09:10:59.999999Z",
     "total": 0
   }
 };
