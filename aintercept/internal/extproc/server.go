@@ -199,6 +199,16 @@ const (
 	respBufferCap = 512 * 1024
 )
 
+// reqCap is a stream's request buffer cap: recording needs reqBufferCap, but
+// an observed stream whose requests go to the Interceptor holds the whole
+// body (to interceptBodyCap) so it can be read. Enforce holds its own copy.
+func (srv *Server) reqCap(st *streamState) int {
+	if !st.enforce && srv.intercepting(st) && srv.ic.Content() {
+		return interceptBodyCap
+	}
+	return reqBufferCap
+}
+
 func (s *streamState) next() uint64 {
 	s.seq++
 	return s.seq
@@ -384,21 +394,27 @@ func (srv *Server) observeBody(st *streamState, dir events.Direction, phase even
 		srv.wsFeed(st, dir, b.GetBody())
 	case dir == events.DirInbound:
 		st.reqBytes += n
-		st.reqBuf, st.reqTrunc = appendCapped(st.reqBuf, b.GetBody(), st.reqTrunc, reqBufferCap)
+		st.reqBuf, st.reqTrunc = appendCapped(st.reqBuf, b.GetBody(), st.reqTrunc, srv.reqCap(st))
 	default:
 		st.respBytes += n
 		body := b.GetBody()
-		if st.respEncoding == "" && (st.respTrunc || len(st.respBuf)+len(body) > respBufferCap) {
-			over := body
+		over := st.respEncoding == "" && (st.respTrunc || len(st.respBuf)+len(body) > respBufferCap)
+		start := over && st.respTail == nil
+		var rest []byte
+		if over {
+			rest = body
 			if !st.respTrunc {
-				over = body[max(0, respBufferCap-len(st.respBuf)):]
+				rest = body[max(0, respBufferCap-len(st.respBuf)):]
 			}
-			if st.respTail == nil {
-				st.respTail = &sseTail{}
-			}
-			st.respTail.feed(over)
 		}
 		st.respBuf, st.respTrunc = appendCapped(st.respBuf, body, st.respTrunc, respBufferCap)
+		if start {
+			st.respTail = &sseTail{}
+			st.respTail.begin(st.respBuf) // the full buffer: the event the cap cuts, from its start
+		}
+		if over {
+			st.respTail.feed(rest)
+		}
 	}
 
 	e := events.Event{
@@ -449,6 +465,9 @@ func (srv *Server) account(st *streamState) {
 	n := int64(len(st.reqBuf) + len(st.respBuf))
 	if st.respTail != nil {
 		n += int64(st.respTail.held())
+	}
+	if ic := st.ic; ic != nil {
+		n += int64(len(ic.replyBody) + len(ic.replyEnc) + len(ic.sniff))
 	}
 	if ws := st.ws; ws != nil {
 		n += int64(ws.up.Buffered() + ws.down.Buffered())

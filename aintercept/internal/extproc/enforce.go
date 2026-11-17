@@ -59,6 +59,7 @@ const (
 	respWhole                      // evaluate the whole body before releasing it
 	respToolsSSE                   // v2: hold the event stream's text and tool calls
 	respToolsWhole                 // v2: decide the whole body's text and tool calls
+	respSniff                      // v2: a reply without a content-type, held until its first bytes say what it is
 )
 
 type enforceState struct {
@@ -406,6 +407,9 @@ func (srv *Server) enforceResponseBody(st *streamState, chunk []byte, eos bool) 
 
 	case respToolsWhole:
 		return srv.toolsWhole(st, chunk, eos)
+
+	case respSniff:
+		return srv.sniffReply(st, chunk, eos)
 	}
 	return []*extprocv3.ProcessingResponse{bodyResponse(false, chunk, eos)}
 }
