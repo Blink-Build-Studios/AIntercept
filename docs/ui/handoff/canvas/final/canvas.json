@@ -28,7 +28,7 @@
    "y": 0,
    "w": 1440,
    "h": 1760,
-   "title": "Person page · Sessions tab",
+   "title": "Person page · Work tab · content-free",
    "expand": "fill",
    "is_interactive": true,
    "page": "screens"
@@ -47,7 +47,7 @@
    "y": 2200,
    "w": 1440,
    "h": 2000,
-   "title": "Session page · Prompts tab",
+   "title": "Session page · Turns tab · content-free",
    "expand": "fill",
    "is_interactive": true,
    "page": "screens"
@@ -67,15 +67,6 @@
    "w": 1440,
    "h": 2000,
    "title": "Session page · Requests tab",
-   "expand": "fill",
-   "page": "screens"
-  },
-  "SessionEvents.dc.html": {
-   "x": 4560,
-   "y": 2200,
-   "w": 1440,
-   "h": 2000,
-   "title": "Session page · Events tab",
    "expand": "fill",
    "page": "screens"
   },
@@ -138,7 +129,7 @@
    "y": 6800,
    "w": 1440,
    "h": 2000,
-   "title": "Session · live (in-flight step, events pending)",
+   "title": "Session · live (in-flight step)",
    "expand": "fill",
    "page": "screens"
   },
@@ -151,17 +142,8 @@
    "expand": "fill",
    "page": "screens"
   },
-  "DrawerNotCaptured.dc.html": {
-   "x": 4560,
-   "y": 6800,
-   "w": 1440,
-   "h": 2000,
-   "title": "Drawer · reported, not captured",
-   "expand": "fill",
-   "page": "screens"
-  },
   "DrawerFailed.dc.html": {
-   "x": 6080,
+   "x": 4560,
    "y": 6800,
    "w": 1440,
    "h": 2000,
@@ -170,7 +152,7 @@
    "page": "screens"
   },
   "DrawerRetained.dc.html": {
-   "x": 7600,
+   "x": 6080,
    "y": 6800,
    "w": 1440,
    "h": 2000,
@@ -310,24 +292,6 @@
    "expand": "fill",
    "page": "screens"
   },
-  "PersonRequestsNotCaptured.dc.html": {
-   "x": 3040,
-   "y": 0,
-   "w": 1440,
-   "h": 1760,
-   "title": "Person · All requests · not captured filter",
-   "expand": "fill",
-   "page": "screens"
-  },
-  "PersonRequestsNoUncaptured.dc.html": {
-   "x": 4560,
-   "y": 0,
-   "w": 1440,
-   "h": 1760,
-   "title": "Person · All requests · not captured, no matches",
-   "expand": "fill",
-   "page": "screens"
-  },
   "CompDensity.dc.html": {
    "x": 19760,
    "y": 0,
@@ -365,7 +329,7 @@
    "y": 0,
    "w": 1440,
    "h": 1960,
-   "title": "Timeline lanes · round 17",
+   "title": "Timeline lanes · round 19",
    "page": "components"
   },
   "ExpOverview.dc.html": {
@@ -436,20 +400,39 @@
    "x": 27360,
    "y": 0,
    "w": 1440,
-   "h": 4760,
-   "title": "Turns & work · round 18",
+   "h": 6620,
+   "title": "Turns & work · round 19",
    "page": "components"
+  },
+  "SessionContent.dc.html": {
+   "x": 4560,
+   "y": 2200,
+   "w": 1440,
+   "h": 2000,
+   "title": "Session page · Turns tab · with content recorded",
+   "expand": "fill",
+   "page": "screens"
+  },
+  "PersonContent.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1760,
+   "title": "Person page · Work tab · with content recorded",
+   "expand": "fill",
+   "page": "screens"
   }
  },
  "order": [
   "People.dc.html",
   "PeopleLoading.dc.html",
   "Main.dc.html",
+  "PersonContent.dc.html",
   "PersonRequests.dc.html",
   "Session.dc.html",
+  "SessionContent.dc.html",
   "SessionDrawer.dc.html",
   "SessionRequests.dc.html",
-  "SessionEvents.dc.html",
   "PersonLoading.dc.html",
   "PersonWaiting.dc.html",
   "PersonDelayed.dc.html",
@@ -458,7 +441,6 @@
   "SessionLoading.dc.html",
   "SessionLive.dc.html",
   "SessionError.dc.html",
-  "DrawerNotCaptured.dc.html",
   "DrawerFailed.dc.html",
   "DrawerRetained.dc.html",
   "CompIndex.dc.html",
@@ -475,8 +457,6 @@
   "CompTimelineHover.dc.html",
   "CompTableHover.dc.html",
   "AboutThisData.dc.html",
-  "PersonRequestsNotCaptured.dc.html",
-  "PersonRequestsNoUncaptured.dc.html",
   "CompDensity.dc.html",
   "CompR11.dc.html",
   "CompAgents.dc.html",

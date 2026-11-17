@@ -38,7 +38,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <!-- top bar -->
 <div data-spec="AppBar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 32px; background: #131618; border-bottom: 1px solid #2a3034">
 <span data-spec="Wordmark" class="m" style="color: #e6e3db; letter-spacing: .01em"><span style="font-weight: 600">AI</span><span style="font-weight: 400">ntercept</span></span>
-<span class="m" style="color: #848c90"><a href="Main.dc.html" style="color: #a3a9ad; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">people</a> / <span style="display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: #e8916f; margin-right: 6px"></span><a href="Main.dc.html" style="color: #a3a9ad; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">name unknown</a> / <span style="display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: #e8916f; margin-right: 6px"></span><span style="color: #e6e3db">aintercept · partner-readiness</span></span>
+<span class="m" style="color: #848c90"><a href="Main.dc.html" style="color: #a3a9ad; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">people</a> / <span style="display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: #e8916f; margin-right: 6px"></span><a href="Main.dc.html" style="color: #a3a9ad; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">name unknown</a> / <span style="display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: #e8916f; margin-right: 6px"></span><span style="color: #e6e3db">{{hdr.title}}</span></span>
 <div style="flex: 1 1 0"></div>
 <span data-spec="LiveBadge" class="chip" style="border-color: {{live.bd}}; color: {{live.c}}"><span style="width: 7px; height: 7px; background: {{live.dot}}; border-radius: 999px"></span>{{live.t}}</span>
 <button data-spec="Button/pause" class="btn">Pause</button>
@@ -83,23 +83,19 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div data-spec="PageHeader" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch">
 <div style="display: flex; flex-direction: column; gap: 4px">
 <div data-spec="ProviderMark" class="m" style="display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 16px; letter-spacing: .06em; color: #a3a9ad"><span style="width: 8px; height: 8px; border-radius: 999px; background: #e8916f; flex: none"></span><span style="color: #e6e3db; font-weight: 600">CLAUDE CODE</span><span>· SESSION · 2.1.31</span></div>
-<div style="display: flex; gap: 8px; align-items: center"><span style="font-size: 18px; line-height: 24px; font-weight: 600">aintercept · partner-readiness</span></div>
+<div style="display: flex; gap: 8px; align-items: center"><span style="font-size: 18px; line-height: 24px; font-weight: 600">{{hdr.title}}</span></div>
 <div class="m" style="color: #a3a9ad">session 4c1a…77e0</div>
-<div style="color: #a3a9ad; max-width: 720px">Latest recap: “Coverage check and IPv6 routing; PR #2 open, CI pending.”</div>
 </div>
 <div data-spec="HeaderStatGroup" style="display: flex; flex-wrap: wrap; row-gap: 8px; border-left: 1px solid #2a3034">
 <div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Span</div><div class="m" style="font-weight: 500">Nov 2 10:04 → now · 2d 0h</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">6h 12m active</div></div>
 <div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Turns</div><div class="m" style="font-weight: 500">34</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">2 interrupted</div></div>
-<div data-spec="HeaderStat/withQualifier" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Steps</div><div class="m" style="font-weight: 500">640 <span style="color: #ff7a6b">+94 not captured</span></div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">model calls</div></div>
+<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Steps</div><div class="m" style="font-weight: 500">640</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">model calls · 5 failed</div></div>
 <div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Tokens</div><div class="m" style="font-weight: 500">8.2M → 1.1M</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">92% cache read</div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Cost</div><div class="m" style="font-weight: 500">$48.10</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">est.</div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Edited</div><div class="m" style="font-weight: 500">23 files</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">+1,204 −388</div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Commits</div><div class="m" style="font-weight: 500">2</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">a41f → 9c02</div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px; border-right: 1px solid #2a3034"><div class="k">Device</div><div class="m" style="font-weight: 500">darwin · zsh · 3 networks</div></div>
-<div data-spec="HeaderStat" style="padding: 0 16px"><div class="k">Approvals bypassed</div><div class="m" style="font-weight: 500">99.7% of calls</div></div>
+<div data-spec="HeaderStat/tools" style="padding: 0 16px"><div class="k">Tool calls</div><div class="m" style="font-weight: 500">1,212</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">14 tools used of 404 offered</div></div>
+<sc-if value="{{isContent}}" hint-placeholder-val="{{ false }}"><div data-spec="HeaderStat/withContent" style="padding: 0 16px; border-left: 1px solid #2a3034; border-right: 1px solid #2a3034"><div class="k">Edited</div><div class="m" style="font-weight: 500">23 files</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">+1,204 −388</div></div><div data-spec="HeaderStat/withContent" style="padding: 0 16px; border-left: 1px solid #2a3034"><div class="k">Commits</div><div class="m" style="font-weight: 500">2</div><div class="m" style="color: #848c90; font-size: 11px; line-height: 14px">a41f → 9c02</div></div></sc-if>
 </div>
 </div>
-<div data-spec="OutcomeSlot" style="border: 1px dashed #60686d; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(132,140,144,.06) 6px 7px); padding: 10px 12px"><div class="k" style="color: #a3a9ad">Outcome · <span style="color: #ffd36b">needs a generated summary · not captured yet</span></div><div style="display: flex; flex-direction: column; gap: 6px; margin: 8px 0"><div style="height: 8px; width: 82%; background: #20252a"></div><div style="height: 8px; width: 56%; background: #20252a"></div></div><div data-spec="OutcomeFacts" class="m" style="font-size: 12px">2 commits on <b>partner-readiness</b> (a41f → 9c02) · 23 files edited (.ts ×17, .md ×4, .json ×2) · last <b>npm test</b> exited 0 · PR #2 open</div></div>
+<div data-spec="OutcomeSlot" style="border: 1px dashed #60686d; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(132,140,144,.06) 6px 7px); padding: 10px 12px"><div class="k" style="color: #a3a9ad">Outcome · <span style="color: #ffd36b">needs a generated summary · not captured yet</span></div><div style="display: flex; flex-direction: column; gap: 6px; margin: 8px 0"><div style="height: 8px; width: 82%; background: #20252a"></div><div style="height: 8px; width: 56%; background: #20252a"></div></div><div data-spec="OutcomeFacts" class="m" style="font-size: 12px"><sc-if value="{{isContent}}" hint-placeholder-val="{{ false }}">2 commits on <b>partner-readiness</b> (a41f → 9c02) · 23 files edited (.ts ×17, .md ×4, .json ×2) · last <b>npm test</b> passed · PR #2 open</sc-if><sc-if value="{{isMeta}}" hint-placeholder-val="{{ true }}">34 turns · 640 steps · 1,212 tool calls: Bash ×488 · Read ×402 · Edit ×171 · Grep ×96 · 6 subagents</sc-if></div></div>
 
 <!-- session timeline (range control) -->
 <div>
@@ -121,11 +117,11 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <sc-for list="{{turnBlk}}" as="p" hint-placeholder-count="34"><div style="position: absolute; top: 5px; height: 16px; box-sizing: border-box; background: #1b1f22; border-left: 2px solid #e6e3db; left: {{p.l}}; width: {{p.w}}"></div></sc-for>
 </div>
 </div>
-<div data-spec="Lane/work" class="lane" style="height: 76px">
-<div class="lab" style="position: relative"><div class="k">Work</div><div class="m" style="font-size: 11px; line-height: 16px; color: #a3a9ad">per 15m</div><div class="m" style="position: absolute; left: 12px; bottom: 0; height: 16px; font-size: 10.5px; line-height: 16px; color: #ff7a6b; white-space: nowrap">▲ not captured {{gapTotal}}</div></div>
+<div data-spec="Lane/work" class="lane" style="height: 60px">
+<div class="lab" style="position: relative"><div class="k">Work</div><div class="m" style="font-size: 11px; line-height: 16px; color: #a3a9ad">per 15m</div></div>
 <div data-spec="WorkTrack" class="track"><div style="position: absolute; left: 0; right: 0; top: 0; height: 58px">
 <sc-for list="{{work}}" as="b" hint-placeholder-count="60"><div style="position: absolute; bottom: 0; background: #a3a9ad; left: {{b.l}}; width: {{b.w}}; height: {{b.c}}"></div><div style="position: absolute; background: #e6e3db; left: {{b.l}}; width: {{b.w}}; bottom: {{b.c}}; height: {{b.e}}"></div></sc-for>
-</div><div data-spec="GapRow" style="position: absolute; left: 0; right: 0; bottom: 0; height: 16px; border-top: 1px solid #2a3034"><sc-for list="{{gaps}}" as="g" hint-placeholder-count="2"><div style="position: absolute; top: 3px; height: 10px; min-width: 3px; box-sizing: border-box; left: {{g.l}}; width: {{g.w}}; background: repeating-linear-gradient(135deg, rgba(255,122,107,.3) 0 4px, transparent 4px 8px); border-left: 1px solid #ff7a6b; border-right: 1px solid #ff7a6b"></div></sc-for></div></div>
+</div></div>
 </div>
 <div data-spec="Lane/context" class="lane" style="height: 56px">
 <div class="lab"><div class="k">Context</div><div class="m" style="font-size: 11px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">main thread</div></div>
@@ -134,9 +130,9 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <sc-for list="{{ctxMarks}}" as="c" hint-placeholder-count="2"><span class="m" style="position: absolute; top: 2px; font-size: 10.5px; white-space: nowrap; color: #e6e3db; left: {{c.l}}">{{c.t}}</span></sc-for>
 </div>
 </div>
-<div data-spec="Lane/frictionSplit" class="lane" style="height: 74px; border-bottom: 0">
-<div class="lab"><div class="k" style="height: 14px">Friction</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">↯ frustrated {{fN.f}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">✕ interrupted {{fN.i}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span style="color: #ff7a6b">▲ destructive {{fN.d}}</span></div></div>
-<div class="track"><div data-spec="FrictionRow/frustrated" style="position: absolute; left: 0; right: 0; top: 20px; height: 16px"><sc-for list="{{fricF}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div><div data-spec="FrictionRow/interrupted" style="position: absolute; left: 0; right: 0; top: 36px; height: 16px"><sc-for list="{{fricI}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div><div data-spec="FrictionRow/destructive" style="position: absolute; left: 0; right: 0; top: 52px; height: 16px"><sc-for list="{{fricD}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div></div>
+<div data-spec="Lane/frictionSplit" class="lane" style="height: 56px; border-bottom: 0">
+<div class="lab"><div class="k" style="height: 14px">Friction</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">✕ interrupted {{fN.i}}</div><div class="m" style="font-size: 10.5px; line-height: 16px; height: 16px; color: #a3a9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">! failed calls {{fN.f}}</div></div>
+<div class="track"><div data-spec="FrictionRow/interrupted" style="position: absolute; left: 0; right: 0; top: 20px; height: 16px"><sc-for list="{{fricI}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div><div data-spec="FrictionRow/failedCalls" style="position: absolute; left: 0; right: 0; top: 36px; height: 16px"><sc-for list="{{fricF}}" as="f" hint-placeholder-count="4"><span class="m" style="position: absolute; top: -2px; white-space: nowrap; font-size: 11px; left: {{f.l}}; color: {{f.c}}; font-weight: {{f.w}}">{{f.g}}</span></sc-for></div></div>
 </div>
 </div>
 <div data-spec="TimeAxis/ticks" style="display: flex; height: 24px; border-top: 1px solid #2a3034"><div style="width: 132px; flex: none; border-right: 1px solid #2a3034"></div><div style="position: relative; flex: 1"><sc-for list="{{ticks}}" as="t" hint-placeholder-count="30"><div style="position: absolute; top: 0; width: 1px; left: {{t.l}}; height: {{t.h}}; background: {{t.c}}"></div></sc-for><sc-for list="{{tlabels}}" as="t" hint-placeholder-count="8"><span class="m" style="position: absolute; top: 8px; font-size: 11px; line-height: 16px; white-space: nowrap; left: {{t.l}}; transform: translateX({{t.x}}); color: {{t.c}}; font-weight: {{t.w}}">{{t.t}}</span></sc-for></div></div>
@@ -146,7 +142,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <div data-spec="RangeReadout" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 12px; border: 1px solid #ffd36b; border-top: 0; background: #131618">
 <span class="k" style="color: #ffd36b">Range</span>
 <span class="m" style="font-weight: 600">{{rng.t}}</span>
-<span class="m">{{rng.p}}</span><span class="m">{{rng.c}}</span><span class="m">{{rng.r}}</span><span class="m">{{rng.e}}</span><span class="m">{{rng.x}}</span>
+<span class="m">{{rng.p}}</span><span class="m">{{rng.c}}</span><span class="m">{{rng.r}}</span><span class="m">{{rng.x}}</span>
 <span style="flex: 1"></span>
 <button data-spec="Button/prevRange" class="btn" aria-label="Previous range">‹</button>
 <button data-spec="Button/nextRange" class="btn" aria-label="Next range">›</button>
@@ -155,32 +151,34 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 </div>
 
 <!-- session state panels, scoped to range -->
-<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
-<div data-spec="KeyValueList/capabilities" class="panel">
-<div class="ph"><span class="k" style="color: #e8916f">Capabilities</span></div>
-<sc-for list="{{caps}}" as="c" hint-placeholder-count="5"><div class="row m"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{c.k}}</span><span style="color: #a3a9ad">{{c.v}}</span></div></sc-for>
-<div class="m" style="padding: 4px 12px; color: #a3a9ad; font-size: 11px">2 tool-pool changes in range</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div data-spec="ToolsOfferedUsed" class="panel" style="grid-column: span 2">
+<div class="ph"><span class="k">Tools · offered vs used</span><span class="m" style="color: #a3a9ad">from each request’s tool list</span><span style="flex: 1"></span><span class="m" style="color: #848c90">in range</span></div>
+<div class="row k" style="color: #848c90"><span style="flex: 1">Source</span><span style="width: 90px; text-align: right">Offered</span><span style="width: 90px; text-align: right">Used</span><span style="width: 260px">Calls</span></div>
+<sc-for list="{{tools}}" as="c" hint-placeholder-count="5"><div data-spec="ToolsOfferedUsed/row" class="row m"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{c.k}}</span><span style="width: 90px; text-align: right; color: #a3a9ad">{{c.o}}</span><span style="width: 90px; text-align: right">{{c.u}}</span><span style="width: 260px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{c.d}}</span></div></sc-for>
+<div class="m" style="padding: 4px 12px; color: #a3a9ad; font-size: 11px">tool list changed 2 times in range</div>
 </div>
+<sc-if value="{{isContent}}" hint-placeholder-val="{{ false }}">
 <div data-spec="KeyValueList/repo" class="panel">
-<div class="ph"><span class="k">Repo · in range</span></div>
+<div class="ph"><span class="k">Repo · in range</span><span class="m" style="color: #a3a9ad">with content</span></div>
 <div class="m" style="padding: 6px 12px; display: flex; flex-direction: column">
 <span>partner-readiness</span>
-<span>head a41f… → 9c02… · 2 commits</span>
+<span>a41f… → 9c02… · 2 commits</span>
 <span>cwd …/aintercept → …/observer</span>
 <span style="color: #a3a9ad">no push in range</span>
 </div>
 </div>
-<div data-spec="KeyValueList/recaps" class="panel">
-<div class="ph"><span class="k">Recaps · in range</span><span class="m" style="color: #a3a9ad">{{rng.recapN}}</span></div>
-<div style="padding: 6px 12px"><span class="m" style="color: #848c90">{{rng.recapT}}</span> <span>{{rng.recapX}}</span></div>
-</div>
-<div data-spec="KeyValueList/experiments" class="panel">
-<div class="ph"><span class="k" style="color: #c9a3ec">Experiments</span></div>
+</sc-if>
+<sc-if value="{{isMeta}}" hint-placeholder-val="{{ true }}">
+<div data-spec="KeyValueList/context" class="panel">
+<div class="ph"><span class="k">Context · in range</span></div>
 <div class="m" style="padding: 6px 12px; display: flex; flex-direction: column">
-<span style="color: #c9a3ec">curried_trinket</span><span style="color: #a3a9ad">= no_scratchpad_capped</span>
-<span style="margin-top: 6px">1 flag fetch in range · 3 changed</span>
+<span>1 compaction · 905k → 21k</span>
+<span>peak context 905k tokens</span>
+<span style="color: #a3a9ad">3 subagent threads</span>
 </div>
 </div>
+</sc-if>
 </div>
 
 <!-- tabs -->
@@ -193,7 +191,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 
 <!-- Turns tab -->
 <sc-if value="{{isTurns}}" hint-placeholder-val="{{ true }}">
-<div data-spec="DataTable/turns" class="panel" style="border-top: 0; overflow-x: auto"><div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 14px"></span><span style="width: 40px">Turn</span><span style="width: 92px">Started</span><span style="width: 240px">Asked</span><span style="flex: 1">Work done</span><span style="width: 50px; text-align: right">Steps</span><span style="width: 64px; text-align: right">Time</span><span style="width: 110px; text-align: right">Tokens</span><span style="width: 64px; text-align: right">Cost</span><span style="width: 40px"></span></div><div data-spec="TurnRow" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#13</span><span style="width: 92px; color: #848c90">Nov 3 10:02</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">212 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 31 files · ran 6 commands (rg ×4, git ×2)</span><span style="width: 50px; text-align: right">18</span><span style="width: 64px; text-align: right; color: #a3a9ad">3m 40s</span><span style="width: 110px; text-align: right">410k → 6.1k</span><span style="width: 64px; text-align: right; color: #a3a9ad">$1.92</span><span style="width: 40px; text-align: center"></span></div><div data-spec="TurnRow/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #1b1f22"><span style="width: 14px; color: #a3a9ad">▾</span><span style="width: 40px; font-weight: 600">#14</span><span style="width: 92px; color: #848c90">10:09</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">1.4k chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 5 · edited 2 files +31 −9 · ran npm test ×4: <span style="color: #e6e3db">3 failed</span>, then passed</span><span style="width: 50px; text-align: right">41</span><span style="width: 64px; text-align: right; color: #a3a9ad">9m 18s</span><span style="width: 110px; text-align: right">1.2M → 14k</span><span style="width: 64px; text-align: right; color: #a3a9ad">$5.80</span><span style="width: 40px; text-align: center">↯</span></div><div data-spec="WorkGroup" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read 5 files <span style="color: #a3a9ad">.ts ×5 · 4 steps · 41 s</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▾</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Ran npm test ×4 <span style="color: #a3a9ad">4 steps · 2m 12s</span></span><span style="color: #a3a9ad">exit 1 · exit 1 · exit 1 · exit 0</span></div><button data-spec="TurnStep" class="srow m" onClick="{{openStep}}" style="min-width: 1100px; padding: 6px 12px 6px 112px"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">step 22 · <span style="color: #a3a9ad">sonnet · 96k → 610 · 4.1 s · Bash npm · exit 1 · 18 s</span></span><span style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">raw request ›</span></button><div data-spec="WorkGroup/edits" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Edited 2 files <span style="color: #a3a9ad">+31 −9 · .ts ×2 · 3 steps</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/thinking" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Thinking <span style="color: #a3a9ad">22 steps with no tool · 1m 40s · 210k → 3.2k</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/reply" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">↩</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Reply <span style="color: #a3a9ad">1.2k tokens</span></span><span style="color: #a3a9ad"></span></div><div data-spec="TurnRow/interrupted" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#15</span><span style="width: 92px; color: #848c90">10:36</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">40 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">edited 1 file +4 −0</span><span style="width: 50px; text-align: right">3</span><span style="width: 64px; text-align: right; color: #a3a9ad">22s</span><span style="width: 110px; text-align: right">120k → 400</span><span style="width: 64px; text-align: right; color: #a3a9ad">$0.41</span><span style="width: 40px; text-align: center">✕</span></div><div data-spec="TurnRow/subagent" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#16</span><span style="width: 92px; color: #848c90">10:41</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">388 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 4 · edited 2 files +66 −4 · ran npm test ×3: passed · spawned 1 subagent</span><span style="width: 50px; text-align: right">37</span><span style="width: 64px; text-align: right; color: #a3a9ad">8m 51s</span><span style="width: 110px; text-align: right">1.0M → 12k</span><span style="width: 64px; text-align: right; color: #a3a9ad">$4.66</span><span style="width: 40px; text-align: center"></span></div><div data-spec="SubagentRow" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; background: #0c0e0f"><span style="width: 14px; color: #a3a9ad">⤷</span><span style="width: 220px">subagent <b>test-writer</b></span><span style="flex: 1; color: #a3a9ad">9 steps · wrote 1 file (.test.ts) +66 · ran npm test ×2: passed</span><span style="width: 110px; text-align: right">180k → 2.2k</span></div><div data-spec="Pagination/turns" class="row m" style="min-width: 1100px; color: #a3a9ad; border-bottom: 0; justify-content: space-between"><span>Turns 13–16 of 34 in range · oldest first</span><span>4 of 34</span></div></div>
+<sc-if value="{{isMeta}}" hint-placeholder-val="{{ true }}"><div data-spec="DataTable/turns" class="panel" style="border-top: 0; overflow-x: auto"><div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 14px"></span><span style="width: 40px">Turn</span><span style="width: 92px">Started</span><span style="width: 240px">Asked</span><span style="flex: 1">Work done</span><span style="width: 50px; text-align: right">Steps</span><span style="width: 64px; text-align: right">Time</span><span style="width: 110px; text-align: right">Tokens</span><span style="width: 40px"></span></div><div data-spec="TurnRow" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#13</span><span style="width: 92px; color: #848c90">Nov 3 10:02</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">212 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read ×31 · Bash ×6 · Grep ×2</span><span style="width: 50px; text-align: right">18</span><span style="width: 64px; text-align: right; color: #a3a9ad">3m 40s</span><span style="width: 110px; text-align: right">410k → 6.1k</span><span style="width: 40px; text-align: center"></span></div><div data-spec="TurnRow/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #1b1f22"><span style="width: 14px; color: #a3a9ad">▾</span><span style="width: 40px; font-weight: 600">#14</span><span style="width: 92px; color: #848c90">10:09</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">1.4k chars · 1 image</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read ×5 · Edit ×2 · Bash ×4</span><span style="width: 50px; text-align: right">41</span><span style="width: 64px; text-align: right; color: #a3a9ad">9m 18s</span><span style="width: 110px; text-align: right">1.2M → 14k</span><span style="width: 40px; text-align: center"></span></div><div data-spec="WorkGroup" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read ×5 <span style="color: #a3a9ad">4 steps · 41 s</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▾</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Bash ×4 <span style="color: #a3a9ad">4 steps · 2m 12s</span></span><span style="color: #a3a9ad"></span></div><button data-spec="TurnStep" class="srow m" onClick="{{openStep}}" style="min-width: 1100px; padding: 6px 12px 6px 112px"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">step 22 · <span style="color: #a3a9ad">sonnet · 96k → 610 · 4.1 s · tool_use · Bash</span></span><span style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">raw request ›</span></button><div data-spec="WorkGroup/edits" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Edit ×2 <span style="color: #a3a9ad">3 steps</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/thinking" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">No tool <span style="color: #a3a9ad">22 steps · 1m 40s · 210k → 3.2k</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/reply" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">↩</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Reply <span style="color: #a3a9ad">1.2k tokens</span></span><span style="color: #a3a9ad"></span></div><div data-spec="TurnRow/interrupted" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#15</span><span style="width: 92px; color: #848c90">10:36</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">40 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Edit ×1</span><span style="width: 50px; text-align: right">3</span><span style="width: 64px; text-align: right; color: #a3a9ad">22s</span><span style="width: 110px; text-align: right">120k → 400</span><span style="width: 40px; text-align: center">✕</span></div><div data-spec="TurnRow/subagent" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#16</span><span style="width: 92px; color: #848c90">10:41</span><span style="width: 240px; color: #848c90; overflow: hidden; text-overflow: ellipsis">388 chars</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read ×4 · Edit ×2 · Bash ×3 · 1 subagent</span><span style="width: 50px; text-align: right">37</span><span style="width: 64px; text-align: right; color: #a3a9ad">8m 51s</span><span style="width: 110px; text-align: right">1.0M → 12k</span><span style="width: 40px; text-align: center">!</span></div><div data-spec="SubagentRow" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; background: #0c0e0f"><span style="width: 14px; color: #a3a9ad">⤷</span><span style="width: 220px">subagent 1</span><span style="flex: 1; color: #a3a9ad">9 steps · Write ×1 · Bash ×2</span><span style="width: 110px; text-align: right">180k → 2.2k</span></div><div data-spec="Pagination/turns" class="row m" style="min-width: 1100px; color: #a3a9ad; border-bottom: 0; justify-content: space-between"><span>Turns 13–16 of 34 in range · oldest first</span><span>4 of 34</span></div></div></sc-if><sc-if value="{{isContent}}" hint-placeholder-val="{{ false }}"><div data-spec="DataTable/turns" class="panel" style="border-top: 0; overflow-x: auto"><div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 14px"></span><span style="width: 40px">Turn</span><span style="width: 92px">Started</span><span style="width: 240px">Asked</span><span style="flex: 1">Work done</span><span style="width: 50px; text-align: right">Steps</span><span style="width: 64px; text-align: right">Time</span><span style="width: 110px; text-align: right">Tokens</span><span style="width: 40px"></span></div><div data-spec="TurnRow" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#13</span><span style="width: 92px; color: #848c90">Nov 3 10:02</span><span style="width: 240px; color: #e6e3db; overflow: hidden; text-overflow: ellipsis">“check coverage for the observer…”</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 31 files · ran 6 commands (rg ×4, git ×2)</span><span style="width: 50px; text-align: right">18</span><span style="width: 64px; text-align: right; color: #a3a9ad">3m 40s</span><span style="width: 110px; text-align: right">410k → 6.1k</span><span style="width: 40px; text-align: center"></span></div><div data-spec="TurnRow/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #1b1f22"><span style="width: 14px; color: #a3a9ad">▾</span><span style="width: 40px; font-weight: 600">#14</span><span style="width: 92px; color: #848c90">10:09</span><span style="width: 240px; color: #e6e3db; overflow: hidden; text-overflow: ellipsis">“the auth refresh test is flaky…” · 1 image</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 5 · edited 2 files +31 −9 · ran npm test ×4: <span style="color: #e6e3db">3 failed</span>, then passed</span><span style="width: 50px; text-align: right">41</span><span style="width: 64px; text-align: right; color: #a3a9ad">9m 18s</span><span style="width: 110px; text-align: right">1.2M → 14k</span><span style="width: 40px; text-align: center"></span></div><div data-spec="WorkGroup" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Read 5 files <span style="color: #a3a9ad">.ts ×5 · 4 steps · 41 s</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/expanded" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▾</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Ran npm test ×4 <span style="color: #a3a9ad">4 steps · 2m 12s</span></span><span style="color: #a3a9ad">exit 1 · exit 1 · exit 1 · exit 0</span></div><button data-spec="TurnStep" class="srow m" onClick="{{openStep}}" style="min-width: 1100px; padding: 6px 12px 6px 112px"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">step 22 · <span style="color: #a3a9ad">sonnet · 96k → 610 · 4.1 s · Bash npm test · exit 1</span></span><span style="color: #e6e3db; text-decoration: underline; text-decoration-color: #60686d; text-underline-offset: 3px">raw request ›</span></button><div data-spec="WorkGroup/edits" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Edited 2 files <span style="color: #a3a9ad">+31 −9 · .ts ×2 · 3 steps</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/thinking" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">▸</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Thinking <span style="color: #a3a9ad">22 steps with no tool · 1m 40s · 210k → 3.2k</span></span><span style="color: #a3a9ad"></span></div><div data-spec="WorkGroup/reply" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; cursor: pointer"><span style="width: 14px; color: #a3a9ad">↩</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">Reply <span style="color: #a3a9ad">“Fixed: refreshSession now awaits the expiry check…” · 1.2k tokens</span></span><span style="color: #a3a9ad"></span></div><div data-spec="TurnRow/interrupted" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#15</span><span style="width: 92px; color: #848c90">10:36</span><span style="width: 240px; color: #e6e3db; overflow: hidden; text-overflow: ellipsis">“stop, wrong file”</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">edited 1 file +4 −0</span><span style="width: 50px; text-align: right">3</span><span style="width: 64px; text-align: right; color: #a3a9ad">22s</span><span style="width: 110px; text-align: right">120k → 400</span><span style="width: 40px; text-align: center">✕</span></div><div data-spec="TurnRow/subagent" class="row m" style="min-width: 1100px; padding: 6px 12px; cursor: pointer; background: #131618"><span style="width: 14px; color: #a3a9ad">▸</span><span style="width: 40px; font-weight: 600">#16</span><span style="width: 92px; color: #848c90">10:41</span><span style="width: 240px; color: #e6e3db; overflow: hidden; text-overflow: ellipsis">“add a regression test for it”</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis">read 4 · edited 2 files +66 −4 · ran npm test ×3: passed · committed 9c02 · 1 subagent</span><span style="width: 50px; text-align: right">37</span><span style="width: 64px; text-align: right; color: #a3a9ad">8m 51s</span><span style="width: 110px; text-align: right">1.0M → 12k</span><span style="width: 40px; text-align: center">!</span></div><div data-spec="SubagentRow" class="row m" style="min-width: 1100px; padding: 6px 12px 6px 82px; background: #0c0e0f"><span style="width: 14px; color: #a3a9ad">⤷</span><span style="width: 220px">subagent <b>test-writer</b></span><span style="flex: 1; color: #a3a9ad">9 steps · wrote 1 file (.test.ts) +66 · ran npm test ×2: passed</span><span style="width: 110px; text-align: right">180k → 2.2k</span></div><div data-spec="Pagination/turns" class="row m" style="min-width: 1100px; color: #a3a9ad; border-bottom: 0; justify-content: space-between"><span>Turns 13–16 of 34 in range · oldest first</span><span>4 of 34</span></div></div></sc-if>
 </sc-if>
 
 <!-- Requests tab -->
@@ -223,32 +221,6 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 </div>
 </sc-if>
 
-<!-- Events tab -->
-<sc-if value="{{isEvents}}" hint-placeholder-val="{{ false }}">
-<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0">
-<label class="k" for="sevf">Filter</label>
-<input data-spec="TextInput/filter" id="sevf" class="inp" placeholder="event name, field=value…">
-<span data-spec="ToggleChip" class="chip" style="border-color: #2a3034; color: #a3a9ad">HIDE CLIENT INTERNALS ✓</span>
-<span style="flex: 1"></span>
-<span class="m" style="color: #848c90">2,412 in range · 1,503 shown after hiding internals</span>
-</div>
-<div data-spec="DataTable/events" class="panel" style="overflow-x: auto">
-<div class="row k" style="color: #848c90; min-width: 1100px"><span style="width: 76px">Time</span><span style="width: 40px">#</span><span style="width: 290px">Event</span><span style="width: 150px">Linked to</span><span style="flex: 1">Fields</span></div>
-<sc-for list="{{evLog}}" as="e" hint-placeholder-count="20">
-<button data-spec="EventRow" class="srow m {{e.q}}" onClick="{{e.pick}}" style="min-width: 1100px; background: {{e.bg}}">
-<span style="width: 76px; color: #848c90">{{e.t}}</span><span style="width: 40px; color: #a3a9ad">{{e.n}}</span><span style="width: 290px; color: #f0b43c; overflow: hidden; text-overflow: ellipsis">{{e.ev}}</span>
-<span style="width: 150px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.l}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{e.f}}</span><span style="color: {{e.wc}}">{{e.w}}</span>
-</button>
-<sc-if value="{{e.sel}}" hint-placeholder-val="{{ false }}">
-<pre data-spec="EventRow/expandedJson" class="m" style="margin: 0; padding: 8px 12px 8px 140px; background: #0c0e0f; border-bottom: 1px solid #2a3034; color: #e6e3db; white-space: pre-wrap">{{e.json}}</pre>
-</sc-if>
-</sc-for>
-<div data-spec="Pagination" class="row m" style="border-bottom: 0; justify-content: space-between; color: #a3a9ad">
-<span>1–20 of 1,503</span>
-<span style="display: flex; gap: 4px; align-items: center"><button class="btn" aria-disabled="true">‹ Prev</button><button class="btn" aria-current="page" style="background: #1b1f22">1</button><button class="btn">2</button><span>…</span><button class="btn">76</button><button class="btn">Next ›</button></span>
-</div>
-</div>
-</sc-if>
 </div>
 
 </div>
@@ -304,10 +276,6 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <!-- All details -->
 <sc-if value="{{dtAllNoWire}}" hint-placeholder-val="{{ false }}">
 <div data-spec="DetailsView/unavailable" style="padding: 16px; color: #a3a9ad; border-bottom: 1px solid #2a3034">{{dk.allMsg}}</div>
-<div class="k" style="padding: 12px 16px 4px">Claude Code events for this call</div>
-<sc-for list="{{dk.ev}}" as="e" hint-placeholder-count="3">
-<div data-spec="EventRow/compact" class="row m"><span style="width: 64px; color: #848c90">{{e.t}}</span><span style="color: #f0b43c; width: 250px; overflow: hidden; text-overflow: ellipsis">{{e.n}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.d}}</span><span style="color: #848c90">{{e.j}}</span></div>
-</sc-for>
 </sc-if>
 <sc-if value="{{dtAllWire}}" hint-placeholder-val="{{ false }}">
 <div data-spec="InputCompositionBar" style="padding: 12px 16px; border-bottom: 1px solid #2a3034">
@@ -335,11 +303,11 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <!-- Tools -->
 <sc-if value="{{dtAllWire}}" hint-placeholder-val="{{ false }}">
 <div style="padding: 12px 16px; display: flex; flex-direction: column; gap: 12px">
-<div class="m" style="color: #a3a9ad">This response asked for 1 tool call. Claude Code ran it, and the result went back to the model in the next step.</div>
+<div class="m" style="color: #a3a9ad">This response asked for 1 tool call. Its result went back to the model in the next step.</div>
 <div data-spec="DetailsView/toolBlock" style="border: 1px solid #2a3034">
-<div class="ph" style="background: #1b1f22"><span class="m" style="font-weight: 600; color: #e8916f">Edit</span><span class="m" style="color: #a3a9ad">toolu_…8a · built-in</span><span style="flex: 1"></span><span class="m" style="color: #57d68d">success</span></div>
-<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))">
-<sc-for list="{{toolCols}}" as="col" hint-placeholder-count="3">
+<div class="ph" style="background: #1b1f22"><span class="m" style="font-weight: 600; color: #e8916f">Edit</span><span class="m" style="color: #a3a9ad">toolu_…8a · built-in</span><span style="flex: 1"></span><span class="m" style="color: #a3a9ad">is_error false</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))">
+<sc-for list="{{toolCols}}" as="col" hint-placeholder-count="2">
 <div style="padding: 8px 12px; border-right: 1px solid #2a3034">
 <div class="k" style="margin-bottom: 4px">{{col.h}}</div>
 <sc-for list="{{col.rows}}" as="r" hint-placeholder-count="4">
@@ -381,17 +349,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 <sc-for list="{{timing}}" as="t" hint-placeholder-count="6">
 <div data-spec="TimingWaterfall/phase" class="m" style="display: flex; align-items: center; gap: 8px"><span style="width: 170px; color: #a3a9ad">{{t.k}}</span><div style="flex: 1; position: relative; height: 10px"><div style="position: absolute; top: 0; height: 10px; background: {{t.c}}; left: {{t.l}}; width: {{t.w}}"></div><span class="m" style="position: absolute; left: 0; top: -5px; font-size: 11px; line-height: 20px; color: #848c90; white-space: nowrap">{{t.r}}</span></div><span style="width: 64px; text-align: right">{{t.v}}</span></div>
 </sc-for>
-<div class="k" style="margin-top: 12px">Claude Code’s own timing</div>
-<sc-for list="{{ccTiming}}" as="r" hint-placeholder-count="5"><div class="m" style="display: flex; gap: 8px"><span style="width: 170px; color: #a3a9ad">{{r.k}}</span><span>{{r.v}}</span></div></sc-for>
 </div>
-</sc-if>
-
-<!-- Events -->
-<sc-if value="{{dtAllWire}}" hint-placeholder-val="{{ false }}">
-<div class="k" style="padding: 12px 16px 4px; border-top: 1px solid #2a3034">Claude Code events · 6</div>
-<sc-for list="{{events}}" as="e" hint-placeholder-count="6">
-<div data-spec="EventRow/compact" class="row m"><span style="width: 64px; color: #848c90">{{e.t}}</span><span style="color: #f0b43c; width: 250px; overflow: hidden; text-overflow: ellipsis">{{e.n}}</span><span style="flex: 1; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.d}}</span><span style="color: #848c90">{{e.j}}</span></div>
-</sc-for>
 </sc-if>
 
 <!-- Fields -->
@@ -408,7 +366,7 @@ a{color:#7db3ff}a:hover{color:#a9cbff}
 
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["turns","requests","events"],"default":"turns"},"drawer":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["ready","loading","live","error"],"default":"ready"},"drawerKind":{"editor":"enum","options":["normal","ghost","failed","retained"],"default":"normal"},"drawerTab":{"editor":"enum","options":["summary","raw","all"],"default":"summary"},"$preview":{"width":1440,"height":2000}}'>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["turns","requests"],"default":"turns"},"recording":{"editor":"enum","options":["metadata","content"],"default":"metadata"},"drawer":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["ready","loading","live","error"],"default":"ready"},"drawerKind":{"editor":"enum","options":["normal","failed","retained"],"default":"normal"},"drawerTab":{"editor":"enum","options":["summary","raw","all"],"default":"summary"},"$preview":{"width":1440,"height":2000}}'>
 class Component extends DCLogic {
   renderVals() {
     var self = this;
@@ -417,6 +375,8 @@ class Component extends DCLogic {
     var dtab = st.dtab || this.props.drawerTab || 'summary';
     var st8 = this.props.state || 'ready';
     var kind = this.props.drawerKind || 'normal';
+    var isContent = (this.props.recording || 'metadata') === 'content';
+    if (isContent && kind === 'normal') kind = 'retained';
     var NEU = { c: '#a3a9ad', bd: '#60686d', dot: '#848c90' };
     var live = { t: 'LIVE · 5s', c: '#57d68d', bd: '#57d68d', dot: '#57d68d' };
     if (st8 === 'loading') live = { t: 'CONNECTING', c: NEU.c, bd: NEU.bd, dot: NEU.dot };
@@ -424,8 +384,8 @@ class Component extends DCLogic {
     var isLive = st8 === 'live';
     var brush = isLive ? { l: '0.9901', w: '0.005', r: '0.0049', sel: false } : { l: '0.516', w: '0.0397', r: '0.4443', sel: true };
     var rng = isLive
-      ? { t: 'Last 15 min · following live', p: '2 turns', c: '19 steps', r: '31 requests', e: '402 events', x: '0 compactions', at: 'now', tabTxt: 'last 15 min · oldest first · new rows append below', recapN: '0 of 7', recapT: '', recapX: 'No recap in this range.' }
-      : { t: 'Nov 3 10:00:00 → 12:00:00 · 2h 0m', p: '4 turns', c: '96 steps', r: '170 requests', e: '2,412 events', x: '1 compaction', at: 'at 12:00', tabTxt: '10:00 → 12:00 · oldest first', recapN: '1 of 7', recapT: '11:02', recapX: 'Patched session refresh race; auth suite green locally.' };
+      ? { t: 'Last 15 min · following live', p: '2 turns', c: '19 steps', r: '31 requests', e: '', x: '0 compactions', at: 'now', tabTxt: 'last 15 min · oldest first · new rows append below', recapN: '0 of 7', recapT: '', recapX: 'No recap in this range.' }
+      : { t: 'Nov 3 10:00:00 → 12:00:00 · 2h 0m', p: '4 turns', c: '96 steps', r: '170 requests', e: '', x: '1 compaction', at: 'at 12:00', tabTxt: '10:00 → 12:00 · oldest first', recapN: '1 of 7', recapT: '11:02', recapX: 'Patched session refresh race; auth suite green locally.' };
     var liveRows = [
       { isPrompt: true, tw: '▸', n: 33, t: 'Nov 4 09:58', txt: '58 chars', steps: '14', dur: '3m 02s', tok: '61k → 2.2k', tools: 'Bash·10 Read·3', mk: '', bg: '#131618' },
       { isPrompt: true, tw: '▾', n: 34, t: 'Nov 4 10:05', txt: '120 chars', steps: '5 so far', dur: '● 4m 3s', tok: '64k → 1.4k', tools: 'Bash·3 Read·1', mk: '', bg: '#1b1f22' },
@@ -439,49 +399,33 @@ class Component extends DCLogic {
     var KS = function (arr) { return arr.map(function (x) { return { k: x[0], v: x[1], s: x[2] }; }); };
     var KINDS = {
       normal: {
-        dh: { status: '200 · 9.3 s · 8.2 KB ↑ · 3.4 KB ↓', sc: '#a3a9ad', sub: 'Nov 3 10:42:16.204 · prompt #19 · step 2 of 9 · main · req_01H…9fa' },
-        kstrip: KS([['Model', 'opus', 'effort high · thinking on'], ['Tokens', '43.0k → 1.2k', '99% from cache'], ['Cost est.', '$0.21', 'API-equivalent'], ['TTFT', '1.9 s', 'proxy 1.87 s'], ['Duration', '9.3 s', '47 stream events'], ['Stop', 'tool_use', '1 tool call: Edit']]),
-        ds: { ctx: 'Prompt #19 · step 2 of 9 · ← 10:42:11 · 10:42:31 →', ok: '✓ matches Claude Code’s own report', okc: '#a3a9ad', hasNote: false,
+        dh: { status: '200 · 9.3 s · 8.2 KB ↑ · 3.4 KB ↓', sc: '#a3a9ad', sub: 'Nov 3 10:42:16.204 · turn #19 · step 2 of 9 · main · req_01H…9fa' },
+        kstrip: KS([['Model', 'opus', 'effort high · thinking on'], ['Tokens', '43.0k → 1.2k', '99% from cache'], ['Cache', '42.6k read', '0 written'], ['TTFT', '1.9 s', 'measured at proxy'], ['Duration', '9.3 s', '47 stream events'], ['Stop', 'tool_use', '1 tool call: Edit']]),
+        ds: { ctx: 'Turn #19 · step 2 of 9 · ← 10:42:11 · 10:42:31 →', ok: '', okc: '#a3a9ad', hasNote: false,
           sentH: 'Sent · 2 new messages on a 42.6k-token cached prefix', recvH: 'Received · 1,204 tokens',
           sent: [drow('tool_result · Read', 'src/auth/session.ts · 132 lines', '4.1 KB'), drow('tool_result · Bash', 'npm test · exit 1', '18 KB')],
           recv: [drow('thinking', 'not retained', '380 tok'), drow('text', 'not retained', '212 chars'), drow('tool_use · Edit', 'src/auth/session.ts → ran 62 ms · +14 −3', '1.3 KB', '#e8916f')],
-          foot: 'Headers, body and stream are in Raw. Limits, network, timing, events and all 64 fields are in All details.' },
+          foot: 'Headers, body and stream are in Raw. Limits, network, timing and all fields are in All details.' },
         wire: true, rawLabel: 'Raw'
       },
-      ghost: {
-        dh: { status: 'reported by Claude Code · not captured', sc: '#ff7a6b', sub: 'Nov 3 15:22:08 · prompt #22 · main · requestId req_01J…c44 (from analytics)' },
-        kstrip: KS([['Model', 'opus', 'from analytics'], ['Tokens', '38.1k → 900', 'from analytics'], ['Cost est.', '$0.17', 'Claude Code costUSD'], ['TTFT', '2.0 s', 'Claude Code only'], ['Duration', '7.7 s', 'Claude Code only'], ['Stop', '—', 'not reported']]),
-        ds: { ctx: 'Prompt #22 · 1 of 57 not captured in Nov 3 15:00–17:59', ok: '', okc: '#a3a9ad', hasNote: true, noteBd: '#ff7a6b', noteC: '#ff7a6b',
-          noteT: '▲ This call bypassed the proxy',
-          noteB: 'Claude Code’s own analytics (tengu_api_success) report a model call the proxy never saw. The machine was on net B, which has IPv6, and routing covered only IPv4 at the time. Tokens, cost and timing below come from Claude Code’s report; there is no request or response to show.',
-          sentH: 'Sent · unknown', recvH: 'Received · usage only',
-          sent: [drow('messages', 'not captured', '—', '#a3a9ad')],
-          recv: [drow('usage', '38,104 in (37,690 cached) → 912 out', 'analytics'), drow('tool calls', 'unknown · the next captured step may show their results', '—', '#a3a9ad')],
-          foot: 'Other calls in this window: 56 more · view all 94 not captured.' },
-        wire: false, rawLabel: 'Raw · none',
-        rawMsg: 'No wire data. This request went straight to Anthropic over IPv6 and never passed through the proxy, so there are no headers, body or stream.',
-        allMsg: 'Only Claude Code’s own report exists for this call. Proxy timing, headers, account limits and network details are unavailable.',
-        ev: [{ t: '+0.0 s', n: 'tengu_api_query', d: 'permissionMode bypassPermissions', j: 'clientRequestId' }, { t: '+7.7 s', n: 'tengu_api_success', d: 'costUSD 0.17 · ttftMs 2,011 · durationMs 7,702', j: 'requestId · no match ▲' }]
-      },
       failed: {
-        dh: { status: 'ERR · connection reset after 0.6 s · retried', sc: '#e6e3db', sub: 'Nov 3 10:03:08.412 · prompt #17 · step 6 · main · attempt 1 of 2' },
-        kstrip: KS([['Model', 'opus', 'effort high'], ['Tokens', '—', 'no response'], ['Cost est.', '—', 'not billed'], ['TTFT', '—', 'no first byte'], ['Duration', '0.6 s', 'until reset'], ['Outcome', 'retried', '→ 10:03:10 · 200 ✓']]),
-        ds: { ctx: 'Prompt #17 · step 6 · attempt 1 of 2 ·', ok: 'retry succeeded → 10:03:10', okc: '#a3a9ad', hasNote: true, noteBd: '#60686d', noteC: '#e6e3db',
+        dh: { status: 'ERR · connection reset after 0.6 s · retried', sc: '#e6e3db', sub: 'Nov 3 10:03:08.412 · turn #17 · step 6 · main · attempt 1 of 2' },
+        kstrip: KS([['Model', 'opus', 'effort high'], ['Tokens', '—', 'no response'], ['Cache', '—', 'no response'], ['TTFT', '—', 'no first byte'], ['Duration', '0.6 s', 'until reset'], ['Outcome', 'retried', '→ 10:03:10 · 200 ✓']]),
+        ds: { ctx: 'Turn #17 · step 6 · attempt 1 of 2 ·', ok: 'retry succeeded → 10:03:10', okc: '#a3a9ad', hasNote: true, noteBd: '#60686d', noteC: '#e6e3db',
           noteT: '✕ Connection reset',
-          noteB: 'The upstream connection was reset 0.6 s after the request was sent, before any response. Claude Code waited 1.2 s (tengu_api_retry, attempt 1) and sent the same request again; the retry succeeded.',
+          noteB: 'The upstream connection was reset 0.6 s after the request was sent, before any response. 1.2 s later Claude Code sent the same request again (x-stainless-retry-count 1); the retry succeeded.',
           sentH: 'Sent · 1 new message', recvH: 'Received · nothing',
           sent: [drow('tool_result · Bash', 'kubectl get pods -n aintercept · exit 0', '2.3 KB')],
           recv: [drow('no response', 'connection reset by upstream', '—', '#a3a9ad')],
           foot: 'One of 5 API retries in this session, all connection errors.' },
         wire: false, rawLabel: 'Raw · request only',
         rawMsg: 'The request was sent (5.1 KB) but no response arrived: the upstream connection was reset after 0.6 s. Request headers and body are available on the retried request at 10:03:10.',
-        allMsg: 'No response, so no usage, limits or stream. Proxy recorded: client accept 3 ms · upstream connect 41 ms · reset at 0.6 s.',
-        ev: [{ t: '+0.0 s', n: 'tengu_api_query', d: 'permissionMode bypassPermissions', j: 'clientRequestId' }, { t: '+0.6 s', n: 'tengu_api_retry', d: 'attempt 1 · backoff 1,200 ms · error ECONNRESET', j: 'clientRequestId' }]
+        allMsg: 'No response, so no usage, limits or stream. Proxy recorded: client accept 3 ms · upstream connect 41 ms · reset at 0.6 s.'
       },
       retained: {
-        dh: { status: '200 · 9.3 s · 8.2 KB ↑ · 3.4 KB ↓', sc: '#a3a9ad', sub: 'Nov 3 10:42:16.204 · prompt #19 · step 2 of 9 · main · req_01H…9fa · content retained (experimentation mode)' },
-        kstrip: KS([['Model', 'opus', 'effort high · thinking on'], ['Tokens', '43.0k → 1.2k', '99% from cache'], ['Cost est.', '$0.21', 'API-equivalent'], ['TTFT', '1.9 s', 'proxy 1.87 s'], ['Duration', '9.3 s', '47 stream events'], ['Stop', 'tool_use', '1 tool call: Edit']]),
-        ds: { ctx: 'Prompt #19 · step 2 of 9 · ← 10:42:11 · 10:42:31 →', ok: '✓ matches Claude Code’s own report', okc: '#a3a9ad', hasNote: false,
+        dh: { status: '200 · 9.3 s · 8.2 KB ↑ · 3.4 KB ↓', sc: '#a3a9ad', sub: 'Nov 3 10:42:16.204 · turn #19 · step 2 of 9 · main · req_01H…9fa · content retained (experimentation mode)' },
+        kstrip: KS([['Model', 'opus', 'effort high · thinking on'], ['Tokens', '43.0k → 1.2k', '99% from cache'], ['Cache', '42.6k read', '0 written'], ['TTFT', '1.9 s', 'measured at proxy'], ['Duration', '9.3 s', '47 stream events'], ['Stop', 'tool_use', '1 tool call: Edit']]),
+        ds: { ctx: 'Turn #19 · step 2 of 9 · ← 10:42:11 · 10:42:31 →', ok: '', okc: '#a3a9ad', hasNote: false,
           sentH: 'Sent · 2 new messages on a 42.6k-token cached prefix', recvH: 'Received · 1,204 tokens',
           sent: [
             drow('tool_result · Read', 'src/auth/session.ts · 132 lines', '4.1 KB', '#e6e3db', ' 41  export async function refreshSession(s: Session) {\n 42    const token = await fetchToken(s.id)\n 43    s.token = token\n 44    if (await isExpired(s)) { … }\n      … 128 more lines'),
@@ -503,20 +447,19 @@ class Component extends DCLogic {
       kstrip: [
         { k: 'Model', v: 'opus', s: 'effort high · thinking on' },
         { k: 'Tokens', v: '43.0k → 1.2k', s: '99% from cache' },
-        { k: 'Cost est.', v: '$0.21', s: 'API-equivalent' },
-        { k: 'TTFT', v: '1.9 s', s: 'proxy 1.87 s' },
+        { k: 'Cache', v: '42.6k read', s: '0 written' },
+        { k: 'TTFT', v: '1.9 s', s: 'measured at proxy' },
         { k: 'Duration', v: '9.3 s', s: '47 stream events' },
         { k: 'Stop', v: 'tool_use', s: '1 tool call: Edit' }
       ],
       ov: [
-        { h: 'Tokens & cost', hc: '#8fd17e', rows: [row('input · uncached', '412'), row('cache read', '42,611'), row('cache write 5m / 1h', '0 / 0'), row('output', '1,204'), row('  of which thinking', '380'), row('costUSD (Claude Code)', '$0.21 · matches usage ✓', OK)] },
+        { h: 'Tokens', hc: '#8fd17e', rows: [row('input · uncached', '412'), row('cache read', '42,611'), row('cache write 5m / 1h', '0 / 0'), row('output', '1,204'), row('  of which thinking', '380')] },
         { h: 'Request settings', hc: '#848c90', rows: [row('model', 'claude-opus-…'), row('max_tokens', '32,000'), row('thinking', 'enabled · budget 10,000'), row('effort', 'high'), row('stream', 'true'), row('cache breakpoints', '2')] },
         { h: 'Thread position', hc: '#848c90', rows: [row('previous step', '10:42:11 · msg_01…a7'), row('this step', 'msg_01…b2'), row('next step', '10:42:31 · after Edit ran'), row('thread created', 'Nov 3 08:31 · 412 KB'), row('messages added', '2 · tool_result ×2'), row('compactions since create', '0')] },
-        { h: 'What the model could use', hc: '#e8916f', rows: [row('built-in tools', '23 (schemas at thread create)'), row('deferred MCP tools', '381 names · 11 servers'), row('skills', '87'), row('system prompt', '14 KB · carried from create'), row('injected context', 'git status · cwd · user email'), row('memory files', 'CLAUDE.md · MEMORY.md')] },
+        { h: 'What the model could use', hc: '#e8916f', rows: [row('built-in tools', '23 offered'), row('MCP tools', '381 offered · 11 servers'), row('deferred', '381 names only'), row('system prompt', '14 KB · cached prefix'), row('tool list', 'unchanged since step 1')] },
         { h: 'Response service', hc: '#848c90', rows: [row('service tier', 'standard'), row('inference geo', 'us'), row('speed', '—'), row('status', '200 · request-id req_01H…9fa'), row('retries', '0'), row('streaming stalls', 'none')] },
         { h: 'Account limits at response', hc: '#848c90', rows: [row('unified status', 'allowed'), row('7-day utilization', '41%'), row('representative claim', 'seven_day'), row('overage', 'rejected · org_level_disabled'), row('fallback percentage', '—', MU), row('5-hour window', 'not sent by API', MU)] },
-        { h: 'Network & proxy', hc: '#848c90', rows: [row('client', 'net A · home · IPv4'), row('device', 'd91…0c · darwin'), row('TLS', 'intercepted · minted api.anthropic.com cert'), row('upstream', 'verified TLS · connect 38 ms'), row('bytes', '8.2 KB up · 3.4 KB down'), row('credential', 'key_hash 9e2… (refreshes; not identity)', MU)] },
-        { h: 'Cross-check & posture', hc: '#848c90', rows: [row('analytics match', 'tengu_api_success by requestId ✓', OK), row('cost agreement', 'costUSD = usage × price ✓', OK), row('ttft agreement', '1,912 ms vs proxy 1,870 ms'), row('permissionMode', 'bypassPermissions'), row('sandbox', 'off'), row('content retention', 'shape only (production mode)', MU)] }
+        { h: 'Network & proxy', hc: '#848c90', rows: [row('client', 'net A · home · IPv4'), row('TLS', 'intercepted · minted api.anthropic.com cert'), row('upstream', 'verified TLS · connect 38 ms'), row('bytes', '8.2 KB up · 3.4 KB down'), row('credential', 'key_hash 9e2… (refreshes; not identity)', MU)] },
       ],
       convoOut: [
         { role: 'assistant', kind: 'thinking', col: W, size: '380 tokens', body: 'signature present · text not retained' },
@@ -525,10 +468,8 @@ class Component extends DCLogic {
       ],
       toolCols: [
         { h: 'Input (from response)', rows: [row('file_path', 'src/auth/session.ts'), row('old_string', '3 lines · 142 chars', MU), row('new_string', '14 lines · 610 chars', MU), row('replace_all', 'false')] },
-        { h: 'Execution (analytics)', rows: [row('PreToolUse hook', '48 ms'), row('duration', '62 ms'), row('file operation', 'edit · .ts · +14 −3'), row('contentHash', '4be…'), row('permission', 'auto · bypassPermissions')] },
         { h: 'Result (next request)', rows: [row('delivered in', 'step 3 · 10:42:31'), row('size', '300 B'), row('is_error', 'false'), row('content', 'not retained', MU)] }
       ],
-      ccTiming: [row('requestPrepareMs', '41'), row('ttftMs', '1,912'), row('durationMs', '9,301'), row('attempt', '1 of 1'), row('ttfvt (prompt)', '7.4 s')],
       sse: [
         { t: '+1.87 s', e: 'message_start', d: 'id msg_01…b2 · model · usage.input' },
         { t: '+1.88 s', e: 'content_block_start [0]', d: 'thinking' },
@@ -542,9 +483,8 @@ class Component extends DCLogic {
       ]
     };
     var ptab = st.ptab || this.props.tab || 'turns';
-    var selEv = st.selEv !== undefined ? st.selEv : 5;
-    var openDrawer = function () { self.setState({ drawer: true }); };
-    var ptabs = (st8 === 'live' ? [['turns', 'Turns · 2'], ['requests', 'Requests · 31'], ['events', 'Events · 402']] : [['turns', 'Turns · 4'], ['requests', 'Requests · 170'], ['events', 'Events · 2,412']]).map(function (t) {
+        var openDrawer = function () { self.setState({ drawer: true }); };
+    var ptabs = (st8 === 'live' ? [['turns', 'Turns · 2'], ['requests', 'Requests · 31']] : [['turns', 'Turns · 4'], ['requests', 'Requests · 170']]).map(function (t) {
       var on = t[0] === ptab;
       return { n: t[1], c: on ? '#e6e3db' : '#a3a9ad', b: on ? '#e6e3db' : 'transparent', pick: function () { self.setState({ ptab: t[0] }); } };
     });
@@ -557,7 +497,7 @@ class Component extends DCLogic {
     var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
     var NOW = 58.15;
     var active = function (h) { return (h >= 10 && h < 25.5) || (h >= 32.5 && h < 48) || (h >= 56 && h < NOW); };
-    var gapsH = [{ a: 24, b: 25, n: 37 }, { a: 39, b: 42, n: 57 }];
+    var gapsH = [];
     var inGap = function (h) { return gapsH.some(function (g) { return h >= g.a && h < g.b; }); };
     var model = [], ctx = [], prompts = [];
     var c = 20;
@@ -582,7 +522,7 @@ class Component extends DCLogic {
     AX.minor.forEach(function (h) { ticks.push({ l: pct(h), h: '3px', c: '#60686d' }); });
     AX.major.forEach(function (h) { var day = h % 24 === 0; ticks.push({ l: pct(h), h: day ? '9px' : '6px', c: day ? '#848c90' : '#60686d' }); grid.push({ l: pct(h), c: day ? '#60686d' : '#2a3034' }); });
     AX.labels.forEach(function (x) { var p = (x.h - AX.a) / AX.span; tlabels.push({ l: pct(x.h), t: x.t, x: p < 0.01 ? '0' : (p > 0.99 ? '-100%' : '-50%'), c: x.day ? '#e6e3db' : '#848c90', w: x.day ? 500 : 400 }); });
-    var fsplit = function (list) { var o = { f: [], i: [], d: [] }; list.forEach(function (x) { var n = x.g.length; var g = x.g.charAt(0); var k = g === '↯' ? 'f' : (g === '▲' ? 'd' : 'i'); o[k].push({ l: x.l, g: n > 1 ? g + n : g, c: x.c, w: n > 1 ? 600 : 400, n: n }); }); return o; };
+    var fsplit = function (list) { var o = { f: [], i: [], d: [] }; list.forEach(function (x) { var n = x.g.length; var g = x.g.charAt(0); var k = g === '!' ? 'f' : (g === '▲' ? 'd' : 'i'); o[k].push({ l: x.l, g: n > 1 ? g + n : g, c: x.c, w: n > 1 ? 600 : 400, n: n }); }); return o; };
     var cnt = function (a) { return a.reduce(function (s, x) { return s + x.n; }, 0); };
 
     // ---- requests in range, oldest first (page 1) ----
@@ -613,48 +553,19 @@ class Component extends DCLogic {
       R('10:04:35', '17', 'analytics', 'POST', '/api/event_logging/v2/batch · 79 events', '200', '68 ms', '12 KB', '100 B', 0.55)
     ];
 
-    // ---- events in range, oldest first (page 1) ----
-    var evRaw = [
-      ['10:00:12', '—', 'tengu_event_loop_stall', 'device', 'stall 1.2 s · likely_sleep false', '', '', 0.55],
-      ['10:00:30', '—', 'tengu_return_to_session', 'session', 'blurDurationMs 1,840,000 (30m 40s)'],
-      ['10:02:01', '17', 'tengu_input_prompt', 'prompt', 'prompt_length 402 · prompt_source typed · is_negative false'],
-      ['10:02:01', '17', 'tengu_paste_text', 'prompt', '6.0 KB pasted'],
-      ['10:02:03', '17', 'tengu_api_query', 'req …a10', 'permissionMode bypassPermissions · messages 2'],
-      ['10:02:09', '17', 'tengu_api_success', 'req …a10', 'costUSD 0.18 · ttftMs 2,104 · durationMs 6,120', '', '',
-        1, '{\n  "requestId": "req_01H…a10",  "clientRequestId": "c3b0…7f",\n  "session_id": "4c1a…77e0",  "cc_prompt_id": "p_2b…09",\n  "model": "claude-opus-…",  "costUSD": 0.18,\n  "ttftMs": 2104,  "durationMs": 6120,  "permissionMode": "bypassPermissions",\n  "inputTokens": 388,  "cachedInputTokens": 301204,  "outputTokens": 214,\n  "env": { platform, terminal, shell, runtimes, … +45 fields }\n}'],
-      ['10:02:09', '17', 'tengu_tool_use_start', 'tool Bash', 'toolUseID toolu_…41'],
-      ['10:02:09', '17', 'tengu_run_hook', 'tool Bash', 'PreToolUse · 51 ms'],
-      ['10:02:11', '17', 'tengu_bash_tool_command_executed', 'tool Bash', 'kubectl · exit 0 · stdout 3.1 KB · 1.4 s'],
-      ['10:02:11', '17', 'tengu_tool_use_success', 'tool Bash', '1.5 s'],
-      ['10:02:11', '17', 'tengu_api_query', 'req …a11', 'permissionMode bypassPermissions'],
-      ['10:02:22', '17', 'tengu_api_success', 'req …a11', 'costUSD 0.12 · ttftMs 1,960'],
-      ['10:02:22', '17', 'tengu_file_operation', 'tool Read', 'read · .go · contentHash 91c…'],
-      ['10:02:23', '17', 'tengu_tool_use_success', 'tool Read', '22 ms · 6.4 KB result'],
-      ['10:02:24', '17', 'tengu_api_query', 'req …a12', 'permissionMode bypassPermissions'],
-      ['10:02:37', '17', 'tengu_api_success', 'req …a12', 'costUSD 0.14 · ttftMs 2,230'],
-      ['10:02:37', '17', 'tengu_bash_tool_command_executed', 'tool Bash', 'rm · exit 0 · destructive_category rm -rf · scope unknown', '▲', '#ff7a6b'],
-      ['10:02:38', '17', 'tengu_shell_set_cwd', 'session', '…/aintercept → …/observer'],
-      ['10:02:39', '17', 'tengu_api_query', 'req …a13', 'permissionMode bypassPermissions']
-    ];
-    var evLog = evRaw.map(function (e, i) {
-      var sel = i === selEv;
-      return { t: e[0], n: e[1], ev: e[2], l: e[3], f: e[4], w: e[5] || '', wc: e[6] || '#a3a9ad', op: e[7] || 1, q: e[7] && e[7] < 1 ? 'quiet' : '',
-        bg: sel ? '#1b1f22' : 'transparent', sel: sel && !!e[8], json: e[8] || '',
-        pick: function () { self.setState({ selEv: sel ? -1 : i }); } };
-    });
-
     var __r = {
       drawer: drawer,
       live: live, isLoading: st8 === 'loading', isError: st8 === 'error', showData: st8 === 'ready' || st8 === 'live',
       brush: brush, rng: rng,
-      skelLanes: [{ h: '14px' }, { h: '48px' }, { h: '44px' }, { h: '14px' }],
+      skelLanes: [{ h: '14px' }, { h: '44px' }, { h: '44px' }, { h: '30px' }],
       skelRows: [{ w: '40%' }, { w: '55%' }, { w: '30%' }, { w: '48%' }, { w: '36%' }, { w: '44%' }, { w: '52%' }, { w: '28%' }],
       dh: K.dh, ds: K.ds, dk: { wire: K.wire, noWire: !K.wire, rawMsg: K.rawMsg || '', allMsg: K.allMsg || '', ev: K.ev || [] },
       dtAllWire: dtab === 'all' && K.wire, dtAllNoWire: dtab === 'all' && !K.wire,
       close: function () { self.setState({ drawer: false }); },
-      ptabs: ptabs, isTurns: ptab === 'turns', openStep: openDrawer, isRequests: ptab === 'requests', isEvents: ptab === 'events',
-      reqLog: reqLog, evLog: evLog,
-      kstrip: K.kstrip, ov: drawerData.ov, convoOut: drawerData.convoOut, toolCols: drawerData.toolCols, ccTiming: drawerData.ccTiming, sse: drawerData.sse,
+      ptabs: ptabs, isTurns: ptab === 'turns', openStep: openDrawer, isRequests: ptab === 'requests', isContent: isContent, isMeta: !isContent,
+      hdr: { title: isContent ? 'aintercept · partner-readiness' : 'Claude Code session · Nov 2 10:04' },
+      reqLog: reqLog,
+      kstrip: K.kstrip, ov: drawerData.ov, convoOut: drawerData.convoOut, toolCols: drawerData.toolCols, sse: drawerData.sse,
       dt: { summary: dtab === 'summary', raw: dtab === 'raw', all: dtab === 'all' },
       sumSent: [{ a: 'tool_result · Read', b: 'src/auth/session.ts · 132 lines', c: '4.1 KB' }, { a: 'tool_result · Bash', b: 'npm test · exit 1', c: '18 KB' }],
       sumRecv: [{ a: 'thinking', b: 'not retained', c: '380 tok', col: '#e6e3db' }, { a: 'text', b: 'not retained', c: '212 chars', col: '#e6e3db' }, { a: 'tool_use · Edit', b: 'src/auth/session.ts → ran 62 ms · +14 −3', c: '1.3 KB', col: '#e8916f' }],
@@ -683,12 +594,15 @@ class Component extends DCLogic {
         { l: pct(56.5), w: dur(NOW - 56.5), t: 'IPv6 test', c: '#e6e3db' }
       ],
       fric: [
-        { l: pct(14), g: '▲', c: '#ff7a6b' }, { l: pct(22.7), g: '▲▲', c: '#ff7a6b' }, { l: pct(34.05), g: '▲', c: '#ff7a6b' },
-        { l: pct(34.7), g: '↯', c: '#e6e3db' }, { l: pct(35.43), g: '✕', c: '#e6e3db' }, { l: pct(37.4), g: '▲▲▲', c: '#ff7a6b' }, { l: pct(44.8), g: '▲▲', c: '#ff7a6b' }
+        { l: pct(34.05), g: '!', c: '#e6e3db' }, { l: pct(22.7), g: '!!', c: '#e6e3db' }, { l: pct(37.4), g: '!', c: '#e6e3db' }, { l: pct(44.8), g: '!', c: '#e6e3db' },
+        { l: pct(35.43), g: '✕', c: '#e6e3db' }, { l: pct(47.4), g: '✕', c: '#e6e3db' }
       ],
-      caps: [
-        { k: 'Built-in tools', v: '5 / 23 used' }, { k: 'MCP servers', v: '11' }, { k: 'MCP tools', v: '0 / 381 used' },
-        { k: 'Skills', v: '87' }, { k: 'Hooks', v: '15' }
+      tools: [
+        { k: 'Built-in', o: '23', u: '9', d: 'Bash 488 · Read 402 · Edit 171 · Grep 96 · Glob 31 · …' },
+        { k: 'mcp:linear', o: '41', u: '2', d: 'list_issues 2 · get_issue 1' },
+        { k: 'mcp:github', o: '38', u: '1', d: 'get_pull_request 1' },
+        { k: 'mcp:sentry', o: '22', u: '0', d: '—' },
+        { k: '8 more MCP servers', o: '280', u: '0', d: '—' }
       ],
       rows: (st8 === 'live' ? liveRows : [
         { isPrompt: true, tw: '▸', n: 17, t: 'Nov 3 10:02', txt: '402 chars · pasted 6 KB', steps: '48', dur: '11m 0s', tok: '310k → 6.0k', tools: 'Bash·40 Read·5 Edit·3', mk: '▲', bg: '#131618' },
@@ -700,8 +614,7 @@ class Component extends DCLogic {
         { isStep: true, pad: '70px', t: '10:42:16', a: 'opus', b: '43.0k in → 1.2k out · 9.3 s · tool_use', r: 'open ›', w: '', c: '#7db3ff', fw: 400, bg: '#1b1f22', op: 1 },
         { isStep: true, pad: '100px', t: '', a: 'Edit', b: 'src/auth/session.ts', r: '+14 −3', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
         { isStep: true, pad: '70px', t: '10:42:31', a: '⤷ Explore', b: 'subagent (haiku) · 3 steps · 22 s · same prompt ID', r: '▸', w: '', c: '#e6e3db', fw: 600, bg: '#131618', op: 1 },
-        { isBetween: true, t: 'Nov 3 11:02', b: 'recap · auxiliary · haiku · 212 chars', c: '#a3a9ad' },
-        { isBetween: true, t: 'Nov 3 11:18', b: 'compaction · 905k → 21k tokens · 2,207 messages summarized · 1m 11s wait', c: '#8fd17e' },
+                { isBetween: true, t: 'Nov 3 11:18', b: 'compaction · 905k → 21k tokens · 2,207 messages summarized · 1m 11s wait', c: '#8fd17e' },
         { isPrompt: true, tw: '▸', n: 20, t: 'Nov 3 11:26', txt: '41 chars', steps: '12', dur: '2m 10s', tok: '52k → 1.9k', tools: 'Bash·9 Read·2', mk: '✕', bg: '#131618' }
       ]).map(function (r) {
         r.isPrompt = !!r.isPrompt; r.isStep = !!r.isStep; r.isBetween = !!r.isBetween;
@@ -750,16 +663,8 @@ class Component extends DCLogic {
         { k: 'streaming', l: '20.1%', w: '79.9%', c: '#7db3ff', v: '7.4 s', r: '' },
         { k: 'total', l: '0%', w: '100%', c: '#2a3034', v: '9.3 s', r: '' }
       ],
-      events: [
-        { t: '+0.0 s', n: 'tengu_api_query', d: 'permissionMode bypassPermissions · messages 2', j: 'clientRequestId' },
-        { t: '+9.3 s', n: 'tengu_api_success', d: 'costUSD 0.21 · ttftMs 1,912', j: 'requestId ✓' },
-        { t: '+9.4 s', n: 'tengu_tool_use_start', d: 'Edit', j: 'toolUseID' },
-        { t: '+9.5 s', n: 'tengu_run_hook', d: 'PreToolUse · 48 ms', j: 'toolUseID' },
-        { t: '+9.5 s', n: 'tengu_file_operation', d: 'edit · .ts · contentHash 4be…', j: 'toolUseID' },
-        { t: '+9.6 s', n: 'tengu_tool_use_success', d: 'Edit · 62 ms', j: 'toolUseID' }
-      ],
       fields: [
-        { k: 'account_uuid', v: '7d2e…a41c' }, { k: 'provider_org_id', v: '1b9f…e02' }, { k: 'device_id', v: 'd91…0c' },
+        { k: 'account_uuid', v: '7d2e…a41c' }, { k: 'provider_org_id', v: '1b9f…e02' },
         { k: 'session_id', v: '4c1a…77e0' }, { k: 'cc_prompt_id', v: 'p_7f…31' }, { k: 'cc_prompt_index', v: '19' },
         { k: 'message_id', v: 'msg_01…b2' }, { k: 'previous_message_id', v: 'msg_01…a7' }, { k: 'request_id', v: 'req_01H…9fa' },
         { k: 'client_request_id', v: 'c3b0…e1' }, { k: 'request_class', v: 'main' }, { k: 'model', v: 'claude-opus-…' },

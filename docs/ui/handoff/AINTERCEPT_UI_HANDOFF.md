@@ -2483,6 +2483,147 @@ The Explorations page (`Exp*.dc.html`, all illustrative) holds the three directi
 - Per person: totals and `workingOn` (live session's turn and repo).
 - Per bin: `work{edits, other}`.
 
+## 11S. Without the agents' own analytics (canvas: Session, Main, People, AboutThisData, CompTurns, CompPersonTimeline, CompIndex; state artboards)
+
+Every page now shows only what the conversation carries: prompts, replies, tool calls and results, tokens, timings, status, request headers, account and auth calls. Nothing on a page comes from Claude Code's `tengu_*` events or Codex's analytics. Analytics posts stay in raw storage and stay listed in Requests / All requests as kind `analytics` (metadata only). **Cost is gone everywhere** too: it will come from the providers' APIs later, not from AIntercept.
+
+Both recording modes are first-class. `Session.dc.html` and `Main.dc.html` take a new prop **`recording: metadata | content`** (default `metadata`). Every surface with two forms switches on it. New state artboards `SessionContent` and `PersonContent` mount them with `recording="content"`.
+
+### Session page (Session.dc.html)
+
+1. **Title:**
+   - Content-free: `Claude Code session · Nov 2 10:04` (agent and start time).
+   - With content: `<repo> · <branch>`, from the environment block in the system prompt.
+   - The breadcrumb uses the same title. The recap line is removed.
+2. **Header stats:**
+   - Span · Turns (`2 interrupted`) · Steps (`model calls · 5 failed`) · Tokens · **Tool calls** (`14 tools used of 404 offered`).
+   - With content, add Edited (`+/−`) and Commits (head range).
+   - Removed: Cost, Device, Approvals bypassed, and `+N not captured` (`HeaderStat/withQualifier`).
+   - The client version stays in the ProviderMark (`· 2.1.31`, from the user agent).
+3. **OutcomeFacts:**
+   - Content-free: turns · steps · tool calls with the top tools, then subagents.
+   - With content: commits, files edited by type, the last test outcome, PR.
+4. **Timeline:**
+   - Work is 60px (bars 58 + 2). The not-captured row (`GapRow`) and its `▲ not captured` label are gone.
+   - The edit/other split is by tool name (Edit / Write / MultiEdit / apply_patch), so it works without content.
+   - Friction is 56px with two rows: `✕ interrupted` (top 20) and `! failed calls` (top 36, API errors, overloads and retried requests, from the HTTP status). Frustrated `↯` and destructive `▲` are gone. Neither timeline uses red any more.
+   - Total height 222. Skeleton `14 · 44 · 44 · 30`.
+5. **State panels** (3 columns):
+   - **`ToolsOfferedUsed`** (spans 2): one row per source, Built-in then `mcp:<server>`, with Offered · Used · Calls. It comes from the tool list each request carries. Footer: `tool list changed N times in range`.
+   - Third column, content-free: **`KeyValueList/context`** (compactions, peak context, subagent threads).
+   - Third column, with content: `KeyValueList/repo`.
+   - Removed: Capabilities (skills, hooks, MCP servers), Recaps, Experiments.
+6. **Tabs:** `Turns · Requests`. The Events tab, `EventRow`, `EventRow/expandedJson` and the single-event drawer are removed, and so is the `SessionEvents` artboard. `prop tab` is `turns | requests`. The range readout drops the events count.
+7. **Turns tab:**
+   - Content-free and with-content tables are both drawn (CompTurns has every state).
+   - There is no Cost column.
+   - Friction column: `✕` / `!`.
+8. **Drawer:**
+   - KeyStrip: `Cost est.` is replaced by **Cache** (`42.6k read · 0 written`). TTFT sub reads `measured at proxy`.
+   - Removed:
+     - `✓ matches Claude Code's own report`;
+     - the costUSD row (the section is renamed `Tokens`);
+     - the **Cross-check & posture** section;
+     - the **Execution (analytics)** tool column (the tool block is now 2 columns: input · result);
+     - **Claude Code's own timing**;
+     - the **Claude Code events** list;
+     - `device` in Network.
+   - The tool block's status reads `is_error false`, from the tool result.
+   - "What the model could use" lists offered tools only (no skills).
+   - The failed-request note cites `x-stainless-retry-count`, not `tengu_api_retry`.
+   - The `ghost` drawer kind and the **`DrawerNotCaptured`** artboard are removed; `drawerKind` is `normal | failed | retained`.
+   - The cache-write 5m/1h split stays: it is in Anthropic's response `usage.cache_creation`.
+   - `prompt #` reads `turn #`.
+
+### Person page (Main.dc.html)
+
+1. **Header row (All agents):** Sessions · Turns · Tokens · Active · **Tool calls** · Last seen. With content, add Edited · Commits. Devices is removed.
+2. **Claude Code AgentRow:** Plan · Organization · Role · 7-day limit, all from account/auth calls and rate-limit headers. Removed: Cost, Using since, Flags, Bypass, Missed.
+3. **Removed:** the posture chips, and the coverage line with its container. The timeline sits directly under `OutcomeSlot/person`.
+4. **OutcomeSlot/person facts:**
+   - Content-free: sessions · turns · tool calls with the top tools · subagent calls.
+   - With content: commits, files, PR.
+5. **Timeline:**
+   - Work is 72px (bars 70 + 2), with no gap row.
+   - Friction is as on the session page.
+   - Total height 220. Skeleton `30 · 14 · 56 · 30`.
+6. **Panels:**
+   - **`ToolsOfferedUsed/person`** replaces Capabilities (source · most used · used/offered).
+   - **Footprint:** Turns · Steps (N failed) · Tool calls · Subagent calls · Compactions · Images. Commands, Destructive and Code shipped are removed.
+7. **Work tab:**
+   - **Content-free: a flat session list**, newest first, labelled `session <id>`. The work line is tool counts and friction is `✕N !N`. There is no repo to group by (see open question 1).
+   - **With content:** grouped by repo as in §11R. The no-repo group reads `no repo in the conversation`. `PartialMark` (†) and the destructive count are removed.
+8. **All requests:** the NOT CAPTURED filter chip, its empty state and the `filter` prop are removed (`PersonRequestsNotCaptured` and `PersonRequestsNoUncaptured` artboards deleted).
+
+### People page (People.dc.html)
+
+- Id line: `email · N accounts` (e.g. `email not seen · 1 account`, `linked by email · 2 accounts`). Devices are not counted.
+- Working on: `session <id> · turn #N`. A repo needs content.
+- Ribbon: Devices is replaced by **Tool calls** (`Claude Code and Codex`).
+- Claude Code agent card: `18 sessions · 108 turns`, `most used: Bash ×2,410 · Read ×1,980`. Removed: `▲ N calls missed` and `bypass on N%`.
+- Claude Code filter columns: Bypass and Missed are replaced by **Tool calls** and **Failed**.
+- Search placeholder: `name, email, account, org…`.
+- The unattributed notice no longer mentions devices.
+
+### About this data
+
+- The pipeline's bypass note (“Traffic that skips the proxy…”) is removed.
+- The analytics channel reads `kept raw, not shown`. Feature flags read `kept raw, not shown`. Account calls read: identity (account, email, org).
+- **What is kept:**
+  - kept: headers, tokens, timings, status/errors, model, stop reason, tool names and counts, tool lists, interrupts, compactions; analytics are raw only;
+  - not kept without content: prompt, reply, tool inputs and results, so no repo, edited lines, commits or test outcomes.
+- Marks: the `▲ 94` coverage-gap row is replaced by `✕ · !` (friction). The `—` text reads “not on the wire, needs recorded content, or not sent by this agent”.
+
+### Work-line vocabulary (CompTurns)
+
+- **Content-free:** tool names with `×N`, most used first, then `N subagents`, then `mcp:<server> ×N`, joined with ` · `. Example: `Bash ×12 · Edit ×8 · Read ×31 · 2 subagents · mcp:linear ×3`. Codex: `exec_command ×141 · apply_patch ×18`. Work groups are by tool name (`Read ×5`, `Bash ×4`, `mcp:linear ×3`, `No tool`, `Reply`). Subagents read `subagent N`.
+- **With content:** the §11R plain-words line. Edits are counted from the edit inputs; command outcomes come from the tool results; commits and PRs from git/gh commands and their output; subagent names from the spawn input.
+- Nothing is inferred without content: no exit codes, file types or line counts.
+
+### New and changed specimens (CompTurns, CompPersonTimeline)
+
+- **New:**
+  - `HeaderStatGroup/contentFree`, `HeaderStatGroup/withContent`;
+  - `HeaderStat/span|turns|steps|tokens|tools|turnsWithContent|toolsWithContent|withContent|commits`;
+  - `ToolsOfferedUsed` (+ `/row`, `/rowMcp`, `/rowUnused`), `KeyValueList/context`;
+  - `Lane/frictionTwoRows`, `FrictionRow/interruptedSpec`, `FrictionRow/failedCalls`;
+  - `TurnRow/failedCalls`;
+  - `WorkGroup/mcpGroup`, `WorkGroup/withCommands`;
+  - `TurnStep/withContent`, `SubagentRow/withContent`;
+  - `OutcomeSlot/sessionWithContent`, `OutcomeSlot/personWithContent`;
+  - `SessionRow/workPlain`, `SessionRow/workWithContent`.
+- **Redrawn in place** (same names, new content):
+  - TurnRow/*, WorkGroup/*, TurnStep/default, SubagentRow/default (all content-free now);
+  - OutcomeSlot/session and OutcomeSlot/personFortnight (content-free facts);
+  - Lane/workSpec (60px, no gap row);
+  - SessionRow/workDefault (flat);
+  - RepoRow/collapsed (`no repo in the conversation`);
+  - ContentBlock/metadataOnly;
+  - Skeleton/personTimeline and Skeleton/sessionTimeline.
+
+### Superseded (marked illustrative, `scripts/mark_ill.py` + `manifest.js`)
+
+- **Coverage / not captured:**
+  - Marker/coverageGap(Label), StatusCode/noneNotCaptured, FilterChip/notCaptured, Lane/modelCallsWithGapRow, GapRow/merged, Tooltip/gapMerged;
+  - CoverageCell/*, CoverageLine/*, TableHeader/missed, SessionRow/partialCapture, PartialMark, Tooltip/partialCapture, StatTile/coverageGap;
+  - PersonRow/liveCoverageGap, SessionRow/liveGap, RequestRow/notCaptured, DrawerHeader/reportedNotCaptured, DrawerMeta/reportedNotCaptured, StepRun/claudeCodeNoBodies;
+  - BarTrack/withGaps, BarTrack/hoverGap, Lane/notCapturedHover, Tooltip/notCaptured, Tooltip/coverage, Tooltip/columnHeaderCoverage, CoverageLine/hover, Tooltip/coverageLine.
+- **Analytics-derived:**
+  - Marker/frustrated(Compact), Marker/destructive(Compact), FrictionRow/frustrated, FrictionRow/destructive, Marker/match;
+  - Chip/neutralPosture, Tooltip/postureChip;
+  - EventRow/*, StepRow/eventsPending, Lane/analytics, Lane/analyticsHover(Guide), DensityTrack/default, DensityTrack/hoverBin;
+  - SessionRow/noRecapLabel, BetweenRow/recap, TurnReport (Codex).
+- **Cost:** KeyStripCell/costEst, KeyStripCell/costEstUnknown. If any other specimen still shows a cost cell (older sheets: CompAgents, CompProviders, CompSummary), drop it when building. Cost is not a parity target anywhere.
+- **Kept:** ChannelSwatch/analytics, RequestRow/personClaudeCodeAnalytics and RequestRow/codexAnalytics, because analytics posts are still listed as requests.
+
+### Open questions (defaults taken)
+
+1. **Repo and branch without content.** They came from analytics; on the wire they're in the system prompt's environment block (content). **Default:** content-free shows no repo anywhere. The session title is agent + start time, Person › Work is a flat list, and People › Working on is `session <id> · turn #N`. If the observer may keep the environment block's cwd/branch as metadata even in content-free mode, repo grouping comes back unchanged.
+2. **Failed calls as friction:** **yes**, as `!` (API errors, overloads, retried requests). Failed **commands** stay work.
+3. **Client and version:** kept in the ProviderMark only, not as a header stat.
+4. **Subagent names** content-free: `subagent N`. If a header carries the agent type, use it.
+5. **Tool result `is_error`:** treated as content (not shown content-free). If the observer keeps it as metadata, the content-free work group can add `N errors`.
+
 ## 12. Acceptance checklist (whole project)
 
 - [ ] `tokens.css` generated; no hex literals outside it (lint rule `stylelint-declaration-strict-value`).

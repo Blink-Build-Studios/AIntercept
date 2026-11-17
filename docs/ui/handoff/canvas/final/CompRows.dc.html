@@ -69,7 +69,7 @@ body{margin:0;background:#0c0e0f}
 <sc-for list="{{events}}" as="e" hint-placeholder-count="3"><div class="var"><span class="cap">{{e.cap}}</span><div class="frame"><div data-spec="EventRow/{{e.ds}}" class="row m {{e.q}}" style="min-width: 1100px; background: {{e.bg}}">
 <span style="width: 76px; color: #848c90">{{e.t}}</span><span style="width: 40px; color: #a3a9ad">{{e.n}}</span><span style="width: 290px; color: #f0b43c; overflow: hidden; text-overflow: ellipsis">{{e.ev}}</span><span style="width: 150px; color: #a3a9ad; overflow: hidden; text-overflow: ellipsis">{{e.l}}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis">{{e.f}}</span><span style="color: {{e.wc}}">{{e.w}}</span>
 </div>
-<sc-if value="{{e.open}}" hint-placeholder-val="{{ false }}"><pre data-spec="EventRow/expandedJson" class="m" style="margin: 0; padding: 8px 12px 8px 140px; background: #0c0e0f; border-bottom: 1px solid #2a3034; color: #e6e3db; white-space: pre-wrap">{{e.json}}</pre></sc-if>
+<sc-if value="{{e.open}}" hint-placeholder-val="{{ false }}"><pre data-spec="EventRow/expandedJson" data-spec-illustrative="true" class="m" style="margin: 0; padding: 8px 12px 8px 140px; background: #0c0e0f; border-bottom: 1px solid #2a3034; color: #e6e3db; white-space: pre-wrap">{{e.json}}</pre></sc-if>
 </div></div></sc-for>
 </div>
 

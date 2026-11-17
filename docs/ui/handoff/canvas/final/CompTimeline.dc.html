@@ -33,14 +33,14 @@ body{margin:0;background:#0c0e0f}
 </div>
 
 <div class="comp"><span class="cname">Lane + BarTrack</span><span class="props">bins[{t, v}], color, gaps[] · model calls · coverage gaps now have their own row: Timelines at density → Lane/modelCallsWithGapRow</span>
-<div class="frame"><div data-spec="Lane/modelCalls" class="lane" style="height: 60px; border-bottom: 0"><div class="lab"><div class="k">Model calls</div><div class="m" style="font-size: 11px; color: #a3a9ad">per hour</div></div><div data-spec="BarTrack/withGaps" class="track">
+<div class="frame"><div data-spec="Lane/modelCalls" class="lane" style="height: 60px; border-bottom: 0"><div class="lab"><div class="k">Model calls</div><div class="m" style="font-size: 11px; color: #a3a9ad">per hour</div></div><div data-spec="BarTrack/withGaps" data-spec-illustrative="true" class="track">
 
 
 <sc-for list="{{bars}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; background: {{b.c}}; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
 </div></div></div></div>
 
 <div class="comp"><span class="cname">Lane + DensityTrack</span><span class="props">bins[], color · analytics events per bin; continues after model calls stop</span>
-<div class="frame"><div data-spec="Lane/analytics" class="lane" style="height: 44px; border-bottom: 0"><div class="lab"><div class="k">Analytics</div><div class="m" style="font-size: 11px; color: #a3a9ad">events/hour</div></div><div data-spec="DensityTrack/default" class="track">
+<div class="frame"><div data-spec="Lane/analytics" data-spec-illustrative="true" class="lane" style="height: 44px; border-bottom: 0"><div class="lab"><div class="k">Analytics</div><div class="m" style="font-size: 11px; color: #a3a9ad">events/hour</div></div><div data-spec="DensityTrack/default" data-spec-illustrative="true" class="track">
 <sc-for list="{{dens}}" as="b" hint-placeholder-count="40"><div style="position: absolute; bottom: 0; background: #f0b43c; opacity: .85; left: {{b.l}}; width: {{b.w}}; height: {{b.h}}"></div></sc-for>
 </div></div></div></div>
 
