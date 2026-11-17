@@ -135,13 +135,14 @@ func TestListThenLoad(t *testing.T) {
 	if got := loadAll(t, db, s); len(got) != 1 || got[0] != k {
 		t.Fatalf("loaded %v", got)
 	}
-	var calls, evs, ranged int
-	if err := db.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM calls), (SELECT count(*) FROM events),
-		(SELECT count(*) FROM calls WHERE raw_key = $1 AND raw_offset IS NOT NULL AND raw_len > 0)`, k).Scan(&calls, &evs, &ranged); err != nil {
+	// The analytics events stay in the raw file: none is loaded (docs/PIPELINE.md §3.2).
+	var calls, ranged int
+	if err := db.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM calls),
+		(SELECT count(*) FROM calls WHERE raw_key = $1 AND raw_offset IS NOT NULL AND raw_len > 0)`, k).Scan(&calls, &ranged); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 3 || evs != 3 || ranged != 3 {
-		t.Fatalf("calls %d, events %d, with a raw range %d", calls, evs, ranged)
+	if calls != 3 || ranged != 3 {
+		t.Fatalf("calls %d, with a raw range %d", calls, ranged)
 	}
 	// Each call's range is its member: the call's own row, read alone.
 	rows, err := db.Query(ctx(t), "SELECT call_id, raw_key, raw_offset, raw_len FROM calls")

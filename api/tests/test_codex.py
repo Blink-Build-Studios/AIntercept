@@ -164,16 +164,16 @@ def test_codex_session_header_facts_and_limits(dataset, pg_client_for, write_sam
         "cwd": "/work/pomodoro",
         "shell": None,
         "tz": None,
-        "approval": "never",
+        "approval": None,  # its codex_turn_event's: Codex's analytics aren't kept
         "sandbox": "danger-full-access",
     }
     assert h["limitsAtEnd"]["windows"][0]["usedPct"] == 44.0
     assert (h["tokens"]["input"], h["tokens"]["output"], h["toolCalls"]) == (3600, 150, None)
-    assert h["events"] is None and h["coverage"]["reported"] is None
+    assert h["events"] is None and h["coverage"] is None
     write_sample(client, r, "codex")
 
 
-def test_codex_prompts_carry_turn_report_and_hidden_calls(dataset, pg_client_for, write_sample):
+def test_codex_prompts_carry_their_hidden_calls(dataset, pg_client_for, write_sample):
     codex_work(dataset)
     client = pg_client_for(dataset)
     r = client.get(f"/api/v1/sessions/{ROOT}/prompts")
@@ -183,11 +183,9 @@ def test_codex_prompts_carry_turn_report_and_hidden_calls(dataset, pg_client_for
     first = prompts[0]
     assert len(first["steps"]) == 2
     assert first["prompt"]["hidden"] == {"prewarm": 1, "title": 1}  # the title names the turn before it
-    report = first["prompt"]["turnReport"]
-    assert report["samplingMs"] == 41000 and report["requests"] == 2 and report["steers"] == 1
-    assert report["toolCalls"] == {"shell": 4, "fileChange": 1}
+    # Its codex_turn_event is Codex's analytics: not kept.
+    assert first["prompt"]["turnReport"] is None and prompts[1]["prompt"]["turnReport"] is None
     assert prompts[1]["prompt"]["hidden"] == {}
-    assert prompts[1]["prompt"]["turnReport"] is None
     write_sample(client, r, "codex")
 
 

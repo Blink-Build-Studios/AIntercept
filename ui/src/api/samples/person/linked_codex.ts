@@ -24,7 +24,7 @@ const sample: components["schemas"]["PersonResponse"] = {
       {
         "agent": "claude-code",
         "devices": 1,
-        "firstSeenAt": "2026-11-04T08:00:00Z",
+        "firstSeenAt": "2026-11-04T08:00:10Z",
         "version": "2.1.308"
       },
       {
@@ -90,7 +90,14 @@ const sample: components["schemas"]["PersonResponse"] = {
       ]
     },
     "customerSince": null,
-    "devices": [],
+    "devices": [
+      {
+        "deviceId": "1a5e0000-0000-4000-8000-0000000001a5",
+        "platform": null,
+        "shell": null,
+        "terminal": null
+      }
+    ],
     "email": "ada@example.com",
     "firstUseAt": null,
     "flags": {
@@ -106,7 +113,7 @@ const sample: components["schemas"]["PersonResponse"] = {
     },
     "linkedBy": "email",
     "live": false,
-    "missed": 0,
+    "missed": null,
     "name": "Ada Lovelace",
     "org": null,
     "orgIdShort": null,

@@ -6,7 +6,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T10:30:00Z",
-    "lastDataAt": "2026-11-04T10:05:46Z",
+    "lastDataAt": "2026-11-04T10:05:40Z",
     "page": 1,
     "pageSize": 20,
     "to": "2026-11-04T10:40:59.999999Z",

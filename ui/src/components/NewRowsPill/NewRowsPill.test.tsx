@@ -1,33 +1,31 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import demo from "../../api/samples/session_events/demo";
-import many from "../../api/samples/session_events/many";
-import type { Event } from "../EventRow/EventRow";
+import demo from "../../api/samples/person_requests/demo";
 import { DataTable } from "../DataTable/DataTable";
-import { EVENT_COLUMNS, EVENT_MIN_WIDTH, EventRow } from "../EventRow/EventRow";
+import { RequestRow, requestColumns, requestMinWidth, type Request } from "../RequestRow/RequestRow";
 import { NewRowsPill } from "./NewRowsPill";
 import { useHeldRows } from "./useHeldRows";
 
-function LiveEvents({ rows, following }: { rows: Event[]; following: boolean }) {
+function LiveRequests({ rows, following }: { rows: Request[]; following: boolean }) {
   const held = useHeldRows(rows, following);
   return (
     <div data-testid="scroller" style={{ height: 200, overflow: "auto" }}>
       <NewRowsPill count={held.pending} direction="down" onClick={held.reveal} />
-      <DataTable columns={EVENT_COLUMNS} minWidth={EVENT_MIN_WIDTH} label="Events">
-        {held.rows.map((e) => (
-          <EventRow key={e.eventId} event={e} onToggle={() => {}} />
+      <DataTable columns={requestColumns(false)} minWidth={requestMinWidth(false)} label="Requests">
+        {held.rows.map((r) => (
+          <RequestRow key={r.requestId} row={r} onOpen={() => {}} />
         ))}
       </DataTable>
     </div>
   );
 }
 
-const all: Event[] = [...demo.data, ...many.data];
-const firstRowName = () => screen.getAllByRole("row")[1]?.querySelector("button")?.textContent;
+const all: Request[] = demo.data;
+const firstRowName = () => screen.getAllByRole("row")[1]?.textContent;
 
 describe("NewRowsPill (§6A.9)", () => {
   it("[6A.11-10] A live append while scrolled away shows NewRowsPill and doesn't move visible rows", () => {
     const base = all.slice(0, 20);
-    const { rerender } = render(<LiveEvents rows={base} following={false} />);
+    const { rerender } = render(<LiveRequests rows={base} following={false} />);
     const scroller = screen.getByTestId("scroller");
     act(() => {
       scroller.scrollTop = 120;
@@ -35,7 +33,7 @@ describe("NewRowsPill (§6A.9)", () => {
     const before = { top: scroller.scrollTop, first: firstRowName(), count: screen.getAllByRole("row").length };
     expect(screen.queryByText(/NEW/)).toBeNull();
 
-    rerender(<LiveEvents rows={all.slice(0, 23)} following={false} />);
+    rerender(<LiveRequests rows={all.slice(0, 23)} following={false} />);
 
     expect(screen.getByRole("button", { name: /3 NEW ↓/ })).toBeTruthy();
     expect(scroller.scrollTop).toBe(before.top);
@@ -49,8 +47,8 @@ describe("NewRowsPill (§6A.9)", () => {
   });
 
   it("inserts directly while following the edge", () => {
-    const { rerender } = render(<LiveEvents rows={all.slice(0, 5)} following />);
-    rerender(<LiveEvents rows={all.slice(0, 8)} following />);
+    const { rerender } = render(<LiveRequests rows={all.slice(0, 5)} following />);
+    rerender(<LiveRequests rows={all.slice(0, 8)} following />);
     expect(screen.getAllByRole("row")).toHaveLength(1 + 8);
     expect(screen.queryByText(/NEW/)).toBeNull();
   });

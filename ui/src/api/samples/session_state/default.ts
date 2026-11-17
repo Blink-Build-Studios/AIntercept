@@ -6,63 +6,49 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "capabilitiesAt": {
       "builtin": {
         "total": null,
-        "used": 1
+        "used": 3
       },
-      "hooks": 1,
-      "mcpServers": [
-        {
-          "name": "github",
-          "riskyVerbs": [],
-          "tools": null,
-          "toolsUsed": 1
-        }
-      ],
+      "hooks": null,
+      "mcpServers": [],
       "mcpTools": {
         "total": null,
-        "used": 1
+        "used": null
       },
-      "poolChangesInRange": 1,
+      "poolChangesInRange": null,
       "skills": null
     },
     "counts": {
       "compactions": 0,
-      "events": 23,
+      "events": 0,
       "modelCalls": 4,
       "prompts": 2,
-      "requests": 19,
+      "requests": 4,
       "steps": 4,
       "turns": 2
     },
     "experimentsAt": null,
     "flagFetchesInRange": null,
     "flagsChangedInRange": null,
-    "recapsInRange": [
-      {
-        "t": "2026-11-04T09:08:00Z",
-        "text": null
-      }
-    ],
-    "recapsTotal": 1,
+    "recapsInRange": null,
+    "recapsTotal": null,
     "repoInRange": {
       "branch": null,
-      "commits": 1,
+      "commits": 0,
       "cwdTrail": null,
-      "headChanges": 1,
-      "headFrom": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "headTo": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "prs": [
-        2
-      ],
-      "pushed": true
+      "headChanges": null,
+      "headFrom": null,
+      "headTo": null,
+      "prs": [],
+      "pushed": false
     }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
-    "from": "2026-11-04T09:00:00Z",
-    "lastDataAt": "2026-11-04T09:11:05Z",
+    "from": "2026-11-04T09:01:00Z",
+    "lastDataAt": "2026-11-04T09:10:30Z",
     "page": null,
     "pageSize": null,
-    "to": "2026-11-04T09:11:59.999999Z",
+    "to": "2026-11-04T09:10:59.999999Z",
     "total": null
   }
 };

@@ -17,16 +17,16 @@ const sample: components["schemas"]["PersonResponse"] = {
       {
         "agent": "claude-code",
         "devices": 1,
-        "firstSeenAt": "2026-11-04T09:00:00Z",
+        "firstSeenAt": "2026-11-04T09:01:00Z",
         "version": "2.1.308"
       }
     ],
     "agentLimits": [
       {
         "agent": "claude-code",
-        "asOf": "2026-11-04T09:06:08Z",
+        "asOf": "2026-11-04T09:05:00Z",
         "credits": "overage rejected",
-        "plan": "max",
+        "plan": null,
         "windows": [
           {
             "name": "7d",
@@ -59,9 +59,9 @@ const sample: components["schemas"]["PersonResponse"] = {
     "devices": [
       {
         "deviceId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        "platform": "darwin",
-        "shell": "zsh",
-        "terminal": "iTerm.app"
+        "platform": null,
+        "shell": null,
+        "terminal": null
       }
     ],
     "email": null,
@@ -71,7 +71,7 @@ const sample: components["schemas"]["PersonResponse"] = {
       "experiments": null,
       "total": null
     },
-    "lastSeenAt": "2026-11-04T09:06:08Z",
+    "lastSeenAt": "2026-11-04T09:05:00Z",
     "limits": {
       "overage": "rejected",
       "status": "allowed",
@@ -79,20 +79,17 @@ const sample: components["schemas"]["PersonResponse"] = {
     },
     "linkedBy": null,
     "live": false,
-    "missed": 1,
+    "missed": null,
     "name": null,
-    "org": {
-      "id": "00000000-0000-4000-8000-0000000000a9",
-      "kind": "unset"
-    },
-    "orgIdShort": "0000\u202600a9",
+    "org": null,
+    "orgIdShort": null,
     "orgKind": "unknown",
     "personId": "00000000-0000-4000-8000-00000000acc1",
-    "plan": "max",
+    "plan": null,
     "posture": {
-      "bypassPct": 100.0,
-      "proxyDetected": "custom_ca",
-      "sandbox": "off",
+      "bypassPct": null,
+      "proxyDetected": null,
+      "sandbox": null,
       "tokenStorage": null
     },
     "rateLimitTier": null,
@@ -101,7 +98,7 @@ const sample: components["schemas"]["PersonResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:06:08Z",
+    "lastDataAt": "2026-11-04T09:05:00Z",
     "page": null,
     "pageSize": null,
     "to": null,

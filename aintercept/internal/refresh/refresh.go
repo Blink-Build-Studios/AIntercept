@@ -22,7 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Coalesce is how long a prompt, session or account-day row waits after it's
+// Coalesce is how long a step, prompt, session or account-day row waits after it's
 // marked before it's claimed, so a busy one is recomputed at most this often
 // however many flushes touch it (§5.1). A var so tests can drain at once.
 var Coalesce = 5 * time.Second
@@ -35,10 +35,10 @@ const Stale = time.Minute
 const claimBatch = 32
 
 // Kinds are the dirty kinds this refresher recomputes (§5.3).
-var Kinds = []string{"minute", "hour", "cred_minute", "cred_hour", "prompt", "session", "account_day"}
+var Kinds = []string{"minute", "hour", "cred_minute", "cred_hour", "step", "prompt", "session", "account_day"}
 
 // coalesced are the kinds a claim waits Coalesce for.
-var coalesced = []string{"prompt", "session", "account_day"}
+var coalesced = []string{"step", "prompt", "session", "account_day"}
 
 // Claim is a claimed dirty row: what it is, and its seq when claimed.
 type Claim struct {
@@ -83,13 +83,16 @@ func Release(ctx context.Context, db *pgxpool.Pool, c Claim) (bool, error) {
 // Refresh recomputes c's rollup rows from the facts and marks the next level
 // dirty, in one transaction.
 func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
+	switch c.Kind {
+	case "step":
+		return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error { return noJIT(ctx, tx, func() error { return refreshStep(ctx, tx, c.Key) }) })
+	case "prompt":
+		return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error { return noJIT(ctx, tx, func() error { return refreshPrompt(ctx, tx, c.Key) }) })
+	}
 	id, at, args := c.Key, int64(0), []any(nil)
 	switch c.Kind {
-	case "prompt", "session": // keyed by an id alone
+	case "session": // keyed by an id alone
 		args = []any{id}
-		if c.Kind == "prompt" {
-			args = promptArgs(id)
-		}
 	default:
 		var err error
 		if id, at, err = splitKey(c.Key); err != nil {
@@ -97,13 +100,16 @@ func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
 		}
 	}
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SET LOCAL jit = off`); err != nil {
+			return err
+		}
 		var stmts []string
 		var next []mark
 		width := minuteNS
 		switch c.Kind {
 		case "minute":
 			at -= at % minuteNS
-			stmts = append(append(append(stmts, minuteMissed...), minuteRow), minuteKeys...)
+			stmts = append([]string{minuteRow}, minuteKeys...)
 			next = []mark{{"hour", key(id, at-at%hourNS)}}
 		case "hour":
 			at -= at % hourNS
@@ -118,20 +124,6 @@ func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
 			at -= at % hourNS
 			width = hourNS
 			stmts = credHour
-		case "prompt":
-			// §5.3: a prompt marks its sessions, those it was in and is in now.
-			rows, err := tx.Query(ctx, "DELETE FROM prompts WHERE prompt_id = $1 RETURNING session_id", id)
-			if err != nil {
-				return err
-			}
-			was, err := pgx.CollectRows(rows, pgx.RowTo[string])
-			if err != nil {
-				return err
-			}
-			for _, s := range was {
-				next = append(next, mark{"session", s})
-			}
-			stmts = promptRefresh
 		case "session":
 			stmts = sessionRefresh
 		case "account_day":
@@ -149,17 +141,10 @@ func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
 				return fmt.Errorf("refresh %s %q: %w", c.Kind, c.Key, err)
 			}
 		}
-		var more string
-		switch c.Kind {
-		case "prompt":
-			more = "SELECT 'session', session_id FROM prompts WHERE prompt_id = $1"
-		case "session":
+		if c.Kind == "session" {
 			// §5.3: a session marks each of its accounts' days, every day it
 			// has, so an account seen on it late still gets its earlier days.
-			more = "SELECT 'account_day', k FROM (" + sessionDays + ") d(k)"
-		}
-		if more != "" {
-			rows, err := tx.Query(ctx, more, id)
+			rows, err := tx.Query(ctx, "SELECT 'account_day', k FROM ("+sessionDays+") d(k)", id)
 			if err != nil {
 				return err
 			}
@@ -176,18 +161,108 @@ func Refresh(ctx context.Context, db *pgxpool.Pool, c Claim) error {
 	})
 }
 
-// promptArgs is a prompt refresh's arguments: its key, and for an input with
-// no prompt id (input:<batch>:<n>) its batch and place ($2, $3; NULL else).
-func promptArgs(key string) []any {
-	batch, n := any(nil), any(nil)
-	if rest, ok := strings.CutPrefix(key, "input:"); ok {
-		if i := strings.LastIndexByte(rest, ':'); i > 0 {
-			if v, err := strconv.ParseInt(rest[i+1:], 10, 64); err == nil {
-				batch, n = rest[:i], v
-			}
+// noJIT runs f with JIT off in tx. The planner prices a result lookup (GIN's
+// default selectivity) and a session's lookups high enough to compile them, and
+// compiling costs seconds where running takes milliseconds (a step: 3.3 s of
+// JIT, 0.8 ms of work).
+func noJIT(ctx context.Context, tx pgx.Tx, f func() error) error {
+	if _, err := tx.Exec(ctx, `SET LOCAL jit = off`); err != nil {
+		return err
+	}
+	return f()
+}
+
+// stepAt is where a step is, or its call would be: its prompt, session and time.
+type stepAt struct {
+	prompt, session string
+	at              int64
+}
+
+// refreshStep recomputes step id (a call id) from its call alone, and its
+// prompts' rows (the one it was in, the one it's in now) from their keys
+// (§5.1). It marks its sessions and its minutes (their work keys read it).
+func refreshStep(ctx context.Context, tx pgx.Tx, id string) error {
+	where := func(sql string) (*stepAt, error) {
+		var s stepAt
+		err := tx.QueryRow(ctx, sql, id).Scan(&s.prompt, &s.session, &s.at)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return &s, err
+	}
+	was, err := where(`SELECT prompt_id, session_id, t_ns FROM steps WHERE call_id = $1`)
+	if err != nil {
+		return fmt.Errorf("refresh step %q: %w", id, err)
+	}
+	now, err := where(`SELECT c.prompt_id, c.session_id, ` + at + ` FROM calls c
+		WHERE c.call_id = $1 AND c.prompt_id IS NOT NULL AND ` + visible)
+	if err != nil {
+		return fmt.Errorf("refresh step %q: %w", id, err)
+	}
+	if was == nil && now == nil {
+		return nil
+	}
+	var prompts []string
+	var next []mark
+	for _, s := range []*stepAt{was, now} {
+		if s != nil {
+			prompts = append(prompts, s.prompt)
+			next = append(next, mark{"session", s.session}, mark{"minute", key(s.session, s.at-s.at%minuteNS)})
 		}
 	}
-	return []any{key, batch, n}
+	prompts = promptList(prompts...)
+	if _, err := tx.Exec(ctx, lockPrompts, prompts); err != nil {
+		return fmt.Errorf("refresh step %q: %w", id, err)
+	}
+	for _, s := range stepRefresh {
+		if _, err := tx.Exec(ctx, s, id); err != nil {
+			return fmt.Errorf("refresh step %q: %w", id, err)
+		}
+	}
+	for _, s := range promptRows {
+		if _, err := tx.Exec(ctx, s, prompts); err != nil {
+			return fmt.Errorf("refresh step %q: %w", id, err)
+		}
+	}
+	return markDirty(ctx, tx, next)
+}
+
+// refreshPrompt recomputes prompt id from all its calls (promptFull): what
+// retention marks, for a prompt that lost calls. It marks its sessions, those
+// it was in and is in now, and their minutes are retention's.
+func refreshPrompt(ctx context.Context, tx pgx.Tx, id string) error {
+	if _, err := tx.Exec(ctx, lockPrompts, []string{id}); err != nil {
+		return fmt.Errorf("refresh prompt %q: %w", id, err)
+	}
+	sessions := func() ([]mark, error) {
+		rows, err := tx.Query(ctx, "SELECT DISTINCT 'session', session_id FROM steps WHERE prompt_id = $1", id)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, func(r pgx.CollectableRow) (mark, error) {
+			var m mark
+			return m, r.Scan(&m.kind, &m.key)
+		})
+	}
+	next, err := sessions()
+	if err != nil {
+		return fmt.Errorf("refresh prompt %q: %w", id, err)
+	}
+	for _, s := range promptFull {
+		if _, err := tx.Exec(ctx, s, id); err != nil {
+			return fmt.Errorf("refresh prompt %q: %w", id, err)
+		}
+	}
+	for _, s := range promptRows {
+		if _, err := tx.Exec(ctx, s, []string{id}); err != nil {
+			return fmt.Errorf("refresh prompt %q: %w", id, err)
+		}
+	}
+	now, err := sessions()
+	if err != nil {
+		return fmt.Errorf("refresh prompt %q: %w", id, err)
+	}
+	return markDirty(ctx, tx, append(next, now...))
 }
 
 // dayNS is a UTC day.

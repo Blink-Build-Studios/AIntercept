@@ -2,12 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import account from "../../api/samples/person_requests/account_calls";
 import demo from "../../api/samples/person_requests/demo";
-import missed from "../../api/samples/person_requests/not_captured";
 import { DataTable } from "../DataTable/DataTable";
 import { RequestRow, requestColumns, requestMinWidth, type Request } from "./RequestRow";
 import { codexRequests, codexRequestsNoBodies, personRequests } from "../ProviderMark/providerSpecimens";
 
-const rows: Request[] = [...demo.data, ...account.data, ...missed.data];
+const rows: Request[] = [...demo.data, ...account.data];
 const byKind = (k: Request["kind"], extra: (r: Request) => boolean = () => true) =>
   rows.find((r) => r.kind === k && r.captured && extra(r)) ?? rows[0]!;
 
@@ -33,7 +32,6 @@ export const Flags: Story = { args: { row: byKind("flags") } };
 export const Count: Story = { args: { row: byKind("count") } };
 export const Account: Story = { args: { row: byKind("account") } };
 export const Error: Story = { args: { row: { ...byKind("model"), status: 529, durationMs: 612 } } };
-export const NotCaptured: Story = { args: { row: missed.data[0]! } };
 export const Selected: Story = { args: { selected: true } };
 /** Arrived since the last look: starts on surface-raised and fades (held here on the first frame). */
 export const New: Story = { args: { "data-force": "new" } };

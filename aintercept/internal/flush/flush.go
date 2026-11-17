@@ -1,4 +1,6 @@
 // Package flush writes records to the v9 fact tables (docs/PIPELINE.md §4):
+// the calls and who they say made them. Analytics events (a client's
+// analytics posts' contents) aren't loaded: they stay in the raw files only.
 // a slice of records, collapsed by key in Go, then one transaction with one
 // unnest upsert per table, rows sorted by key, and the rollup rows they touch
 // marked dirty. Every upsert is keyed and order-free, so re-running a flush,
@@ -22,7 +24,6 @@ const minuteNS = int64(60e9)
 // Rows are a flush's records collapsed by key, each table's sorted by key.
 type Rows struct {
 	Calls              []Call
-	Events             []Event
 	Accounts           []Account
 	SessionAccounts    []Span // (session, account)
 	SessionCredentials []Span // (session, key hash)
@@ -30,22 +31,10 @@ type Rows struct {
 	Parents            []Parent
 	Dirty              []Dirty
 	Verdicts           []Verdict
-	// ReportIDs are the model calls' request and client request ids: the
-	// minutes of their reports are marked dirty too (§4.3).
-	ReportIDs []string
-	// ReportedIDs are the reports' (Claude Code's tengu_api_success) request
-	// and client request ids: the minutes of their calls are marked dirty too,
-	// so a call whose report came later stops counting as unreported.
-	ReportedIDs []string
-	// StepIDs are the request ids of Claude Code's tool events, and ToolUseIDs
-	// the tool use ids of its Bash events: a step reads them by those ids, not
-	// by its prompt, so the prompts of their calls are marked dirty too (with
-	// the reports' ReportedIDs).
-	StepIDs, ToolUseIDs []string
 	// ResultIDs are the tool call ids whose results the calls carry back
 	// (detail's results): a step's exit codes are its session's first result
-	// for each of its tool calls, which a later prompt's call can carry, so
-	// the prompts of the calls that made those tool calls are marked dirty too.
+	// for each of its tool calls, which a later call can carry, so the steps
+	// of the calls that made those tool calls are marked dirty too.
 	ResultIDs []string
 	LastNS    int64 // the newest time in the records
 }
@@ -54,23 +43,10 @@ type Rows struct {
 type Call struct {
 	R           canon.Request
 	Scope, Kind string
-	BatchEvents int64
-	BatchName   string
-	BatchOther  []string
 	// Raw is the call's member in the raw file being loaded (WriteTx; RawKey
 	// "": none).
 	RawKey            string
 	RawOffset, RawLen int64
-}
-
-// Event is an events row.
-type Event struct {
-	Key, Batch      string
-	N, CCN          int64
-	KeyHash         string
-	E               canon.Event
-	Summary, Marker string
-	Internal        bool
 }
 
 // Newest is a value and when it was seen: the newest sighting wins, the
@@ -88,9 +64,9 @@ func (n *Newest) offer(v string, ns int64) {
 
 // Account is an accounts row.
 type Account struct {
-	ID                             string
-	Email, Name, Org, Plan, CodexP Newest
-	Seen                           int64
+	ID                       string
+	Email, Name, Org, CodexP Newest
+	Seen                     int64
 }
 
 // Span is a (session, account) or (session, key hash) row: first and last seen.
@@ -101,10 +77,9 @@ type Span struct {
 
 // Device is an account_devices row.
 type Device struct {
-	Account, Device                           string
-	OnEvents                                  bool
-	Platform, Terminal, Shell, Agent, Version Newest
-	First, Last                               int64
+	Account, Device string
+	Agent, Version  Newest
+	First, Last     int64
 }
 
 // Parent is a session_edges row: a session and the one it came from.
@@ -122,19 +97,17 @@ type Verdict struct {
 // Dirty is a rollup row to recompute (§5.3).
 type Dirty struct{ Kind, Key string }
 
-// Collapse merges records by key: an end wins over a start, the earliest copy
-// of an event wins, sightings keep the newest value, spans the earliest and
-// latest times.
+// Collapse merges records by key: an end wins over a start, sightings keep
+// the newest value, spans the earliest and latest times. Analytics events are
+// skipped (docs/PIPELINE.md §3.2).
 func Collapse(recs []records.Record) Rows {
 	calls := map[string]*Call{}
-	evs := map[string]*Event{}
 	accts := map[string]*Account{}
 	sessAccts, sessCreds := map[[2]string]*Span{}, map[[2]string]*Span{}
 	devs := map[[2]string]*Device{}
 	parents := map[[2]string]*Parent{}
 	dirty := map[Dirty]bool{}
-	reports, reported := map[string]bool{}, map[string]bool{}
-	stepIDs, toolUseIDs, resultIDs := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	resultIDs := map[string]bool{}
 	verdicts := map[string]*Verdict{}
 	var last int64
 
@@ -186,88 +159,13 @@ func Collapse(recs []records.Record) Rows {
 			a.Org.offer(s.Org, s.NS)
 			last = max(last, s.NS)
 
-		case r.Kind == records.KindClientEvent && r.Event != nil:
-			e := r.Event
-			key := e.EventKey
-			if e.ClientEventID != "" {
-				key = e.Source + "/" + e.ClientEventID
-			}
-			row := &Event{Key: key, Batch: r.BatchID, N: r.BatchN, CCN: r.BatchCCN, E: *e}
-			if r.Call != nil {
-				row.KeyHash = r.Call.KeyHash
-			}
-			if cur := evs[key]; cur == nil || eventBefore(row, cur) {
-				// Summary, internal and marker as the Events tab's rows derive them
-				// (process/eventrows.go EventFactsOf: summaryOf, isInternal, the marker).
-				f := process.EventFactsOf(*e).Row
-				row.Summary, row.Internal, row.Marker = f.Summary, f.Internal, f.Marker
-				evs[key] = row
-			}
-			ns := e.NS
-			last = max(last, e.RowNS, ns)
-			minute("minute", e.SessionID, ns)
-			if e.PromptID != "" {
-				dirty[Dirty{"prompt", e.PromptID}] = true
-			} else if e.Source == canon.ProductClaudeCode && e.Name == "tengu_input_prompt" && e.SessionID != "" {
-				// A typed prompt with no prompt id is its own prompt, keyed by its
-				// place in its batch (process/promptrows.go rows: "input:" + its id).
-				dirty[Dirty{"prompt", fmt.Sprintf("input:%s:%d", r.BatchID, r.BatchCCN)}] = true
-			}
-			if e.Source == canon.ProductClaudeCode {
-				switch e.Name {
-				case "tengu_tool_use_success", "tengu_tool_use_error", "tengu_tool_use_progress":
-					if e.RequestID != "" {
-						stepIDs[e.RequestID] = true
-					}
-				case "tengu_bash_tool_command_executed":
-					if e.ToolUseID != "" {
-						toolUseIDs[e.ToolUseID] = true
-					}
-				}
-			}
-			if e.Source == canon.ProductClaudeCode && e.Name == "tengu_api_success" {
-				for _, id := range []string{e.RequestID, e.ClientRequestID} {
-					if id != "" {
-						reported[id] = true
-					}
-				}
-			}
-			// A session's credentials are its visible calls' and those of the analytics posts that
-			// carried its Claude Code events (process/requestrows.go: callHashes, corrHashes).
-			if e.Source == canon.ProductClaudeCode && e.SessionID != "" && row.KeyHash != "" {
-				span(sessCreds, e.SessionID, row.KeyHash, ns)
-			}
-			if e.Source != canon.ProductClaudeCode || e.PersonID == "" {
-				continue
-			}
-			// What an account's Claude Code events say about it (process/personmap.go acctEvents).
-			if e.SessionID != "" {
-				span(sessAccts, e.SessionID, e.PersonID, ns)
-			}
-			if plan, ok := process.SubscriptionType(e.MetadataJSON); ok {
-				account(e.PersonID, ns).Plan.offer(plan, ns)
-			}
-			if e.OrgID != "" { // the org the person pages show (process/personmap.go acctEvents)
-				account(e.PersonID, ns).Org.offer(e.OrgID, ns)
-			}
-			if e.DeviceID != "" {
-				d := device(e.PersonID, e.DeviceID, ns)
-				d.OnEvents = true
-				if v, ok := process.EnvFields(e.EnvJSON); ok[0] || ok[1] || ok[2] {
-					d.Platform.offer(v[0], ns)
-					d.Terminal.offer(v[1], ns)
-					d.Shell.offer(v[2], ns)
-				}
-			}
+		case r.Kind == records.KindClientEvent:
+			// An analytics event: in the raw files only (§3.2).
 
 		case r.Call != nil:
 			c := r.Call
 			// kind: the Requests tab's channel (process/requestrows.go kindOf).
-			row := &Call{R: *c, Scope: c.SessionID, Kind: process.RequestKind(c.Path),
-				BatchEvents: r.BatchEvents, BatchName: r.BatchName, BatchOther: r.BatchOtherSessions}
-			if row.Scope == "" { // an analytics post: its batch's earliest session (records/assemble.go event, txSession)
-				row.Scope = r.BatchSession
-			}
+			row := &Call{R: *c, Scope: c.SessionID, Kind: process.RequestKind(c.Path)}
 			if cur := calls[c.CallID]; cur == nil {
 				calls[c.CallID] = row
 			} else if c.EndNS != 0 && (cur.R.EndNS == 0 || c.EndNS > cur.R.EndNS) {
@@ -282,25 +180,15 @@ func Collapse(recs []records.Record) Rows {
 			}
 			last = max(last, at, c.EndNS)
 			minute("minute", c.SessionID, at)
-			if row.Scope != c.SessionID {
-				minute("minute", row.Scope, at)
-			}
 			if agentCall(c) { // the credential rollups count coding agents' calls (refresh: agentCalls)
 				dirty[Dirty{"cred_minute", fmt.Sprintf("%s/%d", c.KeyHash, at-at%minuteNS)}] = true
 			}
-			if c.PromptID != "" {
-				dirty[Dirty{"prompt", c.PromptID}] = true
+			if c.PromptID != "" { // its step (§5.3)
+				dirty[Dirty{"step", c.CallID}] = true
 			}
 			if c.SessionID != "" {
 				for _, id := range resultKeys(c.DetailJSON) {
 					resultIDs[id] = true
-				}
-			}
-			if row.Kind == "model" {
-				for _, id := range []string{c.RequestID, c.ClientRequestID} {
-					if id != "" {
-						reports[id] = true
-					}
 				}
 			}
 			if !canon.IsModelCall(c) {
@@ -341,7 +229,6 @@ func Collapse(recs []records.Record) Rows {
 
 	out := Rows{LastNS: last}
 	out.Calls = sortedBy(calls, func(c *Call) string { return c.R.CallID })
-	out.Events = sortedBy(evs, func(e *Event) string { return e.Key })
 	out.Accounts = sortedBy(accts, func(a *Account) string { return a.ID })
 	out.SessionAccounts = sortedBy(sessAccts, func(s *Span) string { return s.A + "\x00" + s.B })
 	out.SessionCredentials = sortedBy(sessCreds, func(s *Span) string { return s.A + "\x00" + s.B })
@@ -352,22 +239,6 @@ func Collapse(recs []records.Record) Rows {
 		out.Dirty = append(out.Dirty, d)
 	}
 	slices.SortFunc(out.Dirty, func(a, b Dirty) int { return cmp.Or(cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Key, b.Key)) })
-	for id := range reports {
-		out.ReportIDs = append(out.ReportIDs, id)
-	}
-	slices.Sort(out.ReportIDs)
-	for id := range reported {
-		out.ReportedIDs = append(out.ReportedIDs, id)
-	}
-	slices.Sort(out.ReportedIDs)
-	for id := range stepIDs {
-		out.StepIDs = append(out.StepIDs, id)
-	}
-	slices.Sort(out.StepIDs)
-	for id := range toolUseIDs {
-		out.ToolUseIDs = append(out.ToolUseIDs, id)
-	}
-	slices.Sort(out.ToolUseIDs)
 	for id := range resultIDs {
 		out.ResultIDs = append(out.ResultIDs, id)
 	}
@@ -384,12 +255,6 @@ func agentCall(c *canon.Request) bool {
 		p = canon.ProductClaudeCode
 	}
 	return !c.Synthetic && (p == canon.ProductClaudeCode || p == canon.ProductCodex)
-}
-
-// eventBefore is whether a is an earlier copy of an event than b: a resent
-// batch's copy loses to the first (its row time, then its batch and place).
-func eventBefore(a, b *Event) bool {
-	return cmp.Or(cmp.Compare(a.E.RowNS, b.E.RowNS), cmp.Compare(a.Batch, b.Batch), cmp.Compare(a.N, b.N)) < 0
 }
 
 func sortedBy[K comparable, T any](m map[K]*T, key func(*T) string) []T {

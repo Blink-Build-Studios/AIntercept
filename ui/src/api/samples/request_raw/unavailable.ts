@@ -7,17 +7,17 @@ const sample: components["schemas"]["RequestRawResponse"] = {
     "keyHash": null,
     "requestBody": null,
     "requestHeaders": [],
-    "requestLine": null,
+    "requestLine": "POST /v1/messages",
     "responseBody": null,
     "responseHeaders": [],
-    "responseLine": null,
+    "responseLine": "200 OK",
     "stream": null,
-    "unavailable": "No wire data: this call never passed through the proxy, so there are no headers, body or stream."
+    "unavailable": "The raw files for this request can't be read here, so its full headers, body and stream aren't shown; the summary and details come from the processed tables."
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:02:30Z",
+    "lastDataAt": "2026-11-04T09:06:00.002000Z",
     "page": null,
     "pageSize": null,
     "to": null,

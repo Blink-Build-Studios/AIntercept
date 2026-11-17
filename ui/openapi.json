@@ -4643,7 +4643,8 @@
               {
                 "enum": [
                   "prewarm",
-                  "title"
+                  "title",
+                  "suggestion"
                 ],
                 "type": "string"
               },
@@ -8453,7 +8454,7 @@
   "paths": {
     "/api/v1/events/{eventId}": {
       "get": {
-        "description": "An EventRow's `eventId` (`<batch>:<n>`): the client event in full.",
+        "description": "An EventRow's `eventId`: none since analytics events aren't stored (always a 404).",
         "operationId": "get_event",
         "parameters": [
           {
@@ -9443,7 +9444,7 @@
     },
     "/api/v1/requests/{requestId}": {
       "get": {
-        "description": "A captured transaction (its correlation id), or `reported:<requestId>` for a call only Claude Code reported.",
+        "description": "A captured transaction (its correlation id).",
         "operationId": "get_request",
         "parameters": [
           {

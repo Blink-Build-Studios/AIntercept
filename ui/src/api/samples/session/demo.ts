@@ -3,10 +3,10 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
-    "activeMs": 18077741.032934,
+    "activeMs": 12899106.607953,
     "agent": "claude-code",
     "branch": null,
-    "bypassPct": 99.7,
+    "bypassPct": null,
     "capabilities": [
       "bypass",
       "missed",
@@ -24,7 +24,7 @@ const sample: components["schemas"]["SessionResponse"] = {
       "analytics",
       "frustrated"
     ],
-    "capturedFromPrompt": 7,
+    "capturedFromPrompt": null,
     "channels": [
       "model",
       "analytics",
@@ -36,59 +36,23 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
-    "costUsd": 75.78856069999999,
-    "coverage": {
-      "captured": 507,
-      "notCaptured": 95,
-      "reported": 602,
-      "windows": [
-        {
-          "cause": null,
-          "count": 37,
-          "from": "2026-11-03T00:48:55.710000Z",
-          "to": "2026-11-03T00:57:10.792000Z"
-        },
-        {
-          "cause": null,
-          "count": 4,
-          "from": "2026-11-03T15:13:59.125000Z",
-          "to": "2026-11-03T15:17:48.778000Z"
-        },
-        {
-          "cause": null,
-          "count": 3,
-          "from": "2026-11-03T16:14:56.406000Z",
-          "to": "2026-11-03T16:24:30.091000Z"
-        },
-        {
-          "cause": null,
-          "count": 50,
-          "from": "2026-11-03T16:51:31.940000Z",
-          "to": "2026-11-03T17:03:02.686000Z"
-        },
-        {
-          "cause": null,
-          "count": 1,
-          "from": "2026-11-03T21:17:26.955000Z",
-          "to": "2026-11-03T21:17:26.955000Z"
-        }
-      ]
-    },
+    "costUsd": null,
+    "coverage": null,
     "device": {
       "deviceId": "5e8024215ed54d7fef870262205de55f82ac99815d210ca24bfc462a3208125b",
-      "platform": "darwin",
-      "shell": "fish",
-      "terminal": "iTerm.app"
+      "platform": null,
+      "shell": null,
+      "terminal": null
     },
     "effort": "medium",
     "end": null,
-    "events": 21305,
+    "events": null,
     "facts": null,
     "fieldsMissing": false,
     "friction": {
-      "destructive": 16,
-      "frustrated": 2,
-      "interrupted": 3
+      "destructive": 0,
+      "frustrated": 0,
+      "interrupted": 0
     },
     "hiddenCalls": 0,
     "label": {
@@ -99,22 +63,20 @@ const sample: components["schemas"]["SessionResponse"] = {
     "live": true,
     "modelCalls": 640,
     "networks": 3,
-    "notCaptured": 95,
+    "notCaptured": null,
     "origin": null,
     "outcome": {
-      "commits": 18,
+      "commits": 0,
       "editTypes": {},
       "editedFiles": null,
-      "headFrom": "b81e6e1c56b801e901fad5631be634f68628c90b",
-      "headTo": "fa97e3b2e72acf47adc7d12d11c1734ca22135d1",
+      "headFrom": null,
+      "headTo": null,
       "lastTest": null,
-      "prs": [
-        2
-      ],
-      "pushes": 13
+      "prs": [],
+      "pushes": 0
     },
     "personId": "7d2e0000-0000-4000-8000-00000000a41c",
-    "prompts": 43,
+    "prompts": 38,
     "repo": null,
     "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
     "start": "2026-11-02T05:31:51.155051Z",
@@ -128,221 +90,46 @@ const sample: components["schemas"]["SessionResponse"] = {
       "output": 694376
     },
     "toolCalls": 516,
-    "turns": 43,
-    "turnsInterrupted": 3,
+    "turns": 38,
+    "turnsInterrupted": 0,
     "work": {
       "commands": [
         {
-          "failed": 1,
-          "lastExit": null,
-          "program": "cd",
-          "runs": 138
-        },
-        {
-          "failed": 3,
-          "lastExit": null,
-          "program": "python",
-          "runs": 81
-        },
-        {
-          "failed": 1,
-          "lastExit": null,
-          "program": "sed",
-          "runs": 45
-        },
-        {
           "failed": 0,
           "lastExit": null,
-          "program": "cat",
-          "runs": 38
-        },
-        {
-          "failed": 1,
-          "lastExit": null,
-          "program": "grep",
-          "runs": 33
-        },
-        {
-          "failed": 1,
-          "lastExit": null,
-          "program": "other",
-          "runs": 21
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "git",
-          "runs": 16
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "kubectl",
-          "runs": 14
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "mkdir",
-          "runs": 14
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "docker",
-          "runs": 13
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "bash",
-          "runs": 10
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "curl",
-          "runs": 9
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "echo",
-          "runs": 8
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "gh",
-          "runs": 6
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "cp",
-          "runs": 5
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "helm",
-          "runs": 4
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "ls",
-          "runs": 4
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "go",
-          "runs": 3
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "rm",
-          "runs": 3
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "sleep",
-          "runs": 3
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "awk",
-          "runs": 2
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "head",
-          "runs": 2
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "wc",
-          "runs": 2
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "date",
-          "runs": 1
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "find",
-          "runs": 1
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "pkill",
-          "runs": 1
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "seq",
-          "runs": 1
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "tail",
-          "runs": 1
-        },
-        {
-          "failed": 0,
-          "lastExit": null,
-          "program": "which",
-          "runs": 1
+          "program": null,
+          "runs": 458
         }
       ],
-      "commits": 18,
+      "commits": 0,
       "editTypes": {},
       "editedFiles": null,
       "edits": 31,
       "linesAdded": null,
       "linesRemoved": null,
-      "mcp": [
-        {
-          "calls": 1,
-          "server": ""
-        }
-      ],
-      "otherTools": 8,
-      "prs": [
-        2
-      ],
-      "pushes": 13,
+      "mcp": [],
+      "otherTools": 7,
+      "prs": [],
+      "pushes": 0,
       "readFiles": null,
       "readTypes": {},
       "reads": 15,
       "subagents": [
         {
-          "count": 2,
+          "count": 4,
           "name": null
         }
       ],
       "web": {
-        "fetches": 2,
-        "searches": 1
+        "fetches": 0,
+        "searches": 0
       }
     }
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T18:02:49.146000Z",
+    "lastDataAt": "2026-11-04T18:02:33.797795Z",
     "page": null,
     "pageSize": null,
     "to": null,

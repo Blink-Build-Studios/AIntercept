@@ -5,34 +5,34 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "data": [
     {
       "asked": {
-        "chars": 40,
-        "images": 0,
+        "chars": null,
+        "images": null,
         "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 1.0,
-      "durationMs": 40002.0,
+      "costUsd": null,
+      "durationMs": 30002.0,
       "endedAt": "2026-11-04T10:05:40.002000Z",
       "friction": {
         "destructive": 0,
-        "frustrated": true,
-        "interrupted": true
+        "frustrated": false,
+        "interrupted": false
       },
       "groups": [
         {
           "durationMs": 2.0,
           "exits": [],
-          "kind": "mcp",
+          "kind": "tool",
           "paths": null,
           "program": null,
-          "server": "linear-server",
+          "server": null,
           "startedAt": "2026-11-04T10:05:10Z",
           "steps": [
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -60,7 +60,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
                   "fileType": null,
                   "mcpServer": "linear-server",
@@ -69,7 +69,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0007"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -87,13 +87,8 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "edits": 0,
             "linesAdded": null,
             "linesRemoved": null,
-            "mcp": [
-              {
-                "calls": 1,
-                "server": "linear-server"
-              }
-            ],
-            "otherTools": 0,
+            "mcp": [],
+            "otherTools": 1,
             "prs": [],
             "pushes": 0,
             "readFiles": null,
@@ -118,7 +113,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -146,7 +141,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
                   "fileType": null,
                   "mcpServer": null,
@@ -155,7 +150,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0008"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -199,7 +194,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "spawn",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -227,7 +222,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
                   "fileType": null,
                   "mcpServer": null,
@@ -236,7 +231,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0009"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -277,7 +272,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "live": false,
       "n": 2,
       "promptId": "p2",
-      "startedAt": "2026-11-04T10:05:00Z",
+      "startedAt": "2026-11-04T10:05:10Z",
       "steps": 4,
       "subagents": [
         {
@@ -295,7 +290,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "agentType": "test-writer",
                   "commands": [],
-                  "costUsd": 0.25,
+                  "costUsd": null,
                   "does": "patch",
                   "durationMs": 2.0,
                   "eventsPending": false,
@@ -323,16 +318,16 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                     {
                       "command": null,
                       "destructive": null,
-                      "durationMs": 1200.0,
+                      "durationMs": null,
                       "exitCode": null,
-                      "fileType": "ts",
+                      "fileType": null,
                       "mcpServer": null,
                       "name": "Write",
                       "program": null,
                       "resultBytes": null,
                       "status": "ok",
                       "target": null,
-                      "toolUseId": "toolu_2222_0010"
+                      "toolUseId": null
                     }
                   ],
                   "ttftMs": null,
@@ -345,9 +340,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
               "work": {
                 "commands": [],
                 "commits": 0,
-                "editTypes": {
-                  "ts": 1
-                },
+                "editTypes": {},
                 "editedFiles": null,
                 "edits": 1,
                 "linesAdded": null,
@@ -375,9 +368,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "work": {
             "commands": [],
             "commits": 0,
-            "editTypes": {
-              "ts": 1
-            },
+            "editTypes": {},
             "editedFiles": null,
             "edits": 1,
             "linesAdded": null,
@@ -402,20 +393,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "work": {
         "commands": [],
         "commits": 0,
-        "editTypes": {
-          "ts": 1
-        },
+        "editTypes": {},
         "editedFiles": null,
         "edits": 1,
         "linesAdded": null,
         "linesRemoved": null,
-        "mcp": [
-          {
-            "calls": 1,
-            "server": "linear-server"
-          }
-        ],
-        "otherTools": 0,
+        "mcp": [],
+        "otherTools": 1,
         "prs": [],
         "pushes": 0,
         "readFiles": null,
@@ -437,7 +421,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T10:05:00Z",
-    "lastDataAt": "2026-11-04T10:05:46Z",
+    "lastDataAt": "2026-11-04T10:05:40Z",
     "page": 1,
     "pageSize": 20,
     "to": "2026-11-04T10:05:59.999999Z",

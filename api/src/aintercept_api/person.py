@@ -1,18 +1,7 @@
-"""A person's transactions, as the request drawer reads them (handoff §5.2.7), and the reference
-the processor's request_rows are tested against. The header, summary and request log are SQL
-over the processor's tables (rollups.py; docs/architecture.md, Decision 4).
-
-A person's requests are every transaction made with one of their credential
-hashes (key_hash): model calls, count_tokens, analytics batches, flag fetches
-and account calls with no session. key_hash isn't an identity on its own (OAuth
-tokens rotate), but each hash seen on the person's own calls or batches is theirs.
-"""
+"""A transaction's channel and a model's family, as the request rows and the drawer name them
+(handoff §5.2.7, §11L.6)."""
 
 import re
-from collections.abc import Callable
-from dataclasses import dataclass
-
-from aintercept_api import claude_code as cc
 
 
 def kind_of(path: str) -> str:
@@ -45,91 +34,3 @@ def model_family(model: str | None) -> str:
         return "—"
     m = re.match(r"claude-(opus|sonnet|haiku)", model)
     return m.group(1) if m else model
-
-
-@dataclass
-class Tx:
-    correlation_id: str
-    ts: int
-    method: str | None
-    path: str
-    session_id: str | None
-    prompt_id: str | None
-    request_class: str | None
-    status: int | None
-    end_ts: int | None
-    model: str | None
-    stop_reason: str | None
-    bytes_up: int | None
-    bytes_down: int | None
-    batch_events: int | None
-    batch_session: str | None
-    request_id: str | None
-    client_request_id: str | None
-    content_encoding: str | None
-    error: str | None
-    input: int | None
-    output: int | None
-    cache_read: int | None
-    cache_write: int | None
-    product: str | None = None
-    client: str | None = None
-    hidden_kind: str | None = None
-    effort: str | None = None
-    reasoning: int | None = None
-    tool_uses_json: str | None = None
-    ws_turn: int | None = None
-    batch_name: str | None = None
-    detail_json: str | None = None
-
-    @property
-    def kind(self) -> str:
-        return kind_of(self.path)
-
-    @property
-    def session(self) -> str | None:
-        return self.session_id or self.batch_session
-
-    def detail(self) -> str:
-        k = self.kind
-        if k == "model":
-            return f"{self.request_class or '—'} · {model_family(self.model)} · {self.stop_reason or '—'}"
-        if k == "analytics":
-            n = self.batch_events or 0
-            if self.product == "codex" and self.batch_name:  # its event, by name (handoff §11L.6)
-                return self.batch_name if n == 1 else f"{self.batch_name} · {n} events"
-            return f"{n} events"
-        if k == "flags":
-            return "feature flags"
-        if k == "count":
-            return "count_tokens"
-        p = self.path.split("?", 1)[0]
-        if k in ("usage", "catalog", "metrics"):  # Codex's endpoints, by name: wham/usage, ps/plugins/list
-            return p.removeprefix("/backend-api/").lstrip("/") or p
-        return p.rsplit("/", 1)[-1] or self.path
-
-
-@dataclass
-class Reported:
-    """What a tengu_api_success says about its call."""
-
-    ttft_ms: float | None
-    cache_5m: int | None
-    cache_1h: int | None
-
-
-RETRY_AFTER_NS = 30 * cc.NS  # tengu_api_retry is logged within seconds of the failed attempt's end
-
-
-def nearest_retry[T](
-    retries: list[T], key: Callable[[T], tuple[int, str | None]], ts: int, end: int | None, prompt: str | None
-) -> T | None:
-    """The tengu_api_retry for a failed attempt. It carries no request id, so: same prompt (when both have
-    one), logged between the attempt's start and 30 s after its end; the nearest to its end."""
-    stop = end or ts
-    near = []
-    for r in retries:
-        at, pid = key(r)
-        if ts <= at <= stop + RETRY_AFTER_NS and (prompt is None or pid in (None, prompt)):
-            near.append((abs(at - stop), at, r))
-    return min(near, key=lambda x: (x[0], x[1]))[2] if near else None

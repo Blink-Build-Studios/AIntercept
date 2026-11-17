@@ -40,10 +40,6 @@ func sessionScratch(width int64) string {
 		switch {
 		case c == "hidden_calls":
 			src = "ag."
-		case c == "missed":
-			src = "ms."
-		case strings.Contains(eventAggs, " AS "+c+","), strings.HasSuffix(eventAggs, " AS "+c):
-			src = "ev."
 		}
 		cols[i] = src + c
 		if !nullable[c] {
@@ -56,37 +52,24 @@ func sessionScratch(width int64) string {
 		FROM calls c WHERE c.session_id IS NOT NULL AND ` + visible + ` GROUP BY 1, 2),
 	ag AS (SELECT c.session_id AS sid, ` + b(at) + ` AS t, ` + hiddenAggs + `
 		FROM calls c WHERE c.hidden_kind IS NOT NULL AND ` + modelCall + ` GROUP BY 1, 2),
-	ev AS (SELECT e.session_id AS sid, ` + b("e.ts_ns") + ` AS t, ` + eventAggs + `
-		FROM events e WHERE e.session_id IS NOT NULL AND e.source = 'claude_code' GROUP BY 1, 2),
-	ms AS (SELECT r.session_id AS sid, ` + b("r.ts_ns") + ` AS t, count(*) AS missed
-		FROM events r WHERE r.session_id IS NOT NULL AND ` + missedWhere + ` GROUP BY 1, 2),
 	rq AS (SELECT sid, t, jsonb_object_agg(kind, n) FILTER (WHERE NOT hidden) AS requests,
 			jsonb_object_agg(kind, n) FILTER (WHERE hidden) AS requests_hidden
 		FROM (SELECT c.scope_session_id AS sid, ` + b(at) + ` AS t, c.kind || '/' || c.key_hash AS kind, c.hidden_kind IS NOT NULL AS hidden, count(*) AS n
 		      FROM calls c WHERE c.scope_session_id IS NOT NULL AND ` + requestRows + ` GROUP BY 1, 2, 3, 4) x
 		GROUP BY 1, 2),
-	k AS (SELECT sid, t FROM cc UNION SELECT sid, t FROM ag UNION SELECT sid, t FROM ev UNION SELECT sid, t FROM ms
-		UNION SELECT sid, t FROM rq)
+	k AS (SELECT sid, t FROM cc UNION SELECT sid, t FROM ag UNION SELECT sid, t FROM rq)
 	SELECT k.sid, k.t, ` + strings.Join(cols, ", ") + `,
 		coalesce(rq.requests, '{}'), coalesce(rq.requests_hidden, '{}')
-	FROM k LEFT JOIN cc USING (sid, t) LEFT JOIN ag USING (sid, t) LEFT JOIN ev USING (sid, t)
-		LEFT JOIN ms USING (sid, t) LEFT JOIN rq USING (sid, t)`
+	FROM k LEFT JOIN cc USING (sid, t) LEFT JOIN ag USING (sid, t) LEFT JOIN rq USING (sid, t)`
 }
 
-// sessionNorm is a session_minutes or session_hours row as compared: sums of
-// doubles rounded, since an hour adds its minutes' in another order.
+// sessionNorm is a session_minutes or session_hours row as compared.
 func sessionNorm(t string) string {
-	cols := []string{"session_id", t}
-	for _, c := range sumColumns {
-		if c == "hook_ms_sum" || c == "cost_usd" {
-			c = "round(" + c + "::numeric, 6)"
-		}
-		cols = append(cols, c)
-	}
+	cols := append([]string{"session_id", t}, sumColumns...)
 	return strings.Join(append(cols, "requests", "requests_hidden"), ", ")
 }
 
-const nonZero = `(model_calls + hidden_calls + events + missed > 0 OR requests <> '{}' OR requests_hidden <> '{}')`
+const nonZero = `(model_calls + hidden_calls > 0 OR requests <> '{}' OR requests_hidden <> '{}')`
 
 // checks are each rollup table with its rows as compared and from scratch.
 var checks = []struct{ table, rows, scratch string }{
@@ -96,13 +79,10 @@ var checks = []struct{ table, rows, scratch string }{
 		"SELECT " + sessionNorm("t") + " FROM (" + sessionScratch(hourNS) + ") s(" + scratchCols("t") + ")"},
 	{"session_minute_keys", "SELECT session_id, minute_ns, kind, key, n FROM session_minute_keys",
 		"SELECT sid, " + bucket("at", minuteNS) + ", kind, key, sum(n) FROM (" +
-			keyItems("e.session_id IS NOT NULL", "c.session_id IS NOT NULL") + ") k GROUP BY 1, 2, 3, 4"},
+			keyItems("c.session_id IS NOT NULL", "true") + ") k GROUP BY 1, 2, 3, 4"},
 	{"session_keys", "SELECT session_id, hour_ns, kind, key, n FROM session_keys",
 		"SELECT sid, " + bucket("at", hourNS) + ", kind, key, sum(n) FROM (" +
-			keyItems("e.session_id IS NOT NULL", "c.session_id IS NOT NULL") + ") k GROUP BY 1, 2, 3, 4"},
-	{"missed_reports", "SELECT event_key, session_id, minute_ns, ts_ns, request_id, client_request_id FROM missed_reports",
-		"SELECT r.event_key, r.session_id, " + bucket("r.ts_ns", minuteNS) + ", r.ts_ns, r.request_id, r.client_request_id " +
-			"FROM events r WHERE r.session_id IS NOT NULL AND " + missedWhere},
+			keyItems("c.session_id IS NOT NULL", "true") + ") k GROUP BY 1, 2, 3, 4"},
 	{"cred_minutes", "SELECT key_hash, minute_ns, kind, hidden, agent, n, n_tx FROM cred_minutes", credScratch(minuteNS)},
 	{"cred_hours", "SELECT key_hash, hour_ns, kind, hidden, agent, n, n_tx FROM cred_hours", credScratch(hourNS)},
 }
@@ -144,24 +124,38 @@ func Check(ctx context.Context, q DB) ([]Result, error) {
 }
 
 // recomputed are the prompt, session and day rollups, each with every key
-// the facts give it from scratch and the statements that compute a key's rows,
-// in the order they read each other (sessions read prompts, days sessions).
+// the facts give it from scratch and how a key's rows are computed, in the
+// order they read each other (sessions read prompts, days sessions). A prompt
+// is computed from all its calls at once (refreshPrompt), the refresh does it
+// a step at a time: the check holds the two equal.
 var recomputed = []struct {
 	kind, keys string
 	tables     []string
-	stmts      []string
+	run        func(ctx context.Context, tx pgx.Tx, key string) error
 }{
-	{"prompt", `SELECT DISTINCT prompt_id FROM calls c WHERE c.prompt_id IS NOT NULL AND ` + visible + `
-		UNION SELECT DISTINCT coalesce(e.prompt_id, 'input:' || e.batch_call_id || ':' || e.batch_cc_n) FROM events e
-		WHERE e.source = 'claude_code' AND e.name = 'tengu_input_prompt' AND e.session_id IS NOT NULL`,
-		[]string{"prompts", "steps"}, promptRefresh},
-	{"session", `SELECT DISTINCT session_id FROM calls c WHERE ` + visible + `
-		UNION SELECT DISTINCT session_id FROM events WHERE source = 'claude_code' AND session_id IS NOT NULL`,
-		[]string{"sessions", "prompt_items"}, sessionRefresh},
-	{"account_day", `SELECT DISTINCT a.account_id || '/' || (d.t - d.t % ` + fmt.Sprint(dayNS) + `) FROM session_accounts a JOIN (
-		SELECT c.session_id, ` + at + ` AS t FROM calls c WHERE ` + visible + `
-		UNION ALL SELECT session_id, ts_ns FROM events WHERE source = 'claude_code' AND session_id IS NOT NULL) d USING (session_id)`,
-		[]string{"account_days"}, dayRefresh},
+	{"prompt", `SELECT DISTINCT prompt_id FROM calls c WHERE c.prompt_id IS NOT NULL AND ` + visible,
+		[]string{"prompts", "steps", "step_keys", "prompt_keys"}, refreshPrompt},
+	{"session", `SELECT DISTINCT session_id FROM calls c WHERE ` + visible,
+		[]string{"sessions", "prompt_items"}, stmtsOf(sessionRefresh, "session")},
+	{"account_day", `SELECT DISTINCT a.account_id || '/' || (` + at + ` - ` + at + ` % ` + fmt.Sprint(dayNS) + `)
+		FROM session_accounts a JOIN calls c USING (session_id) WHERE ` + visible,
+		[]string{"account_days"}, stmtsOf(dayRefresh, "account_day")},
+}
+
+// stmtsOf runs a rollup's statements for a key of kind.
+func stmtsOf(stmts []string, kind string) func(ctx context.Context, tx pgx.Tx, key string) error {
+	return func(ctx context.Context, tx pgx.Tx, k string) error {
+		args, err := keyArgs(kind, k)
+		if err != nil {
+			return err
+		}
+		for _, s := range stmts {
+			if _, err := tx.Exec(ctx, s, args[:params(s)]...); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 // checkRecomputed compares the prompt, session and day rollups with the same
@@ -176,7 +170,10 @@ func checkRecomputed(ctx context.Context, q DB) ([]Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck // a rollback after a failure has nothing to report
+	defer tx.Rollback(context.WithoutCancel(ctx))                  //nolint:errcheck // a rollback after a failure has nothing to report
+	if _, err := tx.Exec(ctx, `SET LOCAL jit = off`); err != nil { // as Refresh runs them (noJIT)
+		return nil, err
+	}
 	var tables []string
 	for _, r := range recomputed {
 		tables = append(tables, r.tables...)
@@ -199,14 +196,8 @@ func checkRecomputed(ctx context.Context, q DB) ([]Result, error) {
 			return nil, err
 		}
 		for _, k := range keys {
-			args, err := keyArgs(r.kind, k)
-			if err != nil {
-				return nil, err
-			}
-			for _, s := range r.stmts {
-				if _, err := tx.Exec(ctx, s, args[:params(s)]...); err != nil {
-					return nil, fmt.Errorf("check %s %q: %w", r.kind, k, err)
-				}
+			if err := r.run(ctx, tx, k); err != nil {
+				return nil, fmt.Errorf("check %s %q: %w", r.kind, k, err)
 			}
 		}
 	}
@@ -228,45 +219,32 @@ func checkRecomputed(ctx context.Context, q DB) ([]Result, error) {
 }
 
 // dayCheck is account_days against one SQL over the facts alone (not the
-// session rollups it reads): each account's sessions' visible calls and Claude
-// Code events per UTC day, by the session's agent (owner decision 2: the
-// directory sums activity inside the window).
+// session rollups it reads): each account's sessions' visible calls per UTC
+// day, by the session's agent (owner decision 2: the directory sums activity
+// inside the window).
 var dayCheck = struct{ table, rows, scratch string }{"account_days (facts)",
-	`SELECT account_id, day_ns, agent, sessions, session_ids, call_session_ids, sessions_with_events, prompts, model_calls, outputs_known, tokens_input,
-		tokens_cache_read, tokens_cache_write, tokens_output, queries, bypassed, reported, missed, first_ns, last_ns FROM account_days`,
-	`WITH d AS (SELECT c.session_id AS sid, ` + at + ` - ` + at + ` % ` + fmt.Sprint(dayNS) + ` AS day, ` + at + ` AS t, true AS call, c.prompt_id AS prompt,
-			c.input_tokens, c.cache_read_tokens, c.cache_write_tokens, c.output_tokens, NULL::events AS e
-		FROM calls c WHERE ` + visible + `
-		UNION ALL SELECT e.session_id, e.ts_ns - e.ts_ns % ` + fmt.Sprint(dayNS) + `, e.ts_ns, false,
-			CASE WHEN e.name = 'tengu_input_prompt' THEN coalesce(e.prompt_id, 'input:' || e.ts_ns) END, NULL, NULL, NULL, NULL, e
-		FROM events e WHERE e.source = 'claude_code' AND e.session_id IS NOT NULL),
+	`SELECT account_id, day_ns, agent, sessions, session_ids, call_session_ids, prompts, model_calls, outputs_known, tokens_input,
+		tokens_cache_read, tokens_cache_write, tokens_output, first_ns, last_ns FROM account_days`,
+	`WITH d AS (SELECT c.session_id AS sid, ` + at + ` - ` + at + ` % ` + fmt.Sprint(dayNS) + ` AS day, ` + at + ` AS t, c.prompt_id AS prompt,
+			c.input_tokens, c.cache_read_tokens, c.cache_write_tokens, c.output_tokens
+		FROM calls c WHERE ` + visible + `),
 	agent AS (SELECT DISTINCT ON (c.session_id) c.session_id AS sid, ` + agent + ` AS product FROM calls c WHERE ` + visible + `
 		ORDER BY c.session_id, ` + callOrder + `),
-	sd AS (SELECT sid, day, count(*) FILTER (WHERE call) AS calls, count(*) FILTER (WHERE NOT call) AS events,
-			count(DISTINCT prompt) AS prompts, count(output_tokens) AS outputs_known, sum(input_tokens) AS input_tokens,
-			sum(cache_read_tokens) AS cache_read_tokens, sum(cache_write_tokens) AS cache_write_tokens, sum(output_tokens) AS output_tokens,
-			count(*) FILTER (WHERE (e).name = 'tengu_api_query' AND coalesce(` + jsonText(`(e).metadata -> 'permissionMode'`) + `, '') <> '') AS queries,
-			count(*) FILTER (WHERE (e).name = 'tengu_api_query' AND ` + jsonText(`(e).metadata -> 'permissionMode'`) + ` = 'bypassPermissions') AS bypassed,
-			count(*) FILTER (WHERE (e).name = 'tengu_api_success') AS reported, min(t) AS first, max(t) AS last
-		FROM d GROUP BY 1, 2),
-	ms AS (SELECT r.session_id AS sid, r.ts_ns - r.ts_ns % ` + fmt.Sprint(dayNS) + ` AS day, count(*) AS missed
-		FROM events r WHERE r.session_id IS NOT NULL AND ` + missedWhere + ` GROUP BY 1, 2)
+	sd AS (SELECT sid, day, count(*) AS calls, count(DISTINCT prompt) AS prompts, count(output_tokens) AS outputs_known,
+			sum(input_tokens) AS input_tokens, sum(cache_read_tokens) AS cache_read_tokens, sum(cache_write_tokens) AS cache_write_tokens,
+			sum(output_tokens) AS output_tokens, min(t) AS first, max(t) AS last
+		FROM d GROUP BY 1, 2)
 	SELECT a.account_id, sd.day, CASE WHEN agent.product = 'codex' THEN 'codex' ELSE 'claude-code' END,
 		count(*), array_agg(a.session_id ORDER BY a.session_id COLLATE "C"),
-		coalesce(array_agg(a.session_id ORDER BY a.session_id COLLATE "C") FILTER (WHERE sd.calls > 0), '{}'),
-		count(*) FILTER (WHERE sd.events > 0), sum(sd.prompts), sum(sd.calls), sum(sd.outputs_known),
-		sum(sd.input_tokens), sum(sd.cache_read_tokens), sum(sd.cache_write_tokens), sum(sd.output_tokens),
-		sum(sd.queries), sum(sd.bypassed), sum(sd.reported), sum(coalesce(ms.missed, 0)), min(sd.first), max(sd.last)
+		array_agg(a.session_id ORDER BY a.session_id COLLATE "C"), sum(sd.prompts), sum(sd.calls), sum(sd.outputs_known),
+		sum(sd.input_tokens), sum(sd.cache_read_tokens), sum(sd.cache_write_tokens), sum(sd.output_tokens), min(sd.first), max(sd.last)
 	FROM session_accounts a JOIN sd ON sd.sid = a.session_id LEFT JOIN agent ON agent.sid = a.session_id
-		LEFT JOIN ms ON ms.sid = sd.sid AND ms.day = sd.day
 	GROUP BY 1, 2, 3`,
 }
 
 // keyArgs is a refresh's arguments for a key of kind (Refresh's).
 func keyArgs(kind, k string) ([]any, error) {
 	switch kind {
-	case "prompt":
-		return promptArgs(k), nil
 	case "session":
 		return []any{k}, nil
 	}

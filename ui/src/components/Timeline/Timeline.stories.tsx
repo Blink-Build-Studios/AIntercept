@@ -3,8 +3,6 @@ import { useState } from "react";
 import { BandTrack } from "./BandTrack";
 import { BarTrack, gapRowLabel } from "./BarTrack";
 import type { Range } from "./Brush";
-import sessionCompaction from "../../api/samples/session_timeline/compaction";
-import sessionCoverageGap from "../../api/samples/session_timeline/coverage_gap";
 import sessionDemo from "../../api/samples/session_timeline/demo";
 import sessionMany from "../../api/samples/session_timeline/many";
 import sessionOnePrompt from "../../api/samples/session_timeline/one_prompt";
@@ -112,16 +110,12 @@ function SessionTimeline({ data, loading }: { data: SessionTimelineData; loading
 const sessionArgs = (data: SessionTimelineData) => ({ from: data.from, to: data.to, label: "Session timeline", children: null });
 const sessionStory = (data: SessionTimelineData): Story => ({ args: sessionArgs(data), render: () => <SessionTimeline data={data} /> });
 
-/** The session page from the demo sample (real traffic, sanitized): live, three idle compactions. */
+/** The session page from the demo sample (real traffic, sanitized): live. */
 export const Session: Story = sessionStory(sessionDemo.data);
 /** Scenario one_prompt: one prompt, one call. */
 export const SessionOnePrompt: Story = sessionStory(sessionOnePrompt.data);
-/** Scenario many: three prompts, with friction. */
+/** Scenario many: three prompts. */
 export const SessionMany: Story = sessionStory(sessionMany.data);
-/** Scenario compaction: an idle compaction (from → to, wait) and one with no result yet. */
-export const SessionCompaction: Story = sessionStory(sessionCompaction.data);
-/** Scenario coverage_gap: a not-captured window on the Model calls lane. */
-export const SessionCoverageGap: Story = sessionStory(sessionCoverageGap.data);
 export const SessionLoading: Story = { args: sessionArgs(sessionDemo.data), render: () => <SessionTimeline data={sessionDemo.data} loading /> };
 export const Loading: Story = { args: { ...window, label: "Activity", children: null }, render: () => <PersonTimeline loading /> };
 /** A Codex thread's lanes: Prompts · Model calls · Friction (§11J). */

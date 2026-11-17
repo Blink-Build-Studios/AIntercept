@@ -1,38 +1,36 @@
 """The session pages over v9 (docs/PIPELINE.md §6.1): what each page shows, read from the facts and the
 rollups through a few indexed statements in the request's snapshot, and shaped by today's code.
 
-- /sessions/{id}: its `sessions` row. What a page computes from the stored values: the agent, bypass %,
-  live, Codex's limits (agents.codex_limits of the stored headers), the children (`session_edges`,
-  §5.4) and the label (its own title, else the earliest title call of its accounts 0–5 minutes after
-  its start).
-- /timeline: the model-call and analytics lanes from `session_minutes` (bins under an hour) or
-  `session_hours`, the top event names from `session_minute_keys` or `session_keys`; the not-captured
-  windows from the row's coverage windows; friction from the friction minutes' events, each with its
-  prompt's number from `prompts`; typed prompts from `prompts`; compactions from `prompt_items`;
-  context points from `calls` by (session, time), one per main-thread call (what the chart draws).
-- /state: counts from `session_minutes` in the brush (hours inside it, minutes at its edges); heads,
-  PRs, commits and pushes from `session_keys` the same way; capabilities over the whole session from
-  its `session_keys`; recaps and the latest counts by event name.
-- /events: a page of `events` by (session, time), found through the minutes' counts; prompt numbers
-  and `linkedTo` by join (§5.4); totals from `session_minutes`.
-- /requests: a page of `calls` by (scope session, time) with the session's `missed_reports`, and for a
-  Codex thread its client's sessionless calls in its window by (credential, time); the page is found
-  through the minutes' counts per kind and credential; step numbers from `steps`, TTFT and cache from
-  the report (§5.4).
-- /prompts: a page of `prompt_items` by (session, seq), with each prompt's `prompts` row and `steps`.
+Analytics events (Claude Code's tengu_*, Codex's codex_*) aren't in the database: they stay in the raw
+files. What only they fed (the analytics lane, coverage and not-captured calls, friction marks, heads,
+recaps, hooks, TTFT, cost) is empty or null; everything else comes from the model calls themselves.
+
+- /sessions/{id}: its `sessions` row. What a page computes from the stored values: the agent, live,
+  Codex's limits (agents.codex_limits of the stored headers), the children (`session_edges`, §5.4) and
+  the label (its own title, else the earliest title call of its accounts 0–5 minutes after its start).
+- /timeline: the model-call lane from `session_minutes` (bins under an hour) or `session_hours`; the
+  prompts from `prompt_items` and `prompts`; context points from `calls` by (session, time), one per
+  main-thread call (what the chart draws).
+- /state: counts from `session_minutes` in the brush (hours inside it, minutes at its edges); commits,
+  pushes and PRs from the work keys the same way; tools used over the whole session from its
+  `session_keys`.
+- /events: none (analytics aren't stored).
+- /requests: a page of `calls` by (scope session, time), and for a Codex thread its client's sessionless
+  calls in its window by (credential, time); the page is found through the minutes' counts per kind and
+  credential; step numbers counted from `steps` (§5.2: never stored).
+- /prompts: a page of `prompt_items` by (session, seq), with each prompt's `prompts` row and `steps`
+  (numbered at read, by (t_ns, ord)); a turn is interrupted when it stopped on an interrupt or the next
+  prompt says so (follows_interrupt).
 
 Text search (`q`) scans the session's rows in the range (§6.1). Nothing is cached between requests.
 """
 
 import json
-import math
-import re
 from bisect import bisect_right
 from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from http import HTTPStatus
 from typing import Any
 
@@ -42,11 +40,7 @@ from aintercept_api import person as pp
 from aintercept_api import session as ss
 from aintercept_api import timeline as tl
 from aintercept_api.models.people import (
-    AnalyticsBin,
     CallClasses,
-    EventCount,
-    FrictionMark,
-    GapWindow,
     McpServer,
     ModelCallBin,
     PromptText,
@@ -59,20 +53,17 @@ from aintercept_api.models.sessions import (
     BetweenData,
     BetweenItem,
     CapabilitiesAt,
-    Compaction,
     ContextPoint,
     EventRow,
     PromptData,
     PromptFriction,
     PromptItem,
     RangeCounts,
-    Recap,
     RepoInRange,
     SessionState,
     SessionTimeline,
     StepData,
     ToolTally,
-    TurnReport,
 )
 from aintercept_api.models.work import TurnBlock, WorkBin
 from aintercept_api.reader import Snapshot
@@ -84,7 +75,9 @@ NS = cc.NS
 MINUTE = 60 * NS
 HOUR = 60 * MINUTE
 TITLE_WITHIN_NS = 5 * MINUTE
-RETRY_AFTER_NS = 30 * NS
+# The hidden kinds a request row names (calls.hidden_kind): Codex's prewarm and title calls, Claude Code's
+# next-prompt suggestion. Another kind's row is hidden all the same, unnamed.
+HIDDEN_KINDS = ("prewarm", "title", "suggestion")
 
 VISIBLE = drawer.VISIBLE
 _AT = "coalesce(c.start_ns, c.end_ns)"
@@ -112,8 +105,7 @@ _ROW_COLUMNS = f"""{_ID} AS id, {_AT} AS ts, CASE WHEN c.swept THEN NULL ELSE c.
   c.source, c.host, c.client_mode, c.hidden_kind, c.session_id, c.scope_session_id, {_UNNAMED} AS unnamed,
   c.prompt_id, c.method, c.path, c.status, c.error, c.request_bytes, c.response_bytes, c.request_class,
   c.content_encoding, c.model, c.effort, c.stop_reason, c.input_tokens, c.cache_read_tokens, c.cache_write_tokens,
-  c.output_tokens, c.ws_turn, c.tool_uses, c.detail -> 'text' AS text, c.request_id, c.client_request_id,
-  c.batch_events, c.batch_name, c.key_hash"""
+  c.output_tokens, c.ws_turn, c.tool_uses, c.detail -> 'text' AS text, c.key_hash"""
 
 
 # --- small helpers ------------------------------------------------------------------------------------
@@ -121,44 +113,6 @@ _ROW_COLUMNS = f"""{_ID} AS id, {_AT} AS ts, CASE WHEN c.swept THEN NULL ELSE c.
 
 def _round1(x: float) -> float:
     return round(x, 1)
-
-
-_NUMERIC = re.compile(r"^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$")
-
-
-def json_int(v: Any) -> int | None:
-    """TRY_CAST(json_extract_string(v) AS BIGINT): a number or numeric string, rounded half away from zero."""
-    if v is None or isinstance(v, bool):
-        return None
-    if isinstance(v, int):
-        return v
-    text = repr(v) if isinstance(v, float) else str(v).strip() if isinstance(v, str) else None
-    if text is None or not _NUMERIC.match(text):
-        return None
-    try:
-        return int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP))
-    except (InvalidOperation, ValueError, OverflowError):
-        return None
-
-
-def json_double(v: Any) -> float | None:
-    """TRY_CAST(json_extract_string(v) AS DOUBLE)."""
-    if v is None or isinstance(v, bool):
-        return None
-    if isinstance(v, int | float):
-        return float(v)
-    if isinstance(v, str) and _NUMERIC.match(v.strip()):
-        return float(v.strip())
-    return None
-
-
-def _json_str(v: Any) -> str | None:
-    """json_extract_string: a string's value, another scalar's text; None for null, an object or a list."""
-    if v is None or isinstance(v, dict | list):
-        return None
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    return v if isinstance(v, str) else json.dumps(v)
 
 
 def _phrase(status: int) -> str | None:
@@ -227,8 +181,8 @@ def title_text(answer: str) -> str:
 
 def session_row(s: Row, now: int, children: str | None, title_call: str | None) -> Row:
     """A `sessions` row as today's session_rows has it (with `live` as of now): what a page computes from the
-    stored values (the agent, bypass %, live, Codex's limits), its children and its label (§6.1: its own
-    title, else its title call's)."""
+    stored values (the agent, live, Codex's limits), its children and its label (§6.1: its own title, else
+    its title call's)."""
     r = dict(s)
     sid = s["session_id"]
     r["agent"] = agents.agent_of(s["product"])
@@ -240,7 +194,6 @@ def session_row(s: Row, now: int, children: str | None, title_call: str | None) 
     text, source = (title, "title") if title else (f"Session {sid[:8]}", "none")
     r["label_text"] = r["label_text_alone"] = text
     r["label_source"] = r["label_source_alone"] = source
-    r["bypass_pct"] = _round1(100 * s["bypassed"] / s["queries"]) if s["queries"] else None
     limits = None
     if s["limits"] is not None and s["limits_ns"] is not None:
         # As today's row has it: the time as Python's fromtimestamp reads a float (sessionrows.go
@@ -271,8 +224,7 @@ WHERE c.hidden_kind = 'title' AND c.account_id IN (SELECT account_id FROM sessio
   AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.session_id = c.session_id AND s.model_calls > 0)
 ORDER BY {_AT}, {_ID} COLLATE "C" LIMIT 1"""  # noqa: S608 (fixed text)
 
-_CELL_COLUMNS = """model_calls, main_calls, subagent_calls, output_tokens, context_sum, missed, events, events_shown,
-    frustrated, interrupted, destructive, requests, requests_hidden"""
+_CELL_COLUMNS = """model_calls, main_calls, subagent_calls, output_tokens, context_sum, requests, requests_hidden"""
 
 
 def _cells_sql(minutes_only: bool) -> str:
@@ -299,124 +251,60 @@ _KEYS = """SELECT kind, key, sum(n)::bigint AS n FROM (
   SELECT kind, key, n FROM session_minute_keys WHERE session_id = %(sid)s AND kind = ANY(%(kinds)s)
     AND minute_ns >= %(lo)s AND minute_ns <= %(hi)s AND (minute_ns < %(hlo)s OR minute_ns >= %(hhi)s)
 ) k GROUP BY kind, key"""
-# Each bin's event names: the hours' or minutes' name keys.
-_HOUR_NAMES = "SELECT hour_ns AS t, key, n FROM session_keys WHERE session_id = %(sid)s AND kind = 'name'"
-_MINUTE_NAMES = "SELECT minute_ns AS t, key, n FROM session_minute_keys WHERE session_id = %(sid)s AND kind = 'name'"
+PROMPT_INDEX = drawer.PROMPT_INDEX
+# Whether the prompt after p in its session (by time, then id byte-wise) says the turn before it was
+# interrupted (the harness writes the note into the next turn's request): one indexed LIMIT 1.
+NEXT_FOLLOWS_INTERRUPT = """coalesce((SELECT n.follows_interrupt FROM prompts n
+  WHERE n.session_id = p.session_id AND n.t_ns >= p.t_ns
+    AND (n.t_ns > p.t_ns OR n.prompt_id COLLATE "C" > p.prompt_id COLLATE "C")
+  ORDER BY n.t_ns, n.prompt_id COLLATE "C" LIMIT 1), false)"""
+# A list of prompts' steps, in order, each with its number.
+STEPS = """SELECT s.*, row_number() OVER (PARTITION BY s.prompt_id ORDER BY s.t_ns, s.ord) AS step FROM steps s
+WHERE s.session_id = %(sid)s AND s.prompt_id = ANY(%(pids)s) ORDER BY s.prompt_id, s.t_ns, s.ord"""
 
-# The typed prompts (the timeline's marks): a prompt with its input, or a Codex thread's turn.
-_TYPED = """SELECT i.seq, i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, i.pasted_bytes, i.images, p.steps,
-    p.text, p.text_chars, p.tokens_in, p.tokens_out, p.turn_end_ns, p.turn_report, p.unfinished_max_ns
+# The prompts (the timeline's marks): every prompt of the session.
+_TYPED = """SELECT i.seq, i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, p.steps, p.text, p.text_chars,
+    p.tokens_in, p.tokens_out, p.ended_ns, p.unfinished_max_ns
 FROM prompt_items i JOIN prompts p ON p.prompt_id = i.prompt_id AND p.session_id = i.session_id
-WHERE i.session_id = %(sid)s AND i.type = 'prompt' AND (p.has_input OR %(codex)s)
+WHERE i.session_id = %(sid)s AND i.type = 'prompt'
 ORDER BY i.t_ns / 1000, i.seq"""
-_FRICTION_MINUTES = """SELECT minute_ns FROM session_minutes WHERE session_id = %(sid)s
-  AND (frustrated > 0 OR interrupted > 0 OR destructive > 0) ORDER BY minute_ns"""
-# The friction minutes' events (claude_code.py friction_marks), each with its prompt's number (the
-# input's own, else its prompt's from `prompts`).
-_FRICTION = """SELECT e.ts_ns, e.name, e.metadata -> 'is_negative' AS negative, e.metadata -> 'prompt_index' AS idx,
-    e.metadata -> 'destructive_category' AS category, e.metadata -> 'destructive_target_scope' AS scope,
-    (SELECT p.prompt_index FROM prompts p WHERE p.prompt_id = e.metadata ->> 'cc_prompt_id' AND p.session_id = %(sid)s
-       AND p.has_input) AS prompt_index
-FROM unnest(%(minutes)s::bigint[]) m(t), LATERAL (
-  SELECT * FROM events e WHERE e.session_id = %(sid)s
-    AND e.name IN ('tengu_input_prompt', 'tengu_cancel', 'tengu_bash_tool_command_executed')
-    AND e.ts_ns >= m.t AND e.ts_ns < m.t + 60000000000 AND e.source = 'claude_code') e
-ORDER BY e.ts_ns, e.batch_call_id COLLATE "C", e.batch_cc_n"""
-# Not-captured windows' cross-checks: the reports in each, and whether any call was captured in it.
-_WINDOW = f"""SELECT (SELECT count(*) FROM events e WHERE e.session_id = %(sid)s AND e.name = 'tengu_api_success'
-      AND e.ts_ns BETWEEN %(a)s AND %(b)s AND e.source = 'claude_code') AS reported,
-  NOT EXISTS (SELECT 1 FROM calls c WHERE c.session_id = %(sid)s AND {_AT} BETWEEN %(a)s AND %(b)s AND {VISIBLE})
-    AS bypassed"""  # noqa: S608
 # Context points: one per main-thread visible call that sent context.
 _CONTEXT = f"""SELECT {_ID} AS id, {_AT} AS t, c.model,
     nullif(coalesce(c.input_tokens, 0) + coalesce(c.cache_read_tokens, 0) + coalesce(c.cache_write_tokens, 0), 0)
       AS tokens,
-    (SELECT p.prompt_index FROM prompts p
-     WHERE p.prompt_id = c.prompt_id AND p.session_id = c.session_id AND p.has_input)
-      AS prompt_index
+    {PROMPT_INDEX.format(s="c.session_id", p="c.prompt_id")} AS prompt_index
 FROM calls c WHERE c.session_id = %(sid)s AND c.request_class = 'main' AND {VISIBLE}
   AND (c.input_tokens IS NOT NULL OR c.cache_read_tokens IS NOT NULL OR c.cache_write_tokens IS NOT NULL)
 ORDER BY {_AT}, {_ID} COLLATE "C\""""  # noqa: S608
-_COMPACTIONS = """SELECT t_ns, between_kind, tokens_from, tokens_to, attempt_ns FROM prompt_items
-WHERE session_id = %(sid)s AND type = 'between' AND between_kind IN ('compaction', 'idle-compaction')
-  AND (%(lo)s::bigint IS NULL OR t_ns BETWEEN %(lo)s AND %(hi)s)
-ORDER BY seq"""
 
-# State: the range's prompts and compactions, the head at each end, the recaps, the latest counts.
-_ITEM_COUNTS = """SELECT count(*) FILTER (WHERE type = 'prompt') AS prompts,
-    count(*) FILTER (WHERE between_kind IN ('compaction', 'idle-compaction')) AS compactions
-FROM prompt_items WHERE session_id = %(sid)s AND t_ns BETWEEN %(lo)s AND %(hi)s"""
-_HEADS = """SELECT
-  (SELECT head_sha FROM events WHERE session_id = %(sid)s AND ts_ns BETWEEN %(lo)s AND %(hi)s AND head_sha IS NOT NULL
-     AND source = 'claude_code' ORDER BY ts_ns, head_sha COLLATE "C" LIMIT 1) AS head_from,
-  (SELECT head_sha FROM events WHERE session_id = %(sid)s AND ts_ns BETWEEN %(lo)s AND %(hi)s AND head_sha IS NOT NULL
-     AND source = 'claude_code' ORDER BY ts_ns DESC, head_sha COLLATE "C" DESC LIMIT 1) AS head_to"""
-_RECAPS = """SELECT ts_ns, metadata ? 'hadRecap' AS has,
-    metadata -> 'hadRecap' IN ('true'::jsonb, '"true"'::jsonb) AS recap
-FROM events WHERE session_id = %(sid)s AND name = 'tengu_return_to_session' AND source = 'claude_code'
-  AND jsonb_typeof(metadata) = 'object'
-ORDER BY ts_ns, batch_call_id COLLATE "C", batch_cc_n"""
-_LATEST = """SELECT (SELECT e.metadata -> 'mcpToolCount' FROM events e WHERE e.session_id = %(sid)s
-     AND e.name = 'tengu_tool_search_mode_decision' AND e.source = 'claude_code'
-     ORDER BY e.ts_ns DESC, e.batch_call_id COLLATE "C" DESC, e.batch_cc_n DESC LIMIT 1) AS mcp,
-  (SELECT e.metadata -> 'total' FROM events e WHERE e.session_id = %(sid)s
-     AND e.name = 'tengu_skills_sync_success' AND e.source = 'claude_code'
-     ORDER BY e.ts_ns DESC, e.batch_call_id COLLATE "C" DESC, e.batch_cc_n DESC LIMIT 1) AS skills"""
+# State: the range's prompts.
+_ITEM_COUNTS = """SELECT count(*) AS prompts FROM prompt_items
+WHERE session_id = %(sid)s AND type = 'prompt' AND t_ns BETWEEN %(lo)s AND %(hi)s"""
 
 # Prompts: the range's items (seq follows time, so they're a run of seqs), a page of them, and their steps.
 _ITEM_SPAN = """SELECT count(*) AS total, min(seq) AS first FROM prompt_items
 WHERE session_id = %(sid)s AND t_ns BETWEEN %(lo)s AND %(hi)s"""
 _PROMPT_AT = """SELECT min(seq) FROM prompt_items WHERE session_id = %(sid)s AND t_ns BETWEEN %(lo)s AND %(hi)s
   AND type = 'prompt' AND prompt_index = %(n)s"""
-_ITEMS = """SELECT i.*, p.has_input, p.text, p.text_chars, p.frustrated, p.steps, p.unfinished_max_ns, p.turn_end_ns,
-    p.tokens_in, p.tokens_out, p.tool_counts, p.interrupted, p.destructive, p.turn_report
+_ITEMS = f"""SELECT i.*, p.text, p.text_chars, p.steps, p.unfinished_max_ns, p.ended_ns, p.tokens_in, p.tokens_out,
+    p.tool_counts, p.interrupted OR {NEXT_FOLLOWS_INTERRUPT} AS interrupted
 FROM prompt_items i LEFT JOIN prompts p ON p.prompt_id = i.prompt_id AND p.session_id = i.session_id
-WHERE i.session_id = %(sid)s AND i.seq BETWEEN %(a)s AND %(b)s ORDER BY i.seq"""
-_STEPS = """SELECT * FROM steps WHERE session_id = %(sid)s AND prompt_id = ANY(%(pids)s) ORDER BY prompt_id, step"""
+WHERE i.session_id = %(sid)s AND i.seq BETWEEN %(a)s AND %(b)s ORDER BY i.seq"""  # noqa: S608 (fixed text)
 
-# Events: a page from a minute on, in today's order (time, batch, place in the batch).
-_EVENT_PAGE = f"""SELECT {drawer._EVENT} FROM events e
-WHERE e.session_id = %(sid)s AND e.ts_ns >= %(from)s AND e.ts_ns <= %(hi)s AND e.source = 'claude_code'
-  AND (%(internal)s OR NOT e.internal)
-  AND (%(q)s = '' OR strpos(lower(coalesce(e.name, '(unnamed)')), %(q)s) > 0 OR strpos(lower(e.summary), %(q)s) > 0)
-ORDER BY e.ts_ns, e.batch_call_id COLLATE "C", e.batch_cc_n LIMIT %(n)s OFFSET %(skip)s"""  # noqa: S608
-_EVENT_COUNTS = """SELECT count(*) FILTER (WHERE (%(internal)s OR NOT e.internal)
-    AND (strpos(lower(coalesce(e.name, '(unnamed)')), %(q)s) > 0 OR strpos(lower(e.summary), %(q)s) > 0))
-FROM events e WHERE e.session_id = %(sid)s AND e.ts_ns BETWEEN %(lo)s AND %(hi)s AND e.source = 'claude_code'"""
-
-# Requests: the session's credentials; its rows (a span of its calls, its missed reports); a Codex
-# thread's client's sessionless calls in its window; the joins a row reads.
+# Requests: the session's credentials; its rows (a span of its calls); a Codex thread's client's
+# sessionless calls in its window; the joins a row reads.
 _CREDENTIALS = "SELECT key_hash FROM session_credentials WHERE session_id = %(sid)s"
 _ROW_PREDICATE = f"""c.key_hash = ANY(%(creds)s) AND NOT {_UNNAMED} AND {_TRANSACTION}"""
 _CALL_ROWS = f"""SELECT {_ROW_COLUMNS} FROM calls c
 WHERE c.scope_session_id = %(sid)s AND (c.start_ns >= %(a)s AND c.start_ns < %(b)s
     OR c.start_ns IS NULL AND c.end_ns >= %(a)s AND c.end_ns < %(b)s)
   AND {_ROW_PREDICATE} AND (%(hidden)s OR c.hidden_kind IS NULL) AND (%(any_kind)s OR c.kind = ANY(%(kinds)s))"""  # noqa: S608
-_MISSED_ROWS = """SELECT event_key, ts_ns, request_id, client_request_id FROM missed_reports
-WHERE session_id = %(sid)s AND ts_ns >= %(a)s AND ts_ns < %(b)s"""
 _EXTRA_ROWS = f"""SELECT {_ROW_COLUMNS} FROM calls c
 WHERE c.key_hash = ANY(%(creds)s) AND c.start_ns BETWEEN %(lo)s AND %(hi)s
   AND (c.scope_session_id IS NULL OR {_UNNAMED}) AND c.source = 'codex' AND c.kind <> 'model'
   AND (CASE WHEN c.end_ns IS NULL THEN '' ELSE coalesce(c.client_mode, '') END) = %(client)s
   AND {_TRANSACTION}"""  # noqa: S608
-# The first report of each id (as its request or client request id), in today's order.
-_REPORTS = """SELECT k, r.metadata -> 'ttftMs' AS ttft, r.metadata -> 'cache_creation_5m_input_tokens' AS c5,
-    r.metadata -> 'cache_creation_1h_input_tokens' AS c1
-FROM unnest(%(keys)s::text[]) k, LATERAL (
-  SELECT r.metadata FROM events r WHERE (r.request_id = k OR r.client_request_id = k) AND r.session_id = %(sid)s
-    AND r.source = 'claude_code' AND r.name = 'tengu_api_success'
-  ORDER BY r.ts_ns, r.event_key COLLATE "C" LIMIT 1) r"""
-_STEP_NUMBERS = "SELECT call_id, step FROM steps WHERE call_id = ANY(%(ids)s) AND session_id = %(sid)s"
-_RETRIES = """SELECT ts_ns, metadata -> 'cc_prompt_id' AS prompt, metadata -> 'attempt' AS attempt FROM events
-WHERE session_id = %(sid)s AND name = 'tengu_api_retry' AND source = 'claude_code' AND ts_ns BETWEEN %(a)s AND %(b)s
-  AND jsonb_typeof(metadata) = 'object'
-ORDER BY ts_ns, event_key COLLATE "C\""""
-_NEXT_ATTEMPT = f"""SELECT {_AT} AS ts, c.status FROM calls c
-WHERE c.scope_session_id = %(sid)s AND c.kind = 'model' AND {_ROW_PREDICATE}
-  AND c.prompt_id IS NOT DISTINCT FROM %(prompt)s AND c.request_class IS NOT DISTINCT FROM %(cls)s
-  AND (c.start_ns >= %(ts)s OR c.start_ns IS NULL AND c.end_ns >= %(ts)s)
-  AND ({_AT} > %(ts)s OR {_AT} = %(ts)s AND {_ID} COLLATE "C" > %(id)s)
-ORDER BY {_AT}, {_ID} COLLATE "C" LIMIT 1"""  # noqa: S608
+STEP_NUMBERS = drawer.STEP_NUMBERS
 
 
 # --- shaping --------------------------------------------------------------------------------------
@@ -447,11 +335,6 @@ def _call_detail(c: Row) -> str:
     kind = c["kind"]
     if kind == "model":
         return _family_detail(c["request_class"], c["model"], c["stop_reason"])
-    if kind == "analytics":
-        n, name = c["batch_events"] or 0, c["batch_name"] or ""
-        if c["source"] == "codex" and name:
-            return name if n == 1 else f"{name} · {n} events"
-        return f"{n} events"
     if kind == "flags":
         return "feature flags"
     if kind == "count":
@@ -461,19 +344,6 @@ def _call_detail(c: Row) -> str:
     if kind in ("usage", "catalog", "metrics"):
         return p.removeprefix("/backend-api/").lstrip("/") or p
     return p[p.rfind("/") + 1 :] or path
-
-
-@dataclass
-class _Report:
-    ttft: float | None
-    cache_5m: int | None
-    cache_1h: int | None
-
-
-@dataclass
-class _Attempt:
-    retries: int | None
-    succeeded_at: int | None
 
 
 def _failed(c: Row) -> bool:
@@ -499,23 +369,17 @@ _NOT_YET = {
 }  # fmt: skip
 
 
-def call_row(
-    c: Row, index: dict[str, int], reports: dict[str, _Report], steps: dict[str, int], attempt: _Attempt | None
-) -> RequestRow:
-    """A captured transaction's row (process/requestrows.go requestRow)."""
+def call_row(c: Row, index: dict[str, int], steps: dict[str, int]) -> RequestRow:
+    """A captured transaction's row (process/requestrows.go requestRow). TTFT, the cache write split and
+    retries were Claude Code's analytics: null."""
     if c["pending"]:
         c = {**c, **_NOT_YET}
     kind = c["kind"]
     model = kind == "model"
-    rep = None
-    if model:
-        rep = (reports.get(c["request_id"]) if c["request_id"] else None) or (
-            reports.get(c["client_request_id"]) if c["client_request_id"] else None
-        )
     status = c["status"] or 0
     end = c["end_ns"]
     duration = _round1((end - c["ts"]) / 1e6) if end is not None else None
-    hidden = c["hidden_kind"] if c["hidden_kind"] in ("prewarm", "title") else None
+    hidden = c["hidden_kind"] if c["hidden_kind"] in HIDDEN_KINDS else None
     prewarm = c["hidden_kind"] == "prewarm"
     output = c["output_tokens"] or 0
     tokens = None
@@ -524,8 +388,8 @@ def call_row(
             input=c["input_tokens"] or None,
             cacheRead=c["cache_read_tokens"] or None,
             cacheWrite=c["cache_write_tokens"] or None,
-            cacheWrite5m=rep.cache_5m if rep else None,
-            cacheWrite1h=rep.cache_1h if rep else None,
+            cacheWrite5m=None,
+            cacheWrite1h=None,
             output=0 if output == 0 and prewarm else (output or None),
             accuracy="exact" if output != 0 or prewarm else "missing",
         )
@@ -540,8 +404,8 @@ def call_row(
             message=msg,
             afterMs=duration,
             bytesReceived=c["response_bytes"] or None,
-            retries=attempt.retries if attempt else None,
-            retrySucceededAt=dt(attempt.succeeded_at) if attempt and attempt.succeeded_at is not None else None,
+            retries=None,
+            retrySucceededAt=None,
         )
     text = c["text"] if isinstance(c["text"], str) else None
     session = None if c["unnamed"] else c["scope_session_id"]
@@ -560,14 +424,14 @@ def call_row(
         detail=_call_detail(c),
         status=status if status else ("ERR" if end is not None else None),
         durationMs=duration,
-        retries=attempt.retries if attempt else None,
+        retries=None,
         bytesUp=c["request_bytes"] or None,
         bytesDown=c["response_bytes"] or None,
         background=kind in ("count", "analytics") or c["request_class"] in ("auxiliary", "compaction"),
         captured=True,
         statusText=_phrase(status) if status else (c["error"] or None),
         stopReason=(c["stop_reason"] or None) if model else None,
-        ttftMs=rep.ttft if rep else None,
+        ttftMs=None,
         tokens=tokens,
         contentEncoding=c["content_encoding"] or None,
         error=error,
@@ -581,53 +445,6 @@ def call_row(
         if model
         else None,
         text=text if model else None,
-    )
-
-
-def missed_row(m: Row, sid: str, reports: dict[str, _Report]) -> RequestRow:
-    """A call Claude Code reported that the proxy never saw (process/requestrows.go missedRows)."""
-    rid, crid = m["request_id"], m["client_request_id"]
-    rep = (reports.get(rid) if rid else None) or (reports.get(crid) if crid else None)
-    return RequestRow(
-        requestId="reported:" + (rid or crid or str(m["ts_ns"])),
-        t=dt(m["ts_ns"]),
-        kind="model",
-        agent="claude-code",
-        client=None,
-        hiddenKind=None,
-        sessionId=sid,
-        sessionLabel=None,
-        promptIndex=None,
-        method=None,
-        path="/v1/messages",
-        detail="reported by Claude Code · not captured",
-        status=None,
-        durationMs=None,
-        retries=None,
-        bytesUp=None,
-        bytesDown=None,
-        background=False,
-        captured=False,
-        statusText=None,
-        stopReason=None,
-        ttftMs=rep.ttft if rep else None,
-        tokens=TokenCount(
-            input=None,
-            cacheRead=None,
-            cacheWrite=None,
-            cacheWrite5m=rep.cache_5m if rep else None,
-            cacheWrite1h=rep.cache_1h if rep else None,
-            output=None,
-            accuracy="missing",
-        ),
-        contentEncoding=None,
-        error=None,
-        model=None,
-        effort=None,
-        stepIndex=None,
-        toolCalls=[],
-        usageMissing=None,
-        text=None,
     )
 
 
@@ -670,7 +487,6 @@ class SessionReads:
     def __init__(self, snap: Snapshot) -> None:
         self.snap = snap
         self._rows: dict[str, Row | None] = {}
-        self._failed: dict[str, Row] = {}  # the failed model calls a requests read built rows of, by row id
 
     # --- the session row ------------------------------------------------------------------------
 
@@ -729,55 +545,15 @@ class SessionReads:
         work: Callable[[int, dict[int, int]], list[WorkBin]],
     ) -> SessionTimeline:
         """The timeline, with the Turns lane given and the Work lane from `work(width, steps per bin)`
-        (turnpages.TurnReads, §11R)."""
+        (turnpages.TurnReads, §11R). The analytics, not-captured, friction and compaction lanes were
+        analytics': empty."""
         width = bin_s * NS
         hourly = width % HOUR == 0
         cells = self.cells(sid, None, None) if hourly else self.minutes(sid, None, None)
-        model: dict[int, Counter[str]] = defaultdict(Counter)
-        known: dict[int, set[str]] = defaultdict(set)
-        events: Counter[int] = Counter()
+        model = model_bins(cells, width)
+        steps: Counter[int] = Counter()
         for c in cells:
-            b = c.start - c.start % width
-            row = c.row
-            if row["model_calls"] or row["missed"]:
-                m = model[b]
-                for k in ("model_calls", "main_calls", "subagent_calls", "missed"):
-                    m[k] += row[k]
-                for k in ("output_tokens", "context_sum"):
-                    if row[k] is not None:
-                        m[k] += row[k]
-                        known[b].add(k)
-            events[b] += row["events"]
-        model_bins = []
-        for b in sorted(model):
-            m = model[b]
-            n = m["model_calls"]
-            model_bins.append(
-                ModelCallBin(
-                    t=dt(b),
-                    count=n,
-                    tokens=m["output_tokens"],
-                    byClass=CallClasses(
-                        main=m["main_calls"],
-                        subagent=m["subagent_calls"],
-                        auxiliary=n - m["main_calls"] - m["subagent_calls"],
-                    ),
-                    tokensIn=m["context_sum"] if "context_sum" in known[b] else None,
-                    tokensOut=m["output_tokens"] if "output_tokens" in known[b] else None,
-                    notCaptured=m["missed"],
-                )
-            )
-        names: dict[int, Counter[str]] = defaultdict(Counter)
-        for t, key, n in self.snap.rows("names", _HOUR_NAMES if hourly else _MINUTE_NAMES, {"sid": sid}):
-            names[t - t % width][key] += n
-        analytics = []
-        for b in sorted(k for k, n in events.items() if n):
-            got = names[b]
-            unnamed = events[b] - sum(got.values())
-            if unnamed > 0:
-                got["(unnamed)"] += unnamed
-            top = sorted(got.items(), key=lambda x: (-x[1], x[0]))[: tl.TOP_EVENTS]
-            analytics.append(AnalyticsBin(t=dt(b), count=events[b], top=[EventCount(name=k, count=n) for k, n in top]))
+            steps[c.start - c.start % width] += c.row["model_calls"]
         return SessionTimeline(
             from_=dt(lo),
             to=dt(hi),
@@ -785,10 +561,10 @@ class SessionReads:
             binSeconds=bin_s,
             sessions=[tl.band_from_table(r, 0, alone=True)],
             prompts=self.typed_prompts(sid, r, now),
-            modelCalls=model_bins,
-            analytics=analytics,
-            notCaptured=self.gaps(sid, r),
-            friction=self.friction(sid, width),
+            modelCalls=model,
+            analytics=[],
+            notCaptured=[],
+            friction=[],
             context=[
                 ContextPoint(
                     t=dt(x["t"]),
@@ -801,25 +577,15 @@ class SessionReads:
                 )
                 for x in self.snap.dicts("context", _CONTEXT, {"sid": sid})
             ],
-            compactions=[
-                Compaction(
-                    t=dt(c["t_ns"]),
-                    from_=c["tokens_from"],
-                    to=c["tokens_to"],
-                    idle=c["between_kind"] == "idle-compaction",
-                    waitMs=_round1((c["t_ns"] - c["attempt_ns"]) / 1e6) if c["attempt_ns"] is not None else None,
-                    messages=None,
-                )
-                for c in self.snap.dicts("compactions", _COMPACTIONS, {"sid": sid, "lo": None, "hi": None})
-            ],
+            compactions=[],
             turns=turns,
-            work=work(width, {b: m["model_calls"] for b, m in model.items()}),
+            work=work(width, dict(steps)),
         )
 
     def typed_prompts(self, sid: str, r: Row, now: int) -> list[TimelinePrompt]:
         live = r["live"]
         out = []
-        for p in self.snap.dicts("typed", _TYPED, {"sid": sid, "codex": r["product"] == "codex"}):
+        for p in self.snap.dicts("typed", _TYPED, {"sid": sid}):
             out.append(
                 TimelinePrompt(
                     t=dt(p["t_ns"]),
@@ -835,112 +601,48 @@ class SessionReads:
             )
         return out
 
-    def gaps(self, sid: str, r: Row) -> list[GapWindow]:
-        out = []
-        for a, b, n in zip(r["cov_window_from"], r["cov_window_to"], r["cov_window_count"], strict=True):
-            ((reported, bypassed),) = self.snap.rows("window", _WINDOW, {"sid": sid, "a": a, "b": b})
-            out.append(
-                GapWindow(
-                    from_=dt(a),
-                    to=dt(b),
-                    count=n,
-                    reported=reported,
-                    captured=reported - n,
-                    cause=tl.BYPASS_CAUSE if bypassed else None,
-                )
-            )
-        return out
-
-    def friction(self, sid: str, width: int) -> list[FrictionMark]:
-        minutes = [m for (m,) in self.snap.rows("friction_minutes", _FRICTION_MINUTES, {"sid": sid})]
-        if not minutes:
-            return []
-        marks: dict[tuple[int, str], list[tuple[int | None, str | None]]] = defaultdict(list)
-        for e in self.snap.dicts("friction", _FRICTION, {"sid": sid, "minutes": minutes}):
-            b = e["ts_ns"] - e["ts_ns"] % width
-            if e["name"] == "tengu_input_prompt":
-                if _json_str(e["negative"]) == "true":
-                    marks[b, "frustrated"].append((json_int(e["idx"]), None))
-            elif e["name"] == "tengu_cancel":
-                marks[b, "interrupted"].append((e["prompt_index"], None))
-            else:
-                cat = _json_str(e["category"])
-                if cat and cat != "none":
-                    scope = _json_str(e["scope"])
-                    detail = " · ".join(p for p in (cat, scope) if p)
-                    marks[b, "destructive"].append((e["prompt_index"], detail))
-        out = []
-        for (b, kind), xs in sorted(marks.items()):
-            details = list(dict.fromkeys(d for _, d in xs if d is not None))
-            out.append(
-                FrictionMark(
-                    t=dt(b),
-                    kind=kind,
-                    count=len(xs),
-                    promptIndex=xs[0][0],
-                    detail=", ".join(details) if kind == "destructive" else tl.FRICTION_DETAIL[kind],
-                    tool="Bash" if kind == "destructive" else None,
-                )
-            )
-        return out
-
     # --- state ----------------------------------------------------------------------------------
 
     def state(self, sid: str, lo: int, hi: int, requests: int) -> SessionState:
-        s = self.stored(sid) or {}
-        has_events = bool(s.get("events"))
+        """The range readout: its counts, and the commits, pushes and PRs its steps' tool calls made; the
+        tools the whole session's calls asked for. Heads, hooks, skills, recaps and pool changes were
+        analytics': null."""
         cells = self.cells(sid, lo, hi)
         model_calls = sum(c.row["model_calls"] for c in cells)
-        n_events = sum(c.row["events"] for c in cells)
         (counts,) = self.snap.dicts("item_counts", _ITEM_COUNTS, {"sid": sid, "lo": lo, "hi": hi})
         ranged: dict[str, Counter[str]] = defaultdict(Counter)
-        for kind, key, n in self.keys(sid, lo, hi, ["head", "pr", "git", "name"]):
-            if kind != "name" or key == "tengu_deferred_tools_pool_change":
-                ranged[kind][key] += n
-        heads = len(ranged["head"])
-        head_from = head_to = None
-        if heads:
-            ((head_from, head_to),) = self.snap.rows("heads", _HEADS, {"sid": sid, "lo": lo, "hi": hi})
-        prs = sorted({n for n in map(_pr, ranged["pr"]) if n is not None})
+        for kind, key, n in self.keys(sid, lo, hi, ["w:commit", "w:push", "w:pr"]):
+            ranged[kind][key] += n
+        prs = sorted(int(k) for k in ranged["w:pr"] if k.isdigit())
         whole: dict[str, set[str]] = defaultdict(set)
-        for kind, key, _ in self.keys(
-            sid, None, None, ["hook", "event_builtin", "event_mcp", "call_builtin", "call_mcp"]
-        ):
+        for kind, key, _ in self.keys(sid, None, None, ["call_builtin", "call_mcp"]):
             whole[kind].add(key)
-        builtin = len(whole["event_builtin"] | whole["call_builtin"])
         servers: dict[str, set[str]] = defaultdict(set)
-        for key in whole["event_mcp"] | whole["call_mcp"]:
+        for key in whole["call_mcp"]:
             server, tool = json.loads(key)
             servers[server].add(tool)
         mcp = sorted((k, len(v)) for k, v in servers.items())
-        recaps = self.snap.dicts("recaps", _RECAPS, {"sid": sid})
-        reports_recaps = any(x["has"] for x in recaps)
-        (latest,) = self.snap.dicts("latest", _LATEST, {"sid": sid})
         return SessionState(
             capabilitiesAt=CapabilitiesAt(
-                builtin=ToolTally(total=None, used=builtin if has_events else None),
+                builtin=ToolTally(total=None, used=len(whole["call_builtin"]) or None),
                 mcpServers=[McpServer(name=k, tools=None, toolsUsed=n, riskyVerbs=[]) for k, n in mcp],
-                mcpTools=ToolTally(
-                    total=json_int(latest["mcp"]), used=sum(n for _, n in mcp) if has_events or mcp else None
-                ),
-                skills=json_int(latest["skills"]),
-                hooks=len(whole["hook"]) if has_events else None,
-                poolChangesInRange=ranged["name"]["tengu_deferred_tools_pool_change"] if has_events else None,
+                mcpTools=ToolTally(total=None, used=sum(n for _, n in mcp) if mcp else None),
+                skills=None,
+                hooks=None,
+                poolChangesInRange=None,
             ),
             repoInRange=RepoInRange(
                 branch=None,
-                headFrom=head_from,
-                headTo=head_to,
-                headChanges=heads - 1 if heads else None,
-                commits=ranged["git"]["commit"],
-                pushed=ranged["git"]["push"] > 0,
+                headFrom=None,
+                headTo=None,
+                headChanges=None,
+                commits=sum(ranged["w:commit"].values()),
+                pushed=sum(ranged["w:push"].values()) > 0,
                 cwdTrail=None,
                 prs=prs,
             ),
-            recapsInRange=[Recap(t=dt(x["ts_ns"]), text=None) for x in recaps if x["recap"] and lo <= x["ts_ns"] <= hi]
-            if reports_recaps
-            else None,
-            recapsTotal=sum(bool(x["recap"]) for x in recaps) if reports_recaps else None,
+            recapsInRange=None,
+            recapsTotal=None,
             experimentsAt=None,
             flagFetchesInRange=None,
             flagsChangedInRange=None,
@@ -948,8 +650,8 @@ class SessionReads:
                 prompts=counts["prompts"],
                 modelCalls=model_calls,
                 requests=requests,
-                events=n_events,
-                compactions=counts["compactions"],
+                events=0,
+                compactions=0,
                 turns=counts["prompts"],
                 steps=model_calls,
             ),
@@ -973,11 +675,10 @@ class SessionReads:
         items = self.snap.dicts("items", _ITEMS, {"sid": sid, "a": a, "b": b})
         pids = sorted({i["prompt_id"] for i in items if i["type"] == "prompt"})
         live = self._live(sid, now)
-        last_event = (self.stored(sid) or {}).get("prompt_event_last_ns")
         steps: dict[str, list[StepData]] = defaultdict(list)
         if pids:
-            for s in self.snap.dicts("steps", _STEPS, {"sid": sid, "pids": pids}):
-                steps[s["prompt_id"]].append(_step(s, live, now, last_event))
+            for s in self.snap.dicts("steps", STEPS, {"sid": sid, "pids": pids}):
+                steps[s["prompt_id"]].append(step_data(s, live, now))
         return [_item(i, steps[i["prompt_id"]] if i["type"] == "prompt" else [], live, now) for i in items], total, page
 
     # --- events ---------------------------------------------------------------------------------
@@ -985,28 +686,8 @@ class SessionReads:
     def events(
         self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
     ) -> tuple[int, int, list[EventRow]]:
-        needle = q.lower() if q else ""
-        cells = self.cells(sid, lo, hi)
-        total = sum(c.row["events"] for c in cells)
-        col = "events" if internal else "events_shown"
-        params: dict[str, Any] = {"sid": sid, "hi": hi, "internal": internal, "q": needle, "n": size}
-        skip = (page - 1) * size
-        if needle:
-            (shown,) = self.snap.rows(
-                "event_counts", _EVENT_COUNTS, {"sid": sid, "lo": lo, "hi": hi, "internal": internal, "q": needle}
-            )[0]
-            params.update({"from": lo, "skip": skip})
-        else:
-            shown = sum(c.row[col] for c in cells)
-            found = _walk(
-                cells, lambda c: c.row[col], skip, lambda c: self.minutes(sid, c.start, c.end - 1), desc=False
-            )
-            if found is None:
-                return total, shown, []
-            params.update({"from": found[0], "skip": found[1]})
-        reads = drawer.PgReads(self.snap, lambda *_: None)
-        evs = reads._events("event_page", _EVENT_PAGE, params)
-        return total, shown, reads.event_rows(sid, evs)
+        """None: analytics events aren't stored (they stay in the raw files)."""
+        return 0, 0, []
 
     # --- requests -------------------------------------------------------------------------------
 
@@ -1022,7 +703,7 @@ class SessionReads:
         creds = sorted({k for (k,) in self.snap.rows("credentials", _CREDENTIALS, {"sid": sid})})
         whole = self.cells(sid, None, None) if lo is None and hi is None else None
         cells = whole if whole is not None else self.cells(sid, lo, hi)
-        if not codex:  # the analytics posts that carried its events (process/requestrows.go corrHashes)
+        if not codex:  # its analytics posts' credentials (the posts its calls' rows count)
             batch_cells = whole if whole is not None else self.cells(sid, None, None)
             creds = sorted(
                 set(creds)
@@ -1061,8 +742,6 @@ class SessionReads:
                         kd, _, h = k.partition("/")
                         if h in creds:
                             got[kd, hid] += n
-            if captured is not True and cell.row["missed"]:
-                got["model", False] += cell.row["missed"]
             return got
 
         extra_counts: Counter[tuple[str, bool]] = Counter()
@@ -1084,7 +763,7 @@ class SessionReads:
                 hidden_count,
                 total,
                 dict(sorted(by_kind.items())),
-                self._retried(sid, creds, shown[(page - 1) * size : page * size]),
+                shown[(page - 1) * size : page * size],
             )
 
         allc: Counter[tuple[str, bool]] = Counter(extra_counts)
@@ -1131,7 +810,7 @@ class SessionReads:
             b = min(b, hi_all + 1)
         rows = self._request_rows(sid, s, creds, extras, a, b - 1, captured, hidden, kinds)
         rows.sort(key=lambda r: (r.t, r.requestId), reverse=desc)
-        rows = self._retried(sid, creds, rows[inner : inner + size])
+        rows = rows[inner : inner + size]
         return (
             hidden_count,
             total,
@@ -1181,7 +860,6 @@ class SessionReads:
         a = lo if lo is not None else -(1 << 62)
         b = hi + 1 if hi is not None else 1 << 62
         calls: list[Row] = []
-        missed: list[Row] = []
         if captured is not False:
             calls = self.snap.dicts(
                 "call_rows",
@@ -1193,81 +871,17 @@ class SessionReads:
                 for x in extras
                 if a <= x["ts"] < b and (hidden or x["hidden_kind"] is None) and (not kinds or x["kind"] in kinds)
             ]
-        if captured is not True and (not kinds or "model" in kinds):
-            missed = self.snap.dicts("missed_rows", _MISSED_ROWS, {"sid": sid, "a": a, "b": b})
-        keys = sorted(
-            {k for c in calls if c["kind"] == "model" for k in (c["request_id"], c["client_request_id"]) if k}
-            | {k for m in missed for k in (m["request_id"], m["client_request_id"]) if k}
-        )
-        reports: dict[str, _Report] = {}
-        if keys:
-            for k, ttft, c5, c1 in self.snap.rows("reports", _REPORTS, {"keys": keys, "sid": sid}):
-                reports[k] = _Report(json_double(ttft), json_int(c5), json_int(c1))
         pids = sorted({c["prompt_id"] for c in calls if c["prompt_id"]})
         index: dict[str, int] = {}
         if pids:
-            index = dict(self.snap.rows("prompt_indexes", drawer._PROMPT_INDEXES, {"sid": sid, "pids": pids}))
+            index = dict(self.snap.rows("prompt_indexes", drawer.PROMPT_INDEXES, {"sid": sid, "pids": pids}))
         model_ids = [c["id"].replace("~", "#") for c in calls if c["kind"] == "model" and c["prompt_id"]]
         steps: dict[str, int] = {}
         if model_ids:
             steps = {
-                cid.replace("#", "~"): n
-                for cid, n in self.snap.rows("step_numbers", _STEP_NUMBERS, {"ids": model_ids, "sid": sid})
+                cid.replace("#", "~"): n for cid, n in self.snap.rows("step_numbers", STEP_NUMBERS, {"ids": model_ids})
             }
-        out = []
-        for c in calls:
-            if c["kind"] == "model" and _failed(c) and not c["unnamed"] and c["scope_session_id"] == sid:
-                self._failed[c["id"]] = c
-            out.append(call_row(c, index, reports, steps, None))
-        out += [missed_row(m, sid, reports) for m in missed]
-        return out
-
-    def _retried(self, sid: str, creds: list[str], rows: list[RequestRow]) -> list[RequestRow]:
-        """The page's rows, each failed model call's with its retry (read for the page's rows alone)."""
-        out = []
-        for r in rows:
-            c = self._failed.get(r.requestId)
-            attempt = self._attempt(sid, c, creds) if c is not None else None
-            if attempt is not None and r.error is not None:
-                at = dt(attempt.succeeded_at) if attempt.succeeded_at is not None else None
-                error = r.error.model_copy(update={"retries": attempt.retries, "retrySucceededAt": at})
-                r = r.model_copy(update={"retries": attempt.retries, "error": error})
-            out.append(r)
-        return out
-
-    def _attempt(self, sid: str, c: Row, creds: list[str]) -> _Attempt | None:
-        """A failed call Claude Code retried: its tengu_api_retry (nearest its end, within 30 s after it),
-        and the next attempt (process/requestrows.go attempts)."""
-        stop = c["end_ns"] if c["end_ns"] is not None else c["ts"]
-        best: tuple[int, int, Any] | None = None
-        for r in self.snap.dicts("retries", _RETRIES, {"sid": sid, "a": c["ts"], "b": stop + RETRY_AFTER_NS}):
-            prompt = _json_str(r["prompt"])
-            if c["prompt_id"] and prompt is not None and prompt != c["prompt_id"]:
-                continue
-            dist = abs(r["ts_ns"] - stop)
-            if best is None or dist < best[0]:
-                best = (dist, r["ts_ns"], r["attempt"])
-        if best is None:
-            return None
-        found = self.snap.dicts(
-            "next_attempt",
-            _NEXT_ATTEMPT,
-            {
-                "sid": sid,
-                "creds": creds,
-                "prompt": c["prompt_id"],
-                "cls": c["request_class"],
-                "ts": c["ts"],
-                "id": c["id"],
-            },
-        )
-        succeeded = None
-        if found and found[0]["status"] and found[0]["status"] < 400:
-            succeeded = found[0]["ts"]
-        retries = json_int(best[2])
-        if retries is not None and not -(1 << 31) <= retries < 1 << 31:
-            retries = None
-        return _Attempt(retries, succeeded)
+        return [call_row(c, index, steps) for c in calls]
 
     def request_count(self, sid: str, lo: int | None, hi: int | None) -> int:
         """The Requests tab's total in [lo, hi] with every row shown (the state readout's)."""
@@ -1284,27 +898,57 @@ def _with_extras(cells: list[Cell], extra_at: list[int]) -> list[Cell]:
 
     out = list(cells)
     for m in sorted({t - t % MINUTE for t in extra_at if not covered(t)}):
-        out.append(Cell(m, m + MINUTE, {"requests": {}, "requests_hidden": {}, "missed": 0}))
+        out.append(Cell(m, m + MINUTE, {"requests": {}, "requests_hidden": {}}))
     out.sort(key=lambda c: c.start)
     return out
 
 
-def _pr(key: str) -> int | None:
-    """A PR number as event_rows.pr read it (pyIntOf: int(float(v)))."""
-    try:
-        v = float(key)
-    except ValueError:
-        return None
-    return int(v) if math.isfinite(v) else None
+def model_bins(cells: list[Cell], width: int) -> list[ModelCallBin]:
+    """The model-call lane: the cells' calls and tokens per bin of `width` ns (bins with calls only)."""
+    model: dict[int, Counter[str]] = defaultdict(Counter)
+    known: dict[int, set[str]] = defaultdict(set)
+    for c in cells:
+        row = c.row
+        if not row["model_calls"]:
+            continue
+        b = c.start - c.start % width
+        m = model[b]
+        for k in ("model_calls", "main_calls", "subagent_calls"):
+            m[k] += row[k]
+        for k in ("output_tokens", "context_sum"):
+            if row[k] is not None:
+                m[k] += row[k]
+                known[b].add(k)
+    out = []
+    for b in sorted(model):
+        m = model[b]
+        n = m["model_calls"]
+        out.append(
+            ModelCallBin(
+                t=dt(b),
+                count=n,
+                tokens=m["output_tokens"],
+                byClass=CallClasses(
+                    main=m["main_calls"],
+                    subagent=m["subagent_calls"],
+                    auxiliary=n - m["main_calls"] - m["subagent_calls"],
+                ),
+                tokensIn=m["context_sum"] if "context_sum" in known[b] else None,
+                tokensOut=m["output_tokens"] if "output_tokens" in known[b] else None,
+                notCaptured=0,
+            )
+        )
+    return out
 
 
 def _text(p: Row) -> PromptText:
+    """A prompt's text and size; pastes and images were analytics': null."""
     return PromptText(
         retained=p["text"] is not None,
         text=p["text"],
         chars=p["text_chars"],
-        pastedBytes=p["pasted_bytes"],
-        images=p["images"],
+        pastedBytes=None,
+        images=None,
     )
 
 
@@ -1314,12 +958,10 @@ def _in_flight(p: Row, live: bool, now: int) -> bool:
 
 
 def _duration(p: Row, live: bool, now: int) -> float | None:
-    """The prompt's duration (session.py _DURATION): its turn's, unless still in flight; else its report's."""
-    turn = _round1((p["turn_end_ns"] - p["t_ns"]) / 1e6) if p["turn_end_ns"] is not None else None
-    if turn is not None and not _in_flight(p, live, now):
-        return turn
-    report = p["turn_report"]
-    return report.get("durationMs") if isinstance(report, dict) else None
+    """The prompt's duration: to its last step's end, unless still in flight."""
+    if p["ended_ns"] is None or _in_flight(p, live, now):
+        return None
+    return _round1((p["ended_ns"] - p["t_ns"]) / 1e6)
 
 
 def _item(i: Row, steps: list[StepData], live: bool, now: int) -> PromptItem | BetweenItem:
@@ -1331,13 +973,12 @@ def _item(i: Row, steps: list[StepData], live: bool, now: int) -> PromptItem | B
                 t=dt(i["t_ns"]),
                 detail=i["detail"],
                 requestId=i["call_id"].replace("#", "~") if i["call_id"] else None,
-                tokensFrom=i["tokens_from"],
-                tokensTo=i["tokens_to"],
-                waitMs=_round1((i["t_ns"] - i["attempt_ns"]) / 1e6) if i["attempt_ns"] is not None else None,
+                tokensFrom=None,
+                tokensTo=None,
+                waitMs=None,
             ),
         )
     counts = sorted((i["tool_counts"] or {}).items(), key=lambda x: (-x[1], x[0]))
-    report = i["turn_report"]
     prompt = PromptData(
         promptId=i["prompt_id"],
         index=i["prompt_index"],
@@ -1348,23 +989,22 @@ def _item(i: Row, steps: list[StepData], live: bool, now: int) -> PromptItem | B
         tokensIn=i["tokens_in"],
         tokensOut=i["tokens_out"],
         toolCounts=dict(counts),
-        friction=PromptFriction(frustrated=i["frustrated"], interrupted=i["interrupted"], destructive=i["destructive"]),
+        friction=PromptFriction(frustrated=False, interrupted=bool(i["interrupted"]), destructive=0),
         inFlight=_in_flight(i, live, now),
-        turnReport=TurnReport.model_validate(report) if report else None,
+        turnReport=None,
         hidden=i["hidden"] or {},
     )
     return PromptItem(type="prompt", prompt=prompt, steps=steps)
 
 
-def _step(s: Row, live: bool, now: int, last_event: int | None) -> StepData:
-    """A steps row as the API's StepData, with what depends on now (session.py _step)."""
+def step_data(s: Row, live: bool, now: int) -> StepData:
+    """A steps row as the API's StepData, with what depends on now (session.py _step). TTFT, the cache
+    write split and cost were Claude Code's analytics: null."""
     end = s["end_ns"]
     if end is None:
         status = "streaming" if live and now - s["t_ns"] <= ss.STREAMING_WITHIN_NS else "error"
     else:
         status = "error" if s["failed"] else "done"
-    pending = not s["reported"] and (last_event is None or last_event <= (end if end is not None else s["t_ns"]))
-    content_live = live and s["content_live"]
     return StepData(
         requestId=s["call_id"].replace("#", "~"),
         t=dt(s["t_ns"]),
@@ -1375,23 +1015,23 @@ def _step(s: Row, live: bool, now: int, last_event: int | None) -> StepData:
             input=s["tokens_input"],
             cacheRead=s["tokens_cache_read"],
             cacheWrite=s["tokens_cache_write"],
-            cacheWrite5m=s["tokens_cache_write_5m"],
-            cacheWrite1h=s["tokens_cache_write_1h"],
+            cacheWrite5m=None,
+            cacheWrite1h=None,
             output=s["tokens_output"],
             accuracy="exact" if s["tokens_output"] is not None else "missing",
         ),
         durationMs=_round1((end - s["t_ns"]) / 1e6) if end is not None else None,
-        ttftMs=s["ttft_ms"],
+        ttftMs=None,
         stopReason=s["stop_reason"],
-        costUsd=s["cost_usd"],
+        costUsd=None,
         status=status,
-        eventsPending=live and pending,
+        eventsPending=False,
         agentType=s["agent_type"],
-        tools=s["tools_live"] if live and s["tools_live"] is not None else s["tools"],
+        tools=s["tools"],
         does=s["does"],
-        commands=list(s["commands_live"] if content_live else s["commands"]),
+        commands=list(s["commands"]),
         patches=s["patches"],
         text=s["text"],
-        exitCodes=list(s["exit_codes_live"] if content_live else s["exit_codes"]),
+        exitCodes=list(s["exit_codes"]),
         usageMissing=s["usage_missing"],
     )

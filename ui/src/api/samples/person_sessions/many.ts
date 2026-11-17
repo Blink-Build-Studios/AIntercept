@@ -6,20 +6,15 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
     {
       "agent": "claude-code",
       "branch": null,
-      "bypassPct": 100.0,
+      "bypassPct": null,
       "capturedFromPrompt": null,
       "children": null,
       "client": "cli",
       "clientVersion": "2.1.308",
       "commit": null,
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": 1,
-        "windows": []
-      },
-      "end": "2026-11-04T13:01:05Z",
-      "events": 3,
+      "coverage": null,
+      "end": "2026-11-04T13:01:00Z",
+      "events": null,
       "fieldsMissing": false,
       "friction": {
         "destructive": 0,
@@ -37,25 +32,20 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "prompts": 1,
       "repo": null,
       "sessionId": "33333333-3333-4333-8333-333333333333",
-      "start": "2026-11-04T13:00:00Z"
+      "start": "2026-11-04T13:01:00Z"
     },
     {
       "agent": "claude-code",
       "branch": null,
-      "bypassPct": 100.0,
+      "bypassPct": null,
       "capturedFromPrompt": null,
       "children": null,
       "client": "cli",
       "clientVersion": "2.1.308",
       "commit": null,
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": 1,
-        "windows": []
-      },
-      "end": "2026-11-04T11:01:05Z",
-      "events": 3,
+      "coverage": null,
+      "end": "2026-11-04T11:01:00Z",
+      "events": null,
       "fieldsMissing": false,
       "friction": {
         "destructive": 0,
@@ -73,25 +63,20 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "prompts": 1,
       "repo": null,
       "sessionId": "22222222-2222-4222-8222-222222222222",
-      "start": "2026-11-04T11:00:00Z"
+      "start": "2026-11-04T11:01:00Z"
     },
     {
       "agent": "claude-code",
       "branch": null,
-      "bypassPct": 100.0,
+      "bypassPct": null,
       "capturedFromPrompt": null,
       "children": null,
       "client": "cli",
       "clientVersion": "2.1.308",
       "commit": null,
-      "coverage": {
-        "captured": 1,
-        "notCaptured": 0,
-        "reported": 1,
-        "windows": []
-      },
-      "end": "2026-11-04T09:01:05Z",
-      "events": 3,
+      "coverage": null,
+      "end": "2026-11-04T09:01:00Z",
+      "events": null,
       "fieldsMissing": false,
       "friction": {
         "destructive": 0,
@@ -109,13 +94,13 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "prompts": 1,
       "repo": null,
       "sessionId": "11111111-1111-4111-8111-111111111111",
-      "start": "2026-11-04T09:00:00Z"
+      "start": "2026-11-04T09:01:00Z"
     }
   ],
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T13:01:05Z",
+    "lastDataAt": "2026-11-04T13:01:00Z",
     "page": 1,
     "pageSize": 20,
     "to": null,

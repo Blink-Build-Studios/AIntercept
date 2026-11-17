@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Get Event
-         * @description An EventRow's `eventId` (`<batch>:<n>`): the client event in full.
+         * @description An EventRow's `eventId`: none since analytics events aren't stored (always a 404).
          */
         get: operations["get_event"];
         put?: never;
@@ -173,7 +173,7 @@ export interface paths {
         };
         /**
          * Get Request
-         * @description A captured transaction (its correlation id), or `reported:<requestId>` for a call only Claude Code reported.
+         * @description A captured transaction (its correlation id).
          */
         get: operations["get_request"];
         put?: never;
@@ -1677,7 +1677,7 @@ export interface components {
             effort: string | null;
             error: components["schemas"]["RequestError"] | null;
             /** Hiddenkind */
-            hiddenKind: ("prewarm" | "title") | null;
+            hiddenKind: ("prewarm" | "title" | "suggestion") | null;
             /**
              * Kind
              * @enum {string}

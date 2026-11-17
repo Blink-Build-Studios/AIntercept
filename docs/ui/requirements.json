@@ -16,7 +16,6 @@
         "one",
         "many",
         "unattributed",
-        "coverage_gap",
         "error"
       ],
       "demo": true
@@ -51,7 +50,6 @@
       "scenarios": [
         "one_session",
         "many",
-        "coverage_gap",
         "error"
       ],
       "demo": true
@@ -63,7 +61,6 @@
         "empty",
         "one_session",
         "many",
-        "coverage_gap",
         "error"
       ],
       "demo": true
@@ -87,8 +84,6 @@
         "empty",
         "one",
         "many",
-        "pre_parser",
-        "coverage_gap",
         "live",
         "codex_threads",
         "error"
@@ -102,7 +97,6 @@
         "empty",
         "one",
         "many",
-        "not_captured",
         "account_calls",
         "error"
       ],
@@ -126,8 +120,6 @@
       "scenarios": [
         "one_prompt",
         "many",
-        "compaction",
-        "coverage_gap",
         "error"
       ],
       "demo": true
@@ -177,7 +169,6 @@
         "empty",
         "one",
         "many",
-        "not_captured",
         "codex_hidden",
         "codex_channels",
         "error"
@@ -189,9 +180,6 @@
       "operationId": "get_session_events",
       "scenarios": [
         "empty",
-        "one",
-        "many",
-        "internals_hidden",
         "error"
       ],
       "demo": true
@@ -200,17 +188,15 @@
       "path": "/api/v1/events/{eventId}",
       "operationId": "get_event",
       "scenarios": [
-        "normal",
         "error"
       ],
-      "demo": true
+      "demo": false
     },
     {
       "path": "/api/v1/requests/{requestId}",
       "operationId": "get_request",
       "scenarios": [
         "normal",
-        "not_captured",
         "failed",
         "retained",
         "error"
@@ -448,9 +434,7 @@
       "name": "CoverageLine",
       "group": "Summary",
       "states": [
-        "complete",
-        "gap",
-        "hover"
+        "complete"
       ]
     },
     {
@@ -723,7 +707,6 @@
         "count",
         "account",
         "error",
-        "notCaptured",
         "selected",
         "hover",
         "linked",
@@ -745,13 +728,7 @@
     {
       "name": "EventRow",
       "group": "Rows",
-      "states": [
-        "default",
-        "marked",
-        "expanded",
-        "compact",
-        "linkedToHover"
-      ]
+      "states": []
     },
     {
       "name": "StepRow",
@@ -786,7 +763,6 @@
       "group": "Drawer",
       "states": [
         "normal",
-        "notCaptured",
         "failed",
         "retained",
         "loading",
@@ -799,7 +775,6 @@
       "path": "src/components/RequestDrawer/DrawerHeader.tsx",
       "states": [
         "normal",
-        "notCaptured",
         "failed"
       ]
     },
@@ -838,7 +813,6 @@
       "path": "src/components/RequestDrawer/SummaryView.tsx",
       "states": [
         "normal",
-        "notCaptured",
         "failed",
         "retained"
       ]
@@ -1478,7 +1452,6 @@
         "delayed",
         "refreshFailed",
         "emptyRange",
-        "notCaptured",
         "noUncaptured",
         "aboutOpen",
         "workManyRepos"
@@ -1494,7 +1467,6 @@
         "loading",
         "loadFailed",
         "drawer",
-        "drawerNotCaptured",
         "drawerFailed",
         "drawerRetained",
         "codexTurns",

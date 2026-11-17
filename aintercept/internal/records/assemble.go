@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/canon"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 )
@@ -388,7 +389,11 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			p = &c.p
 		}
 		r := canon.RequestFrom(e, p, file)
-		r.DetailJSON = a.detail(c)
+		var side string
+		r.DetailJSON, side = a.detail(c)
+		if side != "" && r.HiddenKind == "" { // Claude Code's title and suggestion side requests, by their notes
+			r.HiddenKind = side
+		}
 		if c == nil {
 			c = a.callFor(e, file)
 		}
@@ -721,16 +726,26 @@ func (a *Assembler) body(c *call, e *events.Event, resp bool) {
 	}
 }
 
-// detail is what a model call's recorded bodies show, as JSON ("" without them).
-func (a *Assembler) detail(c *call) string {
+// detail is what a model call's recorded bodies show ("" without them), and
+// the hidden kind of a side request they show (a title's or a suggestion's).
+func (a *Assembler) detail(c *call) (string, string) {
 	if c == nil || c.bodies == nil || len(c.bodies.req)+len(c.bodies.resp) == 0 {
-		return ""
+		return "", ""
 	}
 	b := c.bodies
-	if d := events.DetailFromBodies(b.req, b.reqEnc, b.resp, b.respEnc); d != nil {
-		return canon.Marshal(d)
+	d := events.DetailFromBodies(b.req, b.reqEnc, b.resp, b.respEnc)
+	if d == nil {
+		d = &events.CallDetail{}
 	}
-	return ""
+	if raw, err := events.DecodeBody(b.req, b.reqEnc); err == nil && len(raw) > 0 {
+		if r, ok := convo.Parse(c.p.Host, c.p.Path, raw); ok {
+			said(d, r)
+		}
+	}
+	if d.Empty() {
+		return "", ""
+	}
+	return canon.Marshal(d), d.Side
 }
 
 // sweep forgets calls past their time: ended ones' markers, and open ones that

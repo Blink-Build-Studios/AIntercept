@@ -3,13 +3,11 @@ import { fn } from "@storybook/test";
 import { useState } from "react";
 import failed from "../../api/samples/request/failed";
 import normal from "../../api/samples/request/normal";
-import notCaptured from "../../api/samples/request/not_captured";
 import retained from "../../api/samples/request/retained";
 import detailsNormal from "../../api/samples/request_details/normal";
 import rawNormal from "../../api/samples/request_raw/normal";
 import rawRetained from "../../api/samples/request_raw/retained";
 import rawFailed from "../../api/samples/request_raw/failed";
-import rawUnavailable from "../../api/samples/request_raw/unavailable";
 import sessionRequests from "../../api/samples/session_requests/many";
 import { readyRegion, type Region } from "../../lib/region";
 import type { DrawerTab } from "./DrawerTabs";
@@ -50,9 +48,7 @@ const ready = (detail: Detail, raw: Raw = rawNormal.data): Args => ({ detail: re
 
 /** A captured model call. */
 export const Normal: Story = { args: ready(normal.data) };
-/** Reported by Claude Code, never seen by the proxy: Raw has nothing. */
-export const NotCaptured: Story = { args: ready(notCaptured.data, rawUnavailable.data) };
-/** The connection failed; Claude Code retried. */
+/** The connection failed. */
 export const Failed: Story = { args: ready(failed.data, rawFailed.data) };
 /** Experimentation mode: bodies are kept (opens on Raw). */
 export const Retained: Story = { args: { ...ready(retained.data, rawRetained.data), initialTab: "raw" } };

@@ -3,13 +3,11 @@ import { fn } from "@storybook/test";
 import { useState } from "react";
 import requestFailed from "../../api/samples/request/failed";
 import requestNormal from "../../api/samples/request/normal";
-import requestNotCaptured from "../../api/samples/request/not_captured";
 import requestRetained from "../../api/samples/request/retained";
 import detailsNormal from "../../api/samples/request_details/normal";
 import rawFailed from "../../api/samples/request_raw/failed";
 import rawNormal from "../../api/samples/request_raw/normal";
 import rawRetained from "../../api/samples/request_raw/retained";
-import rawUnavailable from "../../api/samples/request_raw/unavailable";
 import sessionCodex from "../../api/samples/session/codex";
 import sessionDemo from "../../api/samples/session/demo";
 import sessionError from "../../api/samples/session/error";
@@ -124,7 +122,6 @@ export const LoadFailed: Story = {
 };
 /** A step opened in the request drawer. */
 export const Drawer: Story = { args: { openDrawer: { detail: requestNormal, raw: rawNormal } } };
-export const DrawerNotCaptured: Story = { args: { openDrawer: { detail: requestNotCaptured, raw: rawUnavailable } } };
 export const DrawerFailed: Story = { args: { openDrawer: { detail: requestFailed, raw: rawFailed } } };
 /** Experimentation mode: the drawer on Raw with bodies kept. */
 export const DrawerRetained: Story = { args: { openDrawer: { detail: requestRetained, raw: rawRetained, tab: "raw" } } };

@@ -25,7 +25,7 @@ from aintercept_api.reader import BEGIN, POOL_SIZE, Load, Reader, SchemaMismatch
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "16bb610c652d3f440f656146eb3312e5f5d9984798eb18392479f0bf434f7bc6"
+SCHEMA_HASH = "951b6ee1c6d8d38b469f9576f73f6c8d710391bec1036537f74c9377223e3479"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
@@ -87,9 +87,9 @@ class PgStore:
 
 class PgPages:
     """Every page, read from Postgres through the psycopg reader in one snapshot (docs/PIPELINE.md §6):
-    the drawer and /events/{id} (drawer.PgReads, §6.2), the session pages (sessionpages.SessionReads,
-    §6.1), the person pages (personpages.PersonReads, §6.3), and the directory, the overview and /status
-    (directorypages.DirectoryReads, §6.4)."""
+    the drawer (drawer.PgReads, §6.2; /events/{id} finds none: analytics aren't stored), the session pages
+    (sessionpages.SessionReads, §6.1), the person pages (personpages.PersonReads, §6.3), and the directory,
+    the overview and /status (directorypages.DirectoryReads, §6.4)."""
 
     def __init__(self, store: PgStore, snap: Snapshot) -> None:
         self.store, self.snap = store, snap
@@ -119,7 +119,8 @@ class PgPages:
         return rd.raw(self._reads(), rid)
 
     def event(self, eid: str) -> EventDetail | None:
-        return self._reads().event(eid)
+        """None: analytics events aren't stored (they stay in the raw files)."""
+        return None
 
     # --- the session pages (v9: sessionpages.SessionReads, docs/PIPELINE.md §6.1) ---------------------
 

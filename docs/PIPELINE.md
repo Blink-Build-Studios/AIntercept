@@ -128,7 +128,7 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 |---|---|
 | `call_id` text PK | `corr`, or `corr#turn` for a WebSocket turn. A start inserts the row; the end fills it in. A start never overwrites a row that already has an end |
 | `session_id` | The call's own session |
-| `scope_session_id` | The session whose Requests tab lists it: its own, or for an analytics post the session of its batch's earliest Claude Code or Codex event (`assemble.go:529-546`). Set at insert |
+| `scope_session_id` | The session whose Requests tab lists it: its own. An analytics post is a call like any other: nothing inside it is read (§3.2) |
 | `prompt_id`, `account_id`, `device_id`, `org_id`, `agent_id`, `key_hash`, `key_hint`, `source` | From the record |
 | `kind` | The request kind (model, analytics, auth, …) derived from host and path at insert, as the Requests tab's filter uses it |
 | `host`, `method`, `path`, `status`, `ip`, `transport`, `ws_turn` | From the record |
@@ -136,8 +136,7 @@ Hand-written SQL migrations replace the schema generated from Go state types.
 | `model`, `effort`, `stop_reason`, token columns, `ttft_proxy_ms` | From the record |
 | `tool_uses`, `detail`, `client`, `provider`, `ext` (jsonb) | As `canon.Request` has them |
 | `hidden_kind`, `synthetic` | From the record |
-| `request_id`, `client_request_id`, `message_id`, `parent_message_id` | For joins with analytics and prev/next |
-| `batch_events`, `batch_name` | On an analytics post |
+| `request_id`, `client_request_id`, `message_id`, `parent_message_id` | For prev/next |
 | `raw_key`, `raw_offset`, `raw_len` | The raw file and the byte range of this call's gzip member (§2.1) |
 
 **Indexes:** `(scope_session_id, start_ns)`, `(session_id, start_ns)`,
@@ -153,34 +152,69 @@ call carries back and the tool calls it made, by tool call id). For the label
 (§6.1): partial `(account_id, start_ns) WHERE hidden_kind = 'title'`. For
 `/status` (§6.4): partial `(end_ns) WHERE start_ns IS NULL` (a WebSocket turn has
 only an end), `(start_ns) WHERE synthetic` (the first probe) and
-`(start_ns) WHERE detail IS NOT NULL` (whether any call kept its content).
+`(start_ns) WHERE detail IS NOT NULL AND kind = 'model'` (whether any call kept its content; its
+predicate names the kind so a step's result lookup can't take it for a scan of every call with
+content, which on the cluster made a long turn's refresh never finish: that lookup is the GIN index's).
 
-### 3.2 `events`: one row per analytics event
+### 3.2 Analytics events: kept in the raw files, not loaded (owner decision, 2026-11-16)
 
-| Column | Notes |
-|---|---|
-| `event_key` text PK | `<source>/<client event id>` where the client sends one (Claude Code does), so a resent batch upserts onto the same row; else `corr/<hash>` as today (`assemble.go:617-632`) |
-| `batch_call_id`, `batch_n`, `batch_cc_n` | The analytics post it came in (indexed, no foreign key, so events and calls can arrive in any order) |
-| `session_id`, `prompt_id`, `prompt_index`, `request_id`, `client_request_id`, `tool_use_id`, `device_id`, `account_id` | From the record |
-| `source`, `name`, `ts_ns` | From the record |
-| `metadata`, `env` (jsonb) | Verbatim |
-| `summary`, `internal`, `marker` | From the event alone, at insert, as `process/eventrows.go` does today |
+Claude Code's and Codex's analytics posts (`tengu_*`, `codex_*` events) stay in
+the raw files exactly as the observer writes them, but **nothing from inside
+them goes into Postgres or is referenced there**. The post itself is a `calls`
+row (kind `analytics`, its own session, metadata only) like any other HTTP
+call. There is no `events` table.
 
-**Indexes:** `(session_id, ts_ns)`, `(session_id, name, ts_ns)`,
-`(request_id)`, `(client_request_id)`, `(tool_use_id)`,
-`(batch_call_id, batch_n)`, and `(prompt_id, name)` (a prompt's events).
+**Why:** the client sends analytics on its own schedule, in batches that name
+other sessions and prompts, so every rollup that read them had to be marked
+and recomputed from events across a prompt or session as they trickled in:
+the prompt refresh of a long Claude Code turn (24,504 events) went over the
+worker's 60 s statement timeout and never finished, and its dirty row held
+`/lag` and the worker count at their maximum. What the pages need is on the
+wire, in the model calls themselves.
 
-**A resent analytics batch counts once** (owner decision 4): the insert is
-`ON CONFLICT (event_key) DO NOTHING`.
+**What goes with them**, each now null, empty or 0 in the API (its shape
+unchanged until the pages are redrawn):
+- **Proxy-bypass detection:** `missed_reports`, coverage (reported, captured,
+  not captured, windows) and a call's `unreported`.
+- **Event rows and keys:** the Events tab, `/events/{id}`, the drawer's
+  analytics, event names, hooks, heads, PRs, command words, destructive
+  categories, git operations, the session's tools as events name them.
+- **Friction and posture from events:** frustrated, destructive, outside-cwd,
+  queries and bypassed (bypass %), sandbox, the custom CA, the turn end and
+  cancels (`tengu_turn_end`, `tengu_cancel`), Codex's turn reports and
+  approval policy, pastes and images, compactions and recaps, skills, hook ms.
+- **Reported values:** a step's TTFT, cache-write split and cost, and every
+  cost (no price table: costs are dropped).
+- **Identity only events gave:** the plan, a device's platform, terminal and
+  shell, and accounts and devices named only by events.
+- **Turns created from `tengu_input_prompt`:** a turn is now only what its
+  requests carry (Claude Code's prompt-id header, Codex's `turn_id`).
+
+**Rebuilt from the wire instead:**
+- **A step's work** from its own call's tool calls: their names and counts
+  always (`tool_uses`), and with recorded content their commands, files,
+  patches and the exit codes or errors their results carry back in a later
+  call, matched by tool call id (§5.6).
+- **A turn's text** from the new messages of its first main-class call
+  (`detail.said`): the person's words, and each harness piece (system
+  messages, reminders, notes) as its own typed part, named by the same list of
+  markers as the Interceptor's parser (`convo.HarnessNotes`). Its size is the
+  person's words' whole length.
+- **Interrupted:** a step that stopped on an interrupt, or the harness's note
+  in the next turn's request (Claude Code's `[Request interrupted by user…`,
+  Codex's `<turn_aborted>`), which marks the turn before it.
+- **Side requests:** Claude Code's title (`<session>`) and next-prompt
+  suggestion (`[SUGGESTION MODE:`) requests are hidden calls (`hidden_kind`
+  `title`, `suggestion`) by their notes.
 
 ### 3.3 Identity
 
 | Table | Row | Written |
 |---|---|---|
-| `accounts` | one per account: email, name, org (its sightings' and its Claude Code events'), plan, codex plan, `seen_ns`. Index `(lower(email))` | Upsert; the newest sighting wins |
+| `accounts` | one per account: email, name, org (its sightings'), codex plan, `seen_ns`. Index `(lower(email))` | Upsert; the newest sighting wins |
 | `session_accounts` | (session, account), first/last ns. Index `(account_id, start_ns)` | Upsert; `least`/`greatest` on the times |
-| `session_credentials` | (session, key_hash), first/last ns: its visible calls' credentials and those of the analytics posts that carried its Claude Code events | Same |
-| `account_devices` | (account, device): platform, terminal, shell, agent, version, first/last ns, seen on events | Same |
+| `session_credentials` | (session, key_hash), first/last ns: its visible calls' credentials | Same |
+| `account_devices` | (account, device): agent, version, first/last ns, from its visible calls | Same |
 | `session_edges` | (child session, parent session) | Insert if absent |
 | `ingest_pods` | one per observer pod: `last_ns` (its newest record) | Upsert per file |
 | `ingest_files` | one per raw file: key, listed, loaded | §2.2 |
@@ -194,7 +228,7 @@ read from `accounts` (a handful of rows per person).
 
 1. **Collapse duplicates in Go first.** Postgres rejects an upsert that touches
    the same row twice in one statement, and a flush often has a call's start and
-   end, or many events in the same minute. So records are merged by key before
+   end. Analytics events are skipped (§3.2). So records are merged by key before
    sending: an end wins over a start, times take the earliest and latest.
 2. **One transaction, one statement per table, rows sorted by key** (sorting
    keeps concurrent flushes from deadlocking):
@@ -202,22 +236,21 @@ read from `accounts` (a handful of rows per person).
 ```
 BEGIN;
   INSERT INTO calls    … ON CONFLICT (call_id) DO UPDATE …   -- the end fills in the start
-  INSERT INTO events   … ON CONFLICT (event_key) DO NOTHING
   INSERT INTO accounts, session_accounts, session_credentials, account_devices,
               session_edges, ingest_pods … ON CONFLICT …
   INSERT INTO dirty (kind, key, seq) … ON CONFLICT DO UPDATE SET seq = excluded.seq
 COMMIT;
 ```
 
-3. **What it marks dirty** (§5.1): the minutes, prompts, credentials and
-   account-days its rows fall in. For a model call with a request id, it also
-   marks the minutes of the analytics reports for that request (one indexed
-   lookup on `events`), so a report that arrived first stops counting as missed.
+3. **What it marks dirty** (§5.1): the minutes and credentials its calls fall
+   in, and the step of each call with a prompt. A call carrying back tool
+   calls' results also marks the steps of the calls that made them (one lookup
+   per tool call id on the GIN index of `detail -> 'calls'`).
 
 Re-running a flush changes nothing, so a retry is always safe.
 
 **Order doesn't matter.** An end before its start, a call after a later call of
-its prompt, an event before or after its call: the facts are keyed upserts, and
+its prompt, a tool call's result before or after it: the facts are keyed upserts, and
 everything that depends on order is a rollup computed after the flush commits.
 
 ## 5. Rollups
@@ -237,36 +270,45 @@ A worker loops:
 3. **Release:** delete the dirty row if its `seq` hasn't changed since the
    claim; otherwise clear `claimed_at` so it's refreshed again.
 
-**Coalescing:** a `prompt`, `session` or `account_day` row is claimed only once
-it has been dirty for 5 seconds, so a busy prompt or session is recomputed at
-most every 5 seconds however many flushes touch it. (That's one `WHERE` on the
+**Coalescing:** a `step`, `prompt`, `session` or `account_day` row is claimed
+only once it has been dirty for 5 seconds, so a busy one is recomputed at most
+every 5 seconds however many flushes touch it. (That's one `WHERE` on the
 claim.) Step 4 measures the refresh of the 1,244-step prompt and the
 53,188-event session; if either costs more than 50 ms, it comes back to the
 owner before anything is added.
 
 Every refresh recomputes from the source, so it's idempotent and correct
-whatever order data arrived in. Two workers refreshing two minutes of the same
+whatever order data arrived in. **The step is the unit of a prompt's refresh:**
+a step is recomputed from its one call (and its tool calls' results, one index
+lookup each), its keys (`step_keys`) replace what it added to its prompt's
+sums (`prompt_keys`: old taken away, new added, in the same transaction), and
+the prompt's row is recomputed from those sums and a few indexed `LIMIT 1`
+lookups on its steps. A new call in a 25,000-step prompt reads one call, never
+the prompt's other steps; two steps of one prompt refresh one after the other
+(a transaction-scoped advisory lock on the prompt). A step's number isn't
+stored: the API counts it at read (`steps (prompt_id, session_id, t_ns, ord)`).
+The full prompt refresh (every call at once) is only retention's, and the
+from-scratch check holds the two equal. Two workers refreshing two minutes of the same
 hour each mark the hour dirty, and the hour is recomputed after both commit.
 
 ### 5.2 The rollup tables
 
 | Rollup | Grain | Computed from | Reads |
 |---|---|---|---|
-| `session_minutes` | (session, minute) | That minute's visible model calls (count, main and subagent, unreported, tokens, context sum, outputs known, tool calls) and hidden calls; its Claude Code events (all, and without internal events; frustrated, interrupted and destructive counts; queries and bypassed; reports; hook ms sum and count; cache 5m/1h; cost; outside-cwd commands; reports sent past a custom CA); its missed reports; its Requests tab rows counted by kind and credential, hidden apart (a read keeps the session's credentials, as today's tab does) | One minute's rows |
+| `session_minutes` | (session, minute) | That minute's visible model calls (count, main and subagent, tokens, context sum, outputs known, tool calls) and hidden calls; its Requests tab rows counted by kind and credential, hidden apart (a read keeps the session's credentials, as today's tab does) | One minute's rows |
 | `session_hours` | (session, hour) | Sum of that hour's `session_minutes` | 60 rows |
-| `session_minute_keys` | (session, minute, kind, key) with count | Distinct things per minute: event names, tools and MCP tools, the session's tools from events and from calls' tool_use blocks, hooks, heads, PRs, IPs, batches, prompts (calls' and typed), command words, destructive categories, git operations. Also the timeline's top event names for a bin under an hour, and the minute's work (kinds `w:…`, §5.6): reads and edits by file type, files by hashed path, lines, commands by program and their failures, searches, MCP servers, subagents, commits, pushes, PRs (the Work lane's bins) | One minute's rows |
+| `session_minute_keys` | (session, minute, kind, key) with count | Distinct things per minute: IPs, prompts (calls'), the tools its calls' tool_use blocks name, and the minute's work (kinds `w:…`, §5.6, from its steps' `step_keys`): reads and edits by file type, files by path, lines, commands by program and their failures, searches, MCP servers, subagents, commits, pushes (the Work lane's bins) | One minute's rows |
 | `session_keys` | (session, hour, kind, key) with count | Sum of that hour's `session_minute_keys`. Distinct counts over a range are `count(DISTINCT key)` over these rows (minute rows at a range's partial hours) | 60 minutes' key rows |
-| `missed_reports` | one per Claude Code report with no captured call (by request id or client request id, within its session, as `requestrows.go:1093-1125` does) | That minute's reports, with an index lookup each on `calls` | One minute's rows |
-| `prompts` | (prompt_id, session) | Its number (its input's), steps M, tokens, tool counts, friction, in-flight inputs, text meta, turn report. A typed prompt with no prompt id is keyed `input:<batch>:<n>`, as today. As a turn (§5.6): its end (its last step's), its cost (its steps') and its work (its own events') | One prompt's calls and events, and its calls' reports and tool events by request id. Usually tens; the largest prompt in the capture has 1,244 steps, and 6 have over 200 |
-| `steps` | (prompt_id, session, step) | One row per visible model call in the prompt, numbered by `(start_ns, call_id)`, with its tools, commands, exit codes, patches, cost and status from its events (by request id and tool use id), and its work (§5.6: its kind, program or server, subagent id, and its tools' work). This is where a call's step number lives. Exit codes come from the session's first call that carries each tool call's result back, which can be a later prompt's (the prompt after an interrupt): one lookup per tool call by its id, and a flush with such a call marks the prompt that made the tool call | One prompt's calls and events |
-| `prompt_items` | (session, seq) | The Prompts page's list: prompts in order (with what the session's other prompts decide: a Codex turn's number, the open tail, pastes and images, hidden calls), with the between rows interleaved (compactions, recaps, calls with no prompt) | The session's prompts (hundreds), and its compaction events and prompt-less calls |
-| `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox, env) by index lookup; coverage from `missed_reports`; `unattributed` (a visible call and no account). The turn ledger's header (§5.6): its turns, those interrupted and their times (its `prompts` rows), its cost (its hours'), its work (its `w:…` keys), its first and last head and its last test run (index lookups on its events). A page computes the rest from these: the agent, bypass %, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, and an index lookup per newest value |
+| `steps` | call_id | One per visible model call with a prompt, from that call alone: its tokens, status, tools (`tool_uses` names and counts; with recorded content its commands, files, patches and the exit codes their results carry back, by tool call id), its work (§5.6), whether it stopped on an interrupt or its request says the turn before was, and what its new messages say. Its number is counted at read by `(t_ns, ord)` | One call, and one index lookup per tool call for its result |
+| `step_keys` | (call_id, kind, key) | What a step adds to its prompt: `s:steps`, tokens, interrupts, tool counts by name, its work pieces (with a command's last run) | One step's row |
+| `prompt_keys` | (prompt, session, kind, key) | Its steps' `step_keys` summed, by delta: a step refresh takes away what it added and adds what it adds now | The step's keys |
+| `prompts` | (prompt_id, session) | One per prompt id on visible model calls (Claude Code's prompt-id header, Codex's `turn_id`): its time (first step), steps, tokens, tool counts, interrupted, its end (last step's), its work (its keys, each command's last exit by one `LIMIT 1` on `step_keys`), its text and typed parts (its first main-class step's new messages) | Its `prompt_keys` (its distinct tools, files and commands: tens to a few hundred rows) and four indexed `LIMIT 1` reads of its steps |
+| `prompt_items` | (session, seq) | The Prompts page's list: prompts in order (with what the session's other prompts decide: its number (its place), the open tail, hidden calls), with the session's calls with no prompt interleaved | The session's prompts (hundreds) and prompt-less calls |
+| `sessions` | session_id | Today's `session_rows` fields: sums from `session_hours`; distinct counts from `session_keys`; newest-wins values (effort, versions, limits, sandbox) by index lookup; `unattributed` (a visible call and no account). The turn ledger's header (§5.6): its turns, those interrupted and their times (its `prompts` rows) and its work (its `w:…` keys). A page computes the rest from these: the agent, durations, live, the label (§6.1), the children (§5.4) and Codex's limits (`agents.codex_limits` of the stored headers) | The session's hour rows and keys, its prompts rows, and an index lookup per newest value |
 | `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none). Indexes on the minute and the hour (the overview's window) | One minute's calls / 60 rows |
 
-Two values are read at the page instead (they're few, and a late record changes them):
-- **A friction mark's prompt number:** the timeline reads the bin's friction events (few) and joins each to its prompt's number in `prompts`.
-- **Claude Code's skills count** (the State tab's and the person summary's): the newest `tengu_skills_sync_success` total up to the range's end, one index lookup on `events (session_id, name, ts_ns)`, as today's `_LATEST` does. Hook ms is in `session_minutes`.
-| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, the ids of those with a model call, and those with events), prompts, model calls, tokens, missed and reported, bypassed and total queries, first and last seen, the sessions' repos (Working on, §5.6). Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
+Friction marks and Claude Code's skills count, read at the page from events before, are gone with them (§3.2).
+| `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, and the ids of those with a model call), prompts, model calls, tokens, first and last seen, the sessions' repos (Working on, §5.6). Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
 
 A turn (handoff §11R) is a `prompts` row and a step a `steps` row; the turn ledger's values are in §5.6.
 
@@ -274,10 +316,11 @@ A turn (handoff §11R) is a `prompts` row and a step a `steps` row; the turn led
 
 | Kind | Marked by |
 |---|---|
-| `minute` (session, minute) | a flush with a call or event in that minute; a flush with a call whose report is in that minute; a flush with a report whose call is in that minute |
+| `minute` (session, minute) | a flush with a call in that minute; a `step` refresh of a step in it (its work keys) |
 | `hour` (session, hour) | a `minute` refresh |
-| `prompt` | a flush with a call or event of that prompt; a flush with a report, tool or Bash event of one of its calls (by request id and tool use id: a subagent's events can name another prompt); a flush with a call that carries back the result of one of its calls' tool calls (by tool call id) |
-| `session` | an `hour` or `prompt` refresh |
+| `step` (call id) | a flush with that call (with a prompt); a flush with a call that carries back the result of one of its tool calls (by tool call id); the sweep closing it |
+| `prompt` | retention (§5.5), for a prompt that held calls before the cut: recomputed from all its calls at once |
+| `session` | an `hour`, `step` or `prompt` refresh |
 | `cred_minute`, `cred_hour` | a flush with a call of that credential; a `cred_minute` refresh |
 | `account_day` | a `session` refresh, for each account of the session and each day it has hours (so an account seen on a session late still gets its earlier days) |
 
@@ -306,40 +349,31 @@ older. KEDA scales `worker` on it.
 
 ### 5.6 Work (handoff §11R)
 
-What a turn, a step, a minute and a session did, metadata first (`refresh/work.go`). One rule classes events
-as pieces of work, each keyed `(kind, key, n)`:
+What a turn, a step, a minute and a session did, from each step's own tool calls (`refresh/prompts.go`
+`stepItems`): their names and counts always (`tool_uses`), and with recorded content (`detail.calls`) their
+commands, files, patches and the exit codes their results carry back (`detail.results` of a later call, by tool
+call id). One rule classes a step's tool calls as pieces of work, each keyed `(kind, key, n)`:
 
-| Kind | From (Claude Code) | From (Codex) | Key |
-|---|---|---|---|
-| `w:read`, `w:edit`, `w:web`, `w:mcp`, `w:spawn`, `w:tool` | tool events (`tengu_tool_use_success`, `_error`) by tool name (its Bash calls are counted by their commands) | `codex_file_change_event`, `codex_mcp_tool_call_event`, `codex_web_search_event`, `codex_collab_agent_tool_call_event` | file type, search or fetch, MCP server, subagent type |
-| `w:read_file`, `w:edit_file` | `tengu_file_operation` | — | hashed path (counted distinct) |
-| `w:lines_added`, `w:lines_removed` | `tengu_file_changed` | `codex_accepted_line_fingerprints` | n is the lines |
-| `w:run`, `w:run_failed` | `tengu_bash_tool_command_executed` (exit code ≠ 0 failed) | `codex_command_execution_event` | program (`npm test`; none for Codex) |
-| `w:commit`, `w:push`, `w:pr` | `tengu_git_operation`, `tengu_session_linked_to_pr` | — | PR number |
+| Kind | From | Key |
+|---|---|---|
+| `w:read`, `w:edit`, `w:web`, `w:mcp`, `w:spawn`, `w:tool` | each tool call by its tool's name (a shell call counts by its commands) | file type, search or fetch, MCP server, subagent type |
+| `w:read_file`, `w:edit_file` | a read tool's file; each file a patch changes | its path (counted distinct) |
+| `w:lines_added`, `w:lines_removed` | a patch's lines | n is the lines |
+| `w:run`, `w:run_failed` | each command a shell call (or a Codex exec script) runs, with the exit code its result carries back at its place (≠ 0 failed) | program (`npm test`; '' when not recorded) |
+| `w:commit`, `w:push` | a `git commit` or `git push` command | — |
 
-- **A turn's work** (`prompts.work`): the pieces of its own events (by `prompt_id`, its subagents' included),
-  added up into the API's TurnWork, each command with its last run's exit code. Its end is its last step's,
-  its cost its steps'.
-- **A step's work** (`steps.work`, `work_kind`, `program`, `server`, `agent_id`): its tool calls as its tool
-  events report them (`steps.tools`, each Bash call with its program and exit code and each file tool with its
-  type), else the tools its response asked for (`tool_uses`: Codex's, or a call with no analytics). Its kind
-  is its first tool call's (no tool: thinking); the API groups consecutive steps of a turn where the kind,
+- **A turn's work** (`prompts.work`): its steps' pieces summed (`prompt_keys`), each command with its last run's
+  exit code (by the steps' order). Its end is its last step's.
+- **A step's work** (`steps.work_pieces`, `work_kind`, `program`, `server`, `agent_id`): its pieces in order; its
+  kind is its first tool call's (no tool: thinking); the API groups consecutive steps of a turn where the kind,
   program or server changes, and calls a finished turn's last group with no tool its reply.
-- **A minute's and an hour's** are `session_minute_keys` and `session_keys` rows (kinds `w:…`): the Work lane's
-  bins and a range's work read them (`api/…/work.py from_keys`, the same rules).
-- **A session's** (`sessions.work`) is its `w:…` keys added up (no last exits), with its turns, interrupted
-  turns and active time (its `prompts` rows: the sum of each turn's time, prompt to last step), its cost (its
-  hours'), its first and last head, and its last test (its newest command whose program is a test runner).
+- **A minute's and an hour's** are `session_minute_keys` and `session_keys` rows (kinds `w:…`), from the
+  minute's steps' `step_keys`: the Work lane's bins and a range's work read them (`api/…/work.py from_keys`).
+- **A session's** (`sessions.work`) is its `w:…` keys added up (no last exits), with its turns, interrupted turns
+  and active time (its `prompts` rows: the sum of each turn's time, prompt to last step).
 - **A repo's, a group's, a subagent's**: the API adds the stored works of its sessions or steps.
 
-- **A step's pieces** (`steps.work_pieces`) are `[kind, key, n, exit]` in order; the API adds a group's or a
-  subagent's up (`work.py from_pieces`) rather than storing a work per step, which cost the prompt refresh
-  another 30 ms on the largest prompt.
-
-**Refresh cost** on the real capture (median of 21 refreshes): the 1,244-step prompt went from 78 ms to
-116 ms (its steps 70 → 86 ms, its row 9 → 26 ms: 1,187 work events read once each); it was over §5.1's 50 ms
-before this. The 53,132-event session stays about 11–21 ms: its head range and last test read from the
-hour its keys show them in, so a session with no head or no test reads no events for them.
+PRs, the head range and the last test came from analytics events and are gone (§3.2).
 
 ## 6. Pages
 

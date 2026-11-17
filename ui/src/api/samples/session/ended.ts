@@ -3,10 +3,10 @@ import type { components } from "../../spec";
 
 const sample: components["schemas"]["SessionResponse"] = {
   "data": {
-    "activeMs": 140004.0,
+    "activeMs": 60004.0,
     "agent": "claude-code",
     "branch": null,
-    "bypassPct": 100.0,
+    "bypassPct": null,
     "capabilities": [
       "bypass",
       "missed",
@@ -36,28 +36,23 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
-    "costUsd": 0.5,
-    "coverage": {
-      "captured": 2,
-      "notCaptured": 0,
-      "reported": 2,
-      "windows": []
-    },
+    "costUsd": null,
+    "coverage": null,
     "device": {
       "deviceId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "platform": "darwin",
-      "shell": "zsh",
-      "terminal": "iTerm.app"
+      "platform": null,
+      "shell": null,
+      "terminal": null
     },
     "effort": null,
-    "end": "2026-11-04T09:11:05Z",
-    "events": 17,
+    "end": "2026-11-04T09:10:30Z",
+    "events": null,
     "facts": null,
     "fieldsMissing": false,
     "friction": {
-      "destructive": 1,
-      "frustrated": 1,
-      "interrupted": 1
+      "destructive": 0,
+      "frustrated": 0,
+      "interrupted": 0
     },
     "hiddenCalls": 0,
     "label": {
@@ -68,7 +63,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "live": false,
     "modelCalls": 4,
     "networks": 1,
-    "notCaptured": 0,
+    "notCaptured": null,
     "origin": null,
     "outcome": {
       "commits": 0,
@@ -84,7 +79,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     "prompts": 2,
     "repo": null,
     "sessionId": "11111111-1111-4111-8111-111111111111",
-    "start": "2026-11-04T09:00:00Z",
+    "start": "2026-11-04T09:01:00Z",
     "tokens": {
       "accuracy": "exact",
       "cacheRead": 200000,
@@ -94,15 +89,15 @@ const sample: components["schemas"]["SessionResponse"] = {
       "input": 12,
       "output": 400
     },
-    "toolCalls": null,
+    "toolCalls": 3,
     "turns": 2,
-    "turnsInterrupted": 1,
+    "turnsInterrupted": 0,
     "work": {
       "commands": [
         {
           "failed": 0,
           "lastExit": null,
-          "program": "rm",
+          "program": null,
           "runs": 1
         }
       ],
@@ -112,13 +107,8 @@ const sample: components["schemas"]["SessionResponse"] = {
       "edits": 0,
       "linesAdded": null,
       "linesRemoved": null,
-      "mcp": [
-        {
-          "calls": 1,
-          "server": "github"
-        }
-      ],
-      "otherTools": 0,
+      "mcp": [],
+      "otherTools": 1,
       "prs": [],
       "pushes": 0,
       "readFiles": null,
@@ -134,7 +124,7 @@ const sample: components["schemas"]["SessionResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:11:05Z",
+    "lastDataAt": "2026-11-04T09:10:30Z",
     "page": null,
     "pageSize": null,
     "to": null,

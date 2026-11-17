@@ -5,14 +5,14 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "data": [
     {
       "asked": {
-        "chars": 212,
-        "images": 0,
+        "chars": null,
+        "images": null,
         "pastedBytes": null,
         "retained": false,
         "text": null
       },
-      "costUsd": 1.5,
-      "durationMs": 50002.0,
+      "costUsd": null,
+      "durationMs": 45002.0,
       "endedAt": "2026-11-04T10:00:50.002000Z",
       "friction": {
         "destructive": 0,
@@ -32,7 +32,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -60,16 +60,16 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
-                  "fileType": "ts",
+                  "fileType": null,
                   "mcpServer": null,
                   "name": "Read",
                   "program": null,
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0001"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -78,7 +78,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "tool",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -106,16 +106,16 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
-                  "fileType": "ts",
+                  "fileType": null,
                   "mcpServer": null,
                   "name": "Read",
                   "program": null,
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0002"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -138,9 +138,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "prs": [],
             "pushes": 0,
             "readFiles": null,
-            "readTypes": {
-              "ts": 2
-            },
+            "readTypes": {},
             "reads": 2,
             "subagents": [],
             "web": {
@@ -161,7 +159,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "patch",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -189,16 +187,16 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
                 {
                   "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
+                  "durationMs": null,
                   "exitCode": null,
-                  "fileType": "ts",
+                  "fileType": null,
                   "mcpServer": null,
                   "name": "Edit",
                   "program": null,
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0003"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -211,9 +209,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "work": {
             "commands": [],
             "commits": 0,
-            "editTypes": {
-              "ts": 1
-            },
+            "editTypes": {},
             "editedFiles": null,
             "edits": 1,
             "linesAdded": null,
@@ -234,28 +230,21 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         },
         {
           "durationMs": 10002.0,
-          "exits": [
-            1,
-            0
-          ],
+          "exits": [],
           "kind": "run",
           "paths": null,
-          "program": "npm test",
+          "program": null,
           "server": null,
           "startedAt": "2026-11-04T10:00:30Z",
           "steps": [
             {
               "agentType": null,
-              "commands": [
-                "npm"
-              ],
-              "costUsd": 0.25,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 2.0,
               "eventsPending": false,
-              "exitCodes": [
-                1
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -277,18 +266,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
               },
               "tools": [
                 {
-                  "command": "npm",
+                  "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
-                  "exitCode": 1,
+                  "durationMs": null,
+                  "exitCode": null,
                   "fileType": null,
                   "mcpServer": null,
                   "name": "Bash",
-                  "program": "npm test",
+                  "program": null,
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0004"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -296,16 +285,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             },
             {
               "agentType": null,
-              "commands": [
-                "npm"
-              ],
-              "costUsd": 0.25,
+              "commands": [],
+              "costUsd": null,
               "does": "exec",
               "durationMs": 2.0,
               "eventsPending": false,
-              "exitCodes": [
-                0
-              ],
+              "exitCodes": [],
               "kind": "model",
               "model": "claude-opus-5-5",
               "patches": [],
@@ -327,18 +312,18 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
               },
               "tools": [
                 {
-                  "command": "npm",
+                  "command": null,
                   "destructive": null,
-                  "durationMs": 1200.0,
-                  "exitCode": 0,
+                  "durationMs": null,
+                  "exitCode": null,
                   "fileType": null,
                   "mcpServer": null,
                   "name": "Bash",
-                  "program": "npm test",
+                  "program": null,
                   "resultBytes": null,
                   "status": "ok",
                   "target": null,
-                  "toolUseId": "toolu_2222_0005"
+                  "toolUseId": null
                 }
               ],
               "ttftMs": null,
@@ -351,9 +336,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "work": {
             "commands": [
               {
-                "failed": 1,
-                "lastExit": 0,
-                "program": "npm test",
+                "failed": 0,
+                "lastExit": null,
+                "program": null,
                 "runs": 2
               }
             ],
@@ -389,7 +374,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             {
               "agentType": null,
               "commands": [],
-              "costUsd": 0.25,
+              "costUsd": null,
               "does": "text",
               "durationMs": 2.0,
               "eventsPending": false,
@@ -447,7 +432,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "live": false,
       "n": 1,
       "promptId": "p1",
-      "startedAt": "2026-11-04T10:00:00Z",
+      "startedAt": "2026-11-04T10:00:05Z",
       "steps": 6,
       "subagents": [],
       "tokensIn": 6018,
@@ -455,30 +440,24 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "work": {
         "commands": [
           {
-            "failed": 1,
-            "lastExit": 0,
-            "program": "npm test",
+            "failed": 0,
+            "lastExit": null,
+            "program": null,
             "runs": 2
           }
         ],
-        "commits": 1,
-        "editTypes": {
-          "ts": 1
-        },
-        "editedFiles": 1,
+        "commits": 0,
+        "editTypes": {},
+        "editedFiles": null,
         "edits": 1,
-        "linesAdded": 31,
-        "linesRemoved": 9,
+        "linesAdded": null,
+        "linesRemoved": null,
         "mcp": [],
         "otherTools": 0,
-        "prs": [
-          2
-        ],
+        "prs": [],
         "pushes": 0,
-        "readFiles": 2,
-        "readTypes": {
-          "ts": 2
-        },
+        "readFiles": null,
+        "readTypes": {},
         "reads": 2,
         "subagents": [],
         "web": {
@@ -491,7 +470,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T10:00:00Z",
-    "lastDataAt": "2026-11-04T10:05:46Z",
+    "lastDataAt": "2026-11-04T10:05:40Z",
     "page": 1,
     "pageSize": 20,
     "to": "2026-11-04T10:01:59.999999Z",

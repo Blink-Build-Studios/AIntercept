@@ -82,10 +82,8 @@ def sides(tmp_path_factory) -> Iterator[dict[str, Side]]:
 
 
 def session_ids(side: Side) -> list[str]:
-    """Every session: every one with a row, and every one an event names."""
-    held = {s for (s,) in side.query("SELECT session_id FROM sessions")}
-    held |= {s for (s,) in side.query("SELECT DISTINCT session_id FROM events WHERE session_id <> ''")}
-    return sorted(held)
+    """Every session with a row (a visible model call)."""
+    return sorted(s for (s,) in side.query("SELECT session_id FROM sessions"))
 
 
 def _iso(ns: int) -> str:
@@ -155,23 +153,24 @@ def test_the_cases_are_all_there(sides):
             seen["origin"] += h["origin"] is not None
             seen["titled"] += h["label"]["source"] == "title"
             seen["limits"] += h["limitsAtEnd"] is not None
-            seen["not captured"] += h["coverage"]["notCaptured"] > 0
+            # What only Claude Code's analytics fed is null or empty, whatever the session sent.
+            assert h["coverage"] is None and h["events"] is None and h["costUsd"] is None, sid
             t = side.new.get(f"{base}/timeline").json()["data"]
-            for lane in ("prompts", "modelCalls", "analytics", "notCaptured", "friction", "context", "compactions"):
+            for lane in ("prompts", "modelCalls", "context"):
                 seen[lane] += bool(t[lane])
+            assert not any(t[lane] for lane in ("analytics", "notCaptured", "friction", "compactions")), sid
+            assert side.new.get(f"{base}/events").json()["meta"]["total"] == 0
             for item in side.new.get(f"{base}/prompts?pageSize=200").json()["data"]:
                 seen[item["type"]] += 1
                 seen["steps"] += len(item.get("steps") or [])
             r = side.new.get(f"{base}/requests?hidden=true&pageSize=200").json()
             seen["hidden"] += r["hiddenCount"]
             for row in r["data"]:
-                seen["missed"] += not row["captured"]
+                assert row["captured"] and row["ttftMs"] is None, row["requestId"]
                 seen["sessionless"] += row["sessionId"] is None
                 seen["errors"] += row["error"] is not None
-                seen["retried"] += bool(row["error"] and row["error"]["retries"])
-    wanted = ("codex", "children", "origin", "titled", "limits", "not captured", "prompts", "modelCalls",
-              "analytics", "notCaptured", "friction", "context", "compactions", "prompt", "between", "steps",
-              "hidden", "missed", "sessionless", "errors", "retried")  # fmt: skip
+    wanted = ("codex", "children", "origin", "titled", "limits", "prompts", "modelCalls", "context", "prompt",
+              "between", "steps", "hidden", "sessionless", "errors")  # fmt: skip
     assert all(seen[k] for k in wanted), seen
 
 
@@ -180,38 +179,13 @@ def test_the_cases_are_all_there(sides):
 SESSION = {"session", "children", "title"}
 READS = {
     "": SESSION,
-    "/timeline": SESSION
-    | {
-        "cells",
-        "minutes",
-        "names",
-        "typed",
-        "window",
-        "friction_minutes",
-        "friction",
-        "context",
-        "compactions",
-        "turn_blocks",
-        "work_keys",
-    },  # fmt: skip
-    "/state": SESSION | {"cells", "item_counts", "keys", "heads", "recaps", "latest", "credentials", "extra_rows"},
+    "/timeline": SESSION | {"cells", "minutes", "typed", "context", "turn_blocks", "work_keys"},
+    "/state": SESSION | {"cells", "item_counts", "keys", "credentials", "extra_rows"},
     "/prompts": SESSION | {"item_span", "prompt_at", "items", "steps"},
     "/turns": SESSION | {"turn_count", "turn_at", "turns", "turn_steps", "threads"},
     "/requests": SESSION
-    | {
-        "credentials",
-        "cells",
-        "minutes",
-        "extra_rows",
-        "call_rows",
-        "missed_rows",
-        "reports",
-        "prompt_indexes",
-        "step_numbers",
-        "retries",
-        "next_attempt",
-    },  # fmt: skip
-    "/events": SESSION | {"cells", "minutes", "event_counts", "event_page", "linked", "prompt_indexes"},
+    | {"credentials", "cells", "minutes", "extra_rows", "call_rows", "prompt_indexes", "step_numbers"},
+    "/events": SESSION,
 }
 # What a page draws, whatever it reads: the timeline's context points (one per main-thread call) and
 # typed prompts, and a page of prompts' steps.
@@ -220,12 +194,11 @@ DRAWN = {"context", "typed", "steps", "turn_blocks", "turn_steps"}
 
 def test_a_session_page_reads_cells_and_a_page_whatever_the_session(sides):
     """Bound (§6.1): one snapshot, the page's own statements, each reading cells or a page of rows; what
-    grows with the session is only what the page draws. The session holds a 120-step prompt and a few
-    hundred events: a page that read its events or calls would read hundreds of rows."""
+    grows with the session is only what the page draws. The session holds a 120-step prompt: a page that
+    read its calls would read hundreds of rows."""
     side = sides["big prompt"]
-    (sid,) = side.query("SELECT session_id FROM sessions ORDER BY events DESC NULLS LAST LIMIT 1")[0]
-    (events, calls) = side.query("SELECT events, model_calls FROM sessions WHERE session_id = %s", [sid])[0]
-    assert events > 300 and calls >= 120, (events, calls)
+    (sid, calls) = side.query("SELECT session_id, model_calls FROM sessions ORDER BY model_calls DESC LIMIT 1")[0]
+    assert calls >= 120, calls
     base = f"/api/v1/sessions/{sid}"
     # A page's rows are found by minute: it reads at most a page and its densest minute's rows.
     (dense,) = side.query(

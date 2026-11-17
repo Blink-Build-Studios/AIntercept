@@ -7,55 +7,12 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
       "accuracy": "exact",
       "cacheRead": 42611,
       "cacheWrite": 0,
-      "cacheWrite1h": 0,
-      "cacheWrite5m": 0,
+      "cacheWrite1h": null,
+      "cacheWrite5m": null,
       "input": 3,
       "output": 1204
     },
-    "events": [
-      {
-        "eventId": "batch-11111111-2026-11-04T09:00:59:1",
-        "internal": false,
-        "linkedTo": {
-          "id": "p1",
-          "kind": "prompt",
-          "label": "#1"
-        },
-        "marker": null,
-        "name": "tengu_api_query",
-        "promptIndex": 1,
-        "summary": "permissionMode bypassPermissions",
-        "t": "2026-11-04T09:00:59Z"
-      },
-      {
-        "eventId": "batch-11111111-2026-11-04T09:01:09:1",
-        "internal": false,
-        "linkedTo": {
-          "id": "observer-test-0-1",
-          "kind": "request",
-          "label": "main \u00b7 opus \u00b7 tool_use"
-        },
-        "marker": null,
-        "name": "tengu_api_success",
-        "promptIndex": 1,
-        "summary": "costUSD 0.21 \u00b7 ttftMs 1912 \u00b7 durationMs 9301 \u00b7 requestPrepareMs 41 \u00b7 attempt 1 \u00b7 streamEventCount 47",
-        "t": "2026-11-04T09:01:09Z"
-      },
-      {
-        "eventId": "batch-11111111-2026-11-04T09:01:10:1",
-        "internal": false,
-        "linkedTo": {
-          "id": "toolu_01ABCDEF",
-          "kind": "tool",
-          "label": "Edit"
-        },
-        "marker": null,
-        "name": "tengu_tool_use_success",
-        "promptIndex": 1,
-        "summary": "toolName Edit \u00b7 durationMs 62 \u00b7 toolResultSizeBytes 300 \u00b7 preToolHookDurationMs 48",
-        "t": "2026-11-04T09:01:10Z"
-      }
-    ],
+    "events": [],
     "fields": [
       {
         "key": "account_uuid",
@@ -188,66 +145,6 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
       {
         "key": "tools_available",
         "value": "[{\"name\":\"Edit\",\"tool\":\"Edit\",\"kind\":\"builtin\"},{\"name\":\"mcp__github__create_pr\",\"server\":\"github\",\"tool\":\"create_pr\",\"kind\":\"mcp\"}]"
-      },
-      {
-        "key": "analytics.attempt",
-        "value": "1"
-      },
-      {
-        "key": "analytics.cache_creation_1h_input_tokens",
-        "value": "0"
-      },
-      {
-        "key": "analytics.cache_creation_5m_input_tokens",
-        "value": "0"
-      },
-      {
-        "key": "analytics.cc_prompt_id",
-        "value": "p1"
-      },
-      {
-        "key": "analytics.costUSD",
-        "value": "0.21"
-      },
-      {
-        "key": "analytics.durationMs",
-        "value": "9301"
-      },
-      {
-        "key": "analytics.messageCount",
-        "value": "24"
-      },
-      {
-        "key": "analytics.permissionMode",
-        "value": "bypassPermissions"
-      },
-      {
-        "key": "analytics.requestId",
-        "value": "req_11111111_0001"
-      },
-      {
-        "key": "analytics.requestPrepareMs",
-        "value": "41"
-      },
-      {
-        "key": "analytics.streamEventCount",
-        "value": "47"
-      },
-      {
-        "key": "analytics.textContentLength",
-        "value": "212"
-      },
-      {
-        "key": "analytics.thinkingContentLength",
-        "value": "380"
-      },
-      {
-        "key": "analytics.toolsCount",
-        "value": "23"
-      },
-      {
-        "key": "analytics.ttftMs",
-        "value": "1912"
       }
     ],
     "sections": [
@@ -280,14 +177,14 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": "tokens",
-            "v": 0
+            "v": null
           },
           {
             "k": "cache write 1h",
             "note": null,
             "tone": null,
             "unit": "tokens",
-            "v": 0
+            "v": null
           },
           {
             "k": "output",
@@ -301,14 +198,14 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": "chars",
-            "v": 380
+            "v": null
           },
           {
             "k": "costUSD (Claude Code)",
             "note": null,
-            "tone": "ok",
+            "tone": null,
             "unit": "usd",
-            "v": 0.21
+            "v": null
           }
         ],
         "title": "Tokens & cost"
@@ -356,7 +253,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": 23
+            "v": 2
           }
         ],
         "title": "Request settings"
@@ -397,7 +294,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": 24
+            "v": null
           },
           {
             "k": "query depth",
@@ -500,14 +397,14 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": 0
+            "v": null
           },
           {
             "k": "streaming stalls",
             "note": null,
             "tone": null,
             "unit": null,
-            "v": 0
+            "v": null
           }
         ],
         "title": "Response service"
@@ -620,14 +517,14 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
         "rows": [
           {
             "k": "analytics match",
-            "note": null,
-            "tone": "ok",
+            "note": "analytics aren't stored",
+            "tone": null,
             "unit": null,
-            "v": true
+            "v": null
           },
           {
             "k": "cost agreement",
-            "note": "no price table (costUSD is Claude Code\u2019s own)",
+            "note": "no price table",
             "tone": null,
             "unit": null,
             "v": null
@@ -637,7 +534,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": "ms",
-            "v": 1912.0
+            "v": null
           },
           {
             "k": "ttft (proxy)",
@@ -651,7 +548,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
             "note": null,
             "tone": null,
             "unit": null,
-            "v": "bypassPermissions"
+            "v": null
           },
           {
             "k": "sandbox",
@@ -672,36 +569,7 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
       }
     ],
     "timing": {
-      "client": [
-        {
-          "k": "requestPrepareMs",
-          "note": null,
-          "tone": null,
-          "unit": "ms",
-          "v": 41.0
-        },
-        {
-          "k": "ttftMs",
-          "note": null,
-          "tone": null,
-          "unit": "ms",
-          "v": 1912.0
-        },
-        {
-          "k": "durationMs",
-          "note": null,
-          "tone": null,
-          "unit": "ms",
-          "v": 9301.0
-        },
-        {
-          "k": "attempt",
-          "note": null,
-          "tone": null,
-          "unit": null,
-          "v": 1
-        }
-      ],
+      "client": [],
       "proxy": [
         {
           "durMs": null,
@@ -732,70 +600,19 @@ const sample: components["schemas"]["RequestDetailsResponse"] = {
     },
     "tool": [
       {
-        "execution": [
-          {
-            "k": "status",
-            "note": null,
-            "tone": null,
-            "unit": null,
-            "v": "ok"
-          },
-          {
-            "k": "duration",
-            "note": null,
-            "tone": null,
-            "unit": "ms",
-            "v": 62.0
-          },
-          {
-            "k": "PreToolUse hook",
-            "note": null,
-            "tone": null,
-            "unit": "ms",
-            "v": 48.0
-          },
-          {
-            "k": "permission wait",
-            "note": null,
-            "tone": null,
-            "unit": "ms",
-            "v": null
-          }
-        ],
+        "execution": [],
         "input": [],
         "mcpServer": null,
         "name": "Edit",
-        "result": [
-          {
-            "k": "delivered in",
-            "note": "observer-test-0-2",
-            "tone": null,
-            "unit": null,
-            "v": "step 2"
-          },
-          {
-            "k": "size",
-            "note": null,
-            "tone": null,
-            "unit": "bytes",
-            "v": 300
-          },
-          {
-            "k": "is_error",
-            "note": null,
-            "tone": null,
-            "unit": null,
-            "v": false
-          }
-        ],
-        "toolUseId": "toolu_01ABCDEF"
+        "result": [],
+        "toolUseId": null
       }
     ]
   },
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": null,
-    "lastDataAt": "2026-11-04T09:01:40Z",
+    "lastDataAt": "2026-11-04T09:01:39Z",
     "page": null,
     "pageSize": null,
     "to": null,

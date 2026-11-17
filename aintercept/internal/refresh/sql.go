@@ -95,60 +95,20 @@ const toolCount = `(SELECT coalesce(sum(CASE jsonb_typeof(u -> 'count')
 	FROM jsonb_array_elements(CASE jsonb_typeof(c.tool_uses) WHEN 'array' THEN c.tool_uses ELSE '[]' END) u
 	WHERE jsonb_typeof(u) = 'object')`
 
-// report is whether event r is a Claude Code report of a model call
-// (tengu_api_success: process/requestrows.go eventAgg.add, d.reports).
-const report = `(r.source = 'claude_code' AND r.name = 'tengu_api_success')`
-
-// md is event e's metadata field k.
-func md(k string) string { return "(e.metadata -> '" + k + "')" }
-
-// missedWhere is whether report r is missed: no visible model call of its
-// session has its request id, nor its client request id
-// (process/requestrows.go missedRows; the timeline's not-captured marks,
-// sessionmarks.go).
-const missedWhere = report + `
-	AND NOT EXISTS (SELECT 1 FROM calls c WHERE r.request_id IS NOT NULL AND c.request_id = r.request_id
-	                AND c.session_id = r.session_id AND ` + visible + `)
-	AND NOT EXISTS (SELECT 1 FROM calls c WHERE r.client_request_id IS NOT NULL AND c.client_request_id = r.client_request_id
-	                AND c.session_id = r.session_id AND ` + visible + `)`
-
-// minuteMissed recomputes missed_reports for one (session $1, minute [$2,
-// $3)): the minute's missed reports. A report that's captured now leaves, so
-// the minute's rows are replaced.
-var minuteMissed = []string{
-	`DELETE FROM missed_reports WHERE session_id = $1 AND minute_ns = $2`,
-	`INSERT INTO missed_reports (event_key, session_id, minute_ns, ts_ns, request_id, client_request_id)
-	SELECT r.event_key, r.session_id, $2, r.ts_ns, r.request_id, r.client_request_id
-	FROM events r WHERE r.session_id = $1 AND r.ts_ns >= $2 AND r.ts_ns < $3 AND ` + missedWhere,
-}
-
-// The values of a session's minute (and hour), as aggregates over its calls c
-// and events e. Each is one GROUP BY's select list, used by the refresh over
-// one key's rows and by the from-scratch check over all of them.
+// The values of a session's minute (and hour), as aggregates over its calls
+// c. Each is one GROUP BY's select list, used by the refresh over one key's
+// rows and by the from-scratch check over all of them.
 //   - callAggs, over its visible calls: the timeline's model-call lane and the
 //     person summary's sums are over session_marks' 'call' marks, one per
 //     visible call (sessionmarks.go): its class, tokens (nzi: a zero is NULL,
-//     as the facts store it), context (input + cache read + cache write, NULL
-//     when all are 0: promptrows.go context) and whether a report of the
-//     session names it (Unreported). outputs_known and tool_calls are the
-//     session row's (sessionrows.go sessionRow).
+//     as the facts store it) and context (input + cache read + cache write,
+//     NULL when all are 0: promptrows.go context). outputs_known and
+//     tool_calls are the session row's (sessionrows.go sessionRow).
 //   - hiddenAggs, over its agent calls with a hidden kind: the session row's
 //     hidden_calls.
-//   - eventAggs, over its Claude Code events (eventrows.go event_rows): events,
-//     those not internal (session.py is_internal, stored at insert), friction
-//     (sessionrows.go sessEvents.add: negative prompts, cancels, destructive
-//     commands), queries and bypassed (the same), reports, and what the person
-//     summary sums (pages.py _EVENT_TOTALS over personmap.go eventSums), and
-//     the reports Claude Code sent past a custom CA (personmap.go eventSums
-//     gzipCA: the session row's custom_ca).
 const callAggs = `count(*) AS model_calls,
 	count(*) FILTER (WHERE c.request_class = 'main') AS main_calls,
 	count(*) FILTER (WHERE c.request_class = 'subagent') AS subagent_calls,
-	count(*) FILTER (WHERE
-		NOT EXISTS (SELECT 1 FROM events r WHERE c.request_id IS NOT NULL AND r.request_id = c.request_id
-		            AND r.session_id = c.session_id AND ` + report + `)
-		AND NOT EXISTS (SELECT 1 FROM events r WHERE c.client_request_id IS NOT NULL AND r.client_request_id = c.client_request_id
-		                AND r.session_id = c.session_id AND ` + report + `)) AS unreported,
 	sum(c.input_tokens) AS input_tokens, sum(c.cache_read_tokens) AS cache_read_tokens,
 	sum(c.cache_write_tokens) AS cache_write_tokens, sum(c.output_tokens) AS output_tokens,
 	count(c.output_tokens) AS outputs_known,
@@ -157,27 +117,8 @@ const callAggs = `count(*) AS model_calls,
 
 const hiddenAggs = `count(*) AS hidden_calls`
 
-var eventAggs = `count(*) AS events,
-	count(*) FILTER (WHERE NOT e.internal) AS events_shown,
-	count(*) FILTER (WHERE e.name = 'tengu_input_prompt' AND ` + jsonText(md("is_negative")) + ` = 'true') AS frustrated,
-	count(*) FILTER (WHERE e.name = 'tengu_cancel') AS interrupted,
-	count(*) FILTER (WHERE e.name = 'tengu_bash_tool_command_executed'
-		AND coalesce(` + jsonText(md("destructive_category")) + `, '') NOT IN ('', 'none')) AS destructive,
-	count(*) FILTER (WHERE e.name = 'tengu_bash_tool_command_executed'
-		AND ` + jsonText(md("destructive_target_scope")) + ` = 'outside_cwd') AS outside_cwd,
-	count(*) FILTER (WHERE e.name = 'tengu_api_query' AND coalesce(` + jsonText(md("permissionMode")) + `, '') <> '') AS queries,
-	count(*) FILTER (WHERE e.name = 'tengu_api_query' AND ` + jsonText(md("permissionMode")) + ` = 'bypassPermissions') AS bypassed,
-	count(*) FILTER (WHERE e.name = 'tengu_api_success') AS reported,
-	sum(` + jsonDouble(md("preToolHookDurationMs")) + `) FILTER (WHERE e.name = 'tengu_tool_use_success') AS hook_ms_sum,
-	count(` + jsonDouble(md("preToolHookDurationMs")) + `) FILTER (WHERE e.name = 'tengu_tool_use_success') AS hook_ms_n,
-	sum(` + jsonInt(md("cache_creation_5m_input_tokens")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cache_5m,
-	sum(` + jsonInt(md("cache_creation_1h_input_tokens")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cache_1h,
-	sum(` + jsonDouble(md("costUSD")) + `) FILTER (WHERE e.name = 'tengu_api_success') AS cost_usd,
-	count(*) FILTER (WHERE e.name = 'tengu_api_success' AND ` + jsonText(md("gzipSkipReason")) + ` = 'custom_ca') AS custom_ca`
-
 // requestRows is the Requests tab's rows (stream_sql.py tx_rows): a
-// transaction with a credential, listed under its scope session (its own, else
-// its batch's). requests counts them by kind and credential ("<kind>/<key
+// transaction with a credential, listed under its scope session (its own). requests counts them by kind and credential ("<kind>/<key
 // hash>"), requests_hidden the hidden ones. The tab lists only the
 // credentials of the session's visible calls and of the analytics posts that
 // carried its events (process/requestrows.go: callHashes, corrHashes), a set
@@ -186,16 +127,12 @@ var eventAggs = `count(*) AS events,
 // a new credential re-marking the session's earlier minutes.
 const requestRows = `c.key_hash IS NOT NULL AND NOT ` + unnamed + ` AND ` + transaction
 
-// minuteRow recomputes session_minutes for one (session $1, minute [$2, $3)),
-// after its missed_reports: the aggregates above, the minute's missed reports
-// and its Requests tab rows by kind.
+// minuteRow recomputes session_minutes for one (session $1, minute [$2, $3)):
+// the aggregates above and its Requests tab rows by kind.
 var minuteRow = `INSERT INTO session_minutes AS m SELECT $1, $2,
-	cc.model_calls, cc.main_calls, cc.subagent_calls, ag.hidden_calls, cc.unreported,
+	cc.model_calls, cc.main_calls, cc.subagent_calls, ag.hidden_calls,
 	cc.input_tokens, cc.cache_read_tokens, cc.cache_write_tokens, cc.output_tokens, cc.outputs_known,
 	cc.context_sum, cc.tool_calls,
-	ev.events, ev.events_shown, ev.frustrated, ev.interrupted, ev.destructive, ev.outside_cwd,
-	ev.queries, ev.bypassed, ev.reported, (SELECT count(*) FROM missed_reports WHERE session_id = $1 AND minute_ns = $2),
-	ev.hook_ms_sum, ev.hook_ms_n, ev.cache_5m, ev.cache_1h, ev.cost_usd, ev.custom_ca,
 	coalesce((SELECT jsonb_object_agg(k, n) FROM (SELECT c.kind || '/' || c.key_hash AS k, count(*) AS n FROM calls c
 		WHERE c.scope_session_id = $1 AND ` + in + ` AND c.hidden_kind IS NULL AND ` + requestRows + `
 		GROUP BY 1) x), '{}'),
@@ -203,17 +140,14 @@ var minuteRow = `INSERT INTO session_minutes AS m SELECT $1, $2,
 		WHERE c.scope_session_id = $1 AND ` + in + ` AND c.hidden_kind IS NOT NULL AND ` + requestRows + `
 		GROUP BY 1) x), '{}')
 FROM (SELECT ` + callAggs + ` FROM calls c WHERE c.session_id = $1 AND ` + in + ` AND ` + visible + `) cc,
-	(SELECT ` + hiddenAggs + ` FROM calls c WHERE c.session_id = $1 AND ` + in + ` AND c.hidden_kind IS NOT NULL AND ` + modelCall + `) ag,
-	(SELECT ` + eventAggs + ` FROM events e WHERE e.session_id = $1 AND e.ts_ns >= $2 AND e.ts_ns < $3 AND e.source = 'claude_code') ev
+	(SELECT ` + hiddenAggs + ` FROM calls c WHERE c.session_id = $1 AND ` + in + ` AND c.hidden_kind IS NOT NULL AND ` + modelCall + `) ag
 ON CONFLICT (session_id, minute_ns) DO UPDATE SET ` + setAll(sumColumns) + `, requests = excluded.requests, requests_hidden = excluded.requests_hidden`
 
 // sumColumns are session_minutes' and session_hours' values that an hour sums
 // from its minutes (the requests maps are summed per kind).
 var sumColumns = []string{
-	"model_calls", "main_calls", "subagent_calls", "hidden_calls", "unreported",
+	"model_calls", "main_calls", "subagent_calls", "hidden_calls",
 	"input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens", "outputs_known", "context_sum", "tool_calls",
-	"events", "events_shown", "frustrated", "interrupted", "destructive", "outside_cwd", "queries", "bypassed",
-	"reported", "missed", "hook_ms_sum", "hook_ms_n", "cache_5m", "cache_1h", "cost_usd", "custom_ca",
 }
 
 func setAll(cols []string) string {
@@ -251,53 +185,24 @@ var hourRow = func() string {
 // nullable are the sums that are NULL when nothing had a value.
 var nullable = map[string]bool{
 	"input_tokens": true, "cache_read_tokens": true, "cache_write_tokens": true, "output_tokens": true,
-	"context_sum": true, "tool_calls": true, "hook_ms_sum": true, "cache_5m": true, "cache_1h": true, "cost_usd": true,
+	"context_sum": true, "tool_calls": true,
 }
 
 // session_minute_keys' rows of one (session $1, minute [$2, $3)) are each kind
 // of thing the session's pages count distinct, with its occurrences.
-//   - name, tool, mcp_tool, word, destructive, git, pr: the person summary's
-//     counted dimensions (pages.py _EVENT_DIMENSIONS over personmap.go
-//     eventSums); hook (hookName) and head (head_sha), its distinct counts; batch
-//     (an event's analytics post), its batch count.
-//   - event_builtin and event_mcp ([server, tool]): the tools a session's
-//     tengu_tool_use_success events name (eventrows.go, session_tools); call_builtin
-//     and call_mcp, those its ended calls' tool_use blocks name (session_tools,
-//     call_tool_uses).
+//   - call_builtin and call_mcp ([server, tool]): the tools its ended calls'
+//     tool_use blocks name (session_tools, call_tool_uses).
 //   - ip: its visible calls' networks; call_prompt: their prompts (the person
-//     summary's prompt count); input_prompt: its typed prompts' ids, or
-//     input:<time> for one with none (sessionrows.go prompts).
-//   - w:…: its work (work.go workItems), the Work lane's and the session's.
+//     summary's prompt count).
+//   - has: which newest values its model calls have (sessions.go hasKeys).
+//   - w:…: its steps' work (prompts.go stepItems, their step_keys), the Work
+//     lane's and the session's.
 //
 // keyItems is one row per occurrence: (session, its time, kind, key, n: 1, or
-// a work piece's count), over the events and calls the filters keep.
-func keyItems(events, calls string) string {
-	return `SELECT e.session_id AS sid, e.ts_ns AS at, x.k AS kind, x.v AS key, 1::bigint AS n FROM events e
-	LEFT JOIN LATERAL (SELECT ` + pyTruthy(md("toolName")) + ` AS used,
-		` + jsonText(md("toolName")) + ` AS tool, coalesce(` + md("isMcp") + ` #>> '{}' = 'true', false) AS mcp,
-		coalesce(nullif(` + pyStr(md("mcpServerName")) + `, ''),
-			CASE WHEN starts_with(` + jsonText(md("toolName")) + `, 'mcp__') AND cardinality(string_to_array(` + jsonText(md("toolName")) + `, '__')) >= 3
-			     THEN split_part(` + jsonText(md("toolName")) + `, '__', 2) END, '') AS server
-		WHERE e.name = 'tengu_tool_use_success') t ON true
-	CROSS JOIN LATERAL (VALUES
-		('name', e.name),
-		('head', e.head_sha),
-		('batch', e.batch_call_id),
-		(CASE WHEN t.mcp THEN 'mcp_tool' ELSE 'tool' END, t.tool),
-		('word', CASE WHEN e.name = 'tengu_bash_tool_command_executed' THEN ` + jsonText(md("bash_argv0")) + ` END),
-		('destructive', CASE WHEN e.name = 'tengu_bash_tool_command_executed' AND ` + jsonText(md("destructive_category")) + ` <> 'none'
-		 THEN ` + jsonText(md("destructive_category")) + ` END),
-		('git', CASE WHEN e.name = 'tengu_git_operation' THEN ` + jsonText(md("operation")) + ` END),
-		('pr', CASE WHEN e.name = 'tengu_session_linked_to_pr' THEN ` + jsonText(md("prNumber")) + ` END),
-		('hook', CASE WHEN e.name = 'tengu_run_hook' THEN ` + jsonText(md("hookName")) + ` END),
-		('input_prompt', CASE WHEN e.name = 'tengu_input_prompt' THEN coalesce(e.prompt_id, 'input:' || e.ts_ns) END),
-		(CASE WHEN t.server <> '' THEN 'event_mcp' ELSE 'event_builtin' END,
-		 CASE WHEN t.used AND t.server <> '' THEN jsonb_build_array(t.server, t.tool)::text
-		      WHEN t.used AND NOT t.mcp THEN t.tool END)
-	) AS x(k, v)
-	WHERE ` + events + ` AND e.source = 'claude_code' AND x.v IS NOT NULL
-	UNION ALL
-	SELECT c.session_id, ` + at + `, x.k, x.v, 1 FROM calls c, LATERAL (VALUES ('ip', c.ip), ('call_prompt', c.prompt_id)) AS x(k, v)
+// a work piece's count), over the calls and steps the filters keep.
+func keyItems(calls, steps string) string {
+	return `SELECT c.session_id AS sid, ` + at + ` AS at, x.k AS kind, x.v AS key, 1::bigint AS n
+	FROM calls c, LATERAL (VALUES ('ip', c.ip), ('call_prompt', c.prompt_id)) AS x(k, v)
 	WHERE ` + calls + ` AND ` + visible + ` AND x.v IS NOT NULL
 	UNION ALL
 	SELECT c.session_id, ` + at + `, CASE WHEN u ->> 'kind' = 'mcp' AND u ->> 'server' <> '' AND u ->> 'tool' <> '' THEN 'call_mcp' ELSE 'call_builtin' END,
@@ -306,16 +211,19 @@ func keyItems(events, calls string) string {
 	FROM calls c, jsonb_array_elements(CASE jsonb_typeof(c.tool_uses) WHEN 'array' THEN c.tool_uses ELSE '[]' END) u
 	WHERE ` + calls + ` AND c.end_ns IS NOT NULL AND jsonb_typeof(u) = 'object' AND u ->> 'tool' <> ''
 	UNION ALL
-	SELECT w.sid, w.at, w.kind, w.key, w.n FROM (` + workItems(events) + `) w`
+	` + hasItems(calls) + `
+	UNION ALL
+	SELECT s.session_id, s.t_ns, k.kind, k.key, k.n FROM steps s JOIN step_keys k USING (call_id)
+	WHERE ` + steps + ` AND starts_with(k.kind, 'w:')`
 }
 
 // minuteKeys recomputes session_minute_keys for one (session $1, minute
-// [$2, $3)) from the minute's events and calls: a thing the minute no longer
+// [$2, $3)) from the minute's calls and steps: a thing the minute no longer
 // holds leaves, so the minute's rows are replaced.
 var minuteKeys = []string{
 	`DELETE FROM session_minute_keys WHERE session_id = $1 AND minute_ns = $2`,
 	`INSERT INTO session_minute_keys (session_id, minute_ns, kind, key, n) SELECT $1, $2, kind, key, sum(n) FROM (` +
-		keyItems("e.session_id = $1 AND e.ts_ns >= $2 AND e.ts_ns < $3", "c.session_id = $1 AND "+in) + `) k GROUP BY kind, key`,
+		keyItems("c.session_id = $1 AND "+in, "s.session_id = $1 AND s.t_ns >= $2 AND s.t_ns < $3") + `) k GROUP BY kind, key`,
 }
 
 // hourKeys recomputes session_keys for one (session $1, hour [$2, $3)): the

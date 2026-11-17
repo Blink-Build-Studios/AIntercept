@@ -2,7 +2,6 @@ package flush
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -97,9 +96,6 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	col(calls, cs, "client_request_id", "text", func(c *Call) *string { return str(c.R.ClientRequestID) })
 	col(calls, cs, "message_id", "text", func(c *Call) *string { return str(c.R.MessageID) })
 	col(calls, cs, "parent_message_id", "text", func(c *Call) *string { return str(c.R.PreviousMessageID) })
-	col(calls, cs, "batch_events", "bigint", func(c *Call) *int64 { return num(c.BatchEvents) })
-	col(calls, cs, "batch_name", "text", func(c *Call) *string { return str(c.BatchName) })
-	col(calls, cs, "batch_other_sessions", "jsonb", func(c *Call) *string { return jsonList(c.BatchOther) })
 	col(calls, cs, "raw_key", "text", func(c *Call) *string { return str(c.RawKey) })
 	col(calls, cs, "raw_offset", "bigint", func(c *Call) *int64 { return rawNum(c.RawKey, c.RawOffset) })
 	col(calls, cs, "raw_len", "bigint", func(c *Call) *int64 { return rawNum(c.RawKey, c.RawLen) })
@@ -113,55 +109,15 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 		" WHERE excluded.end_ns IS NOT NULL AND (calls.end_ns IS NULL OR calls.swept OR excluded.end_ns > calls.end_ns)"
 	stmts = append(stmts, calls)
 
-	evs := &insert{table: "events"}
-	es := r.Events
-	col(evs, es, "event_key", "text", func(e *Event) string { return e.Key })
-	col(evs, es, "batch_call_id", "text", func(e *Event) string { return e.Batch })
-	col(evs, es, "batch_n", "bigint", func(e *Event) int64 { return e.N })
-	col(evs, es, "batch_cc_n", "bigint", func(e *Event) *int64 { return num(e.CCN) })
-	col(evs, es, "session_id", "text", func(e *Event) *string { return str(e.E.SessionID) })
-	col(evs, es, "prompt_id", "text", func(e *Event) *string { return str(e.E.PromptID) })
-	col(evs, es, "prompt_index", "bigint", func(e *Event) *int64 { return num(e.E.PromptIndex) })
-	col(evs, es, "request_id", "text", func(e *Event) *string { return str(e.E.RequestID) })
-	col(evs, es, "client_request_id", "text", func(e *Event) *string { return str(e.E.ClientRequestID) })
-	col(evs, es, "tool_use_id", "text", func(e *Event) *string { return str(e.E.ToolUseID) })
-	col(evs, es, "device_id", "text", func(e *Event) *string { return str(e.E.DeviceID) })
-	col(evs, es, "account_id", "text", func(e *Event) *string { return str(e.E.PersonID) })
-	col(evs, es, "org_id", "text", func(e *Event) *string { return str(e.E.OrgID) })
-	col(evs, es, "agent_id", "text", func(e *Event) *string { return str(e.E.AgentID) })
-	col(evs, es, "agent_type", "text", func(e *Event) *string { return str(e.E.AgentType) })
-	col(evs, es, "key_hash", "text", func(e *Event) *string { return str(e.KeyHash) })
-	col(evs, es, "source", "text", func(e *Event) string { return e.E.Source })
-	col(evs, es, "name", "text", func(e *Event) *string { return str(e.E.Name) })
-	col(evs, es, "type", "text", func(e *Event) *string { return str(e.E.Type) })
-	col(evs, es, "client_event_id", "text", func(e *Event) *string { return str(e.E.ClientEventID) })
-	col(evs, es, "model", "text", func(e *Event) *string { return str(e.E.Model) })
-	col(evs, es, "permission_mode", "text", func(e *Event) *string { return str(e.E.PermissionMode) })
-	col(evs, es, "head_sha", "text", func(e *Event) *string { return str(e.E.HeadSHA) })
-	col(evs, es, "ts_ns", "bigint", func(e *Event) int64 { return e.E.NS })
-	col(evs, es, "row_ns", "bigint", func(e *Event) int64 { return e.E.RowNS })
-	col(evs, es, "seq", "bigint", func(e *Event) int64 { return e.E.Seq })
-	col(evs, es, "metadata", "jsonb", func(e *Event) *string { return str(e.E.MetadataJSON) })
-	col(evs, es, "env_hash", "envhash", func(e *Event) *string { return str(e.E.EnvJSON) })
-	col(evs, es, "summary", "text", func(e *Event) string { return e.Summary })
-	col(evs, es, "internal", "boolean", func(e *Event) bool { return e.Internal })
-	col(evs, es, "marker", "text", func(e *Event) *string { return str(e.Marker) })
-	// A resent batch counts once (owner decision 4): the earliest copy is kept,
-	// whichever arrives first.
-	evs.conflict = "ON CONFLICT (event_key) DO UPDATE SET " + evs.excluded("event_key") +
-		" WHERE (excluded.row_ns, excluded.batch_call_id, excluded.batch_n) < (events.row_ns, events.batch_call_id, events.batch_n)"
-	stmts = append(stmts, evs)
-
 	accts := &insert{table: "accounts"}
 	as := r.Accounts
 	col(accts, as, "account_id", "text", func(a *Account) string { return a.ID })
 	newestCols(accts, as, "email", func(a *Account) Newest { return a.Email })
 	newestCols(accts, as, "name", func(a *Account) Newest { return a.Name })
 	newestCols(accts, as, "org", func(a *Account) Newest { return a.Org })
-	newestCols(accts, as, "plan", func(a *Account) Newest { return a.Plan })
 	newestCols(accts, as, "codex_plan", func(a *Account) Newest { return a.CodexP })
 	col(accts, as, "seen_ns", "bigint", func(a *Account) int64 { return a.Seen })
-	accts.conflict = "ON CONFLICT (account_id) DO UPDATE SET " + newestSet("accounts", "email", "name", "org", "plan", "codex_plan") +
+	accts.conflict = "ON CONFLICT (account_id) DO UPDATE SET " + newestSet("accounts", "email", "name", "org", "codex_plan") +
 		", seen_ns = greatest(accounts.seen_ns, excluded.seen_ns)"
 	stmts = append(stmts, accts)
 
@@ -183,16 +139,12 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	ds := r.Devices
 	col(devs, ds, "account_id", "text", func(d *Device) string { return d.Account })
 	col(devs, ds, "device_id", "text", func(d *Device) string { return d.Device })
-	col(devs, ds, "on_events", "boolean", func(d *Device) bool { return d.OnEvents })
-	newestCols(devs, ds, "platform", func(d *Device) Newest { return d.Platform })
-	newestCols(devs, ds, "terminal", func(d *Device) Newest { return d.Terminal })
-	newestCols(devs, ds, "shell", func(d *Device) Newest { return d.Shell })
 	newestCols(devs, ds, "agent", func(d *Device) Newest { return d.Agent })
 	newestCols(devs, ds, "version", func(d *Device) Newest { return d.Version })
 	col(devs, ds, "first_ns", "bigint", func(d *Device) int64 { return d.First })
 	col(devs, ds, "last_ns", "bigint", func(d *Device) int64 { return d.Last })
-	devs.conflict = "ON CONFLICT (account_id, device_id) DO UPDATE SET on_events = account_devices.on_events OR excluded.on_events, " +
-		newestSet("account_devices", "platform", "terminal", "shell", "agent", "version") +
+	devs.conflict = "ON CONFLICT (account_id, device_id) DO UPDATE SET " +
+		newestSet("account_devices", "agent", "version") +
 		", first_ns = least(account_devices.first_ns, excluded.first_ns), last_ns = greatest(account_devices.last_ns, excluded.last_ns)"
 	stmts = append(stmts, devs)
 
@@ -225,15 +177,6 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	vs.conflict = fmt.Sprintf("WHERE (SELECT count(*) FROM verdicts v WHERE v.call_id = u.call_id) < %d ON CONFLICT (call_id, seq) DO NOTHING",
 		records.MaxVerdictsPerCall)
 	stmts = append(stmts, vs)
-
-	// Each distinct environment once, before the events that point at it.
-	if envs := distinctEnvs(es); len(envs) > 0 {
-		if _, err := tx.Exec(ctx, `INSERT INTO event_envs (env_hash, env)
-			SELECT `+envHash("u.env")+`, u.env::jsonb FROM unnest($1::text[]) AS u(env) ORDER BY 1
-			ON CONFLICT (env_hash) DO NOTHING`, envs); err != nil {
-			return fmt.Errorf("flush: event_envs: %w", err)
-		}
-	}
 	for _, s := range stmts {
 		if s.n == 0 {
 			continue
@@ -250,71 +193,24 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 		}
 	}
 
-	// A model call marks the minutes of its reports, so a report that came
-	// first stops counting as missed (§4.3); a report marks its calls' minutes,
-	// so a call whose report came later stops counting as unreported.
-	dirty := r.Dirty
-	if len(r.ReportIDs)+len(r.ReportedIDs) > 0 {
-		for _, q := range []struct {
-			ids []string
-			sql string
-		}{
-			{r.ReportIDs, `SELECT DISTINCT session_id || '/' || (ts_ns - ts_ns % 60000000000) FROM events
-				WHERE session_id IS NOT NULL AND (request_id = ANY($1) OR client_request_id = ANY($1))`},
-			{r.ReportedIDs, `SELECT DISTINCT session_id || '/' || (coalesce(start_ns, end_ns) - coalesce(start_ns, end_ns) % 60000000000)
-				FROM calls WHERE session_id IS NOT NULL AND (request_id = ANY($1) OR client_request_id = ANY($1))`},
-		} {
-			if len(q.ids) == 0 {
-				continue
-			}
-			rows, err := tx.Query(ctx, q.sql, q.ids)
-			if err != nil {
-				return fmt.Errorf("flush: reports: %w", err)
-			}
-			keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
-			if err != nil {
-				return fmt.Errorf("flush: reports: %w", err)
-			}
-			for _, k := range keys {
-				dirty = append(dirty, Dirty{"minute", k})
-			}
-		}
-	}
-	// A step reads its report and tool events by request id, and their Bash
-	// events by tool use id, so those mark their calls' prompts (§5.3: a
-	// prompt's events include its calls' events, whatever prompt they name).
-	if ids := append(append([]string(nil), r.ReportedIDs...), r.StepIDs...); len(ids)+len(r.ToolUseIDs) > 0 {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT prompt_id FROM calls WHERE prompt_id IS NOT NULL AND (
-			request_id = ANY($1) OR client_request_id = ANY($1)
-			OR request_id IN (SELECT request_id FROM events WHERE tool_use_id = ANY($2) AND request_id IS NOT NULL))`, ids, r.ToolUseIDs)
-		if err != nil {
-			return fmt.Errorf("flush: steps: %w", err)
-		}
-		pids, err := pgx.CollectRows(rows, pgx.RowTo[string])
-		if err != nil {
-			return fmt.Errorf("flush: steps: %w", err)
-		}
-		for _, p := range pids {
-			dirty = append(dirty, Dirty{"prompt", p})
-		}
-	}
-	// A call carrying back tool calls' results marks the prompts of the calls
+	// A call carrying back tool calls' results marks the steps of the calls
 	// that made them: a step's exit codes are its session's first result for
-	// each of its tool calls, and that can be a later prompt's call (§5.2
-	// steps). One lookup per id through the index on detail's calls.
+	// each of its tool calls, and that can be a later call's (§5.2 steps). One
+	// lookup per id through the index on detail's calls.
+	dirty := r.Dirty
 	if len(r.ResultIDs) > 0 {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT c.prompt_id FROM unnest($1::text[]) k,
-			LATERAL (SELECT c.prompt_id FROM calls c WHERE c.detail -> 'calls' @> jsonb_build_array(jsonb_build_object('id', k)) OFFSET 0) c
+		rows, err := tx.Query(ctx, `SELECT DISTINCT c.call_id FROM unnest($1::text[]) k,
+			LATERAL (SELECT c.call_id, c.prompt_id FROM calls c WHERE c.detail -> 'calls' @> jsonb_build_array(jsonb_build_object('id', k)) OFFSET 0) c
 			WHERE c.prompt_id IS NOT NULL`, r.ResultIDs)
 		if err != nil {
 			return fmt.Errorf("flush: results: %w", err)
 		}
-		pids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
 		if err != nil {
 			return fmt.Errorf("flush: results: %w", err)
 		}
-		for _, p := range pids {
-			dirty = append(dirty, Dirty{"prompt", p})
+		for _, id := range ids {
+			dirty = append(dirty, Dirty{"step", id})
 		}
 	}
 	if len(dirty) > len(r.Dirty) {
@@ -400,32 +296,12 @@ func (in *insert) sql() string {
 		switch sent {
 		case "jsonb":
 			sent, x = "text", x+"::jsonb"
-		case "envhash": // JSON sent as text, stored as its event_envs key
-			sent, x = "text", envHash(x)
 		}
 		args[i], sel[i] = fmt.Sprintf("$%d::%s[]", i+1, sent), x
 	}
 	cols := strings.Join(in.cols, ", ")
 	return fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM unnest(%s) AS u(%s) %s",
 		in.table, cols, strings.Join(sel, ", "), strings.Join(args, ", "), cols, in.conflict)
-}
-
-// envHash is the event_envs key of JSON text: the sha256 of its canonical
-// form (jsonb's text), so equal environments written differently share a row.
-func envHash(text string) string {
-	return "sha256(convert_to((" + text + ")::jsonb::text, 'UTF8'))"
-}
-
-// distinctEnvs is the events' environments, each once.
-func distinctEnvs(es []Event) []string {
-	var out []string
-	for i := range es {
-		if es[i].E.EnvJSON != "" {
-			out = append(out, es[i].E.EnvJSON)
-		}
-	}
-	slices.Sort(out)
-	return slices.Compact(out)
 }
 
 func str(s string) *string {
@@ -451,17 +327,8 @@ func num(n int64) *int64 {
 	return &n
 }
 
-func jsonList(ss []string) *string {
-	if len(ss) == 0 {
-		return nil
-	}
-	b, _ := json.Marshal(ss)
-	s := string(b)
-	return &s
-}
-
 // Tables are the tables a flush writes facts to, and the dirty list.
-var Tables = []string{"calls", "event_envs", "events", "accounts", "session_accounts", "session_credentials", "account_devices", "session_edges", "dirty"}
+var Tables = []string{"calls", "accounts", "session_accounts", "session_credentials", "account_devices", "session_edges", "dirty"}
 
 // Summary is a table's row count, a checksum of its rows (independent of their
 // order: the sum of a hash of each row's text; dirty's of its kind and key

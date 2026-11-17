@@ -42,7 +42,14 @@ const sample: components["schemas"]["PersonResponse"] = {
       ]
     },
     "customerSince": null,
-    "devices": [],
+    "devices": [
+      {
+        "deviceId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "platform": null,
+        "shell": null,
+        "terminal": null
+      }
+    ],
     "email": null,
     "firstUseAt": null,
     "flags": {

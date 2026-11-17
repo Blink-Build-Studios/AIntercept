@@ -46,7 +46,7 @@ marks AS (
 	WHERE c.scope_session_id IS NOT NULL
 	UNION SELECT 'cred_minute', coalesce(c.key_hash, '') || '/' || (c.start_ns - c.start_ns %% %[1]d) FROM swept c
 	WHERE %[2]s
-	UNION SELECT 'prompt', c.prompt_id FROM swept c WHERE c.prompt_id IS NOT NULL),
+	UNION SELECT 'step', c.call_id FROM swept c WHERE c.prompt_id IS NOT NULL),
 marked AS (
 	INSERT INTO dirty (kind, key) SELECT kind, key FROM marks ORDER BY kind, key
 	ON CONFLICT (kind, key) DO UPDATE SET seq = excluded.seq RETURNING 1)
@@ -76,8 +76,6 @@ func Sweep(ctx context.Context, db *pgxpool.Pool) (int64, error) {
 var retained = []struct{ table, old string }{
 	{"calls", "start_ns < $1"},
 	{"calls", "start_ns IS NULL AND end_ns < $1"},
-	{"events", "ts_ns < $1"},
-	{"missed_reports", "minute_ns < $1"},
 	{"session_minutes", "minute_ns < $1"},
 	{"session_hours", "hour_ns < $1"},
 	{"session_minute_keys", "minute_ns < $1"},

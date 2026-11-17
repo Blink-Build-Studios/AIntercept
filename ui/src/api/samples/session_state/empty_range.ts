@@ -6,22 +6,15 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "capabilitiesAt": {
       "builtin": {
         "total": null,
-        "used": 1
+        "used": 3
       },
-      "hooks": 1,
-      "mcpServers": [
-        {
-          "name": "github",
-          "riskyVerbs": [],
-          "tools": null,
-          "toolsUsed": 1
-        }
-      ],
+      "hooks": null,
+      "mcpServers": [],
       "mcpTools": {
         "total": null,
-        "used": 1
+        "used": null
       },
-      "poolChangesInRange": 0,
+      "poolChangesInRange": null,
       "skills": null
     },
     "counts": {
@@ -36,8 +29,8 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "experimentsAt": null,
     "flagFetchesInRange": null,
     "flagsChangedInRange": null,
-    "recapsInRange": [],
-    "recapsTotal": 1,
+    "recapsInRange": null,
+    "recapsTotal": null,
     "repoInRange": {
       "branch": null,
       "commits": 0,
@@ -52,7 +45,7 @@ const sample: components["schemas"]["SessionStateResponse"] = {
   "meta": {
     "asOf": "2026-11-04T18:05:00Z",
     "from": "2026-11-04T12:00:00Z",
-    "lastDataAt": "2026-11-04T09:11:05Z",
+    "lastDataAt": "2026-11-04T09:10:30Z",
     "page": null,
     "pageSize": null,
     "to": "2026-11-04T13:00:59.999999Z",
