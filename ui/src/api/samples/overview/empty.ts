@@ -13,7 +13,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "sessions\u2192prompts\u2192steps",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       },
       {
         "agent": "codex",
@@ -23,7 +24,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "sessions\u2192turns\u2192steps",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       },
       {
         "agent": "chatgpt",
@@ -33,7 +35,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "conversations\u2192messages",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       },
       {
         "agent": "claude-ai",
@@ -43,7 +46,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "conversations\u2192messages",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       }
     ],
     "capabilities": {
@@ -106,6 +110,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
     "people": 0,
     "requests": 0,
     "sessions": 0,
+    "toolCalls": null,
     "turns": 0,
     "unattributed": {
       "firstSeen": null,

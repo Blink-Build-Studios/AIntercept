@@ -3,7 +3,7 @@
 // and lays the lanes out; stories feed it the generated samples.
 import type { SessionTimeline } from "../../api/types";
 import { formatCount, formatDuration, formatTokens } from "../../lib/format";
-import type { Bin, Gap } from "./BarTrack";
+import type { Bin } from "./BarTrack";
 import type { MarkLabel, TimelineMark } from "./MarkerTrack";
 import { ms } from "./scale";
 import type { TurnBlock } from "./TurnTrack";
@@ -77,7 +77,7 @@ export function sessionLanes(d: SessionTimeline) {
     perBin: perBin(d.binSeconds),
     binsLabel: binsLabel(d.binSeconds),
     prompts: { markers: d.prompts.map((p): TimelineMark => ({ t: p.t, id: p.promptId, hoverLabel: p.index === null ? undefined : `#${p.index}` })), labels: promptLabels(d.prompts, d.from, d.to) },
-    modelCalls: { bins: d.modelCalls.map((b): Bin => ({ t: b.t, v: b.count })), gaps: d.notCaptured.map((g): Gap => ({ from: g.from, to: g.to, count: g.count })) },
+    modelCalls: { bins: d.modelCalls.map((b): Bin => ({ t: b.t, v: b.count })) },
     // A turn from its prompt to its last step (§11R); one still running reaches now.
     turns: d.turns.map((t): TurnBlock => ({ id: t.promptId, index: t.n, from: t.startedAt, to: t.endedAt })),
     // Work per bin (§11R): edits on top of everything else.

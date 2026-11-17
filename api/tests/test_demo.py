@@ -139,14 +139,6 @@ def test_session_requests_demo(pg_demo, write_sample):
     assert missed == 0  # only its analytics said which calls went around the proxy
 
 
-def test_session_events_demo(pg_demo, write_sample):
-    client = pg_demo
-    r = client.get(f"{SESSION}/events")
-    write_sample(client, r, "demo")
-    meta = r.json()["meta"]
-    assert (meta["total"], meta["shown"], r.json()["data"]) == (0, 0, [])  # analytics aren't stored
-
-
 # --- the request drawer (M4): a main-thread call of the demo session ----------------------------------
 
 

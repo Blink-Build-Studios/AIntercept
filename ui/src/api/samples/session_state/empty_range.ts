@@ -6,16 +6,27 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "capabilitiesAt": {
       "builtin": {
         "total": null,
-        "used": 3
+        "used": 2
       },
       "hooks": null,
-      "mcpServers": [],
+      "mcpServers": [
+        {
+          "name": "github",
+          "riskyVerbs": [],
+          "tools": null,
+          "toolsUsed": 1
+        }
+      ],
       "mcpTools": {
         "total": null,
-        "used": null
+        "used": 1
       },
       "poolChangesInRange": null,
       "skills": null
+    },
+    "context": {
+      "compactions": 0,
+      "subagentThreads": 0
     },
     "counts": {
       "compactions": 0,
@@ -27,6 +38,7 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "turns": 0
     },
     "experimentsAt": null,
+    "failedCalls": 0,
     "flagFetchesInRange": null,
     "flagsChangedInRange": null,
     "recapsInRange": null,
@@ -40,6 +52,14 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "headTo": null,
       "prs": [],
       "pushed": false
+    },
+    "tools": {
+      "byName": {},
+      "calls": 0,
+      "listChanges": null,
+      "offered": null,
+      "sources": [],
+      "used": 0
     }
   },
   "meta": {

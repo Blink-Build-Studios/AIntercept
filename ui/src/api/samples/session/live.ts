@@ -36,7 +36,6 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
-    "costUsd": null,
     "coverage": null,
     "device": {
       "deviceId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
@@ -48,10 +47,10 @@ const sample: components["schemas"]["SessionResponse"] = {
     "end": null,
     "events": null,
     "facts": null,
+    "failedCalls": 0,
     "fieldsMissing": false,
     "friction": {
-      "destructive": 0,
-      "frustrated": 0,
+      "failedCalls": 0,
       "interrupted": 0
     },
     "hiddenCalls": 0,
@@ -77,6 +76,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     },
     "personId": "00000000-0000-4000-8000-00000000acc1",
     "prompts": 2,
+    "recording": "metadata",
     "repo": null,
     "sessionId": "11111111-1111-4111-8111-111111111111",
     "start": "2026-11-04T18:00:30Z",
@@ -90,6 +90,25 @@ const sample: components["schemas"]["SessionResponse"] = {
       "output": 100
     },
     "toolCalls": 1,
+    "tools": {
+      "byName": {
+        "Bash": 1
+      },
+      "calls": 1,
+      "listChanges": null,
+      "offered": null,
+      "sources": [
+        {
+          "calls": {
+            "Bash": 1
+          },
+          "offered": null,
+          "source": "Built-in",
+          "used": 1
+        }
+      ],
+      "used": 1
+    },
     "turns": 2,
     "turnsInterrupted": 0,
     "work": {

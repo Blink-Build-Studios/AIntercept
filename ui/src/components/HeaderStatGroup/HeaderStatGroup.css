@@ -6,7 +6,7 @@
     row-gap: 8px;
   }
   /* A wrapping group (§11M 1.10) moves a whole stat to the next row; its value never breaks. */
-  .header-stat-group-wrap .header-stat-value {
+  .header-stat-group-nobreak .header-stat-value {
     white-space: nowrap;
   }
 }

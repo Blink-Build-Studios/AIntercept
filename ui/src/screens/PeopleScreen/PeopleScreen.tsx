@@ -1,7 +1,7 @@
 import { AboutThisData, type AboutState } from "../../components/AboutThisData/AboutThisData";
 import type { Schemas } from "../../api/types";
 import { slowNotice, type Region } from "../../lib/region";
-import { formatCount, formatPct } from "../../lib/format";
+import { formatCount } from "../../lib/format";
 import { formatDay } from "../../lib/time";
 import { AGENT_NAME, type Agent } from "../../components/AgentChip/AgentChip";
 import { AgentCard, agentSummary } from "../../components/AgentCard/AgentCard";
@@ -57,13 +57,13 @@ export type PeopleScreenProps = {
   now: string;
 };
 
-const RIBBON_LABELS = ["People", "Agents seen", "Sessions", "Turns", "Devices"];
+const RIBBON_LABELS = ["People", "Agents seen", "Sessions", "Turns", "Tool calls"];
 
 /** A row's turns and what the person is working on (§11R, People.dc.html): the live turn, else the repos; a chat surface `(chat)`. */
 function personTurns(r: Schemas["PersonSummaryRow"]) {
   const w = r.workingOn;
   const chatOnly = r.agents.every((a) => a === "chatgpt" || a === "claude-ai");
-  return { count: r.turns, workingOn: { live: w?.live ? { repo: w.repo, turn: w.turn } : null, repos: w?.repos ?? [], chat: chatOnly } };
+  return { count: r.turns, workingOn: { live: w?.live ? { repo: w.repo, turn: w.turn, sessionId: w.sessionId } : null, repos: w?.repos ?? [], chat: chatOnly } };
 }
 
 /** The window in words, for the subtitle (§11G.C1). */
@@ -77,24 +77,21 @@ function ribbon(o: Schemas["Overview"]) {
     { label: "Agents seen", value: seen.length, sub: seen.map((a) => AGENT_NAME[a.agent]).join(", ") || "none yet" },
     { label: "Sessions", value: o.sessions, sub: o.unattributed.sessions ? `+${formatCount(o.unattributed.sessions)} not tied to a person` : "all tied to a person" },
     { label: "Turns", value: o.turns, sub: "across all agents" },
-    // §11L.1: Missed is Claude Code's, so it moves to that agent's card; the ribbon keeps what every agent has.
-    { label: "Devices", value: o.devices, sub: "across all agents" },
+    // §11S: Devices came from the agents' analytics; the tool calls are on the wire.
+    { label: "Tool calls", value: o.toolCalls, sub: "Claude Code and Codex", unknownReason: "no call recorded its tools" },
   ];
 }
 
 /**
- * An agent card's second and third lines (handoff §11L.1): the agent's headline where it has
- * one (Claude Code's missed calls and bypass, Codex's highest weekly window), else its shape.
+ * An agent card's second and third lines (handoff §11L.1, §11S): Claude Code's sessions and turns
+ * (`18 sessions · 108 turns`), Codex's highest weekly window, else the agent's shape.
  */
 export function agentLines(a: Schemas["AgentOverview"]): { summary: string; sub: string } {
   const summary = agentSummary(a);
   const shape = a.shape.replace(/→/g, " → ");
   if (a.agent === "claude-code") {
     const sessions = summary.split(" · ")[0] ?? summary;
-    return {
-      summary: a.missedCalls ? `${sessions} · ▲ ${formatCount(a.missedCalls)} calls missed` : summary,
-      sub: a.bypassPct !== null ? `bypass on ${formatPct(a.bypassPct)} of model calls` : shape,
-    };
+    return { summary: a.sessions ? `${sessions} · ${formatCount(a.turns)} ${a.turns === 1 ? "turn" : "turns"}` : summary, sub: shape };
   }
   if (a.agent === "codex" && a.highestWeekPct !== null) return { summary, sub: `limits: highest week ${Math.round(a.highestWeekPct)}%` };
   return { summary, sub: shape };
@@ -194,7 +191,7 @@ export function PeopleScreen(p: PeopleScreenProps) {
         </RegionState>
         <section aria-label="People" className="people-table">
           <div className="people-filters">
-            <TextInput id="people-search" label="Search" value={p.q} onChange={p.onQ} placeholder="name, email, account, device…" pending={p.people.status === "refetching"} />
+            <TextInput id="people-search" label="Search" value={p.q} onChange={p.onQ} placeholder="name, email, account, org…" pending={p.people.status === "refetching"} />
             <Chip tone="selected">{filterLabel}</Chip>
             <span className="flex-1" />
             <span className="type-data text-ink-faint">sorted by last seen</span>
@@ -235,6 +232,7 @@ export function PeopleScreen(p: PeopleScreenProps) {
                           view={view}
                           turns={personTurns(r)}
                           {...(view === "codex" ? codexCells(r) : {})}
+                          {...(view === "claude-code" ? { calls: { tools: r.toolCalls, failed: r.failedCalls } } : {})}
                         />
                       ))
                     : undefined}

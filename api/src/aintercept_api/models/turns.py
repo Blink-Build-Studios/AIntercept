@@ -6,8 +6,8 @@ from typing import Literal
 
 from aintercept_api.models.common import Agent, Envelope, Model
 from aintercept_api.models.people import Friction, PromptText, SessionLabel
-from aintercept_api.models.sessions import PromptFriction, StepData
-from aintercept_api.models.work import TurnWork
+from aintercept_api.models.sessions import StepData
+from aintercept_api.models.work import Recording, TurnWork
 
 WorkKind = Literal["read", "edit", "run", "web", "mcp", "spawn", "tool", "think", "reply"]
 """What a group of steps did (CompTurns WorkGroup): read, edited, ran a program, searched or fetched,
@@ -44,6 +44,8 @@ class WorkGroup(Model):
     tokensOut: int | None
     text: str | None
     """A reply's text (its start), from recorded content; None without content."""
+    tools: dict[str, int]
+    """Its steps' tool calls by tool name as sent (`Read`, `mcp__linear__list_issues`): its content-free title."""
     steps: list[TurnStep]
 
 
@@ -59,10 +61,19 @@ class SubagentRow(Model):
     session: its steps are below)."""
     steps: int
     work: TurnWork
+    tools: dict[str, int]
+    """Its tool calls by tool name as sent (its content-free work line)."""
     tokensIn: int | None
     tokensOut: int | None
     groups: list[WorkGroup]
     """Its steps grouped (Claude Code); empty for a Codex thread, which is a session of its own."""
+
+
+class TurnFriction(Model):
+    """A turn's friction (handoff §11S): ✕ interrupted, ! failed calls (API errors, overloads)."""
+
+    interrupted: bool
+    failedCalls: int
 
 
 class TurnRow(Model):
@@ -83,11 +94,11 @@ class TurnRow(Model):
     tokensIn: int | None
     """input + cacheRead + cacheWrite over its steps."""
     tokensOut: int | None
-    costUsd: float | None
-    """Claude Code's own cost estimate (its reports' costUSD); None for Codex."""
-    friction: PromptFriction
+    friction: TurnFriction
     work: TurnWork
-    """The whole turn's work, from its analytics (its subagents' included)."""
+    """The whole turn's work, from its steps' tool calls (its subagents' included)."""
+    tools: dict[str, int]
+    """Its tool calls by tool name as sent, most first (the content-free work line, handoff §11S)."""
     groups: list[WorkGroup]
     """The main thread's steps, grouped."""
     subagents: list[SubagentRow]
@@ -113,6 +124,10 @@ class SessionWorkRow(Model):
     """The sum of its turns' times (prompt to last step)."""
     work: TurnWork
     friction: Friction
+    tools: dict[str, int]
+    """Its tool calls by tool name as sent, most first: the content-free work line (handoff §11S)."""
+    recording: Recording
+    """`content` when any of its calls kept its content: the Work tab groups by repo only then."""
 
 
 class RepoGroup(Model):

@@ -30,10 +30,15 @@
     flex-direction: column;
     gap: 6px;
   }
+  /* The state panels (§11S): three columns, the tools panel spanning two. */
   .session-panels {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+    align-items: start;
+  }
+  .session-panel-wide {
+    grid-column: span 2;
   }
   .session-panel-skeleton {
     height: 140px;
@@ -82,6 +87,9 @@
     }
     .session-panels {
       grid-template-columns: minmax(0, 1fr);
+    }
+    .session-panel-wide {
+      grid-column: auto;
     }
   }
 }

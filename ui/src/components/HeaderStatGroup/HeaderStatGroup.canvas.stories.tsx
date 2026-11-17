@@ -5,6 +5,7 @@ import { modelCallsTip } from "../../lib/tips";
 import { AgentPlacesSheet } from "../AgentSectionHead/CompAgents.canvas.stories";
 import { ProvidersSessionSheet } from "../ProviderMark/CompProviders.canvas.stories";
 import { HeaderStat } from "../HeaderStat/HeaderStat";
+import { SessionHeaderSpecimens } from "../HeaderStat/HeaderStat.canvas.stories";
 import { HeaderStatGroup } from "./HeaderStatGroup";
 
 export default { title: "Canvas/Summary/HeaderStatGroup", parameters: { layout: "padded" } } satisfies Meta;
@@ -27,6 +28,8 @@ export const Canvas: StoryObj = {
           <HeaderStat label="Model calls" value="640" qualifier="+94 not captured" qualifierTone="gap" tip={modelCallsTip(640, 94)} data-force="hover" />
         </HeaderStatGroup>
       </div>
+      {/* CompTurns (§11S): the session header, content-free and with content. */}
+      <SessionHeaderSpecimens />
       {/* CompAgents: HeaderStatGroup/withAgentExtras. */}
       <AgentPlacesSheet />
       {/* CompProviders: the session header's one wrapping group (§11M 1.10). */}

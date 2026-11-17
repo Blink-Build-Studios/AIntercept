@@ -13,8 +13,8 @@ export type OutcomeSlotProps = {
 /**
  * Where a generated summary will go (handoff §11R, CompTurns OutcomeSlot): a dashed, faintly
  * hatched box tagged `needs a generated summary · not captured yet`, two skeleton lines for
- * the text, then the facts we do capture. Session: under the header. Person: under the
- * header and posture chips, above the coverage line.
+ * the text, then the facts the wire carries. Session and person: under the header, above the
+ * timeline.
  */
 export function OutcomeSlot({ title, facts }: OutcomeSlotProps) {
   return (

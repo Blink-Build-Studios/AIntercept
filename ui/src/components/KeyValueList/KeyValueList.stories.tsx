@@ -31,3 +31,16 @@ export const Loading: Story = { args: { title: "Capabilities · seen in any sess
 export const RowHover: Story = {
   args: { title: "Request shape", rows: [{ k: "thinking budget", v: "10,000", tip: sourceTip("request body · thinking.budget_tokens", { n: 412, of: 640, per: "calls" }) }] },
 };
+/** The session's context, content-free (§11S): compactions, peak context, subagent threads. */
+export const Context: Story = {
+  args: { title: "Context · in range", rows: [], lines: [{ text: "1 compaction · 905k → 21k" }, { text: "peak context 905k tokens" }, { text: "3 subagent threads", muted: true }] },
+};
+/** The session's repo, with content: branch, head range, cwd, push. */
+export const Repo: Story = {
+  args: {
+    title: "Repo · in range",
+    note: "with content",
+    rows: [],
+    lines: [{ text: "partner-readiness" }, { text: "a41f… → 9c02… · 2 commits" }, { text: "cwd …/aintercept → …/observer" }, { text: "no push in range", muted: true }],
+  },
+};

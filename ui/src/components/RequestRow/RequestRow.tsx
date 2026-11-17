@@ -6,7 +6,6 @@ import { useRowLink } from "../../lib/linkedHover";
 import { bytesTip, durationTip, fullText, statusTip, timeTip } from "../../lib/tips";
 import { unknownAttrs, unknownTip } from "../../lib/unknown";
 import type { Column } from "../DataTable/DataTable";
-import { Marker } from "../Marker/Marker";
 import { StatusCode } from "../StatusCode/StatusCode";
 import { Tooltip, type TooltipContent } from "../Tooltip/Tooltip";
 import { AGENT_BG, AGENT_NAME } from "../AgentChip/AgentChip";
@@ -203,13 +202,9 @@ export function RequestRow({ row: r, channel, detail: shaped, showSession = fals
           </span>
         ))}
       <Val v={isWebSocketTurn(r) ? "WS" : r.method} label="Method" reason={why("no method")} />
-      {r.captured ? (
-        <Tooltip kind="truncate" content={fullText(detail)}>
-          <span role="cell">{shaped ? <DetailText d={shaped} /> : detail}</span>
-        </Tooltip>
-      ) : (
-        <Marker kind="coverageGap" role="cell" label="reported by Claude Code, not captured" />
-      )}
+      <Tooltip kind="truncate" content={fullText(detail)}>
+        <span role="cell">{shaped ? <DetailText d={shaped} /> : detail}</span>
+      </Tooltip>
       {r.captured ? (
         <Tooltip content={r.status === null ? unknownTip("Status", "no response") : statusTip(r.status, r.statusText, r.stopReason, r.error)}>
           <StatusCode code={r.status} role="cell" />

@@ -6,10 +6,11 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import type { CSSProperties, ReactNode } from "react";
 import { ParityTags } from "../../test/ParityTag";
-import { BarTrack, gapRowLabel, type Bin, type Gap } from "./BarTrack";
+import { BarTrack, type Bin } from "./BarTrack";
 import { BrushSelection } from "./Brush";
 import { DENSITY } from "./densityData";
 import { FrictionTrack, frictionRowLabels, type Friction } from "./FrictionTrack";
+import { SPLIT_FRICTION_KINDS } from "./frictionSpecimens";
 import { Lane, LANE_HEIGHT } from "./Lane";
 import { ScaleContext, TrackWidthContext, makeScale } from "./scale";
 import { TimeAxis } from "./TimeAxis";
@@ -38,9 +39,6 @@ const friction: Friction[] = (["frustrated", "interrupted", "destructive"] as co
 
 /** Bars from the sheet: bins on the window's grid; heights in px of the bars' area. */
 const bins = (w: Win, bars: readonly (readonly number[])[]): Bin[] => bars.map(([l, , h]) => ({ t: iso(at(w, l!)), v: h! }));
-/** Hatches back to gaps (a gap's hatch covers its last bin), with counts summing to the label's 107. */
-const COUNTS = [60, 30, 2, 15];
-const gaps: Gap[] = DENSITY.gapLane.gaps.map(([l, wd], i) => ({ from: iso(at(W14, l!)), to: iso(at(W14, l! + wd!) - HOUR), count: COUNTS[i] ?? 1 }));
 
 /** A specimen inside a timeline: no box of its own. */
 const In = ({ spec, rule = false, children }: { spec: string; rule?: boolean; children: ReactNode }) => (
@@ -74,20 +72,12 @@ export function DensityCanvasSheet() {
   const axisBox: CSSProperties = { width: 132 + TRACK };
   return (
     <div className="flex flex-col items-start gap-8 p-4">
-      <ParityTags targets={[rowTag("FrictionRow/frustrated", 1), rowTag("FrictionRow/interrupted", 2), rowTag("FrictionRow/destructive", 3)]}>
+      {/* §11S: the frustrated and destructive rows are illustrative inside the measured lane. */}
+      <ParityTags targets={[{ ...rowTag("FrictionRow/frustrated", 1), illustrative: true }, rowTag("FrictionRow/interrupted", 2), { ...rowTag("FrictionRow/destructive", 3), illustrative: true }]}>
         <Frame w={W14}>
           <In spec="Lane/frictionSplit" rule>
-            <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary="friction" rows={frictionRowLabels(friction)}>
-              <FrictionTrack marks={friction} />
-            </Lane>
-          </In>
-        </Frame>
-      </ParityTags>
-      <ParityTags targets={[{ spec: "GapRow/merged", selector: ".tl-gaprow" }]}>
-        <Frame w={W14}>
-          <In spec="Lane/modelCallsWithGapRow" rule>
-            <Lane label="Model calls" sublabel={DENSITY.gapLane.sub ?? undefined} height={LANE_HEIGHT.barsWithGapRow} summary="model calls" footer={gapRowLabel(gaps)}>
-              <BarTrack bins={bins(W14, DENSITY.gapLane.bars)} binSeconds={3600} color="model" maxV={58} gaps={gaps} gapRow />
+            <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary="friction" rows={frictionRowLabels(friction, SPLIT_FRICTION_KINDS)}>
+              <FrictionTrack marks={friction} kinds={SPLIT_FRICTION_KINDS} />
             </Lane>
           </In>
         </Frame>

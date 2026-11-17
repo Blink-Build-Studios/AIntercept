@@ -37,7 +37,7 @@ const sample: components["schemas"]["SessionPromptsResponse"] = {
           "agentType": null,
           "commands": [],
           "costUsd": null,
-          "does": "exec",
+          "does": "mcp",
           "durationMs": 2.0,
           "eventsPending": false,
           "exitCodes": [],

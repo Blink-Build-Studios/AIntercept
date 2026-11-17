@@ -116,10 +116,6 @@ class _Recording:
         self.seen.append(("session/requests", lo, hi))
         return self.inner.session_requests(sid, lo, hi, *a)
 
-    def session_events(self, sid, lo, hi, *a):
-        self.seen.append(("session/events", lo, hi))
-        return self.inner.session_events(sid, lo, hi, *a)
-
     def person_sessions(self, pid, now, lo, hi, *a):
         self.seen.append(("person/sessions", lo, hi))
         return self.inner.person_sessions(pid, now, lo, hi, *a)
@@ -175,7 +171,6 @@ RANGED = {
     "session/state": f"/api/v1/sessions/{S1}/state",
     "session/prompts": f"/api/v1/sessions/{S1}/prompts",
     "session/requests": f"/api/v1/sessions/{S1}/requests",
-    "session/events": f"/api/v1/sessions/{S1}/events",
     "person/sessions": "/api/v1/people/{p}/sessions",
     "person/timeline": "/api/v1/people/{p}/timeline",
     "person/summary": "/api/v1/people/{p}/summary",
@@ -246,7 +241,7 @@ def test_defaults_snap_too(spied):
     pid = _person(client)
     now = cc.to_ns(FROZEN_NOW)
     s1_start = ns(f"{H}:03:21.5")
-    for page in ("session/state", "session/prompts", "session/events"):
+    for page in ("session/state", "session/prompts"):
         store.seen.clear()
         meta = client.get(RANGED[page]).json()["meta"]
         (_, a, b), *_ = [x for x in store.seen if x[0] == page]
@@ -263,7 +258,7 @@ def test_defaults_snap_too(spied):
 
 def test_a_live_sessions_default_end_is_nows_minute(spied):
     client, store = spied
-    meta = client.get(f"/api/v1/sessions/{S2}/events").json()["meta"]
+    meta = client.get(f"/api/v1/sessions/{S2}/state").json()["meta"]
     assert meta["from"] == "2026-11-04T18:02:00Z" and meta["to"] == "2026-11-04T18:05:59.999999Z", meta
 
 

@@ -43,12 +43,6 @@ const headers: {
     meta: ["Nov 3 10:42:16.204", "prompt #19", "step 2 of 9", "main", "req_01H…9fa"],
   },
   {
-    st: "reportedNotCaptured",
-    kind: "notCaptured",
-    status: "▲ reported by Claude Code · not captured",
-    meta: ["Nov 3 15:22:08", "prompt #22", "requestId from analytics"],
-  },
-  {
     st: "failed",
     kind: "failed",
     status: "✕ ERR · connection reset after 0.6 s · retried",
@@ -71,6 +65,7 @@ const unknown: KeyStripCellData[] = [
   { label: "Duration", value: "0.6 s", sub: "until reset" },
   { label: "Stop", value: null, sub: "not reported" },
 ];
+// The sheet still draws its cost cells (illustrative since §11S: the drawer shows Cache there).
 const cellSpecs = (names: string[], strip: string) =>
   names.map((n, i) => ({
     spec: `KeyStripCell/${n}`,

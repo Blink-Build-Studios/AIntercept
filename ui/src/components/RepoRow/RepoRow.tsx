@@ -8,8 +8,9 @@ import { WorkText } from "../TurnRow/WorkText";
 import "../DataTable/DataTable.css";
 import "./RepoRow.css";
 
-// The Work tab (handoff §11R, CompTurns RepoRow · SessionRow (work)): ▸ 14 · Started 92 · ● 10 ·
-// Repo · session 260 · Turns 60 · Active 70 · Work (flex) · Friction 84 · › 12; min width 1100.
+// The Work tab (handoff §11R, §11S, CompTurns RepoRow · SessionRow (work)): ▸ 14 · Started 92 · ● 10 ·
+// Repo · session 260 (content-free: Session) · Turns 60 · Active 70 · Work (flex) · Friction 60 · › 12;
+// min width 1100.
 export const WORK_MIN_WIDTH = 1100;
 export const WORK_COLUMNS: Column[] = [
   { id: "twisty", header: "", width: 14 },
@@ -18,13 +19,19 @@ export const WORK_COLUMNS: Column[] = [
   { id: "repo", header: "Repo · session", width: 260 },
   { id: "turns", header: "Turns", width: 60, align: "right" },
   { id: "active", header: "Active", width: 70, align: "right", definition: "Time inside turns: prompt to last step, summed." },
-  { id: "work", header: "Work", width: "flex", definition: "What the sessions did, from their steps' tool calls and the agent's analytics." },
-  { id: "friction", header: "Friction", width: 84, definition: "↯ frustrated · ✕ interrupted · ▲ destructive commands, counted per session." },
+  { id: "work", header: "Work", width: "flex", definition: "What the sessions did: their tool calls by name, or in plain words when content was recorded." },
+  { id: "friction", header: "Friction", width: 60, definition: "✕ interrupted turns · ! failed calls (API errors, overloads, retries), counted per session." },
   { id: "go", header: "", width: 12 },
 ];
 
+/** The group of sessions whose conversation names no repo. */
+export const NO_REPO = "no repo in the conversation";
+
+/** The content-free flat list's columns (§11S): no repo, so the third reads Session. */
+export const WORK_COLUMNS_FLAT: Column[] = WORK_COLUMNS.map((c) => (c.id === "repo" ? { ...c, header: "Session" } : c));
+
 export type RepoRowProps = {
-  /** The repo (Claude Code) or workspace (Codex); null: `repo not parsed`. */
+  /** The repo (Claude Code) or workspace (Codex), from the conversation; null: `no repo in the conversation`. */
   repo: string | null;
   /** After the name, in --ink-muted: the one session's label, or when (`before Nov 2`). */
   sub?: string | null;
@@ -42,8 +49,9 @@ export type RepoRowProps = {
 };
 
 /**
- * One repo on the person page's Work tab (handoff §11R, CompTurns RepoRow): its session count,
- * turns, active time and work line. Expanded it is --surface-raised, its sessions below.
+ * One repo on the person page's Work tab with content recorded (handoff §11R, §11S, CompTurns
+ * RepoRow): its session count, turns, active time and work line. Expanded it is
+ * --surface-raised, its sessions below.
  */
 export function RepoRow({ repo, sub, agents, sessions, turns, activeMs, work, expanded, onToggle, children, "data-force": force }: RepoRowProps) {
   const line = workText(work);
@@ -73,11 +81,17 @@ export function RepoRow({ repo, sub, agents, sessions, turns, activeMs, work, ex
         <span role="cell" className="text-ink-faint">
           {`${formatCount(sessions)} ${sessions === 1 ? "session" : "sessions"}`}
         </span>
-        <Tooltip kind="truncate" content={fullText([repo ?? "repo not parsed", sub].filter(Boolean).join(" · "))}>
-          <span role="cell" className="type-data-strong">
-            {repo ?? <span className="text-ink-muted">repo not parsed</span>} {agents}
-            {sub && <span className="repo-row-sub text-ink-muted">{`· ${sub}`}</span>}
-          </span>
+        <Tooltip kind="truncate" content={fullText([repo ?? NO_REPO, sub].filter(Boolean).join(" · "))}>
+          {repo === null ? (
+            <span role="cell" className="type-data-strong text-ink-muted">
+              {NO_REPO}
+            </span>
+          ) : (
+            <span role="cell" className="type-data-strong">
+              {repo} {agents}
+              {sub && <span className="repo-row-sub text-ink-muted">{`· ${sub}`}</span>}
+            </span>
+          )}
         </Tooltip>
         <span role="cell" className="dt-right">
           {turns === null ? "—" : formatCount(turns)}

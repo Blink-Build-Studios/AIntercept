@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -100,6 +101,9 @@ type Request struct {
 	ClientJSON   string `parquet:"client_json,optional"`
 	ProviderJSON string `parquet:"provider_json,optional"`
 	ToolUsesJSON string `parquet:"tool_uses_json,optional"`
+	// ToolsOffered is the request's tool list (its tools' names, sorted and
+	// distinct, as a JSON array): what the model could call (handoff §11S).
+	ToolsOffered string `parquet:"tools_offered,optional"`
 
 	// Product is the coding harness (claude_code, codex), Client how it was run
 	// (cli, exec, tui…) and ClientVersion its version. HiddenKind marks a call
@@ -241,6 +245,18 @@ func RequestFrom(e *events.Event, p *Pending, file string) Request {
 	r.ProviderJSON = Marshal(provider)
 	if len(e.ToolUses) > 0 {
 		r.ToolUsesJSON = Marshal(e.ToolUses)
+	}
+	if len(e.ToolsAvailable) > 0 {
+		names := make([]string, 0, len(e.ToolsAvailable))
+		for _, t := range e.ToolsAvailable {
+			if t.Name != "" {
+				names = append(names, t.Name)
+			}
+		}
+		slices.Sort(names)
+		if names = slices.Compact(names); len(names) > 0 {
+			r.ToolsOffered = Marshal(names)
+		}
 	}
 	return r
 }

@@ -11,12 +11,10 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "retained": true,
         "text": "fix the test"
       },
-      "costUsd": null,
       "durationMs": 11000.0,
       "endedAt": "2026-11-04T10:30:11Z",
       "friction": {
-        "destructive": 0,
-        "frustrated": false,
+        "failedCalls": 0,
         "interrupted": false
       },
       "groups": [
@@ -93,6 +91,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1200,
           "tokensOut": 40,
+          "tools": {
+            "exec": 1
+          },
           "work": {
             "commands": [
               {
@@ -166,6 +167,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": "Fixed the flaky test.",
           "tokensIn": 1200,
           "tokensOut": 40,
+          "tools": {},
           "work": {
             "commands": [],
             "commits": 0,
@@ -197,6 +199,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "subagents": [],
       "tokensIn": 2400,
       "tokensOut": 80,
+      "tools": {
+        "exec": 1
+      },
       "work": {
         "commands": [
           {

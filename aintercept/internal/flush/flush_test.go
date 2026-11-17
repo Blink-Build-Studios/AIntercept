@@ -179,6 +179,24 @@ func TestStartThenEndAndEndThenStart(t *testing.T) {
 	}
 }
 
+// A call's tool list (handoff §11S) is stored once, by its hash: the call names it, tool_lists holds it.
+func TestToolListIsStoredOnceByHash(t *testing.T) {
+	db := fresh(t)
+	list := `["Bash","Read","mcp__linear__list_issues"]`
+	a, b := end("a", "s", t0, t0+5), end("b", "s", t0+10, t0+15)
+	a.Call.ToolsOffered, b.Call.ToolsOffered = list, list
+	write(t, db, a, b, end("c", "s", t0+20, t0+25))
+	var lists, named, unnamed int
+	if err := db.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM tool_lists WHERE names = $1::jsonb),
+		(SELECT count(DISTINCT tools_list) FROM calls WHERE tools_list IS NOT NULL),
+		(SELECT count(*) FROM calls WHERE tools_list IS NULL)`, list).Scan(&lists, &named, &unnamed); err != nil {
+		t.Fatal(err)
+	}
+	if lists != 1 || named != 1 || unnamed != 1 {
+		t.Errorf("tool_lists %d, distinct lists on calls %d, calls with none %d; want 1, 1, 1", lists, named, unnamed)
+	}
+}
+
 func TestSweptCallTakesItsRealEnd(t *testing.T) {
 	db := fresh(t)
 	write(t, db, start("a", "s", t0))

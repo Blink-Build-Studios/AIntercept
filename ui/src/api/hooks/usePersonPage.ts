@@ -79,10 +79,10 @@ export function usePersonPage(personId: string): PersonScreenProps {
     ...poll,
   });
   const requestsQ = useQuery({
-    queryKey: ["person", personId, "requests", win, range, scope, url.kind, typedQ, url.captured, url.hidden, tab === "requests" ? url.page : 1],
+    queryKey: ["person", personId, "requests", win, range, scope, url.kind, typedQ, url.hidden, tab === "requests" ? url.page : 1],
     queryFn: ({ signal }) =>
       getJson<Schemas["PersonRequestsResponse"]>(
-        `${base}/requests${qs({ ...scoped(), agent: agentParam, kind: kindParam, q: typedQ, captured: url.captured, hidden: url.hidden ? "true" : undefined, page: tab === "requests" ? url.page : 1, pageSize: PAGE_SIZE })}`,
+        `${base}/requests${qs({ ...scoped(), agent: agentParam, kind: kindParam, q: typedQ, hidden: url.hidden ? "true" : undefined, page: tab === "requests" ? url.page : 1, pageSize: PAGE_SIZE })}`,
         signal,
       ),
     placeholderData: keepPreviousData,
@@ -141,8 +141,6 @@ export function usePersonPage(personId: string): PersonScreenProps {
     onAgentScope: (a) => setUrl({ agent: a === "all" ? [] : [a], kind: [] }),
     showHidden: url.hidden,
     onShowHidden: (shown) => setUrl({ hidden: shown }),
-    notCaptured: url.captured === "false",
-    onNotCaptured: (on) => setUrl(on ? { tab: "requests", captured: "false" } : { captured: undefined }),
     about: aboutState(url.about, setUrl, status?.data, aboutProducts),
     onRetry: (r) => void { person: personQ, summary: summaryQ, timeline: timelineQ, work: workQ, requests: requestsQ }[r].refetch(),
     peopleHref: "/people",

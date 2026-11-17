@@ -52,12 +52,11 @@ export function modelBinTip(from: string, to: string, bin: S["ModelCallBin"] | u
  * A Work bin (handoff §11R, CompTurns "Tooltip (Work bin)"): its steps and its work line
  * (`9 steps · edited 3 files · ran npm test ×4: 1 failed · read 6 files`), and its not-captured calls.
  */
-export function workBinTip(from: string, to: string, bin: S["WorkBin"] | undefined, missed: number, binSeconds: number): TooltipContent {
+export function workBinTip(from: string, to: string, bin: S["WorkBin"] | undefined, binSeconds: number): TooltipContent {
   const steps = bin?.steps ?? 0;
   const line = bin ? workText(workLine(bin.work)) : "";
   const rows: TooltipRow[] = [{ key: "Steps", value: formatExact(steps) }];
   if (line) rows.push({ key: "Work", value: line });
-  if (missed > 0) rows.push({ key: "Not captured", value: `▲ ${formatExact(missed)}`, tone: "danger" });
   const hint = steps > 0 ? `Click to select this ${binWords(binSeconds)} · drag to select a range` : `Click to select this ${binWords(binSeconds)}`;
   return { title: dayRange(from, to), rows, hint };
 }
@@ -76,40 +75,12 @@ export function turnTip(t: S["TurnBlock"], now: string): TooltipContent {
   };
 }
 
-/** An analytics bin: the event count and its three most frequent names. */
-export function analyticsBinTip(from: string, to: string, bin: S["AnalyticsBin"] | undefined, binSeconds: number): TooltipContent {
-  const rows: TooltipRow[] = [{ key: "Events", value: formatExact(bin?.count ?? 0) }];
-  bin?.top.forEach((e, i) => rows.push({ key: i === 0 ? "Top" : "", value: `${e.name} ${formatExact(e.count)}` }));
-  return { title: dayRange(from, to), rows, hint: `Click to select this ${binWords(binSeconds)}` };
-}
 
-/** A not-captured window. */
-export function gapTip(g: S["GapWindow"]): TooltipContent {
-  return {
-    title: `▲ ${formatExact(g.count)} calls not captured`,
-    rows: [
-      { key: "Window", value: `${dayRange(g.from, g.to)} · ${formatDuration(ms(g.to) - ms(g.from))}` },
-      { key: "Reported", value: `${formatExact(g.reported)} by Claude Code` },
-      { key: "Captured", value: `${formatExact(g.captured)} by the proxy` },
-      { key: "Why", value: g.cause ?? unknownValue("reason not determined") },
-    ],
-    hint: "Click to list these calls (Requests · not captured)",
-  };
-}
 
 /** Up to 8 rows of a merged or clustered mark's members, then `+N more` (§11G.A1, A4). */
 const listed = <T,>(items: T[], row: (x: T) => TooltipRow): TooltipRow[] =>
   items.length > 8 ? [...items.slice(0, 8).map(row), { key: "", value: `+${items.length - 8} more` }] : items.map(row);
 
-/** Gaps merged on screen (§11G.A4): the total, then each window (start · count · length). */
-export function mergedGapTip(parts: { from: string; to: string; count: number }[]): TooltipContent {
-  const total = parts.reduce((a, g) => a + g.count, 0);
-  return {
-    title: `▲ ${formatExact(total)} calls not captured · ${formatExact(parts.length)} windows`,
-    rows: listed(parts, (g) => ({ key: formatDayTime(g.from), value: `${formatExact(g.count)} · ${formatDuration(ms(g.to) - ms(g.from))}` })),
-    hint: "Click to list these calls",
-  };
-}
 
 /** A session band (person page). */
 export function sessionBandTip(s: S["TimelineSession"], now?: string): TooltipContent {
@@ -170,21 +141,23 @@ export function promptTip(p: S["TimelinePrompt"]): TooltipContent {
   };
 }
 
-const FRICTION = {
-  destructive: { title: "▲ Destructive command", detail: "Command" },
-  frustrated: { title: "↯ Frustrated", detail: "Said" },
+// §11S: interrupted turns and failed calls (from the HTTP status); Codex's own `steered` (§11J).
+// The analytics kinds (frustrated, destructive) are older sheets' only: their tips are titled by kind.
+const FRICTION: Record<string, { title: string; detail: string }> = {
   interrupted: { title: "✕ Interrupted", detail: "Tool run" },
+  failed: { title: "! Failed call", detail: "Error" },
   steered: { title: "↻ Steered", detail: "Steer" },
-} as const;
-/** A friction mark: the API's kinds and Codex's own `steered` (§11J). */
-type FrictionMarkLike = Omit<S["FrictionMark"], "kind"> & { kind: keyof typeof FRICTION };
+};
+const kindOf = (kind: string) => FRICTION[kind] ?? { title: kind, detail: "Detail" };
+/** A friction mark: the API's kinds, `failed` and Codex's own `steered`. */
+type FrictionMarkLike = Omit<S["FrictionMark"], "kind"> & { kind: string };
 
 /** A friction cluster (§11G.A1): the total, then each incident (time · #prompt · detail). */
 export function frictionClusterTip(marks: FrictionMarkLike[]): TooltipContent {
   const [one] = marks;
   if (!one) return { title: "Friction" };
   if (marks.length === 1) return frictionTip(one);
-  const k = FRICTION[one.kind];
+  const k = kindOf(one.kind);
   const total = marks.reduce((a, m) => a + Math.max(1, m.count), 0);
   const first = marks.find((m) => m.promptIndex !== null);
   return {
@@ -196,7 +169,7 @@ export function frictionClusterTip(marks: FrictionMarkLike[]): TooltipContent {
 
 /** A friction glyph. */
 export function frictionTip(f: FrictionMarkLike): TooltipContent {
-  const k = FRICTION[f.kind];
+  const k = kindOf(f.kind);
   const when = `${formatDayTime(f.t)}:${String(new Date(f.t).getSeconds()).padStart(2, "0")}${f.promptIndex === null ? "" : ` · #${f.promptIndex}`}`;
   const rows: TooltipRow[] = [
     { key: "When", value: when },

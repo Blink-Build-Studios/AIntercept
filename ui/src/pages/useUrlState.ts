@@ -15,8 +15,6 @@ export type UrlState = {
   kind: string[];
   agent: string[];
   page: number;
-  /** Events toggle: show client internals (default off). */
-  internal: boolean;
   /** The drawer: request id and tab. */
   req?: string;
   dtab?: string;
@@ -24,14 +22,12 @@ export type UrlState = {
   about: boolean;
   /** Requests include hidden calls, Codex's prewarm and title calls (`hidden=1`, §11J gap 2). */
   hidden: boolean;
-  /** All requests' coverage filter: "false" = only calls the proxy didn't capture. */
-  captured?: string;
   /** The prompt a timeline click jumped to (#N): the Prompts tab opens on its page. */
   prompt?: string;
 };
 
 const LISTS = ["kind", "agent"] as const;
-const OPT_IN = ["about", "internal", "hidden"] as const; // off unless "1"
+const OPT_IN = ["about", "hidden"] as const; // off unless "1"
 const RANGE = ["from", "to", "win"] as const;
 
 /** Parse the search params (pure, for tests). */
@@ -46,12 +42,10 @@ export function parseUrlState(p: URLSearchParams): UrlState {
     kind: p.getAll("kind"),
     agent: p.getAll("agent"),
     page: Math.max(1, Number(p.get("page") ?? 1) || 1),
-    internal: p.get("internal") === "1",
     req: str("req"),
     dtab: str("dtab"),
     about: p.get("about") === "1",
     hidden: p.get("hidden") === "1",
-    captured: str("captured"),
     prompt: str("prompt"),
   };
 }
@@ -69,7 +63,7 @@ export function patchUrlState(p: URLSearchParams, patch: Partial<UrlState>): URL
       if (Number(v) > 1) next.set(k, String(v));
     } else next.set(k, String(v));
   }
-  const resets = Object.keys(patch).some((k) => (RANGE as readonly string[]).includes(k) || (LISTS as readonly string[]).includes(k) || k === "q" || k === "tab" || k === "captured" || k === "hidden");
+  const resets = Object.keys(patch).some((k) => (RANGE as readonly string[]).includes(k) || (LISTS as readonly string[]).includes(k) || k === "q" || k === "tab" || k === "hidden");
   if (resets && !("page" in patch)) next.delete("page");
   // A jump holds only until the list moves: another page, range, filter or tab.
   if ((resets || "page" in patch) && !("prompt" in patch)) next.delete("prompt");

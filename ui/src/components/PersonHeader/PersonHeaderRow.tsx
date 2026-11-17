@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { formatCount } from "../../lib/format";
 import { useRovingFocus } from "../../lib/rovingFocus";
 import { unknownAttrs, unknownTip } from "../../lib/unknown";
 import { Marker } from "../Marker/Marker";
@@ -31,8 +30,6 @@ export const lastSeenValue = (text: string, live: boolean): ReactNode =>
     <span className="text-ink-muted">{text}</span>
   );
 
-/** Claude Code's Missed stat value: `▲ 94` (a coverage gap) or `0`. */
-export const missedValue = (n: number): ReactNode => (n > 0 ? <Marker kind="coverageGap" inherit label={formatCount(n)} /> : "0");
 
 export function PersonStat({ label, value, sub, tip, unknownReason = "unknown" }: PersonStatData) {
   const unknown = value === null;

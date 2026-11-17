@@ -38,6 +38,7 @@ from aintercept_api import claude_code as cc
 from aintercept_api import directory as dr
 from aintercept_api import sessionpages as sp
 from aintercept_api import timeline as tl
+from aintercept_api import tools as tu
 from aintercept_api import turnpages as tp
 from aintercept_api import work as wk
 from aintercept_api.models.common import AgentLimits, Coverage, LimitWindow
@@ -51,6 +52,7 @@ from aintercept_api.models.people import (
     Failures,
     Flags,
     Footprint,
+    FrictionMark,
     Limits,
     LinkedAccount,
     McpServer,
@@ -170,6 +172,12 @@ def _span(sids: list[str], lo: int | None, hi: int | None) -> dict[str, Any]:
 
 
 # --- the timeline ------------------------------------------------------------------------------------------
+
+# The interrupted turns in range (the friction lane's ✕, handoff §11S): their prompts rows.
+_INTERRUPTED = f"""SELECT p.t_ns, i.prompt_index FROM prompts p
+JOIN prompt_items i ON i.prompt_id = p.prompt_id AND i.session_id = p.session_id AND i.type = 'prompt'
+WHERE p.session_id = ANY(%(sids)s) AND p.t_ns BETWEEN %(lo)s AND %(hi)s
+  AND (p.interrupted OR {sp.NEXT_FOLLOWS_INTERRUPT})"""  # noqa: S608 (fixed text)
 
 # The prompts in range (session.py timeline_prompts: by µs, then session, then place).
 _TYPED = """SELECT i.session_id, i.seq, i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, p.steps, p.text,
@@ -510,7 +518,7 @@ class PersonReads:
             modelCalls=sp.model_bins(cells, width),
             analytics=[],
             notCaptured=[],
-            friction=[],
+            friction=self._friction(sids, width, hourly, span, lo, hi) if sids else [],
             work=self._work_bins(cells, width, hourly, span) if sids else [],
         )
 
@@ -520,6 +528,32 @@ class PersonReads:
         for b, kind, key, n in self.snap.rows("work_bins", _WORK_BINS[hourly], {**span, "kinds": wk.KINDS}):
             rows[b].append((kind, key, n))
         return tp.work_bins(rows, steps)
+
+    def _friction(
+        self, sids: list[str], width: int, hourly: bool, span: dict[str, Any], lo: int, hi: int
+    ) -> list[FrictionMark]:
+        """The person timeline's friction (handoff §11S): ✕ each interrupted turn that started in range, ! each
+        bin's failed calls (its sessions' `failed` key rows)."""
+        failed: Counter[int] = Counter()
+        for b, _kind, _key, n in self.snap.rows("failed_bins", _WORK_BINS[hourly], {**span, "kinds": ["failed"]}):
+            failed[b] += n
+        out = [
+            FrictionMark(
+                t=dt(p["t_ns"]),
+                kind="interrupted",
+                count=1,
+                promptIndex=p["prompt_index"],
+                detail="turn interrupted",
+                tool=None,
+            )
+            for p in self.snap.dicts("interrupted", _INTERRUPTED, {"sids": sids, "lo": lo, "hi": hi})
+        ]
+        out += [
+            FrictionMark(t=dt(b), kind="failed", count=n, promptIndex=None, detail="failed calls", tool=None)
+            for b, n in sorted(failed.items())
+            if n > 0
+        ]
+        return sorted(out, key=lambda m: m.t)
 
     def _cells(self, name: str, sql: str, params: dict[str, Any]) -> list[sp.Cell]:
         return [sp.Cell(r["t"], r["t"] + r["w"], r) for r in self.snap.dicts(name, sql, params)]
@@ -573,10 +607,13 @@ class PersonReads:
         calls = count("model_calls")
         keys: dict[str, Counter[str]] = defaultdict(Counter)
         distinct: dict[str, int] = {}
+        rows: list[tuple[str, str, int]] = []
         if shown:
-            for kind, key, n in self.snap.rows("keys", _KEYS, {**span, "kinds": ["call_mcp", "call_builtin"]}):
+            rows = list(self.snap.rows("keys", _KEYS, {**span, "kinds": tu.KINDS + sp.WIRE_KINDS}))
+            for kind, key, n in rows:
                 keys[kind][key] += n
             distinct = dict(self.snap.rows("key_counts", _KEY_COUNTS, {**span, "kinds": ["call_prompt"]}))
+        wire = sp.wire_of(self.snap, rows)
         creds = self.credentials(scope)
         account_calls = 0
         if creds:
@@ -628,8 +665,8 @@ class PersonReads:
             footprint=Footprint(
                 prompts=prompts,
                 turns=prompts,
-                toolCalls=None,
-                toolsByName={},
+                toolCalls=wire.tools.calls if shown else None,
+                toolsByName=wire.tools.byName,
                 commands=None,
                 topCommandWords=[],
                 destructive=Destructive(total=0, rmF=0, rmRf=0, outsideCwd=0),
@@ -643,6 +680,11 @@ class PersonReads:
                 subagentCalls=count("subagent_calls"),
             ),
             work=work,
+            recording="content" if wire.recorded else "metadata",
+            tools=wire.tools,
+            failedCalls=wire.failed,
+            compactions=wire.compactions,
+            images=None,
         )
         return summary, last
 

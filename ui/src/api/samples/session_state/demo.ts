@@ -17,6 +17,10 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "poolChangesInRange": null,
       "skills": null
     },
+    "context": {
+      "compactions": 3,
+      "subagentThreads": 9
+    },
     "counts": {
       "compactions": 0,
       "events": 0,
@@ -27,6 +31,7 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "turns": 38
     },
     "experimentsAt": null,
+    "failedCalls": 16,
     "flagFetchesInRange": null,
     "flagsChangedInRange": null,
     "recapsInRange": null,
@@ -40,6 +45,39 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "headTo": null,
       "prs": [],
       "pushed": false
+    },
+    "tools": {
+      "byName": {
+        "Agent": 3,
+        "Artifact": 2,
+        "AskUserQuestion": 4,
+        "Bash": 454,
+        "Edit": 7,
+        "Read": 12,
+        "ToolSearch": 1,
+        "Write": 14
+      },
+      "calls": 497,
+      "listChanges": 1,
+      "offered": 18,
+      "sources": [
+        {
+          "calls": {
+            "Agent": 3,
+            "Artifact": 2,
+            "AskUserQuestion": 4,
+            "Bash": 454,
+            "Edit": 7,
+            "Read": 12,
+            "ToolSearch": 1,
+            "Write": 14
+          },
+          "offered": 18,
+          "source": "Built-in",
+          "used": 8
+        }
+      ],
+      "used": 8
     }
   },
   "meta": {

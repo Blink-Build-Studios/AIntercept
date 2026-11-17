@@ -28,8 +28,8 @@ const RESERVED = [
   },
   {
     re: /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|fill|stroke|outline|ring|decoration)-danger\b|var\(--danger\)/g,
-    owners: ["src/design/", `${C}Marker/`, `${C}CoverageLine/`, `${C}StatTile/`, `${C}HeaderStat/`, `${C}Timeline/`, `${C}Notice/`, `${C}RequestDrawer/`, `${C}Tooltip/`, `${C}FilterChip/`, `${C}AboutThisData/`, `${C}StepRow/`],
-    msg: "`danger` is reserved for destructive commands, coverage gaps and a long turn's failed commands (render a Marker)",
+    owners: ["src/design/", `${C}Marker/`, `${C}HeaderStat/`, `${C}Timeline/`, `${C}Notice/`, `${C}RequestDrawer/`, `${C}Tooltip/`, `${C}FilterChip/`, `${C}StepRow/`],
+    msg: "`danger` is reserved for errors, a reached usage limit and the older sheets' specimens (render a Marker)",
   },
   {
     re: /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|fill|stroke|outline|ring|decoration)-agent-[a-z-]+|var\(--agent-[a-z-]+\)/g,

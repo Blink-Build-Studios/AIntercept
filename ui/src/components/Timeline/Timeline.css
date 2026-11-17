@@ -103,29 +103,13 @@
     z-index: 3;
     pointer-events: none;
   }
-  /* The gap row under the bars (§11G.A4): 16px under a rule; hatches 10px tall with 1px danger ends. */
-  .tl-bars {
+  /* The Work lane's bars (§11S): the lane less 2px of floor, no gap row. */
+  .tl-work-bars {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 18px;
-  }
-  .tl-gaprow {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 17px;
-    border-top: 1px solid var(--line);
-  }
-  .tl-gap {
-    position: absolute;
-    top: 3px;
-    height: 10px;
-    border-left: 1px solid var(--danger);
-    border-right: 1px solid var(--danger);
-    background: repeating-linear-gradient(135deg, var(--gap-hatch) 0 4px, transparent 4px 8px);
+    bottom: 2px;
   }
   /* Level bars (the session context lane) and their labels (compactions). */
   .tl-bar-level {
@@ -360,7 +344,6 @@
   }
   /* Bars and labels sit over the bin columns but let the pointer through. */
   .tl-abs,
-  .tl-gap-label,
   .tl-bar-label,
   .tl-band-label,
   .tl-mark-label {
@@ -393,16 +376,6 @@
   }
   .tl-axis {
     position: relative;
-  }
-  /* Not captured: the window outlined in danger, over the bin columns. */
-  .tl-gap.tl-mark {
-    z-index: 1;
-  }
-  .tl-gap:hover,
-  .tl-gap[data-force="hover"],
-  .tl-gap[data-force="linked"] {
-    outline: 1px solid var(--danger);
-    outline-offset: 0;
   }
   /* Bands: pressed fill and a muted inset outline on hover or when a row points at them (§6B.5). */
   .tl-band:hover,

@@ -1,11 +1,9 @@
-import type { Schemas } from "../../api/types";
 import { formatCount, formatDuration } from "../../lib/format";
 import { useRowLink } from "../../lib/linkedHover";
 import { formatTime } from "../../lib/time";
-import { frictionTip, fullText, timeTip } from "../../lib/tips";
+import { fullText, timeTip, turnFrictionTip } from "../../lib/tips";
 import { workText, type WorkPart } from "../../lib/work";
 import { Marker } from "../Marker/Marker";
-import { PartialMark } from "../PartialMark/PartialMark";
 import { Tooltip } from "../Tooltip/Tooltip";
 import { WorkText } from "../TurnRow/WorkText";
 import "../DataTable/DataTable.css";
@@ -16,25 +14,46 @@ export type WorkSession = {
   start: string;
   end: string | null;
   live: boolean;
+  /** Content-free: `session 4c1a…77e0`; with content: its branch or title. */
   label: string;
   turns: number | null;
-  /** Capture began at this prompt (§11G.D1): the `†` after the turn count. */
-  capturedFromPrompt: number | null;
   activeMs: number | null;
-  friction: Schemas["Friction"];
+  /** Interrupted turns and failed calls (§11S). */
+  friction: { interrupted: number; failed: number };
 };
 
+/** A session named by its id alone (§11S, content-free): `session 4c1a…77e0`. */
+export const sessionName = (id: string) => `session ${id.length > 10 ? `${id.slice(0, 4)}…${id.slice(-4)}` : id}`;
+
 /**
- * One session under its repo on the Work tab (handoff §11R, CompTurns `SessionRow/workDefault`):
- * started · live dot · label · turns (with † for a partial capture) · active · work line ·
- * friction · ›. Indented 38px; the whole row opens the session.
+ * One session on the Work tab (handoff §11R, §11S, CompTurns `SessionRow/work*`): started ·
+ * live dot · label · turns · active · work line · friction (`✕2 !5`) · ›. Content-free the list
+ * is flat (`flat`, 12px in); with content it sits under its repo, 38px in. The whole row opens
+ * the session.
  */
-export function WorkSessionRow({ session: s, work, href, pending, now, "data-force": force }: { session: WorkSession; work: readonly WorkPart[]; href: string; pending?: boolean; now?: string; "data-force"?: "hover" | "focus" | "linked" }) {
+export function WorkSessionRow({
+  session: s,
+  work,
+  href,
+  flat,
+  pending,
+  now,
+  "data-force": force,
+}: {
+  session: WorkSession;
+  work: readonly WorkPart[];
+  href: string;
+  /** The content-free flat list: no repo above it. */
+  flat?: boolean;
+  pending?: boolean;
+  now?: string;
+  "data-force"?: "hover" | "focus" | "linked";
+}) {
   const end = s.end ?? now ?? new Date().toISOString();
   const { linked, handlers } = useRowLink({ source: "table", ids: [s.sessionId], span: [s.start, end] }, { id: s.sessionId });
   const fr = s.friction;
-  const calm = [fr.frustrated > 0 && `↯${fr.frustrated}`, fr.interrupted > 0 && `✕${fr.interrupted}`].filter(Boolean).join(" ");
-  const words = [fr.frustrated > 0 && `${fr.frustrated} frustrated`, fr.interrupted > 0 && `${fr.interrupted} interrupted`, fr.destructive > 0 && `${fr.destructive} destructive`].filter(Boolean);
+  const marks = [fr.interrupted > 0 && `✕${formatCount(fr.interrupted)}`, fr.failed > 0 && `!${formatCount(fr.failed)}`].filter(Boolean).join(" ");
+  const words = [fr.interrupted > 0 && `${formatCount(fr.interrupted)} interrupted`, fr.failed > 0 && `${formatCount(fr.failed)} failed calls`].filter(Boolean);
   const line = workText(work);
   return (
     <a
@@ -46,7 +65,7 @@ export function WorkSessionRow({ session: s, work, href, pending, now, "data-for
       data-linked={linked || undefined}
       data-force={force}
       {...handlers}
-      className="dt-row type-data text-ink work-session-row"
+      className={`dt-row type-data text-ink work-session-row ${flat ? "work-session-row-flat" : ""}`}
     >
       <Tooltip content={timeTip(s.start)}>
         <span role="cell" className="text-ink-muted">
@@ -56,16 +75,13 @@ export function WorkSessionRow({ session: s, work, href, pending, now, "data-for
       {s.live ? (
         <Marker kind="live" compact role="cell" />
       ) : (
-        <span role="cell" aria-hidden className="text-line">
-          ●
-        </span>
+        <span role="cell" aria-hidden />
       )}
       <Tooltip kind="truncate" content={fullText(s.label)}>
         <span role="cell">{s.label}</span>
       </Tooltip>
       <span role="cell" className="dt-right">
         {s.turns === null ? "—" : formatCount(s.turns)}
-        {s.capturedFromPrompt !== null && <PartialMark from={s.capturedFromPrompt} />}
       </span>
       <span role="cell" className="dt-right text-ink-muted">
         {s.activeMs === null ? "—" : formatDuration(s.activeMs)}
@@ -75,11 +91,9 @@ export function WorkSessionRow({ session: s, work, href, pending, now, "data-for
           <WorkText parts={work} />
         </span>
       </Tooltip>
-      <Tooltip content={frictionTip(fr)}>
+      <Tooltip content={turnFrictionTip(fr.interrupted, fr.failed)}>
         <span role="cell" aria-label={words.join(", ") || undefined}>
-          {calm}
-          {calm && fr.destructive > 0 && " "}
-          {fr.destructive > 0 && <Marker kind="destructive" count={fr.destructive} />}
+          {marks}
         </span>
       </Tooltip>
       <span role="cell" aria-hidden className="text-ink-faint">

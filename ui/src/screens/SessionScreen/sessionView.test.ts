@@ -2,17 +2,27 @@ import { describe, expect, it } from "vitest";
 import session from "../../api/samples/session/codex";
 import requests from "../../api/samples/session_requests/codex_channels";
 import hidden from "../../api/samples/session_requests/codex_hidden";
-import { requestChannels, requestDetail, sessionTabs, tabHint } from "./sessionView";
+import { requestChannels, requestDetail, sessionTabs, sessionTitle, tabHint } from "./sessionView";
 
 const counts = { prompts: 1, modelCalls: 203, requests: 615, events: 58, compactions: 0, turns: 1, steps: 203 };
 
 describe("session tabs (handoff §11L.7)", () => {
   it("label each tab with its count and unit", () => {
-    expect(sessionTabs(counts).map((t) => `${t.label} ${t.count}`)).toEqual(["Turns 1 · 203 steps", "Requests 203 calls · 412 other", "Events 58"]);
+    expect(sessionTabs(counts).map((t) => `${t.label} ${t.count}`)).toEqual(["Turns 1 · 203 steps", "Requests 203 calls · 412 other"]);
   });
 
   it("the Turns hint says what a turn is (§11R: everyone's word, Codex's too)", () => {
     expect(tabHint("turns", session.data, counts, undefined, "Sam")).toBe("What Sam asked, and the work each turn did: 1 turn, 203 model calls as steps.");
+  });
+});
+
+describe("session title (handoff §11S)", () => {
+  const base = { ...session.data, agent: "claude-code" as const, repo: null, branch: null, commit: null, start: "2026-11-02T10:04:00", label: { source: "none" as const, text: "Session 11111111" }, capabilities: ["repoBranch" as const] };
+  it("content-free: the agent and its start time", () => {
+    expect(sessionTitle(base).title).toBe("Claude Code session · Nov 2 10:04");
+  });
+  it("with content: repo · branch", () => {
+    expect(sessionTitle({ ...base, repo: "aintercept", branch: "partner-readiness" }).title).toBe("aintercept · partner-readiness");
   });
 });
 

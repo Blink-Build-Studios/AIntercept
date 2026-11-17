@@ -89,6 +89,8 @@ and a long turn's refresh never finished. Costs are dropped (no price table).
 | Concept | Claude Code | Codex | Mapping | AIntercept (Claude Code / Codex) |
 |---|---|---|---|---|
 | Tool calls | `tool_use` blocks in responses | `custom_tool_call` / `function_call` items in the stream | mapped | shown / extracted (`tool_uses`) |
+| Tool list (offered) | the request's `tools` (built-in and `mcp__server__tool`), every request | the request's `tools` | mapped | shown (handoff §11S: ToolsOfferedUsed, `N tools used of M offered`, how often the main thread's list changed) / shown |
+| Failed calls | HTTP status ≥ 400 (API errors, 529 overloads), or no response | the same | common | shown (§11S: friction `!`, Steps `N failed`, People's Failed) / shown |
 | Shell | `Bash` | `exec`, `exec_command` | mapped | shown / extracted |
 | Command result | exit code or error from the tool result the next request carries back (recorded content); duration: analytics, captured | exit codes from the `*_call_output` the next request carries back; `codex_command_execution_event`: captured | mapped | shown (full mode) / shown (full mode) |
 | File edits | `Edit`, `Write`, `MultiEdit` | `apply_patch`; `codex_file_change_event`; accepted lines | mapped | shown / captured |

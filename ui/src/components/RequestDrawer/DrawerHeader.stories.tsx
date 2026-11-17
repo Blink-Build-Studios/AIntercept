@@ -16,7 +16,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const of = (d: typeof normal.data) => ({ method: d.method, path: d.path, kind: d.kind, status: statusLine(d) });
+const of = (d: typeof normal.data) => ({ method: d.method, path: d.path, kind: d.kind === "failed" ? ("failed" as const) : ("normal" as const), status: statusLine(d) });
 export const Normal: Story = { args: of(normal.data) };
 export const Failed: Story = { args: of(failed.data) };
 /** At the end of the range: ↓ is disabled with its reason. */

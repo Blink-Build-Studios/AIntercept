@@ -167,7 +167,8 @@ def test_the_cases_are_all_there(sides):
             t = side.new.get(f"{base}/timeline").json()["data"]
             for lane in ("prompts", "modelCalls"):
                 seen[lane] += bool(t[lane])
-            assert not any(t[lane] for lane in ("analytics", "notCaptured", "friction")), pid
+            assert not any(t[lane] for lane in ("analytics", "notCaptured")), pid
+            assert {m["kind"] for m in t["friction"]} <= {"interrupted", "failed"}, pid
             s = side.new.get(f"{base}/summary").json()["data"]
             seen["mcp"] += bool(s["capabilities"]["mcpServers"])
             seen["account calls"] += bool(s["ribbon"]["accountCalls"])
@@ -337,8 +338,9 @@ SCOPE = {"group", "sessions_of"}
 READS = {
     "": SCOPE | {"devices", "session_accounts"},
     "/sessions": SCOPE | {"children", "title"},
-    "/timeline": SCOPE | {"children", "title", "cells", "typed", "work_bins"},
-    "/summary": SCOPE | {"cells", "keys", "key_counts", "credentials", "cred_cells", "person_turns", "work_keys"},
+    "/timeline": SCOPE | {"children", "title", "cells", "typed", "work_bins", "failed_bins", "interrupted"},
+    "/summary": SCOPE
+    | {"cells", "keys", "key_counts", "credentials", "cred_cells", "person_turns", "work_keys", "tool_lists"},
     "/work": SCOPE | {"children", "title"},
     "/requests": SCOPE | {"credentials", "cred_cells", "cred_minutes", "call_rows", "prompt_indexes", "step_numbers"},
 }  # fmt: skip

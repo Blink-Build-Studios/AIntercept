@@ -143,18 +143,20 @@ class Component extends DCLogic {
         C('KeyStrip (Codex)', 'tiles by product', 'call, no usage'),
         C('SummaryLabel', 'name, suffix', 'fits, truncated, long + tooltip')
       ] },
-      { n: 'Timeline lanes', sheet: 'Timeline lanes (round 17)', items: [
-        C('Timeline (person)', 'Sessions · Prompts · Model calls · Analytics · Friction', 'lane heights, loading'),
-        C('Timeline (session)', 'Prompts · Model calls · Context · Friction', 'lane heights, loading')
+      { n: 'Timeline lanes', sheet: 'Timeline lanes (round 19)', items: [
+        C('Timeline (person)', 'Sessions · Turns · Work · Friction', 'lane heights, loading'),
+        C('Timeline (session)', 'Turns · Work · Context · Friction', 'lane heights, loading')
       ] },
-      { n: 'Turns & work', sheet: 'Turns & work (round 18)', items: [
-        C('TurnRow', 'turn, started, asked{size | text}, work, steps, time, tokens, cost?, friction, open, live', 'default, open, interrupted, live, with content, Codex'),
-        C('WorkGroup', 'kind, title, meta, exits?, open', 'collapsed, open, edits, thinking, reply, with paths'),
-        C('TurnStep', 'step, model, tokens, duration, tool → raw request', 'default'),
-        C('SubagentRow', 'name, work, tokens, thread', 'default'),
-        C('OutcomeSlot', 'title, facts[]', 'session, person fortnight'),
+      { n: 'Turns & work', sheet: 'Turns & work (round 19)', items: [
+        C('HeaderStatGroup · ToolsOfferedUsed · KeyValueList/context', 'stats, sources[{name, offered, used, calls}]', 'content-free, with content'),
+        C('FrictionRow', 'interrupted, failed calls', 'two-row lane'),
+        C('TurnRow', 'turn, started, asked{size | text}, work{tools | words}, steps, time, tokens, friction, open, live', 'default, open, interrupted, failed calls, live, with content, Codex'),
+        C('WorkGroup', 'tool | kind, title, meta, exits?, open', 'collapsed, open, edits, MCP, no tool, reply, with paths, with commands'),
+        C('TurnStep', 'step, model, tokens, duration, stop, tool → raw request', 'default, with content'),
+        C('SubagentRow', 'n | name, work, tokens, thread', 'default, with content'),
+        C('OutcomeSlot', 'title, facts[]', 'session, person · content-free and with content'),
         C('Lane/turns · Lane/work', 'TurnTrack blocks · WorkTrack stacked bars', 'session, person'),
-        C('RepoRow · SessionRow (work)', 'repo, sessions[], turns, active, work', 'open, collapsed'),
+        C('RepoRow · SessionRow (work)', 'repo?, sessions[], turns, active, work', 'flat (content-free), grouped (with content)'),
         C('ContentBlock', 'kind, size, preview(head | tail), expand', 'pasted, tool result, reply, metadata only')
       ] },
       { n: 'Hover, tooltips & keyboard', sheet: 'Tooltip · Timeline hover · Table hover', items: [

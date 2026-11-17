@@ -1,0 +1,50 @@
+/* ToolsOfferedUsed (handoff §11S, CompTurns; Main's /person form). Rows as KeyValueList's:
+   4px 12px, gap 12, a hairline under each; the session form's head is 8px 12px, gap 8. */
+@layer components {
+  .tou-head {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tou-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .tou-source {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tou-person .tou-source {
+    flex: 0 0 140px;
+  }
+  .tou-num {
+    flex: 0 0 90px;
+    text-align: right;
+  }
+  .tou-calls {
+    flex: 0 0 260px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tou-person .tou-calls {
+    flex: 1 1 0%;
+  }
+  .tou-foot {
+    padding: 4px 12px;
+    font: 400 11px/20px var(--font-mono);
+  }
+  .tou-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+}

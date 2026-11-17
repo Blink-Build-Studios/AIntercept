@@ -5,7 +5,6 @@ import requestDemo from "../samples/request/demo";
 import requestDetailsDemo from "../samples/request_details/demo";
 import requestRawDemo from "../samples/request_raw/demo";
 import sessionDemo from "../samples/session/demo";
-import sessionEventsDemo from "../samples/session_events/demo";
 import sessionPromptsDemo from "../samples/session_prompts/demo";
 import sessionRequestsDemo from "../samples/session_requests/demo";
 import sessionStateDemo from "../samples/session_state/demo";
@@ -32,7 +31,6 @@ export const handlers = [
   mock("/sessions/:sessionId/state", sessionStateDemo),
   mock("/sessions/:sessionId/prompts", sessionPromptsDemo),
   mock("/sessions/:sessionId/requests", sessionRequestsDemo),
-  mock("/sessions/:sessionId/events", sessionEventsDemo),
   mock("/requests/:requestId", requestDemo),
   mock("/requests/:requestId/raw", requestRawDemo),
   mock("/requests/:requestId/details", requestDetailsDemo),

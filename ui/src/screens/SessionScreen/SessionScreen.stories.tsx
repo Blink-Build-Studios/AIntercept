@@ -12,7 +12,6 @@ import sessionCodex from "../../api/samples/session/codex";
 import sessionDemo from "../../api/samples/session/demo";
 import sessionError from "../../api/samples/session/error";
 import sessionLive from "../../api/samples/session/live";
-import eventsDemo from "../../api/samples/session_events/demo";
 import turnsCodex from "../../api/samples/session_turns/codex";
 import turnsDemo from "../../api/samples/session_turns/demo";
 import turnsLive from "../../api/samples/session_turns/live";
@@ -22,7 +21,7 @@ import requestsCodex from "../../api/samples/session_requests/codex_channels";
 import requestsDemo from "../../api/samples/session_requests/demo";
 import stateDemo from "../../api/samples/session_state/demo";
 import timelineDemo from "../../api/samples/session_timeline/demo";
-import { readyRegion, type Region } from "../../lib/region";
+import { readyRegion } from "../../lib/region";
 import type { DrawerTab } from "../../components/RequestDrawer/DrawerTabs";
 import { curl } from "../../components/RequestDrawer/drawerData";
 import { SessionScreen, type SessionScreenProps, type SessionTab } from "./SessionScreen";
@@ -36,9 +35,7 @@ type Drawer = { detail: typeof requestNormal; raw: typeof rawNormal; tab?: Drawe
 function Screen({ initialTab = "turns", openDrawer: drawer, ...over }: Partial<SessionScreenProps> & { initialTab?: SessionTab; openDrawer?: Drawer }) {
   const [tab, setTab] = useState<SessionTab>(initialTab);
   const [dtab, setDtab] = useState<DrawerTab>(drawer?.tab ?? "summary");
-  const [rq, setRq] = useState({ q: "", kinds: [] as SessionScreenProps["requestFilter"]["kinds"], notCaptured: false });
-  const [ev, setEv] = useState({ q: "", internal: false });
-  const [open, setOpen] = useState<string[]>([]);
+  const [rq, setRq] = useState<SessionScreenProps["requestFilter"]>({ q: "", kinds: [] });
   const props: SessionScreenProps = {
     sessionId: sessionDemo.data.sessionId,
     session: readyRegion(sessionDemo.data),
@@ -48,7 +45,6 @@ function Screen({ initialTab = "turns", openDrawer: drawer, ...over }: Partial<S
     turns: readyRegion(turnsDemo),
     sessionHref: (id) => `/sessions/${id}`,
     requests: readyRegion(requestsDemo),
-    events: readyRegion(eventsDemo),
     onRetry: fn(),
     live: { status: "live", intervalS: 15 },
     paused: false,
@@ -65,8 +61,6 @@ function Screen({ initialTab = "turns", openDrawer: drawer, ...over }: Partial<S
     onPage: fn(),
     requestFilter: rq,
     onRequestFilter: setRq,
-    eventFilter: ev,
-    onEventFilter: setEv,
     onOpenRequest: fn(),
     drawer: drawer && {
       requestId: drawer.detail.data.requestId,
@@ -81,9 +75,6 @@ function Screen({ initialTab = "turns", openDrawer: drawer, ...over }: Partial<S
       link: "https://aintercept.local/sessions/d7ee5e66?req=1",
     },
     onCloseDrawer: fn(),
-    eventJson: Object.fromEntries(open.map((id) => [id, { status: "loading", data: undefined } as Region<never>])),
-    onToggleEvent: (id) => setOpen((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id])),
-    onRetryEvent: fn(),
     now: sessionDemo.meta.asOf,
     ...over,
   };
@@ -97,7 +88,6 @@ type Story = StoryObj<typeof meta>;
 /** The demo session (real traffic, sanitized), whole session, Turns tab (§11R). */
 export const Turns: Story = {};
 export const Requests: Story = { args: { initialTab: "requests" } };
-export const Events: Story = { args: { initialTab: "events" } };
 /** Live: the brush follows the last 15 min; a turn running, open. */
 export const Live: Story = {
   args: {
@@ -108,7 +98,7 @@ export const Live: Story = {
   },
 };
 /** First load: every region's skeleton at its loaded size. */
-export const Loading: Story = { args: { session: loading, timeline: loading, state: loading, turns: loading, requests: loading, events: loading } };
+export const Loading: Story = { args: { session: loading, timeline: loading, state: loading, turns: loading, requests: loading } };
 /** The header query failed with nothing to show: the page's ErrorState. */
 export const LoadFailed: Story = {
   args: {
@@ -117,7 +107,6 @@ export const LoadFailed: Story = {
     state: loading,
     turns: loading,
     requests: loading,
-    events: loading,
   },
 };
 /** A step opened in the request drawer. */
@@ -133,5 +122,7 @@ export const CodexRequests: Story = { args: { ...CodexTurns.args, initialTab: "r
 
 /** Recorded content: the prompt's text, paths in the groups, the reply's preview. */
 export const WithContent: Story = { args: { turns: readyRegion(turnsWithContent), jumpTo: { index: 1, seq: 1 } } };
+/** The session recorded with content (§11S `SessionContent`): Edited and Commits in the header, the outcome's commits, the Repo panel. */
+export const Content: Story = { args: { session: readyRegion({ ...sessionDemo.data, recording: "content" }), turns: readyRegion(turnsWithContent) } };
 /** A turn with MCP, web and a spawned subagent, its ⤷ row under it. */
 export const Subagents: Story = { args: { turns: readyRegion(turnsSubagents), jumpTo: { index: 2, seq: 1 } } };

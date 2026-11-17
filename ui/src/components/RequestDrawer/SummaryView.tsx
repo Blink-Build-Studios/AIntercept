@@ -19,8 +19,8 @@ const FOOTER = {
 export function SummaryView({ detail: d, labelWidth = 240 }: { detail: Detail; /** The received labels' column: 240px in the 640px drawer, 220px in a 520px Summary column (§11L.9). */ labelWidth?: 220 | 240 }) {
   const step = d.stepIndex === null ? null : d.stepCount === null ? `step ${d.stepIndex}` : `step ${d.stepIndex} of ${d.stepCount}`;
   const attempt = d.retry ? `attempt ${d.retry.attempt}${d.retry.of ? ` of ${d.retry.of}` : ""}` : null;
-  const where = [d.promptIndex === null ? null : `Prompt #${d.promptIndex}`, step, attempt].filter(Boolean).join(" · ");
-  const check = d.kind === "failed" ? (d.retry?.nextStatus === 200 ? "retry succeeded" : null) : d.crossCheck.matched ? "✓ matches Claude Code’s own report" : null;
+  const where = [d.promptIndex === null ? null : `Turn #${d.promptIndex}`, step, attempt].filter(Boolean).join(" · ");
+  const check = d.kind === "failed" && d.retry?.nextStatus === 200 ? "retry succeeded" : null;
   const cached = d.keyStrip.tokens.cacheRead;
   const sentHead =
     d.kind === "notCaptured" ? "Sent · unknown" : cached ? `Sent · on a ${formatTokens(cached, "total")}-token cached prefix` : "Sent";

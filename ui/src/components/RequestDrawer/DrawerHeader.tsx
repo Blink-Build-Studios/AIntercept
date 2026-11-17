@@ -3,7 +3,8 @@ import { Button } from "../Button/Button";
 import { KIND_COLOR, type RequestKind } from "../RequestRow/RequestRow";
 import "./DrawerHeader.css";
 
-export type DrawerKind = "normal" | "notCaptured" | "failed";
+/** §11S: a call is normal or failed; the analytics-only `ghost` kind is gone. */
+export type DrawerKind = "normal" | "failed";
 
 export type DrawerHeaderProps = {
   /** The request's channel (model, analytics, …): its label in the channel color. Unknown before the request loads. */
@@ -25,7 +26,6 @@ export type DrawerHeaderProps = {
 
 const STATUS_TONE: Record<DrawerKind, string> = {
   normal: "text-ink-muted",
-  notCaptured: "text-danger",
   failed: "text-ink",
 };
 

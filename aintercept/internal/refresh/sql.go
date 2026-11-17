@@ -195,6 +195,12 @@ var nullable = map[string]bool{
 //   - ip: its visible calls' networks; call_prompt: their prompts (the person
 //     summary's prompt count).
 //   - has: which newest values its model calls have (sessions.go hasKeys).
+//   - offer, offer_main (key: the tool list's hash, tool_lists): the tool lists
+//     its visible calls carried, and its main thread's (handoff §11S: offered vs
+//     used, and how often the main thread's list changed).
+//   - failed: its visible calls that failed (an error status, or none once
+//     ended); compaction: its compaction calls; subagent (key: the agent id):
+//     its subagents' calls; recorded: its calls that kept their content.
 //   - w:…: its steps' work (prompts.go stepItems, their step_keys), the Work
 //     lane's and the session's.
 //
@@ -210,6 +216,15 @@ func keyItems(calls, steps string) string {
 	            THEN jsonb_build_array(u ->> 'server', u ->> 'tool')::text ELSE u ->> 'tool' END, 1
 	FROM calls c, jsonb_array_elements(CASE jsonb_typeof(c.tool_uses) WHEN 'array' THEN c.tool_uses ELSE '[]' END) u
 	WHERE ` + calls + ` AND c.end_ns IS NOT NULL AND jsonb_typeof(u) = 'object' AND u ->> 'tool' <> ''
+	UNION ALL
+	SELECT c.session_id, ` + at + `, x.k, x.v, 1 FROM calls c, LATERAL (VALUES
+		('offer', c.tools_list),
+		(CASE WHEN coalesce(c.request_class, 'main') = 'main' THEN 'offer_main' END, c.tools_list),
+		(CASE WHEN c.end_ns IS NOT NULL AND (coalesce(c.status, 0) = 0 OR c.status >= 400) THEN 'failed' END, ''),
+		(CASE WHEN c.request_class = 'compaction' THEN 'compaction' END, ''),
+		(CASE WHEN c.request_class = 'subagent' THEN 'subagent' END, nullif(c.agent_id, '')),
+		(CASE WHEN c.detail IS NOT NULL THEN 'recorded' END, '')) AS x(k, v)
+	WHERE ` + calls + ` AND ` + visible + ` AND x.k IS NOT NULL AND x.v IS NOT NULL
 	UNION ALL
 	` + hasItems(calls) + `
 	UNION ALL

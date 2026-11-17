@@ -57,7 +57,6 @@ export const CodexFork: Story = {
     agentColumn: { client: "tui" },
     nesting: { kind: "parent", expanded: false, onToggle: fn() },
     threadFacts: "· fork of 3b9a… at #4",
-    absent: { missed: true },
   },
 };
 

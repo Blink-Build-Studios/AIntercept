@@ -2,7 +2,6 @@
 // (CompSummary.dc.html), measured against the canvas by `make parity`.
 import type { Meta, StoryObj } from "@storybook/react";
 import type { ReactNode } from "react";
-import { costTip } from "../../lib/tips";
 import { StatTile } from "./StatTile";
 
 // The canvas draws each tile 200px wide.
@@ -22,10 +21,9 @@ export const Canvas: StoryObj = {
       <P spec="StatTile/hoverLinksToRows">
         <StatTile label="Analytics" swatch="analytics" value={21305} sub="969 batches · 128 types" href="#requests" data-force="hover" />
       </P>
-      <P spec="StatTile/hover"><StatTile label="Cost" value="$41.20" sub="api-equivalent · 640 calls" tip={costTip(3)} data-force="hover" /></P>
+      <P spec="StatTile/hover"><StatTile label="Cost" value="$41.20" sub="api-equivalent · 640 calls" tip={{ title: "Cost", rows: [{ key: "Source", value: "costUSD from Claude Code analytics" }, { key: "Estimated", value: "3 calls had no analytics event" }] }} data-force="hover" /></P>
       <P spec="StatTile/noSwatch"><StatTile label="People" value={5} sub="2 active now" /></P>
       <P spec="StatTile/unknown"><StatTile label="Tool calls" value={null} unknownReason="not extracted yet" /></P>
-      <P spec="StatTile/coverageGap"><StatTile label="Coverage" value={94} tone="gap" sub="reported, not captured" /></P>
       <P spec="StatTile/loading"><StatTile label="Model calls" value={null} loading /></P>
     </div>
   ),

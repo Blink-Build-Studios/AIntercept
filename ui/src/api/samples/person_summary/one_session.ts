@@ -15,12 +15,14 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
       "skills": null,
       "variesBySession": null
     },
+    "compactions": 0,
     "coverage": {
       "captured": 4,
       "notCaptured": 0,
       "reported": null,
       "windows": []
     },
+    "failedCalls": 0,
     "footprint": {
       "codeShipped": {
         "commits": 0,
@@ -42,11 +44,13 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
       },
       "prompts": 1,
       "subagentCalls": 1,
-      "toolCalls": null,
+      "toolCalls": 0,
       "toolsByName": {},
       "topCommandWords": [],
       "turns": 1
     },
+    "images": null,
+    "recording": "metadata",
     "ribbon": {
       "accountCalls": 1,
       "analyticsBatches": 0,
@@ -69,6 +73,14 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
         "output": 700
       },
       "toolsReachable": null
+    },
+    "tools": {
+      "byName": {},
+      "calls": 0,
+      "listChanges": null,
+      "offered": null,
+      "sources": [],
+      "used": 0
     },
     "work": {
       "activeMs": 240002.0,

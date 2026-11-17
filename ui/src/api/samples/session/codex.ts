@@ -42,7 +42,6 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "exec",
     "clientVersion": "0.164.0",
     "commit": "1aa2f42",
-    "costUsd": null,
     "coverage": null,
     "device": {
       "deviceId": "1a5e0000-0000-4000-8000-0000000001a5",
@@ -60,10 +59,10 @@ const sample: components["schemas"]["SessionResponse"] = {
       "shell": null,
       "tz": null
     },
+    "failedCalls": 0,
     "fieldsMissing": false,
     "friction": {
-      "destructive": 0,
-      "frustrated": 0,
+      "failedCalls": 0,
       "interrupted": 0
     },
     "hiddenCalls": 2,
@@ -106,6 +105,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     },
     "personId": "c0de0000-0000-4000-8000-00000000c0de",
     "prompts": 2,
+    "recording": "metadata",
     "repo": "pomodoro",
     "sessionId": "01a1bd9a-0000-7000-8000-00000000r00t",
     "start": "2026-11-04T15:53:02Z",
@@ -119,6 +119,14 @@ const sample: components["schemas"]["SessionResponse"] = {
       "output": 150
     },
     "toolCalls": null,
+    "tools": {
+      "byName": {},
+      "calls": 0,
+      "listChanges": null,
+      "offered": null,
+      "sources": [],
+      "used": 0
+    },
     "turns": 2,
     "turnsInterrupted": 0,
     "work": {

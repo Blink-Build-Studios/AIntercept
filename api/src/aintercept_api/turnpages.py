@@ -17,18 +17,18 @@ the rollups that hold it and shaped here.
 """
 
 import itertools
-from collections import defaultdict
-from collections.abc import Sequence
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Sequence
 from typing import Any, cast
 
 from aintercept_api import agents
 from aintercept_api import sessionpages as sp
 from aintercept_api import work as wk
-from aintercept_api.models.sessions import PromptFriction
 from aintercept_api.models.turns import (
     RepoGroup,
     SessionWorkRow,
     SubagentRow,
+    TurnFriction,
     TurnRow,
     TurnStep,
     WorkGroup,
@@ -49,7 +49,7 @@ WHERE session_id = %(sid)s AND type = 'prompt' AND t_ns BETWEEN %(lo)s AND %(hi)
              AND t_ns BETWEEN %(lo)s AND %(hi)s AND prompt_index = %(n)s)"""
 _TURNS = f"""SELECT i.seq, i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, p.text, p.text_chars, p.steps,
     p.unfinished_max_ns, p.tokens_in, p.tokens_out, p.interrupted OR {sp.NEXT_FOLLOWS_INTERRUPT} AS interrupted,
-    p.ended_ns, p.work, p.product
+    p.ended_ns, p.work, p.product, p.tool_counts
 FROM prompt_items i JOIN prompts p ON p.prompt_id = i.prompt_id AND p.session_id = i.session_id
 WHERE i.session_id = %(sid)s AND i.type = 'prompt' AND i.t_ns BETWEEN %(lo)s AND %(hi)s
 ORDER BY i.seq LIMIT %(n)s OFFSET %(skip)s"""  # noqa: S608 (fixed text)
@@ -63,9 +63,10 @@ FROM session_edges e JOIN sessions s ON s.session_id = e.child_session_id
 WHERE e.parent_session_id = %(sid)s AND s.origin_kind = 'subagent'
 ORDER BY s.start_ns, s.session_id COLLATE "C\""""
 # The timeline's Turns lane: every turn of the session.
-_BLOCKS = """SELECT i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, p.steps, p.ended_ns, p.unfinished_max_ns
+_BLOCKS = f"""SELECT i.t_ns, i.prompt_id, i.prompt_index, i.open_tail, p.steps, p.ended_ns, p.unfinished_max_ns,
+    p.interrupted OR {sp.NEXT_FOLLOWS_INTERRUPT} AS interrupted
 FROM prompt_items i JOIN prompts p ON p.prompt_id = i.prompt_id AND p.session_id = i.session_id
-WHERE i.session_id = %(sid)s AND i.type = 'prompt' ORDER BY i.seq"""
+WHERE i.session_id = %(sid)s AND i.type = 'prompt' ORDER BY i.seq"""  # noqa: S608 (fixed text)
 # The Work lane's key rows: a session's minutes' or hours'.
 _MINUTE_WORK = """SELECT minute_ns AS t, kind, key, n FROM session_minute_keys
 WHERE session_id = %(sid)s AND kind = ANY(%(kinds)s)"""
@@ -86,6 +87,22 @@ def _exits(s: TurnStep) -> list[int]:
     """A step's commands' exit codes: its tool calls', else the recorded results."""
     got = [t.exitCode for t in s.tools if t.command is not None and t.exitCode is not None]
     return got or list(s.exitCodes)
+
+
+def tool_counts(counts: Iterable[dict[str, int] | None]) -> dict[str, int]:
+    """Tool calls by name, summed over steps (or turns) and ordered most first (the content-free work line,
+    handoff §11S). A call whose tool had no name ("—") is left out."""
+    total: Counter[str] = Counter()
+    for c in counts:
+        for name, n in (c or {}).items():
+            if name and name != "—":
+                total[name] += int(n)
+    return dict(sorted(total.items(), key=lambda x: (-x[1], x[0])))
+
+
+def _failed(rows: Iterable[Row]) -> int:
+    """The steps that failed once ended (an error status, or none): the turn's ! (handoff §11S)."""
+    return sum(1 for r in rows if r["failed"] and r["end_ns"] is not None)
 
 
 def _opt_sum(xs: Sequence[int | None]) -> int | None:
@@ -117,6 +134,7 @@ def groups(rows: list[Row], live: bool, now: int) -> list[WorkGroup]:
                 tokensIn=_opt_sum([_ctx(r) for r in rs]),
                 tokensOut=_opt_sum([r["tokens_output"] for r in rs]),
                 text=texts[-1] if kind == "reply" and texts else None,
+                tools=tool_counts(r["tool_counts"] for r in rs),
                 steps=steps,
             )
         )
@@ -142,6 +160,7 @@ def _subagents(rows: list[Row], live: bool, now: int) -> list[SubagentRow]:
                 sessionId=None,
                 steps=len(rs),
                 work=wk.turn_work(wk.from_pieces(p for r in rs for p in r["work_pieces"])),
+                tools=tool_counts(r["tool_counts"] for r in rs),
                 tokensIn=_opt_sum([_ctx(r) for r in rs]),
                 tokensOut=_opt_sum([r["tokens_output"] for r in rs]),
                 groups=groups(rs, live, now),
@@ -159,6 +178,7 @@ def _thread(t: Row) -> SubagentRow:
         sessionId=t["session_id"],
         steps=t["model_calls"],
         work=wk.turn_work(t["work"]),
+        tools={},
         tokensIn=sum(x or 0 for x in ctx) or None,
         tokensOut=t["tokens_output"],
         groups=[],
@@ -223,9 +243,9 @@ class TurnReads:
                     steps=p["steps"],
                     tokensIn=p["tokens_in"],
                     tokensOut=p["tokens_out"],
-                    costUsd=None,
-                    friction=PromptFriction(frustrated=False, interrupted=bool(p["interrupted"]), destructive=0),
+                    friction=TurnFriction(interrupted=bool(p["interrupted"]), failedCalls=_failed(rs)),
                     work=wk.turn_work(p["work"]),
+                    tools=tool_counts([p["tool_counts"]]),
                     groups=_with_reply(groups(main, live, now), running),
                     subagents=_subagents([r for r in rs if r["kind"] == "subagent"], live, now)
                     + threads.get(p["prompt_id"], []),
@@ -248,6 +268,7 @@ class TurnReads:
                     endedAt=dt(ended) if ended is not None and not running else None,
                     steps=p["steps"],
                     live=running,
+                    interrupted=bool(p["interrupted"]),
                 )
             )
         return out
@@ -345,6 +366,8 @@ def _work_row(r: Row) -> SessionWorkRow:
         activeMs=(r["active_ns"] or 0) / 1e6,
         work=wk.turn_work(r["work"]),
         friction=row.friction,
+        tools=tool_counts([r["tools"]]),
+        recording="content" if r["recorded"] else "metadata",
     )
 
 

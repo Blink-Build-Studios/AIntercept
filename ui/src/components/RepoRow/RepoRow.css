@@ -1,7 +1,7 @@
 /* RepoRow and the Work tab's session rows (handoff §11R, CompTurns): repo rows 6px 12px,
    --surface-raised when open: ▸ 14 · sessions 112 · repo 260 · turns 60 · active 70 · work
-   (flex, 12px in) · friction 84 · 12. Session rows 4px 12px, 38px in: started 92 · ● 10 ·
-   label 260 · turns 60 · active 70 · work · friction 84 · › 12. */
+   (flex, 12px in) · friction 60 · 12. Session rows 4px 12px, 38px in: started 92 · ● 10 ·
+   label 260 · turns 60 · active 70 · work · friction 60 · › 12; content-free, flat: 12px in (§11S). */
 @layer components {
   .dt-row.repo-row {
     padding-block: 6px;
@@ -34,7 +34,7 @@
   }
   .dt-row.repo-row > :nth-child(7),
   .dt-row.work-session-row > :nth-child(7) {
-    flex: 0 0 84px;
+    flex: 0 0 60px;
   }
   .dt-row.repo-row > :nth-child(8),
   .dt-row.work-session-row > :nth-child(8) {
@@ -43,6 +43,10 @@
   .dt-row.work-session-row {
     padding-left: 38px;
     min-width: calc(1100px + 50px);
+  }
+  .dt-row.work-session-row-flat {
+    padding-left: 12px;
+    min-width: calc(1100px + 24px);
   }
   .dt-row.work-session-row > :nth-child(1) {
     flex: 0 0 92px;

@@ -22,16 +22,10 @@ export const Default: Story = {
         <HeaderStat label="Plan" value={p.plan} />
         <HeaderStat label="Claude Code user" value={p.firstUseAt} unknownReason="not extracted yet" />
         <HeaderStat
-          label="Devices"
-          value={p.devices.length ? p.devices.map((d) => [d.platform, d.terminal, d.shell].filter(Boolean).join(" · ") || d.deviceId.slice(0, 8)).join(", ") : null}
-          unknownReason="no analytics yet"
-        />
-        <HeaderStat
           label="7-day limit"
           value={p.limits.utilization7d === null ? null : `${Math.round(p.limits.utilization7d * 100)}% · ${p.limits.status}`}
           unknownReason="no response yet"
         />
-        <HeaderStat label="Flags" value={p.flags.total} unknownReason="not extracted yet" />
         <HeaderStat label="Last seen" value={p.live ? "now" : formatDuration(60_000)} live={p.live} />
       </>
     ),
@@ -43,9 +37,37 @@ export const WithAgentExtras: Story = {
     children: (
       <>
         <HeaderStat label="Plan" value="ChatGPT Plus" />
-        <HeaderStat label="Devices" value="2" />
         <HeaderStat label="Last seen" value="now" live />
         <AgentStatGroup agent="codex" topic="limits" value={CODEX_LIMITS} tip={codexLimitsTip} more={codexLimitsMore} />
+      </>
+    ),
+  },
+};
+/** The session header without recorded content (§11S): Span · Turns · Steps · Tokens · Tool calls. */
+export const ContentFree: Story = {
+  args: {
+    wrapGap: true,
+    children: (
+      <>
+        <HeaderStat label="Span" value="Nov 2 10:04 → now · 2d 0h" sub="6h 12m active" />
+        <HeaderStat label="Turns" value="34" sub="2 interrupted" />
+        <HeaderStat label="Steps" value="640" sub="model calls · 5 failed" />
+        <HeaderStat label="Tokens" value="8.2M → 1.1M" sub="92% cache read" />
+        <HeaderStat label="Tool calls" value="1,212" sub="14 tools used of 404 offered" />
+      </>
+    ),
+  },
+};
+/** With content recorded: Edited and Commits join. */
+export const WithContent: Story = {
+  args: {
+    wrapGap: true,
+    children: (
+      <>
+        <HeaderStat label="Turns" value="34" sub="2 interrupted" />
+        <HeaderStat label="Tool calls" value="1,212" sub="14 used of 404 offered" />
+        <HeaderStat label="Edited" value="23 files" sub="+1,204 −388" />
+        <HeaderStat label="Commits" value="2" sub="a41f → 9c02" />
       </>
     ),
   },

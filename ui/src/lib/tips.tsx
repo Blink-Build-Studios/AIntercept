@@ -2,12 +2,10 @@
 // Content only; the rows put it on their cells with <Tooltip>.
 import type { Schemas } from "../api/types";
 import { unknownValue, type TooltipContent, type TooltipRow } from "../components/Tooltip/Tooltip";
-import { formatBytes, formatCount, formatDuration, formatExact, formatExactBytes, formatExactMs, formatFullTime, formatPct } from "./format";
-import { formatDay, formatRange, formatTime } from "./time";
+import { formatBytes, formatCount, formatDuration, formatExact, formatExactBytes, formatExactMs, formatFullTime } from "./format";
+import { formatDay, formatTime } from "./time";
 
 type TokenCount = Schemas["TokenCount"];
-type Coverage = Schemas["Coverage"];
-type Friction = Schemas["Friction"];
 type RequestError = NonNullable<Schemas["RequestRow"]["error"]>;
 
 const exactOr = (n: number | null, reason: string) => (n === null ? unknownValue(reason) : formatExact(n));
@@ -72,23 +70,13 @@ export function bytesTip(up: number | null, down: number | null, encoding: strin
   };
 }
 
-/** Coverage cell: what each number means, and why calls were missed. */
-export function coverageTip(c: Coverage): TooltipContent {
-  const rows: TooltipRow[] = [{ key: "Captured", value: `${formatCount(c.captured)} by the proxy` }];
-  rows.push({ key: "Reported", value: c.reported === null ? unknownValue("no analytics to compare (pre-parser)") : `${formatCount(c.reported)} by Claude Code` });
-  // The fraction lives here since the cell shows only what was missed (§11G.C2).
-  if (c.reported) rows.push({ key: "Captured share", value: formatPct((100 * c.captured) / c.reported) });
-  const why = c.windows.find((w) => w.cause)?.cause;
-  if (c.notCaptured > 0) rows.push({ key: "Why", value: why ?? unknownValue("reason not determined") });
-  return { title: c.notCaptured > 0 ? `${formatCount(c.notCaptured)} calls not captured` : "All calls captured", rows };
-}
 
-/** Friction cell: one row per kind present. */
-export function frictionTip(f: Pick<Friction, "frustrated" | "interrupted" | "destructive">): TooltipContent | null {
+
+/** A turn's or a session's friction (§11S): interrupted turns and failed calls; null when neither. */
+export function turnFrictionTip(interrupted: number, failed: number): TooltipContent | null {
   const rows: TooltipRow[] = [];
-  if (f.frustrated > 0) rows.push({ key: `↯ ${f.frustrated}`, value: "frustrated (user said so)" });
-  if (f.interrupted > 0) rows.push({ key: `✕ ${f.interrupted}`, value: "interrupted by the user" });
-  if (f.destructive > 0) rows.push({ key: `▲ ${f.destructive}`, value: "destructive commands", tone: "danger" });
+  if (interrupted > 0) rows.push({ key: `✕ ${formatCount(interrupted)}`, value: "interrupted by the user" });
+  if (failed > 0) rows.push({ key: `! ${formatCount(failed)}`, value: "failed calls: API errors, overloads, retried requests" });
   return rows.length ? { rows } : null;
 }
 
@@ -108,22 +96,7 @@ export function modelCallsTip(captured: number, notCaptured: number | null): Too
   return { title: "Model calls", rows, hint: notCaptured ? `Click +${formatCount(notCaptured)} to list them` : undefined };
 }
 
-/** StatTile "Cost": its source, and how many calls were estimated (row left out at 0). */
-export function costTip(estimatedCalls: number): TooltipContent {
-  const rows: TooltipRow[] = [{ key: "Source", value: "costUSD from Claude Code analytics" }];
-  if (estimatedCalls > 0) rows.push({ key: "Estimated", value: `${formatCount(estimatedCalls)} ${estimatedCalls === 1 ? "call" : "calls"} had no analytics event` });
-  return { title: "Cost", rows };
-}
 
-/** CoverageLine: how many windows, the longest, and why. */
-export function coverageLineTip(c: Coverage, now?: Date, clickable = false): TooltipContent {
-  const longest = [...c.windows].sort((a, b) => Date.parse(b.to) - Date.parse(b.from) - (Date.parse(a.to) - Date.parse(a.from)))[0];
-  const why = c.windows.find((w) => w.cause)?.cause;
-  const rows: TooltipRow[] = [];
-  if (longest) rows.push({ key: "Windows", value: `${formatCount(c.windows.length)} · longest ${formatRange(longest.from, longest.to, now)}` });
-  rows.push({ key: "Why", value: why ?? unknownValue("reason not determined") });
-  return { title: `${formatCount(c.notCaptured)} calls not captured`, rows, hint: clickable ? "Click to list them" : undefined };
-}
 
 /** KeyValueList row: where the value comes from, and on how many calls (or in how many sessions) it was seen. */
 export const sourceTip = (source: string, seen?: { n: number; of: number; per: "calls" | "sessions" }): TooltipContent => ({
@@ -139,13 +112,6 @@ export const notRetainedTip: TooltipContent = {
   hint: "Click: About this data",
 };
 
-/** The posture chip: the permission mode and its share of calls. */
-export const postureTip = (mode: string, pct: number | null): TooltipContent => ({
-  rows: [
-    { key: "Mode", value: mode },
-    { key: "Share", value: pct === null ? unknownValue("no permission mode reported") : `${formatPct(pct)} of calls` },
-  ],
-});
 
 /** The range chip. */
 export const rangeTip = (ms: number): TooltipContent => ({ body: `Selected range · ${formatDuration(ms)}`, hint: "× or Esc clears it" });

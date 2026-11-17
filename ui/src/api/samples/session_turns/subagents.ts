@@ -11,29 +11,27 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "retained": false,
         "text": null
       },
-      "costUsd": null,
       "durationMs": 30002.0,
       "endedAt": "2026-11-04T10:05:40.002000Z",
       "friction": {
-        "destructive": 0,
-        "frustrated": false,
+        "failedCalls": 0,
         "interrupted": false
       },
       "groups": [
         {
           "durationMs": 2.0,
           "exits": [],
-          "kind": "tool",
+          "kind": "mcp",
           "paths": null,
           "program": null,
-          "server": null,
+          "server": "linear-server",
           "startedAt": "2026-11-04T10:05:10Z",
           "steps": [
             {
               "agentType": null,
               "commands": [],
               "costUsd": null,
-              "does": "tool",
+              "does": "mcp",
               "durationMs": 2.0,
               "eventsPending": false,
               "exitCodes": [],
@@ -79,6 +77,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {
+            "mcp__linear-server__get_issue": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -87,8 +88,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
             "edits": 0,
             "linesAdded": null,
             "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 1,
+            "mcp": [
+              {
+                "calls": 1,
+                "server": "linear-server"
+              }
+            ],
+            "otherTools": 0,
             "prs": [],
             "pushes": 0,
             "readFiles": null,
@@ -160,6 +166,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {
+            "WebSearch": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -241,6 +250,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {
+            "Agent": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -337,6 +349,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
               "text": null,
               "tokensIn": 1003,
               "tokensOut": 100,
+              "tools": {
+                "Write": 1
+              },
               "work": {
                 "commands": [],
                 "commits": 0,
@@ -365,6 +380,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "steps": 1,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {
+            "Write": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -390,6 +408,12 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       ],
       "tokensIn": 4012,
       "tokensOut": 400,
+      "tools": {
+        "Agent": 1,
+        "WebSearch": 1,
+        "Write": 1,
+        "mcp__linear-server__get_issue": 1
+      },
       "work": {
         "commands": [],
         "commits": 0,
@@ -398,8 +422,13 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "edits": 1,
         "linesAdded": null,
         "linesRemoved": null,
-        "mcp": [],
-        "otherTools": 1,
+        "mcp": [
+          {
+            "calls": 1,
+            "server": "linear-server"
+          }
+        ],
+        "otherTools": 0,
         "prs": [],
         "pushes": 0,
         "readFiles": null,

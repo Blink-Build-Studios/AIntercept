@@ -1,6 +1,5 @@
 import { Fragment } from "react";
-import type { TooltipContent } from "../Tooltip/Tooltip";
-import { binSlots, GapRow, gapRowHover, type BinInteraction, type ForceAt, type Gap } from "./BarTrack";
+import { binSlots, type BinInteraction } from "./BarTrack";
 import { Track } from "./Lane";
 import { Mark } from "./TimelineGuide";
 import { ms, useTimeScale, useTrackWidth } from "./scale";
@@ -11,22 +10,17 @@ export type WorkBin = { t: string; edits: number; other: number };
 export type WorkTrackProps = {
   bins: WorkBin[];
   binSeconds: number;
-  /** The not-captured gaps, in their row under the bars (unchanged from the model-call lane). */
-  gaps?: Gap[];
   /** The bar area's full height in bin units (default: the tallest bin). */
   maxV?: number;
   interact?: BinInteraction;
-  gapTip?: (g: Gap) => TooltipContent;
-  onGap?: (g: Gap) => void;
-  forceGap?: ForceAt;
 };
 
 /**
- * The Work lane (handoff §11R, CompTurns `WorkTrack/stacked`): per bin, commands and reads in
- * --ink-muted at the bottom and edits in --ink stacked on top, a bin wide less 1px; the
- * not-captured row under them is the model-call lane's. Replaces the model-call bars.
+ * The Work lane (handoff §11R, §11S, CompTurns `WorkTrack/stacked`): per bin, tool calls in
+ * --ink-muted at the bottom and edit tools (Edit / Write / MultiEdit / apply_patch, by name) in
+ * --ink stacked on top, a bin wide less 1px, over 2px of floor. Same in both recording modes.
  */
-export function WorkTrack({ bins, binSeconds, gaps = [], maxV, interact, gapTip, onGap, forceGap }: WorkTrackProps) {
+export function WorkTrack({ bins, binSeconds, maxV, interact }: WorkTrackProps) {
   const scale = useTimeScale();
   const trackPx = useTrackWidth();
   const top = maxV ?? Math.max(1, ...bins.map((b) => b.edits + b.other));
@@ -44,8 +38,8 @@ export function WorkTrack({ bins, binSeconds, gaps = [], maxV, interact, gapTip,
     );
   };
   return (
-    <Track interactive={!!interact} hover={gapRowHover}>
-      <div className="tl-bars">
+    <Track interactive={!!interact}>
+      <div className="tl-work-bars">
         {interact &&
           binSlots(scale, bins.map((b) => ({ t: b.t, v: b.edits + b.other })), binSeconds).map((s) => {
             const a = ms(s.from);
@@ -66,7 +60,6 @@ export function WorkTrack({ bins, binSeconds, gaps = [], maxV, interact, gapTip,
           })}
         {bins.map(bar)}
       </div>
-      <GapRow gaps={gaps} binSeconds={binSeconds} gapTip={gapTip} onGap={onGap} forceGap={forceGap} />
     </Track>
   );
 }

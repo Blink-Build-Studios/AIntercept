@@ -24,7 +24,7 @@ export const Codex: Story = {
   render: () => (
     <SessionTable view="codex" expandable>
       {codex.map((r) => (
-        <SessionRow key={r.spec} session={r.session} href="#" now={PEOPLE_NOW} common nesting={r.nesting} threadFacts={r.threadFacts} />
+        <SessionRow key={r.spec} session={r.session} href="#" now={PEOPLE_NOW} nesting={r.nesting} threadFacts={r.threadFacts} />
       ))}
     </SessionTable>
   ),

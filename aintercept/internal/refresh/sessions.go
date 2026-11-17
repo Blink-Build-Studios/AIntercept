@@ -96,7 +96,7 @@ const sessionCols = `session_id, start_ns, last_ns, product, client, client_vers
 	networks, effort, tokens_input, tokens_cache_read, tokens_cache_write, tokens_output,
 	outputs_known, tokens_accuracy, tool_calls, has_facts, facts_cwd, facts_approval, facts_sandbox, limits, limits_ns,
 	cli_version, cli_version_ns, rl_status, rl_util, rl_overage, rl_ns, unattributed,
-	turns, turns_interrupted, active_ns, work`
+	turns, turns_interrupted, active_ns, work, failed_calls, recorded, tools`
 
 // newestDesc is today's "newest call" order: latest time, then the latest id.
 const newestDesc = at + ` DESC, replace(c.call_id, '#', '~') COLLATE "C" DESC`
@@ -109,7 +109,8 @@ var sessionSelect = `WITH h AS (SELECT coalesce(sum(model_calls), 0) AS model_ca
 		sum(output_tokens) AS output_tokens, coalesce(sum(outputs_known), 0) AS outputs_known, sum(tool_calls) AS tool_calls
 	FROM session_hours WHERE session_id = $1),
 k AS (SELECT nullif(count(DISTINCT key) FILTER (WHERE kind = 'call_prompt'), 0) AS prompts,
-		nullif(count(DISTINCT key) FILTER (WHERE kind = 'ip'), 0) AS networks
+		nullif(count(DISTINCT key) FILTER (WHERE kind = 'ip'), 0) AS networks,
+		coalesce(sum(n) FILTER (WHERE kind = 'failed'), 0) AS failed, coalesce(bool_or(kind = 'recorded'), false) AS recorded
 	FROM session_keys WHERE session_id = $1)
 SELECT $1, fc.at, lc.at, fc.product, cl.client, cv.version, cv.ns, h.hidden_calls,
 	` + pyStrip(`ttl.text`) + `,
@@ -133,7 +134,11 @@ SELECT $1, fc.at, lc.at, fc.product, cl.client, cv.version, cv.ns, h.hidden_call
 	cli.v, cli.ns, rl.status, rl.util, rl.overage, rl.ns,
 	h.model_calls > 0 AND NOT acct.any,
 	tn.turns, tn.interrupted, tn.active,
-	` + workObj(`(SELECT kind, key, n FROM session_keys WHERE session_id = $1 AND starts_with(kind, 'w:'))`) + `
+	` + workObj(`(SELECT kind, key, n FROM session_keys WHERE session_id = $1 AND starts_with(kind, 'w:'))`) + `,
+	k.failed, k.recorded,
+	(SELECT coalesce(jsonb_object_agg(name, n), '{}') FROM (SELECT CASE WHEN kind = 'call_mcp'
+			THEN 'mcp__' || (key::jsonb ->> 0) || '__' || (key::jsonb ->> 1) ELSE key END AS name, sum(n)::bigint AS n
+		FROM session_keys WHERE session_id = $1 AND kind IN ('call_builtin', 'call_mcp') GROUP BY 1) x)
 FROM h, k
 LEFT JOIN LATERAL (SELECT count(*) AS turns, count(*) FILTER (WHERE interrupted OR next_follows) AS interrupted,
 	coalesce(sum(greatest(ended_ns - t_ns, 0)), 0) AS active

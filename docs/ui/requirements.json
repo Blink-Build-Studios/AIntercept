@@ -176,23 +176,6 @@
       "demo": true
     },
     {
-      "path": "/api/v1/sessions/{sessionId}/events",
-      "operationId": "get_session_events",
-      "scenarios": [
-        "empty",
-        "error"
-      ],
-      "demo": true
-    },
-    {
-      "path": "/api/v1/events/{eventId}",
-      "operationId": "get_event",
-      "scenarios": [
-        "error"
-      ],
-      "demo": false
-    },
-    {
       "path": "/api/v1/requests/{requestId}",
       "operationId": "get_request",
       "scenarios": [
@@ -370,11 +353,8 @@
       "name": "Marker",
       "group": "Chips",
       "states": [
-        "frustrated",
         "interrupted",
         "destructive",
-        "coverageGap",
-        "match",
         "live",
         "compact"
       ]
@@ -397,7 +377,6 @@
         "hover",
         "noSwatch",
         "unknown",
-        "gap",
         "loading"
       ]
     },
@@ -427,14 +406,9 @@
       "group": "Summary",
       "states": [
         "default",
-        "withAgentExtras"
-      ]
-    },
-    {
-      "name": "CoverageLine",
-      "group": "Summary",
-      "states": [
-        "complete"
+        "withAgentExtras",
+        "contentFree",
+        "withContent"
       ]
     },
     {
@@ -478,7 +452,19 @@
         "default",
         "withAction",
         "loading",
-        "rowHover"
+        "rowHover",
+        "context",
+        "repo"
+      ]
+    },
+    {
+      "name": "ToolsOfferedUsed",
+      "group": "Summary",
+      "states": [
+        "session",
+        "person",
+        "unchanged",
+        "loading"
       ]
     },
     {
@@ -521,17 +507,7 @@
       "path": "src/components/Timeline/BarTrack.tsx",
       "states": [
         "default",
-        "withGaps",
-        "gapRow",
         "auxiliary"
-      ]
-    },
-    {
-      "name": "DensityTrack",
-      "group": "Timeline",
-      "path": "src/components/Timeline/DensityTrack.tsx",
-      "states": [
-        "default"
       ]
     },
     {
@@ -629,7 +605,6 @@
         "hover",
         "focus",
         "live",
-        "coverageGap",
         "multiAgentEstimated",
         "noTokenCounts",
         "unidentified",
@@ -680,24 +655,6 @@
       ]
     },
     {
-      "name": "CoverageCell",
-      "group": "Rows",
-      "states": [
-        "gap",
-        "complete",
-        "notApplicable",
-        "absent"
-      ]
-    },
-    {
-      "name": "PartialMark",
-      "group": "Rows",
-      "states": [
-        "default",
-        "open"
-      ]
-    },
-    {
       "name": "RequestRow",
       "group": "Rows",
       "states": [
@@ -726,11 +683,6 @@
       ]
     },
     {
-      "name": "EventRow",
-      "group": "Rows",
-      "states": []
-    },
-    {
       "name": "StepRow",
       "group": "Rows",
       "states": [
@@ -739,7 +691,6 @@
         "toolMarked",
         "toolRunning",
         "streaming",
-        "eventsPending",
         "subagent",
         "auxiliary",
         "codexModelCall",
@@ -754,8 +705,7 @@
       "name": "BetweenRow",
       "group": "Rows",
       "states": [
-        "compaction",
-        "recap"
+        "compaction"
       ]
     },
     {
@@ -1044,7 +994,6 @@
       "name": "FilterChip",
       "group": "Chips",
       "states": [
-        "notCaptured",
         "removeHover",
         "removeFocus",
         "static"
@@ -1108,14 +1057,6 @@
         "fork",
         "resume",
         "subagent"
-      ]
-    },
-    {
-      "name": "TurnReport",
-      "group": "Agents",
-      "states": [
-        "codex",
-        "withOtel"
       ]
     },
     {
@@ -1303,7 +1244,9 @@
       "states": [
         "session",
         "personFortnight",
-        "noFacts"
+        "noFacts",
+        "sessionWithContent",
+        "personWithContent"
       ]
     },
     {
@@ -1311,7 +1254,9 @@
       "group": "Turns",
       "states": [
         "session",
-        "person"
+        "person",
+        "sessionWithContent",
+        "personWithContent"
       ],
       "path": "src/components/OutcomeSlot/OutcomeFacts.tsx"
     },
@@ -1328,7 +1273,8 @@
         "hover",
         "focus",
         "linked",
-        "arrived"
+        "arrived",
+        "failedCalls"
       ]
     },
     {
@@ -1341,7 +1287,9 @@
         "thinkingGroup",
         "replyGroup",
         "withPaths",
-        "hover"
+        "hover",
+        "mcpGroup",
+        "withCommands"
       ],
       "path": "src/components/TurnRow/WorkGroup.tsx"
     },
@@ -1351,7 +1299,8 @@
       "states": [
         "default",
         "hover",
-        "selected"
+        "selected",
+        "withContent"
       ],
       "path": "src/components/TurnRow/TurnStep.tsx"
     },
@@ -1360,7 +1309,8 @@
       "group": "Turns",
       "states": [
         "default",
-        "codexThread"
+        "codexThread",
+        "withContent"
       ],
       "path": "src/components/TurnRow/SubagentRow.tsx"
     },
@@ -1394,8 +1344,8 @@
       "group": "Turns",
       "states": [
         "workDefault",
-        "ended",
-        "partialCapture",
+        "workPlain",
+        "workWithContent",
         "hover",
         "linked"
       ],
@@ -1408,7 +1358,8 @@
         "live",
         "repos",
         "chat",
-        "nothing"
+        "nothing",
+        "liveContentFree"
       ]
     },
     {
@@ -1452,9 +1403,9 @@
         "delayed",
         "refreshFailed",
         "emptyRange",
-        "noUncaptured",
         "aboutOpen",
-        "workManyRepos"
+        "workManyRepos",
+        "content"
       ]
     },
     {
@@ -1462,7 +1413,6 @@
       "states": [
         "turns",
         "requests",
-        "events",
         "live",
         "loading",
         "loadFailed",
@@ -1471,7 +1421,8 @@
         "drawerRetained",
         "codexTurns",
         "withContent",
-        "subagents"
+        "subagents",
+        "content"
       ]
     }
   ],

@@ -75,7 +75,7 @@ def session_row_from_table(r: Mapping[str, Any], alone: bool = False) -> Session
         capturedFromPrompt=None,
         modelCalls=r["model_calls"],
         events=None,
-        friction=Friction(frustrated=0, interrupted=int(r["turns_interrupted"] or 0), destructive=0),
+        friction=Friction(interrupted=int(r["turns_interrupted"] or 0), failedCalls=int(r.get("failed_calls") or 0)),
         bypassPct=None,
         coverage=None,
         fieldsMissing=r["fields_missing"],

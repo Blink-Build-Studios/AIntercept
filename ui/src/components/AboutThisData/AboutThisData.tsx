@@ -39,11 +39,11 @@ const NODES = {
 /** Each product's channels (§11M 3.2: one ChannelTable per captured product): channel, name, on the wire, carries. */
 const CHANNELS: Partial<Record<Agent, [Channel, string, string, string][]>> = {
   "claude-code": [
-    ["model", "Model calls", "POST /v1/messages", "Each agent-loop step; a thread’s first request also carries the tool catalog, MCP servers, skills and injected context"],
-    ["analytics", "Product analytics", "POST /api/event_logging/v2/batch", "~128 event types (tengu_*), ~45 env fields each"],
-    ["flags", "Feature flags", "POST /api/eval/sdk-*", "Account attributes, flag values, experiments"],
+    ["model", "Model calls", "POST /v1/messages", "Each agent-loop step: the conversation, tool calls and results, tokens, timing. Each request carries the tool list (built-in and MCP), the source of “offered vs used”"],
+    ["analytics", "Product analytics", "POST /api/event_logging/v2/batch", "kept raw, not shown: listed in All requests as kind analytics, metadata only"],
+    ["flags", "Feature flags", "POST /api/eval/sdk-*", "Account attributes, flag values · kept raw, not shown"],
     ["count", "Token counting", "POST /v1/messages/count_tokens", "Whole files’ text"],
-    ["account", "Account / setup", "skills list, MCP registry, bootstrap, profile…", "Not tied to a session"],
+    ["account", "Account / setup", "profile, organizations, bootstrap: identity (account, email, org)", "Not tied to a session"],
   ],
   codex: [
     ["model", "Model calls", "WebSocket /backend-api/codex/responses", "Each turn’s steps; prewarm and title calls are hidden by default"],
@@ -56,8 +56,8 @@ const CHANNELS: Partial<Record<Agent, [Channel, string, string, string][]>> = {
 
 /** What a product's traffic becomes, and its hosts (§11M 3.2). */
 const PRODUCT: Record<Agent, { shape: string; hosts: string }> = {
-  "claude-code": { shape: "sessions → prompts → steps", hosts: "api.anthropic.com · statsig.anthropic.com · claude.ai/api/oauth" },
-  codex: { shape: "threads → turns (shown as prompts) → steps", hosts: "chatgpt.com/backend-api/codex (WebSocket + HTTP) · ab.chatgpt.com" },
+  "claude-code": { shape: "sessions → turns → steps", hosts: "api.anthropic.com · statsig.anthropic.com · claude.ai/api/oauth" },
+  codex: { shape: "threads → turns → steps", hosts: "chatgpt.com/backend-api/codex (WebSocket + HTTP) · ab.chatgpt.com" },
   chatgpt: { shape: "conversations → messages", hosts: "chatgpt.com/backend-api/conversation" },
   "claude-ai": { shape: "conversations → messages", hosts: "claude.ai/api" },
 };
@@ -95,9 +95,9 @@ export function AboutProduct({ product: p }: { product: AboutProductData }) {
 }
 
 /**
- * What is kept (§11E.1, §11N.1), the one place the deployment's mode is said. Without
- * bodies: `METADATA ONLY`. Claude Code's own analytics report each command's program and
- * exit code in any mode, so those are listed as kept; no tool input is.
+ * What is kept (§11E.1, §11N.1, §11S), the one place the deployment's mode is said. Without
+ * bodies: `METADATA ONLY`. The agents' own analytics are kept raw; nothing on a page comes
+ * from them, so without content there is no repo, edited lines, commits or test outcomes.
  */
 export function RetentionList({ contentRetained }: { contentRetained: boolean | null }) {
   return (
@@ -118,10 +118,10 @@ export function RetentionList({ contentRetained }: { contentRetained: boolean | 
       <Row k="Kept">
         {contentRetained
           ? "everything below, plus request and response bodies: prompt text, full commands and exit codes, patch files, responses, Codex titles"
-          : "headers, token counts, timings, model and tool names with counts per call, each agent’s own analytics events as sent (Claude Code’s include each command’s program and exit code)"}
+          : "headers, token counts, timings, status and errors, model, stop reason, tool names with counts per call, each request’s tool list, interrupts and compactions. The agents’ own analytics posts are kept raw for later analysis; nothing on a page comes from them."}
       </Row>
       {!contentRetained && (
-        <Row k="Not kept">tool inputs (full commands, paths, URLs), Codex’s exit codes, prompt text, responses, file contents, Codex titles, shell and timezone</Row>
+        <Row k="Not kept">prompt text, responses, tool inputs (commands, paths, edits, URLs) and tool results. So: no repo or branch, no edited lines, no commits or test outcomes. Turn on content recording to see them.</Row>
       )}
       <Row k="Credentials">always redacted; keys appear only as a hash</Row>
     </div>
@@ -154,11 +154,6 @@ function PipelineDiagram() {
       <Node name={NODES.ui[0]} sub={NODES.ui[1]} />
       <Arrow glyph="←" />
       <Node name={NODES.observer[0]} sub={NODES.observer[1]} />
-      <div />
-      <div />
-      <div className="about-bypass border border-dashed border-danger text-danger">
-        ▲ Traffic that skips the proxy (for example over IPv6) is never seen. AIntercept finds it later in Claude Code’s own analytics and lists it as “reported, not captured”.
-      </div>
     </div>
   );
 }
@@ -257,7 +252,7 @@ export function AboutThisData({ contentRetained, products, onClose }: AboutThisD
           <AboutSection title="What the marks mean">
             <div className="about-table bg-surface border border-line">
               <Row k={<span className="text-ink-muted">—</span>} kTone="plain">
-                Not known. Point at it for the reason (not reported, not extracted yet, or not sent by this agent). Never shown as 0.
+                Not known. Point at it for the reason (not on the wire, needs recorded content, or not sent by this agent). Never shown as 0.
               </Row>
               <Row k={<span className="text-ink-muted">≈ 610k</span>} kTone="plain">
                 Estimated from text size, because the agent doesn’t report token usage.
@@ -265,8 +260,8 @@ export function AboutThisData({ contentRetained, products, onClose }: AboutThisD
               <Row k={<Chip tone="notRetained">not retained</Chip>} kTone="plain">
                 Content not kept; its shape (size, counts, types) is shown instead.
               </Row>
-              <Row k={<span className="text-danger">▲ 94</span>} kTone="plain">
-                Coverage gap: Claude Code reported calls the proxy never saw. Red means only this, or a destructive command.
+              <Row k={<span className="text-ink">✕ · !</span>} kTone="plain">
+                Friction: ✕ the person interrupted a turn; ! a model call failed (API error, overload) or was retried. Red is not used for either.
               </Row>
             </div>
           </AboutSection>

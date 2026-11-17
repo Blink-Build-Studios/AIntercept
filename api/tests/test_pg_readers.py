@@ -9,7 +9,7 @@ from tests import pgdb
 
 _SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "aintercept_api"
 _GO = pathlib.Path(__file__).resolve().parents[2] / "aintercept" / "internal"
-_API_READERS = ("pgstore.py", "drawer.py", "sessionpages.py", "personpages.py", "directorypages.py")
+_API_READERS = ("pgstore.py", "drawer.py", "sessionpages.py", "personpages.py", "directorypages.py", "tools.py")
 _WORKERS = ("ingest", "flush", "refresh")
 
 

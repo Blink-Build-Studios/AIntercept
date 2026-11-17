@@ -12,6 +12,8 @@ type Story = StoryObj<typeof meta>;
 
 /** Working now: the live turn and its repo. */
 export const Live: Story = { args: { data: { live: { repo: "aintercept", turn: 34 }, repos: ["aintercept"] } } };
+/** Working now, content-free (§11S): the session and its turn; a repo needs content. */
+export const LiveContentFree: Story = { args: { data: { live: { repo: null, turn: 34, sessionId: "4c1a8e2077e0" }, repos: [] } } };
 /** Not live: the window's repos. */
 export const Repos: Story = { args: { data: { live: null, repos: ["observer", "notes"] } } };
 export const Chat: Story = { args: { data: { live: null, repos: [], chat: true } } };

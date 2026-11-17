@@ -17,7 +17,8 @@ const idShort = (id: string) => (id.length > 12 ? `${id.slice(0, 4)}…${id.slic
  * The session's title and the line beside it (§11L.5, §11M 3.4). Claude Code: repo · branch.
  * A Codex thread: its generated title (label source `title`) or first prompt; an untitled
  * thread is `<workspace> · <first-turn start>` (`pomodoro · Nov 9 09:00`), its line
- * `untitled · thread 01a1…aed1 · <sha>`. The breadcrumb uses the same title.
+ * `untitled · thread 01a1…aed1 · <sha>`. Without a repo or a title (§11S, content-free): the agent
+ * and its start time (`Claude Code session · Nov 2 10:04`). The breadcrumb uses the same title.
  */
 export function sessionTitle(s: Header): { title: string; sub: string } {
   const has = (f: Header["capabilities"][number]) => s.capabilities.includes(f);
@@ -29,7 +30,8 @@ export function sessionTitle(s: Header): { title: string; sub: string } {
   }
   const repoTitle = has("repoBranch") && s.repo ? `${s.repo}${s.branch ? ` · ${s.branch}` : s.commit ? ` · ${s.commit}` : ""}` : null;
   const workspace = has("workspace") ? [s.repo, s.commit].filter(Boolean).join(" · ") : "";
-  return { title: repoTitle ?? s.label.text, sub: [workspace || null, `session ${idShort(s.sessionId)}`].filter(Boolean).join(" · ") };
+  const fallback = s.label.source === "none" ? `${AGENT_NAME[s.agent]} session · ${formatDayTime(s.start)}` : s.label.text;
+  return { title: repoTitle ?? fallback, sub: [workspace || null, `session ${idShort(s.sessionId)}`].filter(Boolean).join(" · ") };
 }
 
 type Header = Schemas["SessionHeader"];
@@ -38,15 +40,14 @@ type Counts = Schemas["RangeCounts"];
 const plural = (n: number, one: string, many = `${one}s`) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
 /**
- * The tabs' labels with count and unit (§11L.7, §11R): `Turns 4 · 96 steps`, `Requests 203 calls ·
- * 412 other`, `Events 58`. The shared model-call count links Turns and Requests.
+ * The tabs' labels with count and unit (§11L.7, §11R, §11S): `Turns 4 · 96 steps`, `Requests 203
+ * calls · 412 other`. The shared model-call count links Turns and Requests.
  */
 export function sessionTabs(c: Counts | undefined): TabSpec[] {
   const other = c ? Math.max(0, c.requests - c.modelCalls) : 0;
   return [
     { id: "turns", label: "Turns", count: c ? `${formatCount(c.turns)} · ${plural(c.steps, "step")}` : null },
     { id: "requests", label: "Requests", count: c ? `${plural(c.modelCalls, "call")}${other ? ` · ${formatCount(other)} other` : ""}` : null },
-    { id: "events", label: "Events", count: c ? formatCount(c.events) : null },
   ];
 }
 
@@ -59,7 +60,6 @@ export function tabHint(tab: string, s: Header | undefined, c: Counts | undefine
     const channels = s?.channels ?? [];
     return tabHints.requests(channels.filter((ch) => (kindCounts?.[ch] ?? 1) > 0).flatMap((ch) => (UNPROMPTED[ch] ? [UNPROMPTED[ch]] : [])));
   }
-  if (tab === "events") return `The analytics events ${s ? AGENT_NAME[s.agent] : "the agent"} sent during this session, in time order.`;
   const detail = c ? `${plural(c.turns, "turn")}, ${plural(c.steps, "model call")} as steps` : "";
   return tabHints.turns(person ?? "this person", detail);
 }

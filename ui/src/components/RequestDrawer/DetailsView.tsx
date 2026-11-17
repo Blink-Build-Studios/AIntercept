@@ -2,10 +2,9 @@ import { useState } from "react";
 import type { Schemas } from "../../api/types";
 import { formatCount } from "../../lib/format";
 import { DetailSection } from "./DetailSection";
-import { EventRow } from "../EventRow/EventRow";
 import { FieldList } from "./FieldList";
 import { InputCompositionBar } from "../InputCompositionBar/InputCompositionBar";
-import { detailRow, joinKey, type Detail, type Details } from "./drawerData";
+import { detailRow, type Detail, type Details } from "./drawerData";
 import { TimingWaterfall } from "./TimingWaterfall";
 import "./DetailsView.css";
 
@@ -14,11 +13,10 @@ const UNAVAILABLE = {
   failed: "No response, so no usage, limits or stream.",
 };
 
-/** One tool call: its input (from the response), execution (analytics) and result (the next request). */
+/** One tool call (§11S): its input (from the response) and result (the next request); no analytics column. */
 function ToolBlock({ tool: t }: { tool: Schemas["ToolCallDetail"] }) {
   const cols = [
     { h: "Input (from response)", rows: t.input },
-    { h: "Execution (analytics)", rows: t.execution },
     { h: "Result (next request)", rows: t.result },
   ];
   return (
@@ -54,28 +52,16 @@ function ToolBlock({ tool: t }: { tool: Schemas["ToolCallDetail"] }) {
 }
 
 /**
- * The drawer's All details tab (handoff §6.6): input composition, the 8
- * sections two to a row, each tool call, the proxy's timing waterfall,
- * Claude Code's events for the call, and every field (filterable).
+ * The drawer's All details tab (handoff §6.6, §11S): input composition, the
+ * sections two to a row, each tool call, the proxy's timing waterfall and every
+ * field (filterable). Nothing from the agent's own analytics.
  */
 export function DetailsView({ detail: d, details: x }: { detail: Detail; details: Details }) {
   const [filter, setFilter] = useState("");
-  const t0 = Date.parse(d.t);
-  const events = (
-    <>
-      <h3 className="details-head type-key text-ink-faint">Claude Code events · {formatCount(x.events.length)}</h3>
-      <div role="treegrid" aria-label="Claude Code events for this call">
-        {x.events.map((e) => (
-          <EventRow key={e.eventId} event={e} onToggle={() => {}} compact={{ offsetMs: Date.parse(e.t) - t0, joinKey: joinKey(e.name), matched: d.crossCheck.matched }} />
-        ))}
-      </div>
-    </>
-  );
   if (d.kind !== "normal") {
     return (
       <div className="details-view">
         <p className="details-unavailable type-body text-ink-muted">{UNAVAILABLE[d.kind]}</p>
-        {events}
       </div>
     );
   }
@@ -97,14 +83,7 @@ export function DetailsView({ detail: d, details: x }: { detail: Detail; details
         </div>
       )}
       <h3 className="details-head type-key text-ink-faint">Timing · proxy waterfall</h3>
-      <TimingWaterfall
-        phases={x.timing.proxy}
-        client={x.timing.client.map((r) => {
-          const row = detailRow(r);
-          return { k: row.k, v: row.v };
-        })}
-      />
-      {events}
+      <TimingWaterfall phases={x.timing.proxy} />
       <h3 className="details-head type-key text-ink-faint">All fields · {formatCount(x.fields.length)}</h3>
       <FieldList fields={x.fields} filter={filter} onFilter={setFilter} />
     </div>

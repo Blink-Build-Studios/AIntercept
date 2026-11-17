@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import sessionDemo from "../../api/samples/session_timeline/demo";
-import { BarTrack, gapRowLabel } from "./BarTrack";
-import { callBins, d, gaps, window } from "./demoData";
-import { Lane, LANE_HEIGHT } from "./Lane";
+import { BarTrack } from "./BarTrack";
+import { callBins, d, window } from "./demoData";
+import { Lane } from "./Lane";
 import { compactionLabels, contextBins } from "./sessionLanes";
 import { Timeline } from "./Timeline";
 
@@ -34,21 +34,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-/** The real IPv6 bypass windows, hatched. */
-export const WithGaps: Story = { args: { gaps } };
-/** The model calls lane (§11G.A4): gaps in their own row under the bars, merged when under 4px apart. */
-export const GapRow: Story = {
-  args: { gaps, gapRow: true },
-  decorators: [
-    (Story) => (
-      <Timeline {...window} label="Bars">
-        <Lane label="Model calls" sublabel="per 1h" height={LANE_HEIGHT.barsWithGapRow} summary="model calls per hour" footer={gapRowLabel(gaps)}>
-          {Story()}
-        </Lane>
-      </Timeline>
-    ),
-  ],
-};
 export const Auxiliary: Story = { args: { bins: callBins.map((b, i) => ({ ...b, auxiliary: i % 4 === 0 })) } };
 /** The session page's Context lane (session demo sample): context per main-thread call as a level, compactions labelled. */
 export const Context: Story = {

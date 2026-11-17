@@ -92,6 +92,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
     "turns": [
       {
         "endedAt": "2026-11-04T09:03:00.002000Z",
+        "interrupted": false,
         "live": false,
         "n": 1,
         "promptId": "p1",

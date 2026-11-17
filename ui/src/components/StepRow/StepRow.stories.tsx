@@ -52,7 +52,6 @@ export const ToolRunning = row({ step: { ...live, status: "done", eventsPending:
 export const Streaming = row({ step: { ...live, tools: [] }, onOpen: open });
 export const StreamingWithTokens = row({ step: { ...live, tools: [], tokens: { ...live.tokens, output: 214 } }, onOpen: open });
 /** Captured, but tengu_api_success not joined yet: `cost — · events pending…`. */
-export const EventsPending = row({ step: { ...done, eventsPending: true }, onOpen: open });
 /** A subagent's run, collapsed to one `⤷` row. */
 export const Subagent = row({ subagent: subagentRun, expanded: false, onToggle: fn(), onOpen: open });
 export const SubagentExpanded = row({ subagent: subagentRun, expanded: true, onToggle: fn(), onOpen: open });

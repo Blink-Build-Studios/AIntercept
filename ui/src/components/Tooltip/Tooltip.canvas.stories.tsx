@@ -4,9 +4,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import type { CSSProperties } from "react";
 import { codexLimitsTip } from "../AgentSectionHead/agentSpecimens";
-import { MISSED_COLUMN } from "../CoverageCell/CoverageCell";
-import { partialCaptureTip } from "../PartialMark/PartialMark";
-import { mergedGapTip, modelBinTip, sessionBandTip } from "../Timeline/timelineTips";
+import { modelBinTip, sessionBandTip } from "../Timeline/timelineTips";
 import { readoutLine } from "../Timeline/trackHover";
 import { updatedAgoTip } from "../UpdatedAgo/UpdatedAgo";
 import { TooltipSurface, unknownValue, type TooltipContent, type TooltipKind } from "./Tooltip";
@@ -66,7 +64,7 @@ export const Canvas: StoryObj = {
         width={480}
         content={{ body: "/api/oauth/organizations/9c2e41d0-7a1f-4b6e-a0f2-5d8c3e1b77a4/skills/list-skills" }}
       />
-      <P spec="Tooltip/columnHeader" width={300} content={{ title: MISSED_COLUMN.header, hint: MISSED_COLUMN.definition }} />
+      <P spec="Tooltip/columnHeader" width={300} content={{ title: "Missed", hint: "Model calls Claude Code reported that the proxy didn’t capture, in this window." }} />
       <P spec="Tooltip/anchoredTop" width={230} content={{ body: notRetained }} />
       <P spec="Tooltip/flippedBottom" width={230} content={{ body: notRetained }} />
       <P spec="Tooltip/chartAnchored" kind="mark" width={200} content={{ body: "Nov 3 10:00–10:30 · 38 calls" }} />
@@ -232,18 +230,6 @@ export const Canvas: StoryObj = {
       <P spec="Tooltip/bytes" width={240} content={{ rows: [{ key: "Up", value: "8,214 B" }, { key: "Down", value: "3,402 B · gzip" }] }} />
       <P spec="Tooltip/time" content={{ body: "Tue Nov 3 2026 · 10:42:16.204 PST" }} />
       <P
-        spec="Tooltip/coverage"
-        width={300}
-        content={{
-          title: "94 calls not captured",
-          rows: [
-            { key: "Captured", value: "640 by the proxy" },
-            { key: "Reported", value: "734 by Claude Code" },
-            { key: "Why", value: "IPv6 route bypassed the proxy" },
-          ],
-        }}
-      />
-      <P
         spec="Tooltip/friction"
         width={300}
         content={{
@@ -260,11 +246,6 @@ export const Canvas: StoryObj = {
         content={{ title: "Claude Code", rows: [{ key: "Version", value: "2.1.32" }, { key: "First seen", value: "Oct 22 · 1 device" }] }}
       />
       <P spec="Tooltip/unknownCell" width={300} content={{ rows: [{ key: "Repo", value: unknownValue("not parsed before Nov 2") }] }} />
-      <P
-        spec="Tooltip/columnHeaderCoverage"
-        width={300}
-        content={{ title: MISSED_COLUMN.header, hint: MISSED_COLUMN.definition }}
-      />
       <P
         spec="Tooltip/headerStat"
         content={{
@@ -287,17 +268,6 @@ export const Canvas: StoryObj = {
         }}
       />
       <P
-        spec="Tooltip/coverageLine"
-        content={{
-          title: "94 calls not captured",
-          rows: [
-            { key: "Windows", value: "2 · longest Nov 3 15:00–17:59" },
-            { key: "Why", value: "IPv6 route bypassed the proxy" },
-          ],
-          hint: "Click to list them",
-        }}
-      />
-      <P
         spec="Tooltip/keyValueRow"
         content={{ rows: [{ key: "Source", value: "MCP server names in tool definitions" }, { key: "Seen", value: "in 9 of 11 sessions" }] }}
       />
@@ -305,17 +275,7 @@ export const Canvas: StoryObj = {
         spec="Tooltip/notRetained"
         content={{ body: "Content not retained. AIntercept stores its shape (size, counts, types), not the text.", hint: "Click: About this data" }}
       />
-      <P spec="Tooltip/postureChip" width={280} content={{ rows: [{ key: "Mode", value: "bypassPermissions" }, { key: "Share", value: "99.7% of calls" }] }} />
       {/* CompDensity (round 10) */}
-      <P
-        spec="Tooltip/gapMerged"
-        content={mergedGapTip([
-          { from: new Date(2026, 9, 26, 2, 10).toISOString(), to: new Date(2026, 9, 26, 2, 14, 12).toISOString(), count: 37 },
-          { from: new Date(2026, 9, 26, 3, 40).toISOString(), to: new Date(2026, 9, 26, 3, 41, 3).toISOString(), count: 5 },
-          { from: new Date(2026, 9, 26, 4, 55).toISOString(), to: new Date(2026, 9, 26, 4, 55, 22).toISOString(), count: 2 },
-        ])}
-      />
-      <P spec="Tooltip/partialCapture" content={partialCaptureTip(7)} />
       {/* CompR11 */}
       <P spec="Tooltip/sessionSnapped" kind="mark" content={sessionBandTip(snapSession)} />
       <P spec="Tooltip/laneReadout" kind="mark" content={readoutLine(new Date(2026, 10, 3, 14, 20).getTime(), "no session open", "nearest: 7a1e… starts 4h 10m later").content} />

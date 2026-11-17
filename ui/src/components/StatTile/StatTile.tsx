@@ -14,7 +14,6 @@ export type StatTileProps = {
   sub?: ReactNode;
   swatch?: Channel;
   href?: string;
-  tone?: "default" | "gap";
   loading?: boolean;
   unknownReason?: string;
   /** How the figure is computed and where it comes from (§6B.7): hover fill and cursor help. */
@@ -23,8 +22,8 @@ export type StatTileProps = {
   "data-force"?: "hover";
 };
 
-/** One figure in a ribbon (handoff §6.3). `gap` shows a coverage gap in danger with ▲. */
-export function StatTile({ label, value, sub, swatch, href, tone = "default", loading, unknownReason, tip, ...rest }: StatTileProps) {
+/** One figure in a ribbon (handoff §6.3). */
+export function StatTile({ label, value, sub, swatch, href, loading, unknownReason, tip, ...rest }: StatTileProps) {
   const reason = unknownReason ?? "unknown";
   const body = loading ? (
     <>
@@ -43,9 +42,7 @@ export function StatTile({ label, value, sub, swatch, href, tone = "default", lo
           —
         </span>
       ) : (
-        <span className={`type-num-xl ${tone === "gap" ? "text-danger" : "text-ink"}`}>
-          {`${tone === "gap" ? "▲ " : ""}${typeof value === "number" ? formatCount(value) : value}`}
-        </span>
+        <span className="type-num-xl text-ink">{typeof value === "number" ? formatCount(value) : value}</span>
       )}
       {(sub ?? (value === null && unknownReason)) && <span className="type-body text-ink-muted">{sub ?? unknownReason}</span>}
     </>

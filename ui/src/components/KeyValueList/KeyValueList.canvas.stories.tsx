@@ -46,6 +46,10 @@ export const Canvas: StoryObj = {
           ]}
         />
       </P>
+      {/* CompTurns (§11S): the session's context panel, 440px. */}
+      <div data-parity="KeyValueList/context" className="grid items-start" style={{ gridTemplateColumns: "442px" }}>
+        <KeyValueList title="Context · in range" rows={[]} lines={[{ text: "1 compaction · 905k → 21k" }, { text: "peak context 905k tokens" }, { text: "3 subagent threads", muted: true }]} />
+      </div>
       <P spec="KeyValueList/loading" track={272}>
         <KeyValueList title="Capabilities · seen in any session" rows={[]} loading />
       </P>

@@ -3,6 +3,7 @@ bin did, structured; the UI composes the phrases (the work line). Metadata first
 Claude Code's analytics; Codex reports tool counts and exit codes, no programs or file types."""
 
 from datetime import datetime
+from typing import Literal
 
 from aintercept_api.models.common import Model
 
@@ -103,6 +104,8 @@ class TurnBlock(Model):
     """None while it's still running (draw to now)."""
     steps: int
     live: bool
+    interrupted: bool
+    """The person interrupted it (the timeline's ✕, handoff §11S)."""
 
 
 class WorkBin(Model):
@@ -140,3 +143,45 @@ class WorkingOn(Model):
     """The live session's newest turn number."""
     repos: list[str]
     """The repos of the sessions active in the window, most recent first."""
+
+
+# --- without the agents' own analytics (handoff §11S) ---------------------------------------------
+
+Recording = Literal["metadata", "content"]
+"""Whether a session's (or a person's window's) calls kept their content: `content` when any did."""
+
+
+class ToolSource(Model):
+    """One source of tools (ToolsOfferedUsed's row): `Built-in` or `mcp:<server>`."""
+
+    source: str
+    offered: int | None
+    """Distinct tools of this source in the requests' tool lists; None when no request carried a list."""
+    used: int
+    """Distinct tools of this source the model called."""
+    calls: dict[str, int]
+    """Calls by tool (its bare name: `Bash`, `list_issues`), most first."""
+
+
+class ToolsInRange(Model):
+    """The tools the requests offered against the ones the model called, from the tool list each request
+    carries and the tool calls each response makes (handoff §11S, ToolsOfferedUsed)."""
+
+    sources: list[ToolSource]
+    """Built-in first, then each MCP server by calls; servers never called last."""
+    offered: int | None
+    """Distinct tools offered, every source; None when no request carried a list."""
+    used: int
+    calls: int
+    byName: dict[str, int]
+    """Calls by tool name as the request sends it (`Bash`, `mcp__linear__list_issues`): the work line."""
+    listChanges: int | None
+    """How many times the main thread's tool list changed: its distinct lists less one; None without a list."""
+
+
+class ContextInRange(Model):
+    """The session's context in a range, content-free (handoff §11S, KeyValueList/context): its compactions
+    and its subagent threads. The peak context is the timeline's context points'."""
+
+    compactions: int
+    subagentThreads: int

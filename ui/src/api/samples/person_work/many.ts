@@ -17,8 +17,7 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           "capturedFromPrompt": null,
           "end": "2026-11-04T12:05:40Z",
           "friction": {
-            "destructive": 0,
-            "frustrated": 0,
+            "failedCalls": 0,
             "interrupted": 0
           },
           "label": {
@@ -26,8 +25,18 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "text": "Session 33333333"
           },
           "live": false,
+          "recording": "metadata",
           "sessionId": "33333333-3333-4333-8333-333333333333",
           "start": "2026-11-04T12:00:05Z",
+          "tools": {
+            "Agent": 1,
+            "Bash": 2,
+            "Edit": 1,
+            "Read": 2,
+            "WebSearch": 1,
+            "Write": 1,
+            "mcp__linear-server__get_issue": 1
+          },
           "turns": 2,
           "work": {
             "commands": [
@@ -44,8 +53,13 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "edits": 2,
             "linesAdded": null,
             "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 1,
+            "mcp": [
+              {
+                "calls": 1,
+                "server": "linear-server"
+              }
+            ],
+            "otherTools": 0,
             "prs": [],
             "pushes": 0,
             "readFiles": null,
@@ -69,8 +83,7 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           "capturedFromPrompt": null,
           "end": "2026-11-04T10:05:40Z",
           "friction": {
-            "destructive": 0,
-            "frustrated": 0,
+            "failedCalls": 0,
             "interrupted": 0
           },
           "label": {
@@ -78,8 +91,18 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "text": "Session 22222222"
           },
           "live": false,
+          "recording": "metadata",
           "sessionId": "22222222-2222-4222-8222-222222222222",
           "start": "2026-11-04T10:00:05Z",
+          "tools": {
+            "Agent": 1,
+            "Bash": 2,
+            "Edit": 1,
+            "Read": 2,
+            "WebSearch": 1,
+            "Write": 1,
+            "mcp__linear-server__get_issue": 1
+          },
           "turns": 2,
           "work": {
             "commands": [
@@ -96,8 +119,13 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "edits": 2,
             "linesAdded": null,
             "linesRemoved": null,
-            "mcp": [],
-            "otherTools": 1,
+            "mcp": [
+              {
+                "calls": 1,
+                "server": "linear-server"
+              }
+            ],
+            "otherTools": 0,
             "prs": [],
             "pushes": 0,
             "readFiles": null,
@@ -133,8 +161,13 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
         "edits": 4,
         "linesAdded": null,
         "linesRemoved": null,
-        "mcp": [],
-        "otherTools": 2,
+        "mcp": [
+          {
+            "calls": 2,
+            "server": "linear-server"
+          }
+        ],
+        "otherTools": 0,
         "prs": [],
         "pushes": 0,
         "readFiles": null,

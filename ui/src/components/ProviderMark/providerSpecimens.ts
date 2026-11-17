@@ -4,7 +4,7 @@ import type { PromptItem } from "../../api/types";
 import type { AgentCardProps } from "../AgentCard/AgentCard";
 import type { AgentRowProps } from "../PersonHeader/AgentRow";
 import { orgStat } from "../PersonHeader/OrgStat";
-import { lastSeenValue, missedValue, type PersonStatData } from "../PersonHeader/PersonHeaderRow";
+import { lastSeenValue, type PersonStatData } from "../PersonHeader/PersonHeaderRow";
 import type { Person } from "../PersonRow/PersonRow";
 import type { RequestChannel } from "../RequestFilters/RequestFilters";
 import type { Header } from "../RequestDrawer/HeaderList";
@@ -55,6 +55,8 @@ const base: Person = {
   activity: [],
   bypassPct: null,
   coverage: null,
+  toolCalls: null,
+  failedCalls: 0,
 };
 // Activity on a shared scale of 19 (sparkline bars 4, 8 and 18px for 1, 5 and 15 calls).
 const MIXED = days([0, 1, 0, 1, 15, 15, 1, 5, 1, 1, 15, 1, 5, 15]);
@@ -149,11 +151,7 @@ export const personHeaders = {
           stat("Plan", "Max 20x"),
           orgStat({ kind: "customer", id: "1b9f…e02" }),
           stat("Role", "admin"),
-          stat("Using since", "Aug 2025", "15 mo"),
           stat("7-day limit", "83%", "overage off"),
-          stat("Flags", "1,108", "12 changed today"),
-          stat("Bypass", "99.7%", "of model calls"),
-          stat("Missed", missedValue(94), "calls not captured"),
         ],
       },
       {
@@ -435,7 +433,7 @@ const session: Session = {
   prompts: 6,
   modelCalls: 41,
   events: null,
-  friction: { frustrated: 0, interrupted: 0, destructive: 0 },
+  friction: { interrupted: 0, failedCalls: 0 },
   bypassPct: null,
   coverage: null,
   fieldsMissing: false,
@@ -458,12 +456,12 @@ export const mixedSessions: { spec: string; session: Session; nesting?: SessionN
       label: { source: "recap", text: "Codex taxonomy analysis" },
       prompts: 34,
       modelCalls: 640,
-      friction: { frustrated: 1, interrupted: 1, destructive: 0 },
+      friction: { interrupted: 1, failedCalls: 0 },
     },
   },
   {
     spec: "SessionRow/mixedCodexParent",
-    session: { ...session, commit: "3f2a1c9", friction: { frustrated: 0, interrupted: 1, destructive: 0 }, ...span(8, 14, 20, 18, 40) },
+    session: { ...session, commit: "3f2a1c9", friction: { interrupted: 1, failedCalls: 0 }, ...span(8, 14, 20, 18, 40) },
     nesting: { kind: "parent", expanded: true, onToggle: () => undefined },
     threadFacts: "· 3 subagent · 1 review",
   },
@@ -487,7 +485,7 @@ export const mixedSessions: { spec: string; session: Session; nesting?: SessionN
       label: { source: "firstPrompt", text: "Add Expo mobile skeleton" },
       prompts: 9,
       modelCalls: 63,
-      friction: { frustrated: 0, interrupted: 0, destructive: 2 },
+      friction: { interrupted: 0, failedCalls: 0 },
       ...span(8, 15, 2, 42, 5),
     },
     nesting: { kind: "parent", expanded: false, onToggle: () => undefined },
@@ -503,7 +501,7 @@ export const mixedSessions: { spec: string; session: Session; nesting?: SessionN
       label: { source: "none", text: "01a1bd9a-0000-7000-8000-00000000aed1" },
       prompts: 1,
       modelCalls: 203,
-      friction: { frustrated: 0, interrupted: 1, destructive: 0 },
+      friction: { interrupted: 1, failedCalls: 0 },
       ...span(9, 9, 0, 124),
     },
     threadFacts: "· resumed from 3b9a…",

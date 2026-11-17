@@ -200,9 +200,8 @@ def test_the_cases_are_all_there(sides):
     for rid in rids:
         for sub in ("/details", "/raw"):
             assert side.new.get(f"/api/v1/requests/{_q(rid)}{sub}").status_code == 200, (rid, sub)
-    # Neither reported-only calls nor events are held: their ids are 404s.
+    # Reported-only calls aren't held: their ids are 404s.
     assert side.new.get("/api/v1/requests/reported:req_bypass_1").status_code == 404
-    assert side.new.get("/api/v1/events/batch-span-ended:0").status_code == 404
 
 
 def test_a_websocket_turn_is_drawn_from_its_row(sides):
