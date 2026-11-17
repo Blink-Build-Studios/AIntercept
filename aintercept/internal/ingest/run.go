@@ -83,11 +83,35 @@ func Run() {
 	_ = srv.Shutdown(sctx)
 }
 
+// drain is refresh.Drain; tests stand in a slow one.
+var drain = refresh.Drain
+
 // Loop lists, loads, refreshes and keeps house until ctx ends. A failure
 // (Postgres or the store down) is logged and retried on the next tick. hk nil:
-// no housekeeping.
+// no housekeeping. The refreshers run on their own, beside listing and loading,
+// so a slow refresh never holds up new data landing in Postgres.
 func Loop(ctx context.Context, db *pgxpool.Pool, store process.Store, prefix string, loaders, refreshers int,
 	hk *refresh.Housekeeper, listEvery time.Duration) {
+	var refreshing sync.WaitGroup
+	defer refreshing.Wait()
+	for i := 0; i < refreshers; i++ {
+		refreshing.Add(1)
+		go func() {
+			defer refreshing.Done()
+			t := time.NewTicker(time.Second)
+			defer t.Stop()
+			for {
+				if _, err := drain(ctx, db); err != nil && ctx.Err() == nil {
+					slog.Warn("worker: refresh", "err", err)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+			}
+		}()
+	}
 	var listed time.Time
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -119,16 +143,6 @@ func Loop(ctx context.Context, db *pgxpool.Pool, store process.Store, prefix str
 					if err != nil {
 						failed = append(failed, key)
 					}
-				}
-			}()
-		}
-		wg.Wait()
-		for i := 0; i < refreshers; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if _, err := refresh.Drain(ctx, db); err != nil && ctx.Err() == nil {
-					slog.Warn("worker: refresh", "err", err)
 				}
 			}()
 		}
