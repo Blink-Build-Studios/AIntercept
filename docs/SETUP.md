@@ -84,7 +84,7 @@ sudo scripts/route-claude-through-proxy.sh revert   # first: give Claude Code it
 make down
 ```
 
-Captured data stays in `data/` and Postgres's Docker volume (`<checkout folder>_pgdata`). To start over, delete both: `rm -rf data/telemetry` and `docker volume rm <checkout folder>_pgdata`. The schema has no migrations, so after pulling a schema change the workers refuse to start (`docker compose logs worker`: a schema hash mismatch) until you do. Locally, retention keeps 15 days of facts in Postgres; the raw files in `data/telemetry/raw/` stay until you delete them.
+Captured data stays in `data/` and Postgres's Docker volume (`<checkout folder>_pgdata`). To start over, delete both: `rm -rf data/telemetry` and `docker volume rm <checkout folder>_pgdata`. The schema has no migrations: after pulling a schema change the workers reset Postgres to the new schema and reload every raw file in `data/telemetry/raw/`. Locally, retention keeps 15 days of facts in Postgres; the raw files in `data/telemetry/raw/` stay until you delete them.
 
 ## The cluster's data instead
 
@@ -106,8 +106,8 @@ It needs `kubectl` pointed at the cluster. It runs `kubectl port-forward svc/api
 | Claude Code: certificate errors | `NODE_EXTRA_CA_CERTS` isn't set in that shell | export it (step 4) and restart `claude` |
 | No people after using Claude Code | Claude Code isn't routed (or bypasses over IPv6) | `scripts/route-claude-through-proxy.sh status`; both host lines must be present |
 | `make verify`: the workers can't read Postgres | Postgres is down, or its volume predates `.env`'s passwords | `docker compose logs postgres worker`; start over (step 6) |
-| The workers restart: schema hash mismatch | the volume holds an older schema (no migrations) | start over (step 6) |
-| `make up`: the API didn't come up, `.cache/run/api.log` says the schema isn't this build's | the volume holds an older schema, or the API is older than the workers | pull and re-run; otherwise start over (step 6) |
+| The workers restart: the database has tables but no schema_version | the volume holds something that isn't AIntercept's | start over (step 6) |
+| The API answers 503 `schema_not_ready` | the workers haven't applied this build's schema yet, or the API is older than the workers | wait for the workers (`docker compose logs worker`); pull and re-run |
 | `make api`: no `AINTERCEPT_PG_API_PASSWORD` | `make api` runs the API alone, on the Postgres `make up` started | `make up` first (or `make down` and `make api` with Docker's Postgres up) |
 | The UI shows "Delayed" | no new data for 3 minutes | `curl localhost:9001/stats` (observer) and `curl localhost:9005/lag` (workers: the age of the oldest unloaded file or dirty rollup row) |
 | Anything else | | logs: `.cache/run/api.log`, `.cache/run/ui.log`, `docker compose logs observer worker postgres envoy` |

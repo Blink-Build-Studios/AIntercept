@@ -78,11 +78,14 @@ spec:
             {{- end }}
           ports:
             - { name: http, containerPort: 8787 }
+          # Ready once the database holds this build's schema (a 503 until the
+          # workers have applied it); alive whatever the database holds, so a
+          # schema change or a Postgres outage never restarts the pod.
           readinessProbe:
             httpGet: { path: /api/v1/status, port: 8787 }
-            periodSeconds: 10
+            periodSeconds: 5
           livenessProbe:
-            httpGet: { path: /api/v1/status, port: 8787 }
+            httpGet: { path: /healthz, port: 8787 }
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10

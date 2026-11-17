@@ -120,6 +120,118 @@ func TestHashMismatchRefusesToStart(t *testing.T) {
 	}
 }
 
+// An upgrade whose schema differs (WORKER_SCHEMA_RESET): the new workers drop
+// the old schema and its data and apply theirs, once however many start
+// together, with the grants logins.sql gives; ingest_files is empty, so the
+// lister reloads every raw file. With the setting off the worker refuses.
+func TestResetReplacesAnotherBuildsSchema(t *testing.T) {
+	admin := pgtest.Fresh(t)
+	c := ctx(t)
+	conn, err := pgx.Connect(c, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(c)
+	if err := pg.CreateLogins(c, conn, "worker pw", "api pw"); err != nil {
+		t.Fatalf("logins: %v", err)
+	}
+	worker := open(t, pgtest.WithUser(t, admin, pg.WorkerLogin, "worker pw"))
+	if reset, err := pg.ApplyOrReset(c, worker); err != nil || reset {
+		t.Fatalf("first start: reset %v, %v", reset, err)
+	}
+	for _, sql := range []string{
+		"INSERT INTO ingest_files (key, listed_at, loaded_at) VALUES ('raw/a.ndjson.gz', now(), now())",
+		"INSERT INTO ingest_pods (incarnation) VALUES ('pod-1')",
+		"CREATE TABLE only_in_the_old_schema (x int)",
+		"UPDATE schema_version SET hash = 'an older build'",
+	} {
+		if _, err := worker.Exec(c, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	if err := pg.Apply(c, worker); !errors.Is(err, pg.ErrSchemaMismatch) {
+		t.Fatalf("WORKER_SCHEMA_RESET=false: %v, want ErrSchemaMismatch", err)
+	}
+	var wg sync.WaitGroup
+	resets, errs := make([]bool, 4), make([]error, 4)
+	for i := range errs {
+		wg.Add(1)
+		go func() { defer wg.Done(); resets[i], errs[i] = pg.ApplyOrReset(c, worker) }()
+	}
+	wg.Wait()
+	n := 0
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("worker %d: %v", i, err)
+		}
+		if resets[i] {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d workers reset the database, want 1", n)
+	}
+	if err := pg.Check(c, worker); err != nil {
+		t.Fatalf("after the reset: %v", err)
+	}
+	var files, pods int
+	var old *string
+	if err := worker.QueryRow(c, "SELECT (SELECT count(*) FROM ingest_files), (SELECT count(*) FROM ingest_pods), to_regclass('only_in_the_old_schema')::text").Scan(&files, &pods, &old); err != nil {
+		t.Fatal(err)
+	}
+	if files != 0 || pods != 0 || old != nil {
+		t.Errorf("after the reset: %d ingest_files, %d ingest_pods, old table %v; want an empty database", files, pods, old)
+	}
+	var tables []string
+	if err := worker.QueryRow(c, "SELECT array_agg(tablename::text ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public'").Scan(&tables); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(tables, " "); got != strings.Join(schemaTables(), " ") {
+		t.Errorf("tables %s, want %s", got, strings.Join(schemaTables(), " "))
+	}
+	var owner string
+	if err := worker.QueryRow(c, "SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'public'").Scan(&owner); err != nil {
+		t.Fatal(err)
+	}
+	if owner != pg.WorkerLogin {
+		t.Errorf("public is owned by %s, want %s", owner, pg.WorkerLogin)
+	}
+	if _, err := worker.Exec(c, "INSERT INTO ingest_pods (incarnation) VALUES ('pod-2')"); err != nil {
+		t.Errorf("the worker writes: %v", err)
+	}
+	api := open(t, pgtest.WithUser(t, admin, pg.APILogin, "api pw"))
+	if err := pg.Check(c, api); err != nil {
+		t.Errorf("the API checks the schema: %v", err)
+	}
+	for _, tb := range schemaTables() {
+		if _, err := api.Exec(c, "SELECT * FROM "+tb+" LIMIT 1"); err != nil {
+			t.Errorf("the API reads %s: %v", tb, err)
+		}
+	}
+	if _, err := api.Exec(c, "INSERT INTO ingest_pods (incarnation) VALUES ('pod-3')"); sqlState(err) != "42501" {
+		t.Errorf("the API wrote: %v", err)
+	}
+	if _, err := api.Exec(c, "CREATE TABLE x (y int)"); sqlState(err) != "42501" {
+		t.Errorf("the API created a table: %v", err)
+	}
+}
+
+// A database that isn't one of ours (tables, no schema_version) is never reset.
+func TestResetRefusesAForeignDatabase(t *testing.T) {
+	p := open(t, pgtest.Fresh(t))
+	c := ctx(t)
+	if _, err := p.Exec(c, "CREATE TABLE something_else (x int)"); err != nil {
+		t.Fatal(err)
+	}
+	if reset, err := pg.ApplyOrReset(c, p); reset || !errors.Is(err, pg.ErrNotEmpty) {
+		t.Fatalf("reset %v, %v; want ErrNotEmpty", reset, err)
+	}
+	var reg *string
+	if err := p.QueryRow(c, "SELECT to_regclass('something_else')::text").Scan(&reg); err != nil || reg == nil {
+		t.Errorf("the foreign table is gone: %v", err)
+	}
+}
+
 func TestApplyNeedsAnEmptyDatabase(t *testing.T) {
 	p := open(t, pgtest.Fresh(t))
 	c := ctx(t)

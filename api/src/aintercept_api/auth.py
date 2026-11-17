@@ -25,7 +25,7 @@ import jwt
 ALGORITHMS = ["RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"]
 
 # Paths served without an assertion: kubelet probes reach the pod directly.
-OPEN_PATHS = frozenset({"/api/v1/status"})
+OPEN_PATHS = frozenset({"/api/v1/status", "/healthz"})
 
 
 @dataclass(frozen=True)

@@ -163,7 +163,11 @@ def test_bearer_prefix_is_accepted(store, keys):
 
 
 def test_status_stays_open_for_probes(store, keys):
-    assert auth_client(store, keys).get("/api/v1/status").status_code == 200
+    # /api/v1/status is the readiness probe, /healthz the liveness probe.
+    c = auth_client(store, keys)
+    assert c.get("/api/v1/status").status_code == 200
+    r = c.get("/healthz")
+    assert r.status_code == 200 and r.text == "ok\n"
 
 
 def test_ui_is_behind_the_assertion_too(store, keys, ui_dir):

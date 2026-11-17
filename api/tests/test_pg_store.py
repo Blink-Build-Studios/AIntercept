@@ -1,7 +1,7 @@
 """The API's Postgres store (docs/PIPELINE.md §6): per request one connection and one READ ONLY,
 REPEATABLE READ snapshot, the page's statements in order (test_drawer.py, test_session_pages.py and
-test_person_pages.py hold what each page reads). The startup refuses a database whose schema isn't this
-build's.
+test_person_pages.py hold what each page reads). On a database whose schema isn't this build's the API
+is up but not ready, until it is.
 
 /status (the first call, the probes, the pods) and the overview's request count are held here."""
 
@@ -10,9 +10,10 @@ import pathlib
 import time
 
 import pytest
+from fastapi.testclient import TestClient
 
 from aintercept_api import pgstore, ranges
-from aintercept_api.pgstore import PgStore, SchemaMismatch
+from aintercept_api.pgstore import PgStore
 from tests import pgdb
 from tests.builders import Dataset, load_fixture
 from tests.conftest import make_client
@@ -44,16 +45,55 @@ def test_the_schema_hash_is_this_builds(pg_dsn):
     PgStore(pg_dsn).close()
 
 
-def test_a_database_with_another_schema_is_refused(pg_dsn):
+def _schema(dsn: str, hash_: str | None) -> None:
+    """Sets the database's schema_version (None: no row, as before the workers apply it)."""
+    if hash_ is None:
+        _exec(dsn, "DELETE FROM schema_version")
+    else:
+        _exec(dsn, "DELETE FROM schema_version", f"INSERT INTO schema_version (hash) VALUES ('{hash_}')")  # noqa: S608
+
+
+def test_another_schema_is_unready_until_the_workers_apply_this_one(monkeypatch):
+    # An upgrade: the new pod starts before the workers have reset the database to its schema. It
+    # answers 503 (its readiness probe fails) and stays alive, then is ready without a restart.
+    monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
     admin = pgdb.admin_dsn()
     assert admin is not None
     with pgdb.fresh_database(admin) as other:
-        _exec(other, "UPDATE schema_version SET hash = 'not-this-build'")
-        with pytest.raises(SchemaMismatch):
-            PgStore(other)
-        _exec(other, "DELETE FROM schema_version")
-        with pytest.raises(SchemaMismatch):
-            PgStore(other)
+        for older in (None, "not-this-build"):
+            _schema(other, older)
+            with contextlib.closing(PgStore(other)) as store:
+                c = make_client(store)
+                assert not store.ready()
+                r = c.get("/api/v1/status")
+                assert r.status_code == 503 and r.json()["error"]["code"] == "schema_not_ready"
+                assert c.get("/api/v1/people").status_code == 503
+                assert c.get("/healthz").status_code == 200
+                _schema(other, pgstore.SCHEMA_HASH)
+                assert c.get("/api/v1/status").status_code == 200 and store.ready()
+
+
+def test_a_ready_pod_goes_unready_when_its_schema_is_replaced(monkeypatch):
+    # The older pods of an upgrade: the workers reset the database to the new schema under them.
+    monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
+    admin = pgdb.admin_dsn()
+    assert admin is not None
+    with pgdb.fresh_database(admin) as other, contextlib.closing(PgStore(other)) as store:
+        c = make_client(store)
+        assert c.get("/api/v1/status").status_code == 200
+        _schema(other, "a-newer-build")
+        assert c.get("/api/v1/status").status_code == 503 and not store.ready()
+
+
+def test_the_schema_is_checked_every_few_seconds(pg_dsn, monkeypatch):
+    # Between checks a pod answers from the last one: no query per request.
+    with contextlib.closing(PgStore(pg_dsn)) as store:
+        assert store.ready()
+        checks: list[str] = []
+        monkeypatch.setattr(store.reader, "check_schema", checks.append)
+        assert store.ready() and checks == []
+        store._checked -= pgstore.RECHECK_SECONDS  # the interval passes
+        assert store.ready() and checks == [pgstore.SCHEMA_HASH]
 
 
 def _status(store: PgStore) -> dict:
@@ -264,16 +304,22 @@ def test_the_app_reads_postgres(pg_dsn, tmp_path, monkeypatch):
     create_app().state.store.close()
 
 
-def test_the_app_refuses_to_start_on_another_schema(pg_dsn, tmp_path, monkeypatch):
-    # The schema-hash check runs when the app starts (the API is up only on this build's schema).
+def test_the_app_starts_unready_on_another_schema(pg_dsn, tmp_path, monkeypatch):
+    # The schema-hash check never stops the app starting (a crash loop would back off for minutes):
+    # it's up, unready, and ready once the workers have applied this build's schema.
     from aintercept_api.app import create_app
 
+    monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
     monkeypatch.setenv("AINTERCEPT_BUCKETS_DIR", str(tmp_path))
     monkeypatch.delenv("AINTERCEPT_PG_DSN_FILE", raising=False)
     admin = pgdb.admin_dsn()
     assert admin is not None
     with pgdb.fresh_database(admin) as other:
-        _exec(other, "UPDATE schema_version SET hash = 'not-this-build'")
+        _schema(other, "not-this-build")
         monkeypatch.setenv("AINTERCEPT_PG_DSN", other)
-        with pytest.raises(SchemaMismatch):
-            create_app()
+        app = create_app()
+        with contextlib.closing(app.state.store):
+            c = TestClient(app)
+            assert c.get("/api/v1/status").status_code == 503
+            _schema(other, pgstore.SCHEMA_HASH)
+            assert c.get("/api/v1/status").status_code == 200

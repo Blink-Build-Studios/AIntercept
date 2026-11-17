@@ -57,7 +57,7 @@ wait_for() { # name url log [pid name: give up early once that process has exite
   fail "$1 didn't come up at $2 (log: .cache/run/$3)"
 }
 alive() { [[ -f "${RUN}/$1.pid" ]] && kill -0 "$(cat "${RUN}/$1.pid")" 2>/dev/null; }
-# The API starts on Postgres with the workers' schema applied (it refuses a database without it):
+# The API is ready once the workers have applied their schema (503 until then):
 # wait for both first.
 for _ in $(seq 90); do
   (cd "$ROOT" && docker compose exec -T postgres pg_isready -q -U postgres -d aintercept) 2>/dev/null && break
