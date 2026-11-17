@@ -80,6 +80,7 @@ _PEOPLE = f"""WITH win AS (
   rows AS (
     SELECT g.pid, sum(w.prompts)::bigint AS prompts, sum(w.model_calls)::bigint AS calls,
       sum(w.outputs_known)::bigint AS outputs_known, sum(w.tokens_output)::bigint AS tokens_out,
+      sum(w.tool_calls)::bigint AS tool_calls, sum(w.failed_calls)::bigint AS failed_calls,
       max(w.last_ns) AS last_ns, array_agg(DISTINCT w.agent) AS agents,
       array_agg(DISTINCT w.account_id) AS accts
     FROM win w JOIN grp g USING (account_id) GROUP BY g.pid),
@@ -292,6 +293,8 @@ class DirectoryReads:
                     activity=dr.activity(dict(strip), now_dt),
                     bypassPct=None,
                     coverage=None,
+                    toolCalls=r["tool_calls"],
+                    failedCalls=int(r["failed_calls"] or 0),
                     agentInfo=info,
                     agentLimits=agent_limits,
                 )
@@ -337,6 +340,7 @@ class DirectoryReads:
                     if mine
                     else "missing",
                     shape=shape,
+                    turns=sum(r.turns or 0 for r in mine),
                     **dr._headline(a, mine),
                 )
             )
@@ -351,6 +355,7 @@ class DirectoryReads:
                 devices=sum(r.devices for r in rows),
                 sessions=sum(r.sessions for r in rows),
                 turns=sum(r.turns or 0 for r in rows),
+                toolCalls=sum(r.toolCalls or 0 for r in rows) if any(r.toolCalls is not None for r in rows) else None,
                 requests=int(requests),
                 notCaptured=0,
                 unattributed=Unattributed(

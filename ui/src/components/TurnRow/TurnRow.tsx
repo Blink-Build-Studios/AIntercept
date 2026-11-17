@@ -36,8 +36,6 @@ export type TurnRowProps = {
   turn: Turn;
   /** The work line (lib/work.ts `workLine`). */
   work: readonly WorkPart[];
-  /** Failed calls in the turn (API errors, overloads, retried requests): `!`. */
-  failed?: number;
   /** Shows the day with the time: the table's first row, and the first of each day. */
   dated?: boolean;
   expanded: boolean;
@@ -58,12 +56,12 @@ export type TurnRowProps = {
  * time is `● 1m 4s` in --live. Friction is `✕` interrupted and `!` failed calls, both --ink
  * (§11S); a failed command is work, not friction.
  */
-export function TurnRow({ turn: t, work, failed = 0, dated = false, expanded, onToggle, now, arrived, children, "data-force": force }: TurnRowProps) {
+export function TurnRow({ turn: t, work, dated = false, expanded, onToggle, now, arrived, children, "data-force": force }: TurnRowProps) {
   const ref = now ? new Date(now) : new Date();
   const asked = askedText(t);
   const tokens = inOut(t.tokensIn, t.tokensOut);
   const line = workText(work);
-  const interrupted = t.friction.interrupted;
+  const { interrupted, failedCalls: failed } = t.friction;
   const glyphs = [interrupted ? "✕" : null, failed > 0 ? "!" : null].filter(Boolean).join(" ");
   const words = [interrupted ? "interrupted" : null, failed > 0 ? plural(failed, "failed call") : null].filter(Boolean).join(", ");
   const { linked, handlers } = useRowLink({ source: "table", ids: [t.promptId], t: t.startedAt }, { id: t.promptId });

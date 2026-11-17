@@ -104,6 +104,20 @@ func TestRequestFromKeepsToolUsesAndMergesProvider(t *testing.T) {
 	}
 }
 
+// The request's tool list (handoff §11S, "offered vs used"): its names, sorted and distinct, so two
+// requests offering the same tools in another order carry the same list.
+func TestRequestFromKeepsTheToolList(t *testing.T) {
+	e := &events.Event{CorrelationID: "c", Phase: events.PhaseComplete, ToolsAvailable: []events.ToolRef{
+		{Name: "Read", Tool: "Read", Kind: "builtin"}, {Name: "mcp__linear__list_issues", Server: "linear", Tool: "list_issues", Kind: "mcp"},
+		{Name: "Bash", Tool: "Bash", Kind: "builtin"}, {Name: "Read", Tool: "Read", Kind: "builtin"}}}
+	if r := RequestFrom(e, nil, "f"); r.ToolsOffered != `["Bash","Read","mcp__linear__list_issues"]` {
+		t.Fatalf("tools offered %q", r.ToolsOffered)
+	}
+	if r := RequestFrom(&events.Event{CorrelationID: "c"}, nil, "f"); r.ToolsOffered != "" {
+		t.Fatalf("no tool list: %q", r.ToolsOffered)
+	}
+}
+
 func TestValueConversions(t *testing.T) {
 	for v, want := range map[any]string{"s": "s", true: "true", 1.5: "1.5", 3: ""} {
 		if got := str(v); got != want {

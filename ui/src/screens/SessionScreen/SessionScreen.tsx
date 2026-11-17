@@ -27,7 +27,9 @@ import { SubagentRow } from "../../components/TurnRow/SubagentRow";
 import { TURN_COLUMNS, TURN_MIN_WIDTH, TurnRow } from "../../components/TurnRow/TurnRow";
 import { TurnStep } from "../../components/TurnRow/TurnStep";
 import { WorkGroup } from "../../components/TurnRow/WorkGroup";
-import { datedRows, outcomeFacts, turnView, type TurnView } from "../../lib/turns";
+import { datedRows, outcomeFacts, toolFacts, turnView, type TurnView } from "../../lib/turns";
+import { sourceRows } from "../../lib/tools";
+import { ToolsOfferedUsed } from "../../components/ToolsOfferedUsed/ToolsOfferedUsed";
 import { RangeReadout } from "../../components/RangeReadout/RangeReadout";
 import { RegionState } from "../../components/RegionState/RegionState";
 import { RequestDrawer, type RequestDrawerProps } from "../../components/RequestDrawer/RequestDrawer";
@@ -186,11 +188,45 @@ function SessionTimelinePanel({
   );
 }
 
+/** `14 tools used of 404 offered` (content-free) or `14 used of 404 offered` (with content); no list: `14 tools used`. */
+export function toolsSub(t: Schemas["ToolsInRange"], content: boolean): string {
+  const used = `${formatCount(t.used)}${content ? "" : t.used === 1 ? " tool" : " tools"} used`;
+  return t.offered === null ? `${formatCount(t.used)} ${t.used === 1 ? "tool" : "tools"} used` : `${used} of ${formatCount(t.offered)} offered`;
+}
+
+/** The peak context in [from, to]: the largest main-thread context point in it; null without one. */
+function peakContext(timeline: SessionTimeline | undefined, range: Range): number | null {
+  const lo = Date.parse(range.from);
+  const hi = Date.parse(range.to);
+  const inRange = (timeline?.context ?? []).filter((c) => Date.parse(c.t) >= lo && Date.parse(c.t) <= hi);
+  return inRange.length ? Math.max(...inRange.map((c) => c.tokens)) : null;
+}
+
 /**
- * The state panels (handoff §7.3, §11S), within the range: the repo when content was recorded.
- * Capabilities, Recaps and Experiments came from the agent's analytics and are gone.
+ * The state panels (handoff §7.3, §11S), within the range: Tools · offered vs used (two of the
+ * three columns), then the context (content-free) or the repo (with content). Capabilities,
+ * Recaps and Experiments came from the agent's analytics and are gone.
  */
-function StatePanels({ st }: { st: Schemas["SessionState"] }) {
+function StatePanels({ st, content, peak }: { st: Schemas["SessionState"]; content: boolean; peak: number | null }) {
+  const c = st.context;
+  const lines = [
+    { text: `${formatCount(c.compactions)} ${c.compactions === 1 ? "compaction" : "compactions"}` },
+    { text: peak === null ? "peak context —" : `peak context ${formatTokens(peak, "total")} tokens` },
+    { text: `${formatCount(c.subagentThreads)} subagent ${c.subagentThreads === 1 ? "thread" : "threads"}`, muted: true },
+  ];
+  const tools = (
+    <div className="session-panel-wide">
+      <ToolsOfferedUsed rows={sourceRows(st.tools.sources, 5)} changes={st.tools.listChanges} />
+    </div>
+  );
+  if (!content) {
+    return (
+      <div className="session-panels">
+        {tools}
+        <KeyValueList title="Context · in range" rows={[]} lines={lines} />
+      </div>
+    );
+  }
   const r = st.repoInRange;
   const repo: KeyValueRow[] = [
     { k: "Branch", v: r.branch, unknownReason: "not in the conversation" },
@@ -201,7 +237,8 @@ function StatePanels({ st }: { st: Schemas["SessionState"] }) {
   ];
   return (
     <div className="session-panels">
-      <KeyValueList title="Repo · in range" rows={repo} footer={r.cwdTrail?.length ? `cwd ${r.cwdTrail.join(" → ")}` : undefined} />
+      {tools}
+      <KeyValueList title="Repo · in range" note="with content" rows={repo} footer={r.cwdTrail?.length ? `cwd ${r.cwdTrail.join(" → ")}` : undefined} />
     </div>
   );
 }
@@ -214,6 +251,7 @@ function StatePanels({ st }: { st: Schemas["SessionState"] }) {
  */
 function SessionHeaderBlock({ s, now }: { s: Schemas["SessionHeader"]; now: string }) {
   const has = (f: Capability) => s.capabilities.includes(f);
+  const content = s.recording === "content";
   const { title, sub } = sessionTitle(s);
   const facts = sessionFacts(s).filter((f) => has(f.k as Capability));
   const origin = has("origin") ? threadOrigin(s) : null;
@@ -239,10 +277,20 @@ function SessionHeaderBlock({ s, now }: { s: Schemas["SessionHeader"]; now: stri
             sub={`${formatDuration(s.activeMs)} active`}
           />
           <HeaderStat label="Turns" value={formatCount(s.turns)} sub={s.turnsInterrupted ? `${formatCount(s.turnsInterrupted)} interrupted` : undefined} />
-          <HeaderStat label="Steps" value={formatCount(s.modelCalls)} qualifier={hidden ? `+${formatCount(hidden)} hidden` : undefined} qualifierTone="hidden" sub="model calls" />
+          <HeaderStat
+            label="Steps"
+            value={formatCount(s.modelCalls)}
+            qualifier={hidden ? `+${formatCount(hidden)} hidden` : undefined}
+            qualifierTone="hidden"
+            sub={`model calls${s.failedCalls ? ` · ${formatCount(s.failedCalls)} failed` : ""}`}
+          />
           <HeaderStat label="Tokens" value={sessionTokens(s.tokens)} sub={cacheShare(s.tokens)} unknownReason="no usage on these calls" />
-          {edited !== null && <HeaderStat label="Edited" value={`${formatCount(edited)} ${edited === 1 ? "file" : "files"}`} sub={lines} />}
-          <HeaderStat label="Commits" value={formatCount(s.outcome.commits)} sub={s.outcome.headFrom && s.outcome.headTo && s.outcome.headFrom !== s.outcome.headTo ? `${s.outcome.headFrom.slice(0, 4)} → ${s.outcome.headTo.slice(0, 4)}` : undefined} />
+          <HeaderStat label="Tool calls" value={formatCount(s.tools.calls)} sub={toolsSub(s.tools, content)} />
+          {/* Edited and Commits read the edit inputs and git commands: with recorded content only (§11S). */}
+          {content && edited !== null && <HeaderStat label="Edited" value={`${formatCount(edited)} ${edited === 1 ? "file" : "files"}`} sub={lines} />}
+          {content && (
+            <HeaderStat label="Commits" value={formatCount(s.outcome.commits)} sub={s.outcome.headFrom && s.outcome.headTo && s.outcome.headFrom !== s.outcome.headTo ? `${s.outcome.headFrom.slice(0, 4)} → ${s.outcome.headTo.slice(0, 4)}` : undefined} />
+          )}
           {has("reasoning") && <HeaderStat label="Reasoning" value={s.effort} unknownReason="no effort on these calls" />}
           {limits && <HeaderStat label="Limits at end" value={limits} />}
         </HeaderStatGroup>
@@ -325,9 +373,8 @@ function sessionTokens(t: { input: number | null; cacheRead: number | null; cach
 /** The page's own skeleton, at the loaded page's size (Session.dc.html `Skeleton/page`). */
 const PanelsSkeleton = () => (
   <div className="session-panels">
-    {[0, 1, 2, 3].map((i) => (
-      <div key={i} className="session-panel-skeleton border border-line bg-surface" />
-    ))}
+    <div className="session-panel-wide session-panel-skeleton border border-line bg-surface" />
+    <div className="session-panel-skeleton border border-line bg-surface" />
   </div>
 );
 
@@ -490,7 +537,12 @@ export function SessionScreen(p: SessionScreenProps) {
       {/* Header (§11L.5): the ProviderMark, the title, then only the fields this agent reports. */}
       {s ? <div className="session-head-box"><SessionHeaderBlock s={s} now={now} /></div> : null}
       {/* Where a generated summary will go, and the facts we capture (§11R). */}
-      {s && <OutcomeSlot title="Outcome" facts={outcomeFacts(s.outcome, { branch: s.branch })} />}
+      {s && (
+        <OutcomeSlot
+          title="Outcome"
+          facts={s.recording === "content" ? outcomeFacts(s.outcome, { branch: s.branch }) : toolFacts({ turns: s.turns, steps: s.modelCalls, calls: s.tools.calls, byName: s.tools.byName })}
+        />
+      )}
       {s ? null : (
         <div className="session-header-skeleton" aria-busy>
           <SkeletonBar width={300} height={22} />
@@ -530,7 +582,7 @@ export function SessionScreen(p: SessionScreenProps) {
         </section>
 
         {/* State panels */}
-        {region(p.state, "state", "the session state", <PanelsSkeleton />, p.state.data && <StatePanels st={p.state.data} />)}
+        {region(p.state, "state", "the session state", <PanelsSkeleton />, p.state.data && <StatePanels st={p.state.data} content={s?.recording === "content"} peak={peakContext(p.timeline.data, p.range)} />)}
 
         {/* Tabs */}
         <section aria-label="Session activity" className="session-tabs">

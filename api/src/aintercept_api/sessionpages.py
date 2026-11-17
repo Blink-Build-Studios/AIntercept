@@ -39,8 +39,10 @@ from aintercept_api import claude_code as cc
 from aintercept_api import person as pp
 from aintercept_api import session as ss
 from aintercept_api import timeline as tl
+from aintercept_api import tools as tu
 from aintercept_api.models.people import (
     CallClasses,
+    FrictionMark,
     McpServer,
     ModelCallBin,
     PromptText,
@@ -54,7 +56,6 @@ from aintercept_api.models.sessions import (
     BetweenItem,
     CapabilitiesAt,
     ContextPoint,
-    EventRow,
     PromptData,
     PromptFriction,
     PromptItem,
@@ -65,7 +66,7 @@ from aintercept_api.models.sessions import (
     StepData,
     ToolTally,
 )
-from aintercept_api.models.work import TurnBlock, WorkBin
+from aintercept_api.models.work import ContextInRange, ToolsInRange, TurnBlock, WorkBin
 from aintercept_api.reader import Snapshot
 from aintercept_api.rows import dt, usage_missing
 
@@ -204,6 +205,64 @@ def session_row(s: Row, now: int, children: str | None, title_call: str | None) 
     r["limits_json"] = limits
     r["live"] = now - s["last_ns"] <= cc.LIVE_WITHIN_NS
     return r
+
+
+# --- what the wire says (handoff §11S) ----------------------------------------------------------------
+
+WIRE_KINDS = ["failed", "compaction", "subagent", "recorded"]
+"""The key kinds Wire reads besides the tools'."""
+
+_MINUTE_FAILED = """SELECT minute_ns, n FROM session_minute_keys WHERE session_id = %(sid)s AND kind = 'failed'"""
+_HOUR_FAILED = """SELECT hour_ns, n FROM session_keys WHERE session_id = %(sid)s AND kind = 'failed'"""
+
+
+@dataclass
+class Wire:
+    """A range's tools, failed calls, compactions, subagent threads, and whether a call kept its content."""
+
+    tools: ToolsInRange
+    failed: int
+    compactions: int
+    subagents: int
+    recorded: bool
+
+
+def wire_of(snap: Snapshot, keys: list[tuple[str, str, int]]) -> Wire:
+    """A Wire from a range's key rows (tu.KINDS and WIRE_KINDS), reading the few tool lists they name."""
+    hashes = tu.hashes(keys)
+    lists = (
+        {r["hash"]: list(r["names"]) for r in snap.dicts("tool_lists", tu.LISTS, {"hashes": hashes})} if hashes else {}
+    )
+    count: Counter[str] = Counter()
+    subagents: set[str] = set()
+    for kind, key, n in keys:
+        if kind == "subagent":
+            subagents.add(key)
+        elif kind in WIRE_KINDS:
+            count[kind] += n
+    return Wire(
+        tools=tu.tools_in_range(keys, lists),
+        failed=count["failed"],
+        compactions=count["compaction"],
+        subagents=len(subagents),
+        recorded=count["recorded"] > 0,
+    )
+
+
+def friction_marks(turns: list[TurnBlock], failed: dict[int, int]) -> list[FrictionMark]:
+    """The timeline's friction (handoff §11S): ✕ at each interrupted turn's start, ! per bin with failed
+    calls (its count)."""
+    out = [
+        FrictionMark(t=t.startedAt, kind="interrupted", count=1, promptIndex=t.n, detail="turn interrupted", tool=None)
+        for t in turns
+        if t.interrupted
+    ]
+    out += [
+        FrictionMark(t=dt(t), kind="failed", count=n, promptIndex=None, detail="failed calls", tool=None)
+        for t, n in sorted(failed.items())
+        if n > 0
+    ]
+    return sorted(out, key=lambda m: m.t)
 
 
 # --- the reads ----------------------------------------------------------------------------------------
@@ -530,6 +589,11 @@ class SessionReads:
     def keys(self, sid: str, lo: int | None, hi: int | None, kinds: list[str]) -> list[tuple[str, str, int]]:
         return [(k, key, n) for k, key, n in self.snap.rows("keys", _KEYS, {**_span(sid, lo, hi), "kinds": kinds})]
 
+    def wire(self, sid: str, lo: int | None, hi: int | None) -> Wire:
+        """What the wire says about [lo, hi] (each None: open), handoff §11S: the tools offered and used, the
+        failed calls, compactions and subagent threads, from the range's key rows and its few tool lists."""
+        return wire_of(self.snap, self.keys(sid, lo, hi, tu.KINDS + WIRE_KINDS))
+
     # --- the timeline ---------------------------------------------------------------------------
 
     def timeline(
@@ -564,7 +628,7 @@ class SessionReads:
             modelCalls=model,
             analytics=[],
             notCaptured=[],
-            friction=[],
+            friction=friction_marks(turns, self.failed_bins(sid, width)),
             context=[
                 ContextPoint(
                     t=dt(x["t"]),
@@ -581,6 +645,15 @@ class SessionReads:
             turns=turns,
             work=work(width, dict(steps)),
         )
+
+    def failed_bins(self, sid: str, width: int) -> dict[int, int]:
+        """The session's failed calls per bin of `width` ns, from its minutes' (or hours') `failed` keys."""
+        hourly = width % HOUR == 0
+        sql = _HOUR_FAILED if hourly else _MINUTE_FAILED
+        out: Counter[int] = Counter()
+        for t, n in self.snap.rows("failed_keys", sql, {"sid": sid}):
+            out[t - t % width] += n
+        return dict(out)
 
     def typed_prompts(self, sid: str, r: Row, now: int) -> list[TimelinePrompt]:
         live = r["live"]
@@ -622,7 +695,11 @@ class SessionReads:
             server, tool = json.loads(key)
             servers[server].add(tool)
         mcp = sorted((k, len(v)) for k, v in servers.items())
+        w = self.wire(sid, lo, hi)
         return SessionState(
+            tools=w.tools,
+            context=ContextInRange(compactions=w.compactions, subagentThreads=w.subagents),
+            failedCalls=w.failed,
             capabilitiesAt=CapabilitiesAt(
                 builtin=ToolTally(total=None, used=len(whole["call_builtin"]) or None),
                 mcpServers=[McpServer(name=k, tools=None, toolsUsed=n, riskyVerbs=[]) for k, n in mcp],
@@ -682,12 +759,6 @@ class SessionReads:
         return [_item(i, steps[i["prompt_id"]] if i["type"] == "prompt" else [], live, now) for i in items], total, page
 
     # --- events ---------------------------------------------------------------------------------
-
-    def events(
-        self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
-    ) -> tuple[int, int, list[EventRow]]:
-        """None: analytics events aren't stored (they stay in the raw files)."""
-        return 0, 0, []
 
     # --- requests -------------------------------------------------------------------------------
 

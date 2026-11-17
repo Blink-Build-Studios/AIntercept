@@ -17,8 +17,7 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           "capturedFromPrompt": null,
           "end": null,
           "friction": {
-            "destructive": 0,
-            "frustrated": 0,
+            "failedCalls": 16,
             "interrupted": 0
           },
           "label": {
@@ -26,8 +25,19 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "text": "Session d7ee5e66"
           },
           "live": true,
+          "recording": "metadata",
           "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
           "start": "2026-11-02T05:31:51.155051Z",
+          "tools": {
+            "Agent": 3,
+            "Artifact": 2,
+            "AskUserQuestion": 4,
+            "Bash": 454,
+            "Edit": 7,
+            "Read": 12,
+            "ToolSearch": 1,
+            "Write": 14
+          },
           "turns": 38,
           "work": {
             "commands": [

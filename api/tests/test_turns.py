@@ -138,7 +138,7 @@ def test_turns_one(dataset, pg_client_for, write_sample):
     assert [g["kind"] for g in t["groups"]] == ["read", "edit", "run", "reply"]
     assert [len(g["steps"]) for g in t["groups"]] == [2, 1, 2, 1]
     assert t["groups"][2]["exits"] == [] and t["groups"][2]["program"] is None  # without content
-    assert t["costUsd"] is None and t["live"] is False
+    assert "costUsd" not in t and t["live"] is False
     # From its first step to its last step's end.
     assert t["startedAt"] == "2026-11-04T10:00:05Z" and t["endedAt"] == "2026-11-04T10:00:50.002000Z"
     assert t["durationMs"] == 45002.0
@@ -150,9 +150,8 @@ def test_turns_many(dataset, pg_client_for, write_sample):
     r = client.get(TURNS)
     write_sample(client, r, "many")
     one, two = r.json()["data"]
-    assert two["friction"] == {"frustrated": False, "interrupted": False, "destructive": 0}
-    # The builder names the MCP tool as a built-in, so it's another tool here (test_codex covers MCP).
-    assert [g["kind"] for g in two["groups"]] == ["tool", "web", "spawn"]
+    assert two["friction"] == {"interrupted": False, "failedCalls": 0}
+    assert [g["kind"] for g in two["groups"]] == ["mcp", "web", "spawn"]
     # paged by turn: the page that holds #2
     r = client.get(TURNS, params={"pageSize": 1, "turn": 2})
     assert r.json()["meta"]["page"] == 2 and r.json()["data"][0]["n"] == 2
@@ -192,7 +191,7 @@ def test_turns_codex(dataset, pg_client_for, write_sample):
     r = client.get(f"/api/v1/sessions/{CODEX}/turns")
     write_sample(client, r, "codex")
     (t,) = r.json()["data"]
-    assert t["costUsd"] is None and [g["kind"] for g in t["groups"]] == ["run", "edit"]
+    assert "costUsd" not in t and [g["kind"] for g in t["groups"]] == ["run", "edit"]
     (sub,) = t["subagents"]
     assert (sub["sessionId"], sub["name"], sub["groups"]) == (THREAD, "/root/edge_tests", [])
 
@@ -301,7 +300,7 @@ def test_work_error(dataset, pg_client_for, write_sample, monkeypatch):
 def test_session_header_and_outcome(dataset, pg_client_for):
     work_session(dataset)
     h = pg_client_for(dataset).get(f"/api/v1/sessions/{S}").json()["data"]
-    assert (h["turns"], h["turnsInterrupted"], h["activeMs"], h["costUsd"]) == (2, 0, 75004.0, None)
+    assert (h["turns"], h["turnsInterrupted"], h["activeMs"]) == (2, 0, 75004.0) and "costUsd" not in h
     w = h["work"]
     assert (w["reads"], w["readFiles"], w["readTypes"]) == (2, None, {})
     assert (w["edits"], w["editedFiles"], w["editTypes"], w["linesAdded"], w["linesRemoved"]) == (
@@ -312,7 +311,7 @@ def test_session_header_and_outcome(dataset, pg_client_for):
         None,
     )
     assert w["commands"] == [{"program": None, "runs": 2, "failed": 0, "lastExit": None}]
-    assert w["web"] == {"searches": 1, "fetches": 0} and w["otherTools"] == 1
+    assert w["web"] == {"searches": 1, "fetches": 0} and w["otherTools"] == 0 and len(w["mcp"]) == 1
     assert w["subagents"] == [{"name": None, "count": 1}] and (w["commits"], w["prs"]) == (0, [])
     o = h["outcome"]
     assert (o["commits"], o["headFrom"], o["headTo"], o["editedFiles"], o["prs"], o["lastTest"]) == (

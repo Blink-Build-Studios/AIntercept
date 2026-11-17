@@ -76,7 +76,7 @@ export function ToolsOfferedUsed({ rows, scope = "session", changes = null, load
                   {r.calls ?? "never called"}
                 </span>
               </Tooltip>
-              <span role="cell" className="tou-num">{`${formatCount(r.used)} / ${formatCount(r.offered)}`}</span>
+              <span role="cell" className="tou-num">{`${formatCount(r.used)} / ${r.offered === null ? "—" : formatCount(r.offered)}`}</span>
             </div>
           ) : (
             <div role="row" key={r.source} className="tou-row type-data text-ink">
@@ -84,7 +84,7 @@ export function ToolsOfferedUsed({ rows, scope = "session", changes = null, load
                 {r.source}
               </span>
               <span role="cell" className="tou-num text-ink-muted">
-                {formatCount(r.offered)}
+                {r.offered === null ? "—" : formatCount(r.offered)}
               </span>
               <span role="cell" className="tou-num">
                 {formatCount(r.used)}

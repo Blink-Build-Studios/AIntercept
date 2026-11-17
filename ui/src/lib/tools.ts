@@ -44,8 +44,20 @@ export function toolLine(counts: ToolCounts, top = Infinity): string {
   return parts.length ? parts.join(" · ") : "no tools";
 }
 
-/** One ToolsOfferedUsed row: a source, its tools offered and used, and its top calls. */
-export type ToolSourceRow = { source: string; offered: number; used: number; calls: string | null };
+/** One ToolsOfferedUsed row: a source, its tools offered (null: no tool list seen) and used, and its top calls. */
+export type ToolSourceRow = { source: string; offered: number | null; used: number; calls: string | null };
+
+/** The top 4 calls with their counts (`Bash 488 · Read 402 · …`); null for none. */
+const topCalls = (calls: [string, number][]) =>
+  calls.length ? [...calls.slice(0, 4).map(([t, n]) => `${t} ${formatCount(n)}`), ...(calls.length > 4 ? ["…"] : [])].join(" · ") : null;
+
+/** The API's tool sources (ToolsInRange.sources: calls by tool, most first) as rows, at most `max`. */
+export function sourceRows(sources: readonly { source: string; offered: number | null; used: number; calls: Readonly<Record<string, number>> }[], max: number): ToolSourceRow[] {
+  return collapseUnused(
+    sources.map((s) => ({ source: s.source, offered: s.offered, used: s.used, calls: topCalls(Object.entries(s.calls).sort(byCount)) })),
+    max,
+  );
+}
 
 /**
  * The ToolsOfferedUsed rows (handoff §11S): one per source, Built-in first, then each MCP server
@@ -75,9 +87,7 @@ export function toolsOffered(offered: readonly string[], calls: ToolCounts): Too
   return [...rows.entries()]
     .sort(([a, ra], [b, rb]) => (a === "Built-in" ? -1 : b === "Built-in" ? 1 : total(rb) - total(ra) || a.localeCompare(b)))
     .map(([source, r]) => {
-      const top = [...r.calls.entries()].sort(byCount);
-      const shown = top.slice(0, 4).map(([t, n]) => `${t} ${formatCount(n)}`);
-      return { source, offered: r.offered.size, used: r.calls.size, calls: top.length ? [...shown, ...(top.length > 4 ? ["…"] : [])].join(" · ") : null };
+      return { source, offered: r.offered.size, used: r.calls.size, calls: topCalls([...r.calls.entries()].sort(byCount)) };
     });
 }
 
@@ -92,5 +102,5 @@ export function collapseUnused(rows: readonly ToolSourceRow[], max: number): Too
   const used = rest.filter((r) => r.used > 0);
   const unused = rest.filter((r) => r.used === 0);
   if (unused.length < 2) return [...rows];
-  return [...keep, ...used, { source: `${formatCount(unused.length)} more MCP servers`, offered: unused.reduce((a, r) => a + r.offered, 0), used: 0, calls: null }];
+  return [...keep, ...used, { source: `${formatCount(unused.length)} more MCP servers`, offered: unused.reduce((a, r) => a + (r.offered ?? 0), 0), used: 0, calls: null }];
 }

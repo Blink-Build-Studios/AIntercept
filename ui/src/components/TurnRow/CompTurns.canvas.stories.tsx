@@ -58,22 +58,22 @@ const turn = ({ chars = 212, text = null, images = 0, ...over }: TurnOver): Turn
   steps: 18,
   tokensIn: 410_000,
   tokensOut: 6_100,
-  costUsd: null,
-  friction: { frustrated: false, interrupted: false, destructive: 0 },
+  friction: { interrupted: false, failedCalls: 0 },
   work: EMPTY_WORK,
+  tools: {},
   groups: [],
   subagents: [],
   ...over,
 });
 const openWork: WorkPart[] = ["read 5 · edited 2 files +31 −9 · ran npm test ×4: ", { failed: "3 failed" }, ", then passed"];
 const t14: TurnOver = { promptId: "t14", n: 14, startedAt: "2026-11-03T10:09:00", durationMs: 558_000, chars: 1_400, images: 1, steps: 41, tokensIn: 1_200_000, tokensOut: 14_000 };
-const interrupted = { frustrated: false, interrupted: true, destructive: 0 };
+const interrupted = { interrupted: true, failedCalls: 0 };
 
 export const TURN_SPECIMENS = {
   default: turn({}),
   open: turn(t14),
   interrupted: turn({ promptId: "t15", n: 15, startedAt: "2026-11-03T10:36:00", durationMs: 22_000, chars: 40, steps: 3, tokensIn: 120_000, tokensOut: 400, friction: interrupted }),
-  failedCalls: turn({ promptId: "t16", n: 16, startedAt: "2026-11-03T10:41:00", durationMs: 531_000, chars: 388, steps: 37, tokensIn: 1_000_000, tokensOut: 12_000 }),
+  failedCalls: turn({ promptId: "t16", n: 16, startedAt: "2026-11-03T10:41:00", durationMs: 531_000, chars: 388, steps: 37, tokensIn: 1_000_000, tokensOut: 12_000, friction: { interrupted: false, failedCalls: 1 } }),
   live: turn({ promptId: "t34", n: 34, startedAt: "2026-11-04T15:12:00", durationMs: null, live: true, chars: 96, steps: 6, tokensIn: 210_000, tokensOut: 1_100 }),
   withContent: turn({ ...t14, text: "the race is in the token cache — here’s the stack trace…" }),
   codex: turn({ promptId: "c1", n: 1, startedAt: "2026-11-09T09:00:00", durationMs: 7_440_000, chars: 412, steps: 203, tokensIn: 9_400_000, tokensOut: 61_000, friction: interrupted }),
@@ -166,7 +166,7 @@ export function CompTurnsSheet() {
       </Panel>
       <Panel>
         <P spec="TurnRow/failedCalls">
-          <TurnRow turn={TURN_SPECIMENS.failedCalls} work={["Read ×4 · Edit ×2 · Bash ×3 · 1 subagent"]} failed={1} expanded={false} onToggle={toggle} />
+          <TurnRow turn={TURN_SPECIMENS.failedCalls} work={["Read ×4 · Edit ×2 · Bash ×3 · 1 subagent"]} expanded={false} onToggle={toggle} />
         </P>
       </Panel>
       <Panel>

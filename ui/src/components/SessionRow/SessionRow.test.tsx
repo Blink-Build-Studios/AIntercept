@@ -23,7 +23,7 @@ const session: Session = {
   prompts: null,
   modelCalls: 282,
   events: null,
-  friction: { frustrated: 0, interrupted: 0, destructive: 0 },
+  friction: { interrupted: 0, failedCalls: 0 },
   bypassPct: 0,
   coverage: { captured: 282, notCaptured: 0, reported: 282, windows: [] },
   fieldsMissing: false,

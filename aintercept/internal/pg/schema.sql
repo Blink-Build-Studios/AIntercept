@@ -67,6 +67,8 @@ CREATE TABLE calls (
     content_encoding text,
     user_agent text,
     tool_uses jsonb,
+    -- The request's tool list (handoff §11S): its hash, the list itself in tool_lists.
+    tools_list text,
     detail jsonb,
     client jsonb,
     provider jsonb,
@@ -471,7 +473,13 @@ CREATE TABLE sessions (
     turns bigint,
     turns_interrupted bigint,
     active_ns bigint,
-    work jsonb
+    work jsonb,
+    -- Without the agents' own analytics (handoff §11S): its failed model calls, and whether any
+    -- call kept its content (its session_keys `failed` and `recorded`).
+    failed_calls bigint NOT NULL DEFAULT 0,
+    recorded boolean NOT NULL DEFAULT false,
+    -- Its tool calls by tool name as sent (`Bash`, `mcp__linear__list_issues`): the content-free work line.
+    tools jsonb
 );
 
 -- An account's activity in one UTC day, per agent (the directory's numbers, owner decision 2):
@@ -496,6 +504,9 @@ CREATE TABLE account_days (
     last_ns bigint NOT NULL,
     -- The day's sessions' repos (the People page's Working on, handoff §11R).
     repos text[],
+    -- Their tool calls and failed calls (the People page's Tool calls and Failed, handoff §11S).
+    tool_calls bigint,
+    failed_calls bigint NOT NULL DEFAULT 0,
     PRIMARY KEY (account_id, day_ns, agent)
 );
 CREATE INDEX ON account_days (day_ns);
@@ -524,6 +535,15 @@ CREATE INDEX ON calls (end_ns) WHERE start_ns IS NULL;
 -- with content: on the cluster it did, 22,933 rows per tool call, and a long turn's refresh never
 -- finished. That lookup uses the GIN index on detail's results.
 CREATE INDEX ON calls (start_ns) WHERE detail IS NOT NULL AND kind = 'model';
+
+-- The tool lists requests carried (handoff §11S, "offered vs used"), each once: its tools' names,
+-- sorted and distinct, by the hash calls.tools_list names it by. A session sends a few lists (the
+-- main thread's, a subagent's, one more when an MCP server connects), so a range's offered tools
+-- are its distinct lists (session_minute_keys `offer`) and these few rows. Written by ingest.
+CREATE TABLE tool_lists (
+    hash text PRIMARY KEY,
+    names jsonb NOT NULL
+);
 
 -- Interceptor verdicts (docs/INTERCEPTOR_V2.md, "What's recorded"): one row per verdict a call's
 -- Interceptor returned (every answer other than a plain accept, and each error), keyed by its call

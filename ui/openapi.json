@@ -194,6 +194,10 @@
             ],
             "title": "Tokenaccuracy",
             "type": "string"
+          },
+          "turns": {
+            "title": "Turns",
+            "type": "integer"
           }
         },
         "required": [
@@ -202,6 +206,7 @@
           "sessions",
           "tokenAccuracy",
           "shape",
+          "turns",
           "missedCalls",
           "bypassPct",
           "highestWeekPct"
@@ -789,6 +794,26 @@
         "title": "ContentRow",
         "type": "object"
       },
+      "ContextInRange": {
+        "additionalProperties": false,
+        "description": "The session's context in a range, content-free (handoff \u00a711S, KeyValueList/context): its compactions\nand its subagent threads. The peak context is the timeline's context points'.",
+        "properties": {
+          "compactions": {
+            "title": "Compactions",
+            "type": "integer"
+          },
+          "subagentThreads": {
+            "title": "Subagentthreads",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "compactions",
+          "subagentThreads"
+        ],
+        "title": "ContextInRange",
+        "type": "object"
+      },
       "ContextPoint": {
         "additionalProperties": false,
         "properties": {
@@ -1283,49 +1308,6 @@
         "title": "EventCount",
         "type": "object"
       },
-      "EventDetail": {
-        "additionalProperties": false,
-        "properties": {
-          "eventId": {
-            "title": "Eventid",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "raw": {
-            "additionalProperties": true,
-            "title": "Raw",
-            "type": "object"
-          },
-          "sessionId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sessionid"
-          },
-          "t": {
-            "format": "date-time",
-            "title": "T",
-            "type": "string"
-          }
-        },
-        "required": [
-          "eventId",
-          "t",
-          "name",
-          "sessionId",
-          "raw"
-        ],
-        "title": "EventDetail",
-        "type": "object"
-      },
       "EventLink": {
         "additionalProperties": false,
         "properties": {
@@ -1355,24 +1337,6 @@
           "label"
         ],
         "title": "EventLink",
-        "type": "object"
-      },
-      "EventResponse": {
-        "additionalProperties": false,
-        "description": "One analytics event in full (the EventRow expansion).",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/EventDetail"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "title": "EventResponse",
         "type": "object"
       },
       "EventRow": {
@@ -1440,96 +1404,6 @@
           "internal"
         ],
         "title": "EventRow",
-        "type": "object"
-      },
-      "EventsMeta": {
-        "additionalProperties": false,
-        "properties": {
-          "asOf": {
-            "format": "date-time",
-            "title": "Asof",
-            "type": "string"
-          },
-          "from": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "From"
-          },
-          "lastDataAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lastdataat"
-          },
-          "page": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Page"
-          },
-          "pageSize": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pagesize"
-          },
-          "shown": {
-            "title": "Shown",
-            "type": "integer"
-          },
-          "to": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "To"
-          },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
-          }
-        },
-        "required": [
-          "asOf",
-          "lastDataAt",
-          "shown"
-        ],
-        "title": "EventsMeta",
         "type": "object"
       },
       "Experiment": {
@@ -1757,13 +1631,10 @@
       },
       "Friction": {
         "additionalProperties": false,
+        "description": "A session's friction (handoff \u00a711S): interrupted turns and failed calls, both from the wire.",
         "properties": {
-          "destructive": {
-            "title": "Destructive",
-            "type": "integer"
-          },
-          "frustrated": {
-            "title": "Frustrated",
+          "failedCalls": {
+            "title": "Failedcalls",
             "type": "integer"
           },
           "interrupted": {
@@ -1772,9 +1643,8 @@
           }
         },
         "required": [
-          "frustrated",
           "interrupted",
-          "destructive"
+          "failedCalls"
         ],
         "title": "Friction",
         "type": "object"
@@ -1792,9 +1662,8 @@
           },
           "kind": {
             "enum": [
-              "frustrated",
               "interrupted",
-              "destructive"
+              "failed"
             ],
             "title": "Kind",
             "type": "string"
@@ -2702,6 +2571,17 @@
             "title": "Sessions",
             "type": "integer"
           },
+          "toolCalls": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolcalls"
+          },
           "turns": {
             "title": "Turns",
             "type": "integer"
@@ -2719,6 +2599,7 @@
           "devices",
           "sessions",
           "turns",
+          "toolCalls",
           "requests",
           "notCaptured",
           "unattributed"
@@ -3156,14 +3037,44 @@
           "capabilities": {
             "$ref": "#/components/schemas/Capabilities"
           },
+          "compactions": {
+            "title": "Compactions",
+            "type": "integer"
+          },
           "coverage": {
             "$ref": "#/components/schemas/Coverage"
+          },
+          "failedCalls": {
+            "title": "Failedcalls",
+            "type": "integer"
           },
           "footprint": {
             "$ref": "#/components/schemas/Footprint"
           },
+          "images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
+          },
+          "recording": {
+            "enum": [
+              "metadata",
+              "content"
+            ],
+            "title": "Recording",
+            "type": "string"
+          },
           "ribbon": {
             "$ref": "#/components/schemas/Ribbon"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/ToolsInRange"
           },
           "work": {
             "$ref": "#/components/schemas/PersonWorkStats"
@@ -3174,7 +3085,12 @@
           "coverage",
           "capabilities",
           "footprint",
-          "work"
+          "work",
+          "recording",
+          "tools",
+          "failedCalls",
+          "compactions",
+          "images"
         ],
         "title": "PersonSummary",
         "type": "object"
@@ -3278,6 +3194,10 @@
             ],
             "title": "Email"
           },
+          "failedCalls": {
+            "title": "Failedcalls",
+            "type": "integer"
+          },
           "lastSeenAt": {
             "format": "date-time",
             "title": "Lastseenat",
@@ -3372,6 +3292,17 @@
             ],
             "title": "Tokensout"
           },
+          "toolCalls": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolcalls"
+          },
           "turns": {
             "anyOf": [
               {
@@ -3416,6 +3347,8 @@
           "activity",
           "bypassPct",
           "coverage",
+          "toolCalls",
+          "failedCalls",
           "agentInfo",
           "agentLimits"
         ],
@@ -5027,28 +4960,6 @@
         "title": "Ribbon",
         "type": "object"
       },
-      "SessionEventsResponse": {
-        "additionalProperties": false,
-        "description": "`meta.total` counts every event in the range; `meta.shown` the rows left to page.",
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/EventRow"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/EventsMeta"
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "title": "SessionEventsResponse",
-        "type": "object"
-      },
       "SessionFacts": {
         "additionalProperties": false,
         "description": "Where and how a session ran (handoff \u00a711J gap 1). None fields: not reported.",
@@ -5267,17 +5178,6 @@
             ],
             "title": "Commit"
           },
-          "costUsd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Costusd"
-          },
           "coverage": {
             "anyOf": [
               {
@@ -5341,6 +5241,10 @@
                 "type": "null"
               }
             ]
+          },
+          "failedCalls": {
+            "title": "Failedcalls",
+            "type": "integer"
           },
           "fieldsMissing": {
             "title": "Fieldsmissing",
@@ -5431,6 +5335,14 @@
             ],
             "title": "Prompts"
           },
+          "recording": {
+            "enum": [
+              "metadata",
+              "content"
+            ],
+            "title": "Recording",
+            "type": "string"
+          },
           "repo": {
             "anyOf": [
               {
@@ -5464,6 +5376,9 @@
               }
             ],
             "title": "Toolcalls"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/ToolsInRange"
           },
           "turns": {
             "title": "Turns",
@@ -5514,9 +5429,11 @@
           "turns",
           "turnsInterrupted",
           "activeMs",
-          "costUsd",
           "work",
-          "outcome"
+          "outcome",
+          "recording",
+          "failedCalls",
+          "tools"
         ],
         "title": "SessionHeader",
         "type": "object"
@@ -5940,6 +5857,9 @@
           "capabilitiesAt": {
             "$ref": "#/components/schemas/CapabilitiesAt"
           },
+          "context": {
+            "$ref": "#/components/schemas/ContextInRange"
+          },
           "counts": {
             "$ref": "#/components/schemas/RangeCounts"
           },
@@ -5956,6 +5876,10 @@
               }
             ],
             "title": "Experimentsat"
+          },
+          "failedCalls": {
+            "title": "Failedcalls",
+            "type": "integer"
           },
           "flagFetchesInRange": {
             "anyOf": [
@@ -6006,6 +5930,9 @@
           },
           "repoInRange": {
             "$ref": "#/components/schemas/RepoInRange"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/ToolsInRange"
           }
         },
         "required": [
@@ -6016,7 +5943,10 @@
           "experimentsAt",
           "flagFetchesInRange",
           "flagsChangedInRange",
-          "counts"
+          "counts",
+          "tools",
+          "context",
+          "failedCalls"
         ],
         "title": "SessionState",
         "type": "object"
@@ -6249,6 +6179,14 @@
             "title": "Live",
             "type": "boolean"
           },
+          "recording": {
+            "enum": [
+              "metadata",
+              "content"
+            ],
+            "title": "Recording",
+            "type": "string"
+          },
           "sessionId": {
             "title": "Sessionid",
             "type": "string"
@@ -6257,6 +6195,13 @@
             "format": "date-time",
             "title": "Start",
             "type": "string"
+          },
+          "tools": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Tools",
+            "type": "object"
           },
           "turns": {
             "title": "Turns",
@@ -6277,7 +6222,9 @@
           "capturedFromPrompt",
           "activeMs",
           "work",
-          "friction"
+          "friction",
+          "tools",
+          "recording"
         ],
         "title": "SessionWorkRow",
         "type": "object"
@@ -6716,6 +6663,13 @@
             ],
             "title": "Tokensout"
           },
+          "tools": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Tools",
+            "type": "object"
+          },
           "work": {
             "$ref": "#/components/schemas/TurnWork"
           }
@@ -6726,6 +6680,7 @@
           "sessionId",
           "steps",
           "work",
+          "tools",
           "tokensIn",
           "tokensOut",
           "groups"
@@ -7424,6 +7379,46 @@
         "title": "ToolCallDetail",
         "type": "object"
       },
+      "ToolSource": {
+        "additionalProperties": false,
+        "description": "One source of tools (ToolsOfferedUsed's row): `Built-in` or `mcp:<server>`.",
+        "properties": {
+          "calls": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Calls",
+            "type": "object"
+          },
+          "offered": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offered"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "offered",
+          "used",
+          "calls"
+        ],
+        "title": "ToolSource",
+        "type": "object"
+      },
       "ToolTally": {
         "additionalProperties": false,
         "properties": {
@@ -7457,6 +7452,66 @@
         "title": "ToolTally",
         "type": "object"
       },
+      "ToolsInRange": {
+        "additionalProperties": false,
+        "description": "The tools the requests offered against the ones the model called, from the tool list each request\ncarries and the tool calls each response makes (handoff \u00a711S, ToolsOfferedUsed).",
+        "properties": {
+          "byName": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Byname",
+            "type": "object"
+          },
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "listChanges": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listchanges"
+          },
+          "offered": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offered"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ToolSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sources",
+          "offered",
+          "used",
+          "calls",
+          "byName",
+          "listChanges"
+        ],
+        "title": "ToolsInRange",
+        "type": "object"
+      },
       "TurnBlock": {
         "additionalProperties": false,
         "description": "A turn on the session timeline's Turns lane: from its prompt to its last step.",
@@ -7472,6 +7527,10 @@
               }
             ],
             "title": "Endedat"
+          },
+          "interrupted": {
+            "title": "Interrupted",
+            "type": "boolean"
           },
           "live": {
             "title": "Live",
@@ -7508,9 +7567,30 @@
           "startedAt",
           "endedAt",
           "steps",
-          "live"
+          "live",
+          "interrupted"
         ],
         "title": "TurnBlock",
+        "type": "object"
+      },
+      "TurnFriction": {
+        "additionalProperties": false,
+        "description": "A turn's friction (handoff \u00a711S): \u2715 interrupted, ! failed calls (API errors, overloads).",
+        "properties": {
+          "failedCalls": {
+            "title": "Failedcalls",
+            "type": "integer"
+          },
+          "interrupted": {
+            "title": "Interrupted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "interrupted",
+          "failedCalls"
+        ],
+        "title": "TurnFriction",
         "type": "object"
       },
       "TurnReport": {
@@ -7634,17 +7714,6 @@
           "asked": {
             "$ref": "#/components/schemas/PromptText"
           },
-          "costUsd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Costusd"
-          },
           "durationMs": {
             "anyOf": [
               {
@@ -7669,7 +7738,7 @@
             "title": "Endedat"
           },
           "friction": {
-            "$ref": "#/components/schemas/PromptFriction"
+            "$ref": "#/components/schemas/TurnFriction"
           },
           "groups": {
             "items": {
@@ -7735,6 +7804,13 @@
             ],
             "title": "Tokensout"
           },
+          "tools": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Tools",
+            "type": "object"
+          },
           "work": {
             "$ref": "#/components/schemas/TurnWork"
           }
@@ -7750,9 +7826,9 @@
           "steps",
           "tokensIn",
           "tokensOut",
-          "costUsd",
           "friction",
           "work",
+          "tools",
           "groups",
           "subagents"
         ],
@@ -8364,6 +8440,13 @@
             ],
             "title": "Tokensout"
           },
+          "tools": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Tools",
+            "type": "object"
+          },
           "work": {
             "$ref": "#/components/schemas/TurnWork"
           }
@@ -8380,6 +8463,7 @@
           "tokensIn",
           "tokensOut",
           "text",
+          "tools",
           "steps"
         ],
         "title": "WorkGroup",
@@ -8452,66 +8536,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/api/v1/events/{eventId}": {
-      "get": {
-        "description": "An EventRow's `eventId`: none since analytics events aren't stored (always a 404).",
-        "operationId": "get_event",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "eventId",
-            "required": true,
-            "schema": {
-              "title": "Eventid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No request (or event) with this id"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Query failed"
-          }
-        },
-        "summary": "Get Event"
-      }
-    },
     "/api/v1/overview": {
       "get": {
         "operationId": "get_overview",
@@ -9677,156 +9701,6 @@
           }
         },
         "summary": "Get Session"
-      }
-    },
-    "/api/v1/sessions/{sessionId}/events": {
-      "get": {
-        "operationId": "get_session_events",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "sessionId",
-            "required": true,
-            "schema": {
-              "title": "Sessionid",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
-            "in": "query",
-            "name": "from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Range start (RFC 3339), snapped to its minute's start. Default: the session's start.",
-              "title": "From"
-            }
-          },
-          {
-            "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
-            "in": "query",
-            "name": "to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live).",
-              "title": "To"
-            }
-          },
-          {
-            "description": "Substring of the event name or its summary.",
-            "in": "query",
-            "name": "q",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Substring of the event name or its summary.",
-              "title": "Q"
-            }
-          },
-          {
-            "description": "Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, \u2026).",
-            "in": "query",
-            "name": "internal",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, \u2026).",
-              "title": "Internal",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Pagesize",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEventsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No session with this id"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid parameters"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Query failed"
-          }
-        },
-        "summary": "Get Session Events"
       }
     },
     "/api/v1/sessions/{sessionId}/prompts": {

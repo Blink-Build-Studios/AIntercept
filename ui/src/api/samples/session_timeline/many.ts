@@ -152,6 +152,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
     "turns": [
       {
         "endedAt": "2026-11-04T09:01:00.002000Z",
+        "interrupted": false,
         "live": false,
         "n": 1,
         "promptId": "p0",
@@ -160,6 +161,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T09:21:00.002000Z",
+        "interrupted": false,
         "live": false,
         "n": 2,
         "promptId": "p1",
@@ -168,6 +170,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T09:41:00.002000Z",
+        "interrupted": false,
         "live": false,
         "n": 3,
         "promptId": "p2",

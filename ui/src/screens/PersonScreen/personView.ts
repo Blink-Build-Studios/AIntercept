@@ -12,7 +12,8 @@ import type { Band } from "../../components/Timeline/BandTrack";
 import type { TimelineMark } from "../../components/Timeline/MarkerTrack";
 import type { KeyValueRow } from "../../components/KeyValueList/KeyValueList";
 import type { OutcomeFact } from "../../components/OutcomeSlot/OutcomeFacts";
-import { outcomeFacts } from "../../lib/turns";
+import { outcomeFacts, toolFacts } from "../../lib/turns";
+import { toolSource } from "../../lib/tools";
 
 export type PersonHeader = Schemas["PersonHeader"];
 export type PersonSummary = Schemas["PersonSummary"];
@@ -36,8 +37,14 @@ export function commonStats(p: PersonHeader, s: PersonSummary | undefined, now: 
     stat("Turns", w ? formatCount(w.turns) : null, null, "the summary hasn’t loaded"),
     stat("Tokens", tokens, null, "no usage on these calls"),
     stat("Active", w ? formatDuration(w.activeMs) : null, w ? "turn time" : null, "the summary hasn’t loaded"),
-    stat("Edited", edited === null ? null : `${formatCount(edited)} ${edited === 1 ? "file" : "files"}`, lines, "no file edits reported"),
-    stat("Commits", w ? formatCount(w.outcome.commits) : null, w ? `${formatCount(w.repos)} ${w.repos === 1 ? "repo" : "repos"}` : null, "the summary hasn’t loaded"),
+    stat("Tool calls", s ? formatCount(s.tools.calls) : null, s ? toolsUsed(s.tools) : null, "the summary hasn’t loaded"),
+    // Edited and Commits read the edit inputs and git commands: with recorded content only (§11S).
+    ...(s?.recording === "content"
+      ? [
+          stat("Edited", edited === null ? null : `${formatCount(edited)} ${edited === 1 ? "file" : "files"}`, lines, "no file edits reported"),
+          stat("Commits", w ? formatCount(w.outcome.commits) : null, w ? `${formatCount(w.repos)} ${w.repos === 1 ? "repo" : "repos"}` : null, "the summary hasn’t loaded"),
+        ]
+      : []),
     stat("Last seen", p.live ? lastSeenValue("now", true) : p.lastSeenAt ? lastSeenValue(formatTime(p.lastSeenAt, now), false) : null, null, "no traffic yet"),
   ];
 }
@@ -113,19 +120,35 @@ export function personHeaderProps(p: PersonHeader, s: PersonSummary | undefined,
 /** The OutcomeSlot's title for the window: `This fortnight`, `This week`, `Today`, `All time`. */
 export const outcomeTitle = (window: string) => ({ "24h": "Today", "7d": "This week", "14d": "This fortnight" })[window] ?? "All time";
 
-/** The facts the person's OutcomeSlot shows (§11R): what the range shipped, as captured; zeros left out. */
-export const personFacts = (s: PersonSummary): OutcomeFact[] => outcomeFacts(s.work.outcome, {});
+/** `14 tools used of 404 offered`, or without a tool list `14 tools used`. */
+const toolsUsed = (t: PersonSummary["tools"]) => `${formatCount(t.used)} ${t.used === 1 ? "tool" : "tools"} used${t.offered === null ? "" : ` of ${formatCount(t.offered)} offered`}`;
 
-/** Footprint · in range (§11S: Commands, Destructive and Code shipped are gone). */
+/**
+ * The facts the person's OutcomeSlot shows (§11R, §11S): with content, what the range shipped
+ * (commits, files, PRs); content-free, sessions · turns · tool calls with the top tools.
+ */
+export const personFacts = (s: PersonSummary): OutcomeFact[] =>
+  s.recording === "content"
+    ? outcomeFacts(s.work.outcome, {})
+    : toolFacts({ sessions: s.ribbon.sessions, turns: s.work.turns, calls: s.tools.calls, byName: s.tools.byName });
+
+/**
+ * Footprint · in range (§11S): Turns · Steps (N failed) · Tool calls · Subagent calls · Compactions
+ * · Images. Commands, Destructive and Code shipped are gone.
+ */
 export function footprintRows(s: PersonSummary): KeyValueRow[] {
   const f = s.footprint;
   const tools = Object.entries(f.toolsByName)
     .sort((a, b) => b[1] - a[1])
-    .map(([k]) => k);
+    .map(([k]) => toolSource(k))
+    .map((t) => (t.source === "Built-in" ? t.tool : t.source));
   return [
     { k: "Turns", d: `${formatCount(s.ribbon.sessions)} ${s.ribbon.sessions === 1 ? "session" : "sessions"}`, v: f.turns === null ? null : formatCount(f.turns), unknownReason: "no prompt ids" },
-    { k: "Tool calls", d: tools.slice(0, 6).join(" · "), v: f.toolCalls === null ? null : formatCount(f.toolCalls), unknownReason: "not extracted yet" },
-    { k: "Subagent calls", d: "share the parent prompt id", v: f.subagentCalls === null ? null : formatCount(f.subagentCalls), unknownReason: "not extracted yet" },
+    { k: "Steps", d: `model calls${s.failedCalls ? ` · ${formatCount(s.failedCalls)} failed` : ""}`, v: formatCount(s.ribbon.modelCalls) },
+    { k: "Tool calls", d: [...new Set(tools)].slice(0, 6).join(" · "), v: f.toolCalls === null ? null : formatCount(f.toolCalls), unknownReason: "no tool calls recorded" },
+    { k: "Subagent calls", d: "their own model calls", v: formatCount(f.subagentCalls) },
+    { k: "Compactions", d: "compaction calls", v: formatCount(s.compactions) },
+    { k: "Images", d: "image blocks in prompts", v: s.images === null ? null : formatCount(s.images), unknownReason: "not counted yet" },
   ];
 }
 

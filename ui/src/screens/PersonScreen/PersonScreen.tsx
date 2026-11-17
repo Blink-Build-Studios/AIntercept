@@ -4,6 +4,9 @@ import type { Schemas } from "../../api/types";
 import { formatCount } from "../../lib/format";
 import { useLatest } from "../../lib/useLatest";
 import { repoView } from "../../lib/turns";
+import { sourceRows, toolLine } from "../../lib/tools";
+import { ToolsOfferedUsed } from "../../components/ToolsOfferedUsed/ToolsOfferedUsed";
+import { sessionName } from "../../components/RepoRow/WorkSessionRow";
 import { slowNotice, type Region } from "../../lib/region";
 import { formatDayTime, formatRange } from "../../lib/time";
 import { AppBar } from "../../components/AppBar/AppBar";
@@ -23,7 +26,7 @@ import { RequestFilters, CODEX_CHANNELS, type RequestChannel } from "../../compo
 import { RequestTable } from "../../components/RequestTable/RequestTable";
 import { OutcomeSlot } from "../../components/OutcomeSlot/OutcomeSlot";
 import { DataTable } from "../../components/DataTable/DataTable";
-import { RepoRow, WORK_COLUMNS, WORK_MIN_WIDTH } from "../../components/RepoRow/RepoRow";
+import { RepoRow, WORK_COLUMNS, WORK_COLUMNS_FLAT, WORK_MIN_WIDTH } from "../../components/RepoRow/RepoRow";
 import { WorkSessionRow } from "../../components/RepoRow/WorkSessionRow";
 import { AgentChip } from "../../components/AgentChip/AgentChip";
 import { AgentScope, type AgentScopeValue } from "../../components/AgentScope/AgentScope";
@@ -219,6 +222,9 @@ export function PersonScreen(p: PersonScreenProps) {
         </RegionState>
 
         <div className="person-panels">
+          <RegionState status={p.summary.status} slow={slowNotice(p.summary, "tools")} hasData={!!p.summary.data} skeleton={<ToolsOfferedUsed rows={[]} scope="person" loading />} label="tools">
+            {p.summary.data && <ToolsOfferedUsed rows={sourceRows(p.summary.data.tools.sources, 5)} scope="person" />}
+          </RegionState>
           <RegionState status={p.summary.status} slow={slowNotice(p.summary, "footprint")} hasData={!!p.summary.data} skeleton={<KeyValueList title="Footprint" rows={[]} loading />} label="footprint">
             {p.summary.data && <KeyValueList title={rangeLabel ? `Footprint · ${rangeLabel}` : "Footprint · all sessions"} rows={footprintRows(p.summary.data)} />}
           </RegionState>
@@ -324,17 +330,31 @@ const windowLabelOf = (d: PersonTimeline) => windowLabel(d.from, d.to);
 const binWord = (s: number) => (s === 3600 ? "hourly" : s === 86_400 ? "daily" : `${Math.round(s / 60)}-min bins`);
 
 /**
- * The Work tab (handoff §11R, Main.dc.html `DataTable/work`): sessions grouped under their repo
- * (RepoRow), repos by most recent activity, each open by default; a session row opens its page.
+ * The Work tab (handoff §11R, §11S, Main.dc.html `DataTable/work`): with content, sessions grouped
+ * under their repo (RepoRow), repos by most recent activity, each open by default; content-free
+ * (no repo in the conversation), one flat list, newest first, each `session <id>` with its tools.
+ * A session row opens its page.
  */
 function WorkTable(p: PersonScreenProps) {
   const r = p.work;
   const repos = useMemo(() => (r.data?.data ?? []).map(repoView), [r.data]);
+  const content = (r.data?.data ?? []).some((g) => g.rows.some((s) => s.recording === "content"));
+  const flat = useMemo(
+    () =>
+      (r.data?.data ?? [])
+        .flatMap((g) => g.rows)
+        .sort((a, b) => Date.parse(b.start) - Date.parse(a.start))
+        .map((s) => ({
+          session: { sessionId: s.sessionId, start: s.start, end: s.end, live: s.live, label: sessionName(s.sessionId), turns: s.turns, activeMs: s.activeMs, friction: { interrupted: s.friction.interrupted, failed: s.friction.failedCalls } },
+          work: [toolLine(s.tools)],
+        })),
+    [r.data],
+  );
   const mixed = new Set(repos.flatMap((x) => x.agents)).size > 1;
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (k: string) => setClosed((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const table = (children?: ReactNode, loading = false) => (
-    <DataTable expandable columns={WORK_COLUMNS} minWidth={WORK_MIN_WIDTH} label="Work" loading={loading}>
+    <DataTable expandable columns={content ? WORK_COLUMNS : WORK_COLUMNS_FLAT} minWidth={WORK_MIN_WIDTH} label="Work" loading={loading}>
       {children}
     </DataTable>
   );
@@ -348,7 +368,9 @@ function WorkTable(p: PersonScreenProps) {
       label="sessions"
     >
       {table(
-        repos.map((repo) => (
+        !content
+          ? flat.map((row) => <WorkSessionRow key={row.session.sessionId} flat session={row.session} work={row.work} href={p.sessionHref(row.session.sessionId)} now={p.now} />)
+          : repos.map((repo) => (
           <RepoRow
             key={repo.key}
             repo={repo.repo}

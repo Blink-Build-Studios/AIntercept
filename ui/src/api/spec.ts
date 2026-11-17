@@ -4,26 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/events/{eventId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Event
-         * @description An EventRow's `eventId`: none since analytics events aren't stored (always a 404).
-         */
-        get: operations["get_event"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/overview": {
         parameters: {
             query?: never;
@@ -235,23 +215,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/{sessionId}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Session Events */
-        get: operations["get_session_events"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/{sessionId}/prompts": {
         parameters: {
             query?: never;
@@ -438,6 +401,8 @@ export interface components {
              * @enum {string}
              */
             tokenAccuracy: "exact" | "estimated" | "missing";
+            /** Turns */
+            turns: number;
         };
         /** AnalyticsBin */
         AnalyticsBin: {
@@ -595,6 +560,17 @@ export interface components {
             /** Unit */
             unit: ("bytes" | "tokens" | "chars") | null;
         };
+        /**
+         * ContextInRange
+         * @description The session's context in a range, content-free (handoff §11S, KeyValueList/context): its compactions
+         *     and its subagent threads. The peak context is the timeline's context points'.
+         */
+        ContextInRange: {
+            /** Compactions */
+            compactions: number;
+            /** Subagentthreads */
+            subagentThreads: number;
+        };
         /** ContextPoint */
         ContextPoint: {
             /** Model */
@@ -739,24 +715,6 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** EventDetail */
-        EventDetail: {
-            /** Eventid */
-            eventId: string;
-            /** Name */
-            name: string;
-            /** Raw */
-            raw: {
-                [key: string]: unknown;
-            };
-            /** Sessionid */
-            sessionId: string | null;
-            /**
-             * T
-             * Format: date-time
-             */
-            t: string;
-        };
         /** EventLink */
         EventLink: {
             /** Id */
@@ -768,14 +726,6 @@ export interface components {
             kind: "request" | "tool" | "prompt" | "session" | "device";
             /** Label */
             label: string;
-        };
-        /**
-         * EventResponse
-         * @description One analytics event in full (the EventRow expansion).
-         */
-        EventResponse: {
-            data: components["schemas"]["EventDetail"];
-            meta: components["schemas"]["Meta"];
         };
         /** EventRow */
         EventRow: {
@@ -797,28 +747,6 @@ export interface components {
              * Format: date-time
              */
             t: string;
-        };
-        /** EventsMeta */
-        EventsMeta: {
-            /**
-             * Asof
-             * Format: date-time
-             */
-            asOf: string;
-            /** From */
-            from?: string | null;
-            /** Lastdataat */
-            lastDataAt: string | null;
-            /** Page */
-            page?: number | null;
-            /** Pagesize */
-            pageSize?: number | null;
-            /** Shown */
-            shown: number;
-            /** To */
-            to?: string | null;
-            /** Total */
-            total?: number | null;
         };
         /** Experiment */
         Experiment: {
@@ -883,12 +811,13 @@ export interface components {
             /** Turns */
             turns: number | null;
         };
-        /** Friction */
+        /**
+         * Friction
+         * @description A session's friction (handoff §11S): interrupted turns and failed calls, both from the wire.
+         */
         Friction: {
-            /** Destructive */
-            destructive: number;
-            /** Frustrated */
-            frustrated: number;
+            /** Failedcalls */
+            failedCalls: number;
             /** Interrupted */
             interrupted: number;
         };
@@ -902,7 +831,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "frustrated" | "interrupted" | "destructive";
+            kind: "interrupted" | "failed";
             /** Promptindex */
             promptIndex: number | null;
             /**
@@ -1159,6 +1088,8 @@ export interface components {
             requests: number;
             /** Sessions */
             sessions: number;
+            /** Toolcalls */
+            toolCalls: number | null;
             /** Turns */
             turns: number;
             unattributed: components["schemas"]["Unattributed"];
@@ -1279,9 +1210,21 @@ export interface components {
         /** PersonSummary */
         PersonSummary: {
             capabilities: components["schemas"]["Capabilities"];
+            /** Compactions */
+            compactions: number;
             coverage: components["schemas"]["Coverage"];
+            /** Failedcalls */
+            failedCalls: number;
             footprint: components["schemas"]["Footprint"];
+            /** Images */
+            images: number | null;
+            /**
+             * Recording
+             * @enum {string}
+             */
+            recording: "metadata" | "content";
             ribbon: components["schemas"]["Ribbon"];
+            tools: components["schemas"]["ToolsInRange"];
             work: components["schemas"]["PersonWorkStats"];
         };
         /**
@@ -1313,6 +1256,8 @@ export interface components {
             devices: number;
             /** Email */
             email: string | null;
+            /** Failedcalls */
+            failedCalls: number;
             /**
              * Lastseenat
              * Format: date-time
@@ -1344,6 +1289,8 @@ export interface components {
             tokensAccuracy: "exact" | "estimated" | "missing";
             /** Tokensout */
             tokensOut: number | null;
+            /** Toolcalls */
+            toolCalls: number | null;
             /** Turns */
             turns: number | null;
             workingOn: components["schemas"]["WorkingOn"] | null;
@@ -1760,15 +1707,6 @@ export interface components {
             toolsReachable: number | null;
         };
         /**
-         * SessionEventsResponse
-         * @description `meta.total` counts every event in the range; `meta.shown` the rows left to page.
-         */
-        SessionEventsResponse: {
-            /** Data */
-            data: components["schemas"]["EventRow"][];
-            meta: components["schemas"]["EventsMeta"];
-        };
-        /**
          * SessionFacts
          * @description Where and how a session ran (handoff §11J gap 1). None fields: not reported.
          */
@@ -1813,8 +1751,6 @@ export interface components {
             clientVersion: string | null;
             /** Commit */
             commit: string | null;
-            /** Costusd */
-            costUsd: number | null;
             coverage: components["schemas"]["Coverage"] | null;
             device: components["schemas"]["DeviceInfo"] | null;
             /** Effort */
@@ -1824,6 +1760,8 @@ export interface components {
             /** Events */
             events: number | null;
             facts: components["schemas"]["SessionFacts"] | null;
+            /** Failedcalls */
+            failedCalls: number;
             /** Fieldsmissing */
             fieldsMissing: boolean;
             friction: components["schemas"]["Friction"];
@@ -1845,6 +1783,11 @@ export interface components {
             personId: string | null;
             /** Prompts */
             prompts: number | null;
+            /**
+             * Recording
+             * @enum {string}
+             */
+            recording: "metadata" | "content";
             /** Repo */
             repo: string | null;
             /** Sessionid */
@@ -1857,6 +1800,7 @@ export interface components {
             tokens: components["schemas"]["TokenCount"];
             /** Toolcalls */
             toolCalls: number | null;
+            tools: components["schemas"]["ToolsInRange"];
             /** Turns */
             turns: number;
             /** Turnsinterrupted */
@@ -1978,9 +1922,12 @@ export interface components {
         /** SessionState */
         SessionState: {
             capabilitiesAt: components["schemas"]["CapabilitiesAt"];
+            context: components["schemas"]["ContextInRange"];
             counts: components["schemas"]["RangeCounts"];
             /** Experimentsat */
             experimentsAt: components["schemas"]["Experiment"][] | null;
+            /** Failedcalls */
+            failedCalls: number;
             /** Flagfetchesinrange */
             flagFetchesInRange: number | null;
             /** Flagschangedinrange */
@@ -1990,6 +1937,7 @@ export interface components {
             /** Recapstotal */
             recapsTotal: number | null;
             repoInRange: components["schemas"]["RepoInRange"];
+            tools: components["schemas"]["ToolsInRange"];
         };
         /**
          * SessionStateResponse
@@ -2073,6 +2021,11 @@ export interface components {
             label: components["schemas"]["SessionLabel"];
             /** Live */
             live: boolean;
+            /**
+             * Recording
+             * @enum {string}
+             */
+            recording: "metadata" | "content";
             /** Sessionid */
             sessionId: string;
             /**
@@ -2080,6 +2033,10 @@ export interface components {
              * Format: date-time
              */
             start: string;
+            /** Tools */
+            tools: {
+                [key: string]: number;
+            };
             /** Turns */
             turns: number;
             work: components["schemas"]["TurnWork"];
@@ -2196,6 +2153,10 @@ export interface components {
             tokensIn: number | null;
             /** Tokensout */
             tokensOut: number | null;
+            /** Tools */
+            tools: {
+                [key: string]: number;
+            };
             work: components["schemas"]["TurnWork"];
         };
         /** SubagentSpawn */
@@ -2379,6 +2340,22 @@ export interface components {
             /** Tooluseid */
             toolUseId: string | null;
         };
+        /**
+         * ToolSource
+         * @description One source of tools (ToolsOfferedUsed's row): `Built-in` or `mcp:<server>`.
+         */
+        ToolSource: {
+            /** Calls */
+            calls: {
+                [key: string]: number;
+            };
+            /** Offered */
+            offered: number | null;
+            /** Source */
+            source: string;
+            /** Used */
+            used: number;
+        };
         /** ToolTally */
         ToolTally: {
             /** Total */
@@ -2387,12 +2364,35 @@ export interface components {
             used: number | null;
         };
         /**
+         * ToolsInRange
+         * @description The tools the requests offered against the ones the model called, from the tool list each request
+         *     carries and the tool calls each response makes (handoff §11S, ToolsOfferedUsed).
+         */
+        ToolsInRange: {
+            /** Byname */
+            byName: {
+                [key: string]: number;
+            };
+            /** Calls */
+            calls: number;
+            /** Listchanges */
+            listChanges: number | null;
+            /** Offered */
+            offered: number | null;
+            /** Sources */
+            sources: components["schemas"]["ToolSource"][];
+            /** Used */
+            used: number;
+        };
+        /**
          * TurnBlock
          * @description A turn on the session timeline's Turns lane: from its prompt to its last step.
          */
         TurnBlock: {
             /** Endedat */
             endedAt: string | null;
+            /** Interrupted */
+            interrupted: boolean;
             /** Live */
             live: boolean;
             /** N */
@@ -2406,6 +2406,16 @@ export interface components {
             startedAt: string;
             /** Steps */
             steps: number;
+        };
+        /**
+         * TurnFriction
+         * @description A turn's friction (handoff §11S): ✕ interrupted, ! failed calls (API errors, overloads).
+         */
+        TurnFriction: {
+            /** Failedcalls */
+            failedCalls: number;
+            /** Interrupted */
+            interrupted: boolean;
         };
         /**
          * TurnReport
@@ -2439,13 +2449,11 @@ export interface components {
          */
         TurnRow: {
             asked: components["schemas"]["PromptText"];
-            /** Costusd */
-            costUsd: number | null;
             /** Durationms */
             durationMs: number | null;
             /** Endedat */
             endedAt: string | null;
-            friction: components["schemas"]["PromptFriction"];
+            friction: components["schemas"]["TurnFriction"];
             /** Groups */
             groups: components["schemas"]["WorkGroup"][];
             /** Live */
@@ -2467,6 +2475,10 @@ export interface components {
             tokensIn: number | null;
             /** Tokensout */
             tokensOut: number | null;
+            /** Tools */
+            tools: {
+                [key: string]: number;
+            };
             work: components["schemas"]["TurnWork"];
         };
         /**
@@ -2657,6 +2669,10 @@ export interface components {
             tokensIn: number | null;
             /** Tokensout */
             tokensOut: number | null;
+            /** Tools */
+            tools: {
+                [key: string]: number;
+            };
             work: components["schemas"]["TurnWork"];
         };
         /**
@@ -2684,55 +2700,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_event: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                eventId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EventResponse"];
-                };
-            };
-            /** @description No request (or event) with this id */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Query failed */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     get_overview: {
         parameters: {
             query?: {
@@ -3275,66 +3242,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description No session with this id */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Invalid parameters */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Query failed */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_session_events: {
-        parameters: {
-            query?: {
-                /** @description Range start (RFC 3339), snapped to its minute's start. Default: the session's start. */
-                from?: string | null;
-                /** @description Range end (RFC 3339), snapped to its minute's end. Default: the session's end (now while it is live). */
-                to?: string | null;
-                /** @description Substring of the event name or its summary. */
-                q?: string | null;
-                /** @description Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, …). */
-                internal?: boolean;
-                page?: number;
-                pageSize?: number;
-            };
-            header?: never;
-            path: {
-                sessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionEventsResponse"];
                 };
             };
             /** @description No session with this id */

@@ -4661,7 +4661,72 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
         "windowTokens": null
       }
     ],
-    "friction": [],
+    "friction": [
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T14:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 3,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T15:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 1,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T16:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T17:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T22:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 3,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-03T20:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-03T21:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 1,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-04T18:00:00Z",
+        "tool": null
+      }
+    ],
     "from": "2026-11-02T05:31:51.155051Z",
     "modelCalls": [
       {
@@ -5542,6 +5607,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
     "turns": [
       {
         "endedAt": "2026-11-02T05:32:09.573527Z",
+        "interrupted": false,
         "live": false,
         "n": 1,
         "promptId": "c58abde5-3897-4c35-8172-4845478aeac0",
@@ -5550,6 +5616,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T06:02:29.038849Z",
+        "interrupted": false,
         "live": false,
         "n": 2,
         "promptId": "d0ade961-81cc-4c69-88c2-0588963b7eeb",
@@ -5558,6 +5625,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T14:15:13.332153Z",
+        "interrupted": false,
         "live": false,
         "n": 3,
         "promptId": "4339d50f-2ba6-4d3e-812c-31cecf3f8900",
@@ -5566,6 +5634,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T14:15:56.106474Z",
+        "interrupted": false,
         "live": false,
         "n": 4,
         "promptId": "5c0e414f-fcb7-4c22-89ad-54639c6775d9",
@@ -5574,6 +5643,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T14:23:20.294638Z",
+        "interrupted": false,
         "live": false,
         "n": 5,
         "promptId": "358731e5-8ce1-46ff-87cf-f255a519239b",
@@ -5582,6 +5652,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T15:15:42.649789Z",
+        "interrupted": false,
         "live": false,
         "n": 6,
         "promptId": "fd4dcb5f-65b9-47bb-87e6-6cc846f750c9",
@@ -5590,6 +5661,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T15:46:32.227994Z",
+        "interrupted": false,
         "live": false,
         "n": 7,
         "promptId": "fbbf55bb-2fda-44c3-8f72-4a1d30e13b54",
@@ -5598,6 +5670,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T15:57:37.224452Z",
+        "interrupted": false,
         "live": false,
         "n": 8,
         "promptId": "f458706f-dc1b-4754-8614-704bf7fa4723",
@@ -5606,6 +5679,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T16:07:51.982523Z",
+        "interrupted": false,
         "live": false,
         "n": 9,
         "promptId": "a61c7c87-346d-485b-848f-7e97870cfbbc",
@@ -5614,6 +5688,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T16:33:03.122445Z",
+        "interrupted": false,
         "live": false,
         "n": 10,
         "promptId": "0e390491-a3a7-4804-83af-0436ce5dd82e",
@@ -5622,6 +5697,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T16:38:17.887171Z",
+        "interrupted": false,
         "live": false,
         "n": 11,
         "promptId": "481d2b3a-2184-4b6b-8f7d-ff69c478ba77",
@@ -5630,6 +5706,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T17:25:08.421222Z",
+        "interrupted": false,
         "live": false,
         "n": 12,
         "promptId": "835ec244-0109-4f5d-83f7-3c33617d6954",
@@ -5638,6 +5715,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T18:06:02.540215Z",
+        "interrupted": false,
         "live": false,
         "n": 13,
         "promptId": "d9ed62b2-96dd-4ff5-832a-da12626b4944",
@@ -5646,6 +5724,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T21:59:33.923904Z",
+        "interrupted": false,
         "live": false,
         "n": 14,
         "promptId": "ddd5d65e-ec44-4085-8698-c82bda540a89",
@@ -5654,6 +5733,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T22:07:18.801183Z",
+        "interrupted": false,
         "live": false,
         "n": 15,
         "promptId": "fb85f4ed-668d-4d45-81c9-c027ae9c48ed",
@@ -5662,6 +5742,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T22:29:13.394969Z",
+        "interrupted": false,
         "live": false,
         "n": 16,
         "promptId": "8f2526a8-9437-4c0d-8f72-566570ea8621",
@@ -5670,6 +5751,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T22:37:46.395385Z",
+        "interrupted": false,
         "live": false,
         "n": 17,
         "promptId": "eb8d0d45-e6d5-4eae-8965-92ba8cd8fbb1",
@@ -5678,6 +5760,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-02T22:55:07.225102Z",
+        "interrupted": false,
         "live": false,
         "n": 18,
         "promptId": "6fc1234a-3930-4d65-8d58-46527684487c",
@@ -5686,6 +5769,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T19:25:54.948205Z",
+        "interrupted": false,
         "live": false,
         "n": 19,
         "promptId": "3a3b20c1-1265-41c6-8577-2211c37fce54",
@@ -5694,6 +5778,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T20:30:45.368761Z",
+        "interrupted": false,
         "live": false,
         "n": 20,
         "promptId": "c0199871-cf41-407c-8b57-50275551a8c1",
@@ -5702,6 +5787,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T20:31:22.018021Z",
+        "interrupted": false,
         "live": false,
         "n": 21,
         "promptId": "08a85c1c-d4d7-43e2-8f43-c6c30792fb8d",
@@ -5710,6 +5796,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T20:34:42.955501Z",
+        "interrupted": false,
         "live": false,
         "n": 22,
         "promptId": "3f1f2c61-5c10-49e9-8740-48658b0a8ca0",
@@ -5718,6 +5805,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T20:36:30.418542Z",
+        "interrupted": false,
         "live": false,
         "n": 23,
         "promptId": "dd242b48-f327-426a-8dc8-889ff80496fb",
@@ -5726,6 +5814,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:04:48.422402Z",
+        "interrupted": false,
         "live": false,
         "n": 24,
         "promptId": "c0cf46fa-e9f5-4f99-80cb-9c8da77407c4",
@@ -5734,6 +5823,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:12:31.358946Z",
+        "interrupted": false,
         "live": false,
         "n": 25,
         "promptId": "5ba3b328-8563-4188-8a6e-33f476820c88",
@@ -5742,6 +5832,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:11:20.962271Z",
+        "interrupted": false,
         "live": false,
         "n": 26,
         "promptId": "90842aad-eea9-4222-8be4-ba92cc61b098",
@@ -5750,6 +5841,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:17:39.684408Z",
+        "interrupted": false,
         "live": false,
         "n": 27,
         "promptId": "3b893496-021b-40d0-8826-11d9f00fe1b0",
@@ -5758,6 +5850,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:21:05.894458Z",
+        "interrupted": false,
         "live": false,
         "n": 28,
         "promptId": "28883e56-61fc-48b8-8124-a61e74567528",
@@ -5766,6 +5859,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:22:19.885147Z",
+        "interrupted": false,
         "live": false,
         "n": 29,
         "promptId": "a7377f08-f5b2-41e3-8c36-b6c48fccc7a4",
@@ -5774,6 +5868,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:24:54.137062Z",
+        "interrupted": false,
         "live": false,
         "n": 30,
         "promptId": "85404ed2-4328-4d55-82ba-613cc636cf2f",
@@ -5782,6 +5877,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:30:27.185403Z",
+        "interrupted": false,
         "live": false,
         "n": 31,
         "promptId": "494f37d2-d9db-4daf-8e7b-0c5ef78d7bf2",
@@ -5790,6 +5886,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:55:25.678838Z",
+        "interrupted": false,
         "live": false,
         "n": 32,
         "promptId": "0928aadd-16c4-4cb9-837b-81a6a49378f2",
@@ -5798,6 +5895,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-03T21:55:39.529685Z",
+        "interrupted": false,
         "live": false,
         "n": 33,
         "promptId": "8f7df8e5-4914-4a1a-8b05-186a140e6216",
@@ -5806,6 +5904,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T00:17:56.492579Z",
+        "interrupted": false,
         "live": false,
         "n": 34,
         "promptId": "ca81b717-47f4-4129-88af-d566119ea789",
@@ -5814,6 +5913,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T00:21:17.256168Z",
+        "interrupted": false,
         "live": false,
         "n": 35,
         "promptId": "61a95e80-e0dc-4b19-8852-fbeba7152d91",
@@ -5822,6 +5922,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T00:26:04.457607Z",
+        "interrupted": false,
         "live": false,
         "n": 36,
         "promptId": "2503ea47-8212-48d9-8cfc-fa0d53c67471",
@@ -5830,6 +5931,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T00:27:32.091292Z",
+        "interrupted": false,
         "live": false,
         "n": 37,
         "promptId": "d78fb4f3-2a16-4662-8572-4e81f88e3fb2",
@@ -5838,6 +5940,7 @@ const sample: components["schemas"]["SessionTimelineResponse"] = {
       },
       {
         "endedAt": "2026-11-04T18:02:38.022616Z",
+        "interrupted": false,
         "live": false,
         "n": 38,
         "promptId": "06fd054b-17f2-49d1-845a-d28a65b4c6ef",

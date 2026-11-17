@@ -42,7 +42,7 @@ def test_sessions_one(dataset, pg_client_for, write_sample):
     assert s["coverage"] is None and s["bypassPct"] is None
     assert s["live"] is False and s["end"] == "2026-11-04T09:03:00Z"  # its last model call
     assert s["capturedFromPrompt"] is None and s["fieldsMissing"] is False
-    assert s["friction"] == {"frustrated": 0, "interrupted": 0, "destructive": 0}
+    assert s["friction"] == {"interrupted": 0, "failedCalls": 0}
 
 
 def test_sessions_many_newest_first_and_paged(dataset, pg_client_for, write_sample):
@@ -72,7 +72,7 @@ def test_sessions_live(dataset, pg_client_for, write_sample):
     write_sample(client, r, "live")
     (s,) = r.json()["data"]
     assert s["live"] is True and s["end"] is None
-    assert s["friction"] == {"frustrated": 0, "interrupted": 0, "destructive": 0}
+    assert s["friction"] == {"interrupted": 0, "failedCalls": 0}
     assert s["capturedFromPrompt"] is None
 
 
@@ -157,3 +157,21 @@ def test_timeline_error(dataset, pg_client_for, write_sample, monkeypatch):
     error_on_query(client, monkeypatch)
     r = client.get(TIMELINE)
     write_sample(client, r, "error", status=500)
+
+
+def test_the_wire_reaches_the_person_and_the_directory(dataset, pg_client_for):
+    """Handoff §11S: the person's summary has its tools, failed calls and compactions and the friction lane
+    its interrupts and failures; the People row its tool and failed calls; the overview its tool calls."""
+    from tests.test_session import wire_session
+
+    wire_session(dataset)
+    client = pg_client_for(dataset)
+    s = client.get(f"/api/v1/people/{ACCOUNT}/summary").json()["data"]
+    assert (s["recording"], s["failedCalls"], s["compactions"]) == ("metadata", 2, 1)
+    assert s["tools"]["used"] == 3 and s["footprint"]["toolCalls"] == 5
+    marks = client.get(TIMELINE).json()["data"]["friction"]
+    assert {m["kind"] for m in marks} == {"failed", "interrupted"}
+    (row,) = client.get("/api/v1/people").json()["data"]
+    assert (row["toolCalls"], row["failedCalls"]) == (5, 2)
+    o = client.get("/api/v1/overview").json()["data"]
+    assert o["toolCalls"] == 5 and o["agents"][0]["turns"] >= 3

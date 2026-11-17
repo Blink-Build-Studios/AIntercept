@@ -17,8 +17,7 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           "capturedFromPrompt": null,
           "end": "2026-11-04T10:20:20Z",
           "friction": {
-            "destructive": 0,
-            "frustrated": 0,
+            "failedCalls": 0,
             "interrupted": 0
           },
           "label": {
@@ -26,8 +25,10 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "text": "Session 01a1bd9a"
           },
           "live": false,
+          "recording": "metadata",
           "sessionId": "01a1bd9a-0000-7000-8000-00000thread1",
           "start": "2026-11-04T10:20:20Z",
+          "tools": {},
           "turns": 1,
           "work": {
             "commands": [],
@@ -57,8 +58,7 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
           "capturedFromPrompt": null,
           "end": "2026-11-04T10:20:10Z",
           "friction": {
-            "destructive": 0,
-            "frustrated": 0,
+            "failedCalls": 0,
             "interrupted": 0
           },
           "label": {
@@ -66,8 +66,13 @@ const sample: components["schemas"]["PersonWorkResponse"] = {
             "text": "Session 01a1bd9a"
           },
           "live": false,
+          "recording": "metadata",
           "sessionId": "01a1bd9a-0000-7000-8000-0000000c0dex",
           "start": "2026-11-04T10:20:00Z",
+          "tools": {
+            "apply_patch": 1,
+            "exec_command": 1
+          },
           "turns": 1,
           "work": {
             "commands": [

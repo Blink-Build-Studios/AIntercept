@@ -36,17 +36,16 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
-    "costUsd": null,
     "coverage": null,
     "device": null,
     "effort": null,
     "end": "2026-11-04T09:02:00Z",
     "events": null,
     "facts": null,
+    "failedCalls": 0,
     "fieldsMissing": true,
     "friction": {
-      "destructive": 0,
-      "frustrated": 0,
+      "failedCalls": 0,
       "interrupted": 0
     },
     "hiddenCalls": 0,
@@ -72,6 +71,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     },
     "personId": null,
     "prompts": null,
+    "recording": "metadata",
     "repo": null,
     "sessionId": "11111111-1111-4111-8111-111111111111",
     "start": "2026-11-04T09:01:00Z",
@@ -85,6 +85,14 @@ const sample: components["schemas"]["SessionResponse"] = {
       "output": 200
     },
     "toolCalls": null,
+    "tools": {
+      "byName": {},
+      "calls": 0,
+      "listChanges": null,
+      "offered": null,
+      "sources": [],
+      "used": 0
+    },
     "turns": 0,
     "turnsInterrupted": 0,
     "work": {

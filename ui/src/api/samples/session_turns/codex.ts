@@ -11,12 +11,10 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "retained": false,
         "text": null
       },
-      "costUsd": null,
       "durationMs": 10000.0,
       "endedAt": "2026-11-04T10:20:10Z",
       "friction": {
-        "destructive": 0,
-        "frustrated": false,
+        "failedCalls": 0,
         "interrupted": false
       },
       "groups": [
@@ -79,6 +77,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 2100,
           "tokensOut": 50,
+          "tools": {
+            "exec_command": 1
+          },
           "work": {
             "commands": [
               {
@@ -167,6 +168,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 2100,
           "tokensOut": 50,
+          "tools": {
+            "apply_patch": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -204,6 +208,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "steps": 1,
           "tokensIn": 2100,
           "tokensOut": 50,
+          "tools": {},
           "work": {
             "commands": [],
             "commits": 0,
@@ -229,6 +234,10 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       ],
       "tokensIn": 4200,
       "tokensOut": 100,
+      "tools": {
+        "apply_patch": 1,
+        "exec_command": 1
+      },
       "work": {
         "commands": [
           {

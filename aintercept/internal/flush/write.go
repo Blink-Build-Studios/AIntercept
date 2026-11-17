@@ -2,6 +2,8 @@ package flush
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
@@ -86,6 +88,7 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	col(calls, cs, "content_encoding", "text", func(c *Call) *string { return str(c.R.ContentEncoding) })
 	col(calls, cs, "user_agent", "text", func(c *Call) *string { return str(c.R.UserAgent) })
 	col(calls, cs, "tool_uses", "jsonb", func(c *Call) *string { return str(c.R.ToolUsesJSON) })
+	col(calls, cs, "tools_list", "text", func(c *Call) *string { return str(ToolListHash(c.R.ToolsOffered)) })
 	col(calls, cs, "detail", "jsonb", func(c *Call) *string { return str(c.R.DetailJSON) })
 	col(calls, cs, "client", "jsonb", func(c *Call) *string { return str(c.R.ClientJSON) })
 	col(calls, cs, "provider", "jsonb", func(c *Call) *string { return str(c.R.ProviderJSON) })
@@ -157,6 +160,22 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	parents.conflict = "ON CONFLICT (child_session_id, parent_session_id) DO UPDATE SET " +
 		"kind = least(session_edges.kind, excluded.kind), first_ns = least(session_edges.first_ns, excluded.first_ns)"
 	stmts = append(stmts, parents)
+
+	// The calls' tool lists, each once by its hash (handoff §11S): a list never changes.
+	lists := &insert{table: "tool_lists"}
+	var ls []string
+	seen := map[string]bool{}
+	for i := range cs {
+		if l := cs[i].R.ToolsOffered; l != "" && !seen[l] {
+			seen[l] = true
+			ls = append(ls, l)
+		}
+	}
+	slices.Sort(ls)
+	col(lists, ls, "hash", "text", func(l *string) string { return ToolListHash(*l) })
+	col(lists, ls, "names", "jsonb", func(l *string) string { return *l })
+	lists.conflict = "ON CONFLICT (hash) DO NOTHING"
+	stmts = append(stmts, lists)
 
 	// Interceptor verdicts: a verdict is written once and never changes.
 	vs := &insert{table: "verdicts"}
@@ -360,4 +379,14 @@ func Summarize(ctx context.Context, q pg.Querier) ([]Summary, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// ToolListHash names a request's tool list (canon.Request.ToolsOffered): the
+// first 16 hex digits of its sha256; "" for none.
+func ToolListHash(list string) string {
+	if list == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(list))
+	return hex.EncodeToString(sum[:8])
 }

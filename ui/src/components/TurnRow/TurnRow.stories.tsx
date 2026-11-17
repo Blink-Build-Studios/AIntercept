@@ -51,7 +51,7 @@ export const Open: Story = {
 };
 export const InterruptedTurn: Story = { args: { turn: TURN_SPECIMENS.interrupted, work: ["Edit ×1"] } };
 /** Failed calls (API errors, overloads, retries): `!`. */
-export const FailedCalls: Story = { args: { turn: TURN_SPECIMENS.failedCalls, work: ["Read ×4 · Edit ×2 · Bash ×3 · 1 subagent"], failed: 2 } };
+export const FailedCalls: Story = { args: { turn: TURN_SPECIMENS.failedCalls, work: ["Read ×4 · Edit ×2 · Bash ×3 · 1 subagent"] } };
 /** Still running: its elapsed time in --live. */
 export const Live: Story = { args: { turn: TURN_SPECIMENS.live, work: ["Read ×3 · Bash ×1 …"], now: "2026-11-04T15:13:04" } };
 /** Content recorded: the prompt's text, pastes inline. */

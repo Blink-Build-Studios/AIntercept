@@ -42,6 +42,8 @@ const base: Person = {
   activity: days([0, 1, 0, 2, 3, 0, 1, 0, 0, 2, 4, 1, 0, 0]),
   bypassPct: null,
   coverage: { reported: 4, captured: 4, notCaptured: 0, windows: [] },
+  toolCalls: null,
+  failedCalls: 0,
 };
 export const rows: Record<string, Person> = {
   liveCoverageGap: {

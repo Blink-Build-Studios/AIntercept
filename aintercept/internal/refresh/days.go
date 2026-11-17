@@ -22,7 +22,9 @@ package refresh
 //     tokensAccuracy, the activity strip);
 //   - first_ns, last_ns: the day's first and last call (lastSeenAt, an
 //     agent's firstSeenAt);
-//   - repos: its sessions' repos (the People page's Working on, handoff §11R).
+//   - repos: its sessions' repos (the People page's Working on, handoff §11R);
+//   - tool_calls, failed_calls: their tool calls and failed calls (the People
+//     page's Tool calls and Failed, handoff §11S).
 // Devices are read from account_devices (§6.4), and live, limits and versions
 // from the newest sessions rows.
 
@@ -33,14 +35,16 @@ var daySelect = `SELECT $1, $2, CASE WHEN s.product = 'codex' THEN 'codex' ELSE 
 	coalesce(sum(k.prompts), 0), sum(h.model_calls), sum(h.outputs_known),
 	sum(h.input_tokens), sum(h.cache_read_tokens), sum(h.cache_write_tokens), sum(h.output_tokens),
 	min(cf.first), max(cl.last),
-	coalesce(array_agg(DISTINCT s.repo ORDER BY s.repo) FILTER (WHERE s.repo IS NOT NULL), '{}')
+	coalesce(array_agg(DISTINCT s.repo ORDER BY s.repo) FILTER (WHERE s.repo IS NOT NULL), '{}'),
+	sum(h.tool_calls), coalesce(sum(k.failed), 0)
 FROM session_accounts sa JOIN sessions s USING (session_id)
 CROSS JOIN LATERAL (SELECT coalesce(sum(model_calls), 0) AS model_calls,
 		coalesce(sum(outputs_known), 0) AS outputs_known, sum(input_tokens) AS input_tokens, sum(cache_read_tokens) AS cache_read_tokens,
-		sum(cache_write_tokens) AS cache_write_tokens, sum(output_tokens) AS output_tokens
+		sum(cache_write_tokens) AS cache_write_tokens, sum(output_tokens) AS output_tokens, sum(tool_calls) AS tool_calls
 	FROM session_hours WHERE session_id = sa.session_id AND hour_ns >= $2 AND hour_ns < $3) h
-CROSS JOIN LATERAL (SELECT count(DISTINCT key) AS prompts FROM session_keys
-	WHERE session_id = sa.session_id AND hour_ns >= $2 AND hour_ns < $3 AND kind = 'call_prompt') k
+CROSS JOIN LATERAL (SELECT count(DISTINCT key) FILTER (WHERE kind = 'call_prompt') AS prompts,
+		coalesce(sum(n) FILTER (WHERE kind = 'failed'), 0) AS failed FROM session_keys
+	WHERE session_id = sa.session_id AND hour_ns >= $2 AND hour_ns < $3 AND kind IN ('call_prompt', 'failed')) k
 LEFT JOIN LATERAL (SELECT ` + at + ` AS first FROM calls c WHERE c.session_id = sa.session_id AND ` + at + ` >= $2 AND ` + at + ` < $3 AND ` + visible + `
 	ORDER BY ` + callOrder + ` LIMIT 1) cf ON true
 LEFT JOIN LATERAL (SELECT ` + at + ` AS last FROM calls c WHERE c.session_id = sa.session_id AND ` + at + ` >= $2 AND ` + at + ` < $3 AND ` + visible + `
@@ -53,5 +57,5 @@ GROUP BY 3`
 var dayRefresh = []string{
 	`DELETE FROM account_days WHERE account_id = $1 AND day_ns = $2`,
 	`INSERT INTO account_days (account_id, day_ns, agent, sessions, session_ids, call_session_ids, prompts, model_calls, outputs_known,
-		tokens_input, tokens_cache_read, tokens_cache_write, tokens_output, first_ns, last_ns, repos) ` + daySelect,
+		tokens_input, tokens_cache_read, tokens_cache_write, tokens_output, first_ns, last_ns, repos, tool_calls, failed_calls) ` + daySelect,
 }

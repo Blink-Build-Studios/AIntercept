@@ -12,8 +12,6 @@ from aintercept_api import work as wk
 from aintercept_api.models.common import AgentLimits, ErrorResponse, Meta, RequestKind
 from aintercept_api.models.people import DeviceInfo, TokenCount
 from aintercept_api.models.sessions import (
-    EventsMeta,
-    SessionEventsResponse,
     SessionFacts,
     SessionHeader,
     SessionPromptsResponse,
@@ -23,6 +21,7 @@ from aintercept_api.models.sessions import (
     SessionTimelineResponse,
 )
 from aintercept_api.models.turns import SessionTurnsResponse
+from aintercept_api.models.work import ToolsInRange
 from aintercept_api.rows import dt, session_row_from_table
 from aintercept_api.timeutil import ns_to_dt
 
@@ -74,9 +73,10 @@ def _range(r: dict[str, Any], from_: datetime | None, to: datetime | None, now: 
     return ranges.start_of_minute(lo), ranges.end_of_minute(hi)
 
 
-def header_from_table(r: dict[str, Any]) -> SessionHeader:
-    """A session_rows row (with `live`) as the session page header: field copies only. What only analytics fed
-    (not-captured calls, the device's platform, terminal and shell, cost) is null."""
+def header_from_table(r: dict[str, Any], tools: ToolsInRange) -> SessionHeader:
+    """A session_rows row (with `live`) as the session page header: field copies only, and the whole
+    session's tools (handoff §11S). What only analytics fed (not-captured calls, the device's platform,
+    terminal and shell) is null; cost is gone."""
     row = session_row_from_table(r, alone=True)
     return SessionHeader(
         **dict(row),
@@ -108,9 +108,11 @@ def header_from_table(r: dict[str, Any]) -> SessionHeader:
         turns=int(r["turns"] or 0),
         turnsInterrupted=int(r["turns_interrupted"] or 0),
         activeMs=(r["active_ns"] or 0) / 1e6,
-        costUsd=None,
         work=wk.turn_work(r["work"]),
         outcome=turnpages.outcome(r),
+        recording="content" if r["recorded"] else "metadata",
+        failedCalls=int(r["failed_calls"] or 0),
+        tools=tools,
     )
 
 
@@ -119,7 +121,8 @@ def get_session(request: Request, sessionId: str) -> SessionResponse:  # noqa: N
     now_dt, now = _now(request)
     with pages.read(request, "session") as reader:
         r = _load(reader, sessionId, now)
-    return SessionResponse(data=header_from_table(r), meta=Meta(asOf=now_dt, lastDataAt=ns_to_dt(r["last_ns"])))
+        tools = reader.session_tools(sessionId)
+    return SessionResponse(data=header_from_table(r, tools), meta=Meta(asOf=now_dt, lastDataAt=ns_to_dt(r["last_ns"])))
 
 
 @router.get("/sessions/{sessionId}/timeline", response_model=SessionTimelineResponse)
@@ -253,34 +256,3 @@ def get_session_requests(
         kindCounts=got.kind_counts,
         hiddenCount=got.hidden_count,
     )
-
-
-@router.get("/sessions/{sessionId}/events", response_model=SessionEventsResponse)
-def get_session_events(
-    request: Request,
-    sessionId: str,  # noqa: N803
-    from_: AwareDatetime | None = FROM,
-    to: AwareDatetime | None = TO,
-    q: str | None = Query(None, description="Substring of the event name or its summary."),
-    internal: bool = Query(
-        False, description="Include client internals (tengu_tether_*, spinner_*, tool-progress ticks, …)."
-    ),
-    page: int = PAGE,
-    pageSize: int = PAGE_SIZE,  # noqa: N803
-) -> SessionEventsResponse:
-    now_dt, now = _now(request)
-    with pages.read(request, "session/events") as reader:
-        r = _load(reader, sessionId, now)
-        lo, hi = _range(r, from_, to, now)
-        total, shown, rows = reader.session_events(sessionId, lo, hi, internal, q, page, pageSize)
-    meta = EventsMeta(
-        asOf=now_dt,
-        lastDataAt=ns_to_dt(r["last_ns"]),
-        from_=dt(lo),
-        to=dt(hi),
-        page=page,
-        pageSize=pageSize,
-        total=total,
-        shown=shown,
-    )
-    return SessionEventsResponse(data=rows, meta=meta)

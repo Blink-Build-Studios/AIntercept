@@ -12,10 +12,11 @@ export const ROWS_TOP = 20;
 export const ROW_HEIGHT = 16;
 
 /**
- * A friction kind: the API's; `failed`, a failed call (§11S: an API error, an overload or a
- * retried request, from the HTTP status); and Codex's own `steered` (§11J).
+ * A friction kind: the API's (§11S: `interrupted`, and `failed`, a failed call: an API error or
+ * an overload, from the HTTP status); Codex's own `steered` (§11J); and the analytics kinds
+ * older sheets' specimens still draw (frictionSpecimens.ts).
  */
-export type FrictionKind = Schemas["FrictionMark"]["kind"] | "failed" | "steered";
+export type FrictionKind = Schemas["FrictionMark"]["kind"] | "steered" | "frustrated" | "destructive";
 export type Friction = Omit<Schemas["FrictionMark"], "kind"> & { kind: FrictionKind };
 type Kind = FrictionKind;
 /** A row: its kind, glyph and name; `danger` only where an older sheet still draws one red. */

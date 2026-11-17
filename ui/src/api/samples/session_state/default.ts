@@ -6,16 +6,27 @@ const sample: components["schemas"]["SessionStateResponse"] = {
     "capabilitiesAt": {
       "builtin": {
         "total": null,
-        "used": 3
+        "used": 2
       },
       "hooks": null,
-      "mcpServers": [],
+      "mcpServers": [
+        {
+          "name": "github",
+          "riskyVerbs": [],
+          "tools": null,
+          "toolsUsed": 1
+        }
+      ],
       "mcpTools": {
         "total": null,
-        "used": null
+        "used": 1
       },
       "poolChangesInRange": null,
       "skills": null
+    },
+    "context": {
+      "compactions": 0,
+      "subagentThreads": 0
     },
     "counts": {
       "compactions": 0,
@@ -27,6 +38,7 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "turns": 2
     },
     "experimentsAt": null,
+    "failedCalls": 0,
     "flagFetchesInRange": null,
     "flagsChangedInRange": null,
     "recapsInRange": null,
@@ -40,6 +52,36 @@ const sample: components["schemas"]["SessionStateResponse"] = {
       "headTo": null,
       "prs": [],
       "pushed": false
+    },
+    "tools": {
+      "byName": {
+        "Bash": 1,
+        "Read": 1,
+        "mcp__github__create_pr": 1
+      },
+      "calls": 3,
+      "listChanges": null,
+      "offered": null,
+      "sources": [
+        {
+          "calls": {
+            "Bash": 1,
+            "Read": 1
+          },
+          "offered": null,
+          "source": "Built-in",
+          "used": 2
+        },
+        {
+          "calls": {
+            "create_pr": 1
+          },
+          "offered": null,
+          "source": "mcp:github",
+          "used": 1
+        }
+      ],
+      "used": 3
     }
   },
   "meta": {

@@ -15,7 +15,7 @@ from aintercept_api.models.common import (
     RequestKind,
     UsageMissing,
 )
-from aintercept_api.models.work import PersonWorkStats, WorkBin, WorkingOn
+from aintercept_api.models.work import PersonWorkStats, Recording, ToolsInRange, WorkBin, WorkingOn
 
 
 class SessionLabel(Model):
@@ -25,12 +25,12 @@ class SessionLabel(Model):
 
 
 class Friction(Model):
-    frustrated: int
-    """Prompts Claude Code flagged as negative (tengu_input_prompt.is_negative)."""
+    """A session's friction (handoff §11S): interrupted turns and failed calls, both from the wire."""
+
     interrupted: int
-    """Interruptions (tengu_cancel); one incident, one marker."""
-    destructive: int
-    """Shell commands with a destructive_category (rm -f, rm -rf, …)."""
+    """Its interrupted turns (the harness's note, or a step stopped on an interrupt)."""
+    failedCalls: int
+    """Its model calls that failed (an error status: API errors, overloads; or none once ended)."""
 
 
 SessionOriginKind = Literal["fork", "resume", "subagent", "review"]
@@ -195,14 +195,15 @@ class GapWindow(Model):
 
 class FrictionMark(Model):
     t: datetime
-    kind: Literal["frustrated", "interrupted", "destructive"]
+    kind: Literal["interrupted", "failed"]
+    """✕ a turn the person interrupted; ! failed model calls (handoff §11S)."""
     count: int
     promptIndex: int | None
-    """The prompt of the mark's first incident; None when its tengu_input_prompt wasn't captured."""
+    """The turn of the mark's first incident; None when unknown."""
     detail: str
-    """What happened: "prompt flagged negative", "turn interrupted", or the destructive category and scope."""
+    """What happened: "turn interrupted", "failed calls"."""
     tool: str | None
-    """The tool involved (Bash for destructive commands); None for prompt-level friction."""
+    """Always None (kept for the mark's shape)."""
 
 
 class Timeline(Model):
@@ -429,6 +430,15 @@ class PersonSummary(Model):
     footprint: Footprint
     work: PersonWorkStats
     """The header row's turns, active time, edits and commits, and the OutcomeSlot's facts (§11R)."""
+    # Without the agents' own analytics (handoff §11S), within the range.
+    recording: Recording
+    """`content` when any call of the range's sessions kept its content."""
+    tools: ToolsInRange
+    """ToolsOfferedUsed/person: the tools the range's requests offered and its calls used."""
+    failedCalls: int
+    compactions: int
+    images: int | None
+    """Image blocks in prompts; None: not counted yet."""
 
 
 class PersonSummaryResponse(Envelope[PersonSummary]):
@@ -555,6 +565,10 @@ class PersonSummaryRow(Model):
     bypassPct: float | None
     coverage: Coverage | None
     """None when no session has analytics to compare with."""
+    toolCalls: int | None
+    """Tool calls in the window (handoff §11S, the Claude Code view's Tool calls); None when no call recorded any."""
+    failedCalls: int
+    """Failed model calls in the window (the Claude Code view's Failed)."""
     agentInfo: list[AgentInfo]
     agentLimits: list[AgentLimits]
     """Each agent's usage limits on its newest response (the Codex view's `5h · week` and Plan)."""
@@ -574,6 +588,8 @@ class AgentOverview(Model):
     tokenAccuracy: Literal["exact", "estimated", "missing"]
     """"missing" for agents aintercept doesn't parse yet (types and colors reserved)."""
     shape: TraceShape
+    turns: int
+    """Turns in the window (the card's `18 sessions · 108 turns`, handoff §11S)."""
     # Each card's headline (handoff §11L.1): only the agent's own fields are set.
     missedCalls: int | None
     """Claude Code: model calls it reported that the proxy didn't capture."""
@@ -608,6 +624,8 @@ class Overview(Model):
     sessions: int
     turns: int
     """Turns in the window (the ribbon's Turns tile, handoff §11R)."""
+    toolCalls: int | None
+    """Tool calls in the window (the ribbon's Tool calls tile, handoff §11S); None when no call recorded any."""
     requests: int
     """Captured transactions with coding agents (Claude Code, Codex), synthetic probes excluded."""
     notCaptured: int

@@ -17,8 +17,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "events": null,
       "fieldsMissing": false,
       "friction": {
-        "destructive": 0,
-        "frustrated": 0,
+        "failedCalls": 16,
         "interrupted": 0
       },
       "hiddenCalls": 0,

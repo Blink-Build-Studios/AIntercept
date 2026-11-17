@@ -11,12 +11,10 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "retained": false,
         "text": null
       },
-      "costUsd": null,
       "durationMs": 45002.0,
       "endedAt": "2026-11-04T10:00:50.002000Z",
       "friction": {
-        "destructive": 0,
-        "frustrated": false,
+        "failedCalls": 0,
         "interrupted": false
       },
       "groups": [
@@ -125,6 +123,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 2006,
           "tokensOut": 200,
+          "tools": {
+            "Read": 2
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -206,6 +207,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {
+            "Edit": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -333,6 +337,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 2006,
           "tokensOut": 200,
+          "tools": {
+            "Bash": 2
+          },
           "work": {
             "commands": [
               {
@@ -406,6 +413,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {},
           "work": {
             "commands": [],
             "commits": 0,
@@ -437,6 +445,11 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "subagents": [],
       "tokensIn": 6018,
       "tokensOut": 600,
+      "tools": {
+        "Bash": 2,
+        "Edit": 1,
+        "Read": 2
+      },
       "work": {
         "commands": [
           {

@@ -308,6 +308,17 @@ hour each mark the hour dirty, and the hour is recomputed after both commit.
 | `cred_minutes`, `cred_hours` | (key_hash, minute/hour, kind, hidden, agent) | Coding agents' calls, and how many are the request log's transactions: counts for the person request log and the overview (key_hash '' for calls with none). Indexes on the minute and the hour (the overview's window) | One minute's calls / 60 rows |
 
 Friction marks and Claude Code's skills count, read at the page from events before, are gone with them (§3.2).
+Friction is the wire's now (handoff §11S): a turn's interrupt (its `prompts` row) and failed calls (an error
+status, or none once ended: `failed` key rows per minute, and `steps.failed` for a turn's).
+
+**What the wire carries (handoff §11S).** Each call names its request's tool list by hash (`calls.tools_list`);
+the list itself is a `tool_lists` row, written once by ingest (a session sends a few lists). `session_minute_keys`
+adds, per minute and from that minute's calls alone: `offer` and `offer_main` (the lists its visible calls and its
+main thread's carried, by hash), `failed`, `compaction`, `subagent` (by agent id) and `recorded` (a call kept its
+content). A range's tools offered are its distinct lists (a few key rows per hour) and those few `tool_lists` rows;
+its tools used are its `call_builtin`/`call_mcp` keys. The `sessions` row adds `failed_calls`, `recorded` and
+`tools` (calls by tool name) from its own key rows; `account_days` adds `tool_calls` and `failed_calls` from its
+sessions' hour rows and keys in the day. Nothing reads a session's or a prompt's calls for them.
 | `account_days` | (account, UTC day, agent) | The directory's numbers for that day: sessions active (their ids, and the ids of those with a model call), prompts, model calls, tokens, first and last seen, the sessions' repos (Working on, §5.6). Devices are read from `account_devices` (§6.4) | The account's sessions' hour rows and keys in that day |
 
 A turn (handoff §11R) is a `prompts` row and a step a `steps` row; the turn ledger's values are in §5.6.

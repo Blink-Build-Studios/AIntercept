@@ -27,6 +27,9 @@ export const WORK_COLUMNS: Column[] = [
 /** The group of sessions whose conversation names no repo. */
 export const NO_REPO = "no repo in the conversation";
 
+/** The content-free flat list's columns (§11S): no repo, so the third reads Session. */
+export const WORK_COLUMNS_FLAT: Column[] = WORK_COLUMNS.map((c) => (c.id === "repo" ? { ...c, header: "Session" } : c));
+
 export type RepoRowProps = {
   /** The repo (Claude Code) or workspace (Codex), from the conversation; null: `no repo in the conversation`. */
   repo: string | null;

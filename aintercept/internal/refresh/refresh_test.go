@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -216,11 +217,49 @@ func TestSessionKeys(t *testing.T) {
 		got = append(got, s)
 	}
 	want := []string{
-		"call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 2", "ip 10.0.0.1 2",
+		"call_builtin Bash 1", `call_mcp ["gh", "pr"] 1`, "call_prompt p-s 2", "ip 10.0.0.1 2", "recorded  1",
 		// The work its steps' tool calls show (prompts.go stepItems): an MCP call and a Bash call
 		// (content-free), a read of a.go and a git commit (recorded).
 		"w:commit  1", "w:mcp gh 1", "w:read go 1", "w:read_file a.go 1", "w:run  1", "w:run git commit 1",
 	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("keys:\n got %q\nwant %q", got, want)
+	}
+	checkScratch(t, db)
+}
+
+// What §11S reads from the wire, per minute (session_minute_keys): the tool lists its calls offered
+// (`offer`, every visible call's; `offer_main`, the main thread's, whose changes the tools panel
+// counts), its failed calls (an error status, or no status at all once ended), its compactions, its
+// subagents (by agent id) and whether any call kept its content (`recorded`).
+func TestSessionKeysFromTheWire(t *testing.T) {
+	db := fresh(t)
+	a := call("a", "s", t0)
+	a.Call.ToolsOffered = `["Bash","Read"]`
+	b := call("b", "s", t0+1e9)
+	b.Call.ToolsOffered, b.Call.RequestClass, b.Call.AgentID = `["Read"]`, "subagent", "ag1"
+	f := call("f", "s", t0+2e9)
+	f.Call.Status = 529
+	e := call("e", "s", t0+3e9)
+	e.Call.Status, e.Call.Error = 0, "connection reset"
+	k := call("k", "s", t0+4e9)
+	k.Call.RequestClass, k.Call.DetailJSON = "compaction", `{"text":"summary"}`
+	write(t, db, a, b, f, e, k)
+	drain(t, db)
+	rows, err := db.Query(ctx(t), `SELECT kind || ' ' || key || ' ' || n FROM session_minute_keys
+		WHERE session_id = 's' AND kind = ANY('{offer,offer_main,failed,compaction,subagent,recorded}') ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var s string
+		rows.Scan(&s)
+		got = append(got, s)
+	}
+	main, sub := flush.ToolListHash(`["Bash","Read"]`), flush.ToolListHash(`["Read"]`)
+	want := []string{"compaction  1", "failed  2", "offer " + main + " 1", "offer " + sub + " 1", "offer_main " + main + " 1", "recorded  1", "subagent ag1 1"}
+	slices.Sort(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("keys:\n got %q\nwant %q", got, want)
 	}

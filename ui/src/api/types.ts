@@ -20,5 +20,4 @@ export type StepData = Schemas["StepData"];
 export type ToolCallData = Schemas["ToolCallData"];
 export type BetweenData = Schemas["BetweenData"];
 export type SessionRequestsResponse = Schemas["SessionRequestsResponse"];
-export type SessionEventsResponse = Schemas["SessionEventsResponse"];
 export type EventRow = Schemas["EventRow"];

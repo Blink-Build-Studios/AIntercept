@@ -122,5 +122,7 @@ export const CodexRequests: Story = { args: { ...CodexTurns.args, initialTab: "r
 
 /** Recorded content: the prompt's text, paths in the groups, the reply's preview. */
 export const WithContent: Story = { args: { turns: readyRegion(turnsWithContent), jumpTo: { index: 1, seq: 1 } } };
+/** The session recorded with content (§11S `SessionContent`): Edited and Commits in the header, the outcome's commits, the Repo panel. */
+export const Content: Story = { args: { session: readyRegion({ ...sessionDemo.data, recording: "content" }), turns: readyRegion(turnsWithContent) } };
 /** A turn with MCP, web and a spawned subagent, its ⤷ row under it. */
 export const Subagents: Story = { args: { turns: readyRegion(turnsSubagents), jumpTo: { index: 2, seq: 1 } } };

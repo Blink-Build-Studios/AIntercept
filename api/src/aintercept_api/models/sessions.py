@@ -24,7 +24,7 @@ from aintercept_api.models.people import (
     Timeline,
     TokenCount,
 )
-from aintercept_api.models.work import OutcomeFacts, TurnBlock, TurnWork
+from aintercept_api.models.work import ContextInRange, OutcomeFacts, Recording, ToolsInRange, TurnBlock, TurnWork
 
 # --- header (§5.2.8) --------------------------------------------------------------------------
 
@@ -71,12 +71,17 @@ class SessionHeader(SessionRow):
     turnsInterrupted: int
     activeMs: float
     """The sum of its turns' times (prompt to last step)."""
-    costUsd: float | None
-    """Claude Code's own cost estimate over the session (costUSD); None for agents that report none."""
     work: TurnWork
     """The whole session's work: Edited (files, lines), Commits."""
     outcome: OutcomeFacts
     """The OutcomeSlot's facts."""
+    # Without the agents' own analytics (handoff §11S). Cost is gone: it will come from the providers.
+    recording: Recording
+    """`content` when any of the session's calls kept its content."""
+    failedCalls: int
+    """Its model calls that failed: an error status (API errors, overloads), or none at all once ended."""
+    tools: ToolsInRange
+    """The whole session's tools: offered by its requests, used by its calls."""
 
 
 class SessionResponse(Envelope[SessionHeader]):
@@ -203,6 +208,10 @@ class SessionState(Model):
     """None until flag fetches are tied to a session by their body's attributes.sessionId (M7)."""
     flagsChangedInRange: int | None
     counts: RangeCounts
+    # Within [from, to], from the wire (handoff §11S).
+    tools: ToolsInRange
+    context: ContextInRange
+    failedCalls: int
 
 
 class SessionStateResponse(Envelope[SessionState]):

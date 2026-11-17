@@ -63,6 +63,7 @@ def test_overview_one(dataset, pg_client_for, write_sample):
         "sessions": 1,
         "tokenAccuracy": "exact",
         "shape": "sessions→prompts→steps",
+        "turns": 1,
         "missedCalls": None,
         "bypassPct": None,
         "highestWeekPct": None,

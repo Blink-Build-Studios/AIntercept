@@ -13,7 +13,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 1,
         "sessions": 2,
         "shape": "sessions\u2192prompts\u2192steps",
-        "tokenAccuracy": "estimated"
+        "tokenAccuracy": "estimated",
+        "turns": 38
       },
       {
         "agent": "codex",
@@ -23,7 +24,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "sessions\u2192turns\u2192steps",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       },
       {
         "agent": "chatgpt",
@@ -33,7 +35,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "conversations\u2192messages",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       },
       {
         "agent": "claude-ai",
@@ -43,7 +46,8 @@ const sample: components["schemas"]["OverviewResponse"] = {
         "people": 0,
         "sessions": 0,
         "shape": "conversations\u2192messages",
-        "tokenAccuracy": "missing"
+        "tokenAccuracy": "missing",
+        "turns": 0
       }
     ],
     "capabilities": {
@@ -106,6 +110,7 @@ const sample: components["schemas"]["OverviewResponse"] = {
     "people": 1,
     "requests": 1903,
     "sessions": 1,
+    "toolCalls": 516,
     "turns": 38,
     "unattributed": {
       "firstSeen": "2026-11-02T05:31:43.390999Z",

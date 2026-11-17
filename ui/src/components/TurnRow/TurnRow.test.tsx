@@ -48,11 +48,11 @@ describe("TurnRow (handoff §11R: whole row toggles; → opens, ← closes)", ()
 });
 
 describe("TurnRow friction (handoff §11S: ✕ interrupted, ! failed calls, both --ink)", () => {
-  const friction = (over: Partial<typeof TURN_SPECIMENS.default>, failed?: number) => {
+  const friction = (over: Partial<typeof TURN_SPECIMENS.default>) => {
     render(
       <TooltipProvider>
         <div role="treegrid" aria-label="Turns">
-          <TurnRow turn={{ ...TURN_SPECIMENS.default, ...over }} failed={failed} work={["Read ×1"]} expanded={false} onToggle={vi.fn()} />
+          <TurnRow turn={{ ...TURN_SPECIMENS.default, ...over }} work={["Read ×1"]} expanded={false} onToggle={vi.fn()} />
         </div>
       </TooltipProvider>,
     );
@@ -60,21 +60,20 @@ describe("TurnRow friction (handoff §11S: ✕ interrupted, ! failed calls, both
   };
 
   it("an interrupted turn reads ✕", () => {
-    const cell = friction({ friction: { ...TURN_SPECIMENS.default.friction, interrupted: true } });
+    const cell = friction({ friction: { interrupted: true, failedCalls: 0 } });
     expect(cell.textContent).toBe("✕");
     expect(cell.getAttribute("aria-label")).toBe("interrupted");
   });
 
   it("failed calls read !, the count in words", () => {
-    const cell = friction({}, 2);
+    const cell = friction({ friction: { interrupted: false, failedCalls: 2 } });
     expect(cell.textContent).toBe("!");
     expect(cell.getAttribute("aria-label")).toBe("2 failed calls");
   });
 
   it("frustrated and destructive are gone, and so is the Cost cell", () => {
-    const cell = friction({ friction: { frustrated: true, interrupted: false, destructive: 3 }, costUsd: 1.92 });
+    const cell = friction({});
     expect(cell.textContent).toBe("");
-    expect(screen.queryByText("$1.92")).toBeNull();
     expect(screen.getAllByRole("cell")).toHaveLength(8); // the twisty is aria-hidden
   });
 });

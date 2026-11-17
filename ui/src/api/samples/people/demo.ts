@@ -80,6 +80,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "coverage": null,
       "devices": 1,
       "email": null,
+      "failedCalls": 16,
       "lastSeenAt": "2026-11-04T18:02:33.797795Z",
       "linkedBy": null,
       "live": true,
@@ -91,6 +92,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "sessions": 1,
       "tokensAccuracy": "estimated",
       "tokensOut": 694376,
+      "toolCalls": 516,
       "turns": 38,
       "workingOn": {
         "live": true,

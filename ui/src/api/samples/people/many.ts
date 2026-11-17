@@ -80,6 +80,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "coverage": null,
       "devices": 1,
       "email": null,
+      "failedCalls": 0,
       "lastSeenAt": "2026-11-04T18:01:00Z",
       "linkedBy": null,
       "live": true,
@@ -91,6 +92,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "sessions": 1,
       "tokensAccuracy": "exact",
       "tokensOut": 100,
+      "toolCalls": null,
       "turns": 1,
       "workingOn": {
         "live": true,
@@ -177,6 +179,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "coverage": null,
       "devices": 1,
       "email": null,
+      "failedCalls": 0,
       "lastSeenAt": "2026-11-04T09:03:00Z",
       "linkedBy": null,
       "live": false,
@@ -188,6 +191,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "sessions": 1,
       "tokensAccuracy": "exact",
       "tokensOut": 300,
+      "toolCalls": null,
       "turns": 1,
       "workingOn": null
     },
@@ -268,6 +272,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "coverage": null,
       "devices": 1,
       "email": null,
+      "failedCalls": 0,
       "lastSeenAt": "2026-11-01T09:02:00Z",
       "linkedBy": null,
       "live": false,
@@ -279,6 +284,7 @@ const sample: components["schemas"]["PeopleResponse"] = {
       "sessions": 1,
       "tokensAccuracy": "exact",
       "tokensOut": 200,
+      "toolCalls": null,
       "turns": 1,
       "workingOn": null
     }

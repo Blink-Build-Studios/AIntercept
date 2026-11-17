@@ -116,7 +116,9 @@ def test_summary_one_session(dataset, pg_client_for, write_sample):
     assert rb["cost"] == {"usd": None, "basis": "api-equivalent", "estimatedCalls": 0}
     assert (rb["analyticsEvents"], rb["analyticsBatches"], rb["eventTypes"]) == (0, 0, 0)
     fp = d["footprint"]
-    assert fp["toolsByName"] == {} and fp["toolCalls"] is None and fp["commands"] is None
+    # This session's calls name no tools (test_people covers them).
+    assert fp["toolsByName"] == {} and fp["toolCalls"] == 0 and fp["commands"] is None
+    assert d["tools"]["used"] == 0 and d["recording"] == "metadata" and d["failedCalls"] == 0
     assert fp["destructive"] == {"total": 0, "rmF": 0, "rmRf": 0, "outsideCwd": 0}
     assert fp["codeShipped"] == {"headChanges": None, "commits": 0, "pushes": 0, "prs": []}
     assert fp["failures"] == {"commands": 0, "toolErrors": 0, "apiRetries": 0} and fp["subagentCalls"] == 1

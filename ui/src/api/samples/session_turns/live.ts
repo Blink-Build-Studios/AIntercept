@@ -11,12 +11,10 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "retained": false,
         "text": null
       },
-      "costUsd": null,
       "durationMs": 10002.0,
       "endedAt": "2026-11-04T18:00:20.002000Z",
       "friction": {
-        "destructive": 0,
-        "frustrated": false,
+        "failedCalls": 0,
         "interrupted": false
       },
       "groups": [
@@ -79,6 +77,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {
+            "Read": 1
+          },
           "work": {
             "commands": [],
             "commits": 0,
@@ -145,6 +146,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": 1003,
           "tokensOut": 100,
+          "tools": {},
           "work": {
             "commands": [],
             "commits": 0,
@@ -176,6 +178,9 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "subagents": [],
       "tokensIn": 2006,
       "tokensOut": 200,
+      "tools": {
+        "Read": 1
+      },
       "work": {
         "commands": [],
         "commits": 0,
@@ -206,12 +211,10 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
         "retained": false,
         "text": null
       },
-      "costUsd": null,
       "durationMs": null,
       "endedAt": null,
       "friction": {
-        "destructive": 0,
-        "frustrated": false,
+        "failedCalls": 0,
         "interrupted": false
       },
       "groups": [
@@ -259,6 +262,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
           "text": null,
           "tokensIn": null,
           "tokensOut": null,
+          "tools": {},
           "work": {
             "commands": [],
             "commits": 0,
@@ -290,6 +294,7 @@ const sample: components["schemas"]["SessionTurnsResponse"] = {
       "subagents": [],
       "tokensIn": null,
       "tokensOut": null,
+      "tools": {},
       "work": {
         "commands": [],
         "commits": 0,

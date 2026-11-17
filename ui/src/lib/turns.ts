@@ -5,6 +5,7 @@ import type { Agent } from "../components/AgentChip/AgentChip";
 import type { OutcomeFact } from "../components/OutcomeSlot/OutcomeFacts";
 import type { WorkSession } from "../components/RepoRow/WorkSessionRow";
 import { formatCount, formatDuration, formatTokens } from "./format";
+import { toolLine, toolSource } from "./tools";
 import { workLine, type WorkPart } from "./work";
 
 /** One turn: a prompt and all the work it started. */
@@ -103,13 +104,39 @@ export function groupLine(g: TurnGroup): { title: string; meta: string } {
   }
 }
 
-/** A turn's groups, subagents and work line, as the Turns tab renders them. */
+/**
+ * A group's title and meta without recorded content (handoff §11S, CompTurns content-free): its
+ * tools by name (`Read ×5`; an MCP server's `mcp:linear ×3` with its tools in the meta), `No tool`,
+ * `Reply`; then steps and time.
+ */
+export function toolGroupLine(g: TurnGroup): { title: string; meta: string } {
+  const steps = plural(g.steps.length, "step");
+  const time = g.durationMs === null ? null : formatDuration(g.durationMs);
+  const meta = (...xs: (string | null)[]) => xs.filter((x): x is string => !!x).join(" · ");
+  if (g.kind === "reply") return groupLine(g);
+  const names = Object.entries(g.tools).filter(([, n]) => n > 0);
+  if (!names.length) return { title: "No tool", meta: meta(steps, time, inOut(g.tokensIn, g.tokensOut)) };
+  const sources = new Set(names.map(([n]) => toolSource(n).source));
+  const [only] = sources;
+  if (sources.size === 1 && only?.startsWith("mcp:")) {
+    const total = names.reduce((a, [, n]) => a + n, 0);
+    const tools = names.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n, c]) => `${toolSource(n).tool}${c > 1 ? ` ×${formatCount(c)}` : ""}`);
+    return { title: `${only} ×${formatCount(total)}`, meta: meta(tools.join(" · "), steps) };
+  }
+  return { title: toolLine(g.tools), meta: meta(steps, time) };
+}
+
+/**
+ * A turn's groups, subagents and work line, as the Turns tab renders them (handoff §11S): in plain
+ * words when the turn's content was recorded, else its tools by name and count.
+ */
 export function turnView(t: Turn): TurnView {
+  const content = t.asked.retained;
   return {
     turn: t,
-    work: workLine(t.work),
+    work: content ? workLine(t.work) : [`${toolLine(t.tools)}${t.live ? " …" : ""}`],
     groups: t.groups.map((g, i) => {
-      const { title, meta } = groupLine(g);
+      const { title, meta } = content ? groupLine(g) : toolGroupLine(g);
       return {
         key: `${t.promptId}:${i}`,
         kind: g.kind,
@@ -121,9 +148,10 @@ export function turnView(t: Turn): TurnView {
       };
     }),
     subagents: t.subagents.map((a, i) => {
-      const work = workLine(a.work);
+      const work = content ? workLine(a.work) : Object.keys(a.tools).length ? [toolLine(a.tools)] : [];
       return {
         key: `${t.promptId}:sub:${a.agentId ?? i}`,
+        // Its type when the request's header names it (handoff §11S open question 4), else `subagent N`.
         name: a.name,
         n: i + 1,
         work: [plural(a.steps, "step"), ...(work.length ? [" · ", ...work] : [])],
@@ -166,7 +194,7 @@ export function repoView(g: Schemas["RepoGroup"]): RepoView {
     activeMs: g.activeMs,
     work: workLine(g.work),
     rows: g.rows.map((r) => ({
-      session: { sessionId: r.sessionId, start: r.start, end: r.end, live: r.live, label: r.label.text, turns: r.turns, activeMs: r.activeMs, friction: { interrupted: r.friction.interrupted, failed: 0 } },
+      session: { sessionId: r.sessionId, start: r.start, end: r.end, live: r.live, label: r.label.text, turns: r.turns, activeMs: r.activeMs, friction: { interrupted: r.friction.interrupted, failed: r.friction.failedCalls } },
       work: workLine(r.work),
     })),
   };
@@ -185,9 +213,23 @@ export function outcomeFacts(o: Schemas["OutcomeFacts"], where: { branch?: strin
   const facts: (OutcomeFact | null)[] = [
     o.commits ? (where.branch ? [`${commits} on `, { strong: where.branch }, range] : [`${commits}${range}`]) : null,
     o.editedFiles ? [`${plural(o.editedFiles, "file")} edited${types ? ` (${types})` : ""}`] : null,
-    o.lastTest ? ["last ", { strong: o.lastTest.program }, ` exited ${o.lastTest.exitCode}`] : null,
+    o.lastTest ? ["last ", { strong: o.lastTest.program }, o.lastTest.exitCode === 0 ? " passed" : ` failed (exit ${o.lastTest.exitCode})`] : null,
     o.pushes ? ["pushed"] : null,
     ...o.prs.map((n) => [`PR #${n}`]),
+  ];
+  return facts.filter((f): f is OutcomeFact => f !== null);
+}
+
+/**
+ * The facts without recorded content (handoff §11S, OutcomeSlot): sessions (a person's), turns,
+ * steps, then the tool calls with the top 4 tools and subagents. Zeros are left out.
+ */
+export function toolFacts(x: { sessions?: number; turns: number; steps?: number; calls: number; byName: Record<string, number> }): OutcomeFact[] {
+  const facts: (OutcomeFact | null)[] = [
+    x.sessions !== undefined ? [plural(x.sessions, "session")] : null,
+    [plural(x.turns, "turn")],
+    x.steps !== undefined ? [plural(x.steps, "step")] : null,
+    x.calls ? [`${plural(x.calls, "tool call")}: ${toolLine(x.byName, 4)}`] : null,
   ];
   return facts.filter((f): f is OutcomeFact => f !== null);
 }

@@ -176,23 +176,6 @@
       "demo": true
     },
     {
-      "path": "/api/v1/sessions/{sessionId}/events",
-      "operationId": "get_session_events",
-      "scenarios": [
-        "empty",
-        "error"
-      ],
-      "demo": true
-    },
-    {
-      "path": "/api/v1/events/{eventId}",
-      "operationId": "get_event",
-      "scenarios": [
-        "error"
-      ],
-      "demo": false
-    },
-    {
       "path": "/api/v1/requests/{requestId}",
       "operationId": "get_request",
       "scenarios": [
@@ -1375,7 +1358,8 @@
         "live",
         "repos",
         "chat",
-        "nothing"
+        "nothing",
+        "liveContentFree"
       ]
     },
     {
@@ -1420,7 +1404,8 @@
         "refreshFailed",
         "emptyRange",
         "aboutOpen",
-        "workManyRepos"
+        "workManyRepos",
+        "content"
       ]
     },
     {
@@ -1436,7 +1421,8 @@
         "drawerRetained",
         "codexTurns",
         "withContent",
-        "subagents"
+        "subagents",
+        "content"
       ]
     }
   ],

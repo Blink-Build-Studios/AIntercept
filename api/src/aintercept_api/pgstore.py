@@ -16,16 +16,17 @@ from typing import Any, cast
 from aintercept_api import directorypages, drawer, pages, personpages, sessionpages, turnpages
 from aintercept_api import request_detail as rd
 from aintercept_api.models.people import Overview, PersonHeader, PersonSummary, SessionRow, Timeline
-from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
-from aintercept_api.models.sessions import BetweenItem, EventRow, PromptItem, SessionState, SessionTimeline
+from aintercept_api.models.requests import RequestDetail, RequestDetails, RequestRaw
+from aintercept_api.models.sessions import BetweenItem, PromptItem, SessionState, SessionTimeline
 from aintercept_api.models.turns import RepoGroup, TurnRow
+from aintercept_api.models.work import ToolsInRange
 from aintercept_api.objects import Source
 from aintercept_api.reader import BEGIN, POOL_SIZE, Load, Reader, SchemaMismatch, Snapshot
 
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "951b6ee1c6d8d38b469f9576f73f6c8d710391bec1036537f74c9377223e3479"
+SCHEMA_HASH = "1dccee7b5be2bb956bdd206ffe1a51086ed532faf20e48c4ffb328749f1fbf60"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
@@ -118,14 +119,13 @@ class PgPages:
     def request_raw(self, rid: str) -> RequestRaw | None:
         return rd.raw(self._reads(), rid)
 
-    def event(self, eid: str) -> EventDetail | None:
-        """None: analytics events aren't stored (they stay in the raw files)."""
-        return None
-
     # --- the session pages (v9: sessionpages.SessionReads, docs/PIPELINE.md §6.1) ---------------------
 
     def session(self, sid: str, now: int) -> dict[str, Any] | None:
         return self._sessions.session(sid, now)
+
+    def session_tools(self, sid: str) -> ToolsInRange:
+        return self._sessions.wire(sid, None, None).tools
 
     def session_timeline(
         self, sid: str, r: dict[str, Any], now_dt: datetime, now: int, lo: int, hi: int, bin_s: int
@@ -154,11 +154,6 @@ class PgPages:
             sid, lo, hi, kind, q, captured, page, size, order, hidden
         )
         return pages.RequestsPage(hidden_count, total, kinds, rows)
-
-    def session_events(
-        self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
-    ) -> tuple[int, int, list[EventRow]]:
-        return self._sessions.events(sid, lo, hi, internal, q, page, size)
 
     # --- the person pages (v9: personpages.PersonReads, docs/PIPELINE.md §6.3) ------------------------
 

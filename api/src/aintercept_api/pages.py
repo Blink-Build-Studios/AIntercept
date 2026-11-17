@@ -24,15 +24,15 @@ from aintercept_api.models.people import (
     SessionRow,
     Timeline,
 )
-from aintercept_api.models.requests import EventDetail, RequestDetail, RequestDetails, RequestRaw
+from aintercept_api.models.requests import RequestDetail, RequestDetails, RequestRaw
 from aintercept_api.models.sessions import (
     BetweenItem,
-    EventRow,
     PromptItem,
     SessionState,
     SessionTimeline,
 )
 from aintercept_api.models.turns import RepoGroup, TurnRow
+from aintercept_api.models.work import ToolsInRange
 
 Row = dict[str, Any]
 
@@ -73,8 +73,8 @@ class Pages(Protocol):
     def request(self, rid: str) -> RequestDetail | None: ...
     def request_details(self, rid: str) -> RequestDetails | None: ...
     def request_raw(self, rid: str) -> RequestRaw | None: ...
-    def event(self, eid: str) -> EventDetail | None: ...
     def session(self, sid: str, now: int) -> Row | None: ...
+    def session_tools(self, sid: str) -> ToolsInRange: ...
     def session_timeline(
         self, sid: str, r: Row, now_dt: datetime, now: int, lo: int, hi: int, bin_s: int
     ) -> SessionTimeline: ...
@@ -89,9 +89,6 @@ class Pages(Protocol):
         self, sid: str, lo: int | None, hi: int | None, kind: Sequence[str] | None, q: str | None,
         captured: bool | None, page: int, size: int, order: str, hidden: bool,
     ) -> RequestsPage: ...  # fmt: skip
-    def session_events(
-        self, sid: str, lo: int, hi: int, internal: bool, q: str | None, page: int, size: int
-    ) -> tuple[int, int, list[EventRow]]: ...
     def person_sessions(
         self, pid: str, now: int, lo: int | None, hi: int | None, page: int, size: int, agent: Sequence[str] | None
     ) -> tuple[int, int | None, list[SessionRow]]: ...
@@ -138,7 +135,6 @@ _ROUTES = [
     ("session/prompts", r"/sessions/[^/]+/prompts"),
     ("session/turns", r"/sessions/[^/]+/turns"),
     ("session/requests", r"/sessions/[^/]+/requests"),
-    ("session/events", r"/sessions/[^/]+/events"),
     ("people", r"/people"),
     ("overview", r"/overview"),
     ("person", r"/people/[^/]+"),
@@ -150,7 +146,6 @@ _ROUTES = [
     ("request", r"/requests/[^/]+"),
     ("request/raw", r"/requests/[^/]+/raw"),
     ("request/details", r"/requests/[^/]+/details"),
-    ("event", r"/events/[^/]+"),
 ]
 _PATTERNS = [(page, re.compile("/api/v1" + rx + "$")) for page, rx in _ROUTES]
 PAGE_NAMES = tuple(page for page, _ in _ROUTES)

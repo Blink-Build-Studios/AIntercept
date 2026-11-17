@@ -108,8 +108,8 @@ def test_session_ended(dataset, pg_client_for, write_sample):
         1,
     )
     assert h["device"] == {"deviceId": DEVICE, "platform": None, "terminal": None, "shell": None}
-    assert h["friction"] == {"frustrated": 0, "interrupted": 0, "destructive": 0} and h["bypassPct"] is None
-    assert (h["events"], h["coverage"], h["costUsd"], h["capturedFromPrompt"]) == (None, None, None, None)
+    assert h["friction"] == {"interrupted": 0, "failedCalls": 0} and h["bypassPct"] is None
+    assert (h["events"], h["coverage"], h["capturedFromPrompt"]) == (None, None, None) and "costUsd" not in h
     assert h["repo"] is None and h["branch"] is None  # M7 extraction: unknown, never ""
 
 
@@ -229,9 +229,9 @@ def test_state_default(dataset, pg_client_for, write_sample):
     write_sample(client, r, "default")
     d = r.json()["data"]
     cap = d["capabilitiesAt"]
-    # The tools its calls asked for (Bash, Read and the MCP tool, which this builder's calls name as built-ins);
-    # Claude Code's hooks, skills and pool changes aren't kept.
-    assert cap["builtin"] == {"total": None, "used": 3} and cap["mcpTools"] == {"total": None, "used": None}
+    # The tools its calls asked for (Bash and Read, and the MCP tool by its server); Claude Code's hooks,
+    # skills and pool changes aren't kept.
+    assert cap["builtin"] == {"total": None, "used": 2} and cap["mcpTools"] == {"total": None, "used": 1}
     assert (cap["hooks"], cap["skills"], cap["poolChangesInRange"]) == (None, None, None)
     repo = d["repoInRange"]
     assert (repo["headFrom"], repo["headTo"], repo["headChanges"]) == (None, None, None)
@@ -249,8 +249,7 @@ def test_state_default(dataset, pg_client_for, write_sample):
         "turns": 2,
         "steps": 4,
     }
-    tabs = {t: client.get(f"{BASE}/{t}").json()["meta"]["total"] for t in ("requests", "events")}
-    assert tabs == {"requests": d["counts"]["requests"], "events": d["counts"]["events"]}
+    assert client.get(f"{BASE}/requests").json()["meta"]["total"] == d["counts"]["requests"]
 
 
 def test_state_follows_the_range(dataset, pg_client_for):
@@ -258,7 +257,7 @@ def test_state_follows_the_range(dataset, pg_client_for):
     client = pg_client_for(dataset)
     d = client.get(f"{BASE}/state", params={"from": "2026-11-04T09:09:00Z"}).json()["data"]
     assert d["counts"]["prompts"] == 1 and d["counts"]["modelCalls"] == 1 and d["recapsInRange"] is None
-    assert d["capabilitiesAt"]["builtin"]["used"] == 3
+    assert d["capabilitiesAt"]["builtin"]["used"] == 2
 
 
 def test_state_capabilities_are_the_whole_sessions(dataset, pg_client_for):
@@ -268,7 +267,7 @@ def test_state_capabilities_are_the_whole_sessions(dataset, pg_client_for):
     client = pg_client_for(dataset)
     whole = client.get(f"{BASE}/state").json()["data"]["capabilitiesAt"]
     early = client.get(f"{BASE}/state", params={"to": "2026-11-04T08:00:00Z"}).json()["data"]["capabilitiesAt"]
-    assert early == whole and whole["builtin"]["used"] == 3
+    assert early == whole and whole["builtin"]["used"] == 2
 
 
 def test_state_empty_range(dataset, pg_client_for, write_sample):
@@ -434,26 +433,7 @@ def test_requests_error(dataset, pg_client_for, write_sample, monkeypatch):
     write_sample(client, client.get(f"{BASE}/requests"), "error", status=500)
 
 
-# --- /events ------------------------------------------------------------------------------------
-
-
-def test_events_empty(dataset, pg_client_for, write_sample):
-    """Analytics events stay in the raw files: a session that sent them lists none."""
-    ended_session(dataset)
-    end_batches(dataset)
-    client = pg_client_for(dataset)
-    r = client.get(f"{BASE}/events")
-    write_sample(client, r, "empty")
-    assert r.json()["data"] == [] and r.json()["meta"]["total"] == 0 and r.json()["meta"]["shown"] == 0
-
-
-def test_events_error(dataset, pg_client_for, write_sample, monkeypatch):
-    client = pg_client_for(dataset, raise_server_exceptions=False)
-    error_on_query(client, monkeypatch)
-    write_sample(client, client.get(f"{BASE}/events"), "error", status=500)
-
-
-@pytest.mark.parametrize("path", ["", "/timeline", "/state", "/prompts", "/events"])
+@pytest.mark.parametrize("path", ["", "/timeline", "/state", "/prompts"])
 def test_every_session_endpoint_404s_on_an_unknown_session(dataset, pg_client_for, path):
     r = pg_client_for(dataset).get(f"/api/v1/sessions/nope{path}")
     assert r.status_code == 404 and r.json()["error"]["queryId"]
@@ -499,7 +479,7 @@ def test_an_analytics_post_is_no_sessions(dataset, pg_client_for):
     cc.call(f"{H}:01:00", prompt="p1")
     client = pg_client_for(dataset)
     body = client.get(f"{BASE}/requests").json()
-    assert body["kindCounts"] == {"model": 1} and client.get(f"{BASE}/events").json()["meta"]["total"] == 0
+    assert body["kindCounts"] == {"model": 1}
     end_batches(dataset)
     client = pg_client_for(dataset)
     assert client.get(f"{BASE}/requests").json()["kindCounts"] == {"model": 1}
@@ -507,3 +487,68 @@ def test_an_analytics_post_is_no_sessions(dataset, pg_client_for):
     assert person["kindCounts"] == {"analytics": 1, "model": 1}
     (post,) = [x for x in person["data"] if x["kind"] == "analytics"]
     assert post["sessionId"] is None and post["background"] is True and post["detail"] == "batch"
+
+
+# --- without the agents' own analytics (handoff §11S) --------------------------------------------------------
+
+
+def wire_session(ds, sid=S1):
+    """A session as the wire tells it: tool lists (the main thread's changing once, a subagent's), tool calls
+    (built-in and MCP), an overload and a reset (failed calls), an interrupted turn, a compaction."""
+    cc = ClaudeCode(ds, sid)
+    main = ["Bash", "Read", "Edit", "mcp__linear__list_issues", "mcp__linear__get_issue", "mcp__sentry__find"]
+    cc.call(f"{H}:00:10", prompt="p1", tools_offered=main, tool_uses=["Read", "Read", "mcp__linear__list_issues"])
+    cc.call(f"{H}:00:20", prompt="p1", tools_offered=main, tool_uses=["Bash"])
+    cc.call(
+        f"{H}:00:30", prompt="p1", tools_offered=["Read"], request_class="subagent", agent_id="ag1", tool_uses=["Read"]
+    )
+    cc.call(f"{H}:00:40", prompt="p1", tools_offered=main, status=529)
+    cc.call(
+        f"{H}:01:10", prompt="p2", tools_offered=[*main, "mcp__github__get_pr"], status=None, error="connection reset"
+    )
+    cc.call(f"{H}:01:20", prompt="p2", tools_offered=[*main, "mcp__github__get_pr"], stop_reason="interrupted")
+    cc.call(f"{H}:02:00", prompt="p3", request_class="compaction")
+    return cc
+
+
+def test_header_says_what_the_wire_carries(dataset, pg_client_for):
+    wire_session(dataset)
+    h = pg_client_for(dataset).get(BASE).json()["data"]
+    assert h["recording"] == "metadata" and h["failedCalls"] == 2
+    t = h["tools"]
+    assert (t["offered"], t["used"], t["calls"], t["listChanges"]) == (7, 3, 5, 1)
+    assert t["byName"] == {"Read": 3, "Bash": 1, "mcp__linear__list_issues": 1}
+    assert [(s["source"], s["offered"], s["used"]) for s in t["sources"]] == [
+        ("Built-in", 3, 2),
+        ("mcp:linear", 2, 1),
+        ("mcp:github", 1, 0),
+        ("mcp:sentry", 1, 0),
+    ]
+    assert "costUsd" not in h
+
+
+def test_state_tools_context_and_failures_follow_the_range(dataset, pg_client_for):
+    wire_session(dataset)
+    client = pg_client_for(dataset)
+    whole = client.get(f"{BASE}/state").json()["data"]
+    assert whole["failedCalls"] == 2 and whole["context"] == {"compactions": 1, "subagentThreads": 1}
+    first = client.get(f"{BASE}/state", params={"from": f"{H}:00:00Z", "to": f"{H}:00:59Z"}).json()["data"]
+    assert first["failedCalls"] == 1 and first["tools"]["listChanges"] == 0 and first["context"]["compactions"] == 0
+
+
+def test_timeline_friction_is_interrupts_and_failed_calls(dataset, pg_client_for):
+    wire_session(dataset)
+    marks = pg_client_for(dataset).get(f"{BASE}/timeline").json()["data"]["friction"]
+    assert {m["kind"] for m in marks} == {"failed", "interrupted"}
+    assert sum(m["count"] for m in marks if m["kind"] == "failed") == 2  # per bin, counted
+    assert [m["promptIndex"] is None for m in marks if m["kind"] == "interrupted"] == [False]
+
+
+def test_turns_carry_their_tools_and_failed_calls(dataset, pg_client_for):
+    wire_session(dataset)
+    turns = {t["n"] or t["promptId"]: t for t in pg_client_for(dataset).get(f"{BASE}/turns").json()["data"]}
+    p1 = next(t for t in turns.values() if t["promptId"] == "p1")
+    assert p1["tools"] == {"Read": 3, "Bash": 1, "mcp__linear__list_issues": 1}
+    assert p1["friction"] == {"interrupted": False, "failedCalls": 1} and "costUsd" not in p1
+    p2 = next(t for t in turns.values() if t["promptId"] == "p2")
+    assert p2["friction"]["failedCalls"] == 1

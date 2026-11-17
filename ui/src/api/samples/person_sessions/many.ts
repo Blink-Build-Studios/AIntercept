@@ -17,8 +17,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "events": null,
       "fieldsMissing": false,
       "friction": {
-        "destructive": 0,
-        "frustrated": 0,
+        "failedCalls": 0,
         "interrupted": 0
       },
       "hiddenCalls": 0,
@@ -48,8 +47,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "events": null,
       "fieldsMissing": false,
       "friction": {
-        "destructive": 0,
-        "frustrated": 0,
+        "failedCalls": 0,
         "interrupted": 0
       },
       "hiddenCalls": 0,
@@ -79,8 +77,7 @@ const sample: components["schemas"]["PersonSessionsResponse"] = {
       "events": null,
       "fieldsMissing": false,
       "friction": {
-        "destructive": 0,
-        "frustrated": 0,
+        "failedCalls": 0,
         "interrupted": 0
       },
       "hiddenCalls": 0,

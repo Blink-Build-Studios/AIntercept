@@ -88,6 +88,8 @@ export const person: Person = {
   activity: [],
   bypassPct: null,
   coverage: { reported: 4, captured: 4, notCaptured: 0, windows: [] },
+  toolCalls: null,
+  failedCalls: 0,
 };
 export const linkedPerson: Person = {
   ...person,
@@ -138,7 +140,7 @@ const session: Session = {
   prompts: 1,
   modelCalls: 1,
   events: null,
-  friction: { frustrated: 0, interrupted: 0, destructive: 0 },
+  friction: { interrupted: 0, failedCalls: 0 },
   bypassPct: null,
   coverage: { captured: 1, notCaptured: 0, reported: 1, windows: [] },
   fieldsMissing: false,
@@ -159,10 +161,10 @@ export const sessions = {
     label: { source: "recap", text: "Codex taxonomy analysis" },
     prompts: 34,
     modelCalls: 640,
-    friction: { frustrated: 1, interrupted: 1, destructive: 0 },
+    friction: { interrupted: 1, failedCalls: 0 },
     coverage: { captured: 640, notCaptured: 94, reported: 734, windows: [] },
   }),
-  codexParent: S({ span: 18 * MIN + 40_000, label: { source: "recap", text: "Pomodoro timer web app" }, prompts: 6, modelCalls: 41, friction: { frustrated: 0, interrupted: 1, destructive: 0 } }),
+  codexParent: S({ span: 18 * MIN + 40_000, label: { source: "recap", text: "Pomodoro timer web app" }, prompts: 6, modelCalls: 41, friction: { interrupted: 1, failedCalls: 0 } }),
   codexChild: S({ start: at(8, 14, 26), span: 3 * MIN + 12_000, label: { source: "recap", text: "subagent of #2 · thread_spawn" }, prompts: 2, modelCalls: 9 }),
   codexReview: S({ start: at(8, 14, 37), span: MIN + 4_000, label: { source: "recap", text: "review of #5" }, prompts: 1, modelCalls: 4 }),
   codexFork: S({
@@ -172,7 +174,7 @@ export const sessions = {
     label: { source: "recap", text: "Add Expo mobile skeleton" },
     prompts: 9,
     modelCalls: 63,
-    friction: { frustrated: 0, interrupted: 0, destructive: 2 },
+    friction: { interrupted: 0, failedCalls: 0 },
   }),
 };
 

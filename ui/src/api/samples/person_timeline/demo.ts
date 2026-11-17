@@ -5,7 +5,72 @@ const sample: components["schemas"]["PersonTimelineResponse"] = {
   "data": {
     "analytics": [],
     "binSeconds": 3600,
-    "friction": [],
+    "friction": [
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T14:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 3,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T15:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 1,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T16:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T17:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-02T22:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 3,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-03T20:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 2,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-03T21:00:00Z",
+        "tool": null
+      },
+      {
+        "count": 1,
+        "detail": "failed calls",
+        "kind": "failed",
+        "promptIndex": null,
+        "t": "2026-11-04T18:00:00Z",
+        "tool": null
+      }
+    ],
     "from": "2026-11-02T05:31:00Z",
     "modelCalls": [
       {

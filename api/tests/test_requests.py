@@ -12,13 +12,12 @@ from tests.builders import (
     body_chunks,
     cid_of,
     complete_meta,
-    end_batches,
     headers_on,
     limits_on_last_call,
     sse,
     timing,
 )
-from tests.test_session import ENV, S1, H, error_on_query, prompt
+from tests.test_session import S1, H, error_on_query, prompt
 
 TOOL_ID = "toolu_01ABCDEF"
 SECRET = "Bearer " + "fake" * 10  # a credential-shaped string the API must redact
@@ -376,26 +375,6 @@ def test_details_error(dataset, pg_client_for, write_sample, monkeypatch):
 
 
 # --- one event ----------------------------------------------------------------------------------
-
-
-def test_event_unknown_is_a_typed_404(dataset, pg_client_for):
-    """Analytics events stay in the raw files: no id opens one, a sent event's included."""
-    cc = ClaudeCode(dataset, S1)
-    prompt(cc, f"{H}:00:10", "p1", 1)
-    cc.event(f"{H}:00:10", "tengu_paste_text", env=ENV, batch="batch-x", pastedTextBytes=2_048)
-    end_batches(dataset)
-    client = pg_client_for(dataset)
-    for eid in ("nope", "batch-x:0", "batch-x:1"):
-        r = client.get(f"/api/v1/events/{eid}")
-        assert r.status_code == 404 and r.json()["error"]["code"] == "http_404"
-
-
-def test_event_error(dataset, pg_client_for, write_sample, monkeypatch):
-    cc = ClaudeCode(dataset, S1)
-    prompt(cc, f"{H}:00:10", "p1", 1)
-    client = pg_client_for(dataset)
-    error_on_query(client, monkeypatch)
-    write_sample(client, client.get("/api/v1/events/batch-x:1"), "error", status=500)
 
 
 def test_request_that_ended_in_a_disconnect(dataset, pg_client_for):

@@ -36,7 +36,6 @@ const sample: components["schemas"]["SessionResponse"] = {
     "client": "cli",
     "clientVersion": "2.1.308",
     "commit": null,
-    "costUsd": null,
     "coverage": null,
     "device": {
       "deviceId": "5e8024215ed54d7fef870262205de55f82ac99815d210ca24bfc462a3208125b",
@@ -48,10 +47,10 @@ const sample: components["schemas"]["SessionResponse"] = {
     "end": null,
     "events": null,
     "facts": null,
+    "failedCalls": 16,
     "fieldsMissing": false,
     "friction": {
-      "destructive": 0,
-      "frustrated": 0,
+      "failedCalls": 16,
       "interrupted": 0
     },
     "hiddenCalls": 0,
@@ -77,6 +76,7 @@ const sample: components["schemas"]["SessionResponse"] = {
     },
     "personId": "7d2e0000-0000-4000-8000-00000000a41c",
     "prompts": 38,
+    "recording": "metadata",
     "repo": null,
     "sessionId": "d7ee5e66-a84c-4d8e-8455-45c27d00ec4a",
     "start": "2026-11-02T05:31:51.155051Z",
@@ -90,6 +90,39 @@ const sample: components["schemas"]["SessionResponse"] = {
       "output": 694376
     },
     "toolCalls": 516,
+    "tools": {
+      "byName": {
+        "Agent": 3,
+        "Artifact": 2,
+        "AskUserQuestion": 4,
+        "Bash": 454,
+        "Edit": 7,
+        "Read": 12,
+        "ToolSearch": 1,
+        "Write": 14
+      },
+      "calls": 497,
+      "listChanges": 1,
+      "offered": 18,
+      "sources": [
+        {
+          "calls": {
+            "Agent": 3,
+            "Artifact": 2,
+            "AskUserQuestion": 4,
+            "Bash": 454,
+            "Edit": 7,
+            "Read": 12,
+            "ToolSearch": 1,
+            "Write": 14
+          },
+          "offered": 18,
+          "source": "Built-in",
+          "used": 8
+        }
+      ],
+      "used": 8
+    },
     "turns": 38,
     "turnsInterrupted": 0,
     "work": {

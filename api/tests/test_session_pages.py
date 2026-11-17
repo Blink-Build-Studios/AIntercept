@@ -20,7 +20,7 @@ from tests.conftest import PgDataset, pg_admin
 from tests.test_codex import codex_work
 from tests.test_drawer import SIDES, Side
 
-PAGES = ("", "/timeline", "/state", "/prompts", "/turns", "/requests", "/events")
+PAGES = ("", "/timeline", "/state", "/prompts", "/turns", "/requests")
 
 
 def codex_threads(ds: Dataset) -> None:
@@ -112,10 +112,6 @@ def session_urls(side: Side, sid: str) -> list[str]:
         f"{base}/requests?q=model",
         f"{base}/requests?q=kind%3Danalytics",
         f"{base}/requests?q=status%3DERR",
-        f"{base}/events?internal=true&pageSize=7&page=2",
-        f"{base}/events?q=tool&pageSize=10",
-        f"{base}/events?pageSize=3&page=3",
-        f"{base}/events?pageSize=20&page=99",
         f"{base}/prompts?pageSize=2&prompt=3",
         f"{base}/prompts?pageSize=20&prompt=999",
         f"{base}/turns?pageSize=2&page=2",
@@ -136,7 +132,6 @@ def session_urls(side: Side, sid: str) -> list[str]:
             f"{base}/prompts?{brush}",
             f"{base}/requests?{brush}",
             f"{base}/requests?{early}&order=desc&pageSize=2&page=2",
-            f"{base}/events?{brush}&pageSize=5&page=2",
         ]
     return urls
 
@@ -154,12 +149,12 @@ def test_the_cases_are_all_there(sides):
             seen["titled"] += h["label"]["source"] == "title"
             seen["limits"] += h["limitsAtEnd"] is not None
             # What only Claude Code's analytics fed is null or empty, whatever the session sent.
-            assert h["coverage"] is None and h["events"] is None and h["costUsd"] is None, sid
+            assert h["coverage"] is None and h["events"] is None and "costUsd" not in h, sid
             t = side.new.get(f"{base}/timeline").json()["data"]
             for lane in ("prompts", "modelCalls", "context"):
                 seen[lane] += bool(t[lane])
-            assert not any(t[lane] for lane in ("analytics", "notCaptured", "friction", "compactions")), sid
-            assert side.new.get(f"{base}/events").json()["meta"]["total"] == 0
+            assert not any(t[lane] for lane in ("analytics", "notCaptured", "compactions")), sid
+            assert {m["kind"] for m in t["friction"]} <= {"interrupted", "failed"}, sid
             for item in side.new.get(f"{base}/prompts?pageSize=200").json()["data"]:
                 seen[item["type"]] += 1
                 seen["steps"] += len(item.get("steps") or [])
@@ -177,15 +172,16 @@ def test_the_cases_are_all_there(sides):
 # What each session page reads (§6.1): its `sessions` row (and its children and, for a Codex thread
 # without a title of its own, its title call), then the page's statements.
 SESSION = {"session", "children", "title"}
+# §11S: the header's and the range's tools and failures (key rows, the few tool lists they name), the
+# timeline's failed calls per bin.
 READS = {
-    "": SESSION,
-    "/timeline": SESSION | {"cells", "minutes", "typed", "context", "turn_blocks", "work_keys"},
-    "/state": SESSION | {"cells", "item_counts", "keys", "credentials", "extra_rows"},
+    "": SESSION | {"keys", "tool_lists"},
+    "/timeline": SESSION | {"cells", "minutes", "typed", "context", "turn_blocks", "work_keys", "failed_keys"},
+    "/state": SESSION | {"cells", "item_counts", "keys", "credentials", "extra_rows", "tool_lists"},
     "/prompts": SESSION | {"item_span", "prompt_at", "items", "steps"},
     "/turns": SESSION | {"turn_count", "turn_at", "turns", "turn_steps", "threads"},
     "/requests": SESSION
     | {"credentials", "cells", "minutes", "extra_rows", "call_rows", "prompt_indexes", "step_numbers"},
-    "/events": SESSION,
 }
 # What a page draws, whatever it reads: the timeline's context points (one per main-thread call) and
 # typed prompts, and a page of prompts' steps.

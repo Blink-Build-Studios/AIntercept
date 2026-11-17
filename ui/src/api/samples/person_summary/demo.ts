@@ -15,12 +15,14 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
       "skills": null,
       "variesBySession": null
     },
+    "compactions": 3,
     "coverage": {
       "captured": 640,
       "notCaptured": 0,
       "reported": null,
       "windows": []
     },
+    "failedCalls": 16,
     "footprint": {
       "codeShipped": {
         "commits": 0,
@@ -42,11 +44,22 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
       },
       "prompts": 38,
       "subagentCalls": 71,
-      "toolCalls": null,
-      "toolsByName": {},
+      "toolCalls": 497,
+      "toolsByName": {
+        "Agent": 3,
+        "Artifact": 2,
+        "AskUserQuestion": 4,
+        "Bash": 454,
+        "Edit": 7,
+        "Read": 12,
+        "ToolSearch": 1,
+        "Write": 14
+      },
       "topCommandWords": [],
       "turns": 38
     },
+    "images": null,
+    "recording": "metadata",
     "ribbon": {
       "accountCalls": 109,
       "analyticsBatches": 0,
@@ -69,6 +82,39 @@ const sample: components["schemas"]["PersonSummaryResponse"] = {
         "output": 694376
       },
       "toolsReachable": null
+    },
+    "tools": {
+      "byName": {
+        "Agent": 3,
+        "Artifact": 2,
+        "AskUserQuestion": 4,
+        "Bash": 454,
+        "Edit": 7,
+        "Read": 12,
+        "ToolSearch": 1,
+        "Write": 14
+      },
+      "calls": 497,
+      "listChanges": 1,
+      "offered": 18,
+      "sources": [
+        {
+          "calls": {
+            "Agent": 3,
+            "Artifact": 2,
+            "AskUserQuestion": 4,
+            "Bash": 454,
+            "Edit": 7,
+            "Read": 12,
+            "ToolSearch": 1,
+            "Write": 14
+          },
+          "offered": 18,
+          "source": "Built-in",
+          "used": 8
+        }
+      ],
+      "used": 8
     },
     "work": {
       "activeMs": 12899106.607953,

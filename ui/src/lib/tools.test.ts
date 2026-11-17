@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapseUnused, toolLine, toolSource, toolsOffered } from "./tools";
+import { collapseUnused, sourceRows, toolLine, toolSource, toolsOffered } from "./tools";
 
 // CompTurns → "Work line vocabulary · content-free" (handoff §11S): tool names and counts.
 describe("toolLine (handoff §11S, CompTurns content-free vocabulary)", () => {
@@ -87,5 +87,32 @@ describe("collapseUnused: servers never called fold into `N more MCP servers`", 
   it("leaves a short list alone", () => {
     const rows = [row("Built-in", 3, 1), row("mcp:sentry", 22)];
     expect(collapseUnused(rows, 5)).toEqual(rows);
+  });
+});
+
+describe("sourceRows: the API's tool sources as ToolsOfferedUsed rows (handoff §11S)", () => {
+  it("calls read as the top 4 with counts, then …; none reads null; past 5 rows unused servers fold", () => {
+    const rows = sourceRows(
+      [
+        { source: "Built-in", offered: 23, used: 9, calls: { Bash: 488, Read: 402, Edit: 171, Grep: 96, Glob: 31 } },
+        { source: "mcp:linear", offered: 41, used: 2, calls: { list_issues: 2, get_issue: 1 } },
+        { source: "mcp:github", offered: 38, used: 1, calls: { get_pull_request: 1 } },
+        { source: "mcp:sentry", offered: 22, used: 0, calls: {} },
+        { source: "mcp:a", offered: 100, used: 0, calls: {} },
+        { source: "mcp:b", offered: 180, used: 0, calls: {} },
+      ],
+      5,
+    );
+    expect(rows.map((r) => [r.source, r.offered, r.used, r.calls])).toEqual([
+      ["Built-in", 23, 9, "Bash 488 · Read 402 · Edit 171 · Grep 96 · …"],
+      ["mcp:linear", 41, 2, "list_issues 2 · get_issue 1"],
+      ["mcp:github", 38, 1, "get_pull_request 1"],
+      ["mcp:sentry", 22, 0, null],
+      ["2 more MCP servers", 280, 0, null],
+    ]);
+  });
+
+  it("an unknown offered count stays unknown", () => {
+    expect(sourceRows([{ source: "Built-in", offered: null, used: 1, calls: { Bash: 2 } }], 5)[0]?.offered).toBeNull();
   });
 });

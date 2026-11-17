@@ -124,6 +124,7 @@ class ClaudeCode:
         agent_type: str | None = None,
         agent_id: str | None = None,
         tool_uses: list[str] | None = None,
+        tools_offered: list[str] | None = None,
         ip: str | None = None,
         complete=True,
         status: int | None = 200,
@@ -134,7 +135,8 @@ class ClaudeCode:
         """One model call; returns its request id. `parsed=False` mimics pre-parser rows (no identity);
         `complete=False` leaves it streaming (no complete row yet). `status=None` is a transport failure:
         no response headers, and the complete row carries only the proxy's `error`. `bytes_down` adds a
-        response body chunk of that size. `tool_uses` names the tools the response asked for, in order."""
+        response body chunk of that size. `tool_uses` names the tools the response asked for, in order;
+        `tools_offered`, the request's tool list (both as named on the wire: `Bash`, `mcp__linear__list_issues`)."""
         n = next(self._n)
         rid = f"req_{self.session[:8]}_{n:04d}"
         headers = {
@@ -174,11 +176,8 @@ class ClaudeCode:
                         **({"cache_read_tokens": cache_read} if cache_read is not None else {}),
                         **({"cache_write_tokens": cache_write} if cache_write is not None else {}),
                         **({"stop_reason": stop_reason} if stop_reason else {}),
-                        **(
-                            {"tool_uses": [{"name": t, "tool": t, "kind": "builtin", "count": 1} for t in tool_uses]}
-                            if tool_uses
-                            else {}
-                        ),
+                        **({"tool_uses": [{**_tool_ref(t), "count": 1} for t in tool_uses]} if tool_uses else {}),
+                        **({"tools_available": [_tool_ref(t) for t in tools_offered]} if tools_offered else {}),
                     }
                 )
                 if parsed:
@@ -645,3 +644,11 @@ def one_stream_one_id(ds: Dataset) -> None:
     for r in ds.rows:
         if "-ws-" in r["correlation_id"] and r.get("session_id"):
             r["correlation_id"] += "-" + r["session_id"][-6:]
+
+
+def _tool_ref(name: str) -> dict[str, str]:
+    """A tool as the observer names it (events.ToolRef): an MCP tool's server and bare name split out."""
+    if name.startswith("mcp__") and name.count("__") >= 2:
+        _, server, tool = name.split("__", 2)
+        return {"name": name, "server": server, "tool": tool, "kind": "mcp"}
+    return {"name": name, "tool": name, "kind": "builtin"}

@@ -9,7 +9,6 @@ from fastapi import APIRouter, HTTPException, Request
 from aintercept_api import pages
 from aintercept_api.models.common import ErrorResponse, Meta
 from aintercept_api.models.requests import (
-    EventResponse,
     RequestDetailsResponse,
     RequestRawResponse,
     RequestResponse,
@@ -53,13 +52,3 @@ def get_request_details(request: Request, requestId: str) -> RequestDetailsRespo
         if d is None:
             raise _missing("request", requestId)
         return RequestDetailsResponse(data=d, meta=_meta(request, reader))
-
-
-@router.get("/events/{eventId}", response_model=EventResponse)
-def get_event(request: Request, eventId: str) -> EventResponse:  # noqa: N803
-    """An EventRow's `eventId`: none since analytics events aren't stored (always a 404)."""
-    with pages.read(request, "event") as reader:
-        e = reader.event(eventId)
-        if e is None:
-            raise _missing("event", eventId)
-        return EventResponse(data=e, meta=_meta(request, reader))
