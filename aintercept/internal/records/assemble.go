@@ -45,7 +45,8 @@ const (
 	CaseBatchSession             = "batch.session"               // an analytics request's call, released: its batch names a session
 	CaseBatchNoSession           = "batch.no_session"            // released: its batch names none
 	CaseAccountSighting          = "account.sighting"            // a row saying who an account is
-	CaseVerdict                  = "verdict"                     // an Interceptor verdict: not a record
+	CaseVerdict                  = "verdict"                     // an Interceptor verdict: its record
+	CaseVerdictOverCap           = "verdict.over_cap"            // a verdict past its call's MaxVerdictsPerCall: dropped
 	CaseUnknownPhase             = "unknown.phase"               // a phase this code doesn't know: ignored, and fails a real-data run
 )
 
@@ -56,8 +57,12 @@ var AllCases = []string{
 	CaseEndComplete, CaseEndCompleteNoHeaders, CaseEndWSTurn, CaseEndWSConnection,
 	CaseEndDisconnect, CaseEndDisconnectEarly, CaseEndDisconnectThenHeaders, CaseEndSplitKey, CaseLateAfterDone,
 	CaseEventWithID, CaseEventNoID, CaseEventRepeat, CaseEventNoPayload,
-	CaseBatchSession, CaseBatchNoSession, CaseAccountSighting, CaseVerdict, CaseUnknownPhase,
+	CaseBatchSession, CaseBatchNoSession, CaseAccountSighting, CaseVerdict, CaseVerdictOverCap, CaseUnknownPhase,
 }
+
+// MaxVerdictsPerCall bounds the verdicts recorded for one call (a reply's
+// text can be answered piece by piece): past it, they're counted, not kept.
+const MaxVerdictsPerCall = 1000
 
 // How long a call's state is kept, in data time (the newest row seen): a call
 // still waiting for its ending, and an ended call's marker, which turns away
@@ -93,6 +98,8 @@ type call struct {
 	// batch_members holds them: by routing key and event key, the last one's
 	// name and session. Dropped once its call record is written.
 	members map[string]batchMember
+	// verdicts is how many of its Interceptor's verdicts were seen.
+	verdicts int
 }
 
 type batchMember struct{ name, session string }
@@ -428,11 +435,39 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 		}
 		a.held.events = append(a.held.events, rec)
 	case events.PhaseVerdict:
+		if c := a.calls[e.CorrelationID]; c != nil {
+			if c.verdicts++; c.verdicts > MaxVerdictsPerCall {
+				a.hit(CaseVerdictOverCap)
+				return out
+			}
+		}
 		a.hit(CaseVerdict)
+		if r, ok := a.verdict(e); ok {
+			out = append(out, r)
+		}
 	default:
 		a.hit(CaseUnknownPhase)
 	}
 	return out
+}
+
+// verdict is an Interceptor verdict's record, routed by its call.
+func (a *Assembler) verdict(e *events.Event) (Record, bool) {
+	v := e.Verdict
+	if v == nil || e.CorrelationID == "" {
+		return Record{}, false
+	}
+	var ann string
+	if len(v.Annotations) > 0 {
+		b, _ := json.Marshal(v.Annotations)
+		ann = string(b)
+	}
+	r := a.record(Record{Kind: KindVerdict, CallID: e.CorrelationID, RoutingKey: "c:" + e.CorrelationID, Verdict: &Verdict{
+		NS: e.TimestampNS, Callback: v.Callback, Action: v.Action, Applied: v.Applied, Mode: v.Mode, MessageID: v.MessageID,
+		RespondMode: v.RespondMode, Reason: v.Reason, AnnotationsJSON: ann, LatencyMS: v.LatencyMS,
+	}}, e.ObserverInstance)
+	r.Verdict.Seq = a.seq
+	return r, true
 }
 
 // start is a call's call_start.

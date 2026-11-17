@@ -29,6 +29,7 @@ type Rows struct {
 	Devices            []Device
 	Parents            []Parent
 	Dirty              []Dirty
+	Verdicts           []Verdict
 	// ReportIDs are the model calls' request and client request ids: the
 	// minutes of their reports are marked dirty too (§4.3).
 	ReportIDs []string
@@ -112,6 +113,12 @@ type Parent struct {
 	First               int64
 }
 
+// Verdict is a verdicts row: an Interceptor verdict on a call.
+type Verdict struct {
+	CallID string
+	V      records.Verdict
+}
+
 // Dirty is a rollup row to recompute (§5.3).
 type Dirty struct{ Kind, Key string }
 
@@ -128,6 +135,7 @@ func Collapse(recs []records.Record) Rows {
 	dirty := map[Dirty]bool{}
 	reports, reported := map[string]bool{}, map[string]bool{}
 	stepIDs, toolUseIDs, resultIDs := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	verdicts := map[string]*Verdict{}
 	var last int64
 
 	account := func(id string, ns int64) *Account {
@@ -166,6 +174,10 @@ func Collapse(recs []records.Record) Rows {
 	for i := range recs {
 		r := &recs[i]
 		switch {
+		case r.Kind == records.KindVerdict && r.Verdict != nil:
+			verdicts[fmt.Sprintf("%s\x00%020d", r.CallID, r.Verdict.Seq)] = &Verdict{CallID: r.CallID, V: *r.Verdict}
+			last = max(last, r.Verdict.NS)
+
 		case r.Kind == records.KindAccount && r.Account != nil:
 			s := r.Account
 			a := account(s.AccountID, s.NS)
@@ -335,6 +347,7 @@ func Collapse(recs []records.Record) Rows {
 	out.SessionCredentials = sortedBy(sessCreds, func(s *Span) string { return s.A + "\x00" + s.B })
 	out.Devices = sortedBy(devs, func(d *Device) string { return d.Account + "\x00" + d.Device })
 	out.Parents = sortedBy(parents, func(p *Parent) string { return p.Child + "\x00" + p.Parent })
+	out.Verdicts = sortedBy(verdicts, func(v *Verdict) string { return fmt.Sprintf("%s\x00%020d", v.CallID, v.V.Seq) })
 	for d := range dirty {
 		out.Dirty = append(out.Dirty, d)
 	}

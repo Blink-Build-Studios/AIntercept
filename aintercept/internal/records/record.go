@@ -23,9 +23,11 @@ const (
 	KindWSConnection = "ws_connection" // a WebSocket connection's own row, at its close
 	KindClientEvent  = "client_event"  // one analytics event a client reported
 	KindAccount      = "account"       // who an account is, as a row named it
+	KindVerdict      = "verdict"       // one verdict a call's Interceptor returned
 )
 
-// Record is one canonical record. Exactly one of Call, Event and Account is set,
+// Record is one canonical record. Exactly one of Call, Event, Account and
+// Verdict is set,
 // except that a client event also carries its batch request's call (Call: the
 // carrier's identity, for routing an event that names no session).
 type Record struct {
@@ -62,6 +64,24 @@ type Record struct {
 	Call    *canon.Request `parquet:"call,optional"`
 	Event   *canon.Event   `parquet:"event,optional"`
 	Account *Account       `parquet:"account,optional"`
+	Verdict *Verdict       `parquet:"verdict,optional"`
+}
+
+// Verdict is one Interceptor verdict (events.Verdict), as the verdicts table
+// holds it: keyed by its call (CallID) and Seq, the assembler's sequence
+// number for its record.
+type Verdict struct {
+	Seq             int64  `parquet:"seq"`
+	NS              int64  `parquet:"ns"`
+	Callback        string `parquet:"callback"`
+	Action          string `parquet:"action"`
+	Applied         bool   `parquet:"applied"`
+	Mode            string `parquet:"mode,optional"`
+	MessageID       string `parquet:"message_id,optional"`
+	RespondMode     string `parquet:"respond_mode,optional"`
+	Reason          string `parquet:"reason,optional"`
+	AnnotationsJSON string `parquet:"annotations_json,optional"`
+	LatencyMS       int64  `parquet:"latency_ms,optional"`
 }
 
 // Account is one sighting of who an account is.

@@ -151,6 +151,8 @@ func (Transport) EnumDescriptor() ([]byte, []int) {
 type Role int32
 
 const (
+	// The wire doesn't say whose it is: an item with no role (Codex's
+	// compaction), or a role AIntercept doesn't know.
 	Role_ROLE_UNSPECIFIED Role = 0
 	Role_ROLE_USER        Role = 1
 	// The model: its reply, its reasoning, each tool call it made.
@@ -749,6 +751,7 @@ type Part struct {
 	//	*Part_ToolCall
 	//	*Part_ToolResult
 	//	*Part_Opaque
+	//	*Part_ToolAdded
 	Kind isPart_Kind `protobuf_oneof:"kind"`
 	// "<message id>/<position in the message>": for Fetch and Replace.
 	Id string `protobuf:"bytes,10,opt,name=id,proto3" json:"id,omitempty"`
@@ -847,6 +850,15 @@ func (x *Part) GetOpaque() *Opaque {
 	return nil
 }
 
+func (x *Part) GetToolAdded() *ToolAdded {
+	if x != nil {
+		if x, ok := x.Kind.(*Part_ToolAdded); ok {
+			return x.ToolAdded
+		}
+	}
+	return nil
+}
+
 func (x *Part) GetId() string {
 	if x != nil {
 		return x.Id
@@ -899,6 +911,10 @@ type Part_Opaque struct {
 	Opaque *Opaque `protobuf:"bytes,5,opt,name=opaque,proto3,oneof"`
 }
 
+type Part_ToolAdded struct {
+	ToolAdded *ToolAdded `protobuf:"bytes,6,opt,name=tool_added,json=toolAdded,proto3,oneof"`
+}
+
 func (*Part_Text) isPart_Kind() {}
 
 func (*Part_Media) isPart_Kind() {}
@@ -908,6 +924,8 @@ func (*Part_ToolCall) isPart_Kind() {}
 func (*Part_ToolResult) isPart_Kind() {}
 
 func (*Part_Opaque) isPart_Kind() {}
+
+func (*Part_ToolAdded) isPart_Kind() {}
 
 type Text struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1198,6 +1216,54 @@ func (*Opaque) Descriptor() ([]byte, []int) {
 	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{11}
 }
 
+// A tool the harness adds to the conversation's tool catalog mid-session
+// (Claude Code's tool_addition block, in a ROLE_SYSTEM message). Like the
+// request's tool catalog, its definition isn't sent; size is the block's size
+// in the request. Never changed: a Replace returns it as it came.
+type ToolAdded struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ToolAdded) Reset() {
+	*x = ToolAdded{}
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolAdded) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolAdded) ProtoMessage() {}
+
+func (x *ToolAdded) ProtoReflect() protoreflect.Message {
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolAdded.ProtoReflect.Descriptor instead.
+func (*ToolAdded) Descriptor() ([]byte, []int) {
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ToolAdded) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type RequestMessages struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Call  *Call                  `protobuf:"bytes,1,opt,name=call,proto3" json:"call,omitempty"`
@@ -1220,7 +1286,7 @@ type RequestMessages struct {
 
 func (x *RequestMessages) Reset() {
 	*x = RequestMessages{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[12]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1232,7 +1298,7 @@ func (x *RequestMessages) String() string {
 func (*RequestMessages) ProtoMessage() {}
 
 func (x *RequestMessages) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[12]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1245,7 +1311,7 @@ func (x *RequestMessages) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestMessages.ProtoReflect.Descriptor instead.
 func (*RequestMessages) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{12}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RequestMessages) GetCall() *Call {
@@ -1310,7 +1376,7 @@ type RequestVerdict struct {
 
 func (x *RequestVerdict) Reset() {
 	*x = RequestVerdict{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[13]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1322,7 +1388,7 @@ func (x *RequestVerdict) String() string {
 func (*RequestVerdict) ProtoMessage() {}
 
 func (x *RequestVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[13]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1335,7 +1401,7 @@ func (x *RequestVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestVerdict.ProtoReflect.Descriptor instead.
 func (*RequestVerdict) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{13}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RequestVerdict) GetMessages() []*MessageVerdict {
@@ -1392,7 +1458,7 @@ type MessageVerdict struct {
 
 func (x *MessageVerdict) Reset() {
 	*x = MessageVerdict{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[14]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1404,7 +1470,7 @@ func (x *MessageVerdict) String() string {
 func (*MessageVerdict) ProtoMessage() {}
 
 func (x *MessageVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[14]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1417,7 +1483,7 @@ func (x *MessageVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageVerdict.ProtoReflect.Descriptor instead.
 func (*MessageVerdict) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{14}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MessageVerdict) GetMessageId() string {
@@ -1524,7 +1590,7 @@ type Accept struct {
 
 func (x *Accept) Reset() {
 	*x = Accept{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[15]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1536,7 +1602,7 @@ func (x *Accept) String() string {
 func (*Accept) ProtoMessage() {}
 
 func (x *Accept) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[15]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1549,7 +1615,7 @@ func (x *Accept) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Accept.ProtoReflect.Descriptor instead.
 func (*Accept) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{15}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{16}
 }
 
 // Release nothing yet: the pending text comes back, with whatever arrives
@@ -1562,7 +1628,7 @@ type Hold struct {
 
 func (x *Hold) Reset() {
 	*x = Hold{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1574,7 +1640,7 @@ func (x *Hold) String() string {
 func (*Hold) ProtoMessage() {}
 
 func (x *Hold) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[16]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1587,7 +1653,7 @@ func (x *Hold) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hold.ProtoReflect.Descriptor instead.
 func (*Hold) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{16}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{17}
 }
 
 // Put this version of the message in place. Every part of the original comes
@@ -1605,7 +1671,7 @@ type Replace struct {
 
 func (x *Replace) Reset() {
 	*x = Replace{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1617,7 +1683,7 @@ func (x *Replace) String() string {
 func (*Replace) ProtoMessage() {}
 
 func (x *Replace) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[17]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1630,7 +1696,7 @@ func (x *Replace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Replace.ProtoReflect.Descriptor instead.
 func (*Replace) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{17}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Replace) GetMessage() *ConvMessage {
@@ -1657,7 +1723,7 @@ type Respond struct {
 
 func (x *Respond) Reset() {
 	*x = Respond{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1669,7 +1735,7 @@ func (x *Respond) String() string {
 func (*Respond) ProtoMessage() {}
 
 func (x *Respond) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[18]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1682,7 +1748,7 @@ func (x *Respond) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Respond.ProtoReflect.Descriptor instead.
 func (*Respond) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{18}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Respond) GetText() string {
@@ -1701,7 +1767,7 @@ type Fetch struct {
 
 func (x *Fetch) Reset() {
 	*x = Fetch{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1713,7 +1779,7 @@ func (x *Fetch) String() string {
 func (*Fetch) ProtoMessage() {}
 
 func (x *Fetch) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[19]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1726,7 +1792,7 @@ func (x *Fetch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Fetch.ProtoReflect.Descriptor instead.
 func (*Fetch) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{19}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Fetch) GetPartIds() []string {
@@ -1751,7 +1817,7 @@ type CallVerdict struct {
 
 func (x *CallVerdict) Reset() {
 	*x = CallVerdict{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1763,7 +1829,7 @@ func (x *CallVerdict) String() string {
 func (*CallVerdict) ProtoMessage() {}
 
 func (x *CallVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[20]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1776,7 +1842,7 @@ func (x *CallVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallVerdict.ProtoReflect.Descriptor instead.
 func (*CallVerdict) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{20}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CallVerdict) GetAction() isCallVerdict_Action {
@@ -1856,7 +1922,7 @@ type ResponseMessage struct {
 
 func (x *ResponseMessage) Reset() {
 	*x = ResponseMessage{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1868,7 +1934,7 @@ func (x *ResponseMessage) String() string {
 func (*ResponseMessage) ProtoMessage() {}
 
 func (x *ResponseMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[21]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1881,7 +1947,7 @@ func (x *ResponseMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseMessage.ProtoReflect.Descriptor instead.
 func (*ResponseMessage) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{21}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ResponseMessage) GetCall() *Call {
@@ -1922,7 +1988,7 @@ type Annotation struct {
 
 func (x *Annotation) Reset() {
 	*x = Annotation{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1934,7 +2000,7 @@ func (x *Annotation) String() string {
 func (*Annotation) ProtoMessage() {}
 
 func (x *Annotation) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[22]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1947,7 +2013,7 @@ func (x *Annotation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Annotation.ProtoReflect.Descriptor instead.
 func (*Annotation) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{22}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Annotation) GetKey() string {
@@ -1987,7 +2053,7 @@ type CallRecord struct {
 
 func (x *CallRecord) Reset() {
 	*x = CallRecord{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1999,7 +2065,7 @@ func (x *CallRecord) String() string {
 func (*CallRecord) ProtoMessage() {}
 
 func (x *CallRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[23]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2012,7 +2078,7 @@ func (x *CallRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallRecord.ProtoReflect.Descriptor instead.
 func (*CallRecord) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{23}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CallRecord) GetCall() *Call {
@@ -2085,7 +2151,7 @@ type ResponseInfo struct {
 
 func (x *ResponseInfo) Reset() {
 	*x = ResponseInfo{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2097,7 +2163,7 @@ func (x *ResponseInfo) String() string {
 func (*ResponseInfo) ProtoMessage() {}
 
 func (x *ResponseInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[24]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2110,7 +2176,7 @@ func (x *ResponseInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseInfo.ProtoReflect.Descriptor instead.
 func (*ResponseInfo) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{24}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ResponseInfo) GetStatus() int32 {
@@ -2214,7 +2280,7 @@ type ToolCount struct {
 
 func (x *ToolCount) Reset() {
 	*x = ToolCount{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2226,7 +2292,7 @@ func (x *ToolCount) String() string {
 func (*ToolCount) ProtoMessage() {}
 
 func (x *ToolCount) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[25]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2239,7 +2305,7 @@ func (x *ToolCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCount.ProtoReflect.Descriptor instead.
 func (*ToolCount) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{25}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ToolCount) GetName() string {
@@ -2277,7 +2343,7 @@ type RecordedVerdict struct {
 
 func (x *RecordedVerdict) Reset() {
 	*x = RecordedVerdict{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2289,7 +2355,7 @@ func (x *RecordedVerdict) String() string {
 func (*RecordedVerdict) ProtoMessage() {}
 
 func (x *RecordedVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[26]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2302,7 +2368,7 @@ func (x *RecordedVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordedVerdict.ProtoReflect.Descriptor instead.
 func (*RecordedVerdict) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{26}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RecordedVerdict) GetCallback() string {
@@ -2362,7 +2428,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[27]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2374,7 +2440,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_interceptor_v2_interceptor_proto_msgTypes[27]
+	mi := &file_interceptor_v2_interceptor_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2387,7 +2453,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{27}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{28}
 }
 
 var File_interceptor_v2_interceptor_proto protoreflect.FileDescriptor
@@ -2446,14 +2512,16 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x123\n" +
 	"\x04role\x18\x02 \x01(\x0e2\x1f.aintercept.interceptor.v2.RoleR\x04role\x125\n" +
 	"\x05parts\x18\x03 \x03(\v2\x1f.aintercept.interceptor.v2.PartR\x05parts\x12\x14\n" +
-	"\x05index\x18\x04 \x01(\x05R\x05index\"\x9a\x03\n" +
+	"\x05index\x18\x04 \x01(\x05R\x05index\"\xe1\x03\n" +
 	"\x04Part\x125\n" +
 	"\x04text\x18\x01 \x01(\v2\x1f.aintercept.interceptor.v2.TextH\x00R\x04text\x128\n" +
 	"\x05media\x18\x02 \x01(\v2 .aintercept.interceptor.v2.MediaH\x00R\x05media\x12B\n" +
 	"\ttool_call\x18\x03 \x01(\v2#.aintercept.interceptor.v2.ToolCallH\x00R\btoolCall\x12H\n" +
 	"\vtool_result\x18\x04 \x01(\v2%.aintercept.interceptor.v2.ToolResultH\x00R\n" +
 	"toolResult\x12;\n" +
-	"\x06opaque\x18\x05 \x01(\v2!.aintercept.interceptor.v2.OpaqueH\x00R\x06opaque\x12\x0e\n" +
+	"\x06opaque\x18\x05 \x01(\v2!.aintercept.interceptor.v2.OpaqueH\x00R\x06opaque\x12E\n" +
+	"\n" +
+	"tool_added\x18\x06 \x01(\v2$.aintercept.interceptor.v2.ToolAddedH\x00R\ttoolAdded\x12\x0e\n" +
 	"\x02id\x18\n" +
 	" \x01(\tR\x02id\x12\x10\n" +
 	"\x03ref\x18\v \x01(\bR\x03ref\x12\x12\n" +
@@ -2478,7 +2546,9 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x19\n" +
 	"\bis_error\x18\x03 \x01(\bR\aisError\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\"\b\n" +
-	"\x06Opaque\"\xfd\x01\n" +
+	"\x06Opaque\"\x1f\n" +
+	"\tToolAdded\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"\xfd\x01\n" +
 	"\x0fRequestMessages\x123\n" +
 	"\x04call\x18\x01 \x01(\v2\x1f.aintercept.interceptor.v2.CallR\x04call\x12\x16\n" +
 	"\x06format\x18\x02 \x01(\tR\x06format\x12\x18\n" +
@@ -2601,7 +2671,7 @@ func file_interceptor_v2_interceptor_proto_rawDescGZIP() []byte {
 }
 
 var file_interceptor_v2_interceptor_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_interceptor_v2_interceptor_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_interceptor_v2_interceptor_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_interceptor_v2_interceptor_proto_goTypes = []any{
 	(Mode)(0),               // 0: aintercept.interceptor.v2.Mode
 	(Transport)(0),          // 1: aintercept.interceptor.v2.Transport
@@ -2618,33 +2688,34 @@ var file_interceptor_v2_interceptor_proto_goTypes = []any{
 	(*ToolCall)(nil),        // 12: aintercept.interceptor.v2.ToolCall
 	(*ToolResult)(nil),      // 13: aintercept.interceptor.v2.ToolResult
 	(*Opaque)(nil),          // 14: aintercept.interceptor.v2.Opaque
-	(*RequestMessages)(nil), // 15: aintercept.interceptor.v2.RequestMessages
-	(*RequestVerdict)(nil),  // 16: aintercept.interceptor.v2.RequestVerdict
-	(*MessageVerdict)(nil),  // 17: aintercept.interceptor.v2.MessageVerdict
-	(*Accept)(nil),          // 18: aintercept.interceptor.v2.Accept
-	(*Hold)(nil),            // 19: aintercept.interceptor.v2.Hold
-	(*Replace)(nil),         // 20: aintercept.interceptor.v2.Replace
-	(*Respond)(nil),         // 21: aintercept.interceptor.v2.Respond
-	(*Fetch)(nil),           // 22: aintercept.interceptor.v2.Fetch
-	(*CallVerdict)(nil),     // 23: aintercept.interceptor.v2.CallVerdict
-	(*ResponseMessage)(nil), // 24: aintercept.interceptor.v2.ResponseMessage
-	(*Annotation)(nil),      // 25: aintercept.interceptor.v2.Annotation
-	(*CallRecord)(nil),      // 26: aintercept.interceptor.v2.CallRecord
-	(*ResponseInfo)(nil),    // 27: aintercept.interceptor.v2.ResponseInfo
-	(*ToolCount)(nil),       // 28: aintercept.interceptor.v2.ToolCount
-	(*RecordedVerdict)(nil), // 29: aintercept.interceptor.v2.RecordedVerdict
-	(*Ack)(nil),             // 30: aintercept.interceptor.v2.Ack
-	nil,                     // 31: aintercept.interceptor.v2.Client.HeadersEntry
-	nil,                     // 32: aintercept.interceptor.v2.CallStart.HeadersEntry
+	(*ToolAdded)(nil),       // 15: aintercept.interceptor.v2.ToolAdded
+	(*RequestMessages)(nil), // 16: aintercept.interceptor.v2.RequestMessages
+	(*RequestVerdict)(nil),  // 17: aintercept.interceptor.v2.RequestVerdict
+	(*MessageVerdict)(nil),  // 18: aintercept.interceptor.v2.MessageVerdict
+	(*Accept)(nil),          // 19: aintercept.interceptor.v2.Accept
+	(*Hold)(nil),            // 20: aintercept.interceptor.v2.Hold
+	(*Replace)(nil),         // 21: aintercept.interceptor.v2.Replace
+	(*Respond)(nil),         // 22: aintercept.interceptor.v2.Respond
+	(*Fetch)(nil),           // 23: aintercept.interceptor.v2.Fetch
+	(*CallVerdict)(nil),     // 24: aintercept.interceptor.v2.CallVerdict
+	(*ResponseMessage)(nil), // 25: aintercept.interceptor.v2.ResponseMessage
+	(*Annotation)(nil),      // 26: aintercept.interceptor.v2.Annotation
+	(*CallRecord)(nil),      // 27: aintercept.interceptor.v2.CallRecord
+	(*ResponseInfo)(nil),    // 28: aintercept.interceptor.v2.ResponseInfo
+	(*ToolCount)(nil),       // 29: aintercept.interceptor.v2.ToolCount
+	(*RecordedVerdict)(nil), // 30: aintercept.interceptor.v2.RecordedVerdict
+	(*Ack)(nil),             // 31: aintercept.interceptor.v2.Ack
+	nil,                     // 32: aintercept.interceptor.v2.Client.HeadersEntry
+	nil,                     // 33: aintercept.interceptor.v2.CallStart.HeadersEntry
 }
 var file_interceptor_v2_interceptor_proto_depIdxs = []int32{
 	0,  // 0: aintercept.interceptor.v2.Call.mode:type_name -> aintercept.interceptor.v2.Mode
 	1,  // 1: aintercept.interceptor.v2.Call.transport:type_name -> aintercept.interceptor.v2.Transport
 	4,  // 2: aintercept.interceptor.v2.Call.identity:type_name -> aintercept.interceptor.v2.Identity
 	5,  // 3: aintercept.interceptor.v2.Call.client:type_name -> aintercept.interceptor.v2.Client
-	31, // 4: aintercept.interceptor.v2.Client.headers:type_name -> aintercept.interceptor.v2.Client.HeadersEntry
+	32, // 4: aintercept.interceptor.v2.Client.headers:type_name -> aintercept.interceptor.v2.Client.HeadersEntry
 	3,  // 5: aintercept.interceptor.v2.CallStart.call:type_name -> aintercept.interceptor.v2.Call
-	32, // 6: aintercept.interceptor.v2.CallStart.headers:type_name -> aintercept.interceptor.v2.CallStart.HeadersEntry
+	33, // 6: aintercept.interceptor.v2.CallStart.headers:type_name -> aintercept.interceptor.v2.CallStart.HeadersEntry
 	7,  // 7: aintercept.interceptor.v2.CallStart.request:type_name -> aintercept.interceptor.v2.RequestInfo
 	2,  // 8: aintercept.interceptor.v2.ConvMessage.role:type_name -> aintercept.interceptor.v2.Role
 	9,  // 9: aintercept.interceptor.v2.ConvMessage.parts:type_name -> aintercept.interceptor.v2.Part
@@ -2653,44 +2724,45 @@ var file_interceptor_v2_interceptor_proto_depIdxs = []int32{
 	12, // 12: aintercept.interceptor.v2.Part.tool_call:type_name -> aintercept.interceptor.v2.ToolCall
 	13, // 13: aintercept.interceptor.v2.Part.tool_result:type_name -> aintercept.interceptor.v2.ToolResult
 	14, // 14: aintercept.interceptor.v2.Part.opaque:type_name -> aintercept.interceptor.v2.Opaque
-	3,  // 15: aintercept.interceptor.v2.RequestMessages.call:type_name -> aintercept.interceptor.v2.Call
-	8,  // 16: aintercept.interceptor.v2.RequestMessages.messages:type_name -> aintercept.interceptor.v2.ConvMessage
-	17, // 17: aintercept.interceptor.v2.RequestVerdict.messages:type_name -> aintercept.interceptor.v2.MessageVerdict
-	22, // 18: aintercept.interceptor.v2.RequestVerdict.fetch:type_name -> aintercept.interceptor.v2.Fetch
-	21, // 19: aintercept.interceptor.v2.RequestVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	25, // 20: aintercept.interceptor.v2.RequestVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	18, // 21: aintercept.interceptor.v2.MessageVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
-	20, // 22: aintercept.interceptor.v2.MessageVerdict.replace:type_name -> aintercept.interceptor.v2.Replace
-	21, // 23: aintercept.interceptor.v2.MessageVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	19, // 24: aintercept.interceptor.v2.MessageVerdict.hold:type_name -> aintercept.interceptor.v2.Hold
-	25, // 25: aintercept.interceptor.v2.MessageVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	8,  // 26: aintercept.interceptor.v2.Replace.message:type_name -> aintercept.interceptor.v2.ConvMessage
-	18, // 27: aintercept.interceptor.v2.CallVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
-	21, // 28: aintercept.interceptor.v2.CallVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	25, // 29: aintercept.interceptor.v2.CallVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	3,  // 30: aintercept.interceptor.v2.ResponseMessage.call:type_name -> aintercept.interceptor.v2.Call
-	8,  // 31: aintercept.interceptor.v2.ResponseMessage.message:type_name -> aintercept.interceptor.v2.ConvMessage
-	3,  // 32: aintercept.interceptor.v2.CallRecord.call:type_name -> aintercept.interceptor.v2.Call
-	7,  // 33: aintercept.interceptor.v2.CallRecord.request:type_name -> aintercept.interceptor.v2.RequestInfo
-	27, // 34: aintercept.interceptor.v2.CallRecord.response:type_name -> aintercept.interceptor.v2.ResponseInfo
-	29, // 35: aintercept.interceptor.v2.CallRecord.verdicts:type_name -> aintercept.interceptor.v2.RecordedVerdict
-	28, // 36: aintercept.interceptor.v2.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v2.ToolCount
-	25, // 37: aintercept.interceptor.v2.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	6,  // 38: aintercept.interceptor.v2.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v2.CallStart
-	15, // 39: aintercept.interceptor.v2.Interceptor.OnRequest:input_type -> aintercept.interceptor.v2.RequestMessages
-	24, // 40: aintercept.interceptor.v2.Interceptor.OnReply:input_type -> aintercept.interceptor.v2.ResponseMessage
-	24, // 41: aintercept.interceptor.v2.Interceptor.OnToolCall:input_type -> aintercept.interceptor.v2.ResponseMessage
-	26, // 42: aintercept.interceptor.v2.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v2.CallRecord
-	23, // 43: aintercept.interceptor.v2.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v2.CallVerdict
-	16, // 44: aintercept.interceptor.v2.Interceptor.OnRequest:output_type -> aintercept.interceptor.v2.RequestVerdict
-	17, // 45: aintercept.interceptor.v2.Interceptor.OnReply:output_type -> aintercept.interceptor.v2.MessageVerdict
-	17, // 46: aintercept.interceptor.v2.Interceptor.OnToolCall:output_type -> aintercept.interceptor.v2.MessageVerdict
-	30, // 47: aintercept.interceptor.v2.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v2.Ack
-	43, // [43:48] is the sub-list for method output_type
-	38, // [38:43] is the sub-list for method input_type
-	38, // [38:38] is the sub-list for extension type_name
-	38, // [38:38] is the sub-list for extension extendee
-	0,  // [0:38] is the sub-list for field type_name
+	15, // 15: aintercept.interceptor.v2.Part.tool_added:type_name -> aintercept.interceptor.v2.ToolAdded
+	3,  // 16: aintercept.interceptor.v2.RequestMessages.call:type_name -> aintercept.interceptor.v2.Call
+	8,  // 17: aintercept.interceptor.v2.RequestMessages.messages:type_name -> aintercept.interceptor.v2.ConvMessage
+	18, // 18: aintercept.interceptor.v2.RequestVerdict.messages:type_name -> aintercept.interceptor.v2.MessageVerdict
+	23, // 19: aintercept.interceptor.v2.RequestVerdict.fetch:type_name -> aintercept.interceptor.v2.Fetch
+	22, // 20: aintercept.interceptor.v2.RequestVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	26, // 21: aintercept.interceptor.v2.RequestVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	19, // 22: aintercept.interceptor.v2.MessageVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
+	21, // 23: aintercept.interceptor.v2.MessageVerdict.replace:type_name -> aintercept.interceptor.v2.Replace
+	22, // 24: aintercept.interceptor.v2.MessageVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	20, // 25: aintercept.interceptor.v2.MessageVerdict.hold:type_name -> aintercept.interceptor.v2.Hold
+	26, // 26: aintercept.interceptor.v2.MessageVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	8,  // 27: aintercept.interceptor.v2.Replace.message:type_name -> aintercept.interceptor.v2.ConvMessage
+	19, // 28: aintercept.interceptor.v2.CallVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
+	22, // 29: aintercept.interceptor.v2.CallVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	26, // 30: aintercept.interceptor.v2.CallVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	3,  // 31: aintercept.interceptor.v2.ResponseMessage.call:type_name -> aintercept.interceptor.v2.Call
+	8,  // 32: aintercept.interceptor.v2.ResponseMessage.message:type_name -> aintercept.interceptor.v2.ConvMessage
+	3,  // 33: aintercept.interceptor.v2.CallRecord.call:type_name -> aintercept.interceptor.v2.Call
+	7,  // 34: aintercept.interceptor.v2.CallRecord.request:type_name -> aintercept.interceptor.v2.RequestInfo
+	28, // 35: aintercept.interceptor.v2.CallRecord.response:type_name -> aintercept.interceptor.v2.ResponseInfo
+	30, // 36: aintercept.interceptor.v2.CallRecord.verdicts:type_name -> aintercept.interceptor.v2.RecordedVerdict
+	29, // 37: aintercept.interceptor.v2.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v2.ToolCount
+	26, // 38: aintercept.interceptor.v2.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	6,  // 39: aintercept.interceptor.v2.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v2.CallStart
+	16, // 40: aintercept.interceptor.v2.Interceptor.OnRequest:input_type -> aintercept.interceptor.v2.RequestMessages
+	25, // 41: aintercept.interceptor.v2.Interceptor.OnReply:input_type -> aintercept.interceptor.v2.ResponseMessage
+	25, // 42: aintercept.interceptor.v2.Interceptor.OnToolCall:input_type -> aintercept.interceptor.v2.ResponseMessage
+	27, // 43: aintercept.interceptor.v2.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v2.CallRecord
+	24, // 44: aintercept.interceptor.v2.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v2.CallVerdict
+	17, // 45: aintercept.interceptor.v2.Interceptor.OnRequest:output_type -> aintercept.interceptor.v2.RequestVerdict
+	18, // 46: aintercept.interceptor.v2.Interceptor.OnReply:output_type -> aintercept.interceptor.v2.MessageVerdict
+	18, // 47: aintercept.interceptor.v2.Interceptor.OnToolCall:output_type -> aintercept.interceptor.v2.MessageVerdict
+	31, // 48: aintercept.interceptor.v2.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v2.Ack
+	44, // [44:49] is the sub-list for method output_type
+	39, // [39:44] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_interceptor_v2_interceptor_proto_init() }
@@ -2704,14 +2776,15 @@ func file_interceptor_v2_interceptor_proto_init() {
 		(*Part_ToolCall)(nil),
 		(*Part_ToolResult)(nil),
 		(*Part_Opaque)(nil),
+		(*Part_ToolAdded)(nil),
 	}
-	file_interceptor_v2_interceptor_proto_msgTypes[14].OneofWrappers = []any{
+	file_interceptor_v2_interceptor_proto_msgTypes[15].OneofWrappers = []any{
 		(*MessageVerdict_Accept)(nil),
 		(*MessageVerdict_Replace)(nil),
 		(*MessageVerdict_Respond)(nil),
 		(*MessageVerdict_Hold)(nil),
 	}
-	file_interceptor_v2_interceptor_proto_msgTypes[20].OneofWrappers = []any{
+	file_interceptor_v2_interceptor_proto_msgTypes[21].OneofWrappers = []any{
 		(*CallVerdict_Accept)(nil),
 		(*CallVerdict_Respond)(nil),
 	}
@@ -2721,7 +2794,7 @@ func file_interceptor_v2_interceptor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_interceptor_v2_interceptor_proto_rawDesc), len(file_interceptor_v2_interceptor_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

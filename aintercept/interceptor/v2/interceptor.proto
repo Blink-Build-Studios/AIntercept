@@ -147,6 +147,8 @@ message RequestInfo {
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 enum Role {
+  // The wire doesn't say whose it is: an item with no role (Codex's
+  // compaction), or a role AIntercept doesn't know.
   ROLE_UNSPECIFIED = 0;
   ROLE_USER = 1;
   // The model: its reply, its reasoning, each tool call it made.
@@ -189,6 +191,7 @@ message Part {
     ToolCall tool_call = 3;
     ToolResult tool_result = 4;
     Opaque opaque = 5;
+    ToolAdded tool_added = 6;
   }
   // "<message id>/<position in the message>": for Fetch and Replace.
   string id = 10;
@@ -241,6 +244,14 @@ message ToolResult {
 // Reasoning, encrypted content, anything AIntercept doesn't recognise:
 // present, never inspectable, never changed.
 message Opaque {}
+
+// A tool the harness adds to the conversation's tool catalog mid-session
+// (Claude Code's tool_addition block, in a ROLE_SYSTEM message). Like the
+// request's tool catalog, its definition isn't sent; size is the block's size
+// in the request. Never changed: a Replace returns it as it came.
+message ToolAdded {
+  string name = 1;
+}
 
 // ── OnRequest ────────────────────────────────────────────────────────────────
 

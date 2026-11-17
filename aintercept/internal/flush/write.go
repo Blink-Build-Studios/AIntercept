@@ -206,6 +206,26 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 		"kind = least(session_edges.kind, excluded.kind), first_ns = least(session_edges.first_ns, excluded.first_ns)"
 	stmts = append(stmts, parents)
 
+	// Interceptor verdicts: a verdict is written once and never changes.
+	vs := &insert{table: "verdicts"}
+	vrows := r.Verdicts
+	col(vs, vrows, "call_id", "text", func(v *Verdict) string { return v.CallID })
+	col(vs, vrows, "seq", "bigint", func(v *Verdict) int64 { return v.V.Seq })
+	col(vs, vrows, "ts_ns", "bigint", func(v *Verdict) int64 { return v.V.NS })
+	col(vs, vrows, "callback", "text", func(v *Verdict) string { return v.V.Callback })
+	col(vs, vrows, "action", "text", func(v *Verdict) string { return v.V.Action })
+	col(vs, vrows, "applied", "boolean", func(v *Verdict) bool { return v.V.Applied })
+	col(vs, vrows, "mode", "text", func(v *Verdict) *string { return str(v.V.Mode) })
+	col(vs, vrows, "message_id", "text", func(v *Verdict) *string { return str(v.V.MessageID) })
+	col(vs, vrows, "respond_mode", "text", func(v *Verdict) *string { return str(v.V.RespondMode) })
+	col(vs, vrows, "reason", "text", func(v *Verdict) *string { return str(v.V.Reason) })
+	col(vs, vrows, "annotations", "jsonb", func(v *Verdict) *string { return str(v.V.AnnotationsJSON) })
+	col(vs, vrows, "latency_ms", "bigint", func(v *Verdict) int64 { return v.V.LatencyMS })
+	// At most records.MaxVerdictsPerCall a call, whatever wrote the rest.
+	vs.conflict = fmt.Sprintf("WHERE (SELECT count(*) FROM verdicts v WHERE v.call_id = u.call_id) < %d ON CONFLICT (call_id, seq) DO NOTHING",
+		records.MaxVerdictsPerCall)
+	stmts = append(stmts, vs)
+
 	// Each distinct environment once, before the events that point at it.
 	if envs := distinctEnvs(es); len(envs) > 0 {
 		if _, err := tx.Exec(ctx, `INSERT INTO event_envs (env_hash, env)
