@@ -44,19 +44,13 @@
     padding: 8px 10px;
   }
   .about-node-sub,
-  .about-copy,
-  .about-bypass {
+  .about-copy {
     font: 400 11px/16px var(--font-mono);
   }
   .about-arrow,
   .about-copy {
     text-align: center;
     align-self: center;
-  }
-  .about-bypass {
-    grid-column: 1 / -1;
-    margin-top: 6px;
-    padding: 6px 10px;
   }
   .about-table > :last-child {
     border-bottom: 0;

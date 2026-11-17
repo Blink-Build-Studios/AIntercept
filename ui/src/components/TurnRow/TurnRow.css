@@ -1,5 +1,5 @@
 /* TurnRow (handoff §11R, CompTurns): ▸ 14 · # 40 · started 92 · asked 240 · work (flex) · steps 50 ·
-   time 64 · tokens 110 · cost 64 · friction 40 (centred); padding 6px 12px on --surface, raised
+   time 64 · tokens 110 · friction 40 (centred); padding 6px 12px on --surface, raised
    when open; min width 1100. Set here too, so the row holds its columns outside a DataTable. */
 @layer components {
   .dt-row.turn-row {
@@ -32,9 +32,6 @@
     flex: 0 0 110px;
   }
   .dt-row.turn-row > :nth-child(9) {
-    flex: 0 0 64px;
-  }
-  .dt-row.turn-row > :nth-child(10) {
     flex: 0 0 40px;
   }
   .turn-friction {

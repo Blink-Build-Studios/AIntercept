@@ -18,5 +18,4 @@ export const Default: Story = {
 export const Hover: Story = { args: { ...Default.args!, label: "Analytics", value: rb.analyticsEvents, href: "#requests" } };
 export const NoSwatch: Story = { args: { label: "Sessions", value: rb.sessions, sub: "1 live" } };
 export const Unknown: Story = { args: { label: "Tool calls", value: null, unknownReason: "not extracted yet" } };
-export const Gap: Story = { args: { label: "Coverage", value: summary.data.coverage.notCaptured, tone: "gap", sub: "reported, not captured" } };
 export const Loading: Story = { args: { label: "Model calls", value: null, loading: true } };

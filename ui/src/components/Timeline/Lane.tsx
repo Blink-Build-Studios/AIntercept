@@ -19,7 +19,9 @@ export type LaneProps = {
   definitionOpen?: boolean;
   /** A multi-row lane's row names, each aligned to its 16px row (§11G.A3). */
   rows?: ReactNode[];
-  /** Pinned to the label column's foot: the gap row's `▲ not captured N` (§11G.A4). */
+  /** The row names in the sublabel's type, 11px (§11S's two-row friction lane). */
+  subRows?: boolean;
+  /** Pinned to the label column's foot. */
   footer?: ReactNode;
   children?: ReactNode;
 };
@@ -29,10 +31,12 @@ export const LANE_HEIGHT = {
   single: 28,
   singleWithSublabel: 44,
   bars: 60,
-  barsWithGapRow: 76,
-  /** The person page's Model calls lane: 70px of bars over the gap row (§11P.1). */
-  personBarsWithGapRow: 88,
   rows: (n: number) => 6 + 14 + 16 * n + 6,
+  /** The friction lane on both timelines (§11S): two rows at 20 and 36, 56px. */
+  friction: 56,
+  /** The Work lane (§11S): the session's 58px of bars + 2, the person's 70 + 2. */
+  workSession: 60,
+  workPerson: 72,
 };
 
 /** Set by Timeline: every lane shows its skeleton while the timeline loads. */
@@ -44,7 +48,7 @@ const LaneContext = createContext({ label: "", summary: "" });
  * is the track's accessible description. Loading keeps the label and height and
  * fills the track with a skeleton bar, inset 8px and at most 40px tall.
  */
-export function Lane({ label, sublabel, height, summary, loading, sunken, definition, definitionOpen, rows, footer, children }: LaneProps) {
+export function Lane({ label, sublabel, height, summary, loading, sunken, definition, definitionOpen, rows, subRows, footer, children }: LaneProps) {
   const timelineLoading = useContext(TimelineLoadingContext);
   const isLoading = loading ?? timelineLoading;
   return (
@@ -61,7 +65,7 @@ export function Lane({ label, sublabel, height, summary, loading, sunken, defini
         )}
         {sublabel && <div className="tl-sublabel">{sublabel}</div>}
         {rows?.map((r, i) => (
-          <div key={i} className="tl-rowlabel">
+          <div key={i} className={subRows ? "tl-sublabel" : "tl-rowlabel"}>
             {r}
           </div>
         ))}

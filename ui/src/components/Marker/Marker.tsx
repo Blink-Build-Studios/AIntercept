@@ -1,24 +1,18 @@
 import { forwardRef, type HTMLAttributes } from "react";
 
 /** `limitReached`: a usage window at 100%, the account blocked (handoff §11J gap 5): a coverage-like failure. */
-export type MarkerKind = "frustrated" | "interrupted" | "destructive" | "coverageGap" | "limitReached" | "match" | "live";
+export type MarkerKind = "interrupted" | "destructive" | "limitReached" | "live";
 
 const GLYPH: Record<MarkerKind, string> = {
-  frustrated: "↯",
   interrupted: "✕",
   destructive: "▲",
-  coverageGap: "▲",
   limitReached: "▲",
-  match: "✓",
   live: "●",
 };
 const WORD: Record<MarkerKind, string> = {
-  frustrated: "frustrated",
   interrupted: "interrupted",
   destructive: "destructive",
-  coverageGap: "reported, not captured",
   limitReached: "usage limit reached",
-  match: "matches the client's report",
   live: "live",
 };
 
@@ -41,7 +35,7 @@ export type MarkerProps = {
  * `danger` only for destructive commands, coverage gaps and a reached usage limit; `live` only for the live dot.
  */
 export const Marker = forwardRef<HTMLSpanElement, MarkerProps>(function Marker({ kind, count, label, compact = false, inherit = false, role, className = "", ...rest }, ref) {
-  const tone = kind === "destructive" || kind === "coverageGap" || kind === "limitReached" ? "quiet-keep text-danger" : kind === "live" ? "text-live" : "text-ink";
+  const tone = kind === "destructive" || kind === "limitReached" ? "quiet-keep text-danger" : kind === "live" ? "text-live" : "text-ink";
   const words = label ?? WORD[kind];
   if (count !== undefined || compact) {
     const name = count !== undefined ? `${count} ${words}` : words;

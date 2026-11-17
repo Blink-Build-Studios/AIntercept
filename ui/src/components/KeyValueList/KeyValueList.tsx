@@ -22,12 +22,16 @@ export type KeyValueListProps = {
   accent?: Channel;
   action?: { label: string; href: string };
   rows: KeyValueRow[];
+  /** A short list of plain lines instead of rows (§11S `KeyValueList/context`, `/repo`); a muted line reads as a note. */
+  lines?: readonly { text: string; muted?: boolean }[];
+  /** In --ink-muted after the title (`with content`). */
+  note?: string;
   footer?: string;
   loading?: boolean;
 };
 
-/** A titled list of facts: capabilities, footprint, session state (handoff §6.3). */
-export function KeyValueList({ title, accent, action, rows, footer, loading }: KeyValueListProps) {
+/** A titled list of facts: footprint, session state (handoff §6.3); or a few plain lines (§11S context, repo). */
+export function KeyValueList({ title, accent, action, rows, lines, note, footer, loading }: KeyValueListProps) {
   if (loading) {
     return (
       <section aria-label={title} aria-busy className="kv-loading border border-line bg-surface">
@@ -35,6 +39,23 @@ export function KeyValueList({ title, accent, action, rows, footer, loading }: K
         <SkeletonBar width="90%" faint />
         <SkeletonBar width="80%" faint />
         <SkeletonBar width="85%" faint />
+      </section>
+    );
+  }
+  if (lines) {
+    return (
+      <section aria-label={title} className="border border-line bg-surface">
+        <header className="kv-head">
+          <h3 className="inline type-key text-ink-faint">{title}</h3>
+          {note && <span className="type-data text-ink-muted">{` ${note}`}</span>}
+        </header>
+        <div className="kv-lines type-data">
+          {lines.map((l) => (
+            <div key={l.text} className={l.muted ? "text-ink-muted" : "text-ink"}>
+              {l.text}
+            </div>
+          ))}
+        </div>
       </section>
     );
   }

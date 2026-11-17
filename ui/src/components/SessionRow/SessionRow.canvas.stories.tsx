@@ -42,21 +42,6 @@ const base: Session = {
   coverage: { captured: 282, notCaptured: 0, reported: 282, windows: [] },
   fieldsMissing: false,
 };
-const liveGap: Session = {
-  ...base,
-  start: "2026-11-02T10:04:00",
-  end: null,
-  live: true,
-  repo: "aintercept",
-  branch: "partner-readiness",
-  label: { source: "recap", text: "Coverage check and IPv6 routing; PR #2 open" },
-  prompts: 34,
-  modelCalls: 640,
-  events: 21305,
-  friction: { frustrated: 1, interrupted: 1, destructive: 10 },
-  bypassPct: 99.7,
-  coverage: { captured: 640, notCaptured: 94, reported: 734, windows: [] },
-};
 const fieldsMissing: Session = {
   ...base,
   start: "2026-10-27T10:02:00",
@@ -70,18 +55,6 @@ const fieldsMissing: Session = {
   coverage: null,
   fieldsMissing: true,
 };
-const noRecap: Session = {
-  ...base,
-  start: "2026-10-28T19:00:00",
-  end: "2026-10-28T19:48:00",
-  repo: "docs",
-  branch: "readme",
-  label: { source: "repo", text: "docs · readme · 19:00" },
-  prompts: 2,
-  modelCalls: 7,
-  bypassPct: 100,
-  coverage: { captured: 7, notCaptured: 0, reported: 7, windows: [] },
-};
 
 const meta = { title: "Canvas/Rows/SessionRow", parameters: { layout: "padded" } } satisfies Meta;
 export default meta;
@@ -89,12 +62,9 @@ export default meta;
 export const Canvas: StoryObj = {
   render: () => (
     <div className="flex flex-col items-start gap-3">
-      <P spec="SessionRow/liveGap"><SessionRow session={liveGap} href="#" now={NOW} /></P>
-      <P spec="SessionRow/partialCapture" frame={1342}><SessionRow session={{ ...liveGap, capturedFromPrompt: 7 }} href="#" now={NOW} /></P>
       <P spec="SessionRow/ended"><SessionRow session={base} href="#" now={NOW} /></P>
       <P spec="SessionRow/hover"><SessionRow session={base} href="#" now={NOW} data-force="hover" /></P>
       <P spec="SessionRow/fieldsMissing"><SessionRow session={fieldsMissing} href="#" now={NOW} /></P>
-      <P spec="SessionRow/noRecapLabel"><SessionRow session={noRecap} href="#" now={NOW} /></P>
       {/* CompTableHover: the row hovered, pointing the timeline at its band (§6B.5). */}
       <P spec="SessionRow/hoverLinked" frame={1344}><SessionRow session={base} href="#" now={NOW} data-force="hover" /></P>
       {/* CompAgents: the Agent column and nested Codex threads (§11J screens 3, gap 3). */}

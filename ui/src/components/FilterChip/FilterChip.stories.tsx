@@ -10,7 +10,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const NotCaptured: Story = {};
 export const RemoveHover: Story = { args: { "data-force": "hover" } };
 export const RemoveFocus: Story = { args: { "data-force": "focus" } };
 /** No remove button: an empty state's reminder of what's filtered. */

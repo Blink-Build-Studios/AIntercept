@@ -20,7 +20,7 @@ const session: Session = {
   branch: null,
   label: { source: "recap", text: "Added CSV export; tests pass" },
   capturedFromPrompt: null,
-  prompts: 8,
+  prompts: null,
   modelCalls: 282,
   events: null,
   friction: { frustrated: 0, interrupted: 0, destructive: 0 },
@@ -64,12 +64,12 @@ describe("SessionRow linked hover (handoff §6B.5)", () => {
   it("[6B.11-17] A null field renders — and its tooltip says why; never 0", () => {
     vi.useFakeTimers();
     renderRow();
-    const events = screen.getByLabelText("unknown: no analytics captured");
-    expect(events).toHaveTextContent("—");
-    expect(events).not.toHaveTextContent("0");
-    fireEvent.pointerEnter(events);
+    const prompts = screen.getByLabelText("unknown: no prompt ids on these calls");
+    expect(prompts).toHaveTextContent("—");
+    expect(prompts).not.toHaveTextContent("0");
+    fireEvent.pointerEnter(prompts);
     act(() => void vi.advanceTimersByTime(400));
-    expect(screen.getByRole("tooltip")).toHaveTextContent(/Events\s*—\s+no analytics captured/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Prompts\s*—\s+no prompt ids on these calls/);
     vi.useRealTimers();
   });
 });

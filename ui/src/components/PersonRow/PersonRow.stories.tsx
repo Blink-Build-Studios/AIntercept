@@ -35,7 +35,6 @@ export const Hover: Story = { args: { "data-force": "hover" } };
 export const Focus: Story = { args: { "data-force": "focus" } };
 export const Live: Story = { args: { person: many.data[0] as Person } };
 /** The demo person in the Claude Code view: live, with calls Claude Code reported that the proxy never saw. */
-export const CoverageGap: Story = { args: { person: live, now: demo.meta.asOf, view: "claude-code" } };
 // No API scenario has other agents yet (only Claude Code is parsed), so these two
 // take a real row and give it the agents and token accuracy those agents would have.
 /** Several agents, tokens estimated: ≈. */
@@ -54,8 +53,8 @@ export const ClaudeCodeOnly: Story = { args: { person: claudeCodePerson, now: AG
 export const MixedCommon: Story = { args: { person: peopleRows.mixed, now: PEOPLE_NOW, activityMax: 19 } };
 /** The Codex view: `5h · week` (a window at 80%+ set apart) and Plan before the chevron. */
 export const CodexView: Story = { args: { person: peopleViewRows.codexLinked, now: PEOPLE_NOW, activityMax: 19, view: "codex", limits: [41, 83], plan: "Plus" } };
-/** The Claude Code view: Bypass and Missed before the chevron. */
-export const ClaudeCodeView: Story = { args: { person: peopleViewRows.claudeCodeLinked, now: PEOPLE_NOW, activityMax: 19, view: "claude-code" } };
+/** The Claude Code view (§11S): Tool calls and Failed before the chevron. */
+export const ClaudeCodeView: Story = { args: { person: peopleViewRows.claudeCodeLinked, now: PEOPLE_NOW, activityMax: 19, view: "claude-code", calls: { tools: 4980, failed: 9 } } };
 /** The turns form (§11R, People.dc.html): Working on after Last seen, Turns in place of Prompts. */
 export const WorkingOnLive: Story = { args: { person: live, now: demo.meta.asOf, turns: { count: 66, workingOn: { live: { repo: "aintercept", turn: 34 }, repos: ["aintercept"] } } } };
 export const WorkingOnRepos: Story = { args: { turns: { count: 41, workingOn: { live: null, repos: ["observer", "notes"] } } } };

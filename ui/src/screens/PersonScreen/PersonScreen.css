@@ -18,16 +18,7 @@
     flex-direction: column;
     gap: 12px;
   }
-  .person-posture {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .person-posture > .type-key {
-    margin-right: 4px;
-  }
-  /* The window's OutcomeSlot, then the coverage line in its own box (§11R, Main.dc.html). */
+  /* The window's OutcomeSlot (§11R, §11S, Main.dc.html). */
   .person-outcome {
     display: flex;
     flex-direction: column;

@@ -126,15 +126,16 @@ export function keyCells(d: Detail): KeyStripCellData[] {
       value: noResponse || t.output === null ? null : `${formatTokens(input, "call")} → ${formatTokens(t.output, "call")}`,
       sub: noResponse ? "no response" : reported ? "from analytics" : k.cachedPct === null ? "" : `${formatPct(Math.floor(k.cachedPct))} from cache`,
     },
+    // §11S: Cache replaces Cost est.; the read and written tokens are the response's own usage.
     {
-      label: "Cost est.",
-      value: k.cost.usd === null ? null : formatUsd(k.cost.usd),
-      sub: noResponse ? "not billed" : reported ? "Claude Code costUSD" : k.cost.usd === null ? "no cost reported" : "API-equivalent",
+      label: "Cache",
+      value: noResponse || t.cacheRead === null ? null : `${formatTokens(t.cacheRead, "call")} read`,
+      sub: noResponse ? "no response" : t.cacheWrite === null ? "not reported" : `${formatTokens(t.cacheWrite, "call")} written`,
     },
     {
       label: "TTFT",
-      value: k.ttftMs === null ? null : formatDuration(k.ttftMs),
-      sub: noResponse ? "no first byte" : reported ? "Claude Code only" : k.proxyTtftMs === null ? "not reported" : `proxy ${formatDuration(k.proxyTtftMs)}`,
+      value: k.proxyTtftMs === null ? null : formatDuration(k.proxyTtftMs),
+      sub: noResponse ? "no first byte" : k.proxyTtftMs === null ? "not timed" : "measured at proxy",
     },
     {
       label: "Duration",
@@ -217,12 +218,6 @@ export const headers = (hs: Schemas["HeaderEntry"][], keyHash: string | null): H
     redacted: h.redacted,
   }));
 
-/** The key that joined an analytics event to the request. */
-export function joinKey(name: string): string {
-  if (name === "tengu_api_success" || name === "tengu_api_error") return "requestId";
-  if (name === "tengu_api_query" || name === "tengu_api_retry") return "clientRequestId";
-  return "toolUseID";
-}
 
 /** A bash-quoted curl for the request, from its raw line and headers (credentials stay redacted). */
 export function curl(raw: Raw, host = "api.anthropic.com"): string {

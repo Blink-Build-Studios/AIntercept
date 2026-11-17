@@ -118,7 +118,7 @@ export function RequestDrawer({ requestId, seed, detail, raw, details, onRetry, 
           method={facts?.method ?? null}
           path={facts?.path ?? requestId}
           status={facts ? statusLine(facts) : ""}
-          kind={facts?.kind ?? "normal"}
+          kind={facts?.kind === "failed" ? "failed" : "normal"}
           actions={
             <>
               <CopyButton label="Copy as curl" text={curl} />

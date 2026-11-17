@@ -17,7 +17,6 @@ import { DetailSection } from "../RequestDrawer/DetailSection";
 import { SessionHeader } from "../SessionHeader/SessionHeader";
 import { SESSION_AGENT_COLUMNS, SESSION_AGENT_MIN_WIDTH, SessionRow } from "../SessionRow/SessionRow";
 import { StepRow, ToolCallRow } from "../StepRow/StepRow";
-import { TurnReport } from "../TurnReport/TurnReport";
 import { Value } from "../Value/Value";
 import {
   CODEX_LIMITS,
@@ -38,7 +37,6 @@ import {
   linkedPerson,
   person,
   sessions,
-  turnReportParts,
 } from "./agentSpecimens";
 
 /** A specimen in a fixed-width column (the sheet's staging width), or at its own size. */
@@ -120,9 +118,6 @@ export function AgentSessionSheet() {
           />
         </P>
       </ParityTags>
-      <P spec="TurnReport" width={1342}>
-        <TurnReport agent="codex" parts={turnReportParts} />
-      </P>
       <P spec="HiddenCallsNote" width={1342}>
         <HiddenCallsNote counts={{ prewarm: 1 }} onShow={fn()} />
       </P>
@@ -189,7 +184,6 @@ export function AgentRowsSheet() {
           agentColumn={{ client: "tui" }}
           nesting={{ kind: "parent", expanded: false, onToggle: fn() }}
           threadFacts="· fork of 3b9a… at #4"
-          absent={{ missed: true }}
         />
       </SessionR>
       <Row spec="StepRow/codexModelCall">

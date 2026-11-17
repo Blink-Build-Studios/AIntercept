@@ -10,9 +10,7 @@ import { AppBar } from "../../components/AppBar/AppBar";
 import { Banner, type BannerProps } from "../../components/Banner/Banner";
 import { Button } from "../../components/Button/Button";
 import { Chip } from "../../components/Chip/Chip";
-import { CoverageLine } from "../../components/CoverageLine/CoverageLine";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
-import { FilterChip } from "../../components/FilterChip/FilterChip";
 import { KeyValueList } from "../../components/KeyValueList/KeyValueList";
 import type { LiveBadgeProps } from "../../components/LiveBadge/LiveBadge";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
@@ -36,7 +34,6 @@ import { PERSON_TIMELINE_LANES, Skeleton } from "../../components/Skeleton/Skele
 import { Tabs } from "../../components/Tabs/Tabs";
 import { TextInput } from "../../components/TextInput/TextInput";
 import { BandTrack } from "../../components/Timeline/BandTrack";
-import { gapRowLabel } from "../../components/Timeline/BarTrack";
 import { FrictionTrack, frictionRowLabels } from "../../components/Timeline/FrictionTrack";
 import type { Range } from "../../components/Timeline/Brush";
 import { WorkTrack } from "../../components/Timeline/WorkTrack";
@@ -48,14 +45,12 @@ import { Timeline } from "../../components/Timeline/Timeline";
 import { LANE_DEFINITIONS, nowTip } from "../../components/Timeline/timelineTips";
 import { WaitingChecklist, type WaitingStep } from "../../components/WaitingChecklist/WaitingChecklist";
 import {
-  capabilityRows,
   footprintRows,
   nearest,
   outcomeTitle,
   personFacts,
   personHeaderProps,
   personLanes,
-  postureChips,
   windowLabel,
   type PersonHeader,
   type PersonSummary,
@@ -121,10 +116,6 @@ export type PersonScreenProps = {
   /** All requests includes hidden calls (Codex's prewarm and title calls; the API counts them as `hiddenCount`). */
   showHidden?: boolean;
   onShowHidden?: (shown: boolean) => void;
-  /** All requests shows only calls the proxy didn't capture (`captured=false`, handoff §11E.2). */
-  notCaptured: boolean;
-  /** Turns that filter on (switching to All requests) or off. */
-  onNotCaptured: (on: boolean) => void;
   onRetry: (region: "person" | "summary" | "timeline" | "work" | "requests") => void;
   peopleHref: string;
   sessionHref: (sessionId: string) => string;
@@ -137,9 +128,9 @@ export type PersonScreenProps = {
 const err = (r: Region<unknown>, onRetry: () => void) => r.error && { message: r.error.message, queryId: r.error.queryId, onRetry };
 
 /**
- * The person page (handoff §7.2, Main.dc.html): app bar, banner, header and
- * posture, the ribbon with coverage, the activity timeline (its brush filters
- * everything below), capabilities and footprint, then Sessions and All requests.
+ * The person page (handoff §7.2, §11S, Main.dc.html): app bar, banner, header, the
+ * window's outcome, the activity timeline (its brush filters everything below),
+ * tools and footprint, then Work and All requests.
  * A request row opens the drawer in place. Pure: every region arrives as a
  * Region from the page.
  */
@@ -192,7 +183,6 @@ export function PersonScreen(p: PersonScreenProps) {
   // Empty range: the brush covers no activity; offer the nearest activity either side.
   const emptyRange = !!p.range && p.work.status !== "loading" && p.work.data?.data.length === 0 && (p.requests.data?.data.length ?? 0) === 0;
   const near = p.range ? nearest(t, p.range.from, p.range.to) : {};
-  const posture = person && !unattributed ? postureChips(person) : [];
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -211,40 +201,24 @@ export function PersonScreen(p: PersonScreenProps) {
             ) : (
               <div className="person-header-stack">
                 <PersonHeaderBox {...personHeaderProps(person, p.summary.data, at)} />
-                {posture.length > 0 && (
-                  <div className="person-posture">
-                    <span className="type-key text-ink-faint">Posture</span>
-                    {posture.map((c) => (
-                      <Chip key={c} tone="muted">
-                        {c}
-                      </Chip>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
         </RegionState>
 
-        {/* The window's outcome (§11R: in place of the request ribbon), then the coverage line. */}
+        {/* The window's outcome (§11R: in place of the request ribbon; §11S: no coverage line). */}
         <RegionState status={p.summary.status} slow={slowNotice(p.summary, "the summary")} hasData={!!p.summary.data} skeleton={<Skeleton shape="block" />} error={err(p.summary, () => p.onRetry("summary"))} label="the summary">
           {p.summary.data && (
             <div className="person-outcome">
               <OutcomeSlot title={outcomeTitle(p.window)} facts={personFacts(p.summary.data)} />
-              <div className="person-coverage border border-line bg-surface">
-                <CoverageLine coverage={p.summary.data.coverage} now={at} onView={() => p.onNotCaptured(true)} />
-              </div>
             </div>
           )}
         </RegionState>
 
         <RegionState status={p.timeline.status} slow={slowNotice(p.timeline, "the timeline")} hasData={!!t} skeleton={<Skeleton shape="timeline" lanes={PERSON_TIMELINE_LANES} />} error={err(p.timeline, () => p.onRetry("timeline"))} label="the timeline">
-          {t && <PersonTimelinePanel d={t} range={p.range} onRange={p.onRange} sessionHref={p.sessionHref} onNotCaptured={() => p.onNotCaptured(true)} />}
+          {t && <PersonTimelinePanel d={t} range={p.range} onRange={p.onRange} sessionHref={p.sessionHref} />}
         </RegionState>
 
         <div className="person-panels">
-          <RegionState status={p.summary.status} slow={slowNotice(p.summary, "capabilities")} hasData={!!p.summary.data} skeleton={<KeyValueList title="Capabilities · seen in any session" rows={[]} loading />} label="capabilities">
-            {p.summary.data && <KeyValueList title="Capabilities · seen in any session" accent="skills" rows={capabilityRows(p.summary.data)} />}
-          </RegionState>
           <RegionState status={p.summary.status} slow={slowNotice(p.summary, "footprint")} hasData={!!p.summary.data} skeleton={<KeyValueList title="Footprint" rows={[]} loading />} label="footprint">
             {p.summary.data && <KeyValueList title={rangeLabel ? `Footprint · ${rangeLabel}` : "Footprint · all sessions"} rows={footprintRows(p.summary.data)} />}
           </RegionState>
@@ -273,7 +247,7 @@ export function PersonScreen(p: PersonScreenProps) {
             <EmptyState
               chip={<Chip tone="range">{rangeLabel}</Chip>}
               title="No Claude Code activity in this range"
-              body="No sessions were open and no requests from this person reached the proxy. Activity that went around the proxy would still show up later as “reported, not captured”."
+              body="No sessions were open and no requests from this person reached the proxy."
               actions={
                 <>
                   <Button onClick={() => p.onRange(null)}>Clear range</Button>
@@ -301,11 +275,11 @@ function around(t: string, r: Range): Range {
   return { from: new Date(c - half).toISOString(), to: new Date(c + half).toISOString() };
 }
 
-function PersonTimelinePanel({ d, range, onRange, sessionHref, onNotCaptured }: { d: PersonTimeline; range: Range | null; onRange: (r: Range | null) => void; sessionHref: (id: string) => string; onNotCaptured: () => void }) {
+function PersonTimelinePanel({ d, range, onRange, sessionHref }: { d: PersonTimeline; range: Range | null; onRange: (r: Range | null) => void; sessionHref: (id: string) => string }) {
   // The lanes are thousands of marks: built once per timeline payload, so a page
   // re-render (a poll's fetching flag) or the brush moving doesn't redo them.
   const l = useMemo(() => personLanes(d), [d]);
-  const cb = useLatest({ onRange, sessionHref, onNotCaptured });
+  const cb = useLatest({ onRange, sessionHref });
   const per = perBin(d.binSeconds);
   const header: ReactNode = (
     <>
@@ -319,10 +293,6 @@ function PersonTimelinePanel({ d, range, onRange, sessionHref, onNotCaptured }: 
     const actions: TimelineActions = {
       select: (r) => cb.current.onRange(r),
       openSession: (id) => window.location.assign(cb.current.sessionHref(id)),
-      listNotCaptured: (r) => {
-        cb.current.onRange(r);
-        cb.current.onNotCaptured();
-      },
     };
     const on = laneInteractions(d, actions);
     return (
@@ -333,10 +303,10 @@ function PersonTimelinePanel({ d, range, onRange, sessionHref, onNotCaptured }: 
       <Lane label="Turns" height={24} summary={`${l.turns.length} turns`}>
         <MarkerTrack markers={l.turns} interact={on.prompts} noun="turn" />
       </Lane>
-      <Lane label="Work" sublabel={per} height={LANE_HEIGHT.personBarsWithGapRow} summary={`${l.workBins.length} active bins; ${l.gaps.length} gaps`} definition={LANE_DEFINITIONS.work} footer={gapRowLabel(l.gaps)}>
-        <WorkTrack bins={l.workBins} binSeconds={d.binSeconds} gaps={l.gaps} interact={on.work} gapTip={on.gapTip} onGap={on.onGap} />
+      <Lane label="Work" sublabel={per} height={LANE_HEIGHT.workPerson} summary={`${l.workBins.length} active bins`} definition={LANE_DEFINITIONS.work}>
+        <WorkTrack bins={l.workBins} binSeconds={d.binSeconds} interact={on.work} />
       </Lane>
-      <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
+      <Lane label="Friction" height={LANE_HEIGHT.friction} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)} subRows>
         <FrictionTrack marks={l.friction} interact={on.friction} />
       </Lane>
       </>
@@ -418,7 +388,6 @@ function RequestsTable(p: PersonScreenProps & { at: Date }) {
     <>
       <div className="person-filters">
         <TextInput id="person-requests-filter" label="Filter" placeholder="path, status, session…" value={p.q} onChange={p.onQ} pending={r.status === "refetching"} />
-        {p.notCaptured && <FilterChip label="▲ not captured" removeLabel="Remove filter: not captured" onRemove={() => p.onNotCaptured(false)} />}
         <RequestFilters
           channels={channels}
           value={p.kinds as Channel[]}
@@ -431,7 +400,7 @@ function RequestsTable(p: PersonScreenProps & { at: Date }) {
         hasData={!!r.data}
         skeleton={<RequestTable scope="person" agentDot={shared} loading />}
         error={err(r, () => p.onRetry("requests"))}
-        empty={p.notCaptured ? <NoUncaptured {...p} /> : <EmptyState title={p.q || p.kinds.length ? "No requests match" : "No requests in this range"} compact />}
+        empty={<EmptyState title={p.q || p.kinds.length ? "No requests match" : "No requests in this range"} compact />}
         label="requests"
       >
         <RequestTable scope="person" agentDot={shared} footer={meta && <Pager meta={meta} page={p.page} onPage={p.onPage} loading={r.status === "refetching"} />}>
@@ -452,35 +421,6 @@ function RequestsTable(p: PersonScreenProps & { at: Date }) {
         </RequestTable>
       </RegionState>
     </>
-  );
-}
-
-/** The not-captured filter matched nothing (handoff §11E.2): the active filters, what coverage says, and ways out. */
-function NoUncaptured(p: PersonScreenProps) {
-  const at = new Date(p.now);
-  const reported = p.summary.data?.coverage.reported ?? null;
-  const span = p.range ? ` between ${formatRange(p.range.from, p.range.to, at)}` : "";
-  const body =
-    reported === null
-      ? `The proxy captured every call Claude Code reported${span || " in this window"}.`
-      : `Claude Code reported ${formatCount(reported)} model ${reported === 1 ? "call" : "calls"}${span || " in this window"}, and the proxy captured ${reported === 1 ? "it" : `all ${formatCount(reported)}`}.`;
-  return (
-    <EmptyState
-      chip={
-        <div className="flex flex-wrap gap-2">
-          {p.range && <Chip tone="range">{`range ${formatRange(p.range.from, p.range.to, at)}`}</Chip>}
-          <FilterChip label="▲ not captured" />
-        </div>
-      }
-      title={p.range ? "No uncaptured calls in this range" : "No uncaptured calls"}
-      body={body}
-      actions={
-        <>
-          <Button onClick={() => p.onNotCaptured(false)}>Clear filter</Button>
-          {p.range && <Button onClick={() => p.onRange(null)}>Clear range</Button>}
-        </>
-      }
-    />
   );
 }
 

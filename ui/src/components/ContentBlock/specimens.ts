@@ -30,8 +30,8 @@ export const reply: ContentBlockProps = {
   note: "head 4 lines · expand shows all, rendered as markdown",
 };
 export const metadataOnly: ContentBlockProps = {
-  label: "Tool result · Bash npm",
-  meta: "exit 1 · 18 s",
+  label: "Tool result · Bash",
+  meta: "18 KB · 18 s",
   content: null,
-  note: "program and exit code from Claude Code’s analytics",
+  note: "content-free: tool name, result size and timing only",
 };

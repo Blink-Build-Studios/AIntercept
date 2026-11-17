@@ -25,6 +25,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* The lines form (§11S): an 8px 12px head, then the lines 6px 12px, one under the other. */
+  .kv-head {
+    padding: 8px 12px;
+    line-height: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .kv-lines {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 12px;
+  }
   .kv-loading {
     display: flex;
     flex-direction: column;

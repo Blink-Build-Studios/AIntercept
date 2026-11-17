@@ -1,15 +1,31 @@
 # Design parity report
 
-534 specimens · 529 pass · 5 fail · 24 illustrative (not measured)
+504 specimens · 466 pass · 38 fail · 64 illustrative (not measured)
 
-Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputCompositionBar, NotReportedLine, PageHeader, PromptRow, RequestDrawer, TabMark, TabTitle
+Not yet covered (no Canvas story): ClickRule, CopyButton, CoverageCell, CoverageLine, DensityTrack, EventRow, Exploration, GapRow, InputCompositionBar, NotReportedLine, PageHeader, PartialMark, PromptRow, RequestDrawer, TabMark, TabTitle, TurnReport
 
-- ✓ AboutSection/products
-- ✓ AboutProduct/claudeCode
-- ✓ AboutProduct/codex
+- ✕ AboutSection/products: 
+  - text "sessions → prompts → steps · exact tokens" · missing: canvas `sessions → prompts → steps · exact tokens` · ours `null`
+  - text "threads → turns (shown as prompts) → steps · exact tokens" · missing: canvas `threads → turns (shown as prompts) → steps · exact tokens` · ours `null`
+  - text "sessions → turns → steps · exact tokens" · extra: canvas `null` · ours `sessions → turns → steps · exact tokens`
+  - text "threads → turns → steps · exact tokens" · extra: canvas `null` · ours `threads → turns → steps · exact tokens`
+- ✕ AboutProduct/claudeCode: 
+  - text "sessions → prompts → steps · exact tokens" · missing: canvas `sessions → prompts → steps · exact tokens` · ours `null`
+  - text "sessions → turns → steps · exact tokens" · extra: canvas `null` · ours `sessions → turns → steps · exact tokens`
+- ✕ AboutProduct/codex: 
+  - text "threads → turns (shown as prompts) → steps · exact tokens" · missing: canvas `threads → turns (shown as prompts) → steps · exact tokens` · ours `null`
+  - text "threads → turns → steps · exact tokens" · extra: canvas `null` · ours `threads → turns → steps · exact tokens`
 - ✓ AboutProduct/chatgpt
 - ✓ AboutProduct/claudeAi
-- ✓ RetentionList/metadataOnly
+- ✕ RetentionList/metadataOnly: 
+  - root · box.h: canvas `197` · ours `257`
+  - text "headers, token counts, timings, model and tool names with counts per call, each agent’s own analytics events as sent (Claude Code’s include each command’s program and exit code)" · missing: canvas `headers, token counts, timings, model and tool names with counts per call, each agent’s own analytics events as sent (Claude Code’s include each command’s program and exit code)` · ours `null`
+  - text "Not kept" · box.y: canvas `103` · ours `143`
+  - text "tool inputs (full commands, paths, URLs), Codex’s exit codes, prompt text, responses, file contents, Codex titles, shell and timezone" · missing: canvas `tool inputs (full commands, paths, URLs), Codex’s exit codes, prompt text, responses, file contents, Codex titles, shell and timezone` · ours `null`
+  - text "Credentials" · box.y: canvas `172` · ours `232`
+  - text "always redacted; keys appear only as a hash" · box.y: canvas `172` · ours `232`
+  - text "headers, token counts, timings, status and errors, model, stop reason, tool names with counts per call, each request’s tool list, interrupts and compactions. The agents’ own analytics posts are kept raw for later analysis; nothing on a page comes from them." · extra: canvas `null` · ours `headers, token counts, timings, status and errors, model, stop reason, tool names with counts per call, each request’s tool list, interrupts and compactions. The agents’ own analytics posts are kept raw for later analysis; nothing on a page comes from them.`
+  - text "prompt text, responses, tool inputs (commands, paths, edits, URLs) and tool results. So: no repo or branch, no edited lines, no commits or test outcomes. Turn on content recording to see them." · extra: canvas `null` · ours `prompt text, responses, tool inputs (commands, paths, edits, URLs) and tool results. So: no repo or branch, no edited lines, no commits or test outcomes. Turn on content recording to see them.`
 - ✓ AgentCard/claudeCodeExtras
 - ✓ AgentCard/codexSelected
 - ✓ AgentCard/chatgpt
@@ -40,7 +56,7 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Banner/delayed
 - ✓ Banner/refreshFailed
 - ✓ BetweenRow/compaction
-- ✓ BetweenRow/recap
+- ◌ BetweenRow/recap (illustrative, not measured)
 - ✓ Breadcrumb/hover
 - ✓ Button/default
 - ✓ Button/hover
@@ -69,7 +85,7 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ ChannelSwatch/skills
 - ✓ ChannelSwatch/count
 - ✓ ChannelSwatch/account
-- ✓ Chip/neutralPosture
+- ◌ Chip/neutralPosture (illustrative, not measured)
 - ✓ Chip/muted
 - ✓ Chip/notRetained
 - ✓ Chip/rangeSelection
@@ -80,23 +96,10 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ ContentBlock/toolResult
 - ✓ ContentBlock/reply
 - ✓ ContentBlock/metadataOnly
-- ✓ CoverageCell/gap
-- ✓ CoverageCell/complete
-- ✓ CoverageCell/notApplicable
-- ✓ CoverageLine/complete
-- ✓ CoverageLine/gap
-- ✓ CoverageLine/hover
 - ✓ EmptyState/emptyRange
 - ✓ EmptyState/noFilterMatches
 - ✓ ErrorState/loadFailed
-- ✓ EventRow/default
-- ✓ EventRow/marked
-- ✓ EventRow/selectedExpanded
-- ✓ EventRow/expandedJson
-- ✓ EventRow/compact
-- ✓ EventRow/compactNoMatch
-- ✓ EventRow/linkedToHover
-- ✓ FilterChip/notCaptured
+- ◌ FilterChip/notCaptured (illustrative, not measured)
 - ✓ FilterChip/removeHover
 - ✓ FilterChip/removeFocus
 - ✓ HeaderStat/default
@@ -104,16 +107,28 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ HeaderStat/unknown
 - ✓ HeaderStat/withQualifier
 - ✓ HeaderStat/hover
+- ✓ HeaderStat/span
+- ✓ HeaderStat/turns
+- ✓ HeaderStat/steps
+- ✓ HeaderStat/tokens
+- ✓ HeaderStat/tools
+- ✓ HeaderStat/turnsWithContent
+- ✓ HeaderStat/toolsWithContent
+- ✓ HeaderStat/withContent
+- ✓ HeaderStat/commits
 - ◌ HeaderStatGroup/withAgentExtras (illustrative, not measured)
 - ✓ HeaderStatGroup/session
 - ✓ HeaderStatGroup/default
 - ✓ HeaderStatGroup/withHover
+- ✓ HeaderStatGroup/contentFree
+- ✓ HeaderStatGroup/withContent
 - ✓ HiddenCallsNote
 - ✓ InlineError/besideTrigger
 - ✓ InlineError/default
 - ✓ KeyValueList/default
 - ✓ KeyValueList/loading
 - ✓ KeyValueList/rowHover
+- ✓ KeyValueList/context
 - ✓ LiveBadge/live
 - ✓ LiveBadge/connecting
 - ✓ LiveBadge/waiting
@@ -124,22 +139,24 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ◌ LiveBadge/heartbeatMid (illustrative, not measured)
 - ◌ LiveBadge/pausedNoPulse (illustrative, not measured)
 - ◌ LiveBadge/delayedNoPulse (illustrative, not measured)
-- ✓ Marker/frustrated
-- ✓ Marker/frustratedCompact
+- ◌ Marker/frustrated (illustrative, not measured)
+- ◌ Marker/frustratedCompact (illustrative, not measured)
 - ✓ Marker/interrupted
 - ✓ Marker/interruptedCompact
-- ✓ Marker/destructive
-- ✓ Marker/destructiveCompact
-- ✓ Marker/coverageGap
-- ✓ Marker/coverageGapLabel
-- ✓ Marker/match
+- ◌ Marker/destructive (illustrative, not measured)
+- ◌ Marker/destructiveCompact (illustrative, not measured)
+- ◌ Marker/coverageGap (illustrative, not measured)
+- ◌ Marker/coverageGapLabel (illustrative, not measured)
+- ◌ Marker/match (illustrative, not measured)
 - ✓ Marker/live
 - ✓ Marker/liveStreaming
 - ✓ NewRowsPill/visible
 - ✓ Notice/danger
 - ✓ Notice/neutral
 - ✓ OutcomeSlot/session
+- ✓ OutcomeSlot/sessionWithContent
 - ✓ OutcomeSlot/personFortnight
+- ✓ OutcomeSlot/personWithContent
 - ✓ Pagination/firstPage
 - ✓ Pagination/middle
 - ✓ Pagination/lastPage
@@ -147,21 +164,124 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Pagination/loadingNextPage
 - ✓ Pagination/liveNewRowsPastTheEnd
 - ✓ Pagination/pendingLocked
-- ✓ PartialMark
-- ✓ PeopleTable/allAgents
-- ✓ PeopleTable/codexView
-- ✓ PeopleTable/claudeCodeView
+- ✕ PeopleTable/allAgents: 
+  - text "linked by email · 2 accounts · 3 devices" · missing: canvas `linked by email · 2 accounts · 3 devices` · ours `null`
+  - text "logan@… · 1 account · 1 device" · missing: canvas `logan@… · 1 account · 1 device` · ours `null`
+  - text "ChatGPT web · 1 device" · missing: canvas `ChatGPT web · 1 device` · ours `null`
+  - text "linked by email · 2 accounts" · extra: canvas `null` · ours `linked by email · 2 accounts`
+  - text "logan@… · 1 account" · extra: canvas `null` · ours `logan@… · 1 account`
+  - text "ChatGPT web" · extra: canvas `null` · ours `ChatGPT web`
+- ✕ PeopleTable/codexView: 
+  - text "logan@… · 1 account · 1 device" · missing: canvas `logan@… · 1 account · 1 device` · ours `null`
+  - text "logan@… · 1 account" · extra: canvas `null` · ours `logan@… · 1 account`
+- ✕ PeopleTable/claudeCodeView: 
+  - text "Activity · 14 days" · box.w: canvas `184` · ours `178`
+  - text "Bypass" · missing: canvas `Bypass` · ours `null`
+  - text "Missed" · missing: canvas `Missed` · ours `null`
+  - text "99.7%" · missing: canvas `99.7%` · ours `null`
+  - text "▲ 94" · missing: canvas `▲ 94` · ours `null`
+  - text "Tool calls" · extra: canvas `null` · ours `Tool calls`
+  - text "Failed" · extra: canvas `null` · ours `Failed`
+  - text "—" · extra: canvas `null` · ours `—`
+  - text "—" · extra: canvas `null` · ours `—`
+  - mark[3] · box.x: canvas `951.58` · ours `950.7`
+  - mark[4] · box.x: canvas `964.86` · ours `963.55`
+  - mark[5] · box.x: canvas `978.16` · ours `976.41`
+  - mark[6] · box.x: canvas `991.44` · ours `989.27`
+  - mark[7] · box.x: canvas `1004.73` · ours `1002.13`
+  - mark[8] · box.x: canvas `1018.02` · ours `1014.98`
+  - mark[9] · box.x: canvas `1031.31` · ours `1027.84`
+  - mark[10] · box.x: canvas `1044.59` · ours `1040.7`
+  - mark[11] · box.x: canvas `1057.88` · ours `1053.56`
+  - mark[12] · box.x: canvas `1071.16` · ours `1066.42`
+  - mark[13] · box.x: canvas `1084.44` · ours `1079.28`
+  - mark[14] · box.x: canvas `1097.72` · ours `1092.14`
 - ✓ AgentRow/codex
-- ✓ AgentRow/claudeCode
+- ✕ AgentRow/claudeCode: 
+  - text "Using since" · missing: canvas `Using since` · ours `null`
+  - text "Aug 2025" · missing: canvas `Aug 2025` · ours `null`
+  - text "15 mo" · missing: canvas `15 mo` · ours `null`
+  - text "7-day limit" · box.x: canvas `609.14` · ours `502.22`
+  - text "83%" · box.x: canvas `609.14` · ours `502.22`
+  - text "overage off" · box.x: canvas `609.14` · ours `502.22`
+  - text "Flags" · missing: canvas `Flags` · ours `null`
+  - text "1,108" · missing: canvas `1,108` · ours `null`
+  - text "12 changed today" · missing: canvas `12 changed today` · ours `null`
+  - text "Bypass" · missing: canvas `Bypass` · ours `null`
+  - text "99.7%" · missing: canvas `99.7%` · ours `null`
+  - text "of model calls" · missing: canvas `of model calls` · ours `null`
+  - text "Missed" · missing: canvas `Missed` · ours `null`
+  - text "▲ 94" · missing: canvas `▲ 94` · ours `null`
+  - text "calls not captured" · missing: canvas `calls not captured` · ours `null`
 - ✓ AgentRow/codexMixed
-- ✓ AgentRow/claudeCodeNarrow
+- ✕ AgentRow/claudeCodeNarrow: 
+  - root · box.h: canvas `121` · ours `65`
+  - text "Using since" · missing: canvas `Using since` · ours `null`
+  - text "Aug 2025" · missing: canvas `Aug 2025` · ours `null`
+  - text "15 mo" · missing: canvas `15 mo` · ours `null`
+  - text "7-day limit" · box.x: canvas `609.14` · ours `502.22`
+  - text "83%" · box.x: canvas `609.14` · ours `502.22`
+  - text "overage off" · box.x: canvas `609.14` · ours `502.22`
+  - text "Flags" · missing: canvas `Flags` · ours `null`
+  - text "1,108" · missing: canvas `1,108` · ours `null`
+  - text "12 changed today" · missing: canvas `12 changed today` · ours `null`
+  - text "Bypass" · missing: canvas `Bypass` · ours `null`
+  - text "99.7%" · missing: canvas `99.7%` · ours `null`
+  - text "of model calls" · missing: canvas `of model calls` · ours `null`
+  - text "Missed" · missing: canvas `Missed` · ours `null`
+  - text "▲ 94" · missing: canvas `▲ 94` · ours `null`
+  - text "calls not captured" · missing: canvas `calls not captured` · ours `null`
 - ✓ AgentRow/codexNarrow
 - ✓ OrgStat/yours
 - ✓ OrgStat/outside
 - ✓ OrgStat/unset
 - ✓ PersonHeader/codexOnly
-- ✓ PersonHeader/mixed
-- ✓ PersonHeader/mixedNarrow
+- ✕ PersonHeader/mixed: 
+  - text "Using since" · missing: canvas `Using since` · ours `null`
+  - text "Aug 2025" · missing: canvas `Aug 2025` · ours `null`
+  - text "15 mo" · missing: canvas `15 mo` · ours `null`
+  - text "7-day limit" · box.x: canvas `622.14` · ours `515.22`
+  - text "83%" · box.x: canvas `622.14` · ours `515.22`
+  - text "overage off" · box.x: canvas `622.14` · ours `515.22`
+  - text "Flags" · missing: canvas `Flags` · ours `null`
+  - text "1,108" · missing: canvas `1,108` · ours `null`
+  - text "12 changed today" · missing: canvas `12 changed today` · ours `null`
+  - text "Bypass" · missing: canvas `Bypass` · ours `null`
+  - text "99.7%" · missing: canvas `99.7%` · ours `null`
+  - text "of model calls" · missing: canvas `of model calls` · ours `null`
+  - text "Missed" · missing: canvas `Missed` · ours `null`
+  - text "▲ 94" · missing: canvas `▲ 94` · ours `null`
+  - text "calls not captured" · missing: canvas `calls not captured` · ours `null`
+- ✕ PersonHeader/mixedNarrow: 
+  - root · box.h: canvas `294` · ours `238`
+  - text "Using since" · missing: canvas `Using since` · ours `null`
+  - text "Aug 2025" · missing: canvas `Aug 2025` · ours `null`
+  - text "15 mo" · missing: canvas `15 mo` · ours `null`
+  - text "7-day limit" · box.x: canvas `622.14` · ours `515.22`
+  - text "83%" · box.x: canvas `622.14` · ours `515.22`
+  - text "overage off" · box.x: canvas `622.14` · ours `515.22`
+  - text "Flags" · missing: canvas `Flags` · ours `null`
+  - text "1,108" · missing: canvas `1,108` · ours `null`
+  - text "12 changed today" · missing: canvas `12 changed today` · ours `null`
+  - text "Bypass" · missing: canvas `Bypass` · ours `null`
+  - text "99.7%" · missing: canvas `99.7%` · ours `null`
+  - text "of model calls" · missing: canvas `of model calls` · ours `null`
+  - text "Missed" · missing: canvas `Missed` · ours `null`
+  - text "▲ 94" · missing: canvas `▲ 94` · ours `null`
+  - text "calls not captured" · missing: canvas `calls not captured` · ours `null`
+  - text "Codex" · box.y: canvas `237` · ours `181`
+  - text "acct 9c2e…41" · box.y: canvas `259` · ours `203`
+  - text "Plan" · box.y: canvas `237` · ours `181`
+  - text "ChatGPT Plus" · box.y: canvas `251` · ours `195`
+  - text "5h window" · box.y: canvas `237` · ours `181`
+  - text "41%" · box.y: canvas `251` · ours `195`
+  - text "resets 22:40" · box.y: canvas `271` · ours `215`
+  - text "Week" · box.y: canvas `237` · ours `181`
+  - text "83%" · box.y: canvas `251` · ours `195`
+  - text "resets Nov 12" · box.y: canvas `271` · ours `215`
+  - text "Credits" · box.y: canvas `237` · ours `181`
+  - text "unlimited" · box.y: canvas `251` · ours `195`
+  - mark[3] · box.y: canvas `243` · ours `187`
 - ✓ PersonHeaderRow/common
 - ✓ PersonHeaderRow/commonMixed
 - ✓ PersonHeaderRow/commonNarrow
@@ -169,19 +289,192 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ◌ PersonRow/linked (illustrative, not measured)
 - ◌ PersonRow/codexOnly (illustrative, not measured)
 - ◌ PersonRow/claudeCodeOnly (illustrative, not measured)
-- ✓ PersonRow/mixedCommon
-- ✓ PersonRow/codexCommon
-- ✓ PersonRow/chatCommon
-- ✓ PersonRow/codexView
+- ✕ PersonRow/mixedCommon: 
+  - text "linked by email · 2 accounts · 3 devices" · missing: canvas `linked by email · 2 accounts · 3 devices` · ours `null`
+  - text "linked by email · 2 accounts" · extra: canvas `null` · ours `linked by email · 2 accounts`
+- ✕ PersonRow/codexCommon: 
+  - text "logan@… · 1 account · 1 device" · missing: canvas `logan@… · 1 account · 1 device` · ours `null`
+  - text "logan@… · 1 account" · extra: canvas `null` · ours `logan@… · 1 account`
+- ✕ PersonRow/chatCommon: 
+  - text "ChatGPT web · 1 device" · missing: canvas `ChatGPT web · 1 device` · ours `null`
+  - text "ChatGPT web" · extra: canvas `null` · ours `ChatGPT web`
+- ✕ PersonRow/codexView: 
+  - text "logan@… · 1 account · 1 device" · missing: canvas `logan@… · 1 account · 1 device` · ours `null`
+  - text "logan@… · 1 account" · extra: canvas `null` · ours `logan@… · 1 account`
 - ✓ PersonRow/codexViewLinked
-- ✓ PersonRow/claudeCodeView
-- ✓ PersonRow/default
-- ✓ PersonRow/hover
-- ✓ PersonRow/focus
-- ✓ PersonRow/liveCoverageGap
-- ✓ PersonRow/multiAgentEstimated
-- ✓ PersonRow/noTokenCounts
-- ✓ PersonRow/loading
+- ✕ PersonRow/claudeCodeView: 
+  - text "99.7%" · missing: canvas `99.7%` · ours `null`
+  - text "▲ 94" · missing: canvas `▲ 94` · ours `null`
+  - text "—" · extra: canvas `null` · ours `—`
+  - text "—" · extra: canvas `null` · ours `—`
+  - mark[3] · box.x: canvas `950.58` · ours `949.7`
+  - mark[4] · box.x: canvas `963.86` · ours `962.55`
+  - mark[5] · box.x: canvas `977.16` · ours `975.41`
+  - mark[6] · box.x: canvas `990.44` · ours `988.27`
+  - mark[7] · box.x: canvas `1003.73` · ours `1001.13`
+  - mark[8] · box.x: canvas `1017.02` · ours `1013.98`
+  - mark[9] · box.x: canvas `1030.31` · ours `1026.84`
+  - mark[10] · box.x: canvas `1043.59` · ours `1039.7`
+  - mark[11] · box.x: canvas `1056.88` · ours `1052.56`
+  - mark[12] · box.x: canvas `1070.16` · ours `1065.42`
+  - mark[13] · box.x: canvas `1083.44` · ours `1078.28`
+  - mark[14] · box.x: canvas `1096.72` · ours `1091.14`
+- ✕ PersonRow/default: 
+  - text "name unknown" · box.w: canvas `236.84` · ours `235.47`
+  - text "email not seen · 1 account · 1 device" · missing: canvas `email not seen · 1 account · 1 device` · ours `null`
+  - text "Claude Code" · box.x: canvas `260.84` · ours `259.47`
+  - text "Nov 3 02:15" · box.w: canvas `94.73` · ours `94.19`
+  - text "Nov 3 02:15" · box.x: canvas `519.16` · ours `516.34`
+  - text "1" · box.x: canvas `625.89` · ours `622.53`
+  - text "1" · box.x: canvas `704.2` · ours `700.47`
+  - text "1.8k out" · box.x: canvas `782.52` · ours `778.41`
+  - text "—" · box.x: canvas `1051.78` · ours `1047.17`
+  - text "—" · color: canvas `rgb(230, 227, 219)` · ours `rgb(163, 169, 173)`
+  - text "0" · missing: canvas `0` · ours `null`
+  - text "email not seen · 1 account" · extra: canvas `null` · ours `email not seen · 1 account`
+  - text "—" · extra: canvas `null` · ours `—`
+  - mark[0] · box.x: canvas `267.84` · ours `266.47`
+  - mark[1] · box.x: canvas `879.78` · ours `875.17`
+  - mark[2] · box.x: canvas `891.34` · ours `886.73`
+  - mark[3] · box.x: canvas `902.92` · ours `898.31`
+  - mark[4] · box.x: canvas `914.48` · ours `909.88`
+  - mark[5] · box.x: canvas `926.06` · ours `921.45`
+  - mark[6] · box.x: canvas `937.63` · ours `933.02`
+  - mark[7] · box.x: canvas `949.2` · ours `944.59`
+  - mark[8] · box.x: canvas `960.77` · ours `956.16`
+  - mark[9] · box.x: canvas `972.34` · ours `967.73`
+  - mark[10] · box.x: canvas `983.91` · ours `979.3`
+  - mark[11] · box.x: canvas `995.48` · ours `990.88`
+  - mark[12] · box.x: canvas `1007.05` · ours `1002.44`
+  - mark[13] · box.x: canvas `1018.63` · ours `1014.02`
+  - mark[14] · box.x: canvas `1030.2` · ours `1025.59`
+- ✕ PersonRow/hover: 
+  - text "name unknown" · box.w: canvas `236.84` · ours `235.47`
+  - text "email not seen · 1 account · 1 device" · missing: canvas `email not seen · 1 account · 1 device` · ours `null`
+  - text "Claude Code" · box.x: canvas `260.84` · ours `259.47`
+  - text "Nov 3 02:15" · box.w: canvas `94.73` · ours `94.19`
+  - text "Nov 3 02:15" · box.x: canvas `519.16` · ours `516.34`
+  - text "1" · box.x: canvas `625.89` · ours `622.53`
+  - text "1" · box.x: canvas `704.2` · ours `700.47`
+  - text "1.8k out" · box.x: canvas `782.52` · ours `778.41`
+  - text "—" · box.x: canvas `1051.78` · ours `1047.17`
+  - text "—" · color: canvas `rgb(230, 227, 219)` · ours `rgb(163, 169, 173)`
+  - text "0" · missing: canvas `0` · ours `null`
+  - text "email not seen · 1 account" · extra: canvas `null` · ours `email not seen · 1 account`
+  - text "—" · extra: canvas `null` · ours `—`
+  - mark[0] · box.x: canvas `267.84` · ours `266.47`
+  - mark[1] · box.x: canvas `879.78` · ours `875.17`
+  - mark[2] · box.x: canvas `891.34` · ours `886.73`
+  - mark[3] · box.x: canvas `902.92` · ours `898.31`
+  - mark[4] · box.x: canvas `914.48` · ours `909.88`
+  - mark[5] · box.x: canvas `926.06` · ours `921.45`
+  - mark[6] · box.x: canvas `937.63` · ours `933.02`
+  - mark[7] · box.x: canvas `949.2` · ours `944.59`
+  - mark[8] · box.x: canvas `960.77` · ours `956.16`
+  - mark[9] · box.x: canvas `972.34` · ours `967.73`
+  - mark[10] · box.x: canvas `983.91` · ours `979.3`
+  - mark[11] · box.x: canvas `995.48` · ours `990.88`
+  - mark[12] · box.x: canvas `1007.05` · ours `1002.44`
+  - mark[13] · box.x: canvas `1018.63` · ours `1014.02`
+  - mark[14] · box.x: canvas `1030.2` · ours `1025.59`
+- ✕ PersonRow/focus: 
+  - text "name unknown" · box.w: canvas `236.84` · ours `235.47`
+  - text "email not seen · 1 account · 1 device" · missing: canvas `email not seen · 1 account · 1 device` · ours `null`
+  - text "Claude Code" · box.x: canvas `260.84` · ours `259.47`
+  - text "Nov 3 02:15" · box.w: canvas `94.73` · ours `94.19`
+  - text "Nov 3 02:15" · box.x: canvas `519.16` · ours `516.34`
+  - text "1" · box.x: canvas `625.89` · ours `622.53`
+  - text "1" · box.x: canvas `704.2` · ours `700.47`
+  - text "1.8k out" · box.x: canvas `782.52` · ours `778.41`
+  - text "—" · box.x: canvas `1051.78` · ours `1047.17`
+  - text "—" · color: canvas `rgb(230, 227, 219)` · ours `rgb(163, 169, 173)`
+  - text "0" · missing: canvas `0` · ours `null`
+  - text "email not seen · 1 account" · extra: canvas `null` · ours `email not seen · 1 account`
+  - text "—" · extra: canvas `null` · ours `—`
+  - mark[0] · box.x: canvas `267.84` · ours `266.47`
+  - mark[1] · box.x: canvas `879.78` · ours `875.17`
+  - mark[2] · box.x: canvas `891.34` · ours `886.73`
+  - mark[3] · box.x: canvas `902.92` · ours `898.31`
+  - mark[4] · box.x: canvas `914.48` · ours `909.88`
+  - mark[5] · box.x: canvas `926.06` · ours `921.45`
+  - mark[6] · box.x: canvas `937.63` · ours `933.02`
+  - mark[7] · box.x: canvas `949.2` · ours `944.59`
+  - mark[8] · box.x: canvas `960.77` · ours `956.16`
+  - mark[9] · box.x: canvas `972.34` · ours `967.73`
+  - mark[10] · box.x: canvas `983.91` · ours `979.3`
+  - mark[11] · box.x: canvas `995.48` · ours `990.88`
+  - mark[12] · box.x: canvas `1007.05` · ours `1002.44`
+  - mark[13] · box.x: canvas `1018.63` · ours `1014.02`
+  - mark[14] · box.x: canvas `1030.2` · ours `1025.59`
+- ◌ PersonRow/liveCoverageGap (illustrative, not measured)
+- ✕ PersonRow/multiAgentEstimated: 
+  - text "Dana Ruiz" · box.w: canvas `236.84` · ours `235.47`
+  - text "dana@example.com · linked by email" · box.w: canvas `236.84` · ours `235.47`
+  - text "Codex" · box.x: canvas `260.84` · ours `259.47`
+  - text "ChatGPT" · box.x: canvas `325.05` · ours `323.67`
+  - text "4 min ago" · box.w: canvas `94.73` · ours `94.19`
+  - text "4 min ago" · box.x: canvas `519.16` · ours `516.34`
+  - text "9" · box.x: canvas `625.89` · ours `622.53`
+  - text "74" · box.x: canvas `704.2` · ours `700.47`
+  - text "≈ 610k out" · box.x: canvas `782.52` · ours `778.41`
+  - text "—" · box.x: canvas `1051.78` · ours `1047.17`
+  - text "—" · color: canvas `rgb(230, 227, 219)` · ours `rgb(163, 169, 173)`
+  - text "—" · box.w: canvas `79.58` · ours `84.77`
+  - text "—" · box.x: canvas `1149.05` · ours `1143.94`
+  - mark[0] · box.x: canvas `267.84` · ours `266.47`
+  - mark[1] · box.x: canvas `332.05` · ours `330.67`
+  - mark[2] · box.x: canvas `879.78` · ours `875.17`
+  - mark[3] · box.x: canvas `891.34` · ours `886.73`
+  - mark[4] · box.x: canvas `902.92` · ours `898.31`
+  - mark[5] · box.x: canvas `914.48` · ours `909.88`
+  - mark[6] · box.x: canvas `926.06` · ours `921.45`
+  - mark[7] · box.x: canvas `937.63` · ours `933.02`
+  - mark[8] · box.x: canvas `949.2` · ours `944.59`
+  - mark[9] · box.x: canvas `960.77` · ours `956.16`
+  - mark[10] · box.x: canvas `972.34` · ours `967.73`
+  - mark[11] · box.x: canvas `983.91` · ours `979.3`
+  - mark[12] · box.x: canvas `995.48` · ours `990.88`
+  - mark[13] · box.x: canvas `1007.05` · ours `1002.44`
+  - mark[14] · box.x: canvas `1018.63` · ours `1014.02`
+  - mark[15] · box.x: canvas `1030.2` · ours `1025.59`
+- ✕ PersonRow/noTokenCounts: 
+  - text "name unknown" · box.w: canvas `236.84` · ours `235.47`
+  - text "ChatGPT web · 1 device" · box.w: canvas `236.84` · ours `235.47`
+  - text "ChatGPT" · box.x: canvas `260.84` · ours `259.47`
+  - text "Nov 3 09:12" · box.w: canvas `94.73` · ours `94.19`
+  - text "Nov 3 09:12" · box.x: canvas `519.16` · ours `516.34`
+  - text "4" · box.x: canvas `625.89` · ours `622.53`
+  - text "19" · box.x: canvas `704.2` · ours `700.47`
+  - text "—" · box.x: canvas `782.52` · ours `778.41`
+  - text "—" · box.x: canvas `1051.78` · ours `1047.17`
+  - text "—" · color: canvas `rgb(230, 227, 219)` · ours `rgb(163, 169, 173)`
+  - text "—" · box.w: canvas `79.58` · ours `84.77`
+  - text "—" · box.x: canvas `1149.05` · ours `1143.94`
+  - mark[0] · box.x: canvas `267.84` · ours `266.47`
+  - mark[1] · box.x: canvas `879.78` · ours `875.17`
+  - mark[2] · box.x: canvas `891.34` · ours `886.73`
+  - mark[3] · box.x: canvas `902.92` · ours `898.31`
+  - mark[4] · box.x: canvas `914.48` · ours `909.88`
+  - mark[5] · box.x: canvas `926.06` · ours `921.45`
+  - mark[6] · box.x: canvas `937.63` · ours `933.02`
+  - mark[7] · box.x: canvas `949.2` · ours `944.59`
+  - mark[8] · box.x: canvas `960.77` · ours `956.16`
+  - mark[9] · box.x: canvas `972.34` · ours `967.73`
+  - mark[10] · box.x: canvas `983.91` · ours `979.3`
+  - mark[11] · box.x: canvas `995.48` · ours `990.88`
+  - mark[12] · box.x: canvas `1007.05` · ours `1002.44`
+  - mark[13] · box.x: canvas `1018.63` · ours `1014.02`
+  - mark[14] · box.x: canvas `1030.2` · ours `1025.59`
+- ✕ PersonRow/loading: 
+  - mark[0] · box.w: canvas `142.09` · ours `141.28`
+  - mark[1] · box.w: canvas `165.78` · ours `164.83`
+  - mark[2] · box.x: canvas `260.84` · ours `259.47`
+  - mark[3] · box.x: canvas `519.16` · ours `516.34`
+  - mark[4] · box.x: canvas `662.2` · ours `658.47`
+  - mark[5] · box.x: canvas `740.52` · ours `736.41`
+  - mark[6] · box.x: canvas `813.78` · ours `809.17`
+  - mark[7] · box.x: canvas `879.78` · ours `875.17`
+  - mark[8] · box.x: canvas `1093.05` · ours `1087.94`
 - ✓ ProgressBar/refetching
 - ✓ ProgressBar/slow
 - ✓ ProgressBar/pagination
@@ -213,10 +506,10 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ DetailSection/codexResponse
 - ✓ DetailSection/default
 - ✓ DrawerMeta/normal
-- ✓ DrawerMeta/reportedNotCaptured
+- ◌ DrawerMeta/reportedNotCaptured (illustrative, not measured)
 - ✓ DrawerMeta/failed
 - ✓ DrawerHeader/normal
-- ✓ DrawerHeader/reportedNotCaptured
+- ◌ DrawerHeader/reportedNotCaptured (illustrative, not measured)
 - ✓ DrawerHeader/failed
 - ✓ DrawerTabs/default
 - ✓ DrawerTabs/noWireData
@@ -237,13 +530,13 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ KeyStrip/codexNoUsage
 - ✓ KeyStripCell/model
 - ✓ KeyStripCell/tokens
-- ✓ KeyStripCell/costEst
+- ◌ KeyStripCell/costEst (illustrative, not measured)
 - ✓ KeyStripCell/ttft
 - ✓ KeyStripCell/duration
 - ✓ KeyStripCell/stop
 - ✓ KeyStripCell/modelKnown
 - ✓ KeyStripCell/tokensUnknown
-- ✓ KeyStripCell/costEstUnknown
+- ◌ KeyStripCell/costEstUnknown (illustrative, not measured)
 - ✓ KeyStripCell/ttftUnknown
 - ✓ KeyStripCell/durationKnown
 - ✓ KeyStripCell/stopUnknown
@@ -284,7 +577,7 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ RequestRow/countTokens
 - ✓ RequestRow/accountNoSession
 - ✓ RequestRow/error
-- ✓ RequestRow/notCaptured
+- ◌ RequestRow/notCaptured (illustrative, not measured)
 - ✓ RequestRow/selected
 - ✓ RequestRow/hoverLinked
 - ✓ RequestRow/timelineHovered
@@ -307,22 +600,62 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ◌ SessionRow/codexChild (illustrative, not measured)
 - ◌ SessionRow/codexReview (illustrative, not measured)
 - ◌ SessionRow/codexFork (illustrative, not measured)
-- ✓ SessionRow/partialCapture
+- ◌ SessionRow/partialCapture (illustrative, not measured)
 - ◌ SessionRow/pendingNavigation (illustrative, not measured)
-- ✓ SessionRow/mixedClaudeCode
+- ✕ SessionRow/mixedClaudeCode: 
+  - text "↯1 ✕1" · missing: canvas `↯1 ✕1` · ours `null`
+  - text "✕1" · extra: canvas `null` · ours `✕1`
 - ✓ SessionRow/mixedCodexParent
 - ✓ SessionRow/mixedCodexChild
 - ✓ SessionRow/mixedCodexReview
-- ✓ SessionRow/mixedCodexFork
+- ✕ SessionRow/mixedCodexFork: 
+  - text "▲2" · missing: canvas `▲2` · ours `null`
 - ✓ SessionRow/mixedCodexUntitled
-- ✓ SessionRow/liveGap
-- ✓ SessionRow/ended
-- ✓ SessionRow/hover
-- ✓ SessionRow/fieldsMissing
-- ✓ SessionRow/noRecapLabel
-- ✓ SessionRow/hoverLinked
+- ◌ SessionRow/liveGap (illustrative, not measured)
+- ✕ SessionRow/ended: 
+  - text "Added CSV export; tests pass" · box.w: canvas `226` · ours `482`
+  - text "8" · box.x: canvas `628` · ours `884`
+  - text "3h 30m" · box.x: canvas `704` · ours `960`
+  - text "282" · box.x: canvas `780` · ours `1036`
+  - text "—" · missing: canvas `—` · ours `null`
+  - text "0%" · missing: canvas `0%` · ours `null`
+  - text "0" · missing: canvas `0` · ours `null`
+- ✕ SessionRow/hover: 
+  - text "Added CSV export; tests pass" · box.w: canvas `226` · ours `482`
+  - text "8" · box.x: canvas `628` · ours `884`
+  - text "3h 30m" · box.x: canvas `704` · ours `960`
+  - text "282" · box.x: canvas `780` · ours `1036`
+  - text "—" · missing: canvas `—` · ours `null`
+  - text "0%" · missing: canvas `0%` · ours `null`
+  - text "0" · missing: canvas `0` · ours `null`
+- ✕ SessionRow/fieldsMissing: 
+  - text "identity and repo not parsed (pre-Nov 2)" · box.w: canvas `226` · ours `482`
+  - text "1" · box.x: canvas `628` · ours `884`
+  - text "24m 0s" · box.x: canvas `704` · ours `960`
+  - text "4" · box.x: canvas `780` · ours `1036`
+  - text "—" · missing: canvas `—` · ours `null`
+  - text "—" · missing: canvas `—` · ours `null`
+  - text "—" · missing: canvas `—` · ours `null`
+- ◌ SessionRow/noRecapLabel (illustrative, not measured)
+- ✕ SessionRow/hoverLinked: 
+  - text "Added CSV export; tests pass" · box.w: canvas `346` · ours `602`
+  - text "8" · box.x: canvas `748` · ours `1004`
+  - text "3h 30m" · box.x: canvas `824` · ours `1080`
+  - text "282" · box.x: canvas `900` · ours `1156`
+  - text "—" · missing: canvas `—` · ours `null`
+  - text "0%" · missing: canvas `0%` · ours `null`
+  - text "0" · missing: canvas `0` · ours `null`
 - ✓ SessionRow/workDefault
-- ✓ SessionTable/mixed
+- ✕ SessionRow/workPlain: 
+  - text "48m" · missing: canvas `48m` · ours `null`
+  - text "48m 0s" · extra: canvas `null` · ours `48m 0s`
+- ✓ SessionRow/workWithContent
+- ✕ SessionTable/mixed: 
+  - text "↯1 ✕1" · missing: canvas `↯1 ✕1` · ours `null`
+  - text "✕1" · box.y: canvas `65.25` · ours `30.75`
+  - text "▲2" · missing: canvas `▲2` · ours `null`
+  - text "✕1" · box.y: canvas `203.25` · ours `65.25`
+  - text "✕1" · extra: canvas `null` · ours `✕1`
 - ✓ SessionTabs/withHints
 - ✓ TabHint
 - ✓ TabHint/requests
@@ -343,13 +676,13 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ StatTile/hoverLinksToRows
 - ✓ StatTile/noSwatch
 - ✓ StatTile/unknown
-- ✓ StatTile/coverageGap
+- ◌ StatTile/coverageGap (illustrative, not measured)
 - ✓ StatTile/loading
 - ✓ StatTile/hover
 - ✓ StatusCode/2xx
 - ✓ StatusCode/error
 - ✓ StatusCode/errorStatus529
-- ✓ StatusCode/noneNotCaptured
+- ◌ StatusCode/noneNotCaptured (illustrative, not measured)
 - ✓ StepList/more
 - ✓ StepRow/codexModelCall
 - ✓ StepRow/codexSubagent
@@ -362,13 +695,13 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ StepRow/longTurnTextNoBodies
 - ✓ StepRow/modelCall
 - ✓ StepRow/streaming
-- ✓ StepRow/eventsPending
+- ◌ StepRow/eventsPending (illustrative, not measured)
 - ✓ StepRow/subagent
 - ✓ StepRun/collapsed
 - ✓ StepRun/collapsedFailing
 - ✓ StepRun/collapsedNoBodies
 - ✓ StepRun/runNoBodies
-- ✓ StepRun/claudeCodeNoBodies
+- ◌ StepRun/claudeCodeNoBodies (illustrative, not measured)
 - ✓ ToolCallRow/codexExec
 - ✓ ToolCallRow/codexPatch
 - ✓ ToolCallRow/default
@@ -376,7 +709,7 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ ToolCallRow/running
 - ✓ StepStrip
 - ✓ StepStrip/noBodies
-- ✓ TableHeader/missed
+- ◌ TableHeader/missed (illustrative, not measured)
 - ✓ TableHeader/hoverDefinition
 - ✓ Tab/default
 - ✓ Tab/hover
@@ -399,10 +732,10 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ BandTrack/liveBand
 - ✓ BandTrack/hoverBand
 - ✓ BandTrack/focusBand
-- ✓ BarTrack/withGaps (75 accepted deviations)
+- ◌ BarTrack/withGaps (illustrative, not measured)
 - ✓ BarTrack/default (75 accepted deviations)
 - ✓ BarTrack/hoverBin (44 accepted deviations)
-- ✓ BarTrack/hoverGap (45 accepted deviations)
+- ◌ BarTrack/hoverGap (illustrative, not measured)
 - ✓ BarTrack/contextHover
 - ✓ BarTrack/contextHoverBar
 - ✓ BarTrack/contextLabelHover
@@ -415,37 +748,41 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Brush/handleHover
 - ✓ Brush/dragging
 - ✓ ContextTrack/compactionLabelHover
-- ✓ DensityTrack/default (100 accepted deviations)
-- ✓ DensityTrack/hoverBin (100 accepted deviations)
 - ✓ FrictionRow/steered
-- ✓ FrictionRow/frustrated (1 accepted deviation)
+- ◌ FrictionRow/frustrated (illustrative, not measured)
 - ✓ FrictionRow/interrupted (1 accepted deviation)
-- ✓ FrictionRow/destructive (1 accepted deviation)
-- ✓ GapRow/merged (1 accepted deviation)
+- ◌ FrictionRow/destructive (illustrative, not measured)
+- ✕ FrictionRow/interruptedSpec: 
+  - text "✕" · white-space: canvas `normal` · ours `nowrap`
+  - text "✕" · white-space: canvas `normal` · ours `nowrap`
+- ✕ FrictionRow/failedCalls: 
+  - text "!2" · white-space: canvas `normal` · ours `nowrap`
+  - text "!" · white-space: canvas `normal` · ours `nowrap`
+  - text "!" · white-space: canvas `normal` · ours `nowrap`
 - ✓ Lane/codexPrompts
 - ✓ Lane/codexModelCalls
 - ✓ Lane/codexFriction
 - ✓ Lane/modelCalls24h (1 accepted deviation)
 - ✓ Lane/modelCalls7d (1 accepted deviation)
 - ✓ Lane/modelCalls14d (1 accepted deviation)
-- ✓ Lane/modelCallsWithGapRow (1 accepted deviation)
+- ◌ Lane/modelCallsWithGapRow (illustrative, not measured)
 - ✓ Lane/frictionSplit (1 accepted deviation)
 - ✓ Lane/modelCallsGrid14d (1 accepted deviation)
 - ✓ Lane/modelCallsGrid24h (1 accepted deviation)
 - ✓ Lane/sessionsSnap
 - ✓ Lane/sessionsReadout
 - ✓ Lane/modelCallsEmptyBin
-- ✓ Lane/modelCalls (79 accepted deviations)
-- ✓ Lane/analytics (104 accepted deviations)
+- ✓ Lane/modelCalls (4 accepted deviations)
+- ◌ Lane/analytics (illustrative, not measured)
 - ✓ Lane/sessions (1 accepted deviation)
 - ✓ Lane/prompts (1 accepted deviation)
 - ✓ Lane/modelCallsUnderBrush (76 accepted deviations)
 - ✓ Lane/loading (1 accepted deviation)
 - ✓ Lane/promptsHoverGuide (1 accepted deviation)
 - ✓ Lane/modelCallsHover (48 accepted deviations)
-- ✓ Lane/analyticsHoverGuide (104 accepted deviations)
-- ✓ Lane/notCapturedHover (49 accepted deviations)
-- ✓ Lane/analyticsHover (104 accepted deviations)
+- ◌ Lane/analyticsHoverGuide (illustrative, not measured)
+- ◌ Lane/notCapturedHover (illustrative, not measured)
+- ◌ Lane/analyticsHover (illustrative, not measured)
 - ✓ Lane/sessionsHover (1 accepted deviation)
 - ✓ Lane/contextHover (4 accepted deviations)
 - ✓ Lane/contextLabelHover (4 accepted deviations)
@@ -456,6 +793,14 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Lane/modelCallsFocus (48 accepted deviations)
 - ✓ Lane/modelCallsPressed (48 accepted deviations)
 - ✓ Lane/sessionsFocus (1 accepted deviation)
+- ✕ Lane/frictionTwoRows: 
+  - text "! failed calls 5" · missing: canvas `! failed calls 5` · ours `null`
+  - text "✕" · white-space: canvas `normal` · ours `nowrap`
+  - text "✕" · white-space: canvas `normal` · ours `nowrap`
+  - text "!2" · white-space: canvas `normal` · ours `nowrap`
+  - text "!" · white-space: canvas `normal` · ours `nowrap`
+  - text "!" · white-space: canvas `normal` · ours `nowrap`
+  - text "! failed calls 4" · extra: canvas `null` · ours `! failed calls 4`
 - ✓ Lane/turnsSpec
 - ✕ Lane/workSpec: 
   - mark[0] · box.w: canvas `14.52` · ours `18.36`
@@ -567,7 +912,7 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Timeline/codex
 - ✓ Timeline/withBrush (105 accepted deviations)
 - ✓ Timeline/loading (3 accepted deviations)
-- ✓ Timeline/hoverGuide (185 accepted deviations)
+- ✓ Timeline/hoverGuide (81 accepted deviations)
 - ✓ TurnTrack/blocks
 - ✕ WorkTrack/stacked: 
   - mark[0] · box.w: canvas `14.52` · ours `18.36`
@@ -673,9 +1018,13 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ ToggleChip/disabled
 - ✓ ToggleChip/withSwatchOn
 - ✓ ToggleChip/withSwatchOff
+- ✓ ToolsOfferedUsed
+- ✓ ToolsOfferedUsed/row
+- ✓ ToolsOfferedUsed/rowMcp
+- ✓ ToolsOfferedUsed/rowUnused
 - ✓ Tooltip/codexLimits
-- ✓ Tooltip/gapMerged (1 accepted deviation)
-- ✓ Tooltip/partialCapture (4 accepted deviations)
+- ◌ Tooltip/gapMerged (illustrative, not measured)
+- ◌ Tooltip/partialCapture (illustrative, not measured)
 - ✓ Tooltip/orgUnset
 - ✓ Tooltip/summaryLabel
 - ✓ Tooltip/sessionSnapped
@@ -688,21 +1037,21 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Tooltip/tokens
 - ✓ Tooltip/bytes
 - ✓ Tooltip/time
-- ✓ Tooltip/coverage
+- ◌ Tooltip/coverage (illustrative, not measured)
 - ✓ Tooltip/friction
 - ✓ Tooltip/agentChip
 - ✓ Tooltip/unknownCell
-- ✓ Tooltip/columnHeaderCoverage
+- ◌ Tooltip/columnHeaderCoverage (illustrative, not measured)
 - ✓ Tooltip/headerStat
 - ✓ Tooltip/statTile
-- ✓ Tooltip/coverageLine
+- ◌ Tooltip/coverageLine (illustrative, not measured)
 - ✓ Tooltip/keyValueRow
 - ✓ Tooltip/notRetained
-- ✓ Tooltip/postureChip
+- ◌ Tooltip/postureChip (illustrative, not measured)
 - ✓ Tooltip/rangeChip
 - ✓ Tooltip/liveBadge
 - ✓ Tooltip/barBin
-- ✓ Tooltip/notCaptured
+- ◌ Tooltip/notCaptured (illustrative, not measured)
 - ✓ Tooltip/densityBin
 - ✓ Tooltip/sessionBand
 - ✓ Tooltip/contextBar
@@ -723,14 +1072,14 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ Tooltip/anchoredTop
 - ✓ Tooltip/flippedBottom
 - ✓ Tooltip/chartAnchored
-- ✓ TurnReport
 - ✓ TurnRow/default
 - ✕ TurnRow/open: 
-  - text "1.4k chars" · missing: canvas `1.4k chars` · ours `null`
-  - text "1,400 chars" · extra: canvas `null` · ours `1,400 chars`
+  - text "1.4k chars · 1 image" · missing: canvas `1.4k chars · 1 image` · ours `null`
+  - text "1,400 chars · 1 image" · extra: canvas `null` · ours `1,400 chars · 1 image`
 - ✕ TurnRow/interruptedTurn: 
   - text "22s" · missing: canvas `22s` · ours `null`
   - text "22 s" · extra: canvas `null` · ours `22 s`
+- ✓ TurnRow/failedCalls
 - ✕ TurnRow/live: 
   - text "● 1m 04s" · missing: canvas `● 1m 04s` · ours `null`
   - text "● 1m 4s" · extra: canvas `null` · ours `● 1m 4s`
@@ -738,13 +1087,17 @@ Not yet covered (no Canvas story): ClickRule, CopyButton, Exploration, InputComp
 - ✓ TurnRow/codex
 - ✓ ReplyPreview
 - ✓ SubagentRow/default
+- ✓ SubagentRow/withContent
 - ✓ TurnStep/default
+- ✓ TurnStep/withContent
 - ✓ WorkGroup/collapsed
 - ✓ WorkGroup/open
 - ✓ WorkGroup/editsGroup
+- ✓ WorkGroup/mcpGroup
 - ✓ WorkGroup/thinkingGroup
 - ✓ WorkGroup/replyGroup
 - ✓ WorkGroup/withPaths
+- ✓ WorkGroup/withCommands
 - ✓ UnattributedNotice/default
 - ✓ UpdatedAgo
 - ✓ UpdatedAgo/peopleBar

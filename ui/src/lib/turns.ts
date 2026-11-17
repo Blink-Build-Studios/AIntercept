@@ -14,11 +14,12 @@ export type TurnStepData = Schemas["TurnStep"];
 
 const plural = (n: number, one: string, many = `${one}s`) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
-/** The Asked cell: the prompt in quotes when recorded, else its size (`212 chars`). */
+/** The Asked cell: the prompt in quotes when recorded, else its size (`212 chars`); then its images (`· 1 image`). */
 export function askedText(t: Pick<Turn, "asked">): { text: string; recorded: boolean } {
   const a = t.asked;
-  if (a.retained && a.text !== null) return { text: `“${a.text}”`, recorded: true };
-  return { text: a.chars === null ? "—" : `${formatCount(a.chars)} chars`, recorded: false };
+  const images = a.images ? ` · ${plural(a.images, "image")}` : "";
+  if (a.retained && a.text !== null) return { text: `“${a.text}”${images}`, recorded: true };
+  return { text: `${a.chars === null ? "—" : `${formatCount(a.chars)} chars`}${images}`, recorded: false };
 }
 
 /** Tokens in → out (`410k → 6.1k`); null when neither is known. */
@@ -51,7 +52,7 @@ export type TurnGroupView = {
   reply: { text: string; size: string } | null;
 };
 /** A subagent under the turn that spawned it. */
-export type SubagentView = { key: string; name: string; work: WorkPart[]; tokens: string | null; sessionId: string | null; requestId: string | null };
+export type SubagentView = { key: string; name: string | null; n: number; work: WorkPart[]; tokens: string | null; sessionId: string | null; requestId: string | null };
 /** A turn as the Turns tab renders it. */
 export type TurnView = { turn: Turn; work: WorkPart[]; groups: TurnGroupView[]; subagents: SubagentView[] };
 
@@ -123,7 +124,8 @@ export function turnView(t: Turn): TurnView {
       const work = workLine(a.work);
       return {
         key: `${t.promptId}:sub:${a.agentId ?? i}`,
-        name: a.name ?? "subagent",
+        name: a.name,
+        n: i + 1,
         work: [plural(a.steps, "step"), ...(work.length ? [" · ", ...work] : [])],
         tokens: inOut(a.tokensIn, a.tokensOut),
         sessionId: a.sessionId,
@@ -164,7 +166,7 @@ export function repoView(g: Schemas["RepoGroup"]): RepoView {
     activeMs: g.activeMs,
     work: workLine(g.work),
     rows: g.rows.map((r) => ({
-      session: { sessionId: r.sessionId, start: r.start, end: r.end, live: r.live, label: r.label.text, turns: r.turns, capturedFromPrompt: r.capturedFromPrompt, activeMs: r.activeMs, friction: r.friction },
+      session: { sessionId: r.sessionId, start: r.start, end: r.end, live: r.live, label: r.label.text, turns: r.turns, activeMs: r.activeMs, friction: { interrupted: r.friction.interrupted, failed: 0 } },
       work: workLine(r.work),
     })),
   };

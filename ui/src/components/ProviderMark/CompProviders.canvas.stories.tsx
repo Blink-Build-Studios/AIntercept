@@ -319,7 +319,7 @@ export function ProvidersSessionSheet() {
             ]}
             origin={{ kind: "resume", threadShort: "3b9a…e21", init: "cold_resume", href: "#" }}
             stats={
-              <HeaderStatGroup label="Session" wrapGap>
+              <HeaderStatGroup label="Session" wrapGap noBreak>
                 <HeaderStat label="Span" value="Nov 9 09:00 → 11:04 · 2h 4m" />
                 <HeaderStat label="Prompts" value="1" />
                 <HeaderStat label="Model calls" value="203" qualifier="+6 prewarm hidden" qualifierTone="hidden" />

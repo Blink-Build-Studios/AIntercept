@@ -2,14 +2,13 @@
 // Pure: the screen and its stories call these.
 import type { Schemas } from "../../api/types";
 import { reports, type Capabilities, type Capability } from "../../lib/agents";
-import { formatCount, formatDuration, formatPct, formatTokens, formatUsd } from "../../lib/format";
+import { formatCount, formatDuration, formatTokens } from "../../lib/format";
 import { formatDay, formatTime } from "../../lib/time";
 import type { Agent } from "../../components/AgentChip/AgentChip";
 import { orgStat } from "../../components/PersonHeader/OrgStat";
 import { personSubtitle, type PersonHeaderProps } from "../../components/PersonHeader/PersonHeader";
-import { lastSeenValue, missedValue, type PersonStatData } from "../../components/PersonHeader/PersonHeaderRow";
+import { lastSeenValue, type PersonStatData } from "../../components/PersonHeader/PersonHeaderRow";
 import type { Band } from "../../components/Timeline/BandTrack";
-import type { Gap } from "../../components/Timeline/BarTrack";
 import type { TimelineMark } from "../../components/Timeline/MarkerTrack";
 import type { KeyValueRow } from "../../components/KeyValueList/KeyValueList";
 import type { OutcomeFact } from "../../components/OutcomeSlot/OutcomeFacts";
@@ -19,31 +18,12 @@ export type PersonHeader = Schemas["PersonHeader"];
 export type PersonSummary = Schemas["PersonSummary"];
 export type PersonTimeline = Schemas["Timeline"];
 
-/** "4 mo", "1 yr 3 mo": how long since a date. */
-function since(iso: string, now: Date): string {
-  const months = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / (30.44 * 86_400_000)));
-  return months < 12 ? `${months} mo` : `${Math.floor(months / 12)} yr${months % 12 ? ` ${months % 12} mo` : ""}`;
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** "Aug 2025". */
-const monthYear = (iso: string) => {
-  const d = new Date(iso);
-  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-};
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const stat = (label: string, value: PersonStatData["value"], sub?: string | null, unknownReason?: string): PersonStatData => ({ label, value, sub, unknownReason });
 
-/** "1 · darwin · zsh", or null before any device is seen. */
-function devicesValue(p: PersonHeader): string | null {
-  if (!p.devices.length) return null;
-  const kinds = [...new Set(p.devices.flatMap((d) => [d.platform, d.shell]).filter(Boolean))];
-  return [formatCount(p.devices.length), ...kinds].join(" · ");
-}
-
 /**
- * The All agents row (handoff §11L.3): the stats every provider fills. Sessions, prompts and
- * tokens follow the range (the summary); devices and last seen are the person's.
+ * The All agents row (handoff §11L.3, §11S): the stats every provider fills. Sessions, turns and
+ * tokens follow the range (the summary); last seen is the person's. No devices (analytics).
  */
 export function commonStats(p: PersonHeader, s: PersonSummary | undefined, now: Date): PersonStatData[] {
   const t = s?.ribbon.tokens;
@@ -58,7 +38,6 @@ export function commonStats(p: PersonHeader, s: PersonSummary | undefined, now: 
     stat("Active", w ? formatDuration(w.activeMs) : null, w ? "turn time" : null, "the summary hasn’t loaded"),
     stat("Edited", edited === null ? null : `${formatCount(edited)} ${edited === 1 ? "file" : "files"}`, lines, "no file edits reported"),
     stat("Commits", w ? formatCount(w.outcome.commits) : null, w ? `${formatCount(w.repos)} ${w.repos === 1 ? "repo" : "repos"}` : null, "the summary hasn’t loaded"),
-    stat("Devices", devicesValue(p), null, "no device seen yet"),
     stat("Last seen", p.live ? lastSeenValue("now", true) : p.lastSeenAt ? lastSeenValue(formatTime(p.lastSeenAt, now), false) : null, null, "no traffic yet"),
   ];
 }
@@ -71,22 +50,19 @@ function orgOf(p: PersonHeader): PersonStatData {
   return orgStat({ kind: o.kind, id: o.id });
 }
 
-/** Claude Code's row (§11L.3): Plan, Organization, Role, Using since, 7-day limit, Flags, Bypass, Missed; only the fields it reports. */
-function claudeCodeStats(p: PersonHeader, caps: Capabilities, now: Date): PersonStatData[] {
+/**
+ * Claude Code's row (§11L.3, §11S): Plan, Organization, Role, 7-day limit, all from account and
+ * auth calls and rate-limit headers; only the fields it reports.
+ */
+function claudeCodeStats(p: PersonHeader, caps: Capabilities): PersonStatData[] {
   const has = (f: Capability) => reports(caps, "claude-code", f);
   const l = p.limits;
   const limit = l.utilization7d !== null ? `${Math.round(l.utilization7d)}%` : l.status;
-  const f = p.flags;
-  const flags = f.total === null ? null : [formatCount(f.total), f.experiments === null ? null : `${formatCount(f.experiments)} exp`].filter(Boolean).join(" · ");
   return [
     has("plan") && stat("Plan", p.plan ? [p.plan, p.rateLimitTier].filter(Boolean).join(" · ") : null, null, "no plan reported yet"),
     has("org") && orgOf(p),
     has("role") && stat("Role", p.role, null, "not extracted yet"),
-    has("usingSince") && stat("Using since", p.firstUseAt ? monthYear(p.firstUseAt) : null, p.firstUseAt ? since(p.firstUseAt, now) : null, "first use not reported yet"),
     has("limit7d") && stat("7-day limit", limit, l.overage ? `overage ${l.overage}` : null, "no limit headers yet"),
-    has("flags") && stat("Flags", flags, f.changedSince ? `${formatCount(f.changedSince.count)} changed since ${formatTime(f.changedSince.at, now)}` : null, "no flag fetches captured"),
-    has("bypass") && stat("Bypass", p.posture.bypassPct === null ? null : formatPct(p.posture.bypassPct), "of model calls", "no permission mode reported"),
-    has("missed") && stat("Missed", p.missed === null ? null : missedValue(p.missed), "calls not captured", "no self-report to compare against"),
   ].filter((x): x is PersonStatData => !!x);
 }
 
@@ -129,27 +105,9 @@ export function personHeaderProps(p: PersonHeader, s: PersonSummary | undefined,
     agentRows: agents.map((agent) => ({
       agent,
       account: accountOf(p, agent),
-      // Cost is Claude Code's own report (§11R: it moved from the ribbon into its row).
-      stats: [...(agent === "claude-code" && reports(p.capabilities, agent, "cost") ? [costStat(s)] : []), ...(AGENT_STATS[agent]?.(p, p.capabilities, now) ?? [])],
+      stats: AGENT_STATS[agent]?.(p, p.capabilities, now) ?? [],
     })),
   };
-}
-
-/** The posture chips (Claude Code's, under the header): bypassed approvals, sandbox, token storage, proxy detected (only what's known). */
-export function postureChips(p: PersonHeader): string[] {
-  const x = p.posture;
-  return [
-    x.bypassPct !== null && `bypassed approvals ${formatPct(x.bypassPct)} of model calls`,
-    x.sandbox && `sandbox ${x.sandbox}`,
-    x.tokenStorage && `token storage ${x.tokenStorage}`,
-    x.proxyDetected && `proxy detected · ${x.proxyDetected}`,
-  ].filter((c): c is string => !!c);
-}
-
-/** Claude Code's reported cost for the range (`$118`, `est.`). */
-function costStat(s: PersonSummary | undefined): PersonStatData {
-  const c = s?.ribbon.cost;
-  return stat("Cost", c?.usd === null || c?.usd === undefined ? null : formatUsd(c.usd), c?.usd === null || c?.usd === undefined ? null : "est.", "no cost reported");
 }
 
 /** The OutcomeSlot's title for the window: `This fortnight`, `This week`, `Today`, `All time`. */
@@ -158,25 +116,7 @@ export const outcomeTitle = (window: string) => ({ "24h": "Today", "7d": "This w
 /** The facts the person's OutcomeSlot shows (§11R): what the range shipped, as captured; zeros left out. */
 export const personFacts = (s: PersonSummary): OutcomeFact[] => outcomeFacts(s.work.outcome, {});
 
-/** A count, or null (unknown: "—" with its reason). */
-const count = (n: number | null) => (n === null ? null : formatCount(n));
-const list = (xs: string[], n = 6) => (xs.length > n ? `${xs.slice(0, n).join(", ")} +${xs.length - n}` : xs.join(", "));
-
-/** Capabilities · seen in any session. */
-export function capabilityRows(s: PersonSummary): KeyValueRow[] {
-  const c = s.capabilities;
-  const used = (n: number | null) => (n === null ? "" : `${formatCount(n)} used`);
-  return [
-    { k: "MCP servers", d: list(c.mcpServers.map((m) => m.name)) || "none seen", v: formatCount(c.mcpServers.length) },
-    { k: "MCP tools", d: used(c.mcpToolsUsed), v: count(c.mcpToolsTotal), unknownReason: "tool lists not extracted yet" },
-    { k: "Built-in tools", d: used(c.builtinUsed), v: count(c.builtinTools), unknownReason: "not extracted yet" },
-    { k: "Skills", d: "listed at session start", v: count(c.skills), unknownReason: "not extracted yet" },
-    { k: "Hooks", d: c.hookOverheadMs === null ? "" : `~${formatDuration(c.hookOverheadMs)} added per tool call`, v: count(c.hooks), unknownReason: "no hook runs reported" },
-    { k: "Memory", d: "long-term writes", v: c.memoryWrites === null ? null : `${formatCount(c.memoryWrites)} ${c.memoryWrites === 1 ? "write" : "writes"}`, unknownReason: "not reported" },
-  ];
-}
-
-/** Footprint · in range. */
+/** Footprint · in range (§11S: Commands, Destructive and Code shipped are gone). */
 export function footprintRows(s: PersonSummary): KeyValueRow[] {
   const f = s.footprint;
   const tools = Object.entries(f.toolsByName)
@@ -185,17 +125,6 @@ export function footprintRows(s: PersonSummary): KeyValueRow[] {
   return [
     { k: "Turns", d: `${formatCount(s.ribbon.sessions)} ${s.ribbon.sessions === 1 ? "session" : "sessions"}`, v: f.turns === null ? null : formatCount(f.turns), unknownReason: "no prompt ids" },
     { k: "Tool calls", d: tools.slice(0, 6).join(" · "), v: f.toolCalls === null ? null : formatCount(f.toolCalls), unknownReason: "not extracted yet" },
-    { k: "Commands", d: f.topCommandWords.slice(0, 6).map((w) => w.word).join(" · "), v: f.commands === null ? null : formatCount(f.commands), unknownReason: "no analytics" },
-    {
-      k: "Destructive",
-      d: `${formatCount(f.destructive.rmF)} rm -f · ${formatCount(f.destructive.rmRf)} rm -rf · ${formatCount(f.destructive.outsideCwd)} outside cwd`,
-      v: formatCount(f.destructive.total),
-    },
-    {
-      k: "Code shipped",
-      d: [`${formatCount(f.codeShipped.commits)} commits`, `${formatCount(f.codeShipped.pushes)} pushes`, ...f.codeShipped.prs.map((n) => `PR #${n}`)].join(" · "),
-      v: `${formatCount(f.codeShipped.prs.length)} ${f.codeShipped.prs.length === 1 ? "PR" : "PRs"}`,
-    },
     { k: "Subagent calls", d: "share the parent prompt id", v: f.subagentCalls === null ? null : formatCount(f.subagentCalls), unknownReason: "not extracted yet" },
   ];
 }
@@ -206,8 +135,7 @@ export function personLanes(d: PersonTimeline) {
     window: { from: d.from, to: d.to, now: d.now ?? undefined },
     // Work per bin (§11R): edits on top of everything else.
     workBins: d.work.map((b) => ({ t: b.t, edits: b.edits, other: b.other })),
-    gaps: d.notCaptured.map((g): Gap => ({ from: g.from, to: g.to, count: g.count })),
-    bands: d.sessions.map((s): Band => ({ id: s.sessionId, from: s.start, to: s.end, label: s.label, row: s.row, live: s.live, preCapture: s.capturedFromPrompt !== null, capturedFrom: s.capturedFromPrompt })),
+    bands: d.sessions.map((s): Band => ({ id: s.sessionId, from: s.start, to: s.end, label: s.label, row: s.row, live: s.live, preCapture: s.capturedFromPrompt !== null })),
     turns: d.prompts.map((p): TimelineMark => ({ t: p.t, id: p.promptId, hoverLabel: p.index === null ? undefined : `#${p.index}` })),
     friction: d.friction,
     rows: Math.max(1, ...d.sessions.map((s) => s.row + 1)),

@@ -27,7 +27,7 @@ export const Open: Story = {
     expanded: true,
     children: (
       <WorkSessionRow
-        session={{ sessionId: "4c1a", start: "2026-11-02T10:04:00", end: null, live: true, label: "partner-readiness", turns: 34, capturedFromPrompt: 7, activeMs: 22_320_000, friction: { frustrated: 1, interrupted: 1, destructive: 10 } }}
+        session={{ sessionId: "4c1a8e2077e0", start: "2026-11-02T10:04:00", end: null, live: true, label: "partner-readiness", turns: 34, activeMs: 22_320_000, friction: { interrupted: 2, failed: 5 } }}
         work={["edited 23 files · ran npm test ×41: ", { failed: "9 failed" }, " · 2 commits"]}
         href="#"
         now="2026-11-04T12:00:00"
@@ -35,7 +35,7 @@ export const Open: Story = {
     ),
   },
 };
-/** Sessions from before the repo was parsed. */
-export const Collapsed: Story = { args: { repo: null, sub: "before Nov 2", sessions: 10, turns: 32, activeMs: 12_480_000, work: ["read 210 files · edited 18 files · used playwright ×40"] } };
+/** Sessions whose conversation names no repo. */
+export const Collapsed: Story = { args: { repo: null, sub: null, sessions: 10, turns: 32, activeMs: 12_480_000, work: ["read 210 files · edited 18 files · used 6 MCP servers"] } };
 /** A mixed person: the agent chip after the repo name. */
 export const WithAgent: Story = { args: { agents: <AgentChip agent="codex" /> } };

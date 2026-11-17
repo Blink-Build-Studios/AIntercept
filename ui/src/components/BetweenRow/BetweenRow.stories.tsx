@@ -39,10 +39,6 @@ type Story = StoryObj<typeof meta>;
 export const Compaction: Story = {};
 /** Compaction with a captured call behind it: the row opens the drawer. */
 export const CompactionOpenable: Story = { args: { onOpen: fn() } };
-/** A recap shown on return (the API names it in `detail`), in ink-muted. The scenarios have none, so it is the call sample re-kinded. */
-export const Recap: Story = {
-  args: { between: { ...byKind("call"), kind: "recap", detail: "recap shown on return", requestId: null } },
-};
 /** A model call outside any prompt (auxiliary): reads like a recap, opens the drawer by its requestId. */
 export const Call: Story = { args: { between: byKind("call"), onOpen: fn() } };
 export const CallSelected: Story = { args: { between: byKind("call"), onOpen: fn(), selected: true } };

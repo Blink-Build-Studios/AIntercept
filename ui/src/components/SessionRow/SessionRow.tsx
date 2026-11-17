@@ -3,11 +3,9 @@ import type { Schemas } from "../../api/types";
 import { formatCount, formatDuration } from "../../lib/format";
 import { formatTime } from "../../lib/time";
 import { useRowLink } from "../../lib/linkedHover";
-import { frictionTip, fullText, timeTip } from "../../lib/tips";
+import { fullText, timeTip, turnFrictionTip } from "../../lib/tips";
 import { unknownAttrs, unknownTip } from "../../lib/unknown";
 import type { Column } from "../DataTable/DataTable";
-import { CoverageCell, MISSED_COLUMN } from "../CoverageCell/CoverageCell";
-import { PartialMark } from "../PartialMark/PartialMark";
 import { Marker } from "../Marker/Marker";
 import { Tooltip } from "../Tooltip/Tooltip";
 import { AgentChip } from "../AgentChip/AgentChip";
@@ -25,10 +23,7 @@ export const SESSION_COLUMNS: Column[] = [
   { id: "prompts", header: "Prompts", width: 64, align: "right" },
   { id: "span", header: "Span", width: 64, align: "right", definition: "First to last activity in the session." },
   { id: "calls", header: "Calls", width: 56, align: "right" },
-  { id: "events", header: "Events", width: 64, align: "right" },
-  { id: "friction", header: "Friction", width: 84, definition: "↯ frustrated · ✕ interrupted · ▲ destructive commands, counted per session." },
-  { id: "bypass", header: "Bypass", width: 72, align: "right", definition: "Share of calls made with permission mode bypassPermissions." },
-  MISSED_COLUMN,
+  { id: "friction", header: "Friction", width: 84, definition: "✕ interrupted turns, counted per session." },
   { id: "go", header: "", width: 12 },
 ];
 
@@ -42,7 +37,7 @@ const COMMON_TAIL: Column[] = [
   { id: "prompts", header: "Prompts", width: 64, align: "right" },
   { id: "span", header: "Span", width: 64, align: "right", definition: "First to last activity in the session." },
   { id: "calls", header: "Calls", width: 56, align: "right" },
-  { id: "friction", header: "Friction", width: 84, definition: "↯ frustrated · ✕ interrupted · ▲ destructive commands, counted per session." },
+  { id: "friction", header: "Friction", width: 84, definition: "✕ interrupted turns, counted per session." },
   { id: "go", header: "", width: 12 },
 ];
 export const SESSION_AGENT_MIN_WIDTH = 1200;
@@ -87,10 +82,8 @@ export function SessionRow({
   pending,
   now,
   agentColumn,
-  common: commonOnly,
   nesting,
   threadFacts,
-  absent = {},
   "data-force": force,
 }: {
   session: Session;
@@ -99,32 +92,20 @@ export function SessionRow({
   now?: string;
   /** Draws the Agent column (SESSION_AGENT_COLUMNS): the agent chip, with its client after a muted dot ("exec", "tui"). Implies `common`. */
   agentColumn?: { client?: string | null };
-  /** Only the columns every agent fills (§11M 2.7: no Events, Bypass or Missed): SESSION_COMMON_COLUMNS. */
-  common?: boolean;
   nesting?: SessionNesting;
   /** Thread facts after the label, in --ink-faint: "· 3 subagent · 1 review", "· fork of 3b9a… at #4". */
   threadFacts?: string | null;
-  /** Cells this session's agent doesn't report (§11L): left empty, no placeholder. */
-  absent?: { missed?: boolean };
   /** Pins a state for stories; "linked": the timeline points at this session (§6B.5). */
   "data-force"?: "hover" | "focus" | "linked";
 }) {
   const end = s.end ?? now ?? new Date().toISOString();
-  const common = commonOnly || !!agentColumn;
   // An untitled thread (§11M 3.4) reads `untitled · thread 01a1…aed1` in --ink-faint.
   const untitled = s.label.source === "none" && s.agent === "codex";
   const label = untitled ? untitledThread(s.sessionId) : s.label.text;
   // Hover and focus put the session's band and span on the timeline; its band hovered marks the row.
   const { linked, handlers } = useRowLink({ source: "table", ids: [s.sessionId], span: [s.start, end] }, { id: s.sessionId });
-  const cov = s.coverage;
-  const fr = s.friction;
-  // Friction as one run, as on the canvas ("↯1 ✕1 ▲10"); only ▲ is a danger Marker.
-  const calm = [fr.frustrated > 0 && `↯${fr.frustrated}`, fr.interrupted > 0 && `✕${fr.interrupted}`].filter(Boolean).join(" ");
-  const frictionWords = [
-    fr.frustrated > 0 && `${fr.frustrated} frustrated`,
-    fr.interrupted > 0 && `${fr.interrupted} interrupted`,
-    fr.destructive > 0 && `${fr.destructive} destructive`,
-  ].filter(Boolean);
+  // Friction (§11S): interrupted turns only; the analytics kinds are gone.
+  const interrupted = s.friction.interrupted;
   // Claude Code: repo · branch; Codex: workspace folder · short commit (no branch).
   const repo = s.repo ? `${s.repo}${s.branch ? ` · ${s.branch}` : s.commit ? ` · ${s.commit}` : ""}` : null;
   const parent = nesting?.kind === "parent" ? nesting : null;
@@ -212,27 +193,16 @@ export function SessionRow({
         )}
       </span>
       </Tooltip>
-      <Num v={s.prompts} label="Prompts" reason="no prompt ids on these calls" mark={s.capturedFromPrompt !== null ? <PartialMark from={s.capturedFromPrompt} /> : undefined} />
+      <Num v={s.prompts} label="Prompts" reason="no prompt ids on these calls" />
       <span role="cell" className="dt-right text-ink-muted">
         {formatDuration(Date.parse(end) - Date.parse(s.start))}
       </span>
       <Num v={s.modelCalls} label="Calls" reason="" />
-      {!common && <Num v={s.events} label="Events" reason="no analytics captured" muted />}
-      <Tooltip content={frictionTip(fr)}>
-        <span role="cell" aria-label={frictionWords.join(", ") || undefined}>
-          {calm}
-          {calm && fr.destructive > 0 && " "}
-          {fr.destructive > 0 && <Marker kind="destructive" count={fr.destructive} />}
+      <Tooltip content={turnFrictionTip(interrupted, 0)}>
+        <span role="cell" aria-label={interrupted > 0 ? `${formatCount(interrupted)} interrupted` : undefined}>
+          {interrupted > 0 ? `✕${formatCount(interrupted)}` : ""}
         </span>
       </Tooltip>
-      {!common && (
-        <Tooltip content={s.bypassPct === null ? unknownTip("Bypass", "no permission mode reported") : null}>
-          <span role="cell" className="dt-right" {...(s.bypassPct === null ? unknownAttrs("no permission mode reported") : {})}>
-            {s.bypassPct === null ? "—" : `${s.bypassPct}%`}
-          </span>
-        </Tooltip>
-      )}
-      {!common && <CoverageCell coverage={cov} absent={absent.missed} />}
       <span role="cell" aria-hidden className="text-ink-faint">
         ›
       </span>

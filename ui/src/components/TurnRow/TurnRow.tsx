@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
-import { formatDuration, formatExact, formatUsd } from "../../lib/format";
+import { formatCount, formatDuration, formatExact } from "../../lib/format";
 import { useRowLink } from "../../lib/linkedHover";
 import { formatDayTime, formatTime } from "../../lib/time";
-import { frictionTip, fullText, spanTip, timeTip } from "../../lib/tips";
+import { fullText, spanTip, timeTip, turnFrictionTip } from "../../lib/tips";
 import { askedText, inOut, type Turn } from "../../lib/turns";
 import { unknownAttrs, unknownTip } from "../../lib/unknown";
 import { workText, type WorkPart } from "../../lib/work";
 import type { Column } from "../DataTable/DataTable";
-import { Marker } from "../Marker/Marker";
 import { Tooltip, unknownValue } from "../Tooltip/Tooltip";
 import { WorkText } from "./WorkText";
 // The table row styles (.dt-row: hover, focus, dimming), also when drawn outside a DataTable.
@@ -16,28 +15,29 @@ import "./TurnRow.css";
 
 export type { Turn };
 
-// The Turns table (handoff §11R, CompTurns TurnRow): ▸ 14 · Turn 40 · Started 92 · Asked 240 ·
-// Work done (flex) · Steps 50 · Time 64 · Tokens 110 · Cost 64 · friction 40; min width 1100.
+// The Turns table (handoff §11R, §11S, CompTurns TurnRow): ▸ 14 · Turn 40 · Started 92 · Asked 240 ·
+// Work done (flex) · Steps 50 · Time 64 · Tokens 110 · friction 40; min width 1100. No Cost column.
 export const TURN_MIN_WIDTH = 1100;
 export const TURN_COLUMNS: Column[] = [
   { id: "twisty", header: "", width: 14 },
   { id: "turn", header: "Turn", width: 40 },
   { id: "t", header: "Started", width: 92 },
   { id: "asked", header: "Asked", width: 240, definition: "The prompt: its size without recorded content, its text with it." },
-  { id: "work", header: "Work done", width: "flex", definition: "What the turn did, from its steps' tool calls and the agent's analytics." },
+  { id: "work", header: "Work done", width: "flex", definition: "What the turn did: its tool calls by name, or in plain words when content was recorded." },
   { id: "steps", header: "Steps", width: 50, align: "right", definition: "Model calls made for the turn, subagents included." },
   { id: "time", header: "Time", width: 64, align: "right", definition: "Prompt to last step." },
   { id: "tokens", header: "Tokens", width: 110, align: "right", definition: "Input → output, summed over the turn's steps." },
-  { id: "cost", header: "Cost", width: 64, align: "right", definition: "Claude Code's own reported cost (API-equivalent)." },
   { id: "friction", header: "", width: 40 },
 ];
 
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+const plural = (n: number, one: string) => `${formatCount(n)} ${one}${n === 1 ? "" : "s"}`;
 
 export type TurnRowProps = {
   turn: Turn;
   /** The work line (lib/work.ts `workLine`). */
   work: readonly WorkPart[];
+  /** Failed calls in the turn (API errors, overloads, retried requests): `!`. */
+  failed?: number;
   /** Shows the day with the time: the table's first row, and the first of each day. */
   dated?: boolean;
   expanded: boolean;
@@ -55,18 +55,17 @@ export type TurnRowProps = {
 /**
  * One turn in the Turns tab (handoff §11R, CompTurns): a `<button aria-expanded>` row; the whole
  * row toggles, expanded it is --surface-raised and followed by its work groups. A live turn's
- * time is `● 1m 4s` in --live. Friction is `↯` frustrated, `✕` interrupted, `▲` destructive; a
- * failed command is work, not friction.
+ * time is `● 1m 4s` in --live. Friction is `✕` interrupted and `!` failed calls, both --ink
+ * (§11S); a failed command is work, not friction.
  */
-export function TurnRow({ turn: t, work, dated = false, expanded, onToggle, now, arrived, children, "data-force": force }: TurnRowProps) {
+export function TurnRow({ turn: t, work, failed = 0, dated = false, expanded, onToggle, now, arrived, children, "data-force": force }: TurnRowProps) {
   const ref = now ? new Date(now) : new Date();
-  const f = t.friction;
   const asked = askedText(t);
   const tokens = inOut(t.tokensIn, t.tokensOut);
   const line = workText(work);
-  const marks = [f.frustrated && (["↯", "frustrated"] as const), f.interrupted && (["✕", "interrupted"] as const)].filter((m) => !!m);
-  const glyphs = marks.map((m) => m[0]).join(" ");
-  const words = [...marks.map((m) => m[1]), f.destructive > 0 ? plural(f.destructive, "destructive command") : null].filter(Boolean).join(", ");
+  const interrupted = t.friction.interrupted;
+  const glyphs = [interrupted ? "✕" : null, failed > 0 ? "!" : null].filter(Boolean).join(" ");
+  const words = [interrupted ? "interrupted" : null, failed > 0 ? plural(failed, "failed call") : null].filter(Boolean).join(", ");
   const { linked, handlers } = useRowLink({ source: "table", ids: [t.promptId], t: t.startedAt }, { id: t.promptId });
   const tokensTip = tokens === null
     ? unknownTip("Tokens", "no captured model calls")
@@ -136,19 +135,9 @@ export function TurnRow({ turn: t, work, dated = false, expanded, onToggle, now,
             {tokens ?? "—"}
           </span>
         </Tooltip>
-        {/* Cost is Claude Code's own; an agent that reports none leaves the cell empty. */}
-        <span role="cell" className="dt-right text-ink-muted">
-          {t.costUsd === null ? "" : formatUsd(t.costUsd)}
-        </span>
-        <Tooltip content={frictionTip({ frustrated: f.frustrated ? 1 : 0, interrupted: f.interrupted ? 1 : 0, destructive: f.destructive })}>
+        <Tooltip content={turnFrictionTip(interrupted ? 1 : 0, failed)}>
           <span role="cell" className="turn-friction" aria-label={words || undefined}>
             {glyphs}
-            {f.destructive > 0 && (
-              <>
-                {glyphs ? " " : ""}
-                <Marker kind="destructive" compact label={plural(f.destructive, "destructive command")} />
-              </>
-            )}
           </span>
         </Tooltip>
       </button>

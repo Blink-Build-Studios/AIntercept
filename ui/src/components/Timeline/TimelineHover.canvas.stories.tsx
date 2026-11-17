@@ -12,7 +12,6 @@ import { ParityTags, type ParityTarget } from "../../test/ParityTag";
 import type { TooltipContent } from "../Tooltip/Tooltip";
 import { BandTrack, type Band } from "./BandTrack";
 import { BarTrack, type Bin } from "./BarTrack";
-import { DensityTrack } from "./DensityTrack";
 import type { MarkForce } from "./TimelineGuide";
 import { Lane } from "./Lane";
 import { MarkerTrack, type TimelineMark } from "./MarkerTrack";
@@ -39,14 +38,6 @@ const modelBins: Bin[] = modelHeights.map(([i, v]) => ({ t: iso(FROM + i * MODEL
 const HOVER_BIN = iso(FROM + 28 * MODEL_BIN * 1000 + 1000);
 /** The guide snaps to the bin's centre. */
 const HOVER_CENTRE = FROM + 28.5 * MODEL_BIN * 1000;
-// Analytics: 100 bins (1%), heights in px of the 44px lane.
-const ANALYTICS_BIN = binOf(1);
-const analyticsHeights = [
-  2, 2, 2, 2, 2, 2, 2, 2, 2, 16, 12, 20, 14, 11, 20, 33, 30, 29, 15, 23, 17, 14, 12, 15, 34, 31, 30, 30, 15, 18, 26, 29, 32, 32, 12, 25, 27, 23, 14, 22, 12, 34, 32, 24, 17, 33, 24, 32,
-  32, 23, 20, 25, 21, 14, 17, 31, 11, 11, 26, 17, 23, 22, 18, 35, 15, 20, 15, 26, 17, 19, 29, 18, 24, 33, 12, 11, 15, 29, 26, 16, 18, 14, 21, 11, 28, 33, 34, 29, 34, 10, 17, 35, 30, 20,
-  34, 26, 2, 2, 2, 2,
-];
-const analyticsBins: Bin[] = analyticsHeights.map((v, i) => ({ t: iso(FROM + i * ANALYTICS_BIN * 1000), v }));
 // Context (session page, drawn as on Session): slots of 100/100.8% from slot 4 to 100, heights in px under the 4px headroom.
 const CONTEXT_SLOT = 100 / 100.8;
 const CONTEXT_BIN = binOf(CONTEXT_SLOT);
@@ -88,8 +79,8 @@ const Frame = ({ width = 1102, sheet, children }: { width?: number; sheet?: stri
   </div>
 );
 /** A specimen inside a lane or timeline: no box of its own. */
-const In = ({ spec, children }: { spec: string; children: ReactNode }) => (
-  <div data-parity={spec} className="contents">
+const In = ({ spec, illustrative = false, children }: { spec: string; illustrative?: boolean; children: ReactNode }) => (
+  <div {...(illustrative ? { "data-spec-illustrative": "true" } : { "data-parity": spec })} className="contents">
     {children}
   </div>
 );
@@ -153,10 +144,9 @@ export function TimelineHoverSheet() {
                     <BarTrack bins={modelBins} binSeconds={MODEL_BIN} color="model" maxV={60} interact={{ tip: tip(barBin), label, force: forceAt(HOVER_BIN, "hover") }} />
                   </In>
                 </Lane>
-                <In spec="Lane/analyticsHoverGuide">
-                  <Lane label="Analytics" sublabel="events" height={44} summary="analytics">
-                    <DensityTrack bins={analyticsBins} binSeconds={ANALYTICS_BIN} color="analytics" maxV={44} />
-                  </Lane>
+                {/* Illustrative since §11S: the lane keeps its place under the guide, unmeasured. */}
+                <In spec="Lane/analyticsHoverGuide" illustrative>
+                  <Lane label="Analytics" sublabel="events" height={44} summary="analytics" />
                   {/* The sheet keeps the last lane's bottom rule. */}
                   <span hidden />
                 </In>
@@ -165,36 +155,6 @@ export function TimelineHoverSheet() {
           </Timeline>
         </In>
       </Frame>
-
-      {/* Not captured: the window outlined in danger. */}
-      <One>
-        <In spec="Lane/notCapturedHover">
-          <Lane label="Model calls" sublabel="per 30 min" height={60} summary="model calls">
-            <In spec="BarTrack/hoverGap">
-              <BarTrack
-                bins={modelBins}
-                binSeconds={MODEL_BIN}
-                color="model"
-                maxV={60}
-                gaps={[{ from: at(52), to: at(60 - 100 / 60), count: 57 }]}
-                gapTip={() => ({ body: "" })}
-                forceGap={forceAt(at(53), "hover")}
-              />
-            </In>
-          </Lane>
-        </In>
-      </One>
-
-      {/* Analytics bin. */}
-      <One>
-        <In spec="Lane/analyticsHover">
-          <Lane label="Analytics" sublabel="events" height={44} summary="analytics">
-            <In spec="DensityTrack/hoverBin">
-              <DensityTrack bins={analyticsBins} binSeconds={ANALYTICS_BIN} color="analytics" maxV={44} interact={{ tip: none, label, force: forceAt(at(47.5), "hover") }} />
-            </In>
-          </Lane>
-        </In>
-      </One>
 
       {/* Session band (person page). */}
       <One sheet="bands">

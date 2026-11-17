@@ -25,7 +25,7 @@ describe("ContentBlock rules (handoff §11R, CompTurns)", () => {
   });
 
   it("without content shows the header and the note only: no preview, no expand", () => {
-    render(<ContentBlock label="Tool result · Bash npm" meta="exit 1 · 18 s" content={null} note="program and exit code from Claude Code’s analytics" />);
+    render(<ContentBlock label="Tool result · Bash" meta="18 KB · 18 s" content={null} note="content-free: tool name, result size and timing only" />);
     expect(screen.queryByRole("button")).toBeNull();
     expect(document.querySelector(".content-block-body")).toBeNull();
   });

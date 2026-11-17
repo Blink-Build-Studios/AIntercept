@@ -1,7 +1,6 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import { formatDuration } from "../../lib/format";
-import { partialCaptureTip } from "../PartialMark/PartialMark";
-import { Tooltip, type TooltipContent } from "../Tooltip/Tooltip";
+import type { TooltipContent } from "../Tooltip/Tooltip";
 import { Mark, type MarkForce } from "./TimelineGuide";
 import { Track } from "./Lane";
 import { ms, useTimeScale } from "./scale";
@@ -15,8 +14,6 @@ export type Band = {
   row: number;
   live: boolean;
   preCapture?: boolean;
-  /** The prompt capture began at (§11G.D1): the pre-capture fade's tooltip names it. */
-  capturedFrom?: number | null;
 };
 
 /**
@@ -131,5 +128,5 @@ export function BandFade({ band: b, single = false }: { band: Band; single?: boo
       style={{ left: `${Math.max(a - FADE, 0)}%`, width: `${Math.min(FADE, a)}%`, top: topOf(b, single) }}
     />
   );
-  return b.capturedFrom ? <Tooltip content={partialCaptureTip(b.capturedFrom)}>{fade}</Tooltip> : fade;
+  return fade;
 }

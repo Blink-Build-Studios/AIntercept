@@ -60,6 +60,11 @@ describe("turnView", () => {
     expect(askedText(turn)).toEqual({ text: "212 chars", recorded: false });
     expect(askedText({ asked: { retained: true, text: "fix it", chars: 6, images: 0, pastedBytes: null } })).toEqual({ text: "“fix it”", recorded: true });
   });
+
+  it("adds the prompt's images, either way (§11S: `212 chars · 1 image`)", () => {
+    expect(askedText({ asked: { retained: false, text: null, chars: 212, images: 1, pastedBytes: null } }).text).toBe("212 chars · 1 image");
+    expect(askedText({ asked: { retained: true, text: "see", chars: 3, images: 2, pastedBytes: null } }).text).toBe("“see” · 2 images");
+  });
 });
 
 describe("repoView (the Work tab)", () => {

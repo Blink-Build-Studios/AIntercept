@@ -9,7 +9,6 @@ import { BandFade, BandTrack, SessionBand, type Band } from "./BandTrack";
 import { BarTrack, type Bin } from "./BarTrack";
 import { BrushSelection } from "./Brush";
 import { CodexTimelineSheet } from "./CodexTimeline.canvas.stories";
-import { DensityTrack } from "./DensityTrack";
 import { DensityCanvasSheet } from "./Density.canvas.stories";
 import { HoverR11Sheet } from "./HoverR11.canvas.stories";
 import { Lane } from "./Lane";
@@ -48,7 +47,6 @@ const dens: Bin[] = [];
     dens.push({ t: at(x), v: Math.round(on ? 10 + rnd() * 28 : 1 + rnd() * 5) });
   }
 }
-const gaps = [{ from: at(52), to: at(59), count: 57 }];
 const overlapping: Band = { id: "c", from: at(34), to: at(44), label: "overlapping (row 2)", row: 1, live: false };
 const live: Band = { id: "d", from: at(65), to: null, label: "aintercept · partner-readiness · live", row: 0, live: true, preCapture: true };
 const bands: Band[] = [
@@ -65,8 +63,9 @@ const P = ({ spec, style, children }: { spec: string; style?: CSSProperties; chi
   </div>
 );
 /** A specimen inside a lane or timeline: no box of its own, so the layout is the component's. */
-const In = ({ spec, rule = false, children }: { spec: string; rule?: boolean; children: ReactNode }) => (
-  <div data-parity={spec} className="contents">
+/** `illustrative`: the sheet marks this nested specimen illustrative (§11S), so neither side measures it. */
+const In = ({ spec, rule = false, illustrative = false, children }: { spec: string; rule?: boolean; illustrative?: boolean; children: ReactNode }) => (
+  <div {...(illustrative ? { "data-spec-illustrative": "true" } : { "data-parity": spec })} className="contents">
     {children}
     {/* A following sibling keeps the lane's bottom rule, as the sheet draws it. */}
     {rule && <span hidden />}
@@ -88,17 +87,8 @@ export function TimelineCanvasSheet() {
       <Frame>
         <In spec="Lane/modelCalls">
           <Lane label="Model calls" sublabel="per hour" height={60} summary="model calls per hour">
-            <In spec="BarTrack/withGaps">
-              <BarTrack bins={bars} binSeconds={BIN_SECONDS} color="model" gaps={gaps} maxV={60} />
-            </In>
-          </Lane>
-        </In>
-      </Frame>
-      <Frame>
-        <In spec="Lane/analytics">
-          <Lane label="Analytics" sublabel="events/hour" height={44} summary="analytics events per hour">
-            <In spec="DensityTrack/default">
-              <DensityTrack bins={dens} binSeconds={BIN_SECONDS} color="analytics" maxV={44} />
+            <In spec="BarTrack/withGaps" illustrative>
+              <BarTrack bins={bars} binSeconds={BIN_SECONDS} color="model" maxV={60} />
             </In>
           </Lane>
         </In>

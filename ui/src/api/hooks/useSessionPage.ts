@@ -1,6 +1,6 @@
 // The session page's data and URL state (handoff §7.3), shaped as SessionScreen's props.
 import { pickBin, useTrackPx } from "../../lib/bins";
-import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import type { RequestKind } from "../../components/RequestRow/RequestRow";
 import type { DrawerTab } from "../../components/RequestDrawer/DrawerTabs";
@@ -19,7 +19,7 @@ import { useRequestDrawer } from "./useRequestDrawer";
 /** Live sessions follow the last 15 min (handoff §7.3). */
 /** Range-scoped queries wait this long after the brush settles (§7.3). */
 const DEBOUNCE_MS = 200;
-const TABS: SessionTab[] = ["turns", "requests", "events"];
+const TABS: SessionTab[] = ["turns", "requests"];
 
 
 const qs = (params: Record<string, string | number | boolean | string[] | undefined>) => {
@@ -37,14 +37,8 @@ const qs = (params: Record<string, string | number | boolean | string[] | undefi
  * Everything SessionScreen needs: the header and whole-session timeline (polled
  * while live), the range from the URL (or the whole session),
  * the range-scoped regions debounced 200 ms after the brush settles, the drawer
- * from `?req`, and the expanded events' JSON.
+ * from `?req`.
  */
-/** The Events tab's filters as query parameters. Client internals are hidden unless
- * asked for (the API's default), so showing them is the one that needs a parameter. */
-export function eventFilterParams(q: string | undefined, internal: boolean) {
-  return { q, internal: internal ? true : undefined };
-}
-
 export function useSessionPage(sessionId: string): SessionScreenProps {
   const [url, setUrl] = useUrlState();
   // Each jump to a prompt, so the screen scrolls to it once (and again on a repeat click).
@@ -105,10 +99,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
   const turnsQ = useQuery(
     scopedQuery<Schemas["SessionTurnsResponse"]>("turns", "turns", url.prompt ? { pageSize: PAGE_SIZE, turn: url.prompt } : pageParams, tab === "turns"),
   );
-  const requestsQ = useQuery(scopedQuery<Schemas["SessionRequestsResponse"]>("requests", "requests", { ...pageParams, kind: kinds, q: typedQ, captured: url.captured, hidden: url.hidden || undefined }, tab === "requests"));
-  const eventsQ = useQuery(
-    scopedQuery<Schemas["SessionEventsResponse"]>("events", "events", { ...pageParams, ...eventFilterParams(typedQ, url.internal) }, tab === "events"),
-  );
+  const requestsQ = useQuery(scopedQuery<Schemas["SessionRequestsResponse"]>("requests", "requests", { ...pageParams, kind: kinds, q: typedQ, hidden: url.hidden || undefined }, tab === "requests"));
 
   const slow = {
     session: useSlow(headerQ.isFetching, ["session", sessionId], true),
@@ -116,17 +107,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     state: useSlow(stateQ.isFetching, ["session", sessionId, "state"]),
     turns: useSlow(turnsQ.isFetching, ["session", sessionId, "turns"]),
     requests: useSlow(requestsQ.isFetching, ["session", sessionId, "requests"]),
-    events: useSlow(eventsQ.isFetching, ["session", sessionId, "events"]),
   };
-
-  // Expanded events load their full JSON (§6A.4).
-  const [openEvents, setOpenEvents] = useState<string[]>([]);
-  const eventQs = useQueries({
-    queries: openEvents.map((id) => ({
-      queryKey: ["event", id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getJson<Schemas["EventResponse"]>(`/events/${encodeURIComponent(id)}`, signal),
-    })),
-  });
 
   // The drawer: `?req`, with the clicked row's data as its header until the request lands.
   const dtab = (["summary", "raw", "all"].includes(url.dtab ?? "") ? url.dtab : "summary") as DrawerTab;
@@ -134,7 +115,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
   const seeds = useRef(new Map<string, Schemas["RequestRow"]>());
 
   const aboutProducts = useAboutProducts(url.about);
-  const refresh = useRefresh([headerQ, timelineQ, stateQ, turnsQ, requestsQ, eventsQ]);
+  const refresh = useRefresh([headerQ, timelineQ, stateQ, turnsQ, requestsQ]);
   const delayed = delayedSince(headerQ.data?.meta, isLive);
   const width = Date.parse(range.to) - Date.parse(range.from);
   const shift = (dir: 1 | -1) => {
@@ -149,12 +130,7 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     state: stateQ.refetch,
     turns: turnsQ.refetch,
     requests: requestsQ.refetch,
-    events: eventsQ.refetch,
   };
-  const eventJson = useMemo(
-    () => Object.fromEntries(openEvents.map((id, i) => [id, toRegion({ ...(eventQs[i] ?? { data: undefined, isPending: true, isFetching: true, isError: false, error: null }), data: eventQs[i]?.data?.data })])),
-    [openEvents, eventQs],
-  );
 
   return {
     sessionId,
@@ -168,7 +144,6 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     turns: { ...toRegion(turnsQ, (r) => r.data.length === 0), slow: slow.turns },
     sessionHref: (id) => `/sessions/${encodeURIComponent(id)}`,
     requests: { ...toRegion(requestsQ, (r) => r.data.length === 0), slow: slow.requests },
-    events: { ...toRegion(eventsQ, (r) => r.data.length === 0), slow: slow.events },
     onRetry: (r) => void retry[r](),
     live: live.badge,
     paused: live.paused,
@@ -195,15 +170,9 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
     },
     page: url.page,
     onPage: (page) => setUrl({ page }),
-    requestFilter: { q: url.q ?? "", kinds, notCaptured: url.captured === "false", hidden: url.hidden },
-    // Turning the not-captured filter on (from "+N not captured") switches to Requests, as its own history entry.
-    onRequestFilter: (f) =>
-      f.notCaptured && url.captured !== "false"
-        ? setUrl({ tab: "requests", q: f.q || undefined, kind: f.kinds, captured: "false" })
-        : setUrl({ q: f.q, kind: f.kinds, captured: f.notCaptured ? "false" : undefined, hidden: !!f.hidden }, { replace: true }),
+    requestFilter: { q: url.q ?? "", kinds, hidden: url.hidden },
+    onRequestFilter: (f) => setUrl({ q: f.q, kind: f.kinds, hidden: !!f.hidden }, { replace: true }),
     onShowHiddenRequests: () => setUrl({ tab: "requests", hidden: true }),
-    eventFilter: { q: url.q ?? "", internal: url.internal },
-    onEventFilter: (f) => setUrl({ q: f.q, internal: f.internal }, { replace: true }),
     onOpenRequest: (id, seed) => {
       if (seed) seeds.current.set(id, seed);
       setUrl({ req: id, dtab: undefined });
@@ -225,8 +194,5 @@ export function useSessionPage(sessionId: string): SessionScreenProps {
         }
       : null,
     onCloseDrawer: () => setUrl({ req: undefined, dtab: undefined }),
-    eventJson,
-    onToggleEvent: (id) => setOpenEvents((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id])),
-    onRetryEvent: (id) => void eventQs[openEvents.indexOf(id)]?.refetch(),
   };
 }

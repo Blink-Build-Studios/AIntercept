@@ -1,19 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
 import { BandTrack } from "./BandTrack";
-import { BarTrack, gapRowLabel } from "./BarTrack";
+import { BarTrack } from "./BarTrack";
 import type { Range } from "./Brush";
 import sessionCompaction from "../../api/samples/session_timeline/compaction";
-import sessionCoverageGap from "../../api/samples/session_timeline/coverage_gap";
 import sessionDemo from "../../api/samples/session_timeline/demo";
 import sessionMany from "../../api/samples/session_timeline/many";
 import sessionOnePrompt from "../../api/samples/session_timeline/one_prompt";
 import type { SessionTimeline as SessionTimelineData } from "../../api/types";
-import { analyticsBins, bands, callBins, d, friction, gaps, prompts, window } from "./demoData";
-import { DensityTrack } from "./DensityTrack";
+import { bands, callBins, d, friction, prompts, window } from "./demoData";
 import { FrictionTrack, frictionRowLabels } from "./FrictionTrack";
 import { Lane, LANE_HEIGHT } from "./Lane";
 import { MarkerTrack } from "./MarkerTrack";
+import { TurnTrack } from "./TurnTrack";
+import { WorkTrack } from "./WorkTrack";
 import { perBin, sessionLanes } from "./sessionLanes";
 import { Timeline } from "./Timeline";
 import { laneInteractions, sessionInteractions, type TimelineActions } from "./interactions";
@@ -27,7 +27,6 @@ const actions = (select: (r: Range) => void): TimelineActions => ({
   openSession: log("open session"),
   openRequest: log("open request"),
   jumpToPrompt: log("jump to prompt"),
-  listNotCaptured: log("list not captured"),
 });
 
 function PersonTimeline({ loading }: { loading?: boolean }) {
@@ -35,26 +34,16 @@ function PersonTimeline({ loading }: { loading?: boolean }) {
   const on = laneInteractions(d, actions(setSel));
   return (
     <Timeline {...window} label="Activity" selection={sel} onSelect={setSel} loading={loading} brushMode="range" nowTip={d.now ? nowTip(d.now, true) : undefined}>
-      <Lane label="Sessions" height={40} summary={`${bands.length} session`} sunken>
+      <Lane label="Sessions" height={44} summary={`${bands.length} session`} sunken>
         <BandTrack bands={bands} now={d.to} interact={on.bands} />
       </Lane>
-      <Lane label="Prompts" height={24} summary={`${prompts.length} prompts`}>
+      <Lane label="Turns" height={24} summary={`${prompts.length} turns`}>
         <MarkerTrack markers={prompts} interact={on.prompts} />
       </Lane>
-      <Lane
-        label="Model calls"
-        sublabel={perBin(d.binSeconds)}
-        height={LANE_HEIGHT.personBarsWithGapRow}
-        summary={`peak ${Math.max(...callBins.map((b) => b.v))} per bin; ${gaps.length} gaps`}
-        definition={LANE_DEFINITIONS.modelCalls}
-        footer={gapRowLabel(gaps)}
-      >
-        <BarTrack bins={callBins} binSeconds={d.binSeconds} color="model" gaps={gaps} gapRow interact={on.modelCalls} gapTip={on.gapTip} onGap={on.onGap} />
+      <Lane label="Work" sublabel={perBin(d.binSeconds)} height={LANE_HEIGHT.workPerson} summary={`peak ${Math.max(...callBins.map((b) => b.v))} per bin`} definition={LANE_DEFINITIONS.work}>
+        <WorkTrack bins={callBins.map((b) => ({ t: b.t, other: b.v, edits: 0 }))} binSeconds={d.binSeconds} interact={on.work} />
       </Lane>
-      <Lane label="Analytics" sublabel="events" height={44} summary={`${analyticsBins.length} active bins`} definition={LANE_DEFINITIONS.analytics}>
-        <DensityTrack bins={analyticsBins} binSeconds={d.binSeconds} color="analytics" interact={on.analytics} />
-      </Lane>
-      <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${friction.length} marks`} rows={frictionRowLabels(friction)}>
+      <Lane label="Friction" height={LANE_HEIGHT.friction} summary={`${friction.length} marks`} rows={frictionRowLabels(friction)} subRows>
         <FrictionTrack marks={friction} interact={on.friction} />
       </Lane>
     </Timeline>
@@ -86,23 +75,16 @@ function SessionTimeline({ data, loading }: { data: SessionTimelineData; loading
   );
   return (
     <Timeline {...l.window} label="Session timeline" header={header} selection={sel} onSelect={setSel} loading={loading} brushMode="range" nowTip={data.now ? nowTip(data.now, true) : undefined}>
-      <Lane label="Prompts" height={26} summary={`${l.prompts.markers.length} prompts`}>
-        <MarkerTrack markers={l.prompts.markers} labels={l.prompts.labels} interact={on.prompts} />
+      <Lane label="Turns" height={26} summary={`${l.turns.length} turns`}>
+        <TurnTrack blocks={l.turns} now={data.now ?? data.to} interact={own.turns} />
       </Lane>
-      <Lane
-        label="Model calls"
-        sublabel={l.perBin}
-        height={LANE_HEIGHT.barsWithGapRow}
-        summary={`${l.modelCalls.bins.length} active bins; ${l.modelCalls.gaps.length} gaps`}
-        definition={LANE_DEFINITIONS.modelCalls}
-        footer={gapRowLabel(l.modelCalls.gaps)}
-      >
-        <BarTrack bins={l.modelCalls.bins} binSeconds={l.binSeconds} color="model" gaps={l.modelCalls.gaps} gapRow interact={on.modelCalls} gapTip={on.gapTip} onGap={on.onGap} />
+      <Lane label="Work" sublabel={l.perBin} height={LANE_HEIGHT.workSession} summary={`${l.work.length} active bins`} definition={LANE_DEFINITIONS.work}>
+        <WorkTrack bins={l.work} binSeconds={l.binSeconds} interact={on.work} />
       </Lane>
       <Lane label="Context" sublabel="main thread" height={56} summary={`peak ${l.context.peak} tokens; ${l.context.labels.length} compactions`}>
         <BarTrack bins={l.context.bins} binSeconds={l.binSeconds} color="count" level labels={l.context.labels} interact={own.context} labelTip={own.compactionTip} />
       </Lane>
-      <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
+      <Lane label="Friction" height={LANE_HEIGHT.friction} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)} subRows>
         <FrictionTrack marks={l.friction} interact={on.friction} />
       </Lane>
     </Timeline>
@@ -120,8 +102,6 @@ export const SessionOnePrompt: Story = sessionStory(sessionOnePrompt.data);
 export const SessionMany: Story = sessionStory(sessionMany.data);
 /** Scenario compaction: an idle compaction (from → to, wait) and one with no result yet. */
 export const SessionCompaction: Story = sessionStory(sessionCompaction.data);
-/** Scenario coverage_gap: a not-captured window on the Model calls lane. */
-export const SessionCoverageGap: Story = sessionStory(sessionCoverageGap.data);
 export const SessionLoading: Story = { args: sessionArgs(sessionDemo.data), render: () => <SessionTimeline data={sessionDemo.data} loading /> };
 export const Loading: Story = { args: { ...window, label: "Activity", children: null }, render: () => <PersonTimeline loading /> };
 /** A Codex thread's lanes: Prompts · Model calls · Friction (§11J). */

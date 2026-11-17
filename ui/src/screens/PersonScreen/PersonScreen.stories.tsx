@@ -5,7 +5,6 @@ import personLinked from "../../api/samples/person/linked_codex";
 import workCodex from "../../api/samples/person_work/codex";
 import requestsDemo from "../../api/samples/person_requests/demo";
 import requestsEmpty from "../../api/samples/person_requests/empty";
-import requestsNotCaptured from "../../api/samples/person_requests/not_captured";
 import workDemo from "../../api/samples/person_work/demo";
 import workEmpty from "../../api/samples/person_work/empty";
 import workMany from "../../api/samples/person_work/many";
@@ -45,8 +44,6 @@ const base: PersonScreenProps = {
   onQ: fn(),
   kinds: [],
   onKinds: fn(),
-  notCaptured: false,
-  onNotCaptured: fn(),
   onRetry: fn(),
   peopleHref: "#people",
   sessionHref: (id) => `#sessions/${id}`,
@@ -57,7 +54,6 @@ const meta = { title: "Screens/PersonScreen", component: PersonScreen, parameter
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The demo person (real traffic, sanitized): live, with a coverage gap. */
 /** The Work tab (§11R): sessions grouped by repo. */
 export const Work: Story = {};
 /** Several repos, and sessions from before the repo was parsed. */
@@ -69,17 +65,6 @@ export const Linked: Story = { args: { person: readyRegion(personLinked.data), w
 export const LinkedCodex: Story = { args: { person: readyRegion(personLinked.data), work: readyRegion(workCodex), agentScope: "codex", onAgentScope: fn() } };
 /** A linked person's All requests in All agents: the shared chips and the agent-dot column. */
 export const LinkedAllRequests: Story = { args: { person: readyRegion(personLinked.data), tab: "requests", agentScope: "all", onAgentScope: fn(), onShowHidden: fn() } };
-/** "view N calls" (or the timeline's hatch): All requests filtered to calls the proxy didn't capture (handoff §11E.2). */
-export const NotCaptured: Story = { args: { tab: "requests", notCaptured: true, requests: readyRegion(requestsNotCaptured) } };
-/** The filter matched nothing in the range: what coverage says, and ways out. */
-export const NoUncaptured: Story = {
-  args: {
-    tab: "requests",
-    notCaptured: true,
-    range: { from: "2026-11-04T08:00:00Z", to: "2026-11-04T10:10:00Z" },
-    requests: { status: "empty", data: requestsEmpty },
-  },
-};
 /** "About this data" open over the page (`?about=1`). */
 export const AboutOpen: Story = {
   args: {

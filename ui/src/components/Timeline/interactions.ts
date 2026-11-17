@@ -3,18 +3,15 @@
 // (select a range, open a session or request, jump to a prompt); stories pass fakes.
 import type { Schemas, SessionTimeline } from "../../api/types";
 import type { BandInteraction } from "./BandTrack";
-import type { BinInteraction, BinSlot, Gap } from "./BarTrack";
+import type { BinInteraction, BinSlot } from "./BarTrack";
 import type { FrictionInteraction } from "./FrictionTrack";
 import type { MarkLabel, MarkerInteraction } from "./MarkerTrack";
 import type { TurnInteraction } from "./TurnTrack";
 import { ms } from "./scale";
 import {
-  analyticsBinTip,
   compactionTip,
   contextTip,
   frictionClusterTip,
-  gapTip,
-  mergedGapTip,
   modelBinTip,
   promptTip,
   turnTip,
@@ -30,8 +27,6 @@ export type TimelineActions = {
   /** Prompts tab: scroll to, expand and select the prompt. */
   /** Show prompt #index in the Prompts tab; `t` (its time) lets the page drop a range that excludes it. */
   jumpToPrompt?: (index: number, t?: string) => void;
-  /** Requests tab with the not-captured filter, for a gap's window. */
-  listNotCaptured?: (r: { from: string; to: string }) => void;
 };
 
 type AnyTimeline = Schemas["Timeline"] | SessionTimeline;
@@ -42,15 +37,13 @@ const binLabel = (what: string) => (s: BinSlot) => `${s.from} to ${s.to}: ${s.bi
 /** The lanes both timelines share (person and session pages). */
 export function laneInteractions(d: AnyTimeline, on: TimelineActions) {
   const calls = byT(d.modelCalls);
-  const events = byT(d.analytics);
   const prompts = byT(d.prompts);
-  const gaps = new Map(d.notCaptured.map((g) => [ms(g.from), g]));
   const sessions = new Map(d.sessions.map((s) => [s.sessionId, s]));
   const selectBin = (s: BinSlot) => on.select({ from: s.from, to: s.to });
   const work = byT(d.work);
   return {
     work: {
-      tip: (s) => workBinTip(s.from, s.to, work.get(ms(s.from)), calls.get(ms(s.from))?.notCaptured ?? 0, d.binSeconds),
+      tip: (s) => workBinTip(s.from, s.to, work.get(ms(s.from)), d.binSeconds),
       label: (s) => `${s.from} to ${s.to}: ${work.get(ms(s.from))?.steps ?? 0} steps`,
       onSelect: selectBin,
     } satisfies BinInteraction,
@@ -59,17 +52,6 @@ export function laneInteractions(d: AnyTimeline, on: TimelineActions) {
       label: binLabel("model calls"),
       onSelect: selectBin,
     } satisfies BinInteraction,
-    analytics: {
-      tip: (s) => analyticsBinTip(s.from, s.to, events.get(ms(s.from)), d.binSeconds),
-      label: binLabel("analytics events"),
-      onSelect: selectBin,
-    } satisfies BinInteraction,
-    gapTip: (g: Gap) => {
-      if (g.parts && g.parts.length > 1) return mergedGapTip(g.parts);
-      const w = gaps.get(ms(g.from));
-      return w ? gapTip(w) : { title: `▲ ${g.count} calls not captured` };
-    },
-    onGap: (g: Gap) => (on.listNotCaptured ?? on.select)({ from: g.from, to: g.to }),
     bands: {
       tip: (b) => {
         const s = sessions.get(b.id);

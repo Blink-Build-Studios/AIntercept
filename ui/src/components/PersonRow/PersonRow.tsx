@@ -1,11 +1,10 @@
 import type { Schemas } from "../../api/types";
-import { formatCount, formatPct, formatTokens } from "../../lib/format";
+import { formatCount, formatTokens } from "../../lib/format";
 import { formatTime } from "../../lib/time";
 import { timeTip } from "../../lib/tips";
 import { unknownAttrs, unknownTip } from "../../lib/unknown";
 import { AGENT_NAME, AgentChip, type Agent } from "../AgentChip/AgentChip";
 import type { Column } from "../DataTable/DataTable";
-import { CoverageCell, MISSED_COLUMN } from "../CoverageCell/CoverageCell";
 import { SkeletonBar } from "../Skeleton/Skeleton";
 import { Sparkline } from "../Sparkline/Sparkline";
 import { Tooltip } from "../Tooltip/Tooltip";
@@ -46,9 +45,12 @@ const TURNS_COMMON: Column[] = [
   { id: "activity", header: "Activity · 14 days", width: "flex" },
 ];
 const GO: Column = { id: "go", header: "", width: 12 };
-/** Each agent view's own columns (§11L.1): Claude Code's Bypass and Missed, Codex's limits and plan. */
+/** Each agent view's own columns (§11L.1, §11S): Claude Code's Tool calls and Failed, Codex's limits and plan. */
 const AGENT_COLUMNS: Partial<Record<Agent, Column[]>> = {
-  "claude-code": [{ id: "bypass", header: "Bypass", width: 90, align: "right", definition: "Share of calls made with permission mode bypassPermissions." }, MISSED_COLUMN],
+  "claude-code": [
+    { id: "tools", header: "Tool calls", width: 90, align: "right", definition: "Tool calls in the window, from the responses' tool_use blocks." },
+    { id: "failed", header: "Failed", width: 90, align: "right", definition: "Failed calls in the window: API errors, overloads and retried requests, from the HTTP status." },
+  ],
   codex: [
     { id: "limits", header: "5h · week", width: 150, align: "right", definition: "Codex usage: the share of the 5-hour and weekly windows used, at the last response." },
     { id: "plan", header: "Plan", width: 100 },
@@ -59,26 +61,22 @@ export const personColumns = (view: PeopleView = "all", turns = false): Column[]
 /** The Claude Code view's columns: CompRows draws its PersonRow states there. */
 export const PERSON_COLUMNS: Column[] = personColumns("claude-code");
 
-/** Agents with a permission mode and their own report to compare against (coding agents); chat surfaces read "—". */
-const REPORTS = new Set<Person["agents"][number]>(["claude-code", "codex"]);
-
 const plural = (n: number, one: string) => `${formatCount(n)} ${n === 1 ? one : `${one}s`}`;
 /** "sam@…": the local part only, so the line stays short. */
 const emailShort = (email: string) => `${email.split("@")[0] ?? email}@…`;
 
 /**
- * The id line under a name (handoff §11L.1): `email · N accounts · N devices`, or
- * `linked by email · …` for a linked person (in an agent view, `linked by email · Codex
- * account only`). A web surface has no account: `ChatGPT web · 1 device`. Org and account
- * ids live on the person page, not here.
+ * The id line under a name (handoff §11L.1, §11S): `email · N accounts`, or `linked by email ·
+ * N accounts` for a linked person (in an agent view, `linked by email · Codex account only`).
+ * A web surface has no account: `ChatGPT web`. Devices are not counted (they came from the
+ * agents' analytics). Org and account ids live on the person page, not here.
  */
 export function personIdLine(p: Person, view: PeopleView = "all"): string {
-  const devices = plural(p.devices, "device");
   if (p.linkedBy && p.accounts > 1) {
-    return view === "all" ? `linked by ${p.linkedBy} · ${plural(p.accounts, "account")} · ${devices}` : `linked by ${p.linkedBy} · ${AGENT_NAME[view]} account only`;
+    return view === "all" ? `linked by ${p.linkedBy} · ${plural(p.accounts, "account")}` : `linked by ${p.linkedBy} · ${AGENT_NAME[view]} account only`;
   }
-  if (!p.accountIdShort) return `${AGENT_NAME[p.agents[0] ?? "claude-code"]} web · ${devices}`;
-  return `${p.email ? emailShort(p.email) : "email not seen"} · ${plural(Math.max(1, p.accounts), "account")} · ${devices}`;
+  if (!p.accountIdShort) return `${AGENT_NAME[p.agents[0] ?? "claude-code"]} web`;
+  return `${p.email ? emailShort(p.email) : "email not seen"} · ${plural(Math.max(1, p.accounts), "account")}`;
 }
 
 /** "● now", "4 min ago" within the hour, else the time. */
@@ -87,6 +85,24 @@ function lastSeen(p: Person, now: Date) {
   const ago = now.getTime() - Date.parse(p.lastSeenAt);
   if (ago >= 0 && ago < 3_600_000) return { text: `${Math.max(1, Math.round(ago / 60_000))} min ago`, live: false };
   return { text: formatTime(p.lastSeenAt, now), live: false };
+}
+
+/** A right-aligned count; unknown reads "—" with its reason. */
+function CountCell({ label, n }: { label: string; n: number | null }) {
+  if (n === null) {
+    return (
+      <Tooltip content={unknownTip(label, "not counted yet")}>
+        <span role="cell" className="dt-right text-ink-muted" {...unknownAttrs("not counted yet")}>
+          —
+        </span>
+      </Tooltip>
+    );
+  }
+  return (
+    <span role="cell" className="dt-right">
+      {formatCount(n)}
+    </span>
+  );
 }
 
 /**
@@ -125,8 +141,8 @@ function LimitsCell({ limits }: { limits: (number | null)[] | null }) {
 /**
  * One person, linking to their page (handoff §6.5, columns §11A.6, views §11L.1): name and
  * id line, agents, last seen, counts, output tokens (≈ when estimated), 14 days of
- * activity on the table's shared scale; then the view's own cells: Claude Code's bypass
- * and missed calls, or Codex's limits and plan.
+ * activity on the table's shared scale; then the view's own cells: Claude Code's tool calls
+ * and failed calls, or Codex's limits and plan.
  */
 export function PersonRow({
   person: p,
@@ -138,6 +154,7 @@ export function PersonRow({
   idLine,
   limits,
   plan,
+  calls,
   turns,
   "data-force": force,
 }: {
@@ -155,20 +172,20 @@ export function PersonRow({
   limits?: (number | null)[] | null;
   /** Codex view: the account's plan ("Plus"). */
   plan?: string | null;
+  /** Claude Code view (§11S): tool calls and failed calls in the window; null is unknown. */
+  calls?: { tools: number | null; failed: number | null };
   /** The turns form (§11R): what the person is working on, and their turns in place of prompts. */
   turns?: { count: number | null; workingOn: WorkingOnData };
   "data-force"?: "hover" | "focus";
 }) {
   const at = now ? new Date(now) : new Date();
   const seen = lastSeen(p, at);
-  const reports = p.agents.some((a) => REPORTS.has(a));
   const ids = idLine ?? personIdLine(p, view);
   const info = new Map(p.agentInfo.map((i) => [i.agent, i]));
   const tokens =
     p.tokensOut === null || p.tokensAccuracy === "missing"
       ? { text: "—", tone: "text-ink-faint" }
       : { text: `${p.tokensAccuracy === "estimated" ? "≈ " : ""}${formatTokens(p.tokensOut, "total")} out`, tone: p.tokensAccuracy === "estimated" ? "text-ink-muted" : "text-ink" };
-  const cov = p.coverage;
   return (
     <a href={href} role="row" tabIndex={-1} data-roving data-pending={pending || undefined} data-force={force} className="dt-row person-row type-data text-ink">
       <span role="cell" className="person-cell">
@@ -214,22 +231,8 @@ export function PersonRow({
           aria-label={`${formatCount(p.activity.reduce((n, d) => n + d.count, 0))} model calls in 14 days`}
         />
       </span>
-      {view === "claude-code" &&
-        (!reports ? (
-          // An agent with no permission mode or self-report reads "—" (§11G.C2), its reason on the cell.
-          <Tooltip content={unknownTip("Bypass", "this agent reports no permission mode")}>
-            <span role="cell" className="dt-right" {...unknownAttrs("this agent reports no permission mode")}>
-              —
-            </span>
-          </Tooltip>
-        ) : (
-          <Tooltip content={p.bypassPct === null ? unknownTip("Bypass", "no permission mode reported") : null}>
-            <span role="cell" className="dt-right" {...(p.bypassPct === null ? unknownAttrs("no permission mode reported") : {})}>
-              {p.bypassPct === null ? "—" : formatPct(p.bypassPct)}
-            </span>
-          </Tooltip>
-        ))}
-      {view === "claude-code" && <CoverageCell coverage={reports ? cov : null} />}
+      {view === "claude-code" && <CountCell label="Tool calls" n={calls?.tools ?? null} />}
+      {view === "claude-code" && <CountCell label="Failed" n={calls?.failed ?? null} />}
       {view === "codex" && <LimitsCell limits={limits ?? null} />}
       {view === "codex" && (
         <span role="cell" className={plan ? undefined : "text-ink-muted"} {...(plan ? {} : unknownAttrs("no plan on the account's token"))}>

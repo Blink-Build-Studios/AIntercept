@@ -4,7 +4,7 @@ import type { PromptItem } from "../../api/types";
 import type { AgentCardProps } from "../AgentCard/AgentCard";
 import type { AgentRowProps } from "../PersonHeader/AgentRow";
 import { orgStat } from "../PersonHeader/OrgStat";
-import { lastSeenValue, missedValue, type PersonStatData } from "../PersonHeader/PersonHeaderRow";
+import { lastSeenValue, type PersonStatData } from "../PersonHeader/PersonHeaderRow";
 import type { Person } from "../PersonRow/PersonRow";
 import type { RequestChannel } from "../RequestFilters/RequestFilters";
 import type { Header } from "../RequestDrawer/HeaderList";
@@ -149,11 +149,7 @@ export const personHeaders = {
           stat("Plan", "Max 20x"),
           orgStat({ kind: "customer", id: "1b9f…e02" }),
           stat("Role", "admin"),
-          stat("Using since", "Aug 2025", "15 mo"),
           stat("7-day limit", "83%", "overage off"),
-          stat("Flags", "1,108", "12 changed today"),
-          stat("Bypass", "99.7%", "of model calls"),
-          stat("Missed", missedValue(94), "calls not captured"),
         ],
       },
       {

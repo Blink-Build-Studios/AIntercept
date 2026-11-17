@@ -4,9 +4,10 @@ import { Fragment } from "react";
 export type OutcomeFact = readonly (string | { strong: string })[];
 
 /**
- * The facts we capture about what a session or a fortnight produced (handoff §11R, CompTurns
- * OutcomeSlot): commits and the head range, files edited by type, the last test program's exit
- * code, push and PR; joined with ` · `. Zero facts are left out by whoever builds the list.
+ * The facts the wire carries about what a session or a fortnight did (handoff §11R, §11S;
+ * CompTurns OutcomeSlot). Content-free: turns · steps · tool calls with the top tools, then
+ * subagents. With content: commits and the head range, files edited by type, the last test
+ * outcome, PR. Joined with ` · `; zero facts are left out by whoever builds the list.
  */
 export function OutcomeFacts({ facts }: { facts: readonly OutcomeFact[] }) {
   if (!facts.length) return null;

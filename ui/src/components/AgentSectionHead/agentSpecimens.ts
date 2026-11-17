@@ -63,7 +63,6 @@ export const codexFacts: SessionFact[] = [
 export const forkOrigin: ThreadOriginData = { kind: "fork", threadShort: "3b9a…e21", turn: 4, init: "warm_fork", href: "#" };
 export const resumeOrigin: ThreadOriginData = { kind: "resume", threadShort: "3b9a…e21", init: "cold_resume", href: "#" };
 export const subagentOrigin: ThreadOriginData = { kind: "subagent", threadShort: "3f2a…c19", turn: 4, init: "thread_spawn", href: "#" };
-export const turnReportParts = ["sampling 2.4 s", "7 requests", "1 retry", "tools: shell 4, file change 2, subagent 1", "steers 0", "compaction 0 ms", "trigger user"];
 
 export const person: Person = {
   agentLimits: [],

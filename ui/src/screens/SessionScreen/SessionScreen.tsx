@@ -1,27 +1,24 @@
 import { AboutThisData, type AboutState } from "../../components/AboutThisData/AboutThisData";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas, SessionTimeline } from "../../api/types";
-import { formatCount, formatDuration, formatPct, formatTokens, formatUsd } from "../../lib/format";
+import { formatCount, formatDuration, formatPct, formatTokens } from "../../lib/format";
 import { slowNotice, type Region } from "../../lib/region";
 import { useLatest } from "../../lib/useLatest";
 import { formatDayTime, formatTime } from "../../lib/time";
-import { modelCallsTip } from "../../lib/tips";
 import { AppBar } from "../../components/AppBar/AppBar";
-import { AGENT_NAME, type Agent } from "../../components/AgentChip/AgentChip";
+import type { Agent } from "../../components/AgentChip/AgentChip";
 import { Banner, type BannerProps } from "../../components/Banner/Banner";
 import { Button } from "../../components/Button/Button";
 import { CopyButton } from "../../components/CopyButton/CopyButton";
 import { DataTable } from "../../components/DataTable/DataTable";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorState } from "../../components/ErrorState/ErrorState";
-import { EVENT_COLUMNS, EVENT_MIN_WIDTH, EventRow, type EventLink } from "../../components/EventRow/EventRow";
 import { KeyValueList, type KeyValueRow } from "../../components/KeyValueList/KeyValueList";
 import type { LiveBadgeProps } from "../../components/LiveBadge/LiveBadge";
 import { NewRowsPill } from "../../components/NewRowsPill/NewRowsPill";
 import { sessionFacts, threadOrigin, type Capability } from "../../lib/agents";
 import { HeaderStat } from "../../components/HeaderStat/HeaderStat";
 import { HeaderStatGroup } from "../../components/HeaderStatGroup/HeaderStatGroup";
-import { PartialMark } from "../../components/PartialMark/PartialMark";
 import { OutcomeSlot } from "../../components/OutcomeSlot/OutcomeSlot";
 import { SessionHeader } from "../../components/SessionHeader/SessionHeader";
 import { Pagination } from "../../components/Pagination/Pagination";
@@ -40,9 +37,7 @@ import { RequestTable } from "../../components/RequestTable/RequestTable";
 import { SessionTabs } from "../../components/SessionTabs/SessionTabs";
 import { SESSION_TIMELINE_LANES, Skeleton, SkeletonBar } from "../../components/Skeleton/Skeleton";
 import { TextInput } from "../../components/TextInput/TextInput";
-import { ToggleChip } from "../../components/ToggleChip/ToggleChip";
-import { FilterChip } from "../../components/FilterChip/FilterChip";
-import { BarTrack, gapRowLabel } from "../../components/Timeline/BarTrack";
+import { BarTrack } from "../../components/Timeline/BarTrack";
 import type { Range } from "../../components/Timeline/Brush";
 import { laneInteractions, sessionInteractions } from "../../components/Timeline/interactions";
 import { FrictionTrack, frictionRowLabels } from "../../components/Timeline/FrictionTrack";
@@ -55,7 +50,7 @@ import { LANE_DEFINITIONS, nowTip } from "../../components/Timeline/timelineTips
 import { requestChannels, requestDetail, sessionTabs, sessionTitle, tabHint } from "./sessionView";
 import "./SessionScreen.css";
 
-export type SessionTab = "turns" | "requests" | "events";
+export type SessionTab = "turns" | "requests";
 export const PAGE_SIZE = 20;
 
 export type SessionScreenProps = {
@@ -69,12 +64,11 @@ export type SessionScreenProps = {
   person?: { name: string | null; href: string; agents?: Agent[] } | null;
   /** `/sessions/:id/timeline`: the whole session, fetched once and brushed here. */
   timeline: Region<SessionTimeline>;
-  /** Range-scoped (`from`/`to`): `/state`, `/turns`, `/requests`, `/events`. */
+  /** Range-scoped (`from`/`to`): `/state`, `/turns`, `/requests`. */
   state: Region<Schemas["SessionState"]>;
   turns: Region<Schemas["SessionTurnsResponse"]>;
   requests: Region<Schemas["SessionRequestsResponse"]>;
-  events: Region<Schemas["SessionEventsResponse"]>;
-  onRetry: (region: "session" | "timeline" | "state" | "turns" | "requests" | "events") => void;
+  onRetry: (region: "session" | "timeline" | "state" | "turns" | "requests") => void;
   /** A session page (a Codex subagent's own thread, `open thread ›`). */
   sessionHref?: (sessionId: string) => string;
 
@@ -103,24 +97,17 @@ export type SessionScreenProps = {
   onJumpToPrompt?: (index: number, t?: string) => void;
   page: number;
   onPage: (p: number) => void;
-  /** The Requests tab's filters; `notCaptured` = only calls the proxy didn't capture (`captured=false`). */
-  /** `hidden`: include hidden calls (Codex's prewarm and title calls; the API leaves them out unless asked). */
-  requestFilter: { q: string; kinds: RequestKind[]; notCaptured: boolean; hidden?: boolean };
-  onRequestFilter: (f: { q: string; kinds: RequestKind[]; notCaptured: boolean; hidden?: boolean }) => void;
+  /** The Requests tab's filters. `hidden`: include hidden calls (Codex's prewarm and title calls; the API leaves them out unless asked). */
+  requestFilter: { q: string; kinds: RequestKind[]; hidden?: boolean };
+  onRequestFilter: (f: { q: string; kinds: RequestKind[]; hidden?: boolean }) => void;
   /** A prompt's hidden-calls note: Requests with hidden calls shown, as one URL change. */
   onShowHiddenRequests?: () => void;
-  eventFilter: { q: string; internal: boolean };
-  onEventFilter: (f: { q: string; internal: boolean }) => void;
 
   /** Opens the drawer on a request (the row's data shows at once). */
   onOpenRequest: (requestId: string, seed?: Schemas["RequestRow"]) => void;
   /** The open drawer, from `?req` (its Regions from the page). */
   drawer?: Omit<RequestDrawerProps, "onClose"> | null;
   onCloseDrawer: () => void;
-  /** Expanded events' full JSON (`/events/:id`), by event id; toggling one fetches it. */
-  eventJson: Record<string, Region<Schemas["EventDetail"]>>;
-  onToggleEvent: (eventId: string) => void;
-  onRetryEvent: (eventId: string) => void;
   /** The reference now (stories pin it). */
   now?: string;
 };
@@ -139,7 +126,6 @@ function SessionTimelinePanel({
   onSelect,
   onOpenRequest,
   onJumpToPrompt,
-  onListNotCaptured,
 }: {
   data: SessionTimeline;
   selection: Range | null;
@@ -147,18 +133,16 @@ function SessionTimelinePanel({
   onSelect: (r: Range | null) => void;
   onOpenRequest: (requestId: string) => void;
   onJumpToPrompt: (index: number, t?: string) => void;
-  onListNotCaptured: () => void;
 }) {
   // The lanes are thousands of marks: built once per timeline payload, so a page
   // re-render (a poll's fetching flag, a tab) or the brush moving doesn't redo them.
   const l = useMemo(() => sessionLanes(data), [data]);
-  const cb = useLatest({ onSelect, onOpenRequest, onJumpToPrompt, onListNotCaptured });
+  const cb = useLatest({ onSelect, onOpenRequest, onJumpToPrompt });
   const lanes = useMemo(() => {
     const actions = {
       select: (r: Range) => cb.current.onSelect(r),
       openRequest: (id: string) => cb.current.onOpenRequest(id),
       jumpToPrompt: (index: number, t?: string) => cb.current.onJumpToPrompt(index, t),
-      listNotCaptured: () => cb.current.onListNotCaptured(),
     };
     const on = laneInteractions(data, actions);
     const own = sessionInteractions(data, actions);
@@ -167,20 +151,13 @@ function SessionTimelinePanel({
         <Lane label="Turns" height={26} summary={`${l.turns.length} turns`}>
           <TurnTrack blocks={l.turns} now={data.now ?? data.to} interact={own.turns} />
         </Lane>
-        <Lane
-          label="Work"
-          sublabel={l.perBin}
-          height={LANE_HEIGHT.barsWithGapRow}
-          summary={`${l.work.length} active bins; ${l.modelCalls.gaps.length} gaps`}
-          definition={LANE_DEFINITIONS.work}
-          footer={gapRowLabel(l.modelCalls.gaps)}
-        >
-          <WorkTrack bins={l.work} binSeconds={l.binSeconds} gaps={l.modelCalls.gaps} interact={on.work} gapTip={on.gapTip} onGap={on.onGap} />
+        <Lane label="Work" sublabel={l.perBin} height={LANE_HEIGHT.workSession} summary={`${l.work.length} active bins`} definition={LANE_DEFINITIONS.work}>
+          <WorkTrack bins={l.work} binSeconds={l.binSeconds} interact={on.work} />
         </Lane>
         <Lane label="Context" sublabel="main thread" height={56} summary={`peak ${l.context.peak} tokens; ${l.context.labels.length} compactions`}>
           <BarTrack bins={l.context.bins} binSeconds={l.binSeconds} color="count" level labels={l.context.labels} interact={own.context} labelTip={own.compactionTip} />
         </Lane>
-        <Lane label="Friction" height={LANE_HEIGHT.rows(3)} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)}>
+        <Lane label="Friction" height={LANE_HEIGHT.friction} summary={`${l.friction.length} marks`} rows={frictionRowLabels(l.friction)} subRows>
           <FrictionTrack marks={l.friction} interact={on.friction} />
         </Lane>
       </>
@@ -209,53 +186,22 @@ function SessionTimelinePanel({
   );
 }
 
-/** The four state panels (handoff §7.3): capabilities and experiments for the whole session (§11Q.4), repo and recaps within the range. */
-function StatePanels({ st, at }: { st: Schemas["SessionState"]; at: string }) {
-  const c = st.capabilitiesAt;
-  const tally = (t: Schemas["ToolTally"]) => (t.used === null ? null : t.total === null ? `${formatCount(t.used)} used` : `${formatCount(t.used)} of ${formatCount(t.total)} used`);
-  const caps: KeyValueRow[] = [
-    { k: "Built-in tools", v: tally(c.builtin), unknownReason: "not extracted yet" },
-    { k: "MCP servers", d: c.mcpServers.map((s) => s.name).join(", ") || undefined, v: formatCount(c.mcpServers.length) },
-    { k: "MCP tools", v: tally(c.mcpTools), unknownReason: "not extracted yet" },
-    { k: "Skills", v: c.skills === null ? null : formatCount(c.skills), unknownReason: "not extracted yet" },
-    { k: "Hooks", v: c.hooks === null ? null : formatCount(c.hooks), unknownReason: "not extracted yet" },
-  ];
+/**
+ * The state panels (handoff §7.3, §11S), within the range: the repo when content was recorded.
+ * Capabilities, Recaps and Experiments came from the agent's analytics and are gone.
+ */
+function StatePanels({ st }: { st: Schemas["SessionState"] }) {
   const r = st.repoInRange;
   const repo: KeyValueRow[] = [
-    { k: "Branch", v: r.branch, unknownReason: "not extracted yet" },
+    { k: "Branch", v: r.branch, unknownReason: "not in the conversation" },
     { k: "Head", v: r.headFrom && r.headTo ? `${short(r.headFrom)} → ${short(r.headTo)}` : null, unknownReason: "no head change seen" },
     { k: "Commits", v: formatCount(r.commits) },
     { k: "Push", v: r.pushed ? "pushed" : "no push in range" },
     ...(r.prs.length ? [{ k: "PRs", v: r.prs.map((n) => `#${n}`).join(", ") }] : []),
   ];
-  const recaps = st.recapsInRange ?? [];
-  const latest = [...recaps].reverse().find((x) => x.text) ?? recaps[recaps.length - 1];
-  const recapRows: KeyValueRow[] = latest
-    ? [{ k: formatTime(latest.t, new Date(at)), v: latest.text, unknownReason: "recap text not retained" }]
-    : [{ k: "Recaps", v: "none in range" }];
-  const ex = st.experimentsAt;
-  const exRows: KeyValueRow[] = ex === null ? [{ k: "Experiments", v: null, unknownReason: "not extracted yet" }] : ex.length ? ex.map((e) => ({ k: e.key, v: e.variation })) : [{ k: "Experiments", v: "none" }];
   return (
     <div className="session-panels">
-      <KeyValueList
-        title="Capabilities"
-        accent="skills"
-        rows={caps}
-        footer={c.poolChangesInRange ? `${formatCount(c.poolChangesInRange)} tool-pool changes in range` : undefined}
-      />
       <KeyValueList title="Repo · in range" rows={repo} footer={r.cwdTrail?.length ? `cwd ${r.cwdTrail.join(" → ")}` : undefined} />
-      <KeyValueList
-        title={`Recaps · in range${st.recapsTotal === null ? "" : ` · ${formatCount(recaps.length)} of ${formatCount(st.recapsTotal)}`}`}
-        rows={recapRows}
-      />
-      <KeyValueList
-        title="Experiments"
-        accent="flags"
-        rows={exRows}
-        footer={
-          st.flagFetchesInRange === null ? undefined : `${formatCount(st.flagFetchesInRange)} flag fetches in range · ${formatCount(st.flagsChangedInRange ?? 0)} changed`
-        }
-      />
     </div>
   );
 }
@@ -263,17 +209,15 @@ function StatePanels({ st, at }: { st: Schemas["SessionState"]; at: string }) {
 /**
  * The session header (handoff §11L.5): the ProviderMark (`CODEX · SESSION · EXEC 0.164.0`), the
  * title and ids, then only the facts and stats this agent reports (P2): no placeholder for
- * the rest. Claude Code: repo · branch as the title, its recap, events, device, approvals
- * bypassed. Codex: workspace · sha, cwd, shell, tz, approval, sandbox, origin, reasoning,
- * hidden calls, limits at the end.
+ * the rest (§11S: nothing from the agents' analytics, no cost). Codex: workspace · sha, cwd,
+ * origin, reasoning, hidden calls, limits at the end.
  */
-function SessionHeaderBlock({ s, now, onNotCaptured }: { s: Schemas["SessionHeader"]; now: string; onNotCaptured: () => void }) {
+function SessionHeaderBlock({ s, now }: { s: Schemas["SessionHeader"]; now: string }) {
   const has = (f: Capability) => s.capabilities.includes(f);
   const { title, sub } = sessionTitle(s);
   const facts = sessionFacts(s).filter((f) => has(f.k as Capability));
   const origin = has("origin") ? threadOrigin(s) : null;
   const client = [s.agent === "codex" ? s.client : null, s.clientVersion].filter(Boolean).join(" ") || null;
-  const device = s.device ? [s.device.platform, s.device.shell, s.networks === null ? null : `${formatCount(s.networks)} ${s.networks === 1 ? "network" : "networks"}`].filter(Boolean).join(" · ") || null : null;
   const hidden = has("hiddenCalls") && s.hiddenCalls ? s.hiddenCalls : 0;
   const edited = s.outcome.editedFiles ?? s.work.editedFiles ?? (s.work.edits || null);
   const lines = s.work.linesAdded !== null && s.work.linesRemoved !== null ? `+${formatCount(s.work.linesAdded)} −${formatCount(s.work.linesRemoved)}` : undefined;
@@ -284,7 +228,7 @@ function SessionHeaderBlock({ s, now, onNotCaptured }: { s: Schemas["SessionHead
       agent={s.agent}
       client={client}
       sub={sub}
-      note={has("recap") && s.label.source === "recap" ? `Latest recap: “${s.label.text}”` : null}
+      note={null}
       facts={facts}
       origin={origin}
       stats={
@@ -294,31 +238,11 @@ function SessionHeaderBlock({ s, now, onNotCaptured }: { s: Schemas["SessionHead
             value={`${formatDayTime(s.start)} → ${s.end ? formatTime(s.end, new Date(now)) : "now"} · ${formatDuration(Date.parse(s.end ?? now) - Date.parse(s.start))}`}
             sub={`${formatDuration(s.activeMs)} active`}
           />
-          <HeaderStat
-            label="Turns"
-            value={
-              <>
-                {formatCount(s.turns)}
-                {s.capturedFromPrompt !== null && <PartialMark from={s.capturedFromPrompt} />}
-              </>
-            }
-            sub={s.turnsInterrupted ? `${formatCount(s.turnsInterrupted)} interrupted` : undefined}
-          />
-          <HeaderStat
-            label="Steps"
-            value={formatCount(s.modelCalls)}
-            qualifier={s.notCaptured ? `+${formatCount(s.notCaptured)} not captured` : hidden ? `+${formatCount(hidden)} hidden` : undefined}
-            qualifierTone={s.notCaptured ? "gap" : "hidden"}
-            onQualifier={s.notCaptured ? onNotCaptured : undefined}
-            tip={modelCallsTip(s.modelCalls, s.notCaptured)}
-            sub="model calls"
-          />
+          <HeaderStat label="Turns" value={formatCount(s.turns)} sub={s.turnsInterrupted ? `${formatCount(s.turnsInterrupted)} interrupted` : undefined} />
+          <HeaderStat label="Steps" value={formatCount(s.modelCalls)} qualifier={hidden ? `+${formatCount(hidden)} hidden` : undefined} qualifierTone="hidden" sub="model calls" />
           <HeaderStat label="Tokens" value={sessionTokens(s.tokens)} sub={cacheShare(s.tokens)} unknownReason="no usage on these calls" />
-          {has("cost") && <HeaderStat label="Cost" value={s.costUsd === null ? null : formatUsd(s.costUsd)} sub={s.costUsd === null ? undefined : "est."} unknownReason="no cost reported" />}
           {edited !== null && <HeaderStat label="Edited" value={`${formatCount(edited)} ${edited === 1 ? "file" : "files"}`} sub={lines} />}
           <HeaderStat label="Commits" value={formatCount(s.outcome.commits)} sub={s.outcome.headFrom && s.outcome.headTo && s.outcome.headFrom !== s.outcome.headTo ? `${s.outcome.headFrom.slice(0, 4)} → ${s.outcome.headTo.slice(0, 4)}` : undefined} />
-          {(has("device") || device) && <HeaderStat label="Device" value={device} unknownReason="no device reported" />}
-          {has("permission") && <HeaderStat label="Approvals bypassed" value={s.bypassPct === null ? null : `${formatPct(s.bypassPct)} of calls`} unknownReason="no permission mode reported" />}
           {has("reasoning") && <HeaderStat label="Reasoning" value={s.effort} unknownReason="no effort on these calls" />}
           {limits && <HeaderStat label="Limits at end" value={limits} />}
         </HeaderStatGroup>
@@ -372,6 +296,7 @@ function TurnRows({
             <SubagentRow
               key={a.key}
               name={a.name}
+              n={a.n}
               work={a.work}
               tokens={a.tokens}
               href={a.sessionId && sessionHref ? sessionHref(a.sessionId) : undefined}
@@ -429,9 +354,9 @@ function useNewRows(count: number, live: boolean) {
 
 /**
  * The session page (handoff §7.3, Session.dc.html): header and stats, the
- * whole-session timeline (the range control), the range readout, the four
- * state panels and the Prompts / Requests / Events tabs, all scoped to the
- * range; the request drawer over it. Pure: every value comes in as props.
+ * whole-session timeline (the range control), the range readout, the state
+ * panels and the Turns / Requests tabs, all scoped to the range; the request
+ * drawer over it. Pure: every value comes in as props.
  */
 export function SessionScreen(p: SessionScreenProps) {
   const s = p.session.data;
@@ -444,7 +369,7 @@ export function SessionScreen(p: SessionScreenProps) {
   const setShowHidden = (hidden: boolean) => p.onRequestFilter({ ...p.requestFilter, hidden });
   const hiddenCount = p.requests.data?.hiddenCount ?? p.session.data?.hiddenCalls ?? 0;
   const following = p.rangeMode === "following";
-  const listLength = (p.tab === "turns" ? p.turns.data?.data.length : p.tab === "requests" ? p.requests.data?.data.length : p.events.data?.data.length) ?? 0;
+  const listLength = (p.tab === "turns" ? p.turns.data?.data.length : p.requests.data?.data.length) ?? 0;
   const pill = useNewRows(listLength, following);
   const turns = useMemo(() => (p.turns.data?.data ?? []).map(turnView), [p.turns.data]);
   // In-flight turns start open (§6.5).
@@ -556,9 +481,6 @@ export function SessionScreen(p: SessionScreenProps) {
     return <Pagination inset page={p.page} pageCount={Math.ceil(total / PAGE_SIZE)} from={from} to={Math.min(total, from + PAGE_SIZE - 1)} total={total} loading={loading} onPage={p.onPage} />;
   };
   const selected = p.drawer?.requestId ?? null;
-  const onLink = (l: EventLink) => {
-    if (l.kind === "request") p.onOpenRequest(l.id);
-  };
 
   return (
     <div className="session-screen">
@@ -566,7 +488,7 @@ export function SessionScreen(p: SessionScreenProps) {
       {p.banner && <Banner {...p.banner} page />}
       <div className="session-head">
       {/* Header (§11L.5): the ProviderMark, the title, then only the fields this agent reports. */}
-      {s ? <div className="session-head-box"><SessionHeaderBlock s={s} now={now} onNotCaptured={() => p.onRequestFilter({ q: "", kinds: [], notCaptured: true })} /></div> : null}
+      {s ? <div className="session-head-box"><SessionHeaderBlock s={s} now={now} /></div> : null}
       {/* Where a generated summary will go, and the facts we capture (§11R). */}
       {s && <OutcomeSlot title="Outcome" facts={outcomeFacts(s.outcome, { branch: s.branch })} />}
       {s ? null : (
@@ -593,7 +515,6 @@ export function SessionScreen(p: SessionScreenProps) {
                 onSelect={p.onRange}
                 onOpenRequest={(id) => p.onOpenRequest(id)}
                 onJumpToPrompt={(index, t) => (p.onJumpToPrompt ? p.onJumpToPrompt(index, t) : p.onTab("turns"))}
-                onListNotCaptured={() => p.onTab("requests")}
               />
             ),
           )}
@@ -609,7 +530,7 @@ export function SessionScreen(p: SessionScreenProps) {
         </section>
 
         {/* State panels */}
-        {region(p.state, "state", "the session state", <PanelsSkeleton />, p.state.data && <StatePanels st={p.state.data} at={p.range.to} />)}
+        {region(p.state, "state", "the session state", <PanelsSkeleton />, p.state.data && <StatePanels st={p.state.data} />)}
 
         {/* Tabs */}
         <section aria-label="Session activity" className="session-tabs">
@@ -655,9 +576,6 @@ export function SessionScreen(p: SessionScreenProps) {
                   onChange={(q) => p.onRequestFilter({ ...p.requestFilter, q })}
                   pending={p.requests.status === "refetching"}
                 />
-                {p.requestFilter.notCaptured && (
-                  <FilterChip label="▲ not captured" removeLabel="Remove filter: not captured" onRemove={() => p.onRequestFilter({ ...p.requestFilter, notCaptured: false })} />
-                )}
                 <RequestFilters
                   channels={requestChannels(s, p.requests.data?.kindCounts)}
                   value={p.requestFilter.kinds}
@@ -677,65 +595,11 @@ export function SessionScreen(p: SessionScreenProps) {
                     ))}
                   </RequestTable>
                 ),
-                p.requestFilter.notCaptured && !p.requestFilter.q && !p.requestFilter.kinds.length ? (
-                  <EmptyState
-                    chip={<FilterChip label="▲ not captured" />}
-                    title="No uncaptured calls in this range"
-                    body={`Every model call ${s ? AGENT_NAME[s.agent] : "the agent"} reported in this range reached the proxy.`}
-                    actions={<Button onClick={() => p.onRequestFilter({ ...p.requestFilter, notCaptured: false })}>Clear filter</Button>}
-                  />
-                ) : (
-                  <EmptyState compact title="No requests match" actions={<Button onClick={() => p.onRequestFilter({ q: "", kinds: [], notCaptured: false, hidden: p.requestFilter.hidden })}>Clear filters</Button>} />
-                ),
+                <EmptyState compact title="No requests match" actions={<Button onClick={() => p.onRequestFilter({ q: "", kinds: [], hidden: p.requestFilter.hidden })}>Clear filters</Button>} />,
               )}
             </>
           )}
 
-          {p.tab === "events" && (
-            <>
-              <div className="session-filters">
-                <TextInput
-                  id="session-events-filter"
-                  label="Filter"
-                  placeholder="event name, field=value…"
-                  value={p.eventFilter.q}
-                  onChange={(q) => p.onEventFilter({ ...p.eventFilter, q })}
-                  pending={p.events.status === "refetching"}
-                />
-                <ToggleChip label="hide client internals" pressed={!p.eventFilter.internal} onChange={(on) => p.onEventFilter({ ...p.eventFilter, internal: !on })} />
-                <span className="flex-1" />
-                {counts && p.events.data && (
-                  <span className="type-data text-ink-faint">{`${formatCount(counts.events)} in range · ${formatCount(p.events.data.meta.total ?? p.events.data.data.length)} shown`}</span>
-                )}
-              </div>
-              {region(
-                p.events,
-                "events",
-                "events",
-                <DataTable expandable columns={EVENT_COLUMNS} minWidth={EVENT_MIN_WIDTH} label="Events" loading />,
-                p.events.data && (
-                  <DataTable expandable columns={EVENT_COLUMNS} minWidth={EVENT_MIN_WIDTH} label="Events" footer={pagination(p.events.data.meta, p.events.status === "refetching")}>
-                    {p.events.data.data.map((e) => {
-                      const j = p.eventJson[e.eventId];
-                      return (
-                        <EventRow
-                          key={e.eventId}
-                          event={e}
-                          expanded={j !== undefined}
-                          onToggle={() => p.onToggleEvent(e.eventId)}
-                          json={j?.data?.raw}
-                          jsonError={j?.status === "error" ? { message: j.error?.message, onRetry: () => p.onRetryEvent(e.eventId) } : undefined}
-                          onLink={onLink}
-                          now={now}
-                        />
-                      );
-                    })}
-                  </DataTable>
-                ),
-                <EmptyState compact title="No events match" actions={<Button onClick={() => p.onEventFilter({ q: "", internal: false })}>Clear filters</Button>} />,
-              )}
-            </>
-          )}
           <div className="session-pill">
             <NewRowsPill count={pill.fresh} direction="down" onClick={pill.show} />
           </div>

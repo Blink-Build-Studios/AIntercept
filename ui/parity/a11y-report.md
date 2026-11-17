@@ -1,6 +1,6 @@
 # Accessibility report
 
-533 stories × 2 themes = 1066 checks · 0 violations
+509 stories × 2 themes = 1018 checks · 0 violations
 
 ## Excepted (docs/ui/a11y-exceptions.json)
 

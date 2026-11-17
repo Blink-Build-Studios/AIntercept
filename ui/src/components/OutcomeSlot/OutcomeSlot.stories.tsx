@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { OutcomeSlot } from "./OutcomeSlot";
-import { personFacts, sessionFacts } from "./specimens";
+import { personFacts, personFactsWithContent, sessionFacts, sessionFactsWithContent } from "./specimens";
 
 const meta = { title: "Components/Turns/OutcomeSlot", component: OutcomeSlot, parameters: { layout: "padded" } } satisfies Meta<typeof OutcomeSlot>;
 export default meta;
@@ -12,3 +12,7 @@ export const Session: Story = { args: { title: "Outcome", facts: sessionFacts } 
 export const PersonFortnight: Story = { args: { title: "This fortnight", facts: personFacts } };
 /** Nothing captured yet: the slot alone. */
 export const NoFacts: Story = { args: { title: "Outcome", facts: [] } };
+/** The session page with content recorded: commits, files, the last test, PR. */
+export const SessionWithContent: Story = { args: { title: "Outcome", facts: sessionFactsWithContent } };
+/** The person page with content recorded. */
+export const PersonWithContent: Story = { args: { title: "This fortnight", facts: personFactsWithContent } };
