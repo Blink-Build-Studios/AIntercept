@@ -73,6 +73,9 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
       valueFrom:
         secretKeyRef: { name: {{ .tokenSecret }}, key: token }
     {{- end }}
+    {{- if (.serviceAccountToken | default dict).enabled }}
+    - { name: INTERCEPTOR_TOKEN_FILE, value: /var/run/secrets/aintercept/interceptor/token }
+    {{- end }}
     {{- end }}
     {{- end }}
     - { name: OBSERVER_S3_REGION, value: {{ .Values.objectStore.region | quote }} }
@@ -144,6 +147,9 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     {{- if $icTLS }}
     - { name: interceptor-tls, mountPath: /etc/aintercept/interceptor-tls, readOnly: true }
     {{- end }}
+    {{- if and .Values.interceptor.endpoint (.Values.interceptor.serviceAccountToken | default dict).enabled }}
+    - { name: interceptor-token, mountPath: /var/run/secrets/aintercept/interceptor, readOnly: true }
+    {{- end }}
 {{- end -}}
 
 {{- define "aintercept.observerVolumes" -}}
@@ -168,5 +174,18 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
 - name: interceptor-tls
   secret:
     secretName: {{ .Values.interceptor.tls.secretName }}
+{{- end }}
+{{- $sat := .Values.interceptor.serviceAccountToken | default dict }}
+{{- if and .Values.interceptor.endpoint $sat.enabled }}
+# The observer's service-account token for the Interceptor, scoped to its
+# audience; the kubelet rewrites it before it expires and the observer re-reads
+# it (INTERCEPTOR_TOKEN_FILE). Separate from, and narrower than, the API token.
+- name: interceptor-token
+  projected:
+    sources:
+      - serviceAccountToken:
+          path: token
+          audience: {{ $sat.audience | quote }}
+          expirationSeconds: {{ $sat.expirationSeconds | default 600 | int }}
 {{- end }}
 {{- end -}}

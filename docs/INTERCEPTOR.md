@@ -213,20 +213,42 @@ interceptor:
     clientCert: true
     serverName: my-interceptor.policy.svc
   tokenSecret: interceptor-token             # key `token`, sent as a Bearer token
+  # or, instead of tokenSecret (see Authentication below):
+  # serviceAccountToken: { enabled: true, audience: my-interceptor }
 ```
 
 - **Without the chart:** set the observer's environment: `INTERCEPTOR_ENDPOINT`,
   `INTERCEPTOR_CONTRACT`, `INTERCEPTOR_INLINE_LIMIT_BYTES`, `INTERCEPTOR_CONTENT`,
   `INTERCEPTOR_DEADLINE_MS`, `INTERCEPTOR_ON_ERROR`, `INTERCEPTOR_TLS`,
   `INTERCEPTOR_TLS_CA_FILE`, `INTERCEPTOR_TLS_CERT_FILE`,
-  `INTERCEPTOR_TLS_KEY_FILE`, `INTERCEPTOR_TLS_SERVER_NAME`, `INTERCEPTOR_TOKEN`,
-  plus `INTERCEPTOR_OBSERVE_TIMEOUT_MS`, `INTERCEPTOR_QUEUE_SIZE` and
+  `INTERCEPTOR_TLS_KEY_FILE`, `INTERCEPTOR_TLS_SERVER_NAME`, `INTERCEPTOR_TOKEN`
+  or `INTERCEPTOR_TOKEN_FILE`, plus `INTERCEPTOR_OBSERVE_TIMEOUT_MS`, `INTERCEPTOR_QUEUE_SIZE` and
   `INTERCEPTOR_WORKERS` for observe delivery.
 - **Enforce scopes need an Envoy route:** the hosts in `interceptor.enforce`
   must be in `interception.allowlist`, and the chart checks this.
 - **Where enforce scopes take effect:** they're applied by the Helm chart's
   Envoy config. The local compose stack is observe only;
   `scripts/test-interceptor.sh` runs both modes.
+
+### Authentication
+
+Every callback carries `authorization: Bearer <token>`, from one of these
+(or neither):
+
+| | `interceptor.tokenSecret` | `interceptor.serviceAccountToken` |
+|---|---|---|
+| The token | a static value from a Secret's `token` key | the observer's Kubernetes service-account token, projected for `audience` |
+| Rotation | by hand, on both sides | the kubelet renews it (at 80% of `expirationSeconds`, default 600); the observer re-reads the file at least every 30 s |
+| Your Interceptor checks | it equals the shared value | it's a JWT signed by the cluster's OIDC issuer: verify against the issuer's JWKS, and check `iss`, `aud` (your audience), `sub` (`system:serviceaccount:<namespace>:<observer ServiceAccount>`) and `exp` |
+| Secret to share | yes | none |
+
+For a service-account token: cache the JWKS and refresh it in the
+background, re-fetching once on an unknown `kid` (the issuer rotates keys
+without notice); allow a little clock skew; don't reject unknown claims (a
+projected token also names the pod and node); and don't pin the
+ServiceAccount's `uid`, which changes if it's recreated. Setting both
+`tokenSecret` and `serviceAccountToken` is an error. Mutual TLS
+(`tls.clientCert`) can be added on top of either.
 
 **Running enforce:** an enforced call depends on the observer and on your
 Interceptor. Run both highly available:
