@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 # release.sh — cut the next release: bump the version from the newest vX.Y.Z tag, write it where
-# the code carries it (the chart's version and appVersion), commit "Release vX.Y.Z", tag it and
-# push both. The Release workflow (.github/workflows/release.yml) runs it on main; it also runs
-# locally.
+# the code carries it (the chart's version and appVersion), commit "Release vX.Y.Z", tag it, push
+# both, and publish the GitHub Release (notes generated from the PRs since the last one; needs
+# gh). The Release workflow (.github/workflows/release.yml) runs it on main; it also runs locally.
 #
 #   scripts/release.sh [patch|minor|major] [--dry-run]
 #
@@ -51,4 +51,5 @@ git add "$CHART"
 git commit --quiet -m "Release ${tag}"
 git tag -a "$tag" -m "Release ${tag}"
 git push --quiet origin HEAD "$tag"
+gh release create "$tag" --verify-tag --title "$tag" --generate-notes --notes-start-tag "$last" --latest
 echo "released ${tag} at $(git rev-parse --short HEAD)"
