@@ -14,6 +14,10 @@ BEGIN
   END IF;
 END
 $$;
+-- A managed Postgres's admin (RDS, Cloud SQL) isn't a superuser. Since Postgres 16, creating a
+-- role gives its creator ADMIN on it but not SET, and handing the database and the public schema
+-- to aintercept_worker (below) needs SET. A NOTICE, not an error, when already granted.
+GRANT aintercept_worker TO CURRENT_USER;
 ALTER ROLE aintercept_worker LOGIN PASSWORD :'worker_password';
 ALTER ROLE aintercept_api LOGIN PASSWORD :'api_password';
 
