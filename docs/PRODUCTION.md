@@ -258,7 +258,10 @@ raw file, so it keeps nothing, and an HPA on CPU sets its replica count
      `psql -v worker_password=… -v api_password=… -f aintercept/internal/pg/logins.sql`
      (from a shell that keeps the passwords out of its history). It creates
      `aintercept_worker` (owns the schema; the workers apply it on first start)
-     and `aintercept_api` (read only), with their timeouts.
+     and `aintercept_api` (read only), with their timeouts. The master user
+     isn't a superuser on RDS, so the file first grants it membership in
+     `aintercept_worker`: Postgres 16+ needs that to make the login the
+     database's owner (without it: "must be able to SET ROLE").
   4. **The CA bundle:** every connection uses TLS. Put the RDS CA bundle in a
      ConfigMap (`kubectl create configmap rds-ca --from-file=rds-ca.pem=global-bundle.pem`)
      and set `postgres.caConfigMap: rds-ca`; the workers and the API mount it
@@ -280,6 +283,24 @@ raw file, so it keeps nothing, and an HPA on CPU sets its replica count
   "All" in the UI is that window. The raw files (`<prefix>/raw/`) aren't the
   workers' to delete: a bucket **lifecycle rule** on `<prefix>/raw/` expires
   them (`deploy/terraform`: `raw_retention_days`, 15 by default, to match).
+- **Upgrading from a release before the workers** (the processor and DuckDB):
+  - **The observer writes somewhere new.** Raw files go under `<prefix>/raw/`
+    (before: `<prefix>/dt=…`). An observer role scoped to the old layout gets
+    403 on every write and records nothing, with traffic unaffected, so
+    widen it **before** the upgrade (keep the old prefix too until every pod
+    has rolled). The observer now runs in the envoy pods, as the observer's
+    ServiceAccount.
+  - **Roles:** the `process` role goes; the worker needs its own (§7). The
+    API now reads only `<prefix>/raw/`.
+  - **Nothing is migrated.** The workers load `<prefix>/raw/` only, so the UI
+    starts empty at the upgrade, and anything recorded between creating the
+    database and the upgrade (the old layout) isn't shown. The old
+    `<prefix>/shaped/` tables stay readable for a rollback; expire them, and
+    the old raw partitions, with lifecycle rules once you're past it.
+  - **Order:** the database, its logins and the Secret have to exist first,
+    so the AWS side changes before the release does. Once the old processor
+    and the API's mirror lose their access they stop refreshing, and the old
+    UI shows what it last loaded until the new release replaces it.
 
 ## 5c. Rollouts, disruption and placement
 
@@ -396,7 +417,7 @@ Nothing in the chart provisions AWS resources; it consumes them.
 
 | Component | AWS access it needs | Chart values |
 |---|---|---|
-| observer | `s3:PutObject` on the telemetry prefix (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
+| observer | `s3:PutObject` on `<prefix>/raw/*` and `<prefix>/schema-samples/*` (write-only); `secretsmanager:GetSecretValue` on the salt secret | `observer.serviceAccount`, `objectStore.*`, `observer.keyHashSaltSecretsManagerId` |
 | certsvc | `kms:GetPublicKey`, `kms:Sign` on the intermediate's key | `certsvc.serviceAccount`, `certsvc.kms.keyId` |
 | worker | `s3:ListBucket` on the bucket (prefix `<prefix>/raw/`), `s3:GetObject` on `<prefix>/raw/*`; Postgres through the Secret's `worker-url` | `worker.serviceAccount`, `postgres.*` |
 | api | `s3:GetObject` on `<prefix>/raw/*` (a call's raw member, one ranged GET); Postgres through the Secret's `api-url` | `api.serviceAccount`, `postgres.*` |

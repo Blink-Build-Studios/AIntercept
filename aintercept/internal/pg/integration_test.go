@@ -310,6 +310,78 @@ func TestCollationIsCodePointOrder(t *testing.T) {
 	}
 }
 
+// logins.sql as a managed Postgres's admin (RDS, Cloud SQL): not a superuser,
+// only CREATEDB and CREATEROLE, connected to a database it created, as
+// docs/PRODUCTION.md §5b2 has the operator do. Since Postgres 16 a CREATEROLE
+// role that creates a role gets only ADMIN on it, not SET, and handing the
+// database and the public schema to aintercept_worker needs SET; logins.sql
+// grants it first.
+func TestLoginsAsManagedAdmin(t *testing.T) {
+	super := pgtest.Fresh(t)
+	c := ctx(t)
+	sc, err := pgx.Connect(c, super)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sc.Close(c)
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	suffix := strings.ToLower(strings.TrimRight(base64.RawURLEncoding.EncodeToString(b), "=-_"))
+	admin, db := "managed_admin_"+suffix, "managed_db_"+suffix
+	// The logins are the cluster's: the first test to run creates them. Here they
+	// may already exist, made by the superuser, so give the managed admin what
+	// creating them would have (ADMIN, without SET or INHERIT), as on RDS.
+	for _, sql := range []string{
+		"CREATE ROLE " + admin + " LOGIN PASSWORD 'admin pw' CREATEDB CREATEROLE",
+		"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'aintercept_worker') THEN CREATE ROLE aintercept_worker LOGIN; END IF; " +
+			"IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'aintercept_api') THEN CREATE ROLE aintercept_api LOGIN; END IF; END $$",
+		"GRANT aintercept_worker, aintercept_api TO " + admin + " WITH ADMIN TRUE, INHERIT FALSE, SET FALSE",
+	} {
+		if _, err := sc.Exec(c, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		cc, err := pgx.Connect(c, super)
+		if err != nil {
+			return
+		}
+		defer cc.Close(c)
+		_, _ = cc.Exec(c, "DROP DATABASE IF EXISTS "+db+" WITH (FORCE)")
+		_, _ = cc.Exec(c, "DROP ROLE IF EXISTS "+admin)
+	})
+
+	ac, err := pgx.Connect(c, pgtest.WithUser(t, super, admin, "admin pw"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ac.Exec(c, "CREATE DATABASE "+db+" LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8' TEMPLATE template0"); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	ac.Close(c)
+	adminDSN := pgtest.WithDatabase(t, pgtest.WithUser(t, super, admin, "admin pw"), db)
+	conn, err := pgx.Connect(c, adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(c)
+	if err := pg.CreateLogins(c, conn, "worker pw", "api pw"); err != nil {
+		t.Fatalf("logins as the managed admin: %v", err)
+	}
+	if err := pg.CreateLogins(c, conn, "worker pw", "api pw"); err != nil {
+		t.Fatalf("logins again: %v", err)
+	}
+	var owner string
+	if err := conn.QueryRow(c, "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()").Scan(&owner); err != nil || owner != pg.WorkerLogin {
+		t.Fatalf("database owner %q (%v), want %s", owner, err, pg.WorkerLogin)
+	}
+	worker := open(t, pgtest.WithDatabase(t, pgtest.WithUser(t, super, pg.WorkerLogin, "worker pw"), db))
+	if err := pg.Apply(c, worker); err != nil {
+		t.Fatalf("the worker applies the schema: %v", err)
+	}
+}
+
 func TestLogins(t *testing.T) {
 	admin := pgtest.Fresh(t)
 	c := ctx(t)
