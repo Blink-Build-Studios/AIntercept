@@ -1,6 +1,6 @@
 # Release: run by hand (Actions → release → Run workflow). Cuts the next version from the newest
 # vX.Y.Z tag (patch by default), writes it into the chart, commits "Release vX.Y.Z" on main, tags
-# it and pushes both (scripts/release.sh).
+# it, pushes both and publishes the GitHub Release (scripts/release.sh).
 name: release
 on:
   workflow_dispatch:
@@ -32,6 +32,7 @@ jobs:
       - name: Release
         env:
           BUMP: ${{ inputs.bump }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
