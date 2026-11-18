@@ -1,0 +1,47 @@
+# Release: run by hand (Actions → release → Run workflow). Cuts the next version from the newest
+# vX.Y.Z tag (patch by default), writes it into the chart, commits "Release vX.Y.Z" on main, tags
+# it and pushes both (scripts/release.sh). Refuses unless main's required checks passed.
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+  checks: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag the next release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Main's checks passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="$(git rev-parse HEAD)"
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=check" --jq '.check_runs[0].conclusion // "missing"')"
+          echo "main ${sha::7}: check ${state}"
+          [ "$state" = success ] || { echo "main's 'check' job hasn't passed on ${sha::7}; not releasing"; exit 1; }
+      - name: Release
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/release.sh "$BUMP"
