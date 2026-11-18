@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"regexp"
 	"sort"
@@ -326,7 +327,8 @@ func TestLoginsAsManagedAdmin(t *testing.T) {
 	defer sc.Close(c)
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
-	suffix := strings.ToLower(strings.TrimRight(base64.RawURLEncoding.EncodeToString(b), "=-_"))
+	// Hex: an unquoted identifier takes only [a-z0-9_] (base64's "-" broke it).
+	suffix := hex.EncodeToString(b)
 	admin, db := "managed_admin_"+suffix, "managed_db_"+suffix
 	// The logins are the cluster's: the first test to run creates them. Here they
 	// may already exist, made by the superuser, so give the managed admin what

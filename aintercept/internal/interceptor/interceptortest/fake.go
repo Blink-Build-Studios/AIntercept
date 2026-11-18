@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 
 	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
@@ -27,6 +28,26 @@ type Fake struct {
 	Calls    []string // "start", "message:<seq>", "complete"
 	Records  []*pb.CallRecord
 	Messages []*pb.Message
+	// Auth is each call's "authorization" metadata, in order ("" when absent).
+	Auth []string
+}
+
+// auth records the call's authorization metadata. Called with f.mu held.
+func (f *Fake) auth(ctx context.Context) {
+	v := ""
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if a := md.Get("authorization"); len(a) > 0 {
+			v = a[0]
+		}
+	}
+	f.Auth = append(f.Auth, v)
+}
+
+// Auths returns the authorization metadata of the calls so far.
+func (f *Fake) Auths() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.Auth...)
 }
 
 func (f *Fake) wait() {
@@ -38,10 +59,11 @@ func (f *Fake) wait() {
 	}
 }
 
-func (f *Fake) OnCallStart(_ context.Context, s *pb.CallStart) (*pb.Verdict, error) {
+func (f *Fake) OnCallStart(ctx context.Context, s *pb.CallStart) (*pb.Verdict, error) {
 	f.wait()
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.auth(ctx)
 	f.Calls = append(f.Calls, "start")
 	if f.Start != nil {
 		return f.Start(s), nil
@@ -49,10 +71,11 @@ func (f *Fake) OnCallStart(_ context.Context, s *pb.CallStart) (*pb.Verdict, err
 	return &pb.Verdict{}, nil
 }
 
-func (f *Fake) OnMessage(_ context.Context, m *pb.Message) (*pb.Verdict, error) {
+func (f *Fake) OnMessage(ctx context.Context, m *pb.Message) (*pb.Verdict, error) {
 	f.wait()
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.auth(ctx)
 	f.Calls = append(f.Calls, "message")
 	f.Messages = append(f.Messages, m)
 	if f.Message != nil {
@@ -61,9 +84,10 @@ func (f *Fake) OnMessage(_ context.Context, m *pb.Message) (*pb.Verdict, error) 
 	return &pb.Verdict{}, nil
 }
 
-func (f *Fake) OnCallComplete(_ context.Context, r *pb.CallRecord) (*pb.Ack, error) {
+func (f *Fake) OnCallComplete(ctx context.Context, r *pb.CallRecord) (*pb.Ack, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.auth(ctx)
 	f.Calls = append(f.Calls, "complete")
 	f.Records = append(f.Records, r)
 	return &pb.Ack{}, nil

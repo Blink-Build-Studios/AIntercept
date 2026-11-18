@@ -348,8 +348,11 @@ is always whole.
 
 ### 4.6 Authenticate the observer
 
-The observer can present a bearer token (`interceptor.tokenSecret`), a client
-certificate (`interceptor.tls.clientCert`), or both.
+The observer can present a bearer token, either a static one
+(`interceptor.tokenSecret`) or its own rotating Kubernetes service-account
+token (`interceptor.serviceAccountToken`, a JWT you verify against the
+cluster's OIDC issuer: docs/INTERCEPTOR.md, Authentication), a client
+certificate (`interceptor.tls.clientCert`), or a token and a certificate.
 
 - **Check one of them on every callback**, as the Python example does with the
   `authorization` metadata.

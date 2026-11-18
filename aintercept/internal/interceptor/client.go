@@ -31,6 +31,7 @@ import (
 	"hash/fnv"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,6 +84,13 @@ type Config struct {
 	ServerName string
 	// Token, when set, is sent on every call as "authorization: Bearer <token>".
 	Token string
+	// TokenFile is the same, read from a file that something else keeps
+	// current: a Kubernetes projected service-account token, which the kubelet
+	// rewrites before it expires. It's read at New (which fails if it can't be),
+	// then again at most every TokenFileRefresh (default 30 s); a read that fails
+	// or finds the file empty keeps the last token. Token or TokenFile, not both.
+	TokenFile        string
+	TokenFileRefresh time.Duration
 	// DialOptions are added to the connection's (tests use an in-memory dialer).
 	DialOptions []grpc.DialOption
 }
@@ -127,6 +135,8 @@ type Client struct {
 	api    pb.InterceptorClient
 	api2   pb2.InterceptorClient // contract v2
 	record func(callID string, v events.Verdict)
+	// token is TokenFile's current contents (nil without one).
+	token *tokenFile
 
 	queues []chan job
 	wg     sync.WaitGroup
@@ -197,6 +207,19 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 	default:
 		return nil, fmt.Errorf("interceptor: on-error must be deny or allow, not %q", cfg.OnError)
 	}
+	var token *tokenFile
+	if cfg.TokenFile != "" {
+		if cfg.Token != "" {
+			return nil, errors.New("interceptor: Token or TokenFile, not both")
+		}
+		if cfg.TokenFileRefresh <= 0 {
+			cfg.TokenFileRefresh = 30 * time.Second
+		}
+		token = &tokenFile{path: cfg.TokenFile, refresh: cfg.TokenFileRefresh}
+		if err := token.load(); err != nil {
+			return nil, err
+		}
+	}
 	creds, err := transportCredentials(cfg)
 	if err != nil {
 		return nil, err
@@ -218,7 +241,7 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 		record = func(string, events.Verdict) {}
 	}
 	c := &Client{
-		cfg: cfg, conn: conn, api: pb.NewInterceptorClient(conn), api2: pb2.NewInterceptorClient(conn), record: record,
+		cfg: cfg, conn: conn, api: pb.NewInterceptorClient(conn), api2: pb2.NewInterceptorClient(conn), record: record, token: token,
 		verdicts: map[string]*callVerdicts{},
 	}
 	c.queues = make([]chan job, cfg.Workers)
@@ -291,10 +314,72 @@ func (c *Client) Close() {
 
 func (c *Client) ctx(parent context.Context, d time.Duration) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(parent, d)
-	if c.cfg.Token != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+c.cfg.Token)
+	if t := c.bearer(); t != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+t)
 	}
 	return ctx, cancel
+}
+
+// bearer is the token every call carries: Token, or TokenFile's current one.
+func (c *Client) bearer() string {
+	if c.token != nil {
+		return c.token.get()
+	}
+	return c.cfg.Token
+}
+
+// tokenFile is a bearer token kept in a file that something else rewrites
+// (a projected service-account token: the kubelet replaces it, by an atomic
+// symlink swap, well before it expires). Calls read the cached value; at most
+// every refresh one of them re-reads the file, so no call waits on the disk
+// for long and none sends a token older than refresh plus the writer's lead.
+type tokenFile struct {
+	path    string
+	refresh time.Duration
+
+	mu     sync.Mutex
+	value  string
+	readAt time.Time
+}
+
+// load reads the file, failing if it can't be read or holds nothing.
+func (t *tokenFile) load() error {
+	b, err := os.ReadFile(t.path)
+	if err != nil {
+		return fmt.Errorf("interceptor: token file: %w", err)
+	}
+	v := strings.TrimSpace(string(b))
+	if v == "" {
+		return fmt.Errorf("interceptor: token file %s is empty", t.path)
+	}
+	t.mu.Lock()
+	t.value, t.readAt = v, time.Now()
+	t.mu.Unlock()
+	return nil
+}
+
+// get returns the current token, re-reading the file when it's due. A failed
+// or empty read keeps the last token: a briefly missing file (mid-swap) must
+// not turn every call unauthenticated.
+func (t *tokenFile) get() string {
+	t.mu.Lock()
+	due := time.Since(t.readAt) >= t.refresh
+	if due {
+		t.readAt = time.Now() // one re-read per interval, even if it fails
+	}
+	v := t.value
+	t.mu.Unlock()
+	if due {
+		if b, err := os.ReadFile(t.path); err == nil {
+			if nv := strings.TrimSpace(string(b)); nv != "" {
+				t.mu.Lock()
+				t.value = nv
+				t.mu.Unlock()
+				return nv
+			}
+		}
+	}
+	return v
 }
 
 // ── Observe ──────────────────────────────────────────────────────────────────

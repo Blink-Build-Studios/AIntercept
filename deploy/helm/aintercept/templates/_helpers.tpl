@@ -147,6 +147,16 @@ runtime failure in-cluster.
 {{- if not (has (.contract | default "v1") (list "v1" "v2")) -}}
 {{- fail "interceptor.contract must be v1 or v2" -}}
 {{- end -}}
+{{- $sat := .serviceAccountToken | default dict -}}
+{{- if and $sat.enabled .tokenSecret -}}
+{{- fail "interceptor: tokenSecret or serviceAccountToken, not both" -}}
+{{- end -}}
+{{- if and $sat.enabled (not $sat.audience) -}}
+{{- fail "interceptor.serviceAccountToken.audience is required: the Interceptor must check it, so a token for one service can't be replayed to another" -}}
+{{- end -}}
+{{- if and $sat.enabled (lt (int ($sat.expirationSeconds | default 600)) 600) -}}
+{{- fail "interceptor.serviceAccountToken.expirationSeconds must be at least 600 (Kubernetes' minimum)" -}}
+{{- end -}}
 {{- range .enforce -}}
 {{- if not (has .host (splitList "," (nospace $.Values.interception.allowlist))) -}}
 {{- fail (printf "interceptor.enforce host %q isn't in interception.allowlist" .host) -}}

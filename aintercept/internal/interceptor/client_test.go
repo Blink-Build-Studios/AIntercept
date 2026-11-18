@@ -3,6 +3,8 @@ package interceptor_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -166,4 +168,94 @@ func TestObserveQueueFullDrops(t *testing.T) {
 	}
 	close(f.Block)
 	c.Close()
+}
+
+// The static token rides every callback: the request path's and the record's.
+func TestSendsTheToken(t *testing.T) {
+	f := &interceptortest.Fake{}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: time.Second, Token: "static"}, nil)
+	c.DecideStart(context.Background(), start("a"))
+	c.DecideMessage(context.Background(), msg("a", 1, "x"))
+	c.Complete(&pb.CallRecord{Call: start("a").GetCall()}, true)
+	c.Close()
+	got := f.Auths()
+	if len(got) != 3 {
+		t.Fatalf("calls: %v", got)
+	}
+	for _, a := range got {
+		if a != "Bearer static" {
+			t.Fatalf("authorization %q on a call, want Bearer static: %v", a, got)
+		}
+	}
+}
+
+// TokenFile follows the file as it's rewritten (a projected service-account
+// token, replaced by an atomic rename), keeps the last token while the file is
+// missing, and never sends an empty one.
+func TestTokenFileFollowsRotation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	write := func(v string) {
+		tmp := filepath.Join(dir, "token.tmp")
+		if err := os.WriteFile(tmp, []byte(v+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("one")
+	f := &interceptortest.Fake{}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Deadline: time.Second, TokenFile: path, TokenFileRefresh: 10 * time.Millisecond}, nil)
+	defer c.Close()
+	last := func() string {
+		c.DecideStart(context.Background(), start("a"))
+		a := f.Auths()
+		return a[len(a)-1]
+	}
+	if got := last(); got != "Bearer one" {
+		t.Fatalf("first: %q", got)
+	}
+	write("two")
+	time.Sleep(30 * time.Millisecond)
+	if got := last(); got != "Bearer two" {
+		t.Fatalf("after rotation: %q", got)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if got := last(); got != "Bearer two" {
+		t.Fatalf("file missing: %q, want the last token", got)
+	}
+	write("")
+	time.Sleep(30 * time.Millisecond)
+	if got := last(); got != "Bearer two" {
+		t.Fatalf("file empty: %q, want the last token", got)
+	}
+}
+
+// One credential, chosen explicitly: both is a configuration error, and a
+// token file that can't be read (or is empty) fails at start, not on the first
+// call.
+func TestTokenConfigErrors(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "token")
+	empty := filepath.Join(dir, "empty")
+	if err := os.WriteFile(good, []byte("t"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, cfg := range map[string]interceptor.Config{
+		"both":    {Endpoint: "x", Token: "t", TokenFile: good},
+		"missing": {Endpoint: "x", TokenFile: filepath.Join(dir, "nope")},
+		"empty":   {Endpoint: "x", TokenFile: empty},
+	} {
+		if c, err := interceptor.New(cfg, nil); err == nil {
+			c.Close()
+			t.Errorf("%s: New succeeded, want an error", name)
+		}
+	}
 }

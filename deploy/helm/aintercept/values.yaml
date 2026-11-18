@@ -59,8 +59,19 @@ interceptor:
     # Present the Secret's tls.crt/tls.key as a client certificate.
     clientCert: false
     serverName: ""
-  # A Secret whose `token` key is sent as "authorization: Bearer <token>".
+  # How the observer authenticates to the Interceptor, sent on every call as
+  # "authorization: Bearer <token>" (docs/INTERCEPTOR.md, Authentication).
+  # One of these, or neither:
+  #   tokenSecret: a Secret whose `token` key is a static token.
+  #   serviceAccountToken: the observer's own Kubernetes service-account token,
+  #     projected for `audience` and rotated by the kubelet; the Interceptor
+  #     verifies it against the cluster's OIDC issuer (JWKS). Nothing to share or
+  #     rotate by hand.
   tokenSecret: ""
+  serviceAccountToken:
+    enabled: false
+    audience: ""             # e.g. the Interceptor's name; it must check `aud`
+    expirationSeconds: 600   # the kubelet renews it at 80% of this (minimum 600)
 
 # ── Network policy ────────────────────────────────────────────────────────────
 # Restrict Envoy's UNAUTHENTICATED admin port (9901) to the KEDA operator only.
