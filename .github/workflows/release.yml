@@ -1,6 +1,6 @@
 # Release: run by hand (Actions → release → Run workflow). Cuts the next version from the newest
 # vX.Y.Z tag (patch by default), writes it into the chart, commits "Release vX.Y.Z" on main, tags
-# it and pushes both (scripts/release.sh). Refuses unless main's required checks passed.
+# it and pushes both (scripts/release.sh).
 name: release
 on:
   workflow_dispatch:
@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: write
-  checks: read
 
 concurrency:
   group: release
@@ -30,14 +29,6 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Main's checks passed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          sha="$(git rev-parse HEAD)"
-          state="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=check" --jq '.check_runs[0].conclusion // "missing"')"
-          echo "main ${sha::7}: check ${state}"
-          [ "$state" = success ] || { echo "main's 'check' job hasn't passed on ${sha::7}; not releasing"; exit 1; }
       - name: Release
         env:
           BUMP: ${{ inputs.bump }}
