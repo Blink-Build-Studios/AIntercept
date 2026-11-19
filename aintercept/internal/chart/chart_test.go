@@ -16,10 +16,11 @@ import (
 
 const chartDir = "../../../deploy/helm/aintercept"
 
-// render runs `helm template` with the chart's required values plus extra
-// --set flags, and returns the rendered objects. Without helm the test skips,
-// unless CHART_TEST_REQUIRED is set (CI).
-func render(t *testing.T, set ...string) []map[string]any {
+// helmTemplate is the `helm template` command line: the chart's required
+// values (AWS with RDS: a bucket, a salt, the RDS CA bundle) plus extra --set
+// flags, which override them. Without helm the test skips, unless
+// CHART_TEST_REQUIRED is set (CI).
+func helmTemplate(t *testing.T, set ...string) *exec.Cmd {
 	t.Helper()
 	if _, err := exec.LookPath("helm"); err != nil {
 		if os.Getenv("CHART_TEST_REQUIRED") != "" {
@@ -27,12 +28,18 @@ func render(t *testing.T, set ...string) []map[string]any {
 		}
 		t.Skip("helm not installed")
 	}
-	args := []string{"template", "t", filepath.Clean(chartDir),
-		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "observer.keyHashSalt=s", "--set", "cloud=aws"}
-	for _, s := range set {
+	args := []string{"template", "t", filepath.Clean(chartDir)}
+	for _, s := range append([]string{"objectStore.bucket=b", "objectStore.region=r", "observer.keyHashSalt=s", "cloud=aws",
+		"postgres.caConfigMap=rds-ca"}, set...) {
 		args = append(args, "--set", s)
 	}
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	return exec.Command("helm", args...)
+}
+
+// render renders the chart (helmTemplate) and returns the rendered objects.
+func render(t *testing.T, set ...string) []map[string]any {
+	t.Helper()
+	out, err := helmTemplate(t, set...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("helm template: %v\n%s", err, out)
 	}

@@ -1,8 +1,6 @@
 package chart
 
 import (
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,18 +10,7 @@ import (
 // output (the chart's fail message).
 func renderFails(t *testing.T, set ...string) string {
 	t.Helper()
-	if _, err := exec.LookPath("helm"); err != nil {
-		if os.Getenv("CHART_TEST_REQUIRED") != "" {
-			t.Fatal("helm not found and CHART_TEST_REQUIRED is set")
-		}
-		t.Skip("helm not installed")
-	}
-	args := []string{"template", "t", filepath.Clean(chartDir),
-		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "observer.keyHashSalt=s", "--set", "cloud=aws"}
-	for _, s := range set {
-		args = append(args, "--set", s)
-	}
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	out, err := helmTemplate(t, set...).CombinedOutput()
 	if err == nil {
 		t.Fatalf("helm template succeeded with %v, want a failure", set)
 	}
