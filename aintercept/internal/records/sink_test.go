@@ -81,3 +81,35 @@ func TestCanonMatchesTheLiveSink(t *testing.T) {
 		t.Fatalf("canon differs from the live sink:\nlive\n%s\ncanon\n%s", strings.Join(a, "\n"), strings.Join(b, "\n"))
 	}
 }
+
+// An analytics batch that's the last traffic for a while is written by the tick
+// once it's older than MaxAge, not held until another row comes.
+func TestTickReleasesAQuietHeldBatch(t *testing.T) {
+	live := &memberLog{}
+	now := t1.Add(7 * time.Second)
+	s := NewSink(SinkConfig{Raw: live, Incarnation: "i", MaxAge: 10 * time.Second, Now: func() time.Time { return now }})
+	for _, e := range append(analytics("a1"), clientEvent("a1", "e1", "s1", 0)) {
+		s.Emit(e)
+	}
+	ended := func() bool {
+		got, _, err := ReadRawFile(live.buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range got {
+			if r.Kind == KindCallEnd && r.CallID == "a1" {
+				return true
+			}
+		}
+		return false
+	}
+	s.Tick()
+	if ended() {
+		t.Fatal("released before MaxAge: its batch's events may still be coming")
+	}
+	now = t1.Add(17 * time.Second)
+	s.Tick()
+	if !ended() {
+		t.Fatal("the quiet batch is still held after MaxAge")
+	}
+}
