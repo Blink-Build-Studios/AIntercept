@@ -137,10 +137,9 @@ cat <<EOF
 Bootstrap complete. Now install the chart (credentials come from the Secret,
 never the CLI):
 
+  git checkout vX.Y.Z   # the release: the chart deploys its images from ghcr.io
   helm install aintercept deploy/helm/aintercept \\
     --set cloud=digitalocean \\
-    --set images.aintercept.repository=<registry>/aintercept --set images.aintercept.tag=<tag> \\
-    --set imagePullSecret=<registry-pull-secret> \\
     --set objectStore.bucket=${SPACE} \\
     --set objectStore.region=${REGION} \\
     --set objectStore.endpoint=${ENDPOINT} \\

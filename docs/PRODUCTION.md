@@ -99,8 +99,14 @@ attempt HTTP/3 (QUIC), which the proxy does not intercept.
 
 - Deploy every image by digest: `images.<name>.digest` renders
   `repository@digest`. Envoy ships pinned (`v1.39.6` by digest).
-- Build the `aintercept` image (observer, certsvc and worker) with the stock
-  Dockerfile. One image serves both interception modes.
+- Every release publishes its images to ghcr.io for amd64 and arm64:
+  `ghcr.io/blink-build-studios/aintercept` (observer, certsvc and worker; one
+  image serves both interception modes) and
+  `ghcr.io/blink-build-studios/aintercept-api`, tagged `vX.Y.Z`. The chart
+  deploys its own release's images by default; set `images.<name>.digest` to
+  the release's digest to pin them. To mirror them into ECR, use an ECR
+  pull-through cache for ghcr.io or copy them, and set
+  `images.<name>.repository`.
 - The in-cluster Postgres (`postgres.inCluster`, the DigitalOcean demo only) is
   the stock upstream image, pinned by digest (`images.postgres`), the same pin
   as Compose's and CI's.
@@ -402,8 +408,9 @@ api:
   with `--set-authorization-header`, `Authorization`: the ID token, signed by
   your identity provider (use the provider's JWKS; a `Bearer ` prefix is
   accepted).
-- **The image:** build it from the repository root, since the UI is part of it:
-  `docker build -f api/Dockerfile -t <registry>/aintercept-api:<tag> .`
+- **The image:** `ghcr.io/blink-build-studios/aintercept-api`, published with
+  every release (§4). To build your own, build from the repository root, since
+  the UI is part of it: `docker build -f api/Dockerfile -t <registry>/aintercept-api:<tag> .`
 
 ## 6. Corporate vs personal accounts
 

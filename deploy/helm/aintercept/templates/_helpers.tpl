@@ -18,12 +18,13 @@ what production deploys use), else repository:tag.
 {{- end -}}
 {{- end -}}
 
+{{/* The images built here: an empty tag is the chart's own release, v<appVersion>. */}}
 {{- define "aintercept.ainterceptImage" -}}
-{{ include "aintercept.image" .Values.images.aintercept }}
+{{ include "aintercept.image" (merge (dict "tag" (.Values.images.aintercept.tag | default (printf "v%s" .Chart.AppVersion))) .Values.images.aintercept) }}
 {{- end -}}
 
 {{- define "aintercept.apiImage" -}}
-{{ include "aintercept.image" .Values.images.api }}
+{{ include "aintercept.image" (merge (dict "tag" (.Values.images.api.tag | default (printf "v%s" .Chart.AppVersion))) .Values.images.api) }}
 {{- end -}}
 
 {{- define "aintercept.envoyImage" -}}

@@ -7,8 +7,9 @@
 #   docker build -f api/Dockerfile -t <registry>/aintercept-api:<tag> .
 
 # The UI's production build (`vite build`), with the lockfile and release-age rules
-# the repo uses everywhere (ui/pnpm-workspace.yaml).
-FROM node:24-bookworm-slim AS ui
+# the repo uses everywhere (ui/pnpm-workspace.yaml). Static files, the same on
+# every platform: built once, natively.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS ui
 RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
 WORKDIR /ui
 COPY ui/package.json ui/pnpm-lock.yaml ui/pnpm-workspace.yaml ./

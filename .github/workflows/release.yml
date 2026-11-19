@@ -1,6 +1,9 @@
 # Release: run by hand (Actions → release → Run workflow). Cuts the next version from the newest
-# vX.Y.Z tag (patch by default), writes it into the chart, commits "Release vX.Y.Z" on main, tags
-# it, pushes both and publishes the GitHub Release (scripts/release.sh).
+# vX.Y.Z tag (patch by default), writes it into the chart, commits "Release vX.Y.Z" on main and
+# tags it (scripts/release.sh); builds the release's images for amd64 and arm64 and pushes them to
+# ghcr.io (the chart's defaults, tagged vX.Y.Z and latest); then publishes the GitHub Release, so
+# a published release always has its images. One workflow on purpose: a tag pushed with the
+# workflow's token doesn't start other workflows.
 name: release
 on:
   workflow_dispatch:
@@ -12,28 +15,95 @@ on:
         default: patch
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  tag:
     name: Tag the next release
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      last: ${{ steps.release.outputs.last }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
       - name: Release
+        id: release
         env:
           BUMP: ${{ inputs.bump }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          scripts/release.sh "$BUMP"
+          scripts/release.sh "$BUMP" --no-publish
+
+  images:
+    name: Push ${{ matrix.image }}
+    needs: tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: aintercept
+            context: ./aintercept
+            file: aintercept/Dockerfile
+          - image: aintercept-api
+            context: .
+            file: api/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+      # The API image's Python stage runs under emulation for arm64; the Go image cross-compiles.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/blink-build-studios/${{ matrix.image }}:${{ needs.tag.outputs.tag }}
+            ghcr.io/blink-build-studios/${{ matrix.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.tag.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  publish:
+    name: Publish the GitHub Release
+    needs: [tag, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+          LAST: ${{ needs.tag.outputs.last }}
+        run: gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes --notes-start-tag "$LAST" --latest

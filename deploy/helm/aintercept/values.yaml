@@ -90,9 +90,11 @@ images:
     repository: envoyproxy/envoy
     tag: v1.39.6
     digest: sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed
+  # The release workflow publishes `aintercept` and `api` to ghcr.io for every
+  # release; an empty tag deploys the chart's own release (v<appVersion>).
   aintercept:
-    repository: aintercept/aintercept
-    tag: dev
+    repository: ghcr.io/blink-build-studios/aintercept
+    tag: ""
     digest: ""
     pullPolicy: IfNotPresent
   # In-cluster Postgres (postgres.inCluster.enabled): the same pin as docker-compose.yml's and
@@ -103,8 +105,8 @@ images:
     digest: sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
   # The query API (api/Dockerfile), when `api.enabled`.
   api:
-    repository: aintercept/api
-    tag: dev
+    repository: ghcr.io/blink-build-studios/aintercept-api
+    tag: ""
     digest: ""
     pullPolicy: IfNotPresent
 

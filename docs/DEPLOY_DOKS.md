@@ -3,8 +3,8 @@
 > Goal: a running aintercept stack on DOKS writing telemetry to a DigitalOcean
 > Space, ready to route test traffic through.
 >
-> **Prereq floor (be honest):** you need `doctl` (authenticated), `kubectl`,
-> `helm`, and `docker`. Standing up a fresh DOKS cluster is ~5–8 minutes by
+> **Prereq floor (be honest):** you need `doctl` (authenticated), `kubectl`
+> and `helm` (`docker` only to build your own images). Standing up a fresh DOKS cluster is ~5–8 minutes by
 > itself; the steps below assume that time. Spaces is only available in certain
 > regions (nyc3, ams3, sgp1, sfo3, fra1, syd1, blr1) — the cluster and Space
 > must be in the **same Spaces-capable region**.
@@ -47,17 +47,23 @@ doctl kubernetes cluster create aintercept-demo \
 kubectl get nodes   # confirm Ready
 ```
 
-## 3. Push images to a registry the cluster can pull
+## 3. Images
+
+Every release publishes its images to ghcr.io (the release workflow, `.github/workflows/release.yml`),
+for amd64 and arm64: `ghcr.io/blink-build-studios/aintercept` (the Envoy pod's observer, certsvc
+and the workers run it in their own mode) and `ghcr.io/blink-build-studios/aintercept-api`, tagged
+`vX.Y.Z`. The chart deploys its own release's images by default (`v<appVersion>`), so there is
+nothing to build or push: install the chart from the release's tag. Postgres is the stock upstream
+image (`images.postgres`, pinned by digest).
+
+To run your own build instead, push it to a registry the cluster can pull and set
+`images.aintercept.repository` / `.tag` (and `images.api.*`):
 
 ```bash
 doctl registry login
 REG=registry.digitalocean.com/<your-registry>
-# One image; the Envoy pod's observer, certsvc and the worker Deployment (the workers) run it in
-# their own mode. Postgres is the stock upstream image (images.postgres, pinned by digest), pulled
-# from Docker Hub.
-docker buildx build --platform linux/amd64 -t $REG/aintercept:dev --push ./aintercept
-# Let the cluster pull from the DO registry:
-doctl registry kubernetes-manifest | kubectl apply -f -   # creates the pull secret
+docker buildx build --platform linux/amd64 -t $REG/aintercept:mybuild --push ./aintercept
+doctl registry kubernetes-manifest | kubectl apply -f -   # the pull secret (imagePullSecret)
 ```
 
 ## 4. Create the interception-CA Secret
@@ -108,10 +114,9 @@ so a new Secret over an old volume would lock the workers out.
 ## 6. Install the Helm chart
 
 ```bash
+git checkout vX.Y.Z   # the release to install: the chart deploys that release's images
 helm install aintercept deploy/helm/aintercept \
   --set cloud=digitalocean \
-  --set images.aintercept.repository=$REG/aintercept \
-  --set imagePullSecret=registry-<your-registry> \
   --set objectStore.bucket=$SPACE \
   --set objectStore.region=$REGION \
   --set objectStore.endpoint=$ENDPOINT \
@@ -169,7 +174,7 @@ curl -s localhost:8787/api/v1/status
 
 ## Upgrading
 
-Always `helm upgrade`, **never `helm uninstall`**: uninstalling deletes the Envoy Service and its
+Check out the release's tag and `helm upgrade` from it: the chart brings that release's images. Always `helm upgrade`, **never `helm uninstall`**: uninstalling deletes the Envoy Service and its
 load balancer (a new IP for every client), and once took down the tunnel people reach the UI
 through.
 
