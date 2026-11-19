@@ -67,8 +67,12 @@ services:
       OBSERVER_SPOOL_DIR: /spool
       OBSERVER_SPOOL_MAX_BYTES: ${OBSERVER_SPOOL_MAX_BYTES:-1073741824}
       OBSERVER_UPLOAD_TIMEOUT_SECONDS: "5"
+      OBSERVER_RAW_FLUSH_SECONDS: "10" # the no-loss tests wait past it (default 30)
     volumes: ["./out:/out", "./out/spool:/spool"]
     ports: ["19001:9001"]
+    # It serves on for OBSERVER_SHUTDOWN_DELAY_SECONDS (15) after SIGTERM, then
+    # flushes; compose's default 10 s would kill it first (the chart allows 300).
+    stop_grace_period: 60s
   envoy:
     image: envoyproxy/envoy:v1.39.6@sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed
     depends_on: [observer, observer-v2, fixture]

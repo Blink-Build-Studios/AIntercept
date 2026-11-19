@@ -243,11 +243,10 @@ func TestZZNoLossThroughStoreOutage(t *testing.T) {
 func TestZZNoLossThroughObserverKill(t *testing.T) {
 	c := s3Client(t)
 	dc(t, "pause", "moto")
+	defer dcTry("unpause", "moto") // a failure here mustn't leave the store paused for the tests after it
 	ids := traffic(t, "kill", 15, "observe.test")
-	time.Sleep(15 * time.Second) // past the 10 s flush: sealed into the spool, not uploaded
-	if s, ok := stats(t); !ok || s.Writer.SpoolFiles == 0 {
-		t.Fatalf("expected spooled files before the kill: %+v", s)
-	}
+	// Past the 10 s flush the rows are sealed into the spool, not uploaded.
+	waitUntil(t, time.Minute, "spooled files before the kill", func() bool { s, ok := stats(t); return ok && s.Writer.SpoolFiles > 0 })
 	dc(t, "kill", "-s", "KILL", "observer")
 	dc(t, "unpause", "moto")
 	dc(t, "start", "observer")
