@@ -419,6 +419,9 @@ func (c *Client) ObserveCall(ci *CallInfo, wait time.Duration) *pb.Call {
 		c.hmu.Lock()
 		c.held[ci.CallID] = nil
 		c.holding.Add(1)
+		// Its entry exists from now (identity to come): a stream that ends
+		// while the call is held is marked ended, so the entry is bounded.
+		c.setIdentityLocked(ci.CallID, nil)
 		c.hmu.Unlock()
 		c.heldCalls.Add(1)
 		c.awaiting.Add(1)
@@ -472,7 +475,7 @@ func (c *Client) DecideCall(ctx context.Context, ci *CallInfo, wait time.Duratio
 // callIdentity is a started call's identity, and its v2 and v1-message forms
 // (made once, when first needed).
 type callIdentity struct {
-	id   *pb.Identity
+	id   *pb.Identity // nil while the call is held for it
 	id2  *pb2.Identity
 	call *pb.Call // a v1 message's Call, with id
 	// ended: when the call's stream ended (zero while it's open).
@@ -506,6 +509,10 @@ func (c *Client) setIdentityLocked(callID string, id *pb.Identity) {
 			}
 		}
 	}
+	if ci := c.idents[callID]; ci != nil {
+		ci.id = id // a held call's, now known: its ended stays
+		return
+	}
 	c.idents[callID] = &callIdentity{id: id}
 }
 
@@ -516,7 +523,7 @@ func (c *Client) stamp(j *job) {
 	c.hmu.Lock()
 	defer c.hmu.Unlock()
 	ci := c.idents[j.callID]
-	if ci == nil {
+	if ci == nil || ci.id == nil {
 		return
 	}
 	if j.final {
