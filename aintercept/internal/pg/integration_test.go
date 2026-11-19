@@ -64,7 +64,7 @@ func TestSchemaAppliesOnce(t *testing.T) {
 	if err := pg.Check(c, p); !errors.Is(err, pg.ErrNoSchema) {
 		t.Fatalf("check before: %v", err)
 	}
-	// Workers starting together: one applies it, the rest find it applied.
+	// Workers starting together: one applies each migration, the rest find it applied.
 	var wg sync.WaitGroup
 	errs := make([]error, 8)
 	for i := range errs {
@@ -77,12 +77,8 @@ func TestSchemaAppliesOnce(t *testing.T) {
 			t.Fatalf("apply %d: %v", i, err)
 		}
 	}
-	var hashes []string
-	if err := p.QueryRow(c, "SELECT array_agg(hash) FROM schema_version").Scan(&hashes); err != nil {
-		t.Fatal(err)
-	}
-	if len(hashes) != 1 || hashes[0] != pg.SchemaHash || len(pg.SchemaHash) != 64 {
-		t.Fatalf("schema_version %v, want [%s]", hashes, pg.SchemaHash)
+	if got := versions(t, p); got != versionList(pg.Latest) {
+		t.Fatalf("schema_version %s, want %s", got, versionList(pg.Latest))
 	}
 	if err := pg.Check(c, p); err != nil {
 		t.Fatalf("check after: %v", err)
@@ -92,27 +88,41 @@ func TestSchemaAppliesOnce(t *testing.T) {
 	if err := p.QueryRow(c, "SELECT array_agg(tablename::text ORDER BY tablename) FROM pg_tables WHERE schemaname = current_schema()").Scan(&tables); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(tables, " "); got != strings.Join(schemaTables(), " ") {
-		t.Errorf("tables %s, want %s", got, strings.Join(schemaTables(), " "))
+	if got := strings.Join(tables, " "); got != strings.Join(schemaTables(t), " ") {
+		t.Errorf("tables %s, want %s", got, strings.Join(schemaTables(t), " "))
 	}
 }
 
 // schemaTables is the tables schema.sql creates, sorted.
-func schemaTables() []string {
+func schemaTables(t *testing.T) []string {
 	var out []string
-	for _, m := range regexp.MustCompile(`(?m)^CREATE TABLE (\w+)`).FindAllStringSubmatch(pg.Schema, -1) {
+	for _, m := range regexp.MustCompile(`(?m)^CREATE TABLE (\w+)`).FindAllStringSubmatch(schemaSQL(t), -1) {
 		out = append(out, m[1])
 	}
 	sort.Strings(out)
 	return out
 }
 
-func TestHashMismatchRefusesToStart(t *testing.T) {
-	p := applied(t)
-	c := ctx(t)
-	if _, err := p.Exec(c, "UPDATE schema_version SET hash = 'an older build'"); err != nil {
+// legacy makes p's schema_version what it was before migrations: one row, a
+// schema's hash.
+func legacy(t *testing.T, p *pgxpool.Pool, hash string) {
+	t.Helper()
+	for _, sql := range []string{"DROP TABLE schema_version", "CREATE TABLE schema_version (hash text NOT NULL)"} {
+		if _, err := p.Exec(ctx(t), sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := p.Exec(ctx(t), "INSERT INTO schema_version (hash) VALUES ($1)", hash); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// A database from before migrations at another hash than v0.6.2's: the chain
+// can't reach it, so with the reset off the worker refuses to start.
+func TestAnUnreachableSchemaRefusesToStart(t *testing.T) {
+	p := applied(t)
+	c := ctx(t)
+	legacy(t, p, "an older build")
 	if err := pg.Apply(c, p); !errors.Is(err, pg.ErrSchemaMismatch) {
 		t.Errorf("apply: %v, want ErrSchemaMismatch", err)
 	}
@@ -121,11 +131,12 @@ func TestHashMismatchRefusesToStart(t *testing.T) {
 	}
 }
 
-// An upgrade whose schema differs (WORKER_SCHEMA_RESET): the new workers drop
-// the old schema and its data and apply theirs, once however many start
-// together, with the grants logins.sql gives; ingest_files is empty, so the
-// lister reloads every raw file. With the setting off the worker refuses.
-func TestResetReplacesAnotherBuildsSchema(t *testing.T) {
+// A database the chain can't reach, with WORKER_SCHEMA_RESET on (the escape
+// hatch): the new workers drop the old schema and its data and apply theirs,
+// once however many start together, with the grants logins.sql gives;
+// ingest_files is empty, so the lister reloads every raw file. With the
+// setting off the worker refuses.
+func TestResetReplacesAnUnreachableSchema(t *testing.T) {
 	admin := pgtest.Fresh(t)
 	c := ctx(t)
 	conn, err := pgx.Connect(c, admin)
@@ -137,27 +148,31 @@ func TestResetReplacesAnotherBuildsSchema(t *testing.T) {
 		t.Fatalf("logins: %v", err)
 	}
 	worker := open(t, pgtest.WithUser(t, admin, pg.WorkerLogin, "worker pw"))
-	if reset, err := pg.ApplyOrReset(c, worker); err != nil || reset {
-		t.Fatalf("first start: reset %v, %v", reset, err)
+	if a, err := pg.Migrate(c, worker, pg.Migrations, true); err != nil || a.Reset {
+		t.Fatalf("first start: %+v, %v", a, err)
 	}
 	for _, sql := range []string{
 		"INSERT INTO ingest_files (key, listed_at, loaded_at) VALUES ('raw/a.ndjson.gz', now(), now())",
 		"INSERT INTO ingest_pods (incarnation) VALUES ('pod-1')",
 		"CREATE TABLE only_in_the_old_schema (x int)",
-		"UPDATE schema_version SET hash = 'an older build'",
 	} {
 		if _, err := worker.Exec(c, sql); err != nil {
 			t.Fatalf("%s: %v", sql, err)
 		}
 	}
-	if err := pg.Apply(c, worker); !errors.Is(err, pg.ErrSchemaMismatch) {
+	legacy(t, worker, "an older build")
+	if _, err := pg.Migrate(c, worker, pg.Migrations, false); !errors.Is(err, pg.ErrSchemaMismatch) {
 		t.Fatalf("WORKER_SCHEMA_RESET=false: %v, want ErrSchemaMismatch", err)
 	}
 	var wg sync.WaitGroup
 	resets, errs := make([]bool, 4), make([]error, 4)
 	for i := range errs {
 		wg.Add(1)
-		go func() { defer wg.Done(); resets[i], errs[i] = pg.ApplyOrReset(c, worker) }()
+		go func() {
+			defer wg.Done()
+			a, err := pg.Migrate(c, worker, pg.Migrations, true)
+			resets[i], errs[i] = a.Reset, err
+		}()
 	}
 	wg.Wait()
 	n := 0
@@ -187,8 +202,8 @@ func TestResetReplacesAnotherBuildsSchema(t *testing.T) {
 	if err := worker.QueryRow(c, "SELECT array_agg(tablename::text ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public'").Scan(&tables); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(tables, " "); got != strings.Join(schemaTables(), " ") {
-		t.Errorf("tables %s, want %s", got, strings.Join(schemaTables(), " "))
+	if got := strings.Join(tables, " "); got != strings.Join(schemaTables(t), " ") {
+		t.Errorf("tables %s, want %s", got, strings.Join(schemaTables(t), " "))
 	}
 	var owner string
 	if err := worker.QueryRow(c, "SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'public'").Scan(&owner); err != nil {
@@ -204,7 +219,7 @@ func TestResetReplacesAnotherBuildsSchema(t *testing.T) {
 	if err := pg.Check(c, api); err != nil {
 		t.Errorf("the API checks the schema: %v", err)
 	}
-	for _, tb := range schemaTables() {
+	for _, tb := range schemaTables(t) {
 		if _, err := api.Exec(c, "SELECT * FROM "+tb+" LIMIT 1"); err != nil {
 			t.Errorf("the API reads %s: %v", tb, err)
 		}
@@ -224,8 +239,8 @@ func TestResetRefusesAForeignDatabase(t *testing.T) {
 	if _, err := p.Exec(c, "CREATE TABLE something_else (x int)"); err != nil {
 		t.Fatal(err)
 	}
-	if reset, err := pg.ApplyOrReset(c, p); reset || !errors.Is(err, pg.ErrNotEmpty) {
-		t.Fatalf("reset %v, %v; want ErrNotEmpty", reset, err)
+	if a, err := pg.Migrate(c, p, pg.Migrations, true); a.Reset || !errors.Is(err, pg.ErrNotEmpty) {
+		t.Fatalf("%+v, %v; want ErrNotEmpty", a, err)
 	}
 	var reg *string
 	if err := p.QueryRow(c, "SELECT to_regclass('something_else')::text").Scan(&reg); err != nil || reg == nil {
@@ -428,7 +443,7 @@ func TestLogins(t *testing.T) {
 	if err := pg.Check(c, api); err != nil {
 		t.Errorf("the API checks the schema: %v", err)
 	}
-	for _, tb := range schemaTables() {
+	for _, tb := range schemaTables(t) {
 		if _, err := api.Exec(c, "SELECT * FROM "+tb+" LIMIT 1"); err != nil {
 			t.Errorf("the API reads %s: %v", tb, err)
 		}

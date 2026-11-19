@@ -2,11 +2,11 @@
 test session (each xdist worker its own), on the server AINTERCEPT_TEST_PG names (an admin DSN: CI's
 service container, or the container `make check` starts with scripts/test-pg.sh).
 
-The schema is the workers' (`aintercept/internal/pg/schema.sql`), applied as `pg.Apply` applies it:
-its statements in one transaction, then its hash into schema_version."""
+The schema is the workers' (`aintercept/internal/pg/schema.sql`: what their migrations build, which
+their tests hold equal), its statements in one transaction, then the newest migration's version into
+schema_version, as `pg.Apply` leaves it."""
 
 import contextlib
-import hashlib
 import os
 import pathlib
 import re
@@ -19,6 +19,7 @@ import psycopg
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCHEMA = REPO / "aintercept" / "internal" / "pg" / "schema.sql"
+MIGRATIONS = REPO / "aintercept" / "internal" / "pg" / "migrations"
 
 
 def admin_dsn() -> str | None:
@@ -56,16 +57,18 @@ def statements(sql: str) -> list[str]:
     return out
 
 
-def schema_hash() -> str:
-    return hashlib.sha256(SCHEMA.read_bytes()).hexdigest()
+def newest_migration() -> int:
+    """The workers' newest migration's version (migrations/NNNN_<name>.sql)."""
+    return max(int(m[1]) for p in MIGRATIONS.iterdir() if (m := re.fullmatch(r"(\d{4})_\w+\.sql", p.name)))
 
 
 def apply_schema(dsn: str) -> None:
-    digest = schema_hash()
-    assert re.fullmatch(r"[0-9a-f]{64}", digest)
+    """schema.sql at the newest migration's version, which only builds that know it read (readers_from)."""
+    v = newest_migration()
     conn = connect(dsn, autocommit=False)
     try:
-        execute(conn, *statements(SCHEMA.read_text()), f"INSERT INTO schema_version (hash) VALUES ('{digest}')")  # noqa: S608 (a hex digest)
+        sql = f"INSERT INTO schema_version (version, readers_from) VALUES ({v}, {v})"  # noqa: S608 (an int)
+        execute(conn, *statements(SCHEMA.read_text()), sql)
         conn.commit()
     finally:
         conn.close()
