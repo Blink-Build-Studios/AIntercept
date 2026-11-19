@@ -24,10 +24,11 @@ const (
 	KindClientEvent  = "client_event"  // one analytics event a client reported
 	KindAccount      = "account"       // who an account is, as a row named it
 	KindVerdict      = "verdict"       // one verdict a call's Interceptor returned
+	KindCredential   = "credential"    // who a credential belongs to, and how that was learned
 )
 
-// Record is one canonical record. Exactly one of Call, Event, Account and
-// Verdict is set,
+// Record is one canonical record. Exactly one of Call, Event, Account,
+// Verdict and Credential is set,
 // except that a client event also carries its batch request's call (Call: the
 // carrier's identity, for routing an event that names no session).
 type Record struct {
@@ -65,6 +66,19 @@ type Record struct {
 	Event   *canon.Event   `parquet:"event,optional"`
 	Account *Account       `parquet:"account,optional"`
 	Verdict *Verdict       `parquet:"verdict,optional"`
+	// Credential: written last, so records written before it read it as none.
+	Credential *Credential `parquet:"credential,optional"`
+}
+
+// Credential is one sighting of who a credential belongs to: its salted hash
+// (never the credential), the account, and how it was learned (lookup or
+// observed).
+type Credential struct {
+	KeyHash   string `parquet:"key_hash"`
+	KeyHint   string `parquet:"key_hint,optional"`
+	AccountID string `parquet:"account_id"`
+	Source    string `parquet:"source"`
+	NS        int64  `parquet:"ns"`
 }
 
 // Verdict is one Interceptor verdict (events.Verdict), as the verdicts table

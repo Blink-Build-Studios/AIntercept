@@ -44,16 +44,40 @@ every message through `OnMessage`, and one `CallRecord` per model turn
 (`ws_turn` 1, 2, …) plus a final one when the connection closes (`ws_turn`
 0).
 
-**Identity** is what the call itself shows:
+**Identity** says who is calling:
 - the salted key hash and its display hint;
 - the client IP;
-- the provider account and org;
 - the client's device and session IDs (Claude Code's `metadata.user_id`,
   Codex's turn metadata);
-- the email, when the credential carries it.
+- the person's `email` and `name`, and `email_source`, how they were
+  established;
+- `reported_account_id`, the account the client says it is (the body's
+  `metadata.user_id`, the `chatgpt-account-id` header, the token's claim);
+- `verified_account_id`, the account the provider confirmed for this call's
+  credential, and `account_mismatch` when the client reported another one;
+- `org_id`: the organization the provider confirmed, else the one the request
+  names.
 
-AIntercept doesn't enrich it: linking accounts to people happens later, in its
-processor.
+`account_id` is deprecated and always empty: use `verified_account_id`, or
+`reported_account_id` for what the client says.
+
+The first time an observer pod sees a credential, it asks the provider's own
+account endpoint who owns it, once, with the caller's token, and keeps the
+answer for 24 hours (`docs/PROVIDERS.md`, "Identity", lists each provider's
+lookup). The lookup starts at the request's headers, so it's usually done
+before `OnCallStart`. In observe mode the client never waits for it: the
+call's callbacks wait, up to `observer.identityLookup.maxWaitMs` (300 ms),
+in a buffer of the call's own. In enforce mode the call's first request waits
+up to `enforceMaxWaitMs` (300 ms; 0: never). Every later call with the
+credential is a map read. A call's identity is resolved once, so every
+callback of the call carries the same one.
+
+| `email_source` | Where `email` and `name` come from | How to use it |
+|---|---|---|
+| `CREDENTIAL` | The provider confirmed them for this exact credential (its lookup, or its own account response to a call with the credential). | **Grant privileges on this one only.** What the client sends never overrides it. |
+| `CLAIMS` | The bearer token's own claims (a JWT), not verified. | Only as strong as the provider's later check of the token: you decide before the provider sees the call. |
+| `ACCOUNT` | An account seen before under the id the client reports. | A hint: the client can send another person's id. Apply your default policy. |
+| `UNSPECIFIED` | Nothing known. | Default policy. |
 
 ### Verdicts
 
@@ -223,7 +247,15 @@ interceptor:
   `INTERCEPTOR_TLS_CA_FILE`, `INTERCEPTOR_TLS_CERT_FILE`,
   `INTERCEPTOR_TLS_KEY_FILE`, `INTERCEPTOR_TLS_SERVER_NAME`, `INTERCEPTOR_TOKEN`
   or `INTERCEPTOR_TOKEN_FILE`, plus `INTERCEPTOR_OBSERVE_TIMEOUT_MS`, `INTERCEPTOR_QUEUE_SIZE` and
-  `INTERCEPTOR_WORKERS` for observe delivery.
+  `INTERCEPTOR_WORKERS` for observe delivery. Identity (`observer.identityLookup`,
+  `identityCache`, `identityDirectory` in the chart): `OBSERVER_IDENTITY_LOOKUP`
+  (`false` turns lookups off), `OBSERVER_IDENTITY_LOOKUP_PROVIDERS`,
+  `OBSERVER_IDENTITY_MAX_WAIT_MS`, `OBSERVER_IDENTITY_ENFORCE_MAX_WAIT_MS`,
+  `OBSERVER_IDENTITY_LOOKUP_TIMEOUT_MS`, `OBSERVER_IDENTITY_LOOKUP_MAX_IN_FLIGHT`,
+  `OBSERVER_IDENTITY_LOOKUP_RATE_PER_SECOND`, `OBSERVER_IDENTITY_LOOKUP_BURST`,
+  `OBSERVER_IDENTITY_CACHE_MAX_ENTRIES`, `OBSERVER_IDENTITY_CACHE_TTL`,
+  `OBSERVER_IDENTITY_CACHE_NEGATIVE_TTL`, `OBSERVER_IDENTITY_CACHE_ERROR_TTL`,
+  `OBSERVER_IDENTITY_ANTHROPIC_ADMIN_KEY` and `OBSERVER_IDENTITY_DIRECTORY_INTERVAL`.
 - **Enforce scopes need an Envoy route:** the hosts in `interceptor.enforce`
   must be in `interception.allowlist`, and the chart checks this.
 - **Where enforce scopes take effect:** they're applied by the Helm chart's

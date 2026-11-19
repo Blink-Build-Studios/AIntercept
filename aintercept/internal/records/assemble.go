@@ -47,6 +47,7 @@ const (
 	CaseBatchNoSession           = "batch.no_session"            // released: its batch names none
 	CaseAccountSighting          = "account.sighting"            // a row saying who an account is
 	CaseVerdict                  = "verdict"                     // an Interceptor verdict: its record
+	CaseCredential               = "credential"                  // who a credential belongs to: its record
 	CaseVerdictOverCap           = "verdict.over_cap"            // a verdict past its call's MaxVerdictsPerCall: dropped
 	CaseUnknownPhase             = "unknown.phase"               // a phase this code doesn't know: ignored, and fails a real-data run
 )
@@ -58,7 +59,7 @@ var AllCases = []string{
 	CaseEndComplete, CaseEndCompleteNoHeaders, CaseEndWSTurn, CaseEndWSConnection,
 	CaseEndDisconnect, CaseEndDisconnectEarly, CaseEndDisconnectThenHeaders, CaseEndSplitKey, CaseLateAfterDone,
 	CaseEventWithID, CaseEventNoID, CaseEventRepeat, CaseEventNoPayload,
-	CaseBatchSession, CaseBatchNoSession, CaseAccountSighting, CaseVerdict, CaseVerdictOverCap, CaseUnknownPhase,
+	CaseBatchSession, CaseBatchNoSession, CaseAccountSighting, CaseVerdict, CaseVerdictOverCap, CaseCredential, CaseUnknownPhase,
 }
 
 // MaxVerdictsPerCall bounds the verdicts recorded for one call (a reply's
@@ -187,7 +188,7 @@ func (a *Assembler) TakeDetails() []Detail {
 // keepLine adds a row to its call's detail, unless the call has ended (a late
 // row isn't part of the object already written).
 func (a *Assembler) keepLine(e *events.Event, line []byte) {
-	if !a.KeepDetail || e.Phase == events.PhaseVerdict {
+	if !a.KeepDetail || e.Phase == events.PhaseVerdict || e.Phase == events.PhaseCredential {
 		return
 	}
 	if c := a.calls[e.CorrelationID]; c != nil && c.done && (a.held == nil || a.held.c != c) {
@@ -451,6 +452,13 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 		a.hit(CaseVerdict)
 		if r, ok := a.verdict(e); ok {
 			out = append(out, r)
+		}
+	case events.PhaseCredential:
+		if c := e.Credential; c != nil && e.KeyHash != "" && c.AccountID != "" {
+			a.hit(CaseCredential)
+			out = append(out, a.record(Record{Kind: KindCredential, Credential: &Credential{
+				KeyHash: e.KeyHash, KeyHint: e.KeyHint, AccountID: c.AccountID, Source: c.Source, NS: e.TimestampNS,
+			}}, e.ObserverInstance))
 		}
 	default:
 		a.hit(CaseUnknownPhase)

@@ -79,15 +79,17 @@ message Call {
   string path = 6;
   // When AIntercept received the request headers.
   int64 start_unix_nano = 7;
-  // Who is calling, as far as this one call can tell.
+  // Who is calling (Identity).
   Identity identity = 8;
   // The client software: product ("claude_code", "codex", "" when unknown),
   // the user agent and the client's own identifying headers.
   Client client = 9;
 }
 
-// Identity known from the call itself. No enrichment: linking accounts and
-// devices to a person happens later, in AIntercept's processor.
+// Who is calling. The credential's owner comes from the provider when it can
+// say (email_source CREDENTIAL): AIntercept looks a new credential up once,
+// at the provider's own account endpoint, and keeps the answer (24 h). What
+// the client says about itself (reported_account_id) never overrides it.
 message Identity {
   // Salted, irreversible hash of the API key or bearer token; key_hint is its
   // display fragment (e.g. "sk-ant…a3f9"). Never the credential itself.
@@ -95,15 +97,47 @@ message Identity {
   string key_hint = 2;
   // The client's IP address.
   string ip = 3;
-  // Provider account and organization, from the credential or the request.
-  string account_id = 4;
+  // Deprecated: always empty. Use verified_account_id (what the provider
+  // confirmed for this credential) or reported_account_id (what the client
+  // sent).
+  string account_id = 4 [deprecated = true];
+  // The organization: the one the provider confirmed for the credential when
+  // there is one, else what the request names.
   string org_id = 5;
   // The client installation and its session, when the client sends them
   // (Claude Code's metadata.user_id; Codex's turn metadata).
   string device_id = 6;
   string session_id = 7;
-  // Email, when the call carries it (for example in an OAuth token's claims).
+  // The person's email and name, when known; email_source says how.
   string email = 8;
+  string name = 9;
+  IdentitySource email_source = 10;
+  // The account the client says it is: the request body's metadata.user_id
+  // account, the chatgpt-account-id header, or the bearer token's claim. The
+  // client can send any value.
+  string reported_account_id = 11;
+  // The account the provider confirmed for this call's credential. Empty
+  // unless email_source is CREDENTIAL (and empty then when the provider
+  // confirmed only an organization).
+  string verified_account_id = 12;
+  // The client reported an account other than the verified one.
+  bool account_mismatch = 13;
+}
+
+// How Identity's email and name were established.
+enum IdentitySource {
+  // Not known.
+  IDENTITY_SOURCE_UNSPECIFIED = 0;
+  // The provider confirmed them for this exact credential (a lookup, or its
+  // own account response to a call with the credential). Grant privileges on
+  // this one only.
+  IDENTITY_SOURCE_CREDENTIAL = 1;
+  // From the bearer token's own claims (a JWT), not verified: only as strong
+  // as the provider's later check of the token.
+  IDENTITY_SOURCE_CLAIMS = 2;
+  // From the account the client reported (reported_account_id), matched to
+  // an account seen before. Asserted by the client: a hint, not proof.
+  IDENTITY_SOURCE_ACCOUNT = 3;
 }
 
 message Client {

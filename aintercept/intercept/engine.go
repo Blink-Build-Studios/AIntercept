@@ -170,7 +170,7 @@ func (s *Server) call(c *pb.Call) *Call {
 			}
 		}
 		id := c.GetIdentity()
-		cl = &Call{ID: k, Mode: Observe, Person: Person{Email: id.GetEmail(), Account: firstOf(id.GetAccountId(), id.GetOrgId())},
+		cl = &Call{ID: k, Mode: Observe, Person: personOf(id),
 			Agent: Agent(c.GetClient().GetProduct()), Session: id.GetSessionId(), Transport: HTTP}
 		if c.GetMode() == pb.Mode_MODE_ENFORCE {
 			cl.Mode = Enforce
@@ -188,6 +188,16 @@ func (s *Server) done(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.calls, id)
+}
+
+// personOf is who the call's identity says made it.
+func personOf(id *pb.Identity) Person {
+	verified := id.GetEmailSource() == pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL
+	account := id.GetVerifiedAccountId()
+	if account == "" {
+		account = firstOf(id.GetReportedAccountId(), id.GetOrgId())
+	}
+	return Person{Email: id.GetEmail(), Name: id.GetName(), Account: account, Verified: verified}
 }
 
 func firstOf(a, b string) string {

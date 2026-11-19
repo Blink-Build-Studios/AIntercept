@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/identity"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
@@ -61,6 +62,11 @@ type Server struct {
 	// full reports the writer's spool full (nil: never). While it does,
 	// enforced streams are refused so no enforced call goes unrecorded.
 	full func() bool
+	// ids are the pod's credential owners (nil: none); a call waits up to
+	// idWait (observe: its callbacks, never the request) or enforceIDWait
+	// (enforce: the request) for its credential's first lookup.
+	ids                   *identity.Cache
+	idWait, enforceIDWait time.Duration
 
 	streamCounter    atomic.Uint64
 	undecodableCount atomic.Uint64
@@ -87,6 +93,13 @@ type Config struct {
 	// are refused (Envoy's enforcing filter, failure_mode_allow: false, then
 	// rejects the call); observed streams carry on. nil: never full.
 	Full func() bool
+	// Identities are the pod's credential owners (internal/identity): each
+	// new credential's lookup starts at its request's headers. IdentityWait
+	// bounds how long an observed call's callbacks wait for it (the client
+	// never waits), EnforceIdentityWait how long an enforced call does.
+	Identities          *identity.Cache
+	IdentityWait        time.Duration
+	EnforceIdentityWait time.Duration
 }
 
 // New builds a Server.
@@ -117,6 +130,9 @@ func New(cfg Config) *Server {
 		probeMarker:       cfg.ProbeMarker,
 		ic:                cfg.Interceptor,
 		full:              cfg.Full,
+		ids:               cfg.Identities,
+		idWait:            cfg.IdentityWait,
+		enforceIDWait:     cfg.EnforceIdentityWait,
 	}
 }
 
@@ -156,6 +172,8 @@ type streamState struct {
 	keyHash string
 	keyHint string
 	auth    *events.AuthIdentity
+	// lookup is the credential's identity lookup in flight (nil: none).
+	lookup *identity.Pending
 	// held is the bytes this stream holds in buffers, charged to the memory
 	// budget (see account); handed to events with the buffers they carry.
 	held      int64
@@ -218,8 +236,14 @@ func (s *streamState) next() uint64 {
 func (srv *Server) Process(stream extprocv3.ExternalProcessor_ProcessServer) error {
 	id := srv.streamCounter.Add(1)
 	st := &streamState{correlationID: newCorrelationID(srv.instanceID, id)}
-	// Whatever the stream still holds when it ends is released.
-	defer func() { srv.budget.Add(-st.held) }()
+	// Whatever the stream still holds when it ends is released, and the
+	// Interceptor learns the call has ended.
+	defer func() {
+		srv.budget.Add(-st.held)
+		if srv.ic != nil {
+			srv.ic.Ended(st.correlationID)
+		}
+	}()
 
 	for first := true; ; first = false {
 		req, err := stream.Recv()
@@ -324,6 +348,11 @@ func (srv *Server) observeHeaders(st *streamState, dir events.Direction, phase e
 		st.keyHash = keyHash
 		st.keyHint = keyHint
 		st.auth = events.AuthIdentityFromHeaders(hdrs)
+		// A credential the pod hasn't seen: its owner is looked up now, with
+		// the raw headers, while the body uploads (never for probes).
+		if !st.synthetic {
+			st.lookup = srv.ids.Begin(keyHash, keyHint, st.host, hdrs)
+		}
 	} else {
 		if v := hdrs[":status"]; v != "" {
 			st.status = atoiSafe(v)

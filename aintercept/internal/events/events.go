@@ -35,6 +35,9 @@ const (
 	// PhaseVerdict records one verdict a customer's Interceptor returned
 	// (applied in enforce mode, recorded only in observe mode).
 	PhaseVerdict Phase = "verdict"
+	// PhaseCredential records who a credential belongs to, as the observer
+	// learned it (internal/identity): its own row, no call's.
+	PhaseCredential Phase = "credential"
 )
 
 // Direction indicates which half of the transaction an event belongs to.
@@ -199,6 +202,9 @@ type Event struct {
 	ClientEvent *ClientEvent `json:"client_event,omitempty"`
 	// Verdict is set on PhaseVerdict rows.
 	Verdict *Verdict `json:"verdict,omitempty"`
+	// Credential is set on PhaseCredential rows, with the credential's
+	// KeyHash and KeyHint (and, for a lookup, the account in Auth).
+	Credential *Credential `json:"credential,omitempty"`
 	// InterceptMode is "enforce" when the call went through the enforcing
 	// ext_proc filter (a customer Interceptor could act on it); "" otherwise.
 	InterceptMode string `json:"intercept_mode,omitempty"`
@@ -633,6 +639,19 @@ func KeyHint(hdrs map[string]string, prefix, suffix int) string {
 	}
 	return key[:prefix] + "…" + key[len(key)-suffix:]
 }
+
+// Credential is who a credential belongs to (PhaseCredential rows).
+type Credential struct {
+	AccountID string `json:"account_id"`
+	// Source is how it was learned: "lookup" (the provider's account
+	// endpoint, asked with the credential) or "observed" (the provider's
+	// account response to a call made with it).
+	Source string `json:"source"`
+}
+
+// APIKey is the raw credential a request carries (the one key_hash hashes),
+// or "". For identity lookups only (internal/identity): never stored.
+func APIKey(hdrs map[string]string) string { return extractAPIKey(hdrs) }
 
 // extractAPIKey pulls the raw key from the recognized auth headers. Header lookup
 // is case-insensitive because upstream header maps are not normalized.

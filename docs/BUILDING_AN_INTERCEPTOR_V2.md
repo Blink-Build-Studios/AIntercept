@@ -118,7 +118,7 @@ then complete. Calls run concurrently. `ctx` carries the deadline.
 
 **`Call`** is the same object in every hook of one call (a Codex WebSocket
 connection is one call for all its turns): `ID`, `Mode` (`Observe`,
-`Enforce`), `Person` (`Email`, `Account`), `Agent` (`ClaudeCode`, `Codex`),
+`Enforce`), `Person` (`Email`, `Name`, `Account`, and `Verified`: the provider confirmed them for the call's credential; grant privileges on a verified Person only), `Agent` (`ClaudeCode`, `Codex`),
 `Model`, `Session`, `Transport` (`HTTP`, `WebSocket`), and per-call state:
 `c.Set(k, v)`, `c.Get(k)`, freed after the call completes. The state lives in
 the process: run one replica, or keep state you need across replicas
@@ -230,6 +230,8 @@ h.Reply("The password is sword", "fi", "sh!").WantClientSees(t, "The password is
 h.ToolCall("Bash", `{"command":"rm -rf /"}`).WantReply(t, "I won't run that.")
 h.ToolResult("Bash", "-----BEGIN PRIVATE KEY-----").WantReplaced(t, "-----[redacted]-----")
 h.Prompt("hello").WantAccepted(t)
+// A rule on who's calling: the calls that follow come from this identity.
+h.As(&pb.Identity{Email: "a@example.com", EmailSource: pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL}).Prompt("hello").WantAccepted(t)
 ```
 
 `examples/rabbit/main_test.go` is a complete one. `make test-interceptor`

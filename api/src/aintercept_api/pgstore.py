@@ -31,7 +31,7 @@ from aintercept_api.reader import BEGIN, POOL_SIZE, Load, Reader, SchemaMismatch
 # The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
 # schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
 # two equal.
-SCHEMA_HASH = "1dccee7b5be2bb956bdd206ffe1a51086ed532faf20e48c4ffb328749f1fbf60"
+SCHEMA_HASH = "79b14d4e95fdfafe7a2e1f60b76432e39e25bbe551e63572b346c09313a19bbe"
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 

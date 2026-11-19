@@ -13,13 +13,15 @@ const DefaultBucketBits = 6
 // RoutingKey is the key a record is grouped by: its session ("s:<id>"), or,
 // for what names none, its credential and day ("c:<key hash>:<YYYY-MM-DD>"),
 // or with no credential its source IP and hour ("ip:<ip>:<YYYY-MM-DDTHH>");
-// an account sighting is its account ("a:<id>"). An analytics request's own
+// an account or credential sighting is its account ("a:<id>"). An analytics request's own
 // call goes with the session its batch's earliest event names; an event, with
 // its own session.
 func RoutingKey(r *Record) string {
 	switch {
 	case r.Kind == KindAccount && r.Account != nil:
 		return "a:" + r.Account.AccountID
+	case r.Kind == KindCredential && r.Credential != nil:
+		return "a:" + r.Credential.AccountID
 	case r.Kind == KindClientEvent && r.Event != nil:
 		if r.Event.SessionID != "" {
 			return "s:" + r.Event.SessionID

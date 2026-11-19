@@ -2,6 +2,7 @@ package events
 
 import (
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,7 +36,12 @@ type Processor struct {
 	// touched by the drain goroutine.
 	clientShapesSeen map[string]struct{}
 
-	accepted        atomic.Uint64
+	accepted atomic.Uint64
+	// closeMu guards closed: an Offer after Close is a counted no-op
+	// (afterClose), never a send on the closed buffer.
+	closeMu         sync.RWMutex
+	closed          bool
+	afterClose      atomic.Uint64
 	lastResortDrops atomic.Uint64
 	emitted         atomic.Uint64
 	emitErrs        atomic.Uint64
@@ -127,6 +133,22 @@ func (p *Processor) Offer(e Event) bool {
 		}
 		return false
 	}
+	return p.send(e)
+}
+
+// send puts e on the buffer, waiting for room, unless the processor is
+// closed: then it counts e and drops it. Never called on the drain
+// goroutine (it would wait on its own buffer).
+func (p *Processor) send(e Event) bool {
+	p.closeMu.RLock()
+	defer p.closeMu.RUnlock()
+	if p.closed {
+		p.budget.Add(-e.held)
+		if n := p.afterClose.Add(1); n == 1 || n%p.alarmEvery == 0 {
+			slog.Warn("an event arrived after the processor closed: dropped", "dropped_after_close", n)
+		}
+		return false
+	}
 	p.buf <- e
 	p.accepted.Add(1)
 	return true
@@ -135,10 +157,7 @@ func (p *Processor) Offer(e Event) bool {
 // OfferMust enqueues an event from an enforced stream. It never drops: it
 // waits for room. (Enforced calls are refused at the start while the spool is
 // full, so the calls already admitted are the ones that keep writing.)
-func (p *Processor) OfferMust(e Event) {
-	p.buf <- e
-	p.accepted.Add(1)
-}
+func (p *Processor) OfferMust(e Event) { p.send(e) }
 
 // drain moves buffered events into the sink on a single goroutine.
 func (p *Processor) drain() {
@@ -237,9 +256,13 @@ func (p *Processor) emitRaw(e Event) {
 	p.emit(e)
 }
 
-// Close stops accepting events, drains the buffer, and flushes the sink(s).
+// Close stops accepting events (an Offer after it is counted and dropped),
+// drains the buffer, and flushes the sink(s).
 func (p *Processor) Close() {
+	p.closeMu.Lock()
+	p.closed = true
 	close(p.buf)
+	p.closeMu.Unlock()
 	<-p.done
 	if err := p.sink.Flush(); err != nil {
 		slog.Error("sink flush error", "err", err)
@@ -260,22 +283,25 @@ type Stats struct {
 	EmitErrs        uint64
 	SchemaSampled   uint64 // unrecognized-shape fingerprints emitted
 	SchemaCapHit    uint64 // samples suppressed by the per-minute cap
-	Depth           int
-	Capacity        int
+	// DroppedAfterClose: events offered after Close (stragglers at shutdown).
+	DroppedAfterClose uint64
+	Depth             int
+	Capacity          int
 }
 
 // Stats returns a counter snapshot (for the /stats endpoint and periodic logs).
 func (p *Processor) Stats() Stats {
 	return Stats{
-		Accepted:        p.accepted.Load(),
-		LastResortDrops: p.lastResortDrops.Load(),
-		Panics:          p.panics.Load(),
-		Emitted:         p.emitted.Load(),
-		EmitErrs:        p.emitErrs.Load(),
-		SchemaSampled:   p.schemaSampled.Load(),
-		SchemaCapHit:    p.schemaCapHit.Load(),
-		Depth:           len(p.buf),
-		Capacity:        cap(p.buf),
+		Accepted:          p.accepted.Load(),
+		DroppedAfterClose: p.afterClose.Load(),
+		LastResortDrops:   p.lastResortDrops.Load(),
+		Panics:            p.panics.Load(),
+		Emitted:           p.emitted.Load(),
+		EmitErrs:          p.emitErrs.Load(),
+		SchemaSampled:     p.schemaSampled.Load(),
+		SchemaCapHit:      p.schemaCapHit.Load(),
+		Depth:             len(p.buf),
+		Capacity:          cap(p.buf),
 	}
 }
 

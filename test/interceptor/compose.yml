@@ -2,7 +2,8 @@
 # Envoy (both filters) → fixture, with the observer and the example redact
 # Interceptor, and a second observer on contract v2 with the suite's own v2
 # Interceptor (the example rabbit's rules, plus rules on the model's reply and
-# its tool calls; its records in ./out/events-v2.ndjson). Records land in ./out/events.ndjson and, through the observer's
+# its tool calls; its records in ./out/events-v2.ndjson). Both observers look
+# credentials up at the fixture (OBSERVER_IDENTITY_TEST_ORIGIN). Records land in ./out/events.ndjson and, through the observer's
 # writer and its spool (./out/spool), in an S3 emulator (moto).
 name: aintercept-interceptor-test
 services:
@@ -41,6 +42,8 @@ services:
       INTERCEPTOR_DEADLINE_MS: "2000"
       OBSERVER_KEY_HASH_SALT: e2e-salt
       OBSERVER_SCHEMA_SAMPLING: "false"
+      # Identity lookups go to the fixture's fake profile endpoint, never a provider.
+      OBSERVER_IDENTITY_TEST_ORIGIN: http://fixture:8080
     volumes: ["./out:/out"]
   observer:
     image: aintercept-test/aintercept:dev
@@ -68,6 +71,7 @@ services:
       OBSERVER_SPOOL_MAX_BYTES: ${OBSERVER_SPOOL_MAX_BYTES:-1073741824}
       OBSERVER_UPLOAD_TIMEOUT_SECONDS: "5"
       OBSERVER_RAW_FLUSH_SECONDS: "10" # the no-loss tests wait past it (default 30)
+      OBSERVER_IDENTITY_TEST_ORIGIN: http://fixture:8080
     volumes: ["./out:/out", "./out/spool:/spool"]
     ports: ["19001:9001"]
     # It serves on for OBSERVER_SHUTDOWN_DELAY_SECONDS (15) after SIGTERM, then

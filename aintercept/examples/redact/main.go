@@ -66,8 +66,12 @@ type server struct {
 
 func (server) OnCallStart(_ context.Context, s *pb.CallStart) (*pb.Verdict, error) {
 	c := s.GetCall()
+	id := c.GetIdentity()
+	// Who: email_source CREDENTIAL means the provider confirmed the email for
+	// this call's credential; anything else is what the client says.
 	slog.Info("call start", "call", c.GetCallId(), "mode", c.GetMode().String(), "host", c.GetHost(), "path", c.GetPath(),
-		"product", c.GetClient().GetProduct(), "model", s.GetRequest().GetModel(), "key", c.GetIdentity().GetKeyHint())
+		"product", c.GetClient().GetProduct(), "model", s.GetRequest().GetModel(), "key", id.GetKeyHint(),
+		"email", id.GetEmail(), "email_source", id.GetEmailSource().String(), "account", id.GetVerifiedAccountId())
 	if s.GetRequest().GetModel() == "forbidden-model" {
 		return &pb.Verdict{Action: &pb.Verdict_Deny{Deny: &pb.Deny{Reason: "forbidden-model isn't approved for use here."}}}, nil
 	}

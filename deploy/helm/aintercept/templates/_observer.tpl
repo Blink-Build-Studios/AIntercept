@@ -101,6 +101,28 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
       valueFrom:
         secretKeyRef: { name: {{ include "aintercept.objectStoreSecret" . }}, key: secretAccessKey }
     {{- end }}
+    # ── Identity (docs/PROVIDERS.md, "Identity") ──
+    {{- $lookup := .Values.observer.identityLookup | default dict }}
+    {{- $idCache := .Values.observer.identityCache | default dict }}
+    - { name: OBSERVER_IDENTITY_LOOKUP, value: {{ ternary "false" "true" (eq (toString $lookup.enabled) "false") | quote }} }
+    - { name: OBSERVER_IDENTITY_LOOKUP_PROVIDERS, value: {{ $lookup.providers | default list | join "," | quote }} }
+    - { name: OBSERVER_IDENTITY_MAX_WAIT_MS, value: {{ (hasKey $lookup "maxWaitMs" | ternary $lookup.maxWaitMs 300) | int | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_ENFORCE_MAX_WAIT_MS, value: {{ (hasKey $lookup "enforceMaxWaitMs" | ternary $lookup.enforceMaxWaitMs 300) | int | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_LOOKUP_TIMEOUT_MS, value: {{ $lookup.timeoutMs | default 2000 | int | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_LOOKUP_MAX_IN_FLIGHT, value: {{ $lookup.maxInFlight | default 8 | int | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_LOOKUP_RATE_PER_SECOND, value: {{ $lookup.ratePerSecond | default 5 | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_LOOKUP_BURST, value: {{ $lookup.burst | default 20 | int | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_CACHE_MAX_ENTRIES, value: {{ $idCache.maxEntries | default 100000 | int | toString | quote }} }
+    - { name: OBSERVER_IDENTITY_CACHE_TTL, value: {{ $idCache.ttl | default "24h" | quote }} }
+    - { name: OBSERVER_IDENTITY_CACHE_NEGATIVE_TTL, value: {{ $idCache.negativeTtl | default "1h" | quote }} }
+    - { name: OBSERVER_IDENTITY_CACHE_ERROR_TTL, value: {{ $idCache.errorTtl | default "60s" | quote }} }
+    {{- $anthropicDir := (.Values.observer.identityDirectory | default dict).anthropic | default dict }}
+    {{- if $anthropicDir.adminKeySecret }}
+    - name: OBSERVER_IDENTITY_ANTHROPIC_ADMIN_KEY
+      valueFrom:
+        secretKeyRef: { name: {{ $anthropicDir.adminKeySecret }}, key: adminKey }
+    - { name: OBSERVER_IDENTITY_DIRECTORY_INTERVAL, value: {{ $anthropicDir.interval | default "15m" | quote }} }
+    {{- end }}
     {{- with .Values.observer.memoryBudget }}
     - { name: OBSERVER_MEMORY_BUDGET, value: {{ . | quote }} }
     {{- end }}

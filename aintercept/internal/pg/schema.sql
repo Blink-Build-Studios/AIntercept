@@ -109,6 +109,19 @@ CREATE TABLE accounts (
     seen_ns bigint NOT NULL
 );
 
+-- Who each credential belongs to (credential records): many credentials to one account. key_hash
+-- is the salted hash, never the credential. account_id, source (lookup | observed) and key_hint
+-- are the newest sighting's; first_ns and verified_ns the earliest and latest.
+CREATE TABLE credentials (
+    key_hash text PRIMARY KEY,
+    key_hint text NOT NULL,
+    account_id text NOT NULL,
+    source text NOT NULL,
+    first_ns bigint NOT NULL,
+    verified_ns bigint NOT NULL
+);
+CREATE INDEX ON credentials (account_id);
+
 CREATE TABLE session_accounts (
     session_id text NOT NULL,
     account_id text NOT NULL,

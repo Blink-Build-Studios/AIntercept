@@ -104,3 +104,38 @@ func TestInterceptorAuthGuards(t *testing.T) {
 		})
 	}
 }
+
+// Identity: lookups on by default with the documented limits; off, a zero
+// enforce wait and a provider list carry through; the Anthropic directory's
+// admin key comes only from a Secret, and only when one is named.
+func TestIdentityValues(t *testing.T) {
+	env := envOf(container(render(t), "Deployment", "envoy", "observer"))
+	for k, want := range map[string]string{
+		"OBSERVER_IDENTITY_LOOKUP": "true", "OBSERVER_IDENTITY_MAX_WAIT_MS": "300", "OBSERVER_IDENTITY_ENFORCE_MAX_WAIT_MS": "300",
+		"OBSERVER_IDENTITY_LOOKUP_TIMEOUT_MS": "2000", "OBSERVER_IDENTITY_LOOKUP_MAX_IN_FLIGHT": "8", "OBSERVER_IDENTITY_LOOKUP_RATE_PER_SECOND": "5",
+		"OBSERVER_IDENTITY_LOOKUP_BURST": "20", "OBSERVER_IDENTITY_CACHE_MAX_ENTRIES": "100000", "OBSERVER_IDENTITY_CACHE_TTL": "24h",
+		"OBSERVER_IDENTITY_CACHE_NEGATIVE_TTL": "1h", "OBSERVER_IDENTITY_CACHE_ERROR_TTL": "60s",
+	} {
+		if env[k] != want {
+			t.Errorf("%s = %v, want %s", k, env[k], want)
+		}
+	}
+	if _, ok := env["OBSERVER_IDENTITY_ANTHROPIC_ADMIN_KEY"]; ok {
+		t.Error("an admin key without adminKeySecret")
+	}
+	if _, ok := env["OBSERVER_IDENTITY_TEST_ORIGIN"]; ok {
+		t.Error("the chart sets the test-only origin")
+	}
+
+	obs := container(render(t, "observer.identityLookup.enabled=false", "observer.identityLookup.enforceMaxWaitMs=0",
+		"observer.identityLookup.maxWaitMs=0", "observer.identityLookup.providers={anthropic,chatgpt}",
+		"observer.identityDirectory.anthropic.adminKeySecret=anthropic-admin"), "Deployment", "envoy", "observer")
+	env = envOf(obs)
+	if env["OBSERVER_IDENTITY_LOOKUP"] != "false" || env["OBSERVER_IDENTITY_ENFORCE_MAX_WAIT_MS"] != "0" || env["OBSERVER_IDENTITY_MAX_WAIT_MS"] != "0" ||
+		env["OBSERVER_IDENTITY_LOOKUP_PROVIDERS"] != "anthropic,chatgpt" || env["OBSERVER_IDENTITY_DIRECTORY_INTERVAL"] != "15m" {
+		t.Errorf("env %v", env)
+	}
+	if got := secretRef(obs, "OBSERVER_IDENTITY_ANTHROPIC_ADMIN_KEY"); got != "anthropic-admin/adminKey" {
+		t.Errorf("admin key from %q, want anthropic-admin/adminKey", got)
+	}
+}

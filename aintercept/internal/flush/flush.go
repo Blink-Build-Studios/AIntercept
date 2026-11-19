@@ -31,6 +31,7 @@ type Rows struct {
 	Parents            []Parent
 	Dirty              []Dirty
 	Verdicts           []Verdict
+	Credentials        []Credential
 	// ResultIDs are the tool call ids whose results the calls carry back
 	// (detail's results): a step's exit codes are its session's first result
 	// for each of its tool calls, which a later call can carry, so the steps
@@ -94,6 +95,21 @@ type Verdict struct {
 	V      records.Verdict
 }
 
+// Credential is a credentials row: who a credential belongs to. Its account,
+// source and hint are the newest sighting's (the greatest, at the same time);
+// First and Verified the earliest and latest sightings.
+type Credential struct {
+	KeyHash, KeyHint, AccountID, Source string
+	First, Verified                     int64
+}
+
+// newer reports whether sighting s is newer than c's newest, as the upsert
+// decides: by time, then account, source and hint.
+func (c *Credential) newer(s *records.Credential) bool {
+	return cmp.Or(cmp.Compare(s.NS, c.Verified), cmp.Compare(s.AccountID, c.AccountID), cmp.Compare(s.Source, c.Source),
+		cmp.Compare(s.KeyHint, c.KeyHint)) > 0
+}
+
 // Dirty is a rollup row to recompute (§5.3).
 type Dirty struct{ Kind, Key string }
 
@@ -109,6 +125,7 @@ func Collapse(recs []records.Record) Rows {
 	dirty := map[Dirty]bool{}
 	resultIDs := map[string]bool{}
 	verdicts := map[string]*Verdict{}
+	creds := map[string]*Credential{}
 	var last int64
 
 	account := func(id string, ns int64) *Account {
@@ -157,6 +174,19 @@ func Collapse(recs []records.Record) Rows {
 			a.Email.offer(s.Email, s.NS)
 			a.Name.offer(s.Name, s.NS)
 			a.Org.offer(s.Org, s.NS)
+			last = max(last, s.NS)
+
+		case r.Kind == records.KindCredential && r.Credential != nil:
+			s := r.Credential
+			c := creds[s.KeyHash]
+			if c == nil {
+				c = &Credential{KeyHash: s.KeyHash, First: s.NS, Verified: s.NS - 1}
+				creds[s.KeyHash] = c
+			}
+			if c.newer(s) {
+				c.KeyHint, c.AccountID, c.Source, c.Verified = s.KeyHint, s.AccountID, s.Source, s.NS
+			}
+			c.First = min(c.First, s.NS)
 			last = max(last, s.NS)
 
 		case r.Kind == records.KindClientEvent:
@@ -234,6 +264,7 @@ func Collapse(recs []records.Record) Rows {
 	out.SessionCredentials = sortedBy(sessCreds, func(s *Span) string { return s.A + "\x00" + s.B })
 	out.Devices = sortedBy(devs, func(d *Device) string { return d.Account + "\x00" + d.Device })
 	out.Parents = sortedBy(parents, func(p *Parent) string { return p.Child + "\x00" + p.Parent })
+	out.Credentials = sortedBy(creds, func(c *Credential) string { return c.KeyHash })
 	out.Verdicts = sortedBy(verdicts, func(v *Verdict) string { return fmt.Sprintf("%s\x00%020d", v.CallID, v.V.Seq) })
 	for d := range dirty {
 		out.Dirty = append(out.Dirty, d)

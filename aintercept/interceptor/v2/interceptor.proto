@@ -102,19 +102,42 @@ message Call {
   Client client = 9;
 }
 
-// Identity known from the call itself (no enrichment).
+// Who is calling (v1's Identity, field for field; docs/INTERCEPTOR.md).
 message Identity {
   // Salted, irreversible hash of the API key or bearer token, and its display
   // fragment. Never the credential itself.
   string key_hash = 1;
   string key_hint = 2;
   string ip = 3;
-  string account_id = 4;
+  // Deprecated: always empty. Use verified_account_id or reported_account_id.
+  string account_id = 4 [deprecated = true];
+  // The organization the provider confirmed, else what the request names.
   string org_id = 5;
   // The client installation and its session, when the client sends them.
   string device_id = 6;
   string session_id = 7;
+  // The person's email and name, when known; email_source says how.
   string email = 8;
+  string name = 9;
+  IdentitySource email_source = 10;
+  // The account the client says it is (it can send any value).
+  string reported_account_id = 11;
+  // The account the provider confirmed for this call's credential.
+  string verified_account_id = 12;
+  // The client reported an account other than the verified one.
+  bool account_mismatch = 13;
+}
+
+// How Identity's email and name were established.
+enum IdentitySource {
+  IDENTITY_SOURCE_UNSPECIFIED = 0;
+  // The provider confirmed them for this exact credential. Grant privileges
+  // on this one only.
+  IDENTITY_SOURCE_CREDENTIAL = 1;
+  // From the bearer token's own claims (a JWT), not verified.
+  IDENTITY_SOURCE_CLAIMS = 2;
+  // From the account the client reported: a hint, not proof.
+  IDENTITY_SOURCE_ACCOUNT = 3;
 }
 
 message Client {

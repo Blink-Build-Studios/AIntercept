@@ -71,7 +71,8 @@ func Sweep(ctx context.Context, db *pgxpool.Pool) (int64, error) {
 // retained are the tables retention trims, each with what makes a row old ($1:
 // the cutoff, ns): the facts by their time and the
 // rollups by theirs. The cutoff is a whole hour, so a rollup row goes exactly
-// when all its facts have. Identity rows (accounts, sessions' accounts,
+// when all its facts have. A credential goes when it was last verified before
+// the cutoff; the other identity rows (accounts, sessions' accounts and
 // credentials, devices, parents) are a handful per person and stay.
 var retained = []struct{ table, old string }{
 	{"calls", "start_ns < $1"},
@@ -82,6 +83,7 @@ var retained = []struct{ table, old string }{
 	{"session_keys", "hour_ns < $1"},
 	{"cred_minutes", "minute_ns < $1"},
 	{"cred_hours", "hour_ns < $1"},
+	{"credentials", "verified_ns < $1"},
 	{"ingest_files", "loaded_at < to_timestamp($1::bigint / 1e9)"},
 }
 

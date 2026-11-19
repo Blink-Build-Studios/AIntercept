@@ -130,7 +130,7 @@ func (srv *Server) callInfo(st *streamState, body []byte) *interceptor.CallInfo 
 		Host: st.host, Method: st.method, Path: st.path, StartNS: st.reqStartNS,
 		KeyHash: st.keyHash, KeyHint: st.keyHint, IP: st.ip, Auth: st.auth,
 		Headers: st.reqHeaders, Summary: events.SummarizeRequest(st.host, st.path, st.reqHeaders, body),
-		RequestBytes: len(body),
+		RequestBytes: len(body), Identities: srv.ids, Lookup: st.lookup,
 	}
 }
 
@@ -158,9 +158,7 @@ func (srv *Server) observeStart(st *streamState) {
 	if !st.reqTrunc {
 		body = st.reqBuf
 	}
-	ci := srv.callInfo(st, body)
-	ic.call = ci.Call()
-	srv.ic.ObserveStart(ci.Start())
+	ic.call = srv.ic.ObserveCall(srv.callInfo(st, body), srv.idWait)
 	if srv.ic.Content() && srv.ic.V2() && st.reqTrunc {
 		srv.ic.Unparsed("over the buffer") // it can't be read
 	}
@@ -369,11 +367,13 @@ func wsKind(op byte) pb.MessageKind {
 func (srv *Server) decideStart(st *streamState, ci *interceptor.CallInfo) interceptor.Decision {
 	ic := st.icState()
 	ic.started = true
-	ic.call = ci.Call()
 	if !srv.intercepting(st) {
+		ic.call = ci.Call()
 		return interceptor.Decision{Action: interceptor.Allow}
 	}
-	return srv.ic.DecideStart(context.Background(), ci.Start())
+	var d interceptor.Decision
+	ic.call, d = srv.ic.DecideCall(context.Background(), ci, srv.enforceIDWait)
+	return d
 }
 
 // decideMessage is OnMessage in enforce mode (Allow without content, and

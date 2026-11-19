@@ -182,3 +182,19 @@ func TestStatsLoggerStops(t *testing.T) {
 type discard struct{}
 
 func (discard) Write(b []byte) (int, error) { return len(b), nil }
+
+// An Offer after Close (a straggler at shutdown) is a counted no-op, never a
+// send on the closed buffer.
+func TestOfferAfterCloseIsCounted(t *testing.T) {
+	p := NewProcessor(&blockingSink{release: closedChan()}, ProcessorConfig{BufferSize: 4})
+	p.Close()
+	if p.Offer(Event{Phase: PhaseVerdict}) {
+		t.Error("Offer after Close accepted the event")
+	}
+	p.OfferMust(Event{Phase: PhaseVerdict})
+	if s := p.Stats(); s.DroppedAfterClose != 2 || s.Accepted != 0 {
+		t.Errorf("stats %+v", s)
+	}
+}
+
+func closedChan() chan struct{} { c := make(chan struct{}); close(c); return c }

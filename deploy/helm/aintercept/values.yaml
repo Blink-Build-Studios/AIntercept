@@ -365,6 +365,46 @@ observer:
   keyHashSaltSecretsManagerId: ""
   keyHashSalt: ""
   keyHashSaltSecret: ""   # name of an existing Secret with key `salt`
+  # Who each credential belongs to (docs/PROVIDERS.md, "Identity"; the
+  # Interceptor's Identity and the credentials table). The first time a pod
+  # sees a credential it can look up, it asks the provider's own account
+  # endpoint once, with the caller's token (a fixed URL per provider, never
+  # one from the request), off the request path, and keeps the answer. It
+  # never logs or stores the token. Operators should mention the lookup in
+  # their own disclosures. Egress goes straight to the provider.
+  identityLookup:
+    enabled: true
+    # Limit lookups to these providers (anthropic, openai, chatgpt); empty:
+    # every provider with a lookup.
+    providers: []
+    # How long a call's first callbacks wait for its credential's lookup:
+    # observed calls never wait (their callbacks do, in a buffer of the
+    # call's own); enforced calls wait in the request path (0: never).
+    maxWaitMs: 300
+    enforceMaxWaitMs: 300
+    timeoutMs: 2000
+    # Lookups at once, and how fast they start, per pod. A credential whose
+    # lookup can't start goes unidentified; its next call tries again.
+    maxInFlight: 8
+    ratePerSecond: 5
+    burst: 20
+  identityCache:
+    # Credentials kept per pod (least recently used out first).
+    maxEntries: 100000
+    # An answer is kept ttl, then looked up again on its next call; a refusal
+    # (401, 403) negativeTtl; a failure (timeout, 5xx) errorTtl.
+    ttl: 24h
+    negativeTtl: 1h
+    errorTtl: 60s
+  identityDirectory:
+    anthropic:
+      # The people behind Anthropic API keys (a key's own lookup names only
+      # its organization): a Secret whose `adminKey` key holds an Anthropic
+      # Admin API key. Each pod lists the organization's keys and users with
+      # it every interval, and a call's key is attributed to the user who
+      # created it. Empty: off. The admin key is never logged.
+      adminKeySecret: ""
+      interval: 15m
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "500m", memory: "256Mi" }
