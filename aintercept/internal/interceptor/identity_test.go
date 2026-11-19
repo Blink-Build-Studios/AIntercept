@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -272,5 +273,46 @@ func TestV2HeldRequestCarriesTheIdentity(t *testing.T) {
 	_, reqs, _ := f.Snapshot()
 	if len(reqs) != 1 || reqs[0].GetCall().GetIdentity().GetEmail() != "a@example.com" || reqs[0].GetCall().GetIdentity().GetVerifiedAccountId() != "acc-1" {
 		t.Fatalf("requests %v", reqs)
+	}
+}
+
+// A call's identity stays with it while it's open, however long it idles (a
+// Codex WebSocket between turns), and is swept only once its stream has
+// ended without a final record.
+func TestIdentityStaysWithAnOpenCall(t *testing.T) {
+	ids := newProfile(t, 0, nil).cache()
+	ids.Begin("kh-ws", "", "api.anthropic.com", map[string]string{"authorization": "Bearer " + oauth}).Wait(2 * time.Second)
+	f := &interceptortest.Fake{}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true}, nil)
+	now := time.Now()
+	var mu sync.Mutex
+	interceptor.SetClock(c, func() time.Time { mu.Lock(); defer mu.Unlock(); return now })
+	advance := func(d time.Duration) { mu.Lock(); now = now.Add(d); mu.Unlock() }
+
+	c.ObserveCall(&interceptor.CallInfo{CallID: "ws", Host: "api.anthropic.com", KeyHash: "kh-ws", Identities: ids}, time.Second)
+	c.ObserveCall(&interceptor.CallInfo{CallID: "gone", Host: "api.anthropic.com", KeyHash: "kh-ws", Identities: ids}, time.Second)
+	c.Ended("gone") // its stream ended; its final record never came
+	waitUntil(t, 2*time.Second, func() bool { calls, _ := f.Snapshot(); return len(calls) == 2 })
+	advance(20 * time.Minute)
+	for i := range 600 { // enough new calls to sweep
+		c.ObserveCall(&interceptor.CallInfo{CallID: "other-" + strconv.Itoa(i), Host: "api.anthropic.com"}, time.Second)
+	}
+	// Later callbacks built from a Call without the identity get the one
+	// resolved at the call's start; the ended call's entry is gone.
+	bare := func(id string) *pb.Call { return &pb.Call{CallId: id, Identity: &pb.Identity{}} }
+	c.ObserveMessage(interceptor.Message(bare("ws"), events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_WS_TEXT, []byte("x"), "", ""))
+	c.Complete(&pb.CallRecord{Call: bare("ws")}, false)
+	c.ObserveMessage(interceptor.Message(bare("gone"), events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_WS_TEXT, []byte("x"), "", ""))
+	c.Close()
+	f2 := map[string]string{}
+	for _, m := range f.Messages {
+		f2[m.GetCall().GetCallId()] = m.GetCall().GetIdentity().GetEmail()
+	}
+	_, recs := f.Snapshot()
+	if f2["ws"] != "a@example.com" || len(recs) != 1 || recs[0].GetCall().GetIdentity().GetEmail() != "a@example.com" {
+		t.Errorf("the idle open call lost its identity: message %q, records %v", f2["ws"], recs)
+	}
+	if f2["gone"] != "" {
+		t.Errorf("an ended call's identity outlived its TTL: %q", f2["gone"])
 	}
 }

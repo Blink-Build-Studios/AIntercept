@@ -334,3 +334,21 @@ func TestTokenNeverLeaks(t *testing.T) {
 		t.Errorf("the failures weren't logged: %s", logs.String())
 	}
 }
+
+// Close waits for the lookups in flight (their answers are learned first)
+// and starts no more.
+func TestClose(t *testing.T) {
+	p := newProvider(t)
+	p.release = make(chan struct{})
+	var learned atomic.Int32
+	c := newCache(p, nil, func(Learned) { learned.Add(1) })
+	c.Begin("kh-1", "", "api.anthropic.com", oauthHdrs)
+	go func() { time.Sleep(30 * time.Millisecond); close(p.release) }()
+	c.Close()
+	if learned.Load() != 1 {
+		t.Error("Close returned before the lookup in flight was learned")
+	}
+	if c.Begin("kh-2", "", "api.anthropic.com", oauthHdrs) != nil {
+		t.Error("a lookup started after Close")
+	}
+}

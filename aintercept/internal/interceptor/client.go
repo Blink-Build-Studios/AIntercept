@@ -158,6 +158,7 @@ type Client struct {
 	holding  atomic.Int32
 	idents   map[string]*callIdentity
 	awaiting sync.WaitGroup
+	now      func() time.Time // the clock idents age by
 
 	mu       sync.Mutex
 	verdicts map[string]*callVerdicts
@@ -261,6 +262,7 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 	c := &Client{
 		cfg: cfg, conn: conn, api: pb.NewInterceptorClient(conn), api2: pb2.NewInterceptorClient(conn), record: record, token: token,
 		verdicts: map[string]*callVerdicts{}, held: map[string][]job{}, idents: map[string]*callIdentity{},
+		now: time.Now,
 	}
 	c.queues = make([]chan job, cfg.Workers)
 	for i := range c.queues {
@@ -473,7 +475,8 @@ type callIdentity struct {
 	id   *pb.Identity
 	id2  *pb2.Identity
 	call *pb.Call // a v1 message's Call, with id
-	seen time.Time
+	// ended: when the call's stream ended (zero while it's open).
+	ended time.Time
 }
 
 func (c *Client) setIdentity(callID string, id *pb.Identity) {
@@ -482,16 +485,28 @@ func (c *Client) setIdentity(callID string, id *pb.Identity) {
 	c.setIdentityLocked(callID, id)
 }
 
+// Ended is called when a call's stream has ended. Its identity is kept for
+// its final record (which the processor delivers after this), and swept
+// verdictTTL later if that record never comes. An open call's is never
+// swept, however long it idles.
+func (c *Client) Ended(callID string) {
+	c.hmu.Lock()
+	defer c.hmu.Unlock()
+	if ci := c.idents[callID]; ci != nil {
+		ci.ended = c.now()
+	}
+}
+
 func (c *Client) setIdentityLocked(callID string, id *pb.Identity) {
-	now := time.Now()
+	now := c.now()
 	if len(c.idents)%256 == 0 {
 		for k, ci := range c.idents {
-			if now.Sub(ci.seen) > verdictTTL {
+			if !ci.ended.IsZero() && now.Sub(ci.ended) > verdictTTL {
 				delete(c.idents, k)
 			}
 		}
 	}
-	c.idents[callID] = &callIdentity{id: id, seen: now}
+	c.idents[callID] = &callIdentity{id: id}
 }
 
 // stamp gives a job being delivered its call's identity: every callback of a
@@ -504,7 +519,6 @@ func (c *Client) stamp(j *job) {
 	if ci == nil {
 		return
 	}
-	ci.seen = time.Now()
 	if j.final {
 		delete(c.idents, j.callID)
 	}

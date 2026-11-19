@@ -236,8 +236,14 @@ func (s *streamState) next() uint64 {
 func (srv *Server) Process(stream extprocv3.ExternalProcessor_ProcessServer) error {
 	id := srv.streamCounter.Add(1)
 	st := &streamState{correlationID: newCorrelationID(srv.instanceID, id)}
-	// Whatever the stream still holds when it ends is released.
-	defer func() { srv.budget.Add(-st.held) }()
+	// Whatever the stream still holds when it ends is released, and the
+	// Interceptor learns the call has ended.
+	defer func() {
+		srv.budget.Add(-st.held)
+		if srv.ic != nil {
+			srv.ic.Ended(st.correlationID)
+		}
+	}()
 
 	for first := true; ; first = false {
 		req, err := stream.Recv()

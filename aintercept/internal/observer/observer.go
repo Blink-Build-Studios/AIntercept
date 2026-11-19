@@ -237,7 +237,7 @@ func Run() {
 	idCfg := identityFromEnv()
 	identityCtx, stopIdentity := context.WithCancel(context.Background())
 	defer stopIdentity()
-	ids := setupIdentity(identityCtx, idCfg, instanceID, func(e events.Event) { proc.Offer(e) })
+	ids, stopIDs := setupIdentity(identityCtx, idCfg, instanceID, func(e events.Event) { proc.Offer(e) })
 	procCfg.OnComplete = func(e *events.Event) {
 		ids.Observe(e)
 		if ic != nil && !e.Synthetic {
@@ -353,6 +353,7 @@ func Run() {
 	if ic != nil {
 		ic.Close() // delivers queued callbacks (bounded by their timeout)
 	}
+	stopIDs()    // the lookups in flight end and their rows are offered; nothing is offered after this
 	proc.Close() // drains buffer and flushes sinks
 	if fileSink != nil {
 		if err := fileSink.Close(); err != nil {

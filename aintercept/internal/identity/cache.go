@@ -105,6 +105,8 @@ type Cache struct {
 	creds    *lru // key hash → *Known (nil: refused or failed)
 	accounts *lru // account id → *Known
 	inflight map[string]*Pending
+	closed   bool
+	lookups  sync.WaitGroup
 	tokens   float64
 	refilled time.Time
 	stats    counters
@@ -200,7 +202,7 @@ func (c *Cache) Begin(keyHash, keyHint, host string, hdrs map[string]string) *Pe
 		c.mu.Unlock()
 		return p
 	}
-	if !c.cfg.Lookup {
+	if !c.cfg.Lookup || c.closed {
 		c.mu.Unlock()
 		return nil
 	}
@@ -216,9 +218,22 @@ func (c *Cache) Begin(keyHash, keyHint, host string, hdrs map[string]string) *Pe
 	}
 	p := &Pending{done: make(chan struct{})}
 	c.inflight[keyHash] = p
+	c.lookups.Add(1)
 	c.mu.Unlock()
 	go c.lookup(r, token, keyHash, keyHint, p)
 	return p
+}
+
+// Close starts no more lookups and waits for those in flight (each bounded
+// by Timeout), so what they learn is passed to Learned before Close returns.
+func (c *Cache) Close() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.closed = true
+	c.mu.Unlock()
+	c.lookups.Wait()
 }
 
 // resolver is the first allowed resolver that takes the request's
@@ -249,6 +264,7 @@ func (c *Cache) take(now time.Time) bool {
 // lookup asks the provider, keeps the answer and records it. The token lives
 // only here: it's never logged, kept or put in an error.
 func (c *Cache) lookup(r Resolver, token, keyHash, keyHint string, p *Pending) {
+	defer c.lookups.Done()
 	origin := r.Origin()
 	if c.cfg.Origin != "" {
 		origin = c.cfg.Origin
