@@ -21,6 +21,7 @@ spec:
           args: ["certsvc"]
           env:
             - { name: CERTSVC_LISTEN, value: "0.0.0.0:18000" }
+            - { name: CERTSVC_HTTP_LISTEN, value: "0.0.0.0:18001" }
             - { name: CERT_ALLOWLIST, value: "api.anthropic.com" }
             - { name: INTERMEDIATE_CERT, value: "/secrets/ca/intermediate-ca.crt" }
             - { name: INTERMEDIATE_KEY, value: "/secrets/ca/intermediate-ca.key" }
@@ -28,6 +29,12 @@ spec:
             - { name: LEAF_TTL, value: "24h" }
           ports:
             - { name: grpc, containerPort: 18000 }
+            - { name: http, containerPort: 18001 }
+          # Ready only once certsvc has signed: its startup check mints a leaf
+          # per allowlisted host before it serves.
+          readinessProbe:
+            httpGet: { path: /healthz/ready, port: 18001 }
+            periodSeconds: 5
           volumeMounts:
             # Issuing key from a Secret, mounted read-only. NEVER a ConfigMap.
             - { name: ca, mountPath: /secrets/ca, readOnly: true }
