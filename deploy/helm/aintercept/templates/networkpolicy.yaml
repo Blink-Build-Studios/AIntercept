@@ -53,6 +53,10 @@ spec:
             matchLabels: { app: envoy }
       ports:
         - { protocol: TCP, port: 18000 }
+    # The readiness port (18001: /healthz/ready, nothing else) stays reachable
+    # for kubelet probes.
+    - ports:
+        - { protocol: TCP, port: 18001 }
 {{- if .Values.postgres.inCluster.enabled }}
 ---
 # The in-cluster Postgres holds everything the UI shows: only the workers and

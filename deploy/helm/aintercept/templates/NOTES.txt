@@ -27,3 +27,8 @@ proxy) with the observer beside it in each pod (telemetry →
    shell history and release metadata. For a real deploy, pre-create a Secret and
    set objectStore.existingSecret instead (see docs/DEPLOY_DOKS.md).
 {{- end }}
+{{- if and (eq .Values.cloud "aws") (not .Values.postgres.inCluster.enabled) }}
+ℹ  Postgres (RDS): the Secret {{ .Values.postgres.existingSecret }} must hold the keys worker-url and
+   api-url, the workers' and the API's DSNs (docs/PRODUCTION.md §5b2). After changing it in
+   place, set a new postgres.secretVersion so the upgrade rolls them.
+{{- end }}

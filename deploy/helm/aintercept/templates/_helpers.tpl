@@ -69,6 +69,20 @@ topologySpreadConstraints:
 {{- end }}
 {{- end -}}
 
+{{/*
+Pod-template annotations for the workers or the API, the two components that
+read postgres.existingSecret: the component's podAnnotations, plus
+postgres.secretVersion when set, so changing it rolls their pods onto the
+Secret's new DSNs. Empty when there are none.
+*/}}
+{{- define "aintercept.dsnPodAnnotations" -}}
+{{- $a := deepCopy (.c.podAnnotations | default dict) -}}
+{{- with .root.Values.postgres.secretVersion -}}
+{{- $_ := set $a "aintercept/postgres-secret-version" (toString .) -}}
+{{- end -}}
+{{- with $a }}{{ toYaml . }}{{ end -}}
+{{- end -}}
+
 {{/* ServiceAccount name for worker or api: serviceAccount.name, else aintercept-<component>. */}}
 {{- define "aintercept.readerServiceAccountName" -}}
 {{- $sa := .c.serviceAccount | default dict -}}
@@ -185,6 +199,14 @@ runtime failure in-cluster.
 {{- else if eq .Values.cloud "aws" -}}
 {{- /* AWS credentials come from EKS Pod Identity (an association made outside
 the cluster; nothing to set here) or IRSA (serviceAccount.roleArn). */ -}}
+{{- if not .Values.postgres.inCluster.enabled -}}
+{{- if not .Values.postgres.caConfigMap -}}
+{{- fail "cloud=aws with RDS (postgres.inCluster.enabled=false) needs postgres.caConfigMap: the ConfigMap holding the RDS CA bundle the DSNs' sslrootcert names (docs/PRODUCTION.md §5b2)" -}}
+{{- end -}}
+{{- if not .Values.postgres.existingSecret -}}
+{{- fail "cloud=aws with RDS (postgres.inCluster.enabled=false) needs postgres.existingSecret: the Secret holding the workers' and the API's DSNs (keys worker-url, api-url; docs/PRODUCTION.md §5b2)" -}}
+{{- end -}}
+{{- end -}}
 {{- else -}}
 {{- fail (printf "cloud must be 'aws' or 'digitalocean', got %q" .Values.cloud) -}}
 {{- end -}}

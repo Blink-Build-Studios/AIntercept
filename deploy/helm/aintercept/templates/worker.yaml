@@ -23,6 +23,10 @@ spec:
   template:
     metadata:
       labels: { app: worker }
+      {{- with (include "aintercept.dsnPodAnnotations" (dict "c" .Values.worker "root" $)) }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "aintercept.readerServiceAccountName" (dict "c" .Values.worker "component" "worker" "root" $) }}
       {{- if .Values.imagePullSecret }}

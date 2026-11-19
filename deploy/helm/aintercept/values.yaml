@@ -189,11 +189,16 @@ worker:
   # every fact reloads from the raw files. false: the workers refuse to start
   # until the database is emptied by hand.
   schemaReset: true
+  # keda: false gives a plain CPU HPA. The workers mostly wait on S3 and
+  # Postgres, so CPU may never rise while /lag grows: set minReplicas >= 2 then.
   autoscaling:
     keda: true         # KEDA metrics-api on GET /lag; false: a plain CPU HPA
     minReplicas: 1
     maxReplicas: 10
     lagTargetSeconds: 30
+  # Pod-template annotations, e.g. a checksum of postgres.existingSecret so a
+  # change to it rolls the pods (or set postgres.secretVersion).
+  podAnnotations: {}
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -215,11 +220,20 @@ postgres:
   # (the API's). In the cluster it also carries the passwords its init script
   # sets: postgres-password, worker-password, api-password. Created out of band
   # (deploy/digitalocean-bootstrap.sh postgres-secret), never through --set.
-  # Each pod reads only its own component's DSN; ingest gets none.
+  # Each pod reads only its own component's DSN; ingest gets none. Required on
+  # AWS with RDS (inCluster.enabled false): the render fails without it.
   existingSecret: aintercept-postgres
+  # The workers and the API read their DSNs as environment variables at start,
+  # so a Secret changed in place reaches only pods started afterwards. Set this
+  # to a new value (e.g. 2026-11-19 or the Secret's resourceVersion) whenever
+  # you change the Secret: the chart writes it into both pod templates
+  # (annotation aintercept/postgres-secret-version), so `helm upgrade` rolls
+  # them. Empty: no annotation.
+  secretVersion: ""
   # RDS: a ConfigMap holding the RDS CA bundle, mounted read-only at
   # /etc/aintercept/postgres-ca in the workers and the API; the DSNs name it
   # (sslmode=verify-full&sslrootcert=/etc/aintercept/postgres-ca/<file>).
+  # Required on AWS with RDS (inCluster.enabled false).
   caConfigMap: ""
   inCluster:
     enabled: false            # true on the DigitalOcean demo: a StatefulSet with a PVC
@@ -255,6 +269,8 @@ api:
     create: true
     name: aintercept-api
     roleArn: ""
+  # Pod-template annotations, as worker.podAnnotations.
+  podAnnotations: {}
   # Scheduling. All optional: unset leaves the pod spec as it was.
   nodeSelector: {}
   tolerations: []
@@ -407,12 +423,18 @@ observer:
       # created it. Empty: off. The admin key is never logged.
       adminKeySecret: ""
       interval: 15m
+  # The memory limit is the only bound on what the observer holds in flight:
+  # past it the container is OOM-killed, and Envoy passes traffic through
+  # unrecorded until it restarts. It holds about 4 s of its pod's throughput,
+  # so size the limit at ~4 s x per-pod throughput plus Go's overhead
+  # (docs/PRODUCTION.md §5a). The request can stay small.
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
-    limits: { cpu: "500m", memory: "256Mi" }
+    limits: { cpu: "500m", memory: "1Gi" }
   # Memory budget: bytes in-flight traffic (buffered bodies, WebSocket state,
-  # bodies queued for extraction) may hold per pod, reported on /stats. Empty:
-  # half the memory limit. GOMEMLIMIT defaults to 90% of the memory limit.
+  # bodies queued for extraction) may hold per pod, reported on /stats. It
+  # measures and never refuses, and no autoscaler reads it. Empty: half the
+  # memory limit. GOMEMLIMIT defaults to 90% of the memory limit.
   memoryBudget: ""
   # Interception-path health check, served on the observer's HTTP port as
   # GET /healthz/path: 200 when every allowlisted host passed its last probe,

@@ -20,6 +20,10 @@ spec:
   template:
     metadata:
       labels: { app: api }
+      {{- with (include "aintercept.dsnPodAnnotations" (dict "c" .Values.api "root" $)) }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
     spec:
       # Its own ServiceAccount, never the observer's, so the observer's AWS role
       # stays write-only. Its role needs the reads in docs/PRODUCTION.md §7.

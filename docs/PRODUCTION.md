@@ -40,6 +40,11 @@ the key is in KMS).
   would, refusing to start if any host would be rejected (e.g. outside the
   constraints, expired intermediate). With this on it also refuses an
   intermediate that carries no name constraints.
+- **Readiness:** certsvc's readiness probe (`/healthz/ready` on port 18001)
+  passes only once that startup check has signed its test leaves (with KMS,
+  each is a KMS `Sign` call). A certsvc that can't sign (missing KMS
+  permissions, an intermediate it refuses) exits and never goes Ready, so its
+  rollout stalls with the old pods still serving.
 - Confirm: `kubectl logs -l app=certsvc` shows `SDS listening` and no
   `WARNING: the issuing CA has no name constraints`.
 
@@ -187,8 +192,26 @@ scale together on Envoy's autoscaling (`envoy.autoscaling`); size
 - **Memory budget.** Each observer measures the bytes it holds for traffic in
   flight (buffered bodies, WebSocket decoder state and turns, bodies queued
   for extraction) against a budget: `observer.memoryBudget`, default half the
-  pod's memory limit. `GOMEMLIMIT` defaults to 90% of the limit. `/stats`
-  shows `memory.held_bytes`, `peak_bytes`, `limit_bytes`, `utilization`.
+  observer's memory limit. `GOMEMLIMIT` defaults to 90% of the limit. `/stats`
+  shows `memory.held_bytes`, `peak_bytes`, `limit_bytes`, `utilization`. The
+  budget only measures: nothing refuses traffic on it, and no autoscaler reads
+  it (KEDA scales Envoy on active connections, `mode: cpu` on CPU). Watch it to
+  size the limit.
+- **Size the observer's memory limit** (`observer.resources.limits.memory`,
+  default 1Gi; the request stays at 64Mi). The limit is the only bound on
+  what the observer holds: past it the container is OOM-killed, and Envoy's
+  ext_proc fails open, so traffic keeps flowing **unrecorded** until the
+  observer restarts. LLM traffic is light on CPU for the bytes it holds (long
+  streamed replies, request bodies of several MB), so memory can fill before
+  a CPU autoscaler reacts. The observer holds about **4 seconds of its pod's
+  throughput** in flight (bodies are buffered until parsed), so its memory is
+  roughly `4 s × per-pod throughput`, plus Go's overhead: allow as much again
+  for the garbage collector, and about 64 MiB for the runtime.
+  - Example: 100 MB/s across 3 envoy pods is about 33 MB/s per pod, so about
+    135 MB in flight, and a limit of `2 × 135 MB + 64 MiB`, about 320 MiB:
+    over the old 256Mi default. One user at 1 MB/s holds about 4 MB
+    (`peak_bytes`). The 1Gi default covers about 100 MB/s per pod. Check
+    `peak_bytes` against `limit_bytes` on `/stats` under real load.
 - **Nothing captured is dropped.** All output goes through one writer, which
   seals what it holds every `objectStore.maxAgeSeconds` (10 s), and each raw
   file at `observer.rawFiles.flushBytes` (8 MiB) or `flushSeconds` (30 s),
@@ -251,6 +274,10 @@ raw file, so it keeps nothing, and an HPA on CPU sets its replica count
   `worker.autoscaling.lagTargetSeconds`); with `worker.autoscaling.keda: false`
   a CPU HPA does. Ingest never talks to Postgres: an outage only delays the
   pages, and the workers catch up from the bucket.
+- **Without KEDA** (`worker.autoscaling.keda: false`), set
+  `worker.autoscaling.minReplicas` to at least 2. The workers mostly wait on
+  S3 and Postgres, so their CPU may never cross the HPA's target while `/lag`
+  grows, and a single replica falls behind unnoticed.
 - **Postgres: RDS for PostgreSQL 17** (`postgres.inCluster.enabled: false`, the
   default). You create it (the chart doesn't): gp3 with storage autoscaling,
   Multi-AZ as you choose; today's load needs the smallest class, and
@@ -271,12 +298,25 @@ raw file, so it keeps nothing, and an HPA on CPU sets its replica count
   4. **The CA bundle:** every connection uses TLS. Put the RDS CA bundle in a
      ConfigMap (`kubectl create configmap rds-ca --from-file=rds-ca.pem=global-bundle.pem`)
      and set `postgres.caConfigMap: rds-ca`; the workers and the API mount it
-     at `/etc/aintercept/postgres-ca`.
+     at `/etc/aintercept/postgres-ca`. On `cloud: aws` the chart refuses to
+     render without it.
   5. **The Secret** (`postgres.existingSecret`, default `aintercept-postgres`)
      with one DSN per component, created out of band, never through `--set`:
      `worker-url` and `api-url`, each
      `postgres://<login>:<password>@<endpoint>:5432/aintercept?sslmode=verify-full&sslrootcert=/etc/aintercept/postgres-ca/rds-ca.pem&keepalives_idle=10&keepalives_interval=5&keepalives_count=3&tcp_user_timeout=30000`.
-     Each pod reads only its own component's key; ingest reads none.
+     Each pod reads only its own component's key; ingest reads none. On
+     `cloud: aws` the chart refuses to render with the name empty; it can't
+     check that the Secret exists or holds both keys (under GitOps it may not
+     exist yet), and a missing one shows as workers and API pods that don't
+     start.
+  6. **Changing the Secret** (a password rotation, a new endpoint): the
+     workers and the API read their DSNs at start, so pods already running
+     keep the old ones. Update the Secret, then `helm upgrade` with a new
+     `postgres.secretVersion` (any string, e.g. the date): the chart writes it
+     into both pod templates, which rolls them. Or roll them on your own
+     annotation, e.g. a checksum of the Secret, with `worker.podAnnotations`
+     and `api.podAnnotations`. Keep the old password valid until the roll
+     finishes.
 - **Postgres in the cluster** (`postgres.inCluster.enabled: true`, the
   DigitalOcean demo): one replica with a PVC (`postgres.inCluster.persistence`,
   20 Gi), non-root with a read-only root filesystem. On its first start its
