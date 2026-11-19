@@ -147,6 +147,7 @@ type heldBatch struct {
 	call   *Record
 	c      *call
 	events []Record
+	lastNS int64 // its newest row's time: ReleaseHeld lets a quiet batch go
 }
 
 // Detail is one call's detail object: its rows, as the raw log has them, in order.
@@ -401,7 +402,7 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			c.done = true
 			c.p.SeenNS = e.TimestampNS
 			c.bodies = nil
-			a.held = &heldBatch{corr: e.CorrelationID, c: c,
+			a.held = &heldBatch{corr: e.CorrelationID, c: c, lastNS: e.TimestampNS,
 				call: &Record{Kind: KindCallEnd, CallID: r.CallID, BatchID: r.CallID, Call: &r, Instance: e.ObserverInstance}}
 			return out
 		}
@@ -439,6 +440,7 @@ func (a *Assembler) Apply(e *events.Event, line []byte, file string) []Record {
 			a.held = &heldBatch{corr: e.CorrelationID}
 		}
 		a.held.events = append(a.held.events, rec)
+		a.held.lastNS = e.TimestampNS
 	case events.PhaseVerdict:
 		if c := a.calls[e.CorrelationID]; c != nil {
 			if c.verdicts++; c.verdicts > MaxVerdictsPerCall {
@@ -619,6 +621,15 @@ func rankClaudeCode(evs []Record) {
 // Call it when no more rows will come for now: at a sink's seal, at the end of
 // a file set.
 func (a *Assembler) Flush() []Record { return append(a.StartUploading(0), a.release()...) }
+
+// ReleaseHeld releases a held analytics batch whose newest row came at or
+// before before: its events have all come, and no other row may follow soon.
+func (a *Assembler) ReleaseHeld(before int64) []Record {
+	if a.held == nil || a.held.lastNS > before {
+		return nil
+	}
+	return a.release()
+}
 
 // StartUploading writes the start of each request still uploading (its headers
 // seen, neither its end of stream nor a response yet) that began at or before

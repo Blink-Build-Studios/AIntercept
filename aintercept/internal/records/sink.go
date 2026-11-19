@@ -18,8 +18,9 @@ type SinkConfig struct {
 	// members (raw.go, docs/PIPELINE.md §2.1).
 	Raw         RawWriter
 	Incarnation string // NewIncarnation: record ids begin with it
-	// MaxAge releases the start of a call still uploading its request after
-	// this long (the assembler); default 10 s.
+	// MaxAge releases the start of a call still uploading its request, and an
+	// analytics batch with no row since, after this long (the assembler);
+	// default 10 s.
 	MaxAge time.Duration
 	// Content is true when rows carry bodies (full interception): the line an
 	// unnumbered event's key hashes is then the row with its content, as the
@@ -95,7 +96,8 @@ func (s *Sink) SealIfOld() { s.Tick() }
 func (s *Sink) Tick() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.add(s.asm.StartUploading(s.cfg.Now().Add(-s.cfg.MaxAge).UnixNano()))
+	before := s.cfg.Now().Add(-s.cfg.MaxAge).UnixNano()
+	s.add(append(s.asm.StartUploading(before), s.asm.ReleaseHeld(before)...))
 }
 
 // Run ticks every second until ctx ends.
