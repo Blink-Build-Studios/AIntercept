@@ -58,8 +58,10 @@ every message through `OnMessage`, and one `CallRecord` per model turn
 - `org_id`: the organization the provider confirmed, else the one the request
   names.
 
-`account_id` is deprecated and always empty: use `verified_account_id`, or
-`reported_account_id` for what the client says.
+**Removed:** `account_id` (field 4) was removed in the release after v0.6.2;
+its name and number are reserved. It had been empty since v0.6.2. Use
+`verified_account_id`, or `reported_account_id` for what the client says.
+Code that reads it stops compiling once you regenerate from the new proto.
 
 The first time an observer pod sees a credential, it asks the provider's own
 account endpoint who owns it, once, with the caller's token, and keeps the

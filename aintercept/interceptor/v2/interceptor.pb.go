@@ -390,10 +390,6 @@ type Identity struct {
 	KeyHash string `protobuf:"bytes,1,opt,name=key_hash,json=keyHash,proto3" json:"key_hash,omitempty"`
 	KeyHint string `protobuf:"bytes,2,opt,name=key_hint,json=keyHint,proto3" json:"key_hint,omitempty"`
 	Ip      string `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
-	// Deprecated: always empty. Use verified_account_id or reported_account_id.
-	//
-	// Deprecated: Marked as deprecated in interceptor/v2/interceptor.proto.
-	AccountId string `protobuf:"bytes,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
 	// The organization the provider confirmed, else what the request names.
 	OrgId string `protobuf:"bytes,5,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	// The client installation and its session, when the client sends them.
@@ -460,14 +456,6 @@ func (x *Identity) GetKeyHint() string {
 func (x *Identity) GetIp() string {
 	if x != nil {
 		return x.Ip
-	}
-	return ""
-}
-
-// Deprecated: Marked as deprecated in interceptor/v2/interceptor.proto.
-func (x *Identity) GetAccountId() string {
-	if x != nil {
-		return x.AccountId
 	}
 	return ""
 }
@@ -2576,13 +2564,11 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x04path\x18\x06 \x01(\tR\x04path\x12&\n" +
 	"\x0fstart_unix_nano\x18\a \x01(\x03R\rstartUnixNano\x12?\n" +
 	"\bidentity\x18\b \x01(\v2#.aintercept.interceptor.v2.IdentityR\bidentity\x129\n" +
-	"\x06client\x18\t \x01(\v2!.aintercept.interceptor.v2.ClientR\x06client\"\xc9\x03\n" +
+	"\x06client\x18\t \x01(\v2!.aintercept.interceptor.v2.ClientR\x06client\"\xb8\x03\n" +
 	"\bIdentity\x12\x19\n" +
 	"\bkey_hash\x18\x01 \x01(\tR\akeyHash\x12\x19\n" +
 	"\bkey_hint\x18\x02 \x01(\tR\akeyHint\x12\x0e\n" +
-	"\x02ip\x18\x03 \x01(\tR\x02ip\x12!\n" +
-	"\n" +
-	"account_id\x18\x04 \x01(\tB\x02\x18\x01R\taccountId\x12\x15\n" +
+	"\x02ip\x18\x03 \x01(\tR\x02ip\x12\x15\n" +
 	"\x06org_id\x18\x05 \x01(\tR\x05orgId\x12\x1b\n" +
 	"\tdevice_id\x18\x06 \x01(\tR\bdeviceId\x12\x1d\n" +
 	"\n" +
@@ -2593,7 +2579,8 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	" \x01(\x0e2).aintercept.interceptor.v2.IdentitySourceR\vemailSource\x12.\n" +
 	"\x13reported_account_id\x18\v \x01(\tR\x11reportedAccountId\x12.\n" +
 	"\x13verified_account_id\x18\f \x01(\tR\x11verifiedAccountId\x12)\n" +
-	"\x10account_mismatch\x18\r \x01(\bR\x0faccountMismatch\"\xc7\x01\n" +
+	"\x10account_mismatch\x18\r \x01(\bR\x0faccountMismatchJ\x04\b\x04\x10\x05R\n" +
+	"account_id\"\xc7\x01\n" +
 	"\x06Client\x12\x18\n" +
 	"\aproduct\x18\x01 \x01(\tR\aproduct\x12\x1d\n" +
 	"\n" +

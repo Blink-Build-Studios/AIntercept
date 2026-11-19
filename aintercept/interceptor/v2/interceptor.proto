@@ -109,8 +109,9 @@ message Identity {
   string key_hash = 1;
   string key_hint = 2;
   string ip = 3;
-  // Deprecated: always empty. Use verified_account_id or reported_account_id.
-  string account_id = 4 [deprecated = true];
+  // Removed: account_id. Use verified_account_id or reported_account_id.
+  reserved 4;
+  reserved "account_id";
   // The organization the provider confirmed, else what the request names.
   string org_id = 5;
   // The client installation and its session, when the client sends them.

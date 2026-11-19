@@ -119,7 +119,7 @@ func TestObserveFirstCallCarriesTheEmail(t *testing.T) {
 	id := s.start("a")
 	if id.GetEmail() != "a@example.com" || id.GetName() != "Ada Example" || id.GetEmailSource() != pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL ||
 		id.GetVerifiedAccountId() != "acc-1" || id.GetReportedAccountId() != "acc-1" || id.GetOrgId() != "org-1" ||
-		id.GetAccountMismatch() || id.GetAccountId() != "" || id.GetKeyHash() != "kh-a" {
+		id.GetAccountMismatch() || id.GetKeyHash() != "kh-a" {
 		t.Fatalf("start identity %v", id)
 	}
 	if m := s.msgs["a"]; len(m) != 1 || m[0] != 1 {
@@ -241,7 +241,7 @@ func TestDecideWaitsAtMostTheEnforceWait(t *testing.T) {
 }
 
 // Spoofing: a body account other than the credential's verified one gives
-// account_mismatch, an empty account_id and the verified email.
+// account_mismatch and the verified email.
 func TestAccountMismatch(t *testing.T) {
 	ids := newProfile(t, 0, nil).cache()
 	ids.Begin("kh-a", "", "api.anthropic.com", map[string]string{"authorization": "Bearer " + oauth}).Wait(2 * time.Second)
@@ -253,7 +253,7 @@ func TestAccountMismatch(t *testing.T) {
 	ci.Auth = &events.AuthIdentity{Email: "spoof@example.com"}
 	c.DecideCall(context.Background(), ci, 0)
 	id := s.start("a")
-	if !id.GetAccountMismatch() || id.GetAccountId() != "" || id.GetEmail() != "a@example.com" || id.GetVerifiedAccountId() != "acc-1" ||
+	if !id.GetAccountMismatch() || id.GetEmail() != "a@example.com" || id.GetVerifiedAccountId() != "acc-1" ||
 		id.GetReportedAccountId() != "acc-someone-else" || id.GetEmailSource() != pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL {
 		t.Fatalf("identity %v", id)
 	}
