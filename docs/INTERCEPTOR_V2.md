@@ -164,7 +164,8 @@ service Interceptor {
 ```
 
 - **`OnCallStart`** fires once per call, before anything goes upstream. It
-  carries `Call` (as in v1: identity, client, model) and can **Respond**.
+  carries `Call` (as in v1: identity, client, model; `docs/INTERCEPTOR.md`,
+  Identity, for `email_source` and the verified account) and can **Respond**.
 - **`OnRequest`** fires once per call with the new messages, before they go
   upstream. Per message: **Accept**, or **Replace** it. For the call:
   **Respond**. Or **Fetch** parts first. A request that adds no message

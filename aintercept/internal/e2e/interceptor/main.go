@@ -8,6 +8,7 @@ package main
 import (
 	"log"
 	"regexp"
+	"strconv"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/intercept"
 )
@@ -33,6 +34,11 @@ func Rules() []intercept.Item {
 		intercept.OnToolCallRequest("", intercept.Matches(bing)).Reply(bong),
 		intercept.OnToolCallRequest("", intercept.Matches(rabbit)).Replace(tricks),
 		intercept.OnResponse(intercept.Contains("swordfish")).Replace(password),
+		// Who's calling: the identity the observer resolved, on the verdict row.
+		intercept.OnRequest(intercept.Prompt(intercept.Contains("who am i"))).Do(func(m *intercept.Message) intercept.Answer {
+			p := m.Call.Person
+			return intercept.Accept().Note("email", p.Email).Note("account", p.Account).Note("verified", strconv.FormatBool(p.Verified))
+		}),
 	}
 }
 

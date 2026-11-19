@@ -24,6 +24,9 @@ def test_every_table_has_a_reader() -> None:
         t
         for t in _tables()
         if t != "schema_version"  # the schema's hash: the workers and the API check it at start
+        # Who each credential belongs to (issue #106): written now so its history is there when the
+        # person page's credentials (the follow-up) read it.
+        and t != "credentials"
         and not re.search(rf"\b(FROM|JOIN)\s+{t}\b", api)
         and not re.search(rf"\b(FROM|JOIN|UPDATE)\s+{t}\b", go)
     ]

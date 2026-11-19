@@ -19,7 +19,9 @@ type AuthIdentity struct {
 	AccountID string `json:"account_id,omitempty"`
 	Plan      string `json:"plan,omitempty"`
 	// Org is the organization's name (Claude Code's account endpoints name it).
-	Org       string `json:"org,omitempty"`
+	Org string `json:"org,omitempty"`
+	// OrgID is the organization's id, when an account endpoint names it.
+	OrgID     string `json:"org_id,omitempty"`
 	Issuer    string `json:"issuer,omitempty"`
 	Subject   string `json:"subject,omitempty"`
 	ClientID  string `json:"client_id,omitempty"`

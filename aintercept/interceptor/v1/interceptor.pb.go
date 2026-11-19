@@ -198,6 +198,67 @@ func (Direction) EnumDescriptor() ([]byte, []int) {
 	return file_interceptor_v1_interceptor_proto_rawDescGZIP(), []int{2}
 }
 
+// How Identity's email and name were established.
+type IdentitySource int32
+
+const (
+	// Not known.
+	IdentitySource_IDENTITY_SOURCE_UNSPECIFIED IdentitySource = 0
+	// The provider confirmed them for this exact credential (a lookup, or its
+	// own account response to a call with the credential). Grant privileges on
+	// this one only.
+	IdentitySource_IDENTITY_SOURCE_CREDENTIAL IdentitySource = 1
+	// From the bearer token's own claims (a JWT), not verified: only as strong
+	// as the provider's later check of the token.
+	IdentitySource_IDENTITY_SOURCE_CLAIMS IdentitySource = 2
+	// From the account the client reported (reported_account_id), matched to
+	// an account seen before. Asserted by the client: a hint, not proof.
+	IdentitySource_IDENTITY_SOURCE_ACCOUNT IdentitySource = 3
+)
+
+// Enum value maps for IdentitySource.
+var (
+	IdentitySource_name = map[int32]string{
+		0: "IDENTITY_SOURCE_UNSPECIFIED",
+		1: "IDENTITY_SOURCE_CREDENTIAL",
+		2: "IDENTITY_SOURCE_CLAIMS",
+		3: "IDENTITY_SOURCE_ACCOUNT",
+	}
+	IdentitySource_value = map[string]int32{
+		"IDENTITY_SOURCE_UNSPECIFIED": 0,
+		"IDENTITY_SOURCE_CREDENTIAL":  1,
+		"IDENTITY_SOURCE_CLAIMS":      2,
+		"IDENTITY_SOURCE_ACCOUNT":     3,
+	}
+)
+
+func (x IdentitySource) Enum() *IdentitySource {
+	p := new(IdentitySource)
+	*p = x
+	return p
+}
+
+func (x IdentitySource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IdentitySource) Descriptor() protoreflect.EnumDescriptor {
+	return file_interceptor_v1_interceptor_proto_enumTypes[3].Descriptor()
+}
+
+func (IdentitySource) Type() protoreflect.EnumType {
+	return &file_interceptor_v1_interceptor_proto_enumTypes[3]
+}
+
+func (x IdentitySource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IdentitySource.Descriptor instead.
+func (IdentitySource) EnumDescriptor() ([]byte, []int) {
+	return file_interceptor_v1_interceptor_proto_rawDescGZIP(), []int{3}
+}
+
 type MessageKind int32
 
 const (
@@ -245,11 +306,11 @@ func (x MessageKind) String() string {
 }
 
 func (MessageKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_interceptor_v1_interceptor_proto_enumTypes[3].Descriptor()
+	return file_interceptor_v1_interceptor_proto_enumTypes[4].Descriptor()
 }
 
 func (MessageKind) Type() protoreflect.EnumType {
-	return &file_interceptor_v1_interceptor_proto_enumTypes[3]
+	return &file_interceptor_v1_interceptor_proto_enumTypes[4]
 }
 
 func (x MessageKind) Number() protoreflect.EnumNumber {
@@ -258,7 +319,7 @@ func (x MessageKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MessageKind.Descriptor instead.
 func (MessageKind) EnumDescriptor() ([]byte, []int) {
-	return file_interceptor_v1_interceptor_proto_rawDescGZIP(), []int{3}
+	return file_interceptor_v1_interceptor_proto_rawDescGZIP(), []int{4}
 }
 
 // Call identifies one intercepted call and is repeated on every callback.
@@ -275,7 +336,7 @@ type Call struct {
 	Path string `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
 	// When AIntercept received the request headers.
 	StartUnixNano int64 `protobuf:"varint,7,opt,name=start_unix_nano,json=startUnixNano,proto3" json:"start_unix_nano,omitempty"`
-	// Who is calling, as far as this one call can tell.
+	// Who is calling (Identity).
 	Identity *Identity `protobuf:"bytes,8,opt,name=identity,proto3" json:"identity,omitempty"`
 	// The client software: product ("claude_code", "codex", "" when unknown),
 	// the user agent and the client's own identifying headers.
@@ -377,8 +438,10 @@ func (x *Call) GetClient() *Client {
 	return nil
 }
 
-// Identity known from the call itself. No enrichment: linking accounts and
-// devices to a person happens later, in AIntercept's processor.
+// Who is calling. The credential's owner comes from the provider when it can
+// say (email_source CREDENTIAL): AIntercept looks a new credential up once,
+// at the provider's own account endpoint, and keeps the answer (24 h). What
+// the client says about itself (reported_account_id) never overrides it.
 type Identity struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Salted, irreversible hash of the API key or bearer token; key_hint is its
@@ -387,17 +450,35 @@ type Identity struct {
 	KeyHint string `protobuf:"bytes,2,opt,name=key_hint,json=keyHint,proto3" json:"key_hint,omitempty"`
 	// The client's IP address.
 	Ip string `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
-	// Provider account and organization, from the credential or the request.
+	// Deprecated: always empty. Use verified_account_id (what the provider
+	// confirmed for this credential) or reported_account_id (what the client
+	// sent).
+	//
+	// Deprecated: Marked as deprecated in interceptor/v1/interceptor.proto.
 	AccountId string `protobuf:"bytes,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
-	OrgId     string `protobuf:"bytes,5,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// The organization: the one the provider confirmed for the credential when
+	// there is one, else what the request names.
+	OrgId string `protobuf:"bytes,5,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	// The client installation and its session, when the client sends them
 	// (Claude Code's metadata.user_id; Codex's turn metadata).
 	DeviceId  string `protobuf:"bytes,6,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
 	SessionId string `protobuf:"bytes,7,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	// Email, when the call carries it (for example in an OAuth token's claims).
-	Email         string `protobuf:"bytes,8,opt,name=email,proto3" json:"email,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// The person's email and name, when known; email_source says how.
+	Email       string         `protobuf:"bytes,8,opt,name=email,proto3" json:"email,omitempty"`
+	Name        string         `protobuf:"bytes,9,opt,name=name,proto3" json:"name,omitempty"`
+	EmailSource IdentitySource `protobuf:"varint,10,opt,name=email_source,json=emailSource,proto3,enum=aintercept.interceptor.v1.IdentitySource" json:"email_source,omitempty"`
+	// The account the client says it is: the request body's metadata.user_id
+	// account, the chatgpt-account-id header, or the bearer token's claim. The
+	// client can send any value.
+	ReportedAccountId string `protobuf:"bytes,11,opt,name=reported_account_id,json=reportedAccountId,proto3" json:"reported_account_id,omitempty"`
+	// The account the provider confirmed for this call's credential. Empty
+	// unless email_source is CREDENTIAL (and empty then when the provider
+	// confirmed only an organization).
+	VerifiedAccountId string `protobuf:"bytes,12,opt,name=verified_account_id,json=verifiedAccountId,proto3" json:"verified_account_id,omitempty"`
+	// The client reported an account other than the verified one.
+	AccountMismatch bool `protobuf:"varint,13,opt,name=account_mismatch,json=accountMismatch,proto3" json:"account_mismatch,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Identity) Reset() {
@@ -451,6 +532,7 @@ func (x *Identity) GetIp() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in interceptor/v1/interceptor.proto.
 func (x *Identity) GetAccountId() string {
 	if x != nil {
 		return x.AccountId
@@ -484,6 +566,41 @@ func (x *Identity) GetEmail() string {
 		return x.Email
 	}
 	return ""
+}
+
+func (x *Identity) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Identity) GetEmailSource() IdentitySource {
+	if x != nil {
+		return x.EmailSource
+	}
+	return IdentitySource_IDENTITY_SOURCE_UNSPECIFIED
+}
+
+func (x *Identity) GetReportedAccountId() string {
+	if x != nil {
+		return x.ReportedAccountId
+	}
+	return ""
+}
+
+func (x *Identity) GetVerifiedAccountId() string {
+	if x != nil {
+		return x.VerifiedAccountId
+	}
+	return ""
+}
+
+func (x *Identity) GetAccountMismatch() bool {
+	if x != nil {
+		return x.AccountMismatch
+	}
+	return false
 }
 
 type Client struct {
@@ -1593,18 +1710,24 @@ const file_interceptor_v1_interceptor_proto_rawDesc = "" +
 	"\x04path\x18\x06 \x01(\tR\x04path\x12&\n" +
 	"\x0fstart_unix_nano\x18\a \x01(\x03R\rstartUnixNano\x12?\n" +
 	"\bidentity\x18\b \x01(\v2#.aintercept.interceptor.v1.IdentityR\bidentity\x129\n" +
-	"\x06client\x18\t \x01(\v2!.aintercept.interceptor.v1.ClientR\x06client\"\xd8\x01\n" +
+	"\x06client\x18\t \x01(\v2!.aintercept.interceptor.v1.ClientR\x06client\"\xc9\x03\n" +
 	"\bIdentity\x12\x19\n" +
 	"\bkey_hash\x18\x01 \x01(\tR\akeyHash\x12\x19\n" +
 	"\bkey_hint\x18\x02 \x01(\tR\akeyHint\x12\x0e\n" +
-	"\x02ip\x18\x03 \x01(\tR\x02ip\x12\x1d\n" +
+	"\x02ip\x18\x03 \x01(\tR\x02ip\x12!\n" +
 	"\n" +
-	"account_id\x18\x04 \x01(\tR\taccountId\x12\x15\n" +
+	"account_id\x18\x04 \x01(\tB\x02\x18\x01R\taccountId\x12\x15\n" +
 	"\x06org_id\x18\x05 \x01(\tR\x05orgId\x12\x1b\n" +
 	"\tdevice_id\x18\x06 \x01(\tR\bdeviceId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\a \x01(\tR\tsessionId\x12\x14\n" +
-	"\x05email\x18\b \x01(\tR\x05email\"\xc7\x01\n" +
+	"\x05email\x18\b \x01(\tR\x05email\x12\x12\n" +
+	"\x04name\x18\t \x01(\tR\x04name\x12L\n" +
+	"\femail_source\x18\n" +
+	" \x01(\x0e2).aintercept.interceptor.v1.IdentitySourceR\vemailSource\x12.\n" +
+	"\x13reported_account_id\x18\v \x01(\tR\x11reportedAccountId\x12.\n" +
+	"\x13verified_account_id\x18\f \x01(\tR\x11verifiedAccountId\x12)\n" +
+	"\x10account_mismatch\x18\r \x01(\bR\x0faccountMismatch\"\xc7\x01\n" +
 	"\x06Client\x12\x18\n" +
 	"\aproduct\x18\x01 \x01(\tR\aproduct\x12\x1d\n" +
 	"\n" +
@@ -1706,7 +1829,12 @@ const file_interceptor_v1_interceptor_proto_rawDesc = "" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aDIRECTION_CLIENT_TO_SERVER\x10\x01\x12\x1e\n" +
-	"\x1aDIRECTION_SERVER_TO_CLIENT\x10\x02*\xc6\x01\n" +
+	"\x1aDIRECTION_SERVER_TO_CLIENT\x10\x02*\x8a\x01\n" +
+	"\x0eIdentitySource\x12\x1f\n" +
+	"\x1bIDENTITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aIDENTITY_SOURCE_CREDENTIAL\x10\x01\x12\x1a\n" +
+	"\x16IDENTITY_SOURCE_CLAIMS\x10\x02\x12\x1b\n" +
+	"\x17IDENTITY_SOURCE_ACCOUNT\x10\x03*\xc6\x01\n" +
 	"\vMessageKind\x12\x1c\n" +
 	"\x18MESSAGE_KIND_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eMESSAGE_KIND_HTTP_REQUEST_BODY\x10\x01\x12#\n" +
@@ -1731,67 +1859,69 @@ func file_interceptor_v1_interceptor_proto_rawDescGZIP() []byte {
 	return file_interceptor_v1_interceptor_proto_rawDescData
 }
 
-var file_interceptor_v1_interceptor_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_interceptor_v1_interceptor_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_interceptor_v1_interceptor_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_interceptor_v1_interceptor_proto_goTypes = []any{
 	(Mode)(0),               // 0: aintercept.interceptor.v1.Mode
 	(Transport)(0),          // 1: aintercept.interceptor.v1.Transport
 	(Direction)(0),          // 2: aintercept.interceptor.v1.Direction
-	(MessageKind)(0),        // 3: aintercept.interceptor.v1.MessageKind
-	(*Call)(nil),            // 4: aintercept.interceptor.v1.Call
-	(*Identity)(nil),        // 5: aintercept.interceptor.v1.Identity
-	(*Client)(nil),          // 6: aintercept.interceptor.v1.Client
-	(*CallStart)(nil),       // 7: aintercept.interceptor.v1.CallStart
-	(*RequestInfo)(nil),     // 8: aintercept.interceptor.v1.RequestInfo
-	(*Message)(nil),         // 9: aintercept.interceptor.v1.Message
-	(*Verdict)(nil),         // 10: aintercept.interceptor.v1.Verdict
-	(*Allow)(nil),           // 11: aintercept.interceptor.v1.Allow
-	(*Replace)(nil),         // 12: aintercept.interceptor.v1.Replace
-	(*Drop)(nil),            // 13: aintercept.interceptor.v1.Drop
-	(*Deny)(nil),            // 14: aintercept.interceptor.v1.Deny
-	(*Annotation)(nil),      // 15: aintercept.interceptor.v1.Annotation
-	(*CallRecord)(nil),      // 16: aintercept.interceptor.v1.CallRecord
-	(*ResponseInfo)(nil),    // 17: aintercept.interceptor.v1.ResponseInfo
-	(*ToolCount)(nil),       // 18: aintercept.interceptor.v1.ToolCount
-	(*RecordedVerdict)(nil), // 19: aintercept.interceptor.v1.RecordedVerdict
-	(*Ack)(nil),             // 20: aintercept.interceptor.v1.Ack
-	nil,                     // 21: aintercept.interceptor.v1.Client.HeadersEntry
-	nil,                     // 22: aintercept.interceptor.v1.CallStart.HeadersEntry
+	(IdentitySource)(0),     // 3: aintercept.interceptor.v1.IdentitySource
+	(MessageKind)(0),        // 4: aintercept.interceptor.v1.MessageKind
+	(*Call)(nil),            // 5: aintercept.interceptor.v1.Call
+	(*Identity)(nil),        // 6: aintercept.interceptor.v1.Identity
+	(*Client)(nil),          // 7: aintercept.interceptor.v1.Client
+	(*CallStart)(nil),       // 8: aintercept.interceptor.v1.CallStart
+	(*RequestInfo)(nil),     // 9: aintercept.interceptor.v1.RequestInfo
+	(*Message)(nil),         // 10: aintercept.interceptor.v1.Message
+	(*Verdict)(nil),         // 11: aintercept.interceptor.v1.Verdict
+	(*Allow)(nil),           // 12: aintercept.interceptor.v1.Allow
+	(*Replace)(nil),         // 13: aintercept.interceptor.v1.Replace
+	(*Drop)(nil),            // 14: aintercept.interceptor.v1.Drop
+	(*Deny)(nil),            // 15: aintercept.interceptor.v1.Deny
+	(*Annotation)(nil),      // 16: aintercept.interceptor.v1.Annotation
+	(*CallRecord)(nil),      // 17: aintercept.interceptor.v1.CallRecord
+	(*ResponseInfo)(nil),    // 18: aintercept.interceptor.v1.ResponseInfo
+	(*ToolCount)(nil),       // 19: aintercept.interceptor.v1.ToolCount
+	(*RecordedVerdict)(nil), // 20: aintercept.interceptor.v1.RecordedVerdict
+	(*Ack)(nil),             // 21: aintercept.interceptor.v1.Ack
+	nil,                     // 22: aintercept.interceptor.v1.Client.HeadersEntry
+	nil,                     // 23: aintercept.interceptor.v1.CallStart.HeadersEntry
 }
 var file_interceptor_v1_interceptor_proto_depIdxs = []int32{
 	0,  // 0: aintercept.interceptor.v1.Call.mode:type_name -> aintercept.interceptor.v1.Mode
 	1,  // 1: aintercept.interceptor.v1.Call.transport:type_name -> aintercept.interceptor.v1.Transport
-	5,  // 2: aintercept.interceptor.v1.Call.identity:type_name -> aintercept.interceptor.v1.Identity
-	6,  // 3: aintercept.interceptor.v1.Call.client:type_name -> aintercept.interceptor.v1.Client
-	21, // 4: aintercept.interceptor.v1.Client.headers:type_name -> aintercept.interceptor.v1.Client.HeadersEntry
-	4,  // 5: aintercept.interceptor.v1.CallStart.call:type_name -> aintercept.interceptor.v1.Call
-	22, // 6: aintercept.interceptor.v1.CallStart.headers:type_name -> aintercept.interceptor.v1.CallStart.HeadersEntry
-	8,  // 7: aintercept.interceptor.v1.CallStart.request:type_name -> aintercept.interceptor.v1.RequestInfo
-	4,  // 8: aintercept.interceptor.v1.Message.call:type_name -> aintercept.interceptor.v1.Call
-	2,  // 9: aintercept.interceptor.v1.Message.direction:type_name -> aintercept.interceptor.v1.Direction
-	3,  // 10: aintercept.interceptor.v1.Message.kind:type_name -> aintercept.interceptor.v1.MessageKind
-	11, // 11: aintercept.interceptor.v1.Verdict.allow:type_name -> aintercept.interceptor.v1.Allow
-	12, // 12: aintercept.interceptor.v1.Verdict.replace:type_name -> aintercept.interceptor.v1.Replace
-	13, // 13: aintercept.interceptor.v1.Verdict.drop:type_name -> aintercept.interceptor.v1.Drop
-	14, // 14: aintercept.interceptor.v1.Verdict.deny:type_name -> aintercept.interceptor.v1.Deny
-	15, // 15: aintercept.interceptor.v1.Verdict.annotations:type_name -> aintercept.interceptor.v1.Annotation
-	4,  // 16: aintercept.interceptor.v1.CallRecord.call:type_name -> aintercept.interceptor.v1.Call
-	8,  // 17: aintercept.interceptor.v1.CallRecord.request:type_name -> aintercept.interceptor.v1.RequestInfo
-	17, // 18: aintercept.interceptor.v1.CallRecord.response:type_name -> aintercept.interceptor.v1.ResponseInfo
-	19, // 19: aintercept.interceptor.v1.CallRecord.verdicts:type_name -> aintercept.interceptor.v1.RecordedVerdict
-	18, // 20: aintercept.interceptor.v1.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v1.ToolCount
-	15, // 21: aintercept.interceptor.v1.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v1.Annotation
-	7,  // 22: aintercept.interceptor.v1.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v1.CallStart
-	9,  // 23: aintercept.interceptor.v1.Interceptor.OnMessage:input_type -> aintercept.interceptor.v1.Message
-	16, // 24: aintercept.interceptor.v1.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v1.CallRecord
-	10, // 25: aintercept.interceptor.v1.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v1.Verdict
-	10, // 26: aintercept.interceptor.v1.Interceptor.OnMessage:output_type -> aintercept.interceptor.v1.Verdict
-	20, // 27: aintercept.interceptor.v1.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v1.Ack
-	25, // [25:28] is the sub-list for method output_type
-	22, // [22:25] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	6,  // 2: aintercept.interceptor.v1.Call.identity:type_name -> aintercept.interceptor.v1.Identity
+	7,  // 3: aintercept.interceptor.v1.Call.client:type_name -> aintercept.interceptor.v1.Client
+	3,  // 4: aintercept.interceptor.v1.Identity.email_source:type_name -> aintercept.interceptor.v1.IdentitySource
+	22, // 5: aintercept.interceptor.v1.Client.headers:type_name -> aintercept.interceptor.v1.Client.HeadersEntry
+	5,  // 6: aintercept.interceptor.v1.CallStart.call:type_name -> aintercept.interceptor.v1.Call
+	23, // 7: aintercept.interceptor.v1.CallStart.headers:type_name -> aintercept.interceptor.v1.CallStart.HeadersEntry
+	9,  // 8: aintercept.interceptor.v1.CallStart.request:type_name -> aintercept.interceptor.v1.RequestInfo
+	5,  // 9: aintercept.interceptor.v1.Message.call:type_name -> aintercept.interceptor.v1.Call
+	2,  // 10: aintercept.interceptor.v1.Message.direction:type_name -> aintercept.interceptor.v1.Direction
+	4,  // 11: aintercept.interceptor.v1.Message.kind:type_name -> aintercept.interceptor.v1.MessageKind
+	12, // 12: aintercept.interceptor.v1.Verdict.allow:type_name -> aintercept.interceptor.v1.Allow
+	13, // 13: aintercept.interceptor.v1.Verdict.replace:type_name -> aintercept.interceptor.v1.Replace
+	14, // 14: aintercept.interceptor.v1.Verdict.drop:type_name -> aintercept.interceptor.v1.Drop
+	15, // 15: aintercept.interceptor.v1.Verdict.deny:type_name -> aintercept.interceptor.v1.Deny
+	16, // 16: aintercept.interceptor.v1.Verdict.annotations:type_name -> aintercept.interceptor.v1.Annotation
+	5,  // 17: aintercept.interceptor.v1.CallRecord.call:type_name -> aintercept.interceptor.v1.Call
+	9,  // 18: aintercept.interceptor.v1.CallRecord.request:type_name -> aintercept.interceptor.v1.RequestInfo
+	18, // 19: aintercept.interceptor.v1.CallRecord.response:type_name -> aintercept.interceptor.v1.ResponseInfo
+	20, // 20: aintercept.interceptor.v1.CallRecord.verdicts:type_name -> aintercept.interceptor.v1.RecordedVerdict
+	19, // 21: aintercept.interceptor.v1.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v1.ToolCount
+	16, // 22: aintercept.interceptor.v1.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v1.Annotation
+	8,  // 23: aintercept.interceptor.v1.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v1.CallStart
+	10, // 24: aintercept.interceptor.v1.Interceptor.OnMessage:input_type -> aintercept.interceptor.v1.Message
+	17, // 25: aintercept.interceptor.v1.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v1.CallRecord
+	11, // 26: aintercept.interceptor.v1.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v1.Verdict
+	11, // 27: aintercept.interceptor.v1.Interceptor.OnMessage:output_type -> aintercept.interceptor.v1.Verdict
+	21, // 28: aintercept.interceptor.v1.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v1.Ack
+	26, // [26:29] is the sub-list for method output_type
+	23, // [23:26] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_interceptor_v1_interceptor_proto_init() }
@@ -1810,7 +1940,7 @@ func file_interceptor_v1_interceptor_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_interceptor_v1_interceptor_proto_rawDesc), len(file_interceptor_v1_interceptor_proto_rawDesc)),
-			NumEnums:      4,
+			NumEnums:      5,
 			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,

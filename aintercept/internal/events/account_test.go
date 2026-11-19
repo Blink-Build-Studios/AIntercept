@@ -9,7 +9,7 @@ import (
 func TestAccountFromResponse(t *testing.T) {
 	profile := []byte(`{"account":{"uuid":"acc-1","email":"a@example.com","full_name":"Ada Lovelace","display_name":"Ada"},"organization":{"uuid":"org-1","name":"Example Co"}}`)
 	got := AccountFromResponse("/api/oauth/profile", profile, "")
-	if got == nil || got.AccountID != "acc-1" || got.Email != "a@example.com" || got.Name != "Ada Lovelace" || got.Org != "Example Co" {
+	if got == nil || got.AccountID != "acc-1" || got.Email != "a@example.com" || got.Name != "Ada Lovelace" || got.Org != "Example Co" || got.OrgID != "org-1" {
 		t.Fatalf("profile: %+v", got)
 	}
 	boot := []byte(`{"oauth_account":{"account_uuid":"acc-1","account_email":"a@example.com","organization_name":"Example Co"}}`)

@@ -50,7 +50,23 @@ func interceptorRoutes(mux *http.ServeMux) {
 
 	// Chat Completions (contract v2's end-to-end test), as /v1/messages.
 	mux.HandleFunc("/v1/chat/completions", messages)
+
+	// GET /api/oauth/profile: the Anthropic profile endpoint the observer's
+	// identity lookup asks (its test origin is this fixture): the fake e2e
+	// token's account; any other credential is refused.
+	mux.HandleFunc("/api/oauth/profile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+E2EOAuthToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"account":{"uuid":"e2e-account","email":"e2e@example.com","full_name":"E2E Person"},` +
+			`"organization":{"uuid":"e2e-org","name":"E2E Org"}}`))
+	})
 }
+
+// E2EOAuthToken is the end-to-end test's fake Claude Code OAuth token.
+const E2EOAuthToken = "sk-ant-oat01-E2E-FAKE-TOKEN"
 
 // messages answers with an event stream echoing the request body. The body
 // is also in X-Fixture-Received when it's small enough for a header, and its

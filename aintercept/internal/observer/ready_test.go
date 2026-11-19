@@ -47,7 +47,7 @@ func TestReadyWithAFullSpoolEvenWhenEnforcing(t *testing.T) {
 
 	proc := events.NewProcessor(events.NewStdoutSink(discard{}), events.ProcessorConfig{Full: w.Full})
 	defer proc.Close()
-	mux := statsMux(proc, membudget.New(1<<20), nil, w)
+	mux := statsMux(proc, membudget.New(1<<20), nil, w, nil)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz/ready", nil))

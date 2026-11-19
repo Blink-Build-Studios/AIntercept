@@ -4,7 +4,8 @@ What each coding harness gives us, how it maps onto AIntercept's common schema, 
 where AIntercept stands. Keep this current: when a capture shows a new field or a
 harness ships a feature, update its cell; when AIntercept starts or finishes support,
 update the last two columns. Browsers (ChatGPT web, claude.ai) get their own table
-when that work starts.
+when that work starts. Adding a provider or a harness: `docs/PROVIDERS.md` lists every
+place it touches.
 
 The architecture it tracks: the proxy captures raw traffic unchanged; one rollup per
 harness turns it into the common shaped tables (person, device, session, prompt,
@@ -44,6 +45,7 @@ and a long turn's refresh never finished. Costs are dropped (no price table).
 |---|---|---|---|---|
 | Person (account) | `account_uuid` (request metadata, OAuth; analytics: captured) | `chatgpt-account-id` header, `account_uuid` | mapped | shown / served (linked by email) |
 | Name, email | `/api/oauth/profile`, `/api/claude_cli/bootstrap` responses | JWT claims on every call (email, name, plan, user id) | mapped | shown / served (accounts table) |
+| Credential's owner (verified) | OAuth token: looked up at `/api/oauth/profile` on its first call per pod, and learned from the client's own profile/bootstrap calls; API key: its org (`/v1/organizations/me`), and its creator with the admin directory | JWT claims, confirmed by `/backend-api/wham/accounts/check` | mapped (`internal/identity` resolvers) | Interceptor `Identity` (`email_source CREDENTIAL`) / `credentials` table (UI: follow-up) |
 | Org / workspace | `organization_uuid`, `x-organization-uuid` | the ChatGPT account id is the workspace | mapped | shown / captured |
 | Plan, limits | `utilization7d`, overage (rate-limit headers) | `x-codex-plan-type`, 5 h and weekly windows (used %, reset), credits | mapped | shown / served (`agentLimits`) |
 | Device | `device_id` (request metadata); env (platform, arch, terminal, shell) in analytics: captured | `installation_id` + user-agent OS/arch | mapped | shown (no platform, terminal, shell) / extracted |

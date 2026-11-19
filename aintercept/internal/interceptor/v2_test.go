@@ -536,8 +536,9 @@ func TestV2Observe(t *testing.T) {
 func TestV2CallIsV1s(t *testing.T) {
 	full := &pb.CallStart{
 		Call: &pb.Call{CallId: "c", Mode: pb.Mode_MODE_ENFORCE, Transport: pb.Transport_TRANSPORT_WEBSOCKET, Host: "h", Method: "GET", Path: "/p", StartUnixNano: 9,
-			Identity: &pb.Identity{KeyHash: "kh", KeyHint: "hint", Ip: "1.2.3.4", AccountId: "a", OrgId: "o", DeviceId: "d", SessionId: "s", Email: "e@example.com"},
-			Client:   &pb.Client{Product: "codex", UserAgent: "ua", Headers: map[string]string{"originator": "x"}}},
+			Identity: &pb.Identity{KeyHash: "kh", KeyHint: "hint", Ip: "1.2.3.4", OrgId: "o", DeviceId: "d", SessionId: "s", Email: "e@example.com",
+				Name: "E", EmailSource: pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL, ReportedAccountId: "r", VerifiedAccountId: "v", AccountMismatch: true},
+			Client: &pb.Client{Product: "codex", UserAgent: "ua", Headers: map[string]string{"originator": "x"}}},
 		Headers: map[string]string{"h": "v"},
 		Request: &pb.RequestInfo{Model: "m", Effort: "high", Stream: true, MaxTokens: 5, ToolsAvailable: []string{"t"}, McpToolsAvailable: []string{"s/t"}, Prewarm: true, Attachments: 2, RequestBytes: 100},
 	}

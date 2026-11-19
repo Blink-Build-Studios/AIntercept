@@ -166,6 +166,10 @@ func atomicCases() []atomicCase {
 	verdict.Phase = events.PhaseVerdict
 	verdict.Verdict = &events.Verdict{Callback: "reply", Action: "replace", Applied: true, Mode: "enforce", MessageID: "msg_1/0",
 		Annotations: map[string]string{"rule": "rabbit"}, LatencyMS: 4}
+	// A lookup's row: the credential's account (and, in Auth, who it is).
+	cred := events.Event{Phase: events.PhaseCredential, TimestampNS: at(0), KeyHash: "kh-9", KeyHint: "sk-ant…0009",
+		Credential: &events.Credential{AccountID: "acct-9", Source: "lookup"},
+		Auth:       &events.AuthIdentity{AccountID: "acct-9", Email: "x@example.com", Name: "X"}}
 	overCap := make([]events.Event, MaxVerdictsPerCall+1)
 	overCap[0] = hdr("c1", false, ccHeaders)
 	for i := 1; i < len(overCap); i++ {
@@ -333,6 +337,19 @@ func atomicCases() []atomicCase {
 			}
 		}}}},
 		{label: CaseVerdictOverCap, prior: overCap, row: row(verdict)},
+		{label: CaseCredential, row: row(cred), want: []want{
+			{KindAccount, "", "a:acct-9", nil},
+			{KindCredential, "", "a:acct-9", func(t *testing.T, r Record) {
+				if c := r.Credential; c == nil || *c != (Credential{KeyHash: "kh-9", KeyHint: "sk-ant…0009", AccountID: "acct-9", Source: "lookup", NS: at(0)}) {
+					t.Errorf("credential %+v", c)
+				}
+			}},
+		}},
+		{label: CaseCredential + "/an observed one names no account again", row: row(func() events.Event {
+			e := cred
+			e.Auth, e.Credential = nil, &events.Credential{AccountID: "acct-9", Source: "observed"}
+			return e
+		}()), want: []want{{KindCredential, "", "a:acct-9", nil}}},
 		{label: CaseUnknownPhase, row: row(unknown)},
 	}
 }

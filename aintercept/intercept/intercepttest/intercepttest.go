@@ -26,8 +26,16 @@ import (
 // Harness drives an Interceptor as AIntercept's observer would, in enforce
 // mode, one call per message.
 type Harness struct {
-	s *intercept.Server
-	n int
+	s  *intercept.Server
+	n  int
+	id *pb.Identity
+}
+
+// As makes the calls that follow come from id (by default, an unknown
+// caller): for rules that look at Call.Person.
+func (h *Harness) As(id *pb.Identity) *Harness {
+	h.id = id
+	return h
 }
 
 // New builds the Interceptor from rules, hooks and watches, as intercept.Run
@@ -54,7 +62,7 @@ type Result struct {
 func (h *Harness) call() *pb.Call {
 	h.n++
 	return &pb.Call{CallId: "intercepttest-" + itoa(h.n), Mode: pb.Mode_MODE_ENFORCE, Transport: pb.Transport_TRANSPORT_HTTP,
-		Client: &pb.Client{Product: "claude_code"}}
+		Client: &pb.Client{Product: "claude_code"}, Identity: h.id}
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }

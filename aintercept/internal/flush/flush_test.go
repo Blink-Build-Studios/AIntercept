@@ -300,6 +300,10 @@ func corpus() []records.Record {
 			rs = append(rs, r)
 		}
 		rs = append(rs, sighting("acct1", fmt.Sprintf("p%d@example.com", s), "P", t0+int64(s)*minute))
+		// Credentials: one per session, two sightings each, and two sightings
+		// of one at the same time (the greater account wins, in any order).
+		rs = append(rs, credential("kh-"+sid, "acct1", "lookup", t0+int64(s)*minute), credential("kh-"+sid, "acct1", "observed", t0+int64(s+5)*minute),
+			credential("kh-tie", fmt.Sprintf("acct-%d", s), "lookup", t0))
 	}
 	cx := end("codex-1", "child", t0, t0+9)
 	cx.Call.Product, cx.Call.Host, cx.Call.Path = canon.ProductCodex, "chatgpt.com", "/backend-api/codex/responses"

@@ -597,13 +597,17 @@ func TestSweepClosesOpenCallsInDataTime(t *testing.T) {
 func TestRetainDeletesOldFactsAndRollups(t *testing.T) {
 	db := fresh(t)
 	now := time.Unix(0, t0+20*24*hourNS)
-	write(t, db, call("old", "s", t0), ev("B", 1, "s", t0, "tengu_api_success", `{}`), call("new", "s", now.UnixNano()-hourNS))
+	cred := func(kh string, ns int64) records.Record {
+		return records.Record{Kind: records.KindCredential, Credential: &records.Credential{KeyHash: kh, AccountID: "acct", Source: "lookup", NS: ns}}
+	}
+	write(t, db, call("old", "s", t0), ev("B", 1, "s", t0, "tengu_api_success", `{}`), call("new", "s", now.UnixNano()-hourNS),
+		cred("kh-old", t0), cred("kh-new", now.UnixNano()-hourNS))
 	drain(t, db)
 	if _, err := Retain(ctx(t), db, 15, now); err != nil {
 		t.Fatal(err)
 	}
 	for table, want := range map[string]int{"calls": 1, "session_minutes": 1, "session_hours": 1,
-		"session_minute_keys": 2, "session_keys": 2, "cred_minutes": 1, "cred_hours": 1} {
+		"session_minute_keys": 2, "session_keys": 2, "cred_minutes": 1, "cred_hours": 1, "credentials": 1} {
 		var n int
 		db.QueryRow(ctx(t), "SELECT count(*) FROM "+table).Scan(&n)
 		if n != want {

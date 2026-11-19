@@ -36,6 +36,7 @@ import (
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/extproc"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/identity"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/membudget"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/probe"
@@ -230,12 +231,18 @@ func Run() {
 	// (when enabled) and record go to it; its verdicts are recorded as rows.
 	var proc *events.Processor
 	ic := setupInterceptor(instanceID, func(e events.Event) { proc.Offer(e) })
-	if ic != nil {
-		procCfg.OnComplete = func(e *events.Event) {
-			if !e.Synthetic {
-				rec, final := interceptor.Record(e)
-				ic.Complete(rec, final)
-			}
+	// Who each credential belongs to (internal/identity): looked up at a new
+	// credential's first request, learned from the provider's own account
+	// responses, recorded as credential rows.
+	idCfg := identityFromEnv()
+	identityCtx, stopIdentity := context.WithCancel(context.Background())
+	defer stopIdentity()
+	ids := setupIdentity(identityCtx, idCfg, instanceID, func(e events.Event) { proc.Offer(e) })
+	procCfg.OnComplete = func(e *events.Event) {
+		ids.Observe(e)
+		if ic != nil && !e.Synthetic {
+			rec, final := interceptor.Record(e, ids)
+			ic.Complete(rec, final)
 		}
 	}
 	proc = events.NewProcessor(sink, procCfg)
@@ -276,10 +283,13 @@ func Run() {
 		// Comma-separated request headers trusted to carry the client IP (e.g.
 		// cf-connecting-ip behind an L7 proxy that sets it). Unset: use only the
 		// connection's peer address, which a client cannot forge.
-		ClientIPHeaders: envList("OBSERVER_CLIENT_IP_HEADERS"),
-		ProbeMarker:     probeMarker(keyHashSalt),
-		Interceptor:     ic,
-		Full:            spoolFull,
+		ClientIPHeaders:     envList("OBSERVER_CLIENT_IP_HEADERS"),
+		ProbeMarker:         probeMarker(keyHashSalt),
+		Interceptor:         ic,
+		Full:                spoolFull,
+		Identities:          ids,
+		IdentityWait:        idCfg.wait,
+		EnforceIdentityWait: idCfg.enforceWait,
 	})
 
 	// Bound concurrent ext_proc streams (one per in-flight transaction). This
@@ -299,7 +309,7 @@ func Run() {
 	}
 
 	// HTTP side: liveness + stats, for probes and operators.
-	mux := statsMux(proc, budget, ic, writer)
+	mux := statsMux(proc, budget, ic, writer, ids)
 	mux.HandleFunc("/prestop", preStop(envDefault("OBSERVER_ENVOY_ADMIN", "127.0.0.1:9901"),
 		time.Duration(envInt("OBSERVER_PRESTOP_TIMEOUT_SECONDS", 600))*time.Second))
 	stopPathProbe := startPathProbe(mux, keyHashSalt)
@@ -461,7 +471,7 @@ func startPathProbe(mux *http.ServeMux, salt string) func() {
 	return cancel
 }
 
-func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.Client, writer *events.Writer) *http.ServeMux {
+func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.Client, writer *events.Writer, ids *identity.Cache) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -487,12 +497,18 @@ func statsMux(proc *events.Processor, budget *membudget.Budget, ic *interceptor.
 			s := writer.Stats()
 			ws = &s
 		}
+		var is *identity.Stats
+		if ids != nil {
+			s := ids.Stats()
+			is = &s
+		}
 		_ = json.NewEncoder(w).Encode(struct {
 			events.Stats
 			Memory      budgetStats         `json:"memory"`
 			Interceptor *interceptor.Stats  `json:"interceptor,omitempty"`
 			Writer      *events.WriterStats `json:"writer,omitempty"`
-		}{proc.Stats(), statsOf(budget), ics, ws})
+			Identity    *identity.Stats     `json:"identity,omitempty"`
+		}{proc.Stats(), statsOf(budget), ics, ws, is})
 	})
 	return mux
 }

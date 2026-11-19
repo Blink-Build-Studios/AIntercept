@@ -82,9 +82,16 @@ const (
 	WebSocket
 )
 
-// Person is who made the call, as far as the call itself says.
+// Person is who made the call. Verified is true when the provider confirmed
+// Email, Name and Account for the call's credential: grant privileges on a
+// verified Person only. Otherwise they come from the token's claims or from
+// what the client reports, which it can set to anything.
 type Person struct {
-	Email, Name, Account string
+	Email, Name string
+	// Account is the provider account: the verified one, else the one the
+	// client reports, else the organization.
+	Account  string
+	Verified bool
 }
 
 // Call is one intercepted call: the same object in every hook of the call.

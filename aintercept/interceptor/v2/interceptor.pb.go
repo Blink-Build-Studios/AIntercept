@@ -148,6 +148,63 @@ func (Transport) EnumDescriptor() ([]byte, []int) {
 	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{1}
 }
 
+// How Identity's email and name were established.
+type IdentitySource int32
+
+const (
+	IdentitySource_IDENTITY_SOURCE_UNSPECIFIED IdentitySource = 0
+	// The provider confirmed them for this exact credential. Grant privileges
+	// on this one only.
+	IdentitySource_IDENTITY_SOURCE_CREDENTIAL IdentitySource = 1
+	// From the bearer token's own claims (a JWT), not verified.
+	IdentitySource_IDENTITY_SOURCE_CLAIMS IdentitySource = 2
+	// From the account the client reported: a hint, not proof.
+	IdentitySource_IDENTITY_SOURCE_ACCOUNT IdentitySource = 3
+)
+
+// Enum value maps for IdentitySource.
+var (
+	IdentitySource_name = map[int32]string{
+		0: "IDENTITY_SOURCE_UNSPECIFIED",
+		1: "IDENTITY_SOURCE_CREDENTIAL",
+		2: "IDENTITY_SOURCE_CLAIMS",
+		3: "IDENTITY_SOURCE_ACCOUNT",
+	}
+	IdentitySource_value = map[string]int32{
+		"IDENTITY_SOURCE_UNSPECIFIED": 0,
+		"IDENTITY_SOURCE_CREDENTIAL":  1,
+		"IDENTITY_SOURCE_CLAIMS":      2,
+		"IDENTITY_SOURCE_ACCOUNT":     3,
+	}
+)
+
+func (x IdentitySource) Enum() *IdentitySource {
+	p := new(IdentitySource)
+	*p = x
+	return p
+}
+
+func (x IdentitySource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IdentitySource) Descriptor() protoreflect.EnumDescriptor {
+	return file_interceptor_v2_interceptor_proto_enumTypes[2].Descriptor()
+}
+
+func (IdentitySource) Type() protoreflect.EnumType {
+	return &file_interceptor_v2_interceptor_proto_enumTypes[2]
+}
+
+func (x IdentitySource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IdentitySource.Descriptor instead.
+func (IdentitySource) EnumDescriptor() ([]byte, []int) {
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{2}
+}
+
 type Role int32
 
 const (
@@ -196,11 +253,11 @@ func (x Role) String() string {
 }
 
 func (Role) Descriptor() protoreflect.EnumDescriptor {
-	return file_interceptor_v2_interceptor_proto_enumTypes[2].Descriptor()
+	return file_interceptor_v2_interceptor_proto_enumTypes[3].Descriptor()
 }
 
 func (Role) Type() protoreflect.EnumType {
-	return &file_interceptor_v2_interceptor_proto_enumTypes[2]
+	return &file_interceptor_v2_interceptor_proto_enumTypes[3]
 }
 
 func (x Role) Number() protoreflect.EnumNumber {
@@ -209,7 +266,7 @@ func (x Role) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Role.Descriptor instead.
 func (Role) EnumDescriptor() ([]byte, []int) {
-	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{2}
+	return file_interceptor_v2_interceptor_proto_rawDescGZIP(), []int{3}
 }
 
 // Call identifies one intercepted call and is repeated on every callback.
@@ -325,22 +382,35 @@ func (x *Call) GetClient() *Client {
 	return nil
 }
 
-// Identity known from the call itself (no enrichment).
+// Who is calling (v1's Identity, field for field; docs/INTERCEPTOR.md).
 type Identity struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Salted, irreversible hash of the API key or bearer token, and its display
 	// fragment. Never the credential itself.
-	KeyHash   string `protobuf:"bytes,1,opt,name=key_hash,json=keyHash,proto3" json:"key_hash,omitempty"`
-	KeyHint   string `protobuf:"bytes,2,opt,name=key_hint,json=keyHint,proto3" json:"key_hint,omitempty"`
-	Ip        string `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
+	KeyHash string `protobuf:"bytes,1,opt,name=key_hash,json=keyHash,proto3" json:"key_hash,omitempty"`
+	KeyHint string `protobuf:"bytes,2,opt,name=key_hint,json=keyHint,proto3" json:"key_hint,omitempty"`
+	Ip      string `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
+	// Deprecated: always empty. Use verified_account_id or reported_account_id.
+	//
+	// Deprecated: Marked as deprecated in interceptor/v2/interceptor.proto.
 	AccountId string `protobuf:"bytes,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
-	OrgId     string `protobuf:"bytes,5,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// The organization the provider confirmed, else what the request names.
+	OrgId string `protobuf:"bytes,5,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	// The client installation and its session, when the client sends them.
-	DeviceId      string `protobuf:"bytes,6,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
-	SessionId     string `protobuf:"bytes,7,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Email         string `protobuf:"bytes,8,opt,name=email,proto3" json:"email,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DeviceId  string `protobuf:"bytes,6,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	SessionId string `protobuf:"bytes,7,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// The person's email and name, when known; email_source says how.
+	Email       string         `protobuf:"bytes,8,opt,name=email,proto3" json:"email,omitempty"`
+	Name        string         `protobuf:"bytes,9,opt,name=name,proto3" json:"name,omitempty"`
+	EmailSource IdentitySource `protobuf:"varint,10,opt,name=email_source,json=emailSource,proto3,enum=aintercept.interceptor.v2.IdentitySource" json:"email_source,omitempty"`
+	// The account the client says it is (it can send any value).
+	ReportedAccountId string `protobuf:"bytes,11,opt,name=reported_account_id,json=reportedAccountId,proto3" json:"reported_account_id,omitempty"`
+	// The account the provider confirmed for this call's credential.
+	VerifiedAccountId string `protobuf:"bytes,12,opt,name=verified_account_id,json=verifiedAccountId,proto3" json:"verified_account_id,omitempty"`
+	// The client reported an account other than the verified one.
+	AccountMismatch bool `protobuf:"varint,13,opt,name=account_mismatch,json=accountMismatch,proto3" json:"account_mismatch,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Identity) Reset() {
@@ -394,6 +464,7 @@ func (x *Identity) GetIp() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in interceptor/v2/interceptor.proto.
 func (x *Identity) GetAccountId() string {
 	if x != nil {
 		return x.AccountId
@@ -427,6 +498,41 @@ func (x *Identity) GetEmail() string {
 		return x.Email
 	}
 	return ""
+}
+
+func (x *Identity) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Identity) GetEmailSource() IdentitySource {
+	if x != nil {
+		return x.EmailSource
+	}
+	return IdentitySource_IDENTITY_SOURCE_UNSPECIFIED
+}
+
+func (x *Identity) GetReportedAccountId() string {
+	if x != nil {
+		return x.ReportedAccountId
+	}
+	return ""
+}
+
+func (x *Identity) GetVerifiedAccountId() string {
+	if x != nil {
+		return x.VerifiedAccountId
+	}
+	return ""
+}
+
+func (x *Identity) GetAccountMismatch() bool {
+	if x != nil {
+		return x.AccountMismatch
+	}
+	return false
 }
 
 type Client struct {
@@ -2470,18 +2576,24 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\x04path\x18\x06 \x01(\tR\x04path\x12&\n" +
 	"\x0fstart_unix_nano\x18\a \x01(\x03R\rstartUnixNano\x12?\n" +
 	"\bidentity\x18\b \x01(\v2#.aintercept.interceptor.v2.IdentityR\bidentity\x129\n" +
-	"\x06client\x18\t \x01(\v2!.aintercept.interceptor.v2.ClientR\x06client\"\xd8\x01\n" +
+	"\x06client\x18\t \x01(\v2!.aintercept.interceptor.v2.ClientR\x06client\"\xc9\x03\n" +
 	"\bIdentity\x12\x19\n" +
 	"\bkey_hash\x18\x01 \x01(\tR\akeyHash\x12\x19\n" +
 	"\bkey_hint\x18\x02 \x01(\tR\akeyHint\x12\x0e\n" +
-	"\x02ip\x18\x03 \x01(\tR\x02ip\x12\x1d\n" +
+	"\x02ip\x18\x03 \x01(\tR\x02ip\x12!\n" +
 	"\n" +
-	"account_id\x18\x04 \x01(\tR\taccountId\x12\x15\n" +
+	"account_id\x18\x04 \x01(\tB\x02\x18\x01R\taccountId\x12\x15\n" +
 	"\x06org_id\x18\x05 \x01(\tR\x05orgId\x12\x1b\n" +
 	"\tdevice_id\x18\x06 \x01(\tR\bdeviceId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\a \x01(\tR\tsessionId\x12\x14\n" +
-	"\x05email\x18\b \x01(\tR\x05email\"\xc7\x01\n" +
+	"\x05email\x18\b \x01(\tR\x05email\x12\x12\n" +
+	"\x04name\x18\t \x01(\tR\x04name\x12L\n" +
+	"\femail_source\x18\n" +
+	" \x01(\x0e2).aintercept.interceptor.v2.IdentitySourceR\vemailSource\x12.\n" +
+	"\x13reported_account_id\x18\v \x01(\tR\x11reportedAccountId\x12.\n" +
+	"\x13verified_account_id\x18\f \x01(\tR\x11verifiedAccountId\x12)\n" +
+	"\x10account_mismatch\x18\r \x01(\bR\x0faccountMismatch\"\xc7\x01\n" +
 	"\x06Client\x12\x18\n" +
 	"\aproduct\x18\x01 \x01(\tR\aproduct\x12\x1d\n" +
 	"\n" +
@@ -2643,7 +2755,12 @@ const file_interceptor_v2_interceptor_proto_rawDesc = "" +
 	"\tTransport\x12\x19\n" +
 	"\x15TRANSPORT_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eTRANSPORT_HTTP\x10\x01\x12\x17\n" +
-	"\x13TRANSPORT_WEBSOCKET\x10\x02*_\n" +
+	"\x13TRANSPORT_WEBSOCKET\x10\x02*\x8a\x01\n" +
+	"\x0eIdentitySource\x12\x1f\n" +
+	"\x1bIDENTITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aIDENTITY_SOURCE_CREDENTIAL\x10\x01\x12\x1a\n" +
+	"\x16IDENTITY_SOURCE_CLAIMS\x10\x02\x12\x1b\n" +
+	"\x17IDENTITY_SOURCE_ACCOUNT\x10\x03*_\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tROLE_USER\x10\x01\x12\x12\n" +
@@ -2670,99 +2787,101 @@ func file_interceptor_v2_interceptor_proto_rawDescGZIP() []byte {
 	return file_interceptor_v2_interceptor_proto_rawDescData
 }
 
-var file_interceptor_v2_interceptor_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_interceptor_v2_interceptor_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_interceptor_v2_interceptor_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_interceptor_v2_interceptor_proto_goTypes = []any{
 	(Mode)(0),               // 0: aintercept.interceptor.v2.Mode
 	(Transport)(0),          // 1: aintercept.interceptor.v2.Transport
-	(Role)(0),               // 2: aintercept.interceptor.v2.Role
-	(*Call)(nil),            // 3: aintercept.interceptor.v2.Call
-	(*Identity)(nil),        // 4: aintercept.interceptor.v2.Identity
-	(*Client)(nil),          // 5: aintercept.interceptor.v2.Client
-	(*CallStart)(nil),       // 6: aintercept.interceptor.v2.CallStart
-	(*RequestInfo)(nil),     // 7: aintercept.interceptor.v2.RequestInfo
-	(*ConvMessage)(nil),     // 8: aintercept.interceptor.v2.ConvMessage
-	(*Part)(nil),            // 9: aintercept.interceptor.v2.Part
-	(*Text)(nil),            // 10: aintercept.interceptor.v2.Text
-	(*Media)(nil),           // 11: aintercept.interceptor.v2.Media
-	(*ToolCall)(nil),        // 12: aintercept.interceptor.v2.ToolCall
-	(*ToolResult)(nil),      // 13: aintercept.interceptor.v2.ToolResult
-	(*Opaque)(nil),          // 14: aintercept.interceptor.v2.Opaque
-	(*ToolAdded)(nil),       // 15: aintercept.interceptor.v2.ToolAdded
-	(*RequestMessages)(nil), // 16: aintercept.interceptor.v2.RequestMessages
-	(*RequestVerdict)(nil),  // 17: aintercept.interceptor.v2.RequestVerdict
-	(*MessageVerdict)(nil),  // 18: aintercept.interceptor.v2.MessageVerdict
-	(*Accept)(nil),          // 19: aintercept.interceptor.v2.Accept
-	(*Hold)(nil),            // 20: aintercept.interceptor.v2.Hold
-	(*Replace)(nil),         // 21: aintercept.interceptor.v2.Replace
-	(*Respond)(nil),         // 22: aintercept.interceptor.v2.Respond
-	(*Fetch)(nil),           // 23: aintercept.interceptor.v2.Fetch
-	(*CallVerdict)(nil),     // 24: aintercept.interceptor.v2.CallVerdict
-	(*ResponseMessage)(nil), // 25: aintercept.interceptor.v2.ResponseMessage
-	(*Annotation)(nil),      // 26: aintercept.interceptor.v2.Annotation
-	(*CallRecord)(nil),      // 27: aintercept.interceptor.v2.CallRecord
-	(*ResponseInfo)(nil),    // 28: aintercept.interceptor.v2.ResponseInfo
-	(*ToolCount)(nil),       // 29: aintercept.interceptor.v2.ToolCount
-	(*RecordedVerdict)(nil), // 30: aintercept.interceptor.v2.RecordedVerdict
-	(*Ack)(nil),             // 31: aintercept.interceptor.v2.Ack
-	nil,                     // 32: aintercept.interceptor.v2.Client.HeadersEntry
-	nil,                     // 33: aintercept.interceptor.v2.CallStart.HeadersEntry
+	(IdentitySource)(0),     // 2: aintercept.interceptor.v2.IdentitySource
+	(Role)(0),               // 3: aintercept.interceptor.v2.Role
+	(*Call)(nil),            // 4: aintercept.interceptor.v2.Call
+	(*Identity)(nil),        // 5: aintercept.interceptor.v2.Identity
+	(*Client)(nil),          // 6: aintercept.interceptor.v2.Client
+	(*CallStart)(nil),       // 7: aintercept.interceptor.v2.CallStart
+	(*RequestInfo)(nil),     // 8: aintercept.interceptor.v2.RequestInfo
+	(*ConvMessage)(nil),     // 9: aintercept.interceptor.v2.ConvMessage
+	(*Part)(nil),            // 10: aintercept.interceptor.v2.Part
+	(*Text)(nil),            // 11: aintercept.interceptor.v2.Text
+	(*Media)(nil),           // 12: aintercept.interceptor.v2.Media
+	(*ToolCall)(nil),        // 13: aintercept.interceptor.v2.ToolCall
+	(*ToolResult)(nil),      // 14: aintercept.interceptor.v2.ToolResult
+	(*Opaque)(nil),          // 15: aintercept.interceptor.v2.Opaque
+	(*ToolAdded)(nil),       // 16: aintercept.interceptor.v2.ToolAdded
+	(*RequestMessages)(nil), // 17: aintercept.interceptor.v2.RequestMessages
+	(*RequestVerdict)(nil),  // 18: aintercept.interceptor.v2.RequestVerdict
+	(*MessageVerdict)(nil),  // 19: aintercept.interceptor.v2.MessageVerdict
+	(*Accept)(nil),          // 20: aintercept.interceptor.v2.Accept
+	(*Hold)(nil),            // 21: aintercept.interceptor.v2.Hold
+	(*Replace)(nil),         // 22: aintercept.interceptor.v2.Replace
+	(*Respond)(nil),         // 23: aintercept.interceptor.v2.Respond
+	(*Fetch)(nil),           // 24: aintercept.interceptor.v2.Fetch
+	(*CallVerdict)(nil),     // 25: aintercept.interceptor.v2.CallVerdict
+	(*ResponseMessage)(nil), // 26: aintercept.interceptor.v2.ResponseMessage
+	(*Annotation)(nil),      // 27: aintercept.interceptor.v2.Annotation
+	(*CallRecord)(nil),      // 28: aintercept.interceptor.v2.CallRecord
+	(*ResponseInfo)(nil),    // 29: aintercept.interceptor.v2.ResponseInfo
+	(*ToolCount)(nil),       // 30: aintercept.interceptor.v2.ToolCount
+	(*RecordedVerdict)(nil), // 31: aintercept.interceptor.v2.RecordedVerdict
+	(*Ack)(nil),             // 32: aintercept.interceptor.v2.Ack
+	nil,                     // 33: aintercept.interceptor.v2.Client.HeadersEntry
+	nil,                     // 34: aintercept.interceptor.v2.CallStart.HeadersEntry
 }
 var file_interceptor_v2_interceptor_proto_depIdxs = []int32{
 	0,  // 0: aintercept.interceptor.v2.Call.mode:type_name -> aintercept.interceptor.v2.Mode
 	1,  // 1: aintercept.interceptor.v2.Call.transport:type_name -> aintercept.interceptor.v2.Transport
-	4,  // 2: aintercept.interceptor.v2.Call.identity:type_name -> aintercept.interceptor.v2.Identity
-	5,  // 3: aintercept.interceptor.v2.Call.client:type_name -> aintercept.interceptor.v2.Client
-	32, // 4: aintercept.interceptor.v2.Client.headers:type_name -> aintercept.interceptor.v2.Client.HeadersEntry
-	3,  // 5: aintercept.interceptor.v2.CallStart.call:type_name -> aintercept.interceptor.v2.Call
-	33, // 6: aintercept.interceptor.v2.CallStart.headers:type_name -> aintercept.interceptor.v2.CallStart.HeadersEntry
-	7,  // 7: aintercept.interceptor.v2.CallStart.request:type_name -> aintercept.interceptor.v2.RequestInfo
-	2,  // 8: aintercept.interceptor.v2.ConvMessage.role:type_name -> aintercept.interceptor.v2.Role
-	9,  // 9: aintercept.interceptor.v2.ConvMessage.parts:type_name -> aintercept.interceptor.v2.Part
-	10, // 10: aintercept.interceptor.v2.Part.text:type_name -> aintercept.interceptor.v2.Text
-	11, // 11: aintercept.interceptor.v2.Part.media:type_name -> aintercept.interceptor.v2.Media
-	12, // 12: aintercept.interceptor.v2.Part.tool_call:type_name -> aintercept.interceptor.v2.ToolCall
-	13, // 13: aintercept.interceptor.v2.Part.tool_result:type_name -> aintercept.interceptor.v2.ToolResult
-	14, // 14: aintercept.interceptor.v2.Part.opaque:type_name -> aintercept.interceptor.v2.Opaque
-	15, // 15: aintercept.interceptor.v2.Part.tool_added:type_name -> aintercept.interceptor.v2.ToolAdded
-	3,  // 16: aintercept.interceptor.v2.RequestMessages.call:type_name -> aintercept.interceptor.v2.Call
-	8,  // 17: aintercept.interceptor.v2.RequestMessages.messages:type_name -> aintercept.interceptor.v2.ConvMessage
-	18, // 18: aintercept.interceptor.v2.RequestVerdict.messages:type_name -> aintercept.interceptor.v2.MessageVerdict
-	23, // 19: aintercept.interceptor.v2.RequestVerdict.fetch:type_name -> aintercept.interceptor.v2.Fetch
-	22, // 20: aintercept.interceptor.v2.RequestVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	26, // 21: aintercept.interceptor.v2.RequestVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	19, // 22: aintercept.interceptor.v2.MessageVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
-	21, // 23: aintercept.interceptor.v2.MessageVerdict.replace:type_name -> aintercept.interceptor.v2.Replace
-	22, // 24: aintercept.interceptor.v2.MessageVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	20, // 25: aintercept.interceptor.v2.MessageVerdict.hold:type_name -> aintercept.interceptor.v2.Hold
-	26, // 26: aintercept.interceptor.v2.MessageVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	8,  // 27: aintercept.interceptor.v2.Replace.message:type_name -> aintercept.interceptor.v2.ConvMessage
-	19, // 28: aintercept.interceptor.v2.CallVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
-	22, // 29: aintercept.interceptor.v2.CallVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
-	26, // 30: aintercept.interceptor.v2.CallVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	3,  // 31: aintercept.interceptor.v2.ResponseMessage.call:type_name -> aintercept.interceptor.v2.Call
-	8,  // 32: aintercept.interceptor.v2.ResponseMessage.message:type_name -> aintercept.interceptor.v2.ConvMessage
-	3,  // 33: aintercept.interceptor.v2.CallRecord.call:type_name -> aintercept.interceptor.v2.Call
-	7,  // 34: aintercept.interceptor.v2.CallRecord.request:type_name -> aintercept.interceptor.v2.RequestInfo
-	28, // 35: aintercept.interceptor.v2.CallRecord.response:type_name -> aintercept.interceptor.v2.ResponseInfo
-	30, // 36: aintercept.interceptor.v2.CallRecord.verdicts:type_name -> aintercept.interceptor.v2.RecordedVerdict
-	29, // 37: aintercept.interceptor.v2.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v2.ToolCount
-	26, // 38: aintercept.interceptor.v2.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
-	6,  // 39: aintercept.interceptor.v2.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v2.CallStart
-	16, // 40: aintercept.interceptor.v2.Interceptor.OnRequest:input_type -> aintercept.interceptor.v2.RequestMessages
-	25, // 41: aintercept.interceptor.v2.Interceptor.OnReply:input_type -> aintercept.interceptor.v2.ResponseMessage
-	25, // 42: aintercept.interceptor.v2.Interceptor.OnToolCall:input_type -> aintercept.interceptor.v2.ResponseMessage
-	27, // 43: aintercept.interceptor.v2.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v2.CallRecord
-	24, // 44: aintercept.interceptor.v2.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v2.CallVerdict
-	17, // 45: aintercept.interceptor.v2.Interceptor.OnRequest:output_type -> aintercept.interceptor.v2.RequestVerdict
-	18, // 46: aintercept.interceptor.v2.Interceptor.OnReply:output_type -> aintercept.interceptor.v2.MessageVerdict
-	18, // 47: aintercept.interceptor.v2.Interceptor.OnToolCall:output_type -> aintercept.interceptor.v2.MessageVerdict
-	31, // 48: aintercept.interceptor.v2.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v2.Ack
-	44, // [44:49] is the sub-list for method output_type
-	39, // [39:44] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	5,  // 2: aintercept.interceptor.v2.Call.identity:type_name -> aintercept.interceptor.v2.Identity
+	6,  // 3: aintercept.interceptor.v2.Call.client:type_name -> aintercept.interceptor.v2.Client
+	2,  // 4: aintercept.interceptor.v2.Identity.email_source:type_name -> aintercept.interceptor.v2.IdentitySource
+	33, // 5: aintercept.interceptor.v2.Client.headers:type_name -> aintercept.interceptor.v2.Client.HeadersEntry
+	4,  // 6: aintercept.interceptor.v2.CallStart.call:type_name -> aintercept.interceptor.v2.Call
+	34, // 7: aintercept.interceptor.v2.CallStart.headers:type_name -> aintercept.interceptor.v2.CallStart.HeadersEntry
+	8,  // 8: aintercept.interceptor.v2.CallStart.request:type_name -> aintercept.interceptor.v2.RequestInfo
+	3,  // 9: aintercept.interceptor.v2.ConvMessage.role:type_name -> aintercept.interceptor.v2.Role
+	10, // 10: aintercept.interceptor.v2.ConvMessage.parts:type_name -> aintercept.interceptor.v2.Part
+	11, // 11: aintercept.interceptor.v2.Part.text:type_name -> aintercept.interceptor.v2.Text
+	12, // 12: aintercept.interceptor.v2.Part.media:type_name -> aintercept.interceptor.v2.Media
+	13, // 13: aintercept.interceptor.v2.Part.tool_call:type_name -> aintercept.interceptor.v2.ToolCall
+	14, // 14: aintercept.interceptor.v2.Part.tool_result:type_name -> aintercept.interceptor.v2.ToolResult
+	15, // 15: aintercept.interceptor.v2.Part.opaque:type_name -> aintercept.interceptor.v2.Opaque
+	16, // 16: aintercept.interceptor.v2.Part.tool_added:type_name -> aintercept.interceptor.v2.ToolAdded
+	4,  // 17: aintercept.interceptor.v2.RequestMessages.call:type_name -> aintercept.interceptor.v2.Call
+	9,  // 18: aintercept.interceptor.v2.RequestMessages.messages:type_name -> aintercept.interceptor.v2.ConvMessage
+	19, // 19: aintercept.interceptor.v2.RequestVerdict.messages:type_name -> aintercept.interceptor.v2.MessageVerdict
+	24, // 20: aintercept.interceptor.v2.RequestVerdict.fetch:type_name -> aintercept.interceptor.v2.Fetch
+	23, // 21: aintercept.interceptor.v2.RequestVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	27, // 22: aintercept.interceptor.v2.RequestVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	20, // 23: aintercept.interceptor.v2.MessageVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
+	22, // 24: aintercept.interceptor.v2.MessageVerdict.replace:type_name -> aintercept.interceptor.v2.Replace
+	23, // 25: aintercept.interceptor.v2.MessageVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	21, // 26: aintercept.interceptor.v2.MessageVerdict.hold:type_name -> aintercept.interceptor.v2.Hold
+	27, // 27: aintercept.interceptor.v2.MessageVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	9,  // 28: aintercept.interceptor.v2.Replace.message:type_name -> aintercept.interceptor.v2.ConvMessage
+	20, // 29: aintercept.interceptor.v2.CallVerdict.accept:type_name -> aintercept.interceptor.v2.Accept
+	23, // 30: aintercept.interceptor.v2.CallVerdict.respond:type_name -> aintercept.interceptor.v2.Respond
+	27, // 31: aintercept.interceptor.v2.CallVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	4,  // 32: aintercept.interceptor.v2.ResponseMessage.call:type_name -> aintercept.interceptor.v2.Call
+	9,  // 33: aintercept.interceptor.v2.ResponseMessage.message:type_name -> aintercept.interceptor.v2.ConvMessage
+	4,  // 34: aintercept.interceptor.v2.CallRecord.call:type_name -> aintercept.interceptor.v2.Call
+	8,  // 35: aintercept.interceptor.v2.CallRecord.request:type_name -> aintercept.interceptor.v2.RequestInfo
+	29, // 36: aintercept.interceptor.v2.CallRecord.response:type_name -> aintercept.interceptor.v2.ResponseInfo
+	31, // 37: aintercept.interceptor.v2.CallRecord.verdicts:type_name -> aintercept.interceptor.v2.RecordedVerdict
+	30, // 38: aintercept.interceptor.v2.ResponseInfo.tool_calls:type_name -> aintercept.interceptor.v2.ToolCount
+	27, // 39: aintercept.interceptor.v2.RecordedVerdict.annotations:type_name -> aintercept.interceptor.v2.Annotation
+	7,  // 40: aintercept.interceptor.v2.Interceptor.OnCallStart:input_type -> aintercept.interceptor.v2.CallStart
+	17, // 41: aintercept.interceptor.v2.Interceptor.OnRequest:input_type -> aintercept.interceptor.v2.RequestMessages
+	26, // 42: aintercept.interceptor.v2.Interceptor.OnReply:input_type -> aintercept.interceptor.v2.ResponseMessage
+	26, // 43: aintercept.interceptor.v2.Interceptor.OnToolCall:input_type -> aintercept.interceptor.v2.ResponseMessage
+	28, // 44: aintercept.interceptor.v2.Interceptor.OnCallComplete:input_type -> aintercept.interceptor.v2.CallRecord
+	25, // 45: aintercept.interceptor.v2.Interceptor.OnCallStart:output_type -> aintercept.interceptor.v2.CallVerdict
+	18, // 46: aintercept.interceptor.v2.Interceptor.OnRequest:output_type -> aintercept.interceptor.v2.RequestVerdict
+	19, // 47: aintercept.interceptor.v2.Interceptor.OnReply:output_type -> aintercept.interceptor.v2.MessageVerdict
+	19, // 48: aintercept.interceptor.v2.Interceptor.OnToolCall:output_type -> aintercept.interceptor.v2.MessageVerdict
+	32, // 49: aintercept.interceptor.v2.Interceptor.OnCallComplete:output_type -> aintercept.interceptor.v2.Ack
+	45, // [45:50] is the sub-list for method output_type
+	40, // [40:45] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_interceptor_v2_interceptor_proto_init() }
@@ -2793,7 +2912,7 @@ func file_interceptor_v2_interceptor_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_interceptor_v2_interceptor_proto_rawDesc), len(file_interceptor_v2_interceptor_proto_rawDesc)),
-			NumEnums:      3,
+			NumEnums:      4,
 			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,

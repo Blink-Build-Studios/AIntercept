@@ -20,6 +20,13 @@
 // Every verdict, in both modes, is reported through the record callback (a
 // verdict row in AIntercept's own stream) and attached to the call's
 // CallRecord.
+//
+// Identity: a call's identity is resolved once and carried by every one of
+// its callbacks. ObserveCall and DecideCall start a call. When its
+// credential's lookup is still in flight, DecideCall waits for it (bounded);
+// ObserveCall never waits: it holds the call's callbacks in a buffer of the
+// call's own, before the shared queues, until the lookup ends or the wait has
+// passed, then queues them in order. Workers never wait on identity.
 package interceptor
 
 import (
@@ -40,11 +47,13 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
 	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/identity"
 )
 
 // Config configures the client. An empty Endpoint means no Interceptor.
@@ -141,12 +150,21 @@ type Client struct {
 	queues []chan job
 	wg     sync.WaitGroup
 
+	// held are the calls whose callbacks wait for their identity (holding
+	// counts them); idents each started call's identity, stamped on its
+	// callbacks as they're delivered (until its final record).
+	hmu      sync.Mutex
+	held     map[string][]job
+	holding  atomic.Int32
+	idents   map[string]*callIdentity
+	awaiting sync.WaitGroup
+
 	mu       sync.Mutex
 	verdicts map[string]*callVerdicts
 	// unparsedWhy counts the unparsed requests by reason.
 	unparsedWhy map[string]uint64
 
-	queued, dropped, delivered, failed, decided, decideFailed, unparsed atomic.Uint64
+	queued, dropped, delivered, failed, decided, decideFailed, unparsed, heldCalls atomic.Uint64
 	// noNew counts requests with no new messages: no OnRequest (v2).
 	noNew atomic.Uint64
 	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
@@ -242,7 +260,7 @@ func New(cfg Config, record func(callID string, v events.Verdict)) (*Client, err
 	}
 	c := &Client{
 		cfg: cfg, conn: conn, api: pb.NewInterceptorClient(conn), api2: pb2.NewInterceptorClient(conn), record: record, token: token,
-		verdicts: map[string]*callVerdicts{},
+		verdicts: map[string]*callVerdicts{}, held: map[string][]job{}, idents: map[string]*callIdentity{},
 	}
 	c.queues = make([]chan job, cfg.Workers)
 	for i := range c.queues {
@@ -302,9 +320,10 @@ func (c *Client) Unparsed(reason string) {
 	}
 }
 
-// Close drains the queues (bounded by ObserveTimeout per call) and closes the
-// connection.
+// Close waits for the calls held for their identity, drains the queues
+// (bounded by ObserveTimeout per call) and closes the connection.
 func (c *Client) Close() {
+	c.awaiting.Wait() // calls waiting for their identity: at most their wait
 	for _, q := range c.queues {
 		close(q)
 	}
@@ -384,6 +403,135 @@ func (t *tokenFile) get() string {
 
 // ── Observe ──────────────────────────────────────────────────────────────────
 
+// ObserveCall starts a call in observe mode: it queues OnCallStart and
+// returns the Call the call's later callbacks carry. While ci's credential is
+// being looked up, the call's callbacks (this one and every later one) are
+// held in a buffer of the call's own until the lookup ends, or wait has
+// passed since now; then its identity is resolved once and they're queued in
+// order. Other calls never wait for it.
+func (c *Client) ObserveCall(ci *CallInfo, wait time.Duration) *pb.Call {
+	w := ci.who()
+	r, id := w.resolve()
+	call := ci.callWith(id)
+	if ci.Lookup != nil && wait > 0 && !ci.Lookup.Wait(0) {
+		c.hmu.Lock()
+		c.held[ci.CallID] = nil
+		c.holding.Add(1)
+		c.hmu.Unlock()
+		c.heldCalls.Add(1)
+		c.awaiting.Add(1)
+		go c.await(ci.CallID, w, ci.Lookup, wait, time.Now())
+	} else {
+		w.ids.Note(r)
+		c.setIdentity(ci.CallID, id)
+	}
+	c.ObserveStart(ci.startWith(ci.callWith(id)))
+	return call
+}
+
+// await waits for a held call's lookup (up to wait from t0), resolves its
+// identity and releases its callbacks.
+func (c *Client) await(callID string, w who, p *identity.Pending, wait time.Duration, t0 time.Time) {
+	defer c.awaiting.Done()
+	p.Wait(wait - time.Since(t0))
+	w.ids.NoteWait("observe", time.Since(t0))
+	r, id := w.resolve()
+	w.ids.Note(r)
+	c.hmu.Lock()
+	defer c.hmu.Unlock()
+	c.setIdentityLocked(callID, id)
+	jobs := c.held[callID]
+	delete(c.held, callID)
+	c.holding.Add(-1)
+	for _, j := range jobs {
+		c.push(j)
+	}
+}
+
+// DecideCall starts a call in enforce mode: it waits up to wait for ci's
+// credential lookup, resolves the call's identity once, and calls
+// OnCallStart. It returns the Call the call's later callbacks carry, and the
+// verdict.
+func (c *Client) DecideCall(ctx context.Context, ci *CallInfo, wait time.Duration) (*pb.Call, Decision) {
+	if ci.Lookup != nil {
+		t := time.Now()
+		if !ci.Lookup.Wait(0) {
+			ci.Lookup.Wait(wait)
+			ci.Identities.NoteWait("enforce", time.Since(t))
+		}
+	}
+	w := ci.who()
+	r, id := w.resolve()
+	w.ids.Note(r)
+	c.setIdentity(ci.CallID, id)
+	return ci.callWith(id), c.DecideStart(ctx, ci.startWith(ci.callWith(id)))
+}
+
+// callIdentity is a started call's identity, and its v2 and v1-message forms
+// (made once, when first needed).
+type callIdentity struct {
+	id   *pb.Identity
+	id2  *pb2.Identity
+	call *pb.Call // a v1 message's Call, with id
+	seen time.Time
+}
+
+func (c *Client) setIdentity(callID string, id *pb.Identity) {
+	c.hmu.Lock()
+	defer c.hmu.Unlock()
+	c.setIdentityLocked(callID, id)
+}
+
+func (c *Client) setIdentityLocked(callID string, id *pb.Identity) {
+	now := time.Now()
+	if len(c.idents)%256 == 0 {
+		for k, ci := range c.idents {
+			if now.Sub(ci.seen) > verdictTTL {
+				delete(c.idents, k)
+			}
+		}
+	}
+	c.idents[callID] = &callIdentity{id: id, seen: now}
+}
+
+// stamp gives a job being delivered its call's identity: every callback of a
+// call carries the one resolved when it started. Only the job's own messages
+// are changed (a v1 message gets its own copy of the Call).
+func (c *Client) stamp(j *job) {
+	c.hmu.Lock()
+	defer c.hmu.Unlock()
+	ci := c.idents[j.callID]
+	if ci == nil {
+		return
+	}
+	ci.seen = time.Now()
+	if j.final {
+		delete(c.idents, j.callID)
+	}
+	v2 := func() *pb2.Identity {
+		if ci.id2 == nil {
+			ci.id2 = convert(ci.id, &pb2.Identity{})
+		}
+		return ci.id2
+	}
+	switch {
+	case j.start != nil:
+		j.start.Call.Identity = ci.id
+	case j.msg != nil:
+		if ci.call == nil { // a call's messages share one Call: copied once
+			ci.call = proto.Clone(j.msg.Call).(*pb.Call)
+			ci.call.Identity = ci.id
+		}
+		j.msg.Call = ci.call
+	case j.req != nil:
+		j.req.call.Identity = v2()
+	case j.reply != nil:
+		j.reply.msg.Call.Identity = v2()
+	case j.rec != nil:
+		j.rec.Call.Identity = ci.id
+	}
+}
+
 // ObserveStart queues OnCallStart (observe mode).
 func (c *Client) ObserveStart(s *pb.CallStart) {
 	c.enqueue(job{callID: s.GetCall().GetCallId(), start: s})
@@ -403,7 +551,26 @@ func (c *Client) Complete(r *pb.CallRecord, final bool) {
 	c.enqueue(job{callID: r.GetCall().GetCallId(), rec: r, final: final})
 }
 
+// enqueue queues a callback, or holds it with its call's (ObserveCall).
 func (c *Client) enqueue(j job) {
+	if c.holding.Load() > 0 {
+		c.hmu.Lock()
+		if h, ok := c.held[j.callID]; ok {
+			if len(h) < c.cfg.QueueSize {
+				c.held[j.callID] = append(h, j)
+			} else if n := c.dropped.Add(1); n == 1 || n%1000 == 0 {
+				slog.Warn("interceptor: a call held for its identity has too many callbacks: dropping (traffic unaffected)", "total_dropped", n)
+			}
+			c.hmu.Unlock()
+			return
+		}
+		c.hmu.Unlock()
+	}
+	c.push(j)
+}
+
+// push puts a callback on its call's queue (never blocks).
+func (c *Client) push(j job) {
 	h := fnv.New32a()
 	h.Write([]byte(j.callID))
 	q := c.queues[int(h.Sum32()%uint32(len(c.queues)))]
@@ -426,6 +593,7 @@ func (c *Client) work(q chan job) {
 }
 
 func (c *Client) deliver(j job) {
+	c.stamp(&j)
 	ctx, cancel := c.ctx(context.Background(), c.cfg.ObserveTimeout)
 	defer cancel()
 	var err error
@@ -632,6 +800,9 @@ type Stats struct {
 	// NoNewMessages (v2): requests read whole that add no message (a
 	// chained request resuming a turn), so had no OnRequest.
 	NoNewMessages uint64 `json:"no_new_messages"`
+	// HeldForIdentity: observed calls whose callbacks waited for their
+	// credential's lookup (in a buffer of their own, not the queues).
+	HeldForIdentity uint64 `json:"held_for_identity"`
 }
 
 // Stats returns the counters.
@@ -641,6 +812,7 @@ func (c *Client) Stats() Stats {
 		Queued: c.queued.Load(), Dropped: c.dropped.Load(), Delivered: c.delivered.Load(),
 		Failed: c.failed.Load(), Decided: c.decided.Load(), DecideFailed: c.decideFailed.Load(),
 		Unparsed: c.unparsed.Load(), UnparsedReasons: c.unparsedReasons(), NoNewMessages: c.noNew.Load(),
+		HeldForIdentity: c.heldCalls.Load(),
 	}
 }
 

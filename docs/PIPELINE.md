@@ -64,7 +64,8 @@ Two stages, and only the second touches the database:
 
 The observer already assembles traffic into records (`records/assemble.go`):
 `call_start` when a request has been sent, `call_end` with the call's rows when
-it completes, `client_event` (one per analytics event), `account` and
+it completes, `client_event` (one per analytics event), `account`,
+`credential` (who a credential belongs to, `internal/identity`), `verdict` and
 `ws_connection`. v9 keeps that and writes them to one stream of files per pod:
 
 - **Path:** `<prefix>/raw/<YYYY-MM-DD>/<HH>/<pod>/<ns>-<seq>.ndjson.gz`, so
@@ -213,6 +214,7 @@ unchanged until the pages are redrawn):
 |---|---|---|
 | `accounts` | one per account: email, name, org (its sightings'), codex plan, `seen_ns`. Index `(lower(email))` | Upsert; the newest sighting wins |
 | `session_accounts` | (session, account), first/last ns. Index `(account_id, start_ns)` | Upsert; `least`/`greatest` on the times |
+| `credentials` | one per credential (`key_hash`, never the credential): its account, how that was learned (`lookup` or `observed`), its hint, `first_ns` and `verified_ns`. Many to one account. Index `(account_id)`. Retention deletes a row last verified before the cutoff | Upsert; the newest sighting's account, source and hint; `least`/`greatest` on the times |
 | `session_credentials` | (session, key_hash), first/last ns: its visible calls' credentials | Same |
 | `account_devices` | (account, device): agent, version, first/last ns, from its visible calls | Same |
 | `session_edges` | (child session, parent session) | Insert if absent |
@@ -236,7 +238,7 @@ read from `accounts` (a handful of rows per person).
 ```
 BEGIN;
   INSERT INTO calls    … ON CONFLICT (call_id) DO UPDATE …   -- the end fills in the start
-  INSERT INTO accounts, session_accounts, session_credentials, account_devices,
+  INSERT INTO accounts, credentials, session_accounts, session_credentials, account_devices,
               session_edges, ingest_pods … ON CONFLICT …
   INSERT INTO dirty (kind, key, seq) … ON CONFLICT DO UPDATE SET seq = excluded.seq
 COMMIT;

@@ -177,6 +177,26 @@ func (r *Rows) write(ctx context.Context, tx pgx.Tx, pod string) error {
 	lists.conflict = "ON CONFLICT (hash) DO NOTHING"
 	stmts = append(stmts, lists)
 
+	// Who each credential belongs to: the newest sighting's account, source
+	// and hint (by time, then value, as Credential.newer), the earliest and
+	// latest times. Order-free, so a rebuild gives the same rows.
+	creds := &insert{table: "credentials"}
+	crs := r.Credentials
+	col(creds, crs, "key_hash", "text", func(c *Credential) string { return c.KeyHash })
+	col(creds, crs, "key_hint", "text", func(c *Credential) string { return c.KeyHint })
+	col(creds, crs, "account_id", "text", func(c *Credential) string { return c.AccountID })
+	col(creds, crs, "source", "text", func(c *Credential) string { return c.Source })
+	col(creds, crs, "first_ns", "bigint", func(c *Credential) int64 { return c.First })
+	col(creds, crs, "verified_ns", "bigint", func(c *Credential) int64 { return c.Verified })
+	newer := "(excluded.verified_ns, excluded.account_id, excluded.source, excluded.key_hint) > " +
+		"(credentials.verified_ns, credentials.account_id, credentials.source, credentials.key_hint)"
+	creds.conflict = "ON CONFLICT (key_hash) DO UPDATE SET " +
+		fmt.Sprintf("key_hint = CASE WHEN %[1]s THEN excluded.key_hint ELSE credentials.key_hint END, "+
+			"account_id = CASE WHEN %[1]s THEN excluded.account_id ELSE credentials.account_id END, "+
+			"source = CASE WHEN %[1]s THEN excluded.source ELSE credentials.source END, ", newer) +
+		"first_ns = least(credentials.first_ns, excluded.first_ns), verified_ns = greatest(credentials.verified_ns, excluded.verified_ns)"
+	stmts = append(stmts, creds)
+
 	// Interceptor verdicts: a verdict is written once and never changes.
 	vs := &insert{table: "verdicts"}
 	vrows := r.Verdicts
@@ -347,7 +367,7 @@ func num(n int64) *int64 {
 }
 
 // Tables are the tables a flush writes facts to, and the dirty list.
-var Tables = []string{"calls", "accounts", "session_accounts", "session_credentials", "account_devices", "session_edges", "dirty"}
+var Tables = []string{"calls", "accounts", "credentials", "session_accounts", "session_credentials", "account_devices", "session_edges", "dirty"}
 
 // Summary is a table's row count, a checksum of its rows (independent of their
 // order: the sum of a hash of each row's text; dirty's of its kind and key

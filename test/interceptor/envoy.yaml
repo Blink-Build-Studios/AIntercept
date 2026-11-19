@@ -7,7 +7,8 @@
 # Contract v2 has its own observer (observer-v2, with the v2 example
 # Interceptor): the model hosts convo reads, api.anthropic.com and
 # chatgpt.com, go to the fixture through its enforcing filter, or its
-# observing one with the header x-e2e-mode: observe.
+# observing one with the header x-e2e-mode: observe. With x-e2e-contract: v1
+# they go to the v1 observer's filters instead.
 static_resources:
   listeners:
     - name: http
@@ -29,6 +30,19 @@ static_resources:
                     - name: v2
                       domains: ["api.anthropic.com", "chatgpt.com", "api.openai.com"]
                       routes:
+                        # x-e2e-contract: v1 sends a model host's call to the v1 observer instead
+                        # (the identity tests: a lookup needs the provider's host).
+                        - match: { prefix: "/", headers: [{ name: x-e2e-contract, string_match: { exact: v1 } }, { name: x-e2e-mode, string_match: { exact: observe } }] }
+                          route: { cluster: fixture, timeout: 0s }
+                        - match: { prefix: "/", headers: [{ name: x-e2e-contract, string_match: { exact: v1 } }] }
+                          route: { cluster: fixture, timeout: 0s }
+                          typed_per_filter_config:
+                            aintercept.observe:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+                              disabled: true
+                            aintercept.enforce:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute
+                              overrides: {}
                         - match: { prefix: "/", headers: [{ name: x-e2e-mode, string_match: { exact: observe } }] }
                           route: { cluster: fixture, timeout: 0s }
                           typed_per_filter_config:
