@@ -21,7 +21,6 @@ spec:
         - name: observer
           image: aintercept/aintercept:dev # replace with your registry
           args: ["observer"]
-          args: []
           env:
             - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }
             - { name: OBSERVER_HTTP_LISTEN, value: "0.0.0.0:9001" }
