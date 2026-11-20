@@ -10,7 +10,7 @@
   "call.org_id": "00000000-0000-4000-8000-000000000001",
   "call.path": "/api/oauth/organizations/00000000-0000-4000-8000-000000000001/plugins/list-plugins?enabled_only=true…(132 bytes)",
   "call.product": "claude_code",
-  "call.request_id": "req_000XxxXxXxxxxxxxxXx0XXx3",
+  "call.request_id": "req_000XxxXxXxxxxxxxxXx0XXx4",
   "call.status": 200,
   "call.user_agent": "claude-cli/2.1.322 (external, cli)",
   "interceptor.callbacks": [
@@ -52,6 +52,6 @@
   "row.key_hint": "sk-ant…OAAA",
   "row.method": "GET",
   "row.path": "/api/oauth/organizations/00000000-0000-4000-8000-000000000001/plugins/list-plugins?enabled_only=true…(132 bytes)",
-  "row.provider.request-id": "req_000XxxXxXxxxxxxxxXx0XXx3",
+  "row.provider.request-id": "req_000XxxXxXxxxxxxxxXx0XXx4",
   "row.status": 200
 }

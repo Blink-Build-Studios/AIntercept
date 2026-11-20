@@ -9,7 +9,7 @@
   "call.method": "POST",
   "call.path": "/api/eval/sdk-xXXxxxXXXxXxXXX1",
   "call.product": "claude_code",
-  "call.request_id": "req_000XxxxXXxX0XXxXXx0XxXx3",
+  "call.request_id": "req_000XxxxXXxX0XXxXXx0XxXx4",
   "call.status": 200,
   "call.user_agent": "claude-code/2.1.312",
   "interceptor.callbacks": [
@@ -48,6 +48,6 @@
   "row.key_hint": "sk-ant…OAAA",
   "row.method": "POST",
   "row.path": "/api/eval/sdk-xXXxxxXXXxXxXXX1",
-  "row.provider.request-id": "req_000XxxxXXxX0XXxXXx0XxXx3",
+  "row.provider.request-id": "req_000XxxxXXxX0XXxXXx0XxXx4",
   "row.status": 200
 }

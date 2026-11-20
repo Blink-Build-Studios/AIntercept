@@ -22,11 +22,11 @@
   "call.person_id": "00000000-0000-4000-8000-00000000000d",
   "call.previous_message_id": "msg_000XxxX00xxXxxXxX0XXXX14",
   "call.product": "claude_code",
-  "call.prompt_id": "00000000-0000-4000-8000-000000000003",
+  "call.prompt_id": "00000000-0000-4000-8000-000000000002",
   "call.request_class": "main",
-  "call.request_id": "req_000XxxX0xxXx0xxxXxxxxXX6",
+  "call.request_id": "req_000XxxX0xxXx0xxxXxxxxXX8",
   "call.service_tier": "standard",
-  "call.session_id": "00000000-0000-4000-8000-000000000002",
+  "call.session_id": "00000000-0000-4000-8000-000000000003",
   "call.status": 200,
   "call.stop_reason": "tool_use",
   "call.stream": true,
@@ -105,7 +105,7 @@
   "on_call_complete.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
   "on_call_complete.call.identity.key_hint": "sk-ant…OAAA",
   "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-00000000000d",
-  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
   "on_call_complete.call.method": "POST",
   "on_call_complete.call.mode": "MODE_OBSERVE",
   "on_call_complete.call.path": "/v1/messages?beta=true",
@@ -130,9 +130,9 @@
   ],
   "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.308 (external, cli)",
   "on_call_start.call.client.headers.x-app": "cli",
-  "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000002",
   "on_call_start.call.client.headers.x-claude-code-request-class": "main",
-  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000003",
   "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000004",
   "on_call_start.call.client.headers.x-stainless-arch": "arm64",
   "on_call_start.call.client.headers.x-stainless-lang": "js",
@@ -148,7 +148,7 @@
   "on_call_start.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
   "on_call_start.call.identity.key_hint": "sk-ant…OAAA",
   "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-00000000000d",
-  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
   "on_call_start.call.method": "POST",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/v1/messages?beta=true",
@@ -173,17 +173,17 @@
   "on_request.format": "anthropic_messages",
   "on_request.messages": [
     {
-      "id": "f17a1207168cb7164b65831e252cbb2d",
+      "id": "e07a53933b18e8e7d1e0d1dbc0c34351",
       "parts": [
         {
-          "id": "f17a1207168cb7164b65831e252cbb2d/0",
+          "id": "e07a53933b18e8e7d1e0d1dbc0c34351/0",
           "size": "114",
           "text": {
             "text": "xxxx, X xxxxx xxxx xx xxxx x xxxxxx xxx xxx xxxxxxx. Xxxxx xx xxxxx xxxx x xxxx xxxx, xx xxxxx xxx'x xxxxxxx xxxx."
           }
         },
         {
-          "id": "f17a1207168cb7164b65831e252cbb2d/1",
+          "id": "e07a53933b18e8e7d1e0d1dbc0c34351/1",
           "media": {
             "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA…(7516 bytes)",
             "media_type": "image/png"
@@ -191,7 +191,7 @@
           "size": "5636"
         },
         {
-          "id": "f17a1207168cb7164b65831e252cbb2d/2",
+          "id": "e07a53933b18e8e7d1e0d1dbc0c34351/2",
           "size": "151",
           "text": {
             "text": "[Xxxxx: xxxxxx: /xxx/xxxxxxx/0x/xxxxxx000x0xx0x0x0xxx0xx0000xx/X/XxxxxxxxxXxxxx/XXXXX_xxxxxxxxxxxxxx…(151 bytes)"
@@ -224,9 +224,9 @@
   "row.cache_write_tokens": 648,
   "row.client.user-agent": "claude-cli/2.1.308 (external, cli)",
   "row.client.x-app": "cli",
-  "row.client.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000002",
   "row.client.x-claude-code-request-class": "main",
-  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000003",
   "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000004",
   "row.client.x-stainless-arch": "arm64",
   "row.client.x-stainless-lang": "js",
@@ -254,11 +254,11 @@
   "row.provider.anthropic-ratelimit-unified-overage-status": "rejected",
   "row.provider.anthropic-ratelimit-unified-representative-claim": "seven_day",
   "row.provider.anthropic-ratelimit-unified-status": "allowed",
-  "row.provider.anthropic-workspace-id": "wrkspc_000xxXxxXxxXXxXxXxXxxxx5",
-  "row.provider.request-id": "req_000XxxX0xxXx0xxxXxxxxXX6",
-  "row.provider_org_id": "00000000-0000-4000-8000-000000000007",
+  "row.provider.anthropic-workspace-id": "wrkspc_000xxXxxXxxXXxXxXxXxxxx6",
+  "row.provider.request-id": "req_000XxxX0xxXx0xxxXxxxxXX8",
+  "row.provider_org_id": "00000000-0000-4000-8000-000000000005",
   "row.service_tier": "standard",
-  "row.session_id": "00000000-0000-4000-8000-000000000002",
+  "row.session_id": "00000000-0000-4000-8000-000000000003",
   "row.speed": "standard",
   "row.status": 200,
   "row.stop_reason": "tool_use",

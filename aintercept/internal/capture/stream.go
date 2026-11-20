@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -239,7 +240,13 @@ func (a *Anonymizer) Headers(h map[string]string) (map[string]string, error) {
 		return nil, err
 	}
 	out := make(map[string]string, len(h))
-	for k, v := range h {
+	keys := make([]string, 0, len(h))
+	for k := range h {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // fakes are numbered in the order met: the same call, the same case
+	for _, k := range keys {
+		v := h[k]
 		lk := strings.ToLower(k)
 		switch {
 		case v == redacted || v == "":

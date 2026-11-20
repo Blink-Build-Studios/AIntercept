@@ -10,11 +10,11 @@
     "date": "Wed, 11 Nov 2026 19:16:14 GMT",
     "nel": "{\"report_to\":\"xx-xxx\",\"success_fraction\":0.01,\"max_age\":604800}",
     "referrer-policy": "xxxxxx-xxxxxx-xxxx-xxxxx-xxxxxx",
-    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XxXxXx0xXxXxx10%0XxXxXxxXX11%0Xxxx00X0xXXXXxxX0XXxXx0xXXx0x12%0X0xXxxxXxXXXXxxxXxxXX00xX0X0XxxXx0x13%0XXxXXx0XX0xxxx00XxxXXxxxxXxX14\"}]}",
+    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XxXxXx0xXxXxxx9%0XxXxXxxXX10%0Xxxx00X0xXXXXxxX0XXxXx0xXXx0x11%0X0xXxxxXxXXXXxxxXxxXX00xX0X0XxxXx0x12%0XXxXXx0XX0xxxx00XxxXXxxxxXxX13\"}]}",
     "server": "cloudflare",
     "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
     "x-content-type-options": "nosniff",
-    "x-oai-request-id": "00000000-0000-4000-8000-000000000009",
+    "x-oai-request-id": "00000000-0000-4000-8000-00000000000e",
     "x-openai-proxy-wasm": "v0.1"
   },
   "body": "response-body.json",

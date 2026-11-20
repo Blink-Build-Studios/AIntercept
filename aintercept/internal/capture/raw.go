@@ -406,35 +406,41 @@ func authOf(e *events.Event) *events.AuthIdentity {
 	return e.Auth
 }
 
-// claims is a ChatGPT token's claims as OpenAI namespaces them, from what the
-// observer read (events.AuthIdentityFromHeaders), anonymized.
+// claims is a ChatGPT token's claims as OpenAI namespaces them (the claim
+// keys the code reads, events.AuthIdentityFromHeaders), from what the observer
+// read, each value anonymized as it is everywhere else in the case.
 func claims(a *Anonymizer, au *events.AuthIdentity) json.RawMessage {
-	auth := map[string]any{}
 	put := func(m map[string]any, k, v string) {
 		if v != "" {
 			m[k] = v
 		}
 	}
-	put(auth, "chatgpt_account_id", au.AccountID)
-	put(auth, "chatgpt_user_id", au.UserID)
+	auth := map[string]any{}
+	put(auth, "chatgpt_account_id", a.ID(au.AccountID))
+	put(auth, "chatgpt_user_id", a.ID(au.UserID))
 	put(auth, "chatgpt_plan_type", au.Plan)
 	profile := map[string]any{}
-	put(profile, "email", au.Email)
+	if au.Email != "" {
+		profile["email"] = a.email(au.Email)
+	}
 	top := map[string]any{"https://api.openai.com/auth": auth, "https://api.openai.com/profile": profile}
-	put(top, "name", au.Name)
-	put(top, "iss", au.Issuer)
-	put(top, "sub", au.Subject)
-	put(top, "client_id", au.ClientID)
-	put(top, "session_id", au.SessionID)
+	if au.Name != "" {
+		a.Who[strings.ToLower(au.Name)] = true
+		top["name"] = a.Default(au.Name)
+	}
+	if iss := au.Issuer; iss == "https://auth.openai.com" {
+		top["iss"] = iss // the provider's own issuer
+	} else {
+		put(top, "iss", a.Default(iss))
+	}
+	put(top, "sub", a.Default(au.Subject))
+	put(top, "client_id", a.ID(au.ClientID))
+	put(top, "session_id", a.ID(au.SessionID))
 	if au.ExpiresAt != 0 {
 		top["exp"] = au.ExpiresAt
 	}
 	b, _ := json.Marshal(top)
-	out, err := a.JSON(b)
-	if err != nil {
-		return nil
-	}
-	return out
+	return b
 }
 
 // wsMessages decodes a WebSocket's frames (both directions, in the order the

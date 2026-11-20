@@ -9,7 +9,7 @@
   "call.method": "GET",
   "call.path": "/api/claude_cli/bootstrap?entrypoint=claude-desktop&model=claude-fable-5",
   "call.product": "claude_code",
-  "call.request_id": "req_000XxxxXxxx0X00xXxxXxXX3",
+  "call.request_id": "req_000XxxxXxxx0X00xXxxXxXX5",
   "call.status": 200,
   "call.user_agent": "claude-code/2.1.321",
   "identity.learned": {
@@ -19,7 +19,7 @@
     "key_hint": "sk-ant…OAAA",
     "name": "",
     "org": "person8@example.com'x Xxxxxxxxxxxx",
-    "org_id": "00000000-0000-4000-8000-000000000006"
+    "org_id": "00000000-0000-4000-8000-000000000002"
   },
   "interceptor.callbacks": [
     "start",
@@ -57,7 +57,7 @@
   "row.auth.account_id": "00000000-0000-4000-8000-000000000007",
   "row.auth.email": "person8@example.com",
   "row.auth.org": "person8@example.com'x Xxxxxxxxxxxx",
-  "row.auth.org_id": "00000000-0000-4000-8000-000000000006",
+  "row.auth.org_id": "00000000-0000-4000-8000-000000000002",
   "row.client.anthropic-client-platform": "xxxxxxx_xxx",
   "row.client.user-agent": "claude-code/2.1.321",
   "row.host": "api.anthropic.com",
@@ -66,8 +66,8 @@
   "row.key_hint": "sk-ant…OAAA",
   "row.method": "GET",
   "row.path": "/api/claude_cli/bootstrap?entrypoint=claude-desktop&model=claude-fable-5",
-  "row.provider.anthropic-workspace-id": "wrkspc_00XxXxxxXx00XXXxXxXx0XX2",
-  "row.provider.request-id": "req_000XxxxXxxx0X00xXxxXxXX3",
-  "row.provider_org_id": "00000000-0000-4000-8000-000000000006",
+  "row.provider.anthropic-workspace-id": "wrkspc_00XxXxxxXx00XXXxXxXx0XX3",
+  "row.provider.request-id": "req_000XxxxXxxx0X00xXxxXxXX5",
+  "row.provider_org_id": "00000000-0000-4000-8000-000000000002",
   "row.status": 200
 }

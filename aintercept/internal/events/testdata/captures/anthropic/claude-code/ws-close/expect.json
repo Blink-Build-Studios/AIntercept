@@ -29,7 +29,7 @@
   "ws_connection.call.method": "GET",
   "ws_connection.call.path": "/api/frame/sync?slug=00000000-0000-4000-8000-000000000001&comment_hint=1&vn=passive",
   "ws_connection.call.product": "claude_code",
-  "ws_connection.call.request_id": "req_000Xx0xXxXXXx0Xx0XXXXx10",
+  "ws_connection.call.request_id": "req_000Xx0xXxXXXx0Xx0XXXXxX9",
   "ws_connection.call.status": 101,
   "ws_connection.call.transport": "websocket",
   "ws_connection.call.user_agent": "claude-cli/2.1.319 (external, cli)",
@@ -38,7 +38,7 @@
   "ws_connection.ip": "192.0.2.3",
   "ws_connection.method": "GET",
   "ws_connection.path": "/api/frame/sync?slug=00000000-0000-4000-8000-000000000001&comment_hint=1&vn=passive",
-  "ws_connection.provider.request-id": "req_000Xx0xXxXXXx0Xx0XXXXx10",
+  "ws_connection.provider.request-id": "req_000Xx0xXxXXXx0Xx0XXXXxX9",
   "ws_connection.status": 101,
   "ws_connection.transport": "websocket",
   "ws_connection.websocket": {

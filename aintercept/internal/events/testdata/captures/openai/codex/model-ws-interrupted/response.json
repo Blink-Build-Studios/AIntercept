@@ -3,20 +3,20 @@
   "headers": {
     ":status": "101",
     "cf-cache-status": "DYNAMIC",
-    "cf-ray": "0000000000000009-XXX",
+    "cf-ray": "0000000000000008-XXX",
     "connection": "upgrade",
     "cross-origin-opener-policy": "xxxx-xxxxxx-xxxxx-xxxxxx",
     "date": "Mon, 02 Nov 2026 17:52:40 GMT",
     "nel": "{\"report_to\":\"xx-xxx\",\"success_fraction\":0.01,\"max_age\":604800}",
     "referrer-policy": "xxxxxx-xxxxxx-xxxx-xxxxx-xxxxxx",
-    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XX0XXxX0xXxxxxxXxxXXxXXXxxXXXxxxXxxxxx0XXxXX0X00xXXxXxXx00xXXxXXxXXx10%0Xxxx0xXX0000xX11%0XxXxxxx%0XXxxxXxXxX0XX12%0XXx0xXxxXxxX13%0XX\"}]}",
-    "sec-websocket-accept": "XXxXxXXXX0X0XXx0xX14/X00X0x=",
+    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XX0XXxX0xXxxxxxXxxXXxXXXxxXXXxxxXxxxxx0XXxXX0X00xXXxXxXx00xXXxXXxXXxx9%0Xxxx0xXX0000xX10%0XxXxxxx%0XXxxxXxXxX0XX11%0XXx0xXxxXxxX12%0XX\"}]}",
+    "sec-websocket-accept": "XXxXxXXXX0X0XXx0xX13/X00X0x=",
     "sec-websocket-extensions": "permessage-deflate",
     "server": "cloudflare",
     "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
     "upgrade": "websocket",
     "x-content-type-options": "nosniff",
-    "x-models-etag": "X/\"00000000000000000000000000000008\"",
+    "x-models-etag": "X/\"0000000000000000000000000000000e\"",
     "x-openai-proxy-wasm": "v0.1"
   }
 }

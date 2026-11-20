@@ -2,7 +2,7 @@
   "status": 200,
   "headers": {
     ":status": "200",
-    "anthropic-organization-id": "00000000-0000-4000-8000-000000000012",
+    "anthropic-organization-id": "00000000-0000-4000-8000-00000000000c",
     "anthropic-ratelimit-unified-7d-reset": "1795374000",
     "anthropic-ratelimit-unified-7d-status": "allowed",
     "anthropic-ratelimit-unified-7d-utilization": "0.26",
@@ -22,9 +22,9 @@
     "date": "Thu, 19 Nov 2026 17:42:15 GMT",
     "request-id": "req_000XxXxXX0x0Xx0xxxxXx015",
     "server": "cloudflare",
-    "server-timing": "x-xxxxxxXxxxxx12;xxx=000",
+    "server-timing": "x-xxxxxxXxxxxx16;xxx=000",
     "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
-    "traceresponse": "00-00000000000000000000000000000010-0000000000000011-00",
+    "traceresponse": "00-00000000000000000000000000000011-0000000000000012-00",
     "vary": "Accept-Encoding",
     "x-robots-tag": "none"
   },

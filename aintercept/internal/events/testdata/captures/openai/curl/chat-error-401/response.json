@@ -4,7 +4,7 @@
     ":status": "401",
     "access-control-expose-headers": "XX-Xxx,XX-Xxx",
     "cf-cache-status": "DYNAMIC",
-    "cf-ray": "0000000000000003-XXX",
+    "cf-ray": "0000000000000002-XXX",
     "content-length": "258",
     "content-type": "text/plain",
     "date": "Tue, 10 Nov 2026 21:19:52 GMT",
@@ -16,7 +16,7 @@
     "x-openai-authorization-error": "401",
     "x-openai-ide-error-code": "xxxxxxx_xxx_xxx",
     "x-openai-internal-caller": "xxxxxxx_xxxxxxx_xxx",
-    "x-request-id": "req_x000x0xx0x0x0x0x0000000xxx000xx2"
+    "x-request-id": "req_x000x0xx0x0x0x0x0000000xxx000xx3"
   },
   "body": "response-body.json",
   "chunks": [

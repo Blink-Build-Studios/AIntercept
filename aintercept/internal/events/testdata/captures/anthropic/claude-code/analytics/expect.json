@@ -8,7 +8,7 @@
   "call.method": "POST",
   "call.path": "/api/event_logging/v2/batch",
   "call.product": "claude_code",
-  "call.request_id": "req_000XxxXXX0XxxxXxxxXxxxx4",
+  "call.request_id": "req_000XxxXXX0XxxxXxxxXxxxx3",
   "call.status": 200,
   "call.user_agent": "claude-code/2.1.319",
   "client_events": [
@@ -65,6 +65,6 @@
   "row.key_hint": "sk-ant…OAAA",
   "row.method": "POST",
   "row.path": "/api/event_logging/v2/batch",
-  "row.provider.request-id": "req_000XxxXXX0XxxxXxxxXxxxx4",
+  "row.provider.request-id": "req_000XxxXXX0XxxxXxxxXxxxx3",
   "row.status": 200
 }

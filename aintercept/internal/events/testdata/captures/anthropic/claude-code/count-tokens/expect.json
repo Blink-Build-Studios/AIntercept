@@ -12,7 +12,7 @@
   "call.path": "/v1/messages/count_tokens?beta=true",
   "call.product": "claude_code",
   "call.request_class": "auxiliary",
-  "call.request_id": "req_000Xx0x0xxx0XXxx00Xx0xX8",
+  "call.request_id": "req_000Xx0x0xxx0XXxx00Xx0xX7",
   "call.session_id": "00000000-0000-4000-8000-000000000002",
   "call.status": 200,
   "call.user_agent": "claude-cli/2.1.325 (external, claude-desktop, agent-sdk/0.3.325)",
@@ -81,7 +81,7 @@
   "row.model": "claude-fable-5",
   "row.path": "/v1/messages/count_tokens?beta=true",
   "row.provider.anthropic-workspace-id": "wrkspc_00XxXxxxXx00XXXxXxXx0XX5",
-  "row.provider.request-id": "req_000Xx0x0xxx0XXxx00Xx0xX8",
+  "row.provider.request-id": "req_000Xx0x0xxx0XXxx00Xx0xX7",
   "row.provider_org_id": "00000000-0000-4000-8000-000000000004",
   "row.status": 200
 }

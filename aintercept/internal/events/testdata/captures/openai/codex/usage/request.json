@@ -21,20 +21,20 @@
     "scheme": "Bearer",
     "kind": "chatgpt_jwt",
     "claims": {
-      "client_id": "app_XXxxxXXX00x0XxXxXx0xxxx3",
+      "client_id": "app_XXxxxXXX00x0XxXxXx0xxxx6",
       "exp": 1794492640,
-      "xxxxx://xxx.xxxxxx.xxx/xxxx": {
+      "https://api.openai.com/auth": {
         "chatgpt_account_id": "00000000-0000-4000-8000-000000000002",
         "chatgpt_plan_type": "pro",
-        "chatgpt_user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx04"
+        "chatgpt_user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx03"
       },
-      "xxxxx://xxx.xxxxxx.xxx/xxxxxxx": {
-        "email": "person5@example.com"
+      "https://api.openai.com/profile": {
+        "email": "person4@example.com"
       },
-      "iss": "xxxxx://xxxx.xxxxxx.xxx",
+      "iss": "https://auth.openai.com",
       "name": "Xxxxx Xxxx",
-      "session_id": "authsess_xXX0X0xxxxxXxX0xXxXXXxx6",
-      "sub": "xxxx0|000000000000000000000007"
+      "session_id": "authsess_xXX0X0xxxxxXxX0xXxXXXxx7",
+      "sub": "xxxx0|000000000000000000000005"
     }
   }
 }

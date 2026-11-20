@@ -1,7 +1,7 @@
 {
   "call.agent_id": "00000000000000002",
   "call.client": "cli",
-  "call.client_request_id": "00000000-0000-4000-8000-000000000004",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000005",
   "call.client_version": "2.1.327",
   "call.device_id": "0000000000000000000000000000000000000000000000000000000000000006",
   "call.effort": "low",
@@ -18,7 +18,7 @@
   "call.product": "claude_code",
   "call.prompt_id": "00000000-0000-4000-8000-000000000003",
   "call.request_class": "auxiliary",
-  "call.session_id": "00000000-0000-4000-8000-000000000005",
+  "call.session_id": "00000000-0000-4000-8000-000000000004",
   "call.status": 503,
   "call.stream": true,
   "call.user_agent": "claude-cli/2.1.327 (external, cli)",
@@ -58,7 +58,7 @@
   "on_call_complete.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
   "on_call_complete.call.identity.key_hint": "sk-ant…OAAA",
   "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000007",
-  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000005",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
   "on_call_complete.call.method": "POST",
   "on_call_complete.call.mode": "MODE_OBSERVE",
   "on_call_complete.call.path": "/v1/messages?beta=true",
@@ -74,8 +74,8 @@
   "on_call_start.call.client.headers.x-claude-code-agent-id": "00000000000000002",
   "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000003",
   "on_call_start.call.client.headers.x-claude-code-request-class": "auxiliary",
-  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000005",
-  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000005",
   "on_call_start.call.client.headers.x-stainless-arch": "x64",
   "on_call_start.call.client.headers.x-stainless-lang": "js",
   "on_call_start.call.client.headers.x-stainless-os": "Linux",
@@ -90,7 +90,7 @@
   "on_call_start.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
   "on_call_start.call.identity.key_hint": "sk-ant…OAAA",
   "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000007",
-  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000005",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
   "on_call_start.call.method": "POST",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/v1/messages?beta=true",
@@ -102,10 +102,10 @@
   "on_request.format": "anthropic_messages",
   "on_request.messages": [
     {
-      "id": "1cd5b061f61cef71564df0e29a81d787",
+      "id": "359f58c1a7528bd9bdcfdd0313ccaf20",
       "parts": [
         {
-          "id": "1cd5b061f61cef71564df0e29a81d787/0",
+          "id": "359f58c1a7528bd9bdcfdd0313ccaf20/0",
           "size": "3432",
           "text": {
             "text": "<xxxx>\nXxxx /xxx/xxxxxxx-xxxx-0000x-xxxx/xxxxx/xxxxxxxx.xx xxx xxxxxx xx xxxxxxx; xxx xxx XXXXXX \"X0…(3432 bytes)"
@@ -122,8 +122,8 @@
   "row.client.x-claude-code-agent-id": "00000000000000002",
   "row.client.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000003",
   "row.client.x-claude-code-request-class": "auxiliary",
-  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000005",
-  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000004",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000005",
   "row.client.x-stainless-arch": "x64",
   "row.client.x-stainless-lang": "js",
   "row.client.x-stainless-os": "Linux",
@@ -140,7 +140,7 @@
   "row.method": "POST",
   "row.model": "claude-haiku-5-5",
   "row.path": "/v1/messages?beta=true",
-  "row.session_id": "00000000-0000-4000-8000-000000000005",
+  "row.session_id": "00000000-0000-4000-8000-000000000004",
   "row.status": 503,
   "row.stream": true,
   "row.user_id": "{\"device_id\":\"0000000000000000000000000000000000000000000000000000000000000006\",\"account_uuid\":\"0000…(186 bytes)"

@@ -10,7 +10,7 @@
   "call.method": "GET",
   "call.path": "/api/oauth/usage?cedar_ember=1",
   "call.product": "claude_code",
-  "call.request_id": "req_000Xxx0xXxxXxx0X0xxxxXx3",
+  "call.request_id": "req_000Xxx0xXxxXxx0X0xxxxXx5",
   "call.status": 200,
   "call.user_agent": "claude-cli/2.1.288 (external, cli)",
   "interceptor.callbacks": [
@@ -46,8 +46,8 @@
   "row.key_hint": "sk-ant…OAAA",
   "row.method": "GET",
   "row.path": "/api/oauth/usage?cedar_ember=1",
-  "row.provider.anthropic-workspace-id": "wrkspc_00X0XxX0Xx0X0xXxXxxxxxx6",
-  "row.provider.request-id": "req_000Xxx0xXxxXxx0X0xxxxXx3",
-  "row.provider_org_id": "00000000-0000-4000-8000-000000000005",
+  "row.provider.anthropic-workspace-id": "wrkspc_00X0XxX0Xx0X0xXxXxxxxxx3",
+  "row.provider.request-id": "req_000Xxx0xXxxXxx0X0xxxxXx5",
+  "row.provider_org_id": "00000000-0000-4000-8000-000000000002",
   "row.status": 200
 }

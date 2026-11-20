@@ -10,9 +10,9 @@
     "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
     "content-type": "application/json",
     "date": "Wed, 18 Nov 2026 05:06:05 GMT",
-    "request-id": "req_000Xx0x0xxx0XXxx00Xx0xX8",
+    "request-id": "req_000Xx0x0xxx0XXxx00Xx0xX7",
     "server": "cloudflare",
-    "server-timing": "x-xxxxxxXxxxxxx7;xxx=00",
+    "server-timing": "x-xxxxxxXxxxxxx8;xxx=00",
     "x-robots-tag": "none"
   },
   "body": "response-body.json",

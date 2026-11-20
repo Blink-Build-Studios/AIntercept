@@ -3,14 +3,14 @@
   "headers": {
     ":status": "200",
     "cf-cache-status": "DYNAMIC",
-    "cf-ray": "0000000000000003-XXX",
+    "cf-ray": "0000000000000002-XXX",
     "content-encoding": "br",
     "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
     "content-type": "application/json",
     "date": "Wed, 11 Nov 2026 19:12:08 GMT",
-    "request-id": "req_000XxxxxXXXxXxx00Xx0xXX4",
+    "request-id": "req_000XxxxxXXXxXxx00Xx0xXX3",
     "server": "cloudflare",
-    "server-timing": "x-xxxxxxXxxxxxx2;xxx=00",
+    "server-timing": "x-xxxxxxXxxxxxx4;xxx=00",
     "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
     "vary": "Accept-Encoding",
     "x-robots-tag": "none"

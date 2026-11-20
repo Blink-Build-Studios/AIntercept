@@ -9,24 +9,24 @@
     ":path": "/backend-api/codex/responses",
     ":scheme": "https",
     "authorization": "<redacted>",
-    "chatgpt-account-id": "00000000-0000-4000-8000-000000000004",
+    "chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
     "connection": "Upgrade",
     "cookie": "<redacted>",
     "openai-beta": "responses_websockets=2026-02-06",
     "originator": "codex_exec",
     "sec-websocket-extensions": "permessage-deflate; client_max_window_bits",
-    "sec-websocket-key": "xxxXXX0xxXxxX0xx0xxXX2==",
+    "sec-websocket-key": "xxxXXX0xxXxxX0xx0xxXX3==",
     "sec-websocket-version": "13",
-    "session-id": "00000000-0000-4000-8000-000000000003",
+    "session-id": "00000000-0000-4000-8000-000000000004",
     "thread-id": "00000000-0000-4000-8000-000000000005",
     "upgrade": "websocket",
     "user-agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
     "version": "0.164.0",
     "x-client-request-id": "00000000-0000-4000-8000-000000000005",
     "x-codex-beta-features": "remote_compaction_v2",
-    "x-codex-parent-thread-id": "00000000-0000-4000-8000-000000000003",
+    "x-codex-parent-thread-id": "00000000-0000-4000-8000-000000000004",
     "x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
-    "x-codex-turn-metadata": "{\"installation_id\":\"00000000-0000-4000-8000-000000000006\",\"session_id\":\"00000000-0000-4000-8000-000000000003\",\"thread_id\":\"00000000-0000-4000-8000-000000000005\",\"agent_name\":\"/root/xxxxx_xxxx_xxxxx\",\"turn_id\":\"\",\"window_id\":\"00000000-0000-4000-8000-000000000005:0\",\"window_number\":0,\"context_window_id\":\"00000000-0000-4000-8000-000000000007\",\"request_kind\":\"prewarm\",\"history_initialization\":\"warm_fork\",\"parent_thread_id\":\"00000000-0000-4000-8000-000000000003\",\"subagent_kind\":\"thread_spawn\",\"thread_source\":\"subagent\",\"sandbox\":\"none\",\"sandbox_mode\":\"danger-full-access\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":true,\"node_repl_disabled\":false,\"analytics_enabled\":true,\"model\":\"gpt-6.1-sol\",\"reasoning_effort\":\"medium\"}",
+    "x-codex-turn-metadata": "{\"installation_id\":\"00000000-0000-4000-8000-000000000006\",\"session_id\":\"00000000-0000-4000-8000-000000000004\",\"thread_id\":\"00000000-0000-4000-8000-000000000005\",\"agent_name\":\"/root/xxxxx_xxxx_xxxxx\",\"turn_id\":\"\",\"window_id\":\"00000000-0000-4000-8000-000000000005:0\",\"window_number\":0,\"context_window_id\":\"00000000-0000-4000-8000-000000000007\",\"request_kind\":\"prewarm\",\"history_initialization\":\"warm_fork\",\"parent_thread_id\":\"00000000-0000-4000-8000-000000000004\",\"subagent_kind\":\"thread_spawn\",\"thread_source\":\"subagent\",\"sandbox\":\"none\",\"sandbox_mode\":\"danger-full-access\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":true,\"node_repl_disabled\":false,\"analytics_enabled\":true,\"model\":\"gpt-6.1-sol\",\"reasoning_effort\":\"medium\"}",
     "x-codex-window-id": "00000000-0000-4000-8000-000000000005:0",
     "x-forwarded-proto": "https",
     "x-openai-subagent": "xxxxxx_xxxxx"
@@ -36,20 +36,20 @@
     "scheme": "Bearer",
     "kind": "chatgpt_jwt",
     "claims": {
-      "client_id": "app_XXxxxXXX00x0XxXxXx0xxxx8",
+      "client_id": "app_XXxxxXXX00x0XxXxXx0xxx11",
       "exp": 1794497032,
-      "xxxxx://xxx.xxxxxx.xxx/xxxx": {
-        "chatgpt_account_id": "00000000-0000-4000-8000-000000000004",
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "00000000-0000-4000-8000-000000000002",
         "chatgpt_plan_type": "plus",
-        "chatgpt_user_id": "user-XXxXx0x00Xxxxx0XxXx0xxX9"
+        "chatgpt_user_id": "user-XXxXx0x00Xxxxx0XxXx0xxX8"
       },
-      "xxxxx://xxx.xxxxxx.xxx/xxxxxxx": {
-        "email": "person10@example.com"
+      "https://api.openai.com/profile": {
+        "email": "person9@example.com"
       },
-      "iss": "xxxxx://xxxx.xxxxxx.xxx",
+      "iss": "https://auth.openai.com",
       "name": "Xxxxx Xxxxxxx",
-      "session_id": "authsess_xxXXxxxXX00XxXxxX0xxX011",
-      "sub": "xxxxxx-xxxxx0|00000000000000000000c"
+      "session_id": "authsess_xxXXxxxXX00XxXxxX0xxX012",
+      "sub": "xxxxxx-xxxxx0|00000000000000000000a"
     }
   }
 }

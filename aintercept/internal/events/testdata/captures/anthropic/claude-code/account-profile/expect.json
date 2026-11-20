@@ -9,7 +9,7 @@
   "call.method": "GET",
   "call.path": "/api/oauth/profile",
   "call.product": "claude_code",
-  "call.request_id": "req_000XxxxxXXXxXxx00Xx0xXX4",
+  "call.request_id": "req_000XxxxxXXXxXxx00Xx0xXX3",
   "call.status": 200,
   "call.user_agent": "claude-code/2.1.321",
   "identity.learned": {
@@ -75,6 +75,6 @@
   "row.key_hint": "sk-ant…OAAA",
   "row.method": "GET",
   "row.path": "/api/oauth/profile",
-  "row.provider.request-id": "req_000XxxxxXXXxXxx00Xx0xXX4",
+  "row.provider.request-id": "req_000XxxxxXXXxXxx00Xx0xXX3",
   "row.status": 200
 }
