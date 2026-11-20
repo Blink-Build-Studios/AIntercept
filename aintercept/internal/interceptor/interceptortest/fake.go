@@ -12,24 +12,42 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 )
 
-// Fake is an in-memory Interceptor whose verdicts the test sets.
+// Fake is an in-memory Interceptor whose answers the test sets. Its gRPC
+// server keeps the default 4 MiB receive limit.
 type Fake struct {
 	pb.UnimplementedInterceptorServer
-	mu       sync.Mutex
-	Start    func(*pb.CallStart) *pb.Verdict
-	Message  func(*pb.Message) *pb.Verdict
-	Delay    time.Duration
-	Block    chan struct{}
-	Calls    []string // "start", "message:<seq>", "complete"
-	Records  []*pb.CallRecord
-	Messages []*pb.Message
+	mu      sync.Mutex
+	Start   func(*pb.CallStart) *pb.CallVerdict
+	Request func(*pb.RequestMessages) *pb.RequestVerdict
+	Tool    func(*pb.ResponseMessage) *pb.MessageVerdict
+	// Reply answers OnReply; nil leaves it unimplemented, as in an
+	// Interceptor that doesn't have it.
+	Reply func(*pb.ResponseMessage) *pb.MessageVerdict
+	// NoToolCall: OnToolCall is unimplemented, as in an Interceptor that
+	// doesn't have it.
+	NoToolCall bool
+	Delay      time.Duration
+	// Block, when set, holds every callback until it's closed.
+	Block     chan struct{}
+	Calls     []string // "start", "request", "reply", "tool_call", "complete"
+	Requests  []*pb.RequestMessages
+	ToolCalls []*pb.ResponseMessage
+	Replies   []*pb.ResponseMessage
+	Records   []*pb.CallRecord
 	// Auth is each call's "authorization" metadata, in order ("" when absent).
 	Auth []string
+}
+
+func (f *Fake) wait() {
+	if f.Block != nil {
+		<-f.Block
+	}
+	time.Sleep(f.Delay)
 }
 
 // auth records the call's authorization metadata. Called with f.mu held.
@@ -50,16 +68,7 @@ func (f *Fake) Auths() []string {
 	return append([]string(nil), f.Auth...)
 }
 
-func (f *Fake) wait() {
-	if f.Block != nil {
-		<-f.Block
-	}
-	if f.Delay > 0 {
-		time.Sleep(f.Delay)
-	}
-}
-
-func (f *Fake) OnCallStart(ctx context.Context, s *pb.CallStart) (*pb.Verdict, error) {
+func (f *Fake) OnCallStart(ctx context.Context, s *pb.CallStart) (*pb.CallVerdict, error) {
 	f.wait()
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -68,20 +77,63 @@ func (f *Fake) OnCallStart(ctx context.Context, s *pb.CallStart) (*pb.Verdict, e
 	if f.Start != nil {
 		return f.Start(s), nil
 	}
-	return &pb.Verdict{}, nil
+	return &pb.CallVerdict{}, nil
 }
 
-func (f *Fake) OnMessage(ctx context.Context, m *pb.Message) (*pb.Verdict, error) {
+func (f *Fake) OnRequest(ctx context.Context, r *pb.RequestMessages) (*pb.RequestVerdict, error) {
 	f.wait()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.auth(ctx)
-	f.Calls = append(f.Calls, "message")
-	f.Messages = append(f.Messages, m)
-	if f.Message != nil {
-		return f.Message(m), nil
+	f.Calls = append(f.Calls, "request")
+	f.Requests = append(f.Requests, r)
+	if f.Request != nil {
+		return f.Request(r), nil
 	}
-	return &pb.Verdict{}, nil
+	return &pb.RequestVerdict{}, nil
+}
+
+func (f *Fake) OnToolCall(ctx context.Context, m *pb.ResponseMessage) (*pb.MessageVerdict, error) {
+	if f.NoToolCall {
+		return f.UnimplementedInterceptorServer.OnToolCall(ctx, m)
+	}
+	f.wait()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.auth(ctx)
+	f.Calls = append(f.Calls, "tool_call")
+	f.ToolCalls = append(f.ToolCalls, m)
+	if f.Tool != nil {
+		return f.Tool(m), nil
+	}
+	return &pb.MessageVerdict{}, nil
+}
+
+func (f *Fake) OnReply(ctx context.Context, m *pb.ResponseMessage) (*pb.MessageVerdict, error) {
+	if f.Reply == nil {
+		return f.UnimplementedInterceptorServer.OnReply(ctx, m)
+	}
+	f.wait()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.auth(ctx)
+	f.Calls = append(f.Calls, "reply")
+	f.Replies = append(f.Replies, m)
+	return f.Reply(m), nil
+}
+
+// RepliesSeen returns the OnReply messages received so far.
+func (f *Fake) RepliesSeen() []*pb.ResponseMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*pb.ResponseMessage(nil), f.Replies...)
+}
+
+// ToolCallsSeen returns the OnToolCall messages received so far.
+func (f *Fake) ToolCallsSeen() []*pb.ResponseMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*pb.ResponseMessage(nil), f.ToolCalls...)
 }
 
 func (f *Fake) OnCallComplete(ctx context.Context, r *pb.CallRecord) (*pb.Ack, error) {
@@ -93,11 +145,11 @@ func (f *Fake) OnCallComplete(ctx context.Context, r *pb.CallRecord) (*pb.Ack, e
 	return &pb.Ack{}, nil
 }
 
-// Snapshot returns the callbacks received so far, and the records.
-func (f *Fake) Snapshot() ([]string, []*pb.CallRecord) {
+// Snapshot returns the callbacks received so far, the requests and the records.
+func (f *Fake) Snapshot() ([]string, []*pb.RequestMessages, []*pb.CallRecord) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]string(nil), f.Calls...), append([]*pb.CallRecord(nil), f.Records...)
+	return append([]string(nil), f.Calls...), append([]*pb.RequestMessages(nil), f.Requests...), append([]*pb.CallRecord(nil), f.Records...)
 }
 
 // NewClient starts f in memory and returns a client connected to it.

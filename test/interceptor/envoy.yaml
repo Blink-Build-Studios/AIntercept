@@ -4,11 +4,12 @@
 # enforce.test the enforcing one (FULL_DUPLEX_STREAMED), both in front of the
 # fixture. The filters are configured as in the Helm chart.
 #
-# Contract v2 has its own observer (observer-v2, with the v2 example
-# Interceptor): the model hosts convo reads, api.anthropic.com and
-# chatgpt.com, go to the fixture through its enforcing filter, or its
-# observing one with the header x-e2e-mode: observe. With x-e2e-contract: v1
-# they go to the v1 observer's filters instead.
+# A second observer (observer-v2, with the suite's own Interceptor) takes the
+# model hosts convo reads, api.anthropic.com, chatgpt.com and api.openai.com,
+# through its enforcing filter, or its observing one with the header
+# x-e2e-mode: observe. With x-e2e-observer: main they go to the main
+# observer's filters instead (the example redact's tests, and the identity
+# tests: a lookup needs the provider's host).
 static_resources:
   listeners:
     - name: http
@@ -30,11 +31,10 @@ static_resources:
                     - name: v2
                       domains: ["api.anthropic.com", "chatgpt.com", "api.openai.com"]
                       routes:
-                        # x-e2e-contract: v1 sends a model host's call to the v1 observer instead
-                        # (the identity tests: a lookup needs the provider's host).
-                        - match: { prefix: "/", headers: [{ name: x-e2e-contract, string_match: { exact: v1 } }, { name: x-e2e-mode, string_match: { exact: observe } }] }
+                        # x-e2e-observer: main sends a model host's call to the main observer instead.
+                        - match: { prefix: "/", headers: [{ name: x-e2e-observer, string_match: { exact: main } }, { name: x-e2e-mode, string_match: { exact: observe } }] }
                           route: { cluster: fixture, timeout: 0s }
-                        - match: { prefix: "/", headers: [{ name: x-e2e-contract, string_match: { exact: v1 } }] }
+                        - match: { prefix: "/", headers: [{ name: x-e2e-observer, string_match: { exact: main } }] }
                           route: { cluster: fixture, timeout: 0s }
                           typed_per_filter_config:
                             aintercept.observe:

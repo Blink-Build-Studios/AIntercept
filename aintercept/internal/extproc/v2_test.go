@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor/interceptortest"
@@ -15,11 +15,11 @@ import (
 )
 
 // rabbitV2 replaces "silly rabbit" in any text part of the new messages.
-func rabbitV2() *interceptortest.FakeV2 {
-	return &interceptortest.FakeV2{Request: func(q *pb2.RequestMessages) *pb2.RequestVerdict {
-		v := &pb2.RequestVerdict{}
+func rabbitV2() *interceptortest.Fake {
+	return &interceptortest.Fake{Request: func(q *pb.RequestMessages) *pb.RequestVerdict {
+		v := &pb.RequestVerdict{}
 		for _, m := range q.GetMessages() {
-			m := proto.Clone(m).(*pb2.ConvMessage)
+			m := proto.Clone(m).(*pb.ConvMessage)
 			hit := false
 			for _, p := range m.GetParts() {
 				if t := p.GetText(); t != nil && strings.Contains(t.GetText(), "silly rabbit") {
@@ -27,7 +27,7 @@ func rabbitV2() *interceptortest.FakeV2 {
 				}
 			}
 			if hit {
-				v.Messages = append(v.Messages, &pb2.MessageVerdict{MessageId: m.GetId(), Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m}}})
+				v.Messages = append(v.Messages, &pb.MessageVerdict{MessageId: m.GetId(), Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: m}}})
 			}
 		}
 		return v
@@ -36,7 +36,7 @@ func rabbitV2() *interceptortest.FakeV2 {
 
 type v2Rig struct {
 	enforceRig
-	fake *interceptortest.FakeV2
+	fake *interceptortest.Fake
 	ic   *interceptor.Client
 	rows *[]events.Verdict
 }
@@ -47,7 +47,7 @@ func newV2Rig(t *testing.T, enforce bool) *v2Rig {
 	proc := events.NewProcessor(sink, events.ProcessorConfig{BufferSize: 1024})
 	f := rabbitV2()
 	var rows []events.Verdict
-	ic := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5e9}, func(_ string, v events.Verdict) { rows = append(rows, v) })
+	ic := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5e9}, func(_ string, v events.Verdict) { rows = append(rows, v) })
 	st := &streamState{correlationID: "c"}
 	if enforce {
 		st.enforce, st.enf = true, &enforceState{}

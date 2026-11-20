@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// What the harness writes into the conversation (docs/INTERCEPTOR_V2.md,
+// What the harness writes into the conversation (docs/INTERCEPTOR.md,
 // "The harness's messages"): system messages mid-conversation, and the notes
 // it puts in a user's turn, are messages of their own role, not the user's;
 // the user's words in Claude Code's mid-turn note are a prompt; and nothing

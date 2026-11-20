@@ -16,7 +16,7 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/wsframe"
 )
 
-// Contract v2 in enforce (docs/INTERCEPTOR_V2.md): Respond, and every
+// The Interceptor in enforce (docs/INTERCEPTOR.md): Respond, and every
 // message of the reply decided before the client sees it.
 //
 //   - Respond (OnCallStart, OnRequest): when the client keeps the

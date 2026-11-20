@@ -6,7 +6,7 @@ import (
 )
 
 // sseSplitter cuts a streamed event-stream body into whole events as chunks
-// arrive, for the Interceptor's OnMessage.
+// arrive, for the Interceptor's OnReply and OnToolCall (observe).
 type sseSplitter struct {
 	pending []byte
 }
@@ -61,35 +61,4 @@ func parseSSE(raw []byte) sseEvent {
 	}
 	ev.data = bytes.Join(data, []byte("\n"))
 	return ev
-}
-
-// withData re-serializes an event with new data, keeping its other fields
-// (event, id, retry) in place.
-func (e sseEvent) withData(data []byte) []byte {
-	var out bytes.Buffer
-	wrote := false
-	writeData := func() {
-		for _, l := range bytes.Split(data, []byte("\n")) {
-			out.WriteString("data: ")
-			out.Write(l)
-			out.WriteByte('\n')
-		}
-		wrote = true
-	}
-	for _, line := range bytes.Split(bytes.TrimRight(e.raw, "\r\n"), []byte("\n")) {
-		line = bytes.TrimSuffix(line, []byte("\r"))
-		if bytes.HasPrefix(line, []byte("data:")) {
-			if !wrote {
-				writeData()
-			}
-			continue
-		}
-		out.Write(line)
-		out.WriteByte('\n')
-	}
-	if !wrote {
-		writeData()
-	}
-	out.WriteByte('\n')
-	return out.Bytes()
 }

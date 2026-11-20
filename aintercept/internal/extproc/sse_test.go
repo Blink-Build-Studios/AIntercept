@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -20,17 +19,5 @@ func TestSSESplitterAcrossChunks(t *testing.T) {
 	}
 	if string(got[0].raw)+string(got[1].raw) != in[:len(in)-len("data: tail")] {
 		t.Fatal("raw bytes don't reassemble the stream")
-	}
-}
-
-func TestSSEWithDataKeepsOtherFields(t *testing.T) {
-	ev := parseSSE([]byte("id: 7\nevent: delta\ndata: old\ndata: more\nretry: 10\n\n"))
-	got := string(ev.withData([]byte("new1\nnew2")))
-	want := "id: 7\nevent: delta\ndata: new1\ndata: new2\nretry: 10\n\n"
-	if got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-	if !strings.HasSuffix(string(parseSSE([]byte(": comment\n\n")).withData([]byte("x"))), "data: x\n\n") {
-		t.Fatal("event without data gets one")
 	}
 }

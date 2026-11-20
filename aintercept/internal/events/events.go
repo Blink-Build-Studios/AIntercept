@@ -850,12 +850,13 @@ type WSConnection struct {
 
 // Verdict is one decision a customer's Interceptor returned for a call.
 type Verdict struct {
-	// Callback is "call_start" or "message" (contract v1), "call_start",
-	// "request" or "tool_call" (v2).
+	// Callback is "call_start", "request", "reply" or "tool_call" ("message"
+	// in rows from the removed contract v1).
 	Callback string `json:"callback"`
-	// Action: allow, replace, drop, deny (v1); accept, replace, respond (v2);
-	// or error (the Interceptor failed, missed its deadline or gave an answer
-	// that can't be applied; Applied then says whether the call was refused).
+	// Action: accept (annotated), replace, respond, hold (allow, drop or deny
+	// in rows from the removed contract v1); or error (the Interceptor failed,
+	// missed its deadline or gave an answer that can't be applied; Applied
+	// then says whether the call was refused).
 	Action      string            `json:"action"`
 	Applied     bool              `json:"applied"`
 	Mode        string            `json:"mode"`

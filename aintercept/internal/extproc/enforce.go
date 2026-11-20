@@ -3,13 +3,11 @@ package extproc
 import (
 	"io"
 	"log/slog"
-	"strings"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
@@ -21,20 +19,16 @@ import (
 // back, so every byte goes through here:
 //
 //   - Request headers are held until the whole request body has arrived, then
-//     OnCallStart decides (and, with Interceptor content, OnMessage gets the
-//     body). Allowed requests go upstream unchanged unless a verdict replaced
-//     the body; denied ones get the provider's own error.
+//     OnCallStart decides. With Interceptor content, the request's new
+//     messages go to OnRequest (a Replace is put back in place in the body, or
+//     in a Codex WebSocket's response.create). Requests go upstream unchanged
+//     unless an answer replaced them; a refused one gets the provider's own
+//     error.
 //   - Responses: without content, chunks pass straight through. With content,
-//     an event stream is evaluated event by event as it streams, any other
-//     body whole before it's released, and a WebSocket message by message.
-//     With content on, enforce asks upstream for uncompressed responses and
-//     no WebSocket compression, so verdicts never need re-compressing.
-//
-// With contract v2 and content, the request's new messages go to OnRequest
-// instead (a Replace is put back in place in the body, or in a Codex
-// WebSocket's response.create); a reply's text is held piece by piece for
-// OnReply and its tool calls whole for OnToolCall. A Respond is delivered as
-// a reply or by rewriting the request (respond.go).
+//     a reply's text is held piece by piece for OnReply and its tool calls
+//     whole for OnToolCall, asked for uncompressed so answers never need
+//     re-compressing. A Respond is delivered as a reply or by rewriting the
+//     request (respond.go).
 //
 // Envoy's messages are read on their own goroutine, so a reply's pieces keep
 // arriving while OnReply decides: the pending text is asked about only when
@@ -55,11 +49,9 @@ type respMode int
 
 const (
 	respPass       respMode = iota // forward chunks as they arrive
-	respSSE                        // evaluate event by event
-	respWhole                      // evaluate the whole body before releasing it
-	respToolsSSE                   // v2: hold the event stream's text and tool calls
-	respToolsWhole                 // v2: decide the whole body's text and tool calls
-	respSniff                      // v2: a reply without a content-type, held until its first bytes say what it is
+	respToolsSSE                   // hold the event stream's text and tool calls
+	respToolsWhole                 // decide the whole body's text and tool calls
+	respSniff                      // a reply without a content-type, held until its first bytes say what it is
 )
 
 type enforceState struct {
@@ -75,7 +67,7 @@ type enforceState struct {
 	// WebSocket with content: decoders per direction (uncompressed frames).
 	wsUp, wsDown *wsframe.Decoder
 	wsContent    bool
-	// v2: the reply's text and tool calls held (tools; a WebSocket's current
+	// The reply's text and tool calls held (tools; a WebSocket's current
 	// turn in wsTools), ended once a Respond or a refusal ended the reply;
 	// toolDeny is the refusal.
 	tools, wsTools *convo.Stream
@@ -217,8 +209,8 @@ func (srv *Server) enforceHandle(st *streamState, req *extprocv3.ProcessingReque
 	return nil
 }
 
-// enforceStart decides the call (OnCallStart, then OnMessage on the body with
-// content) and releases or refuses the request. hasBody: the request had a
+// enforceStart decides the call (OnCallStart, then OnRequest with content)
+// and releases or refuses the request. hasBody: the request had a
 // body (held in body; nil when it was too large to hold).
 func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*extprocv3.ProcessingResponse {
 	e := st.enf
@@ -230,20 +222,10 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 	if start.Action == interceptor.Deny {
 		return srv.deny(st, start)
 	}
-	content := srv.enforcingContent(st)
 	requests := srv.enforcingRequests(st)
 	var remove []string
 	if requests && st.wsRequested {
 		remove = append(remove, "sec-websocket-extensions") // client messages are re-framed
-	}
-	if content {
-		// Ask for responses the observer can read and release without
-		// re-compressing them.
-		if st.wsRequested {
-			remove = append(remove, "sec-websocket-extensions")
-		} else {
-			remove = append(remove, "accept-encoding")
-		}
 	}
 	if start.Action == interceptor.Respond && (!hasBody || len(body) == 0) {
 		srv.ic.Responded(st.correlationID, start, "") // nothing to answer (a WebSocket's requests come later)
@@ -290,21 +272,6 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 			}
 		}
 	}
-	if content && len(body) > 0 {
-		plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"])
-		if err != nil {
-			srv.undecodable(st, "request body: "+err.Error())
-		} else {
-			d := srv.decideMessage(st, events.DirInbound, pb.MessageKind_MESSAGE_KIND_HTTP_REQUEST_BODY, plain, st.reqHeaders["content-type"], "")
-			switch d.Action {
-			case interceptor.Replace:
-				fwd = d.Payload
-				remove = append(remove, "content-length", "content-encoding")
-			case interceptor.Drop, interceptor.Deny:
-				return srv.deny(st, d)
-			}
-		}
-	}
 	return []*extprocv3.ProcessingResponse{headersResponse(true, remove), bodyResponse(true, fwd, true)}
 }
 
@@ -314,7 +281,7 @@ func (srv *Server) enforceResponseHeaders(st *streamState, h *extprocv3.HttpHead
 		return srv.holdReplyHeaders(st)
 	}
 	if st.ws != nil {
-		if srv.enforcingContent(st) || srv.enforcingRequests(st) {
+		if srv.enforcingRequests(st) {
 			if st.ws.ext.Deflate {
 				// The server negotiated compression the client was never offered:
 				// messages can't be re-encoded, so they pass unevaluated.
@@ -327,81 +294,12 @@ func (srv *Server) enforceResponseHeaders(st *streamState, h *extprocv3.HttpHead
 		}
 		return []*extprocv3.ProcessingResponse{continueResponseHeaders()}
 	}
-	if !srv.enforcingContent(st) || h.GetEndOfStream() {
-		return []*extprocv3.ProcessingResponse{continueResponseHeaders()}
-	}
-	if strings.Contains(st.respHeaders["content-type"], "text/event-stream") {
-		if st.respEncoding != "" {
-			srv.undecodable(st, "event stream with content-encoding "+st.respEncoding)
-			return []*extprocv3.ProcessingResponse{continueResponseHeaders()}
-		}
-		e.mode = respSSE
-		return []*extprocv3.ProcessingResponse{headersResponse(false, []string{"content-length"})}
-	}
-	e.mode, e.respHeld = respWhole, true
-	return nil
+	return []*extprocv3.ProcessingResponse{continueResponseHeaders()}
 }
 
 func (srv *Server) enforceResponseBody(st *streamState, chunk []byte, eos bool) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	switch e.mode {
-	case respSSE:
-		var out []byte
-		for _, ev := range e.sse.feed(chunk) {
-			d := srv.decideMessage(st, events.DirOutbound, pb.MessageKind_MESSAGE_KIND_SSE_EVENT, ev.data, "text/event-stream", ev.name)
-			switch d.Action {
-			case interceptor.Replace:
-				out = append(out, ev.withData(d.Payload)...)
-			case interceptor.Drop:
-			case interceptor.Deny:
-				e.denied = true
-				dn := srv.denial(st, d)
-				st.denyReason = "denied by interceptor: " + dn.message()
-				out = append(out, dn.sseEvent()...)
-				return []*extprocv3.ProcessingResponse{bodyResponse(false, out, true)}
-			default:
-				out = append(out, ev.raw...)
-			}
-		}
-		if eos {
-			out = append(out, e.sse.rest()...)
-		}
-		// Answer every chunk, even with nothing: Envoy holds the response
-		// headers until the first body response.
-		return []*extprocv3.ProcessingResponse{bodyResponse(false, out, eos)}
-
-	case respWhole:
-		if len(e.resp)+len(chunk) > enforceBodyCap {
-			e.mode, e.respHeld = respPass, false
-			srv.undecodable(st, "response body over the cap")
-			held := append(e.resp, chunk...)
-			e.resp = nil
-			return []*extprocv3.ProcessingResponse{continueResponseHeaders(), bodyResponse(false, held, eos)}
-		}
-		e.resp = append(e.resp, chunk...)
-		if !eos {
-			return nil
-		}
-		e.respHeld = false
-		body := e.resp
-		e.resp = nil
-		plain, err := events.DecodeBody(body, st.respEncoding)
-		if err != nil {
-			srv.undecodable(st, "response body: "+err.Error())
-			return []*extprocv3.ProcessingResponse{continueResponseHeaders(), bodyResponse(false, body, true)}
-		}
-		d := srv.decideMessage(st, events.DirOutbound, pb.MessageKind_MESSAGE_KIND_HTTP_RESPONSE_BODY, plain, st.respHeaders["content-type"], "")
-		switch d.Action {
-		case interceptor.Replace:
-			return []*extprocv3.ProcessingResponse{
-				headersResponse(false, []string{"content-length", "content-encoding"}),
-				bodyResponse(false, d.Payload, true),
-			}
-		case interceptor.Drop, interceptor.Deny:
-			return srv.deny(st, d)
-		}
-		return []*extprocv3.ProcessingResponse{continueResponseHeaders(), bodyResponse(false, body, true)}
-
 	case respToolsSSE:
 		return srv.toolsSSE(st, chunk, eos)
 
@@ -414,10 +312,11 @@ func (srv *Server) enforceResponseBody(st *streamState, chunk []byte, eos bool) 
 	return []*extprocv3.ProcessingResponse{bodyResponse(false, chunk, eos)}
 }
 
-// enforceWS forwards a WebSocket body chunk: as is without content; with
-// content, message by message through OnMessage, re-framed. With v2, client
-// messages go through OnRequest (a response.create) and are re-framed; the
-// server's are decoded for recording and forwarded as they came.
+// enforceWS forwards a WebSocket body chunk: as is without content. With
+// content, client messages go through OnRequest (a response.create) and are
+// re-framed; the server's go through OnReply and OnToolCall when the
+// Interceptor has rules on them (respond.go), else they're decoded for
+// recording and forwarded as they came.
 func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3.HttpBody) []*extprocv3.ProcessingResponse {
 	e := st.enf
 	toServer := dir == events.DirInbound
@@ -429,8 +328,7 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		dec = e.wsUp
 	}
 	msgs, err := dec.Feed(b.GetBody())
-	v2 := srv.enforcingRequests(st)
-	if v2 && !toServer && !srv.holdsReplies() { // recorded, never held or changed
+	if !toServer && !srv.holdsReplies() { // recorded, never held or changed
 		for _, m := range msgs {
 			srv.wsMessage(st, dir, m)
 		}
@@ -439,7 +337,7 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 	if err != nil {
 		return srv.wsDeny(st, toServer, interceptor.Decision{Reason: "Undecodable WebSocket frame."}, 1002)
 	}
-	if v2 && !toServer {
+	if !toServer {
 		return srv.wsToolCalls(st, msgs, b.GetEndOfStream())
 	}
 	var out, toClient []byte
@@ -453,9 +351,7 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 			return srv.wsDeny(st, toServer, interceptor.Decision{Reason: "WebSocket message too large to evaluate."}, 1009)
 		}
 		var d interceptor.Decision
-		if !v2 {
-			d = srv.decideMessage(st, dir, wsKind(m.Opcode), m.Payload, "", "")
-		} else if r, ok := srv.parseWSRequest(st, m); ok {
+		if r, ok := srv.parseWSRequest(st, m); ok {
 			if d = srv.decideRequest(st, r); d.Action == interceptor.Respond {
 				var reply []byte
 				d, reply = srv.respondWS(st, r, m.Payload, d)
@@ -465,7 +361,7 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		switch d.Action {
 		case interceptor.Replace:
 			out = append(out, wsframe.Encode(m.Opcode, d.Payload, toServer)...)
-		case interceptor.Drop, interceptor.Respond: // a synthesized reply: the request never goes upstream
+		case interceptor.Respond: // a synthesized reply: the request never goes upstream
 		case interceptor.Deny:
 			if len(out) > 0 {
 				return append([]*extprocv3.ProcessingResponse{bodyResponse(toServer, out, false)}, srv.wsDeny(st, toServer, d, 1008)...)

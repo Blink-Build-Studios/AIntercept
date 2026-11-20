@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Reply text, piece by piece (docs/INTERCEPTOR_V2.md, "Reply text"): no text
+// Reply text, piece by piece (docs/INTERCEPTOR.md, "Reply text"): no text
 // reaches the client until it's decided; Accept is byte for byte, Replace,
 // Hold, keep (a tail held back), Respond, and a block ending while held, in
 // every format.

@@ -1,6 +1,6 @@
 //go:build e2e
 
-// Contract v2 end to end, the reply (docs/INTERCEPTOR_V2.md, "Reply text"):
+// Contract v2 end to end, the reply (docs/INTERCEPTOR.md, "Reply text"):
 // the model's reply text decided piece by piece before the client sees it,
 // in every format, and Chat Completions tool calls held. The suite's
 // Interceptor replaces "swordfish" in reply text with "[password]".

@@ -91,9 +91,9 @@ provider's row to the table above and to `docs/harness-parity.md`.
 
 | Where | What to add | Test |
 |---|---|---|
-| `aintercept/internal/convo` (`formatOf` in `convo.go`, a parser per format, `reply.go`) | Contract v2: the request and reply shapes of the provider's model endpoints, so OnRequest, OnReply and OnToolCall see them. | `convo/convo_test.go`, `convo/reply_test.go`, `convo/toolcalls_test.go`. |
+| `aintercept/internal/convo` (`formatOf` in `convo.go`, a parser per format, `reply.go`) | The Interceptor: the request and reply shapes of the provider's model endpoints, so OnRequest, OnReply and OnToolCall see them. | `convo/convo_test.go`, `convo/reply_test.go`, `convo/toolcalls_test.go`. |
 | `aintercept/internal/extproc/deny.go` | A refusal in the provider's own error shape (HTTP body, stream event, WebSocket message), so the client shows a sensible error. | `extproc/enforce_test.go`. |
-| `aintercept/internal/e2e`, `test/interceptor/envoy.yaml`, `fixture/cmd/fixture/interceptor.go` | An end-to-end case through a real Envoy: the host in the Envoy config, the fixture serving the endpoint, a test in each contract. | `make test-interceptor`. |
+| `aintercept/internal/e2e`, `test/interceptor/envoy.yaml`, `fixture/cmd/fixture/interceptor.go` | An end-to-end case through a real Envoy: the host in the Envoy config, the fixture serving the endpoint, a test in the Interceptor suite. | `make test-interceptor`. |
 
 ## 6. Pipeline, API and UI
 

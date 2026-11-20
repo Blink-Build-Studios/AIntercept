@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Reply text, piece by piece (docs/INTERCEPTOR_V2.md, "Reply text"). Each
+// Reply text, piece by piece (docs/INTERCEPTOR.md, "Reply text"). Each
 // text delta is held, not sent; the text block's pending text is decided
 // when the block ends, or sooner when the caller Pumps (when no more of the
 // reply is waiting), so pieces that arrive while a decision is outstanding

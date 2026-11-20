@@ -7,7 +7,7 @@
 //   - GET  /stream          an SSE stream of several events (tests streaming)
 //   - POST /echo            echoes the request body back (proves request-body
 //     bytes are observable end-to-end)
-//   - /v1/messages, /v1/json, /ws  the Interceptor end-to-end test's routes
+//   - /v1/messages, /ws     the Interceptor end-to-end test's routes
 //     (interceptor.go)
 //
 // The MARKER lets the smoke test assert that the exact decrypted bytes the
