@@ -8,7 +8,7 @@ import (
 )
 
 // Every message from the model, before the client sees it
-// (docs/INTERCEPTOR_V2.md, "Callbacks"): a reply's text is held piece by
+// (docs/INTERCEPTOR.md, "Callbacks"): a reply's text is held piece by
 // piece until it's decided, each tool call from its first event until it's
 // complete, and each is released as it was, changed, or replaced (with the
 // rest of the reply) by text. Opaque parts (reasoning) are announced and go

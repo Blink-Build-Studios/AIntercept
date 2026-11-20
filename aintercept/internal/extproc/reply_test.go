@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor/interceptortest"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/wsframe"
 )
 
-// The reply's text through the enforcing filter (docs/INTERCEPTOR_V2.md,
+// The reply's text through the enforcing filter (docs/INTERCEPTOR.md,
 // "Reply text"): every piece decided by OnReply before the client sees it,
 // in every format.
 
@@ -19,10 +19,10 @@ const phrase, redacted = "purple elephant", "[redacted]"
 
 // watchReply replaces the phrase in the reply's text, holding back only a
 // tail that could still become it.
-func watchReply(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+func watchReply(m *pb.ResponseMessage) *pb.MessageVerdict {
 	part := m.GetMessage().GetParts()[0]
 	if part.GetText() == nil {
-		return &pb2.MessageVerdict{}
+		return &pb.MessageVerdict{}
 	}
 	s := part.GetText().GetText()
 	keep := 0
@@ -36,10 +36,10 @@ func watchReply(m *pb2.ResponseMessage) *pb2.MessageVerdict {
 	}
 	out := strings.ReplaceAll(s, phrase, redacted)
 	if out == s {
-		return &pb2.MessageVerdict{Keep: int32(keep)}
+		return &pb.MessageVerdict{Keep: int32(keep)}
 	}
 	part.GetText().Text = out[:len(out)-keep]
-	return &pb2.MessageVerdict{MessageId: m.GetMessage().GetId(), Keep: int32(keep), Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m.GetMessage()}}}
+	return &pb.MessageVerdict{MessageId: m.GetMessage().GetId(), Keep: int32(keep), Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: m.GetMessage()}}}
 }
 
 type replyFormat struct {
@@ -176,7 +176,7 @@ func responsesText(t *testing.T, datas []string) string {
 
 // replyRig is a rig with f as the Interceptor and a request in format sent,
 // its response headers in.
-func replyRig(t *testing.T, f *interceptortest.FakeV2, cfg interceptor.Config, rf replyFormat, contentType string) *v2Rig {
+func replyRig(t *testing.T, f *interceptortest.Fake, cfg interceptor.Config, rf replyFormat, contentType string) *v2Rig {
 	t.Helper()
 	r := newBingRig(t, f, cfg)
 	r.send(eReqHeaders(false, rf.call...))
@@ -202,7 +202,7 @@ func (r *v2Rig) stream(evs []string) string {
 func TestV2ReplyTextReplaced(t *testing.T) {
 	for _, rf := range replyFormats {
 		t.Run(rf.name, func(t *testing.T) {
-			f := &interceptortest.FakeV2{Reply: watchReply}
+			f := &interceptortest.Fake{Reply: watchReply}
 			r := replyRig(t, f, interceptor.Config{}, rf, "text/event-stream")
 			out := r.stream(rf.events("The pur", "ple ele", "phant is here."))
 			if got := rf.text(t, out); got != "The [redacted] is here." || strings.Contains(out, "elephant") {
@@ -229,7 +229,7 @@ func TestV2ReplyTextReplaced(t *testing.T) {
 func TestV2ReplyTextAccepted(t *testing.T) {
 	for _, rf := range replyFormats {
 		t.Run(rf.name, func(t *testing.T) {
-			f := &interceptortest.FakeV2{Reply: func(*pb2.ResponseMessage) *pb2.MessageVerdict { return &pb2.MessageVerdict{} }}
+			f := &interceptortest.Fake{Reply: func(*pb.ResponseMessage) *pb.MessageVerdict { return &pb.MessageVerdict{} }}
 			r := replyRig(t, f, interceptor.Config{}, rf, "text/event-stream")
 			evs := rf.events("Hello, ", "world.")
 			if out := r.stream(evs); out != strings.Join(evs, "") {
@@ -243,7 +243,7 @@ func TestV2ReplyTextAccepted(t *testing.T) {
 // more of the stream waiting, nothing is asked until it's all in.
 func TestV2ReplyPiecesGather(t *testing.T) {
 	rf := replyFormats[0]
-	f := &interceptortest.FakeV2{Reply: func(*pb2.ResponseMessage) *pb2.MessageVerdict { return &pb2.MessageVerdict{} }}
+	f := &interceptortest.Fake{Reply: func(*pb.ResponseMessage) *pb.MessageVerdict { return &pb.MessageVerdict{} }}
 	r := replyRig(t, f, interceptor.Config{}, rf, "text/event-stream")
 	evs := rf.events("one ", "two ", "three")
 	waiting := 0
@@ -271,11 +271,11 @@ func TestV2ReplyPiecesGather(t *testing.T) {
 func TestV2ReplyRespond(t *testing.T) {
 	for _, rf := range replyFormats {
 		t.Run(rf.name, func(t *testing.T) {
-			f := &interceptortest.FakeV2{Reply: func(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+			f := &interceptortest.Fake{Reply: func(m *pb.ResponseMessage) *pb.MessageVerdict {
 				if strings.Contains(m.GetMessage().GetParts()[0].GetText().GetText(), "world") {
-					return &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Respond{Respond: &pb2.Respond{Text: "then we bong"}}}
+					return &pb.MessageVerdict{Action: &pb.MessageVerdict_Respond{Respond: &pb.Respond{Text: "then we bong"}}}
 				}
-				return &pb2.MessageVerdict{}
+				return &pb.MessageVerdict{}
 			}}
 			r := replyRig(t, f, interceptor.Config{}, rf, "text/event-stream")
 			out := r.stream(rf.events("Hello, ", "world", "!"))
@@ -293,8 +293,8 @@ func TestV2ReplyRespond(t *testing.T) {
 // reply ends with the provider's error.
 func TestV2ReplyRefused(t *testing.T) {
 	rf := replyFormats[0]
-	f := &interceptortest.FakeV2{Reply: func(*pb2.ResponseMessage) *pb2.MessageVerdict {
-		return &pb2.MessageVerdict{Keep: 1000} // can't be applied
+	f := &interceptortest.Fake{Reply: func(*pb.ResponseMessage) *pb.MessageVerdict {
+		return &pb.MessageVerdict{Keep: 1000} // can't be applied
 	}}
 	r := replyRig(t, f, interceptor.Config{}, rf, "text/event-stream")
 	out := r.stream(rf.events("secret", " text"))
@@ -307,7 +307,7 @@ func TestV2ReplyRefused(t *testing.T) {
 func TestV2ReplyJSON(t *testing.T) {
 	for _, rf := range replyFormats {
 		t.Run(rf.name, func(t *testing.T) {
-			f := &interceptortest.FakeV2{Reply: watchReply}
+			f := &interceptortest.Fake{Reply: watchReply}
 			r := replyRig(t, f, interceptor.Config{}, rf, "application/json")
 			out := r.stream([]string{rf.jsonOut})
 			if out != strings.Replace(rf.jsonOut, phrase, redacted, 1) {
@@ -319,7 +319,7 @@ func TestV2ReplyJSON(t *testing.T) {
 
 // Codex's WebSocket: the turn's text replaced across messages.
 func TestV2ReplyWebSocket(t *testing.T) {
-	r := newBingRig(t, &interceptortest.FakeV2{Reply: watchReply}, interceptor.Config{})
+	r := newBingRig(t, &interceptortest.Fake{Reply: watchReply}, interceptor.Config{})
 	wsOpen(r)
 	r.send(eReqBody(string(wsframe.Encode(wsframe.OpText, []byte(`{"type":"response.create","model":"m-1","input":"look"}`), true)), false))
 	var got []string
@@ -355,12 +355,12 @@ func TestV2ChatToolCall(t *testing.T) {
 // the reply goes on as it came.
 func TestV2ObserveReply(t *testing.T) {
 	r := newV2Rig(t, false)
-	r.fake.Reply = func(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+	r.fake.Reply = func(m *pb.ResponseMessage) *pb.MessageVerdict {
 		if p := m.GetMessage().GetParts()[0]; p.GetText() != nil {
 			p.GetText().Text = strings.ToUpper(p.GetText().GetText())
-			return &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m.GetMessage()}}}
+			return &pb.MessageVerdict{Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: m.GetMessage()}}}
 		}
-		return &pb2.MessageVerdict{}
+		return &pb.MessageVerdict{}
 	}
 	rf := replyFormats[0]
 	r.srv.handle(r.st, eReqHeaders(false, rf.call...))
@@ -396,7 +396,7 @@ func TestV2UnparsedReasons(t *testing.T) {
 		{"/v1/messages/count_tokens", `{"messages":[{"role":"user","content":"hi"}]}`},
 		{"/v1/messages", `{"messages":[{"role":"system","content":"Note."},{"role":"user","content":[{"type":"brand_new","x":1},{"type":"text","text":"hi"}]}]}`},
 	} {
-		r := newBingRig(t, &interceptortest.FakeV2{}, interceptor.Config{})
+		r := newBingRig(t, &interceptortest.Fake{}, interceptor.Config{})
 		r.send(eReqHeaders(false, ":authority", "api.anthropic.com", ":method", "POST", ":path", c.path, "content-type", "application/json"))
 		out := r.send(eReqBody(c.body, true))
 		if b, _ := streamed(out[len(out)-1]); string(b) != c.body {

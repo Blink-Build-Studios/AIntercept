@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Respond (docs/INTERCEPTOR_V2.md, "Respond"): the client gets an
+// Respond (docs/INTERCEPTOR.md, "Respond"): the client gets an
 // Interceptor's text as the model's reply. When the client keeps the
 // conversation, AIntercept synthesizes the reply in the provider's format
 // (Synthesize, SynthesizeEvents); when the provider keeps it (a chained

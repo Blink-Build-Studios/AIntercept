@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/identity"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
@@ -26,11 +26,11 @@ func identityRig(t *testing.T, delay time.Duration) (*Server, *interceptor.Clien
 	t.Cleanup(p.Close)
 	var mu sync.Mutex
 	var got *pb.Identity
-	f := &interceptortest.Fake{Start: func(s *pb.CallStart) *pb.Verdict {
+	f := &interceptortest.Fake{Start: func(s *pb.CallStart) *pb.CallVerdict {
 		mu.Lock()
 		got = s.GetCall().GetIdentity()
 		mu.Unlock()
-		return &pb.Verdict{}
+		return &pb.CallVerdict{}
 	}}
 	ic := interceptortest.NewClient(t, f, interceptor.Config{Deadline: 5 * time.Second}, nil)
 	srv := New(Config{Processor: events.NewProcessor(&memSink{}, events.ProcessorConfig{BufferSize: 1024}), InstanceID: "t", KeyHashSalt: "s",

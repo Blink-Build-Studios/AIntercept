@@ -3,7 +3,7 @@ package interceptor
 import (
 	"strings"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/identity"
 )
@@ -124,15 +124,6 @@ func requestInfo(s events.RequestSummary, bytes int) *pb.RequestInfo {
 		}
 	}
 	return ri
-}
-
-// Message builds an OnMessage message.
-func Message(call *pb.Call, dir events.Direction, seq int64, kind pb.MessageKind, payload []byte, contentType, sseEvent string) *pb.Message {
-	d := pb.Direction_DIRECTION_SERVER_TO_CLIENT
-	if dir == events.DirInbound {
-		d = pb.Direction_DIRECTION_CLIENT_TO_SERVER
-	}
-	return &pb.Message{Call: call, Direction: d, Seq: seq, Kind: kind, Payload: payload, ContentType: contentType, SseEvent: sseEvent}
 }
 
 // Record builds OnCallComplete's message from a complete event (or a

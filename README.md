@@ -5,7 +5,7 @@
 AIntercept sits in front of an organization's AI calls: Anthropic, OpenAI, Gemini, the ChatGPT and Codex backend, and claude.ai. It terminates TLS under a trust root you control, forwards each request to the genuine upstream, and tees every request and response to a horizontally scaled Go observer.
 
 - **See it:** workers load the observations into Postgres, and a query API and web UI show who uses which AI tool, how, and at what cost: people, sessions, prompts, the steps inside each prompt, and every call on the wire.
-- **Act on it:** the **Interceptor** interface lets your own control plane react to every call. It can record, redact or refuse.
+- **Act on it:** the **Interceptor** interface lets your own control plane react to every message of every call. It can record, redact, rewrite, or answer for the model.
 
 ```
 client ──TLS──> Envoy (leaf cert minted on the fly) ──verified TLS──> real api.anthropic.com / chatgpt.com / …
@@ -15,7 +15,7 @@ client ──TLS──> Envoy (leaf cert minted on the fly) ──verified TLS�
                   │  ▲
                   │  certsvc (SDS: mints + renews short-lived leaf certs)
                   ▼
-           your Interceptor (gRPC): OnCallStart · OnMessage · OnCallComplete
+           your Interceptor (gRPC): OnCallStart · OnRequest · OnReply · OnToolCall · OnCallComplete
 ```
 
 ---
@@ -40,17 +40,18 @@ See [`docs/PRODUCTION.md`](docs/PRODUCTION.md) §4b.
 
 ## Acting on traffic: the Interceptor
 
-Your control plane implements one gRPC service, [`aintercept/interceptor/v1/interceptor.proto`](aintercept/interceptor/v1/interceptor.proto):
+Your control plane implements one gRPC service, [`aintercept/interceptor/v2/interceptor.proto`](aintercept/interceptor/v2/interceptor.proto), or in Go uses package [`intercept`](aintercept/intercept), which wraps it in rules, hooks and watches. Messages arrive in one shape for Claude Code, Codex (HTTP or WebSocket) and the OpenAI APIs:
 
-- **`OnCallStart`:** the parsed request (identity, client, model, tools) before it goes upstream. Allow or deny.
-- **`OnMessage`:** content, if you enable it: the request body, each streamed event, each WebSocket message. Allow, replace, drop or deny.
-- **`OnCallComplete`:** the normalized record of the finished call: tokens, tools used, status, timings, and your verdicts.
+- **`OnCallStart`:** the parsed request (identity, client, model, tools) before it goes upstream. Accept, or respond for the model.
+- **`OnRequest`:** the call's new messages, if you enable content (the prompt, tool results; not the history every call resends). Accept or replace each one, or respond for the model.
+- **`OnReply`** and **`OnToolCall`:** the model's reply text, piece by piece as it streams, and each tool call it makes, before the client sees them. Accept, replace, hold, or respond.
+- **`OnCallComplete`:** the normalized record of the finished call: tokens, tools used, status, timings, and your answers.
 
 The same integration runs in two modes:
 - **Observe** (everywhere, by default): callbacks are asynchronous, verdicts are recorded as what would have happened, and traffic never waits.
-- **Enforce** (hosts and paths you list): AIntercept waits for your verdict and applies it. Refused calls fail in the provider's own error format, and a slow or unavailable Interceptor fails closed.
+- **Enforce** (hosts and paths you list): AIntercept waits for your answer and applies it, back in the provider's own format. A slow or unavailable Interceptor fails closed.
 
-Whether the Interceptor sees bodies is its own setting, independent of what AIntercept records: you can redact inline without storing anything. [`docs/INTERCEPTOR.md`](docs/INTERCEPTOR.md) is the reference, and [`docs/BUILDING_AN_INTERCEPTOR.md`](docs/BUILDING_AN_INTERCEPTOR.md) walks through building one and wiring it into a deployment. [`aintercept/examples/redact`](aintercept/examples/redact) is a complete example: it redacts "silly clown" in both directions, refuses a model, and rewrites or refuses a prompt by what the user just said.
+Whether the Interceptor sees content is its own setting, independent of what AIntercept records: you can redact inline without storing anything. [`docs/INTERCEPTOR.md`](docs/INTERCEPTOR.md) is the reference, [`docs/BUILDING_AN_INTERCEPTOR_V2.md`](docs/BUILDING_AN_INTERCEPTOR_V2.md) shows how to write one, and [`docs/BUILDING_AN_INTERCEPTOR.md`](docs/BUILDING_AN_INTERCEPTOR.md) walks through wiring it into a deployment. [`aintercept/examples/rabbit`](aintercept/examples/rabbit) answers two phrases for the model, and [`aintercept/examples/redact`](aintercept/examples/redact) redacts "silly clown" in both directions and refuses a model.
 
 ---
 
@@ -99,8 +100,9 @@ make clean            # DESTRUCTIVE: also delete generated CA keys (prompts firs
 |---|---|
 | `envoy/` | Envoy configs (single-host, multi-provider). TLS termination, per-SNI cert selection, `ext_proc`, verified upstreams. |
 | `aintercept/` | Go, one binary in three roles: `certsvc` (SDS; mints and auto-renews per-SNI leaf certs), `observer` (`ext_proc` in observe and enforce modes, provider-aware extractors, the raw files, the Interceptor client) and `worker` (loads the raw files into Postgres and refreshes the rollups, [docs/PIPELINE.md](docs/PIPELINE.md)). Also `canon` (a tool: a capture as raw files, or loaded into Postgres) and `schemareport`, which turns unrecognized-shape samples into a structure-only report. |
-| `aintercept/interceptor/v1/` | The Interceptor gRPC contract and generated Go code. |
-| `aintercept/examples/redact/`, `aintercept/examples/python-redact/` | Example Interceptors, in Go and Python. |
+| `aintercept/interceptor/v2/` | The Interceptor gRPC contract and generated Go code. |
+| `aintercept/intercept/` | The Go library for writing an Interceptor: rules, hooks and watches over the contract. |
+| `aintercept/examples/` | Example Interceptors: `rabbit` and `redact` (Go, package `intercept`), `python-redact` (Python, the raw protocol). |
 | `api/` | The query API (FastAPI over Postgres): the facts and the rollups. Its Pydantic models are the contract; the UI's types and samples are generated from them (`make regen`). |
 | `ui/` | The web UI (React, Vite, Tailwind), with Storybook stories for every component and state. Design in `docs/ui/`. |
 | `fixture/` | A local HTTPS origin with synthetic content, for the end-to-end tests. |

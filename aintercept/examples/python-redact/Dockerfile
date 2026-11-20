@@ -4,9 +4,9 @@
 FROM python:3.13-slim
 WORKDIR /app
 RUN pip install --no-cache-dir grpcio==1.71.0 grpcio-tools==1.71.0 protobuf==5.29.3
-COPY interceptor/v1/interceptor.proto proto/interceptor/v1/interceptor.proto
-RUN python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/interceptor/v1/interceptor.proto \
- && touch interceptor/__init__.py interceptor/v1/__init__.py
+COPY interceptor/v2/interceptor.proto proto/interceptor/v2/interceptor.proto
+RUN python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/interceptor/v2/interceptor.proto \
+ && touch interceptor/__init__.py interceptor/v2/__init__.py
 COPY examples/python-redact/server.py .
 USER nobody
 EXPOSE 9100

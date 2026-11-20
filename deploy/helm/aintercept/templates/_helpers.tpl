@@ -159,8 +159,8 @@ runtime failure in-cluster.
 {{- if not (has (.onError | default "deny") (list "deny" "allow")) -}}
 {{- fail "interceptor.onError must be deny or allow" -}}
 {{- end -}}
-{{- if not (has (.contract | default "v1") (list "v1" "v2")) -}}
-{{- fail "interceptor.contract must be v1 or v2" -}}
+{{- if and .contract (ne (toString .contract) "v2") -}}
+{{- fail "interceptor.contract: Interceptor contract v1 was removed; v2 is the only one, so remove the setting and port the Interceptor (docs/INTERCEPTOR.md)" -}}
 {{- end -}}
 {{- $sat := .serviceAccountToken | default dict -}}
 {{- if and $sat.enabled .tokenSecret -}}

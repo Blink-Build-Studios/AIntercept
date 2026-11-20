@@ -1,8 +1,8 @@
 package main
 
 // Routes for the Interceptor end-to-end test (scripts/test-interceptor.sh):
-// a provider-shaped event stream and JSON response that echo the request and
-// say "silly clown", and a WebSocket echo.
+// a provider-shaped event stream that echoes the request and says "silly
+// clown", and a WebSocket echo.
 // A request carrying "fixture_tool" gets a reply that calls that tool
 // instead, and one carrying "fixture_text" a reply whose text arrives in
 // those pieces, "fixture_gap_ms" apart (toolReply). Synthetic content only.
@@ -26,13 +26,6 @@ func interceptorRoutes(mux *http.ServeMux) {
 	// POST /v1/messages: an Anthropic-style event stream echoing the request
 	// body back as text, then an event that says the phrase.
 	mux.HandleFunc("/v1/messages", messages)
-
-	// POST /v1/json: a JSON body echoing the request and saying the phrase.
-	mux.HandleFunc("/v1/json", func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"received": string(body), "reply": "a silly clown"})
-	})
 
 	// GET /ws: a WebSocket that answers each text message with
 	// "echo: <message> (silly clown)". No extensions.

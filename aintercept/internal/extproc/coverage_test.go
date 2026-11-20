@@ -9,14 +9,14 @@ import (
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 
-	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor/interceptortest"
 )
 
 // Coverage: every reply in both modes reaches the Interceptor, whatever its
-// headers say (docs/INTERCEPTOR_V2.md, "What the Interceptor sees").
+// headers say (docs/INTERCEPTOR.md, "What the Interceptor sees").
 
 // codexReplyHeaders are a Codex HTTP reply's headers as chatgpt.com sends
 // them (values synthetic): no content-type and no content-encoding, though
@@ -47,7 +47,7 @@ func codexEvents(pieces ...string) []string {
 	return append([]string{name + "\n", rest}, evs[1:]...)
 }
 
-func codexRig(t *testing.T, f *interceptortest.FakeV2) *v2Rig {
+func codexRig(t *testing.T, f *interceptortest.Fake) *v2Rig {
 	t.Helper()
 	rf := replyFormats[1]
 	r := newBingRig(t, f, interceptor.Config{})
@@ -62,7 +62,7 @@ func codexRig(t *testing.T, f *interceptortest.FakeV2) *v2Rig {
 // Enforce: a Codex reply without a content-type is an event stream, read
 // event by event: its text is decided by OnReply.
 func TestV2CodexReplyWithoutContentType(t *testing.T) {
-	r := codexRig(t, &interceptortest.FakeV2{Reply: watchReply})
+	r := codexRig(t, &interceptortest.Fake{Reply: watchReply})
 	out := r.stream(codexEvents("The pur", "ple ele", "phant is here."))
 	if got := responsesText(t, sseDataLines(out)); got != "The [redacted] is here." || strings.Contains(out, "elephant") {
 		t.Fatalf("text %q\n%s", got, out)
@@ -71,7 +71,7 @@ func TestV2CodexReplyWithoutContentType(t *testing.T) {
 
 // Accepted, it goes on byte for byte; its tool calls go to OnToolCall.
 func TestV2CodexReplyWithoutContentTypeAccepted(t *testing.T) {
-	f := &interceptortest.FakeV2{Reply: func(*pb2.ResponseMessage) *pb2.MessageVerdict { return &pb2.MessageVerdict{} }}
+	f := &interceptortest.Fake{Reply: func(*pb.ResponseMessage) *pb.MessageVerdict { return &pb.MessageVerdict{} }}
 	r := codexRig(t, f)
 	evs := codexEvents("Hello, ", "world.")
 	if out := r.stream(evs); out != strings.Join(evs, "") {
@@ -86,14 +86,14 @@ func TestV2CodexReplyWithoutContentTypeAccepted(t *testing.T) {
 // goes on as it came.
 func TestV2ReplyWithoutContentTypeSniffed(t *testing.T) {
 	t.Run("json", func(t *testing.T) {
-		r := codexRig(t, &interceptortest.FakeV2{Reply: watchReply})
+		r := codexRig(t, &interceptortest.Fake{Reply: watchReply})
 		jsonOut := replyFormats[1].jsonOut
 		if out := r.stream([]string{" \n", jsonOut}); out != " \n"+strings.Replace(jsonOut, phrase, redacted, 1) {
 			t.Fatalf("got\n%s", out)
 		}
 	})
 	t.Run("other", func(t *testing.T) {
-		f := &interceptortest.FakeV2{Reply: watchReply}
+		f := &interceptortest.Fake{Reply: watchReply}
 		r := codexRig(t, f)
 		if out := r.stream([]string{"purple elephant", " says hi"}); out != "purple elephant says hi" {
 			t.Fatalf("got %q", out)
@@ -103,7 +103,7 @@ func TestV2ReplyWithoutContentTypeSniffed(t *testing.T) {
 		}
 	})
 	t.Run("empty", func(t *testing.T) {
-		r := codexRig(t, &interceptortest.FakeV2{Reply: watchReply})
+		r := codexRig(t, &interceptortest.Fake{Reply: watchReply})
 		if out := r.stream([]string{""}); out != "" {
 			t.Fatalf("got %q", out)
 		}
@@ -114,7 +114,7 @@ func TestV2ReplyWithoutContentTypeSniffed(t *testing.T) {
 func observeRig(t *testing.T) *v2Rig {
 	t.Helper()
 	r := newV2Rig(t, false)
-	r.fake.Reply = func(*pb2.ResponseMessage) *pb2.MessageVerdict { return &pb2.MessageVerdict{} }
+	r.fake.Reply = func(*pb.ResponseMessage) *pb.MessageVerdict { return &pb.MessageVerdict{} }
 	return r
 }
 

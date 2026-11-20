@@ -1,11 +1,10 @@
-// The Interceptor interface, v2: one message at a time
-// (docs/INTERCEPTOR_V2.md).
+// The Interceptor interface: one message at a time (docs/INTERCEPTOR.md).
 //
 // The customer runs a gRPC server implementing Interceptor; AIntercept's
-// observer is the client. A deployment picks v1 or v2
-// (interceptor.contract); v1 is the default.
+// observer is the client. This is the only contract (v1, the wire's bodies
+// and events, was removed).
 //
-// v2 hands the Interceptor the conversation, not the wire: OnRequest carries
+// It hands the Interceptor the conversation, not the wire: OnRequest carries
 // only the messages a call adds (not the history every call resends), in one
 // shape for Anthropic Messages, OpenAI Responses (HTTP and Codex's
 // WebSocket) and Chat Completions. Its answers come back per message, and
@@ -382,7 +381,7 @@ func (x *Call) GetClient() *Client {
 	return nil
 }
 
-// Who is calling (v1's Identity, field for field; docs/INTERCEPTOR.md).
+// Who is calling (docs/INTERCEPTOR.md, Identity).
 type Identity struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Salted, irreversible hash of the API key or bearer token, and its display

@@ -9,10 +9,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /out/aintercept ./cmd/aintercept
-# The example Interceptor (docs/INTERCEPTOR.md), for trying the control-plane
-# hook: run the image with --entrypoint /redact-interceptor.
+# The example Interceptors (docs/INTERCEPTOR.md), for trying the control-plane
+# hook: run the image with --entrypoint /redact-interceptor, or
+# /rabbit-interceptor.
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /out/redact-interceptor ./examples/redact
-# The same on contract v2 (docs/INTERCEPTOR_V2.md): --entrypoint /rabbit-interceptor.
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /out/rabbit-interceptor ./examples/rabbit
 
 FROM gcr.io/distroless/static-debian12:nonroot

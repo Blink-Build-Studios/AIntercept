@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
-	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor/interceptortest"
@@ -17,27 +16,27 @@ import (
 
 var piece = convo.TextPiece{ID: "msg_1:0", Released: "The ", Pending: "purple ele", Done: false}
 
-func replyAnswer(v *pb2.MessageVerdict) func(*pb2.ResponseMessage) *pb2.MessageVerdict {
-	return func(*pb2.ResponseMessage) *pb2.MessageVerdict { return v }
+func replyAnswer(v *pb.MessageVerdict) func(*pb.ResponseMessage) *pb.MessageVerdict {
+	return func(*pb.ResponseMessage) *pb.MessageVerdict { return v }
 }
 
-func textReplace(id, text string, keep int32) *pb2.MessageVerdict {
-	return &pb2.MessageVerdict{MessageId: id, Keep: keep, Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: &pb2.ConvMessage{
-		Id: id, Parts: []*pb2.Part{{Id: id + "/0", Kind: &pb2.Part_Text{Text: &pb2.Text{Text: text}}}}}}}}
+func textReplace(id, text string, keep int32) *pb.MessageVerdict {
+	return &pb.MessageVerdict{MessageId: id, Keep: keep, Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: &pb.ConvMessage{
+		Id: id, Parts: []*pb.Part{{Id: id + "/0", Kind: &pb.Part_Text{Text: &pb.Text{Text: text}}}}}}}}
 }
 
 // The message: one text part, the pending text, with what was released and
 // whether the block is done.
 func TestV2ReplyMessage(t *testing.T) {
-	f := &interceptortest.FakeV2{Reply: replyAnswer(&pb2.MessageVerdict{})}
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	f := &interceptortest.Fake{Reply: replyAnswer(&pb.MessageVerdict{})}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
 	defer c.Close()
 	if d := c.DecideReply(context.Background(), call, piece); d.Action != interceptor.Allow {
 		t.Fatalf("decision %+v", d)
 	}
 	m := f.RepliesSeen()[0]
 	p := m.GetMessage().GetParts()
-	if m.GetCall().GetCallId() != "c1" || m.GetMessage().GetId() != "msg_1:0" || m.GetMessage().GetRole() != pb2.Role_ROLE_ASSISTANT ||
+	if m.GetCall().GetCallId() != "c1" || m.GetMessage().GetId() != "msg_1:0" || m.GetMessage().GetRole() != pb.Role_ROLE_ASSISTANT ||
 		m.GetReleased() != "The " || m.GetDone() || len(p) != 1 || p[0].GetId() != "msg_1:0/0" || p[0].GetText().GetText() != "purple ele" {
 		t.Fatalf("OnReply got %v", m)
 	}
@@ -46,24 +45,24 @@ func TestV2ReplyMessage(t *testing.T) {
 func TestV2ReplyAnswers(t *testing.T) {
 	cases := []struct {
 		name   string
-		answer *pb2.MessageVerdict
+		answer *pb.MessageVerdict
 		want   interceptor.Decision
 		row    string
 	}{
-		{"accept", &pb2.MessageVerdict{}, interceptor.Decision{Action: interceptor.Allow}, ""},
-		{"accept keeping a tail", &pb2.MessageVerdict{Keep: 6}, interceptor.Decision{Action: interceptor.Allow, Keep: 6}, ""},
+		{"accept", &pb.MessageVerdict{}, interceptor.Decision{Action: interceptor.Allow}, ""},
+		{"accept keeping a tail", &pb.MessageVerdict{Keep: 6}, interceptor.Decision{Action: interceptor.Allow, Keep: 6}, ""},
 		{"replace", textReplace("msg_1:0", "[x]", 0), interceptor.Decision{Action: interceptor.Replace, Text: "[x]"}, "replace"},
 		{"replace keeping a tail", textReplace("msg_1:0", "[x]", 3), interceptor.Decision{Action: interceptor.Replace, Text: "[x]", Keep: 3}, "replace"},
 		{"replace unchanged", textReplace("msg_1:0", "purple ele", 0), interceptor.Decision{Action: interceptor.Allow}, ""},
 		{"replace with nothing", textReplace("msg_1:0", "", 0), interceptor.Decision{Action: interceptor.Replace}, "replace"},
-		{"hold", &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Hold{Hold: &pb2.Hold{}}}, interceptor.Decision{Action: interceptor.Hold}, "hold"},
-		{"respond", &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Respond{Respond: respond("then we bong")}}, interceptor.Decision{Action: interceptor.Respond, Text: "then we bong"}, "respond"},
+		{"hold", &pb.MessageVerdict{Action: &pb.MessageVerdict_Hold{Hold: &pb.Hold{}}}, interceptor.Decision{Action: interceptor.Hold}, "hold"},
+		{"respond", &pb.MessageVerdict{Action: &pb.MessageVerdict_Respond{Respond: respond("then we bong")}}, interceptor.Decision{Action: interceptor.Respond, Text: "then we bong"}, "respond"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &interceptortest.FakeV2{Reply: replyAnswer(tc.answer)}
+			f := &interceptortest.Fake{Reply: replyAnswer(tc.answer)}
 			var rw rows
-			c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+			c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
 			defer c.Close()
 			d := c.DecideReply(context.Background(), call, piece)
 			if d.Action != tc.want.Action || d.Text != tc.want.Text || d.Keep != tc.want.Keep {
@@ -85,8 +84,8 @@ func TestV2ReplyAnswers(t *testing.T) {
 
 // Once the block is done, keep is ignored: nothing can stay held.
 func TestV2ReplyKeepIgnoredWhenDone(t *testing.T) {
-	f := &interceptortest.FakeV2{Reply: replyAnswer(&pb2.MessageVerdict{Keep: 3})}
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	f := &interceptortest.Fake{Reply: replyAnswer(&pb.MessageVerdict{Keep: 3})}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
 	defer c.Close()
 	p := piece
 	p.Done = true
@@ -98,22 +97,22 @@ func TestV2ReplyKeepIgnoredWhenDone(t *testing.T) {
 // Answers that can't be applied are onError: the call is refused (deny) or
 // the text released (allow), and recorded as an error either way.
 func TestV2ReplyInvalid(t *testing.T) {
-	cases := map[string]*pb2.MessageVerdict{
+	cases := map[string]*pb.MessageVerdict{
 		"keep past the text":     {Keep: 12},
 		"keep mid-character":     {Keep: 1},
 		"negative keep":          {Keep: -1},
-		"respond without text":   {Action: &pb2.MessageVerdict_Respond{Respond: &pb2.Respond{}}},
-		"replace with a call":    {Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: &pb2.ConvMessage{Parts: []*pb2.Part{{Kind: &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{}}}}}}}},
-		"replace with two parts": {Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: &pb2.ConvMessage{Parts: []*pb2.Part{{Kind: &pb2.Part_Text{Text: &pb2.Text{}}}, {Kind: &pb2.Part_Text{Text: &pb2.Text{}}}}}}}},
+		"respond without text":   {Action: &pb.MessageVerdict_Respond{Respond: &pb.Respond{}}},
+		"replace with a call":    {Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: &pb.ConvMessage{Parts: []*pb.Part{{Kind: &pb.Part_ToolCall{ToolCall: &pb.ToolCall{}}}}}}}},
+		"replace with two parts": {Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: &pb.ConvMessage{Parts: []*pb.Part{{Kind: &pb.Part_Text{Text: &pb.Text{}}}, {Kind: &pb.Part_Text{Text: &pb.Text{}}}}}}}},
 	}
 	p := piece
 	p.Pending = "purple elé" // ends in a two-byte character
 	for name, v := range cases {
 		for _, onError := range []string{"deny", "allow"} {
 			t.Run(name+"/"+onError, func(t *testing.T) {
-				f := &interceptortest.FakeV2{Reply: replyAnswer(v)}
+				f := &interceptortest.Fake{Reply: replyAnswer(v)}
 				var rw rows
-				c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second, OnError: onError}, rw.add)
+				c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second, OnError: onError}, rw.add)
 				defer c.Close()
 				d := c.DecideReply(context.Background(), call, p)
 				want := interceptor.Deny
@@ -130,8 +129,8 @@ func TestV2ReplyInvalid(t *testing.T) {
 
 // A late Interceptor is onError too.
 func TestV2ReplyDeadline(t *testing.T) {
-	f := &interceptortest.FakeV2{Reply: replyAnswer(&pb2.MessageVerdict{}), Delay: 200 * time.Millisecond}
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 20 * time.Millisecond}, nil)
+	f := &interceptortest.Fake{Reply: replyAnswer(&pb.MessageVerdict{}), Delay: 200 * time.Millisecond}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 20 * time.Millisecond}, nil)
 	defer c.Close()
 	if d := c.DecideReply(context.Background(), call, piece); d.Action != interceptor.Deny {
 		t.Fatalf("decision %+v", d)
@@ -140,9 +139,9 @@ func TestV2ReplyDeadline(t *testing.T) {
 
 // Without OnReply, every reply's text is accepted and no longer held.
 func TestV2ReplyUnimplemented(t *testing.T) {
-	f := &interceptortest.FakeV2{}
+	f := &interceptortest.Fake{}
 	var rw rows
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, rw.add)
 	defer c.Close()
 	if !c.Replies() {
 		t.Fatal("not holding replies to begin with")
@@ -158,17 +157,17 @@ func TestV2ReplyUnimplemented(t *testing.T) {
 // Observe: OnReply and OnToolCall queued, their answers recorded, never
 // applied; an opaque part is announced, with nothing to record.
 func TestV2ObserveReply(t *testing.T) {
-	f := &interceptortest.FakeV2{
-		Reply: func(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+	f := &interceptortest.Fake{
+		Reply: func(m *pb.ResponseMessage) *pb.MessageVerdict {
 			if m.GetMessage().GetParts()[0].GetOpaque() != nil {
-				return &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Respond{Respond: respond("ignored")}}
+				return &pb.MessageVerdict{Action: &pb.MessageVerdict_Respond{Respond: respond("ignored")}}
 			}
 			return textReplace(m.GetMessage().GetId(), strings.ToUpper(m.GetMessage().GetParts()[0].GetText().GetText()), 0)
 		},
 		Tool: toolAnswer(replaced(`{"command":"pwd"}`)),
 	}
 	var rw rows
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true}, rw.add)
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true}, rw.add)
 	c.ObserveOpaque(call, "msg_1:0")
 	c.ObserveReply(call, piece)
 	c.ObserveToolCall(call, bash)
@@ -191,8 +190,8 @@ func TestV2ObserveReply(t *testing.T) {
 // A tool result names the tool it answers, from the call in the request's
 // history.
 func TestV2ToolResultName(t *testing.T) {
-	f := &interceptortest.FakeV2{}
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	f := &interceptortest.Fake{}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
 	defer c.Close()
 	c.DecideRequest(context.Background(), call, parse(t, withHistory))
 	_, reqs, _ := f.Snapshot()
@@ -211,18 +210,18 @@ func TestV2HarnessMessages(t *testing.T) {
 		`{"role":"user","content":[{"type":"text","text":"<system-reminder>be brief</system-reminder>"},` +
 		`{"type":"text","text":"The user sent a new message while you were working:\nuse b.go\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn."}]}]}`
 	var got []string
-	f := &interceptortest.FakeV2{Request: func(q *pb2.RequestMessages) *pb2.RequestVerdict {
-		v := &pb2.RequestVerdict{}
+	f := &interceptortest.Fake{Request: func(q *pb.RequestMessages) *pb.RequestVerdict {
+		v := &pb.RequestVerdict{}
 		for _, m := range q.GetMessages() {
 			got = append(got, m.GetRole().String()+": "+m.GetParts()[0].GetText().GetText())
-			if m.GetRole() == pb2.Role_ROLE_USER {
+			if m.GetRole() == pb.Role_ROLE_USER {
 				m.GetParts()[0].GetText().Text = "use c.go"
-				v.Messages = append(v.Messages, &pb2.MessageVerdict{MessageId: m.GetId(), Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: m}}})
+				v.Messages = append(v.Messages, &pb.MessageVerdict{MessageId: m.GetId(), Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: m}}})
 			}
 		}
 		return v
 	}}
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
 	defer c.Close()
 	d := c.DecideRequest(context.Background(), call, parse(t, body))
 	if want := []string{"ROLE_SYSTEM: Note: a.go changed.", "ROLE_SYSTEM: <system-reminder>be brief</system-reminder>", "ROLE_USER: use b.go"}; strings.Join(got, "|") != strings.Join(want, "|") {
