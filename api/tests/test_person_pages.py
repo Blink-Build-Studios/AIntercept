@@ -24,7 +24,7 @@ import pytest
 from aintercept_api import claude_code as cc
 from aintercept_api import ranges
 from tests.builders import ClaudeCode, Dataset
-from tests.conftest import FROZEN_NOW, PgDataset, make_client, pg_admin
+from tests.conftest import FROZEN_NOW, PgDataset, make_client, pg_admin, pg_datasets
 from tests.endpoints import BIN_LADDER, person_from, person_urls, window_from
 from tests.test_session import prompt
 from tests.test_session_pages import DATASETS as SESSION_DATASETS
@@ -87,16 +87,17 @@ def sides(tmp_path_factory) -> Iterator[dict[str, Side]]:
     with contextlib.ExitStack() as stack:
         out: dict[str, Side] = {}
         only = os.environ.get("PERSON_PAGES_ONLY")  # local iteration: a comma-separated subset
+        roots: dict[str, pathlib.Path] = {}
         for name, build in DATASETS.items():
             if only and name not in only.split(","):
                 continue
             ds = Dataset(tmp / name.replace(" ", "-") / "data")
             build(ds)
             ended(ds)
-            root = pathlib.Path(ds.write())
-            pg = PgDataset(admin, root)
+            roots[name] = pathlib.Path(ds.write())
+        for name, pg in pg_datasets(admin, roots).items():
             stack.callback(pg.close)
-            out[name] = Side(name, root, pg)
+            out[name] = Side(name, roots[name], pg)
             stack.callback(out[name].close)
         yield out
 
@@ -408,8 +409,8 @@ def test_every_person_statement_can_use_an_index(sides):
         for url in urls:
             side.store.trace.clear()
             side.new.get(url)
-            plans += [
-                (s.name, p) for ld in side.store.trace for s in ld.statements for p in side.store.reader.explain(s)
-            ]
+            stmts = [s for ld in side.store.trace for s in ld.statements]
+            explained = side.store.reader.explain_many(stmts)
+            plans += [(s.name, p) for s, ps in zip(stmts, explained, strict=True) for p in ps]
     scans = [(n, p) for n, p in plans if "Seq Scan on" in p and p.split("Seq Scan on ")[1].split()[0] not in _SMALL]
     assert plans and not scans, scans[:5]

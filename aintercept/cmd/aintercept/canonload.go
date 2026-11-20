@@ -39,8 +39,9 @@ const loadChunk = 1000
 // directory in random parts, then each part shuffled and written, the parts in
 // random order. With refreshers, that many rollup refreshers run alongside
 // the load as the workers' do, then the open calls are swept, the rest drained
-// and every rollup checked against the facts from scratch (refreshLoad).
-func canonLoad(src, dsn string, shuffle int64, refreshers int) {
+// and every rollup checked against the facts from scratch (refreshLoad); with
+// timings, each kind of refresh is timed too.
+func canonLoad(src, dsn string, shuffle int64, refreshers int, timings bool) {
 	ctx := context.Background()
 	start := time.Now()
 	db, err := pg.Open(ctx, dsn, int32(4+refreshers))
@@ -52,7 +53,7 @@ func canonLoad(src, dsn string, shuffle int64, refreshers int) {
 		fatalf("load: %v", err)
 	}
 	if refreshers > 0 {
-		defer refreshLoad(ctx, db, refreshers)()
+		defer refreshLoad(ctx, db, refreshers, timings)()
 	}
 	if fi, err := os.Stat(filepath.Join(src, "raw")); err == nil && fi.IsDir() {
 		if shuffle != 0 {
@@ -102,12 +103,15 @@ func canonLoad(src, dsn string, shuffle int64, refreshers int) {
 
 // refreshLoad starts n refreshers (and the sweep, every 5 s) and returns
 // what ends them: it stops them, sweeps, drains and checks every rollup
-// against the facts from scratch, printing what each took.
-func refreshLoad(ctx context.Context, db *pgxpool.Pool, n int) func() {
+// against the facts from scratch, printing what each took, and fails if one
+// differs; with timings, it then times each kind of refresh.
+func refreshLoad(ctx context.Context, db *pgxpool.Pool, n int, timings bool) func() {
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	var refreshed atomic.Int64
-	run := func(f func() error) {
+	// run repeats f every interval until stopped; stopping never waits out
+	// an interval.
+	run := func(every time.Duration, f func() error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -118,15 +122,15 @@ func refreshLoad(ctx context.Context, db *pgxpool.Pool, n int) func() {
 				select {
 				case <-stop:
 					return
-				case <-time.After(100 * time.Millisecond):
+				case <-time.After(every):
 				}
 			}
 		}()
 	}
 	for i := 0; i < n; i++ {
-		run(func() error { k, err := refresh.Drain(ctx, db); refreshed.Add(int64(k)); return err })
+		run(100*time.Millisecond, func() error { k, err := refresh.Drain(ctx, db); refreshed.Add(int64(k)); return err })
 	}
-	run(func() error { _, err := refresh.Sweep(ctx, db); time.Sleep(5 * time.Second); return err })
+	run(5*time.Second, func() error { _, err := refresh.Sweep(ctx, db); return err })
 	return func() {
 		close(stop)
 		wg.Wait()
@@ -159,14 +163,21 @@ func refreshLoad(ctx context.Context, db *pgxpool.Pool, n int) func() {
 			fatalf("refresh: check: %v", err)
 		}
 		fmt.Printf("  %-16s %10s %10s %8s %8s %24s  (from scratch in %.1fs)\n", "rollup", "rows", "scratch", "missing", "extra", "checksum", time.Since(t).Seconds())
+		var differ []string
 		for _, r := range res {
 			mark := "equal"
 			if !r.Equal() {
 				mark = "DIFFERENT"
+				differ = append(differ, r.Table)
 			}
 			fmt.Printf("  %-16s %10d %10d %8d %8d %24s  %s\n", r.Table, r.Rows, r.Scratch, r.Missing, r.Extra, r.Checksum, mark)
 		}
-		timeRefreshes(ctx, db)
+		if len(differ) > 0 {
+			fatalf("refresh: %v differ from the facts from scratch", differ)
+		}
+		if timings {
+			timeRefreshes(ctx, db)
+		}
 	}
 }
 

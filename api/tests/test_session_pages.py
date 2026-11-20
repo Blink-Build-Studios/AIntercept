@@ -16,7 +16,7 @@ import pytest
 
 from aintercept_api.timeutil import ns_to_dt
 from tests.builders import Codex, Dataset, end_batches
-from tests.conftest import PgDataset, pg_admin
+from tests.conftest import pg_admin, pg_datasets
 from tests.test_codex import codex_work
 from tests.test_drawer import SIDES, Side
 
@@ -69,14 +69,15 @@ def sides(tmp_path_factory) -> Iterator[dict[str, Side]]:
     tmp = tmp_path_factory.mktemp("sessions")
     with contextlib.ExitStack() as stack:
         out: dict[str, Side] = {}
+        roots: dict[str, pathlib.Path] = {}
         for name, build in DATASETS.items():
             ds = Dataset(tmp / name.replace(" ", "-") / "data")
             build(ds)
             ended(ds)
-            root = pathlib.Path(ds.write())
-            pg = PgDataset(admin, root)
+            roots[name] = pathlib.Path(ds.write())
+        for name, pg in pg_datasets(admin, roots).items():
             stack.callback(pg.close)
-            out[name] = Side(name, root, pg)
+            out[name] = Side(name, roots[name], pg)
             stack.callback(out[name].close)
         yield out
 
@@ -228,12 +229,12 @@ def test_every_session_statement_can_use_an_index(sides):
     plans = []
     for name in ("drawer cases", "mixed"):
         side = sides[name]
+        stmts = []
         for sid in session_ids(side):
             for url in session_urls(side, sid):
                 side.store.trace.clear()
                 side.new.get(url)
-                plans += [
-                    (s.name, p) for ld in side.store.trace for s in ld.statements for p in side.store.reader.explain(s)
-                ]
+                stmts += [s for ld in side.store.trace for s in ld.statements]
+        plans += [(s.name, p) for s, ps in zip(stmts, side.store.reader.explain_many(stmts), strict=True) for p in ps]
     scans = [(n, p) for n, p in plans if "Seq Scan on" in p and p.split("Seq Scan on ")[1].split()[0] not in _SMALL]
     assert plans and not scans, scans[:5]

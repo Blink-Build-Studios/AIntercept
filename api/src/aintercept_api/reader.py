@@ -231,9 +231,13 @@ class Reader:
     def explain(self, statement: Statement) -> list[str]:
         """statement's plan with sequential scans priced out (what an index can serve), on a connection
         of its own: its setting never reaches a pooled one."""
+        return self.explain_many([statement])[0]
+
+    def explain_many(self, statements: Sequence[Statement]) -> list[list[str]]:
+        """Each statement's plan, as explain, on one connection of their own, closed after."""
         with contextlib.closing(self.connect()) as conn:
             conn.execute("SET enable_seqscan = off")
-            return [str(r[0]) for r in conn.execute("EXPLAIN " + statement.sql, statement.params).fetchall()]
+            return [[str(r[0]) for r in conn.execute("EXPLAIN " + s.sql, s.params).fetchall()] for s in statements]
 
     def close(self) -> None:
         self.pool.close()

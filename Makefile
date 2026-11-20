@@ -133,7 +133,7 @@ regen: ## Regenerate the UI contract: OpenAPI -> ui/src/api/spec.ts, then API te
 	cd api && uv run python -m aintercept_api.openapi > ../ui/openapi.json
 	cd ui && pnpm gen:spec
 	rm -rf ui/src/api/samples
-	$(TEST_PG) cd api && uv run pytest -q --write-samples
+	$(TEST_PG) cd api && uv run pytest -q --write-samples -n auto --dist loadfile
 
 GENERATED := ui/openapi.json ui/src/api/spec.ts ui/src/api/samples
 
