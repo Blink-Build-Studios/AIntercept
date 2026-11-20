@@ -4,9 +4,9 @@
 # stateless (docs/PIPELINE.md §6): each request reads its rows from Postgres in
 # one snapshot and a call's raw member (one ranged GET) for the raw view, so it
 # keeps nothing, and an HPA on CPU sets the replica count. It
-# checks the schema's hash at start and refuses a mismatch; /api/v1/status
-# (its readiness probe) reads Postgres, so a pod that can't is taken out of
-# the Service.
+# checks the database's schema version and is unready until it's one it reads
+# (docs/PIPELINE.md §3.4); /api/v1/status (its readiness probe) reads Postgres,
+# so a pod that can't is taken out of the Service.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

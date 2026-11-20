@@ -248,10 +248,9 @@ its rows from Postgres in one snapshot, through the API login (the Secret's
 raw file, so it keeps nothing, and an HPA on CPU sets its replica count
 (`api.stateless`):
 - **Startup and readiness:** the API refuses to start without its DSN. It
-  checks the schema's hash every few seconds and answers 503 until the
-  database holds this build's schema (on an upgrade that changes it, the
-  workers reset the database and reload from the raw files: just
-  `helm upgrade`, docs/DEPLOY_DOKS.md "Upgrading"). Its readiness probe,
+  checks the database's schema version every few seconds and answers 503
+  until it's one the build reads: the oldest it needs or any newer (on an
+  upgrade the workers migrate the database, §5b3). Its readiness probe,
   `/api/v1/status`, reads Postgres, so a pod that can't reach it, or whose
   schema isn't there, leaves the Service; its liveness probe, `/healthz`,
   never reads the database.
@@ -347,6 +346,67 @@ raw file, so it keeps nothing, and an HPA on CPU sets its replica count
     so the AWS side changes before the release does. Once the old processor
     and the API's mirror lose their access they stop refreshing, and the old
     UI shows what it last loaded until the new release replaces it.
+
+## 5b3. Upgrades and the schema (docs/PIPELINE.md §3.4)
+
+An upgrade is `helm upgrade`. The workers' Deployment is `Recreate` (every old
+worker stops before a new one starts, so no old build writes to the new schema),
+and each new worker migrates the database before it loads anything: goose
+applies the release's new migrations, once however many workers start. What a
+migration costs depends on its kind, which the release notes say:
+
+- **In place** (a new table, column or index; data rewritten in SQL): every row
+  stays and the pages show no gap. Most changes are this kind.
+- **Reload** (the migration names tables with `-- reload:`): those tables and
+  `ingest_files` are emptied, and the workers reload every raw file still in
+  `<prefix>/raw/`. The named tables fill back in as the files load; the rest
+  keep serving throughout.
+- **Reset** (`-- reset`): the database is emptied and every fact reloads from
+  the raw files.
+
+**A reload or reset only brings back what the raw files hold.** Keep the
+bucket's lifecycle on `<prefix>/raw/` (`raw_retention_days`) at least as long
+as `retention.days`; history Postgres holds beyond the raw files is lost when
+a migration reloads the tables it's in.
+
+**How long a reload takes:** about 11 minutes per GB of raw files (gzip, as
+`<prefix>/raw/` holds them) for one worker replica at the chart's defaults (2
+loaders, 2 refreshers), and about 6 with four times as many. It grows with the
+raw volume retained and with nothing else; more worker replicas (KEDA adds them
+on `/lag`) shorten it until Postgres is the limit.
+
+Measured on 2026-11-19: 214 MB of raw files (26 files of about 8 MB, 57,061
+calls; the API tests' sanitized demo capture, 30 copies with their ids
+rewritten) reloaded into an empty database by one `aintercept worker`, timed
+from its start until every file was loaded and no rollup row was dirty: 141 s
+(75 s with 8 loaders and 8 refreshers), and 50 s for 71 MB. Postgres 17 was
+the pinned image with its default settings, in Docker on a 12-core laptop, so
+a smaller managed instance will be slower. To measure your own: note the size
+of `<prefix>/raw/`, run one `aintercept worker` with the bucket's settings
+against an empty scratch database on the same class of instance, and time it
+until every `ingest_files` row is loaded and `/lag` is 0.
+
+**Rolling back** to an older release fails loudly: its workers refuse a
+database newer than they are ("the database is at schema version N and this
+build's newest is M"), exit, and change nothing. Its API pods keep reading (a
+migration never takes away what the previous release's API reads). To go back,
+roll forward to a fixed release, or restore a database backup taken before the
+upgrade.
+
+**Upgrading from v0.6.2** (the last release before migrations): the database is
+recorded as version 1 as it stands, with no reset and no reload. Its
+`schema_version` table stays as it was, so v0.6.2's API pods stay ready until
+the new ones replace them.
+
+**`worker.schemaReset`** (default `true`) is only the escape hatch for a
+database the migrations can't reach: one from before v0.6.2 (another schema
+hash). The first worker resets it once and every fact reloads, as every schema
+change did before migrations. With `false` the workers refuse to start until
+it's emptied by hand. A database at a known version is never reset implicitly.
+
+**`aintercept pg reset`** empties the database and applies the release's
+schema by hand; the workers, running or not, then reload every raw file:
+`kubectl exec deploy/worker -- /aintercept pg reset`.
 
 ## 5c. Rollouts, disruption and placement
 

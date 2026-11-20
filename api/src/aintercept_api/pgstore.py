@@ -28,17 +28,17 @@ from aintercept_api.models.work import ToolsInRange
 from aintercept_api.objects import Source
 from aintercept_api.reader import BEGIN, POOL_SIZE, Load, Reader, SchemaMismatch, Snapshot
 
-# The schema this build reads (aintercept/internal/pg/schema.sql's sha256, as pg.SchemaHash and
-# schema_version record it). The API ships no copy of the file; tests/test_pg_store.py holds the
-# two equal.
-SCHEMA_HASH = "79b14d4e95fdfafe7a2e1f60b76432e39e25bbe551e63572b346c09313a19bbe"
+# The oldest schema version this build reads (the workers' migrations, aintercept/internal/pg/migrations,
+# docs/PIPELINE.md §3.4): raise it to a migration's number when the API starts reading what that
+# migration adds. A newer version is read too (tests/test_pg_store.py).
+OLDEST = 1
 
 __all__ = ["BEGIN", "POOL_SIZE", "PgStore", "SchemaMismatch"]
 
 log = logging.getLogger("aintercept_api")
 
-# How often a pod checks the database's schema hash again: one waiting for the workers to apply its
-# schema (an upgrade), or one whose schema the workers just replaced (an older pod).
+# How often a pod checks the database's schema version again: one waiting for the workers to migrate
+# it (an upgrade), or one whose database the workers just reset.
 RECHECK_SECONDS = 5.0
 
 # The drawer's lastDataAt (it's global, quirk 7): the newest record any observer pod sent (§6.4).
@@ -67,22 +67,23 @@ class PgStore:
         self.ready()
 
     def ready(self) -> bool:
-        """Whether the database holds this build's schema (pg.Check), checked again every
-        RECHECK_SECONDS. Until it does the API answers 503 and its readiness probe fails (app.py), so
-        an upgrade's pods wait for the workers to apply their schema, and never restart for it."""
+        """Whether the database is at a schema version this build reads (Reader.check_schema), checked
+        again every RECHECK_SECONDS. Until it is the API answers 503 and its readiness probe fails
+        (app.py), so an upgrade's pods wait for the workers to migrate, and never restart for it."""
         if time.monotonic() - self._checked < RECHECK_SECONDS or not self._checking.acquire(blocking=False):
             return bool(self._ready)
         try:
+            version: int | None = None
             try:
-                self.reader.check_schema(SCHEMA_HASH)
+                version = self.reader.check_schema(OLDEST)
                 ready, why = True, ""
             except (SchemaMismatch, psycopg.Error) as e:
                 ready, why = False, str(e)
             if ready != self._ready:
                 if ready:
-                    log.info("ready: the database holds this build's schema", extra={"fields": {"schema": SCHEMA_HASH}})
+                    log.info("ready: this build reads the database's schema", extra={"fields": {"version": version}})
                 else:
-                    log.warning("not ready: waiting for this build's schema", extra={"fields": {"reason": why}})
+                    log.warning("not ready: waiting for a schema version it reads", extra={"fields": {"reason": why}})
             self._ready, self._checked = ready, time.monotonic()
             return ready
         finally:

@@ -97,8 +97,8 @@ def create_app(
     )
     if store is None:
         # Postgres (docs/PIPELINE.md §6), with the calls' raw members from the object store or the
-        # observer's local directory. It refuses to start without a DSN; on a database whose schema
-        # isn't this build's it starts unready (schema_ready).
+        # observer's local directory. It refuses to start without a DSN; on a database at a schema
+        # version it doesn't read it starts unready (schema_ready).
         try:
             store = pg_store_from_env(os.environ)
         except Exception as e:
@@ -111,12 +111,13 @@ def create_app(
 
     @app.middleware("http")
     async def schema_ready(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        """/api/* answers 503 until the database holds this build's schema (PgStore.ready): an upgrade's
-        new pods wait for the workers to apply it, and an older pod whose schema they replaced stops
-        serving. /api/v1/status is the readiness probe, so either pod is out of the Service meanwhile."""
+        """/api/* answers 503 until the database is at a schema version this build reads (PgStore.ready):
+        an upgrade's new pods wait for the workers to migrate it, and a pod whose database they reset
+        waits for the schema. /api/v1/status is the readiness probe, so the pod is out of the Service
+        meanwhile."""
         ready = getattr(request.app.state.store, "ready", None)
         if ready is not None and request.url.path.startswith("/api/") and not await run_in_threadpool(ready):
-            msg = "The database doesn't hold this build's schema yet"
+            msg = "The database isn't at a schema version this build reads yet"
             return error_response(503, "schema_not_ready", msg, request.state.query_id)
         return await call_next(request)
 

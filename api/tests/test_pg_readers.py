@@ -9,7 +9,15 @@ from tests import pgdb
 
 _SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "aintercept_api"
 _GO = pathlib.Path(__file__).resolve().parents[2] / "aintercept" / "internal"
-_API_READERS = ("pgstore.py", "drawer.py", "sessionpages.py", "personpages.py", "directorypages.py", "tools.py")
+_API_READERS = (
+    "reader.py",
+    "pgstore.py",
+    "drawer.py",
+    "sessionpages.py",
+    "personpages.py",
+    "directorypages.py",
+    "tools.py",
+)
 _WORKERS = ("ingest", "flush", "refresh")
 
 
@@ -23,7 +31,8 @@ def test_every_table_has_a_reader() -> None:
     unread = [
         t
         for t in _tables()
-        if t != "schema_version"  # the schema's hash: the workers and the API check it at start
+        # v0.6.2's schema hash: kept so v0.6.2's API pods stay ready through the upgrade to migrations.
+        if t != "schema_version"
         # Who each credential belongs to (issue #106): written now so its history is there when the
         # person page's credentials (the follow-up) read it.
         and t != "credentials"

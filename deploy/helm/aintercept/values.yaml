@@ -184,10 +184,11 @@ worker:
   loaders: 2           # files one replica loads at once
   refreshers: 2        # dirty rollup rows one replica refreshes at once
   listSeconds: 5       # how often the lister lists
-  # A release whose schema differs from the database's: its first worker drops
-  # the old schema and its data and applies its own (one transaction), and
-  # every fact reloads from the raw files. false: the workers refuse to start
-  # until the database is emptied by hand.
+  # The workers migrate the database at start (docs/PRODUCTION.md §5b3). This is
+  # only the escape hatch for a database the migrations can't reach (one from
+  # before v0.6.2): the first worker resets it once and every fact reloads from
+  # the raw files. false: the workers refuse to start until it's emptied by
+  # hand (`aintercept pg reset`). A database at a known version is never reset.
   schemaReset: true
   # keda: false gives a plain CPU HPA. The workers mostly wait on S3 and
   # Postgres, so CPU may never rise while /lag grows: set minReplicas >= 2 then.
