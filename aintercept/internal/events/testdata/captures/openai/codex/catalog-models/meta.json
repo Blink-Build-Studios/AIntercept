@@ -1,0 +1,9 @@
+{
+  "provider": "openai",
+  "client": "codex",
+  "api": "chatgpt_backend",
+  "client_version": "0.166.0",
+  "shape": "catalog-models",
+  "captured": "2026-11-09",
+  "notes": "Arrays longer than 4 elements are cut to their first and last 2 (capture-fixture -trim 2): the shape doesn't depend on their length."
+}

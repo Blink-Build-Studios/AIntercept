@@ -1,0 +1,26 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "cf-cache-status": "value_2",
+    "cf-ray": "x00x00000x0xx000-XX8",
+    "content-length": "1010",
+    "content-type": "application/json",
+    "cross-origin-opener-policy": "value_3",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "nel": "{\"xxxxxx_xx\":\"xx-xxx\",\"xxxxxxx_xxxxxxxx\":0.00,\"xxx_xxx\":000009}",
+    "referrer-policy": "value_4",
+    "report-to": "{\"xxxxx\":\"xx-xxx\",\"xxx_xxx\":000009,\"xxxxxxxxx\":[{\"xxx\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=xXxXxX0%0XXx00xxxXxxxxX0x0x0xxxXxxXxx010%0XxXXXxxXxXxx11%0X0xxxx00XxxxxXX0xxXXXxXxxxXxXxxX00XxXxXxXxXXxxXXxxXxXx12%0XxxxxXXXXXXxXx13\"}]}",
+    "server": "value_5",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "xxx-xxx=0000000e; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "x-content-type-options": "value_6",
+    "x-oai-request-id": "00000000-0000-4000-8000-00000000000f",
+    "x-openai-proxy-wasm": "value_7"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    1010,
+    0
+  ]
+}

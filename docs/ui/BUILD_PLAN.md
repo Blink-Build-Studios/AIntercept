@@ -477,7 +477,7 @@ Every rule that can be checked deterministically is checked. `make check` runs e
 | Generated contract current | `make check-generated` | Makefile |
 | Python typed and safe | mypy strict; ruff incl. `S` (no string-built SQL, no hard-coded secrets); coverage ≥ 90% | `api/pyproject.toml` |
 | Exact pins; nothing installed that's < 14 days old | `scripts/check-pins.py`; pnpm `minimumReleaseAge`; uv `exclude-newer` | `ui/pnpm-workspace.yaml`, `api/pyproject.toml` |
-| No real identifiers from captured traffic | `scripts/check-real-data.py` against hashed `scripts/real-data-denylist.sha256` (`real-data-ok` marks a reviewed exception) | repo |
+| No real identifiers from captured traffic | `scripts/check-real-data.py` against hashed `scripts/real-data-denylist.sha256` and, where it exists, the gitignored `data/real-data-denylist.local.sha256` (`real-data-ok` marks a reviewed exception) | repo |
 | No secrets, in any commit | gitleaks 8.30.1 over full history | CI |
 
 Still to add when the code exists:

@@ -1,0 +1,40 @@
+{
+  "method": "GET",
+  "host": "chatgpt.com",
+  "path": "/backend-api/wham/usage",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "chatgpt.com",
+    ":method": "GET",
+    ":path": "/backend-api/wham/usage",
+    ":scheme": "https",
+    "accept": "*/*",
+    "authorization": "<redacted>",
+    "chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+    "cookie": "<redacted>",
+    "user-agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+    "x-forwarded-proto": "https",
+    "x-openai-codex-luna-reserve": "1"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "chatgpt_jwt",
+    "claims": {
+      "client_id": "app_XXxxxXXX00x0XxXxXx0xxxx6",
+      "exp": 1794492640,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "00000000-0000-4000-8000-000000000002",
+        "chatgpt_plan_type": "value_1",
+        "chatgpt_user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx03"
+      },
+      "https://api.openai.com/profile": {
+        "email": "person4@example.com"
+      },
+      "iss": "https://auth.openai.com",
+      "name": "Xxxxx Xxxx",
+      "session_id": "authsess_xXX0X0xxxxxXxX0xXxXXXxx7",
+      "sub": "xxxx0|000000000000000000000005"
+    }
+  }
+}

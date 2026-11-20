@@ -130,8 +130,38 @@ codes their results carry back in a later request, by tool call id.
 | Coverage (reported vs captured) | analytics count the model calls | turn events count sampling requests | mapped | dropped (proxy-bypass detection read analytics) / — |
 | Network, bypass | from the proxy | from the proxy | common | shown / shown |
 
+## Cases in the capture corpus
+
+Each row above that AIntercept reads from the traffic has a real, anonymized
+call in the capture corpus (`docs/PROVIDERS.md`, "The test rule"), under
+[`aintercept/internal/events/testdata/captures/`](../aintercept/internal/events/testdata/captures/).
+What no capture shows yet is in its `KNOWN_GAPS`. The account's own state
+(plan, limits, rate-limit values) is replaced in every case: a case asserts
+where the code reads it, not the account's numbers.
+
+| Row | Claude Code | Codex |
+|---|---|---|
+| Person, name, email; credential's owner | [account-profile](../aintercept/internal/events/testdata/captures/anthropic/claude-code/account-profile/), [account-bootstrap](../aintercept/internal/events/testdata/captures/anthropic/claude-code/account-bootstrap/) | JWT claims on every call; [accounts-check](../aintercept/internal/events/testdata/captures/openai/codex/accounts-check/) |
+| Org / workspace | [account-plugins](../aintercept/internal/events/testdata/captures/anthropic/claude-code/account-plugins/) | the account header on every call |
+| Plan, limits | rate-limit headers on every model call | [usage](../aintercept/internal/events/testdata/captures/openai/codex/usage/); `codex.rate_limits` on every WebSocket turn |
+| Session, prompt, subagents | [model-stream-tools](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-stream-tools/) (a subagent) | [model-ws-fork](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-fork/), [model-ws-tools](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-tools/) (subagent threads) |
+| Session title | [model-title](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-title/) | [model-title](../aintercept/internal/events/testdata/captures/openai/codex/model-title/) |
+| Transport | [model-stream](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-stream/), [model-json](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-json/) | [model-ws](../aintercept/internal/events/testdata/captures/openai/codex/model-ws/), [model-http](../aintercept/internal/events/testdata/captures/openai/codex/model-http/) |
+| Model, effort, tokens, stop reason | every model case; [model-thinking](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-thinking/), [model-websearch](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-websearch/) | every model case; [model-ws-interrupted](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-interrupted/) |
+| Rejected calls | [error-400](../aintercept/internal/events/testdata/captures/anthropic/claude-code/error-400/), [error-404](../aintercept/internal/events/testdata/captures/anthropic/claude-code/error-404/), [error-503](../aintercept/internal/events/testdata/captures/anthropic/claude-code/error-503/), [model-disconnect](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-disconnect/) | [error-400](../aintercept/internal/events/testdata/captures/openai/codex/error-400/) |
+| Call class (side requests) | [model-title](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-title/) | [model-ws-prewarm](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-prewarm/), [model-title](../aintercept/internal/events/testdata/captures/openai/codex/model-title/) |
+| The harness's text in the conversation | [model-system-role](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-system-role/), [model-thread-create](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-thread-create/) (`tool_addition`), [model-interrupted](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-interrupted/) | [model-http](../aintercept/internal/events/testdata/captures/openai/codex/model-http/) (developer messages, `configuration_update`), [model-ws-fork](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-fork/) (`agent_message`) |
+| Chained requests with no new messages | [error-400](../aintercept/internal/events/testdata/captures/anthropic/claude-code/error-400/) (a continue with none, rejected), [model-thread-continue](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-thread-continue/) | [model-ws-prewarm](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-prewarm/) |
+| Tool calls; tool list | [model-stream-tools](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-stream-tools/), [model-mcp-tools](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-mcp-tools/) | [model-ws-tools](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-tools/) (an exec script), [model-ws-function](../aintercept/internal/events/testdata/captures/openai/codex/model-ws-function/) |
+| Images | [model-image](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-image/) | — |
+| MCP, web search | [model-mcp-tools](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-mcp-tools/), [model-websearch](../aintercept/internal/events/testdata/captures/anthropic/claude-code/model-websearch/) | [mcp](../aintercept/internal/events/testdata/captures/openai/codex/mcp/), [web-search](../aintercept/internal/events/testdata/captures/openai/codex/web-search/) |
+| Own analytics, metrics | [analytics](../aintercept/internal/events/testdata/captures/anthropic/claude-code/analytics/) | [analytics](../aintercept/internal/events/testdata/captures/openai/codex/analytics/), [metrics](../aintercept/internal/events/testdata/captures/openai/codex/metrics/) |
+| Plugins, flags, catalog | [flags](../aintercept/internal/events/testdata/captures/anthropic/claude-code/flags/), [account-plugins](../aintercept/internal/events/testdata/captures/anthropic/claude-code/account-plugins/) | [catalog-models](../aintercept/internal/events/testdata/captures/openai/codex/catalog-models/), [catalog-plugins](../aintercept/internal/events/testdata/captures/openai/codex/catalog-plugins/) |
+
 ## Open work
 
 - The UI for Codex (handoff §11J, CompAgents): the API serves the fields above; the screens are being built.
 - Shell and timezone (`facts.shell`, `facts.tz`) and Codex's generated title come from content (the environment block, the title call's response), which the API never reads (BUILD_PLAN §2).
 - Codex's drawer: a WebSocket turn opens on its own id; its decoded frames aren't shown yet.
+- A Codex WebSocket turn has no detail (its commands, patches, prompt text): the records assembler reads
+  detail from an HTTP call's bodies only (the corpus's WebSocket cases have none; the HTTP case has it).

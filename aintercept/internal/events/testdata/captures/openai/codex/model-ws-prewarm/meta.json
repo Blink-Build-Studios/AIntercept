@@ -1,0 +1,11 @@
+{
+  "provider": "openai",
+  "client": "codex",
+  "api": "chatgpt_backend",
+  "client_version": "0.164.0",
+  "shape": "model-ws-prewarm",
+  "captured": "2026-11-09",
+  "turns": [
+    1
+  ]
+}

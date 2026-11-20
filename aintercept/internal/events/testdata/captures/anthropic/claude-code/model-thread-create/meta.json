@@ -1,0 +1,9 @@
+{
+  "provider": "anthropic",
+  "client": "claude-code",
+  "api": "anthropic_messages",
+  "client_version": "2.1.308",
+  "shape": "model-thread-create",
+  "captured": "2026-11-10",
+  "notes": "A message thread's first request: the tool catalog, MCP tools added as tool_addition blocks."
+}

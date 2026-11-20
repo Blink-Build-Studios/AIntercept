@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 """Fail if a tracked file contains a real identifier from captured traffic.
 
-scripts/real-data-denylist.sha256 holds SHA-256 hashes (of the lowercased
-value) of real account, org, device and session IDs, client IPs and email
-addresses. Only hashes are committed, so the list itself leaks nothing. Every
-token-like run of characters in every tracked text file (and .gz file) is hashed
-and checked.
+Two lists of SHA-256 hashes (of the lowercased value) of real identifiers:
+
+- scripts/real-data-denylist.sha256 (committed) holds only identifiers random
+  enough that their hash can't be reversed by guessing: UUIDs and long random
+  device and session ids (about 100 bits or more).
+- data/real-data-denylist.local.sha256 (gitignored, read when it exists) holds
+  the rest: emails, IPs, names, hostnames, short or structured ids. A hash of
+  one of those would give it away to anyone trying the likely values, so it
+  never leaves the machine that captured it.
+
+`aintercept capture-fixture -denylist` sorts each identifier it replaces into
+the right list. Every token-like run of characters in every tracked text file
+(and .gz file) is hashed and checked against both.
 
 A line containing `real-data-ok` is skipped (a deliberate, reviewed exception).
 
-Add identifiers with:  printf '%s' VALUE | tr A-Z a-z | shasum -a 256
+Add an identifier with:  printf '%s' VALUE | tr A-Z a-z | shasum -a 256
+(to the committed list only if it is a UUID or a long random id).
 Run:                   python3 scripts/check-real-data.py [paths...]
 """
 
@@ -22,8 +31,13 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 DENYLIST = REPO / "scripts" / "real-data-denylist.sha256"
+LOCAL_DENYLIST = REPO / "data" / "real-data-denylist.local.sha256"
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+@:-]{6,}")
-SKIP = {"scripts/real-data-denylist.sha256"}
+SKIP = {"scripts/real-data-denylist.sha256", "data/real-data-denylist.local.sha256"}
+
+
+def read_hashes(path: pathlib.Path) -> set[str]:
+    return {line.strip() for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")}
 
 
 def candidates(token: str):
@@ -39,7 +53,9 @@ def candidates(token: str):
 
 
 def main(argv: list[str]) -> int:
-    deny = {line.strip() for line in DENYLIST.read_text().splitlines() if line.strip() and not line.startswith("#")}
+    deny = read_hashes(DENYLIST)
+    if LOCAL_DENYLIST.exists():
+        deny |= read_hashes(LOCAL_DENYLIST)
     if argv:
         files = argv
     else:

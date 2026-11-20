@@ -6,6 +6,7 @@
 //	aintercept worker     the workers (docs/PIPELINE.md §2.2, §5): load the observers' raw files into Postgres and refresh the rollups
 //	aintercept canon      writes a capture as raw files, or loads it into Postgres, through the observer's and the workers' code (a tool; takes flags)
 //	aintercept pg reset   empties the workers' database and applies the schema: every fact reloads from the raw files (an operator's tool)
+//	aintercept capture-fixture  writes one call from the raw files as an anonymized corpus case (a tool; takes flags; docs/PROVIDERS.md)
 //
 // The services are configured through environment variables.
 package main
@@ -20,15 +21,19 @@ import (
 )
 
 var modes = map[string]func(){
-	"observer": observer.Run,
-	"certsvc":  certsvc.Run,
-	"canon":    canonCmd,
-	"pg":       pgCmd,
-	"worker":   ingest.Run,
+	"observer":        observer.Run,
+	"certsvc":         certsvc.Run,
+	"canon":           canonCmd,
+	"capture-fixture": captureFixtureCmd,
+	"pg":              pgCmd,
+	"worker":          ingest.Run,
 }
 
+// tools take flags; the services take none.
+var tools = map[string]bool{"canon": true, "capture-fixture": true, "pg": true}
+
 func main() {
-	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "canon" && os.Args[1] != "pg") {
+	if len(os.Args) < 2 || (len(os.Args) > 2 && !tools[os.Args[1]]) {
 		usage()
 	}
 	run, ok := modes[os.Args[1]]
@@ -39,7 +44,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|worker, aintercept pg reset, or aintercept canon -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|worker, aintercept pg reset, or aintercept canon -h, or aintercept capture-fixture -h")
 	os.Exit(2)
 }
 

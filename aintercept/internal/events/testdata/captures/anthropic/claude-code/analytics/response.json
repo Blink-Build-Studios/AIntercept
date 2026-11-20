@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "accept-encoding": "xxxx,xxxx",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x00x0x000x0xxx00-XX2",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "request-id": "req_000XxxXXX0XxxxXxxxXxxxx3",
+    "server": "value_2",
+    "server-timing": "x-xxxxxxXxxxxxx4;xxx=00",
+    "vary": "value_3",
+    "x-robots-tag": "value_4"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    39,
+    0
+  ]
+}

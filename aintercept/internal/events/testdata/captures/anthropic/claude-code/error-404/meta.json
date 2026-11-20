@@ -1,0 +1,8 @@
+{
+  "provider": "anthropic",
+  "client": "claude-code",
+  "api": "anthropic_messages",
+  "client_version": "2.1.326",
+  "shape": "error-404",
+  "captured": "2026-11-16"
+}

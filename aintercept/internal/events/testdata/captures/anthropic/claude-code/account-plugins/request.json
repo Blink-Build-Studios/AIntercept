@@ -1,0 +1,25 @@
+{
+  "method": "GET",
+  "host": "api.anthropic.com",
+  "path": "/api/oauth/organizations/00000000-0000-4000-8000-000000000001/plugins/list-plugins?enabled_only=true&compact=true&limit=100&offset=0",
+  "ip": "192.0.2.3",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "GET",
+    ":path": "/api/oauth/organizations/00000000-0000-4000-8000-000000000001/plugins/list-plugins?enabled_only=true&compact=true&limit=100&offset=0",
+    ":scheme": "https",
+    "accept": "application/json, text/plain, */*",
+    "anthropic-client-platform": "xxxxxx_xxxx_xxx",
+    "anthropic-version": "2023-06-01",
+    "authorization": "<redacted>",
+    "content-type": "application/json",
+    "user-agent": "claude-cli/2.1.322 (external, cli)",
+    "x-forwarded-proto": "https",
+    "x-organization-uuid": "00000000-0000-4000-8000-000000000001"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "anthropic_oauth"
+  }
+}

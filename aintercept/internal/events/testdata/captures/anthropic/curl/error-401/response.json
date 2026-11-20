@@ -1,0 +1,24 @@
+{
+  "status": 401,
+  "headers": {
+    ":status": "401",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x00x0xx00000xx00-XX2",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "request-id": "req_000XxxxXxx0X0XXX0xXxx0X3",
+    "server": "value_2",
+    "server-timing": "x-xxxxxxXxxxxxx4;xxx=00",
+    "strict-transport-security": "xxx-xxx=00000005; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "traceresponse": "00-00000000000000000000000000000006-0000000000000007-00",
+    "vary": "value_3",
+    "x-robots-tag": "value_4",
+    "x-should-retry": "false"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    141,
+    0
+  ]
+}

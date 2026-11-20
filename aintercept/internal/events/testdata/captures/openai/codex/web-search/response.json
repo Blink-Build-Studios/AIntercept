@@ -1,0 +1,25 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "cf-cache-status": "value_2",
+    "cf-ray": "x0000x00000x0xxx-X10",
+    "content-length": "2802",
+    "content-type": "application/json",
+    "cross-origin-opener-policy": "value_3",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "nel": "{\"xxxxxx_xx\":\"xx-xxx\",\"xxxxxxx_xxxxxxxx\":0.00,\"xxx_xxx\":00000b}",
+    "referrer-policy": "value_4",
+    "report-to": "{\"xxxxx\":\"xx-xxx\",\"xxx_xxx\":00000b,\"xxxxxxxxx\":[{\"xxx\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XxxXxXXxxX0xxXXxXXx0xXXxxxXXXxxXxXxXX0xXxxXXxXXX0xxXXXXX0XXxXxxxxxxXx0x0XxxxX0xXX0Xx0xXXXXXx0X0XXXXx0xXXXxXxX00XxX12%0XxXXXxXX\"}]}",
+    "server": "value_5",
+    "strict-transport-security": "xxx-xxx=0000000d; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "x-content-type-options": "value_6",
+    "x-oai-request-id": "00000000-0000-4000-8000-00000000000e",
+    "x-openai-proxy-wasm": "value_7"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    2802,
+    0
+  ]
+}

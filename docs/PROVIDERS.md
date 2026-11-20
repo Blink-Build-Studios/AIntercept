@@ -20,11 +20,99 @@ is anything AIntercept reads out of it: the model, each token count, the stop
 reason, a tool call, the account, an identity. So a provider with three
 shapes that yields eight fields has up to 24 cases.
 
-The shared corpus of anonymized captures is issue #107. Until it lands, a new
-provider adds its cases next to the code that reads them (`events/*_test.go`,
-`convo/*_test.go`, `identity/*_test.go`), from captures with every real
-identifier replaced (`scripts/check-real-data.py` fails on known ones; see
-"Docs and tests" below).
+The cases are the **capture corpus**,
+`aintercept/internal/events/testdata/captures/<provider>/<client>/<shape>/`:
+one real call per directory, anonymized, replayed through the observer's own
+code by `TestCorpus` (`aintercept/internal/extproc/corpus_test.go`): the
+ext_proc server in observe mode, the processor's extraction, the records the
+raw files hold, the Interceptor's callbacks (contract v2) and the identity
+lookup. Each field the code reads is its own test, named by the case and the
+field, so a failure says which shape broke and where. `make check` runs it.
+
+Web and desktop chat (claude.ai, ChatGPT in a browser) are left out of the
+corpus for now: that work is deferred.
+
+### Adding a case
+
+When a capture shows something new (a client version, a parser miss, an
+`unparsed` counter rising, a field the code doesn't read), **the fix's PR adds
+the anonymized case first, as a failing test, then the fix.** Onboarding a
+provider starts the same way: a case for each of its traffic shapes.
+
+1. Find the call in the raw files (`<prefix>/raw/…`, from the object store, in
+   full interception mode; copy what you need into the gitignored `data/`).
+   From `aintercept/`:
+
+        go run ./cmd/aintercept capture-fixture -raw ../data/raw -list
+
+   lists each call: its id, host, path, status, user agent, body sizes, and a
+   WebSocket's turns. Take the smallest call that shows the shape.
+2. Write the case:
+
+        go run ./cmd/aintercept capture-fixture -raw ../data/raw -call <id> \
+          -out internal/events/testdata/captures/<provider>/<client>/<shape> \
+          -denylist ../scripts/real-data-denylist.sha256
+
+   It writes `meta.json` (provider, client and version, API, shape, the day
+   it was captured), `request.json` and `response.json` (method, host, path, headers,
+   status), the bodies decoded (`request-body.*`, `response-body.*`; the replay
+   encodes them again as they came) or a WebSocket's messages
+   (`websocket.jsonl`). It replaces:
+   - credentials: raw rows have them redacted already, and the tool refuses a
+     row that doesn't. The replay builds a stand-in of the same kind (the case
+     says which, and for a ChatGPT token its claims, anonymized);
+   - identifiers (accounts, orgs, devices, sessions, requests, tool calls,
+     emails, IPs) with fakes of the same shape, the same fake everywhere in
+     the case;
+   - text (prompts, replies, tool inputs and results, system prompts, names,
+     paths, hosts) with placeholder text of the same length and structure:
+     letters `x`, digits `0`, punctuation and line breaks kept, the harness's
+     markers kept (`convo.HarnessNotes`, patch headers, exit codes), tool input
+     JSON still valid JSON;
+   - base64 (images, encrypted reasoning) with the same length of valid base64;
+   - what the provider says about the account: every response header's value
+     but the exchange's own (`content-type`, `content-encoding`, `:status`,
+     …), even the rate-limit state the code reads (the test needs its header,
+     not the account's numbers); plan and tier fields; in-band rate-limit
+     events; moderation verdicts and the safety classifier's context;
+     early-access programs; and any model name the corpus's own model calls
+     don't use (a fake of the same vendor, `claude-model-3`). An MCP tool's
+     parameter names are fakes, as its name is;
+   - a body the code doesn't read whole (a control-plane call's: flags,
+     usage, catalogs, the account's profile) is reduced to its structure:
+     generic field names kept, feature flags `flag_1`, other field names
+     `key_1`, strings placeholders, numbers 0, booleans false. Only the fields
+     an extractor reads stay as they are (anonymized like any value). Those
+     are listed in `readsOf` (`internal/capture/account.go`): a new extractor
+     of a control-plane body adds its fields there, then re-extracts the case.
+
+   Structure, field names, enum values, the corpus's model names, versions
+   and token counts are kept. `-turns` keeps some of a WebSocket's turns; `-trim N` cuts long
+   JSON arrays (a catalog, a long conversation) to their first and last N, for
+   a shape that doesn't depend on length (it says so in `meta.json`).
+   `-denylist` adds the hashes of the real identifiers it replaced, so
+   `scripts/check-real-data.py` (`make check-repo`) fails if one ever reaches
+   the repo: the random ones (UUIDs, long device and session ids) to the
+   committed `scripts/real-data-denylist.sha256`, the guessable ones (emails,
+   IPs, names, hosts, short ids) to the gitignored
+   `data/real-data-denylist.local.sha256`, since their hash would give them
+   away to anyone trying the likely values.
+3. Read every file it wrote. When unsure whether something identifies a
+   person or a company, replace it.
+4. Write `expect.json`: the fields the case asserts, from what the shape
+   means. `go test ./internal/extproc -run TestCorpus -update` writes every
+   case's from what the code reads now; review each value against the case's
+   files, and where they disagree find out which is wrong (the code: fix it
+   in the same PR; the expectation: correct it).
+5. Run `go test ./internal/extproc -run TestCorpus`. `TestCorpusCoverage`
+   checks that every shape in its list (`corpusShapes`, from the taxonomies)
+   has a case, that every field the code can produce (read from the types it
+   fills, so a new field needs a case) is asserted with a value by some case,
+   and that each API (`meta.json`'s `api`, from the host and path) asserts the
+   field families in `corpusRequire`: the common fields, the effort and tier,
+   an error in the API's own shape. A new family (a setting × every API that
+   carries it) is a row in that table. A gap with no real capture goes in
+   `captures/KNOWN_GAPS` with the reason; never fake a capture.
 
 ## 1. Routing and TLS
 
@@ -41,7 +129,7 @@ identifier replaced (`scripts/check-real-data.py` fails on known ones; see
 |---|---|---|
 | `extractAPIKey` (behind `HashAPIKey`, `KeyHint` and `APIKey`) | The header, query parameter or cookie that carries the credential. `key_hash` is its salted hash; nothing else of it is kept. | `events/gemini_key_test.go` is the pattern. |
 | `sensitiveHeaders`, `RedactHeaders`, `RedactPath` | Every credential-bearing header, cookie and query parameter, so none reaches a row. | `extproc/gemini_redaction_test.go`. |
-| `scripts/real-data-denylist.sha256` | The hashes of the real identifiers in the captures you worked from (accounts, orgs, devices, sessions, emails, IPs), so none can be committed. Credential shapes are gitleaks' job (`make check-repo`). | `make check-repo`. |
+| `scripts/real-data-denylist.sha256`, `data/real-data-denylist.local.sha256` | The hashes of the real identifiers in the captures you worked from, so none can be committed (`capture-fixture -denylist` adds a case's): the committed list only the random ones (UUIDs, long device and session ids), the gitignored local one the guessable ones (emails, IPs, names, hosts, short ids). Credential shapes are gitleaks' job (`make check-repo`). | `make check-repo`. |
 
 ## 3. Identity (`aintercept/internal/identity`)
 
@@ -75,8 +163,11 @@ What each credential resolves to today:
 
 Tests (`identity/resolvers_test.go`): for each lookup, success, 401, 403, an
 unexpected shape and a timeout against a fake server; the resolver's
-eligibility (host and shape); `Observe` from a complete row. Add the
-provider's row to the table above and to `docs/harness-parity.md`.
+eligibility (host and shape); `Observe` from a complete row. The lookup
+endpoint's own call is a corpus case (`anthropic/claude-code/account-profile`,
+`openai/codex/accounts-check`): the replay answers the lookup with its
+response. Add the provider's row to the table above and to
+`docs/harness-parity.md`.
 
 ## 4. Parsing and metadata (`aintercept/internal/events`)
 
@@ -115,6 +206,8 @@ Also:
 
 - `docs/TAXONOMY_<PROVIDER>.md`: every request kind and path the client sends,
   and what each lands as.
+- A corpus case for each traffic shape ("The test rule" above), each shape
+  added to `corpusShapes` in `internal/extproc/corpus_coverage_test.go`.
 - A `docs/harness-parity.md` row for each client harness that uses the
   provider (what it sends, common / mapped / bespoke, what AIntercept shows).
 - The provider lists in `README.md` and `docs/PRODUCTION.md`.
@@ -126,4 +219,5 @@ Also:
 A call through the proxy to the provider shows up with its model, its usage
 and its identity, is recorded in the raw files and loaded into Postgres, and is
 refused in the provider's own error shape in enforce mode: in `make verify`
-and `make test-interceptor`, with every field covered by the test rule above.
+and `make test-interceptor`, with every field covered by the test rule above
+(`TestCorpusCoverage` passes with no gap of its own in `KNOWN_GAPS`).

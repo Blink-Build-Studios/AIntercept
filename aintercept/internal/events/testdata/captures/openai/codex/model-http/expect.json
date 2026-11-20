@@ -1,0 +1,865 @@
+{
+  "call.cache_read_tokens": 12032,
+  "call.client": "tui",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000003",
+  "call.client_version": "0.166.0",
+  "call.device_id": "00000000-0000-4000-8000-000000000004",
+  "call.effort": "xhigh",
+  "call.ext": {
+    "agent_name": "/root",
+    "history_initialization": "new",
+    "request_kind": "turn",
+    "root_turn_id": "00000000-0000-4000-8000-000000000005",
+    "sandbox": "none",
+    "sandbox_mode": "danger-full-access",
+    "thread_source": "user",
+    "turn_trigger": "user",
+    "window_id": "00000000-0000-4000-8000-000000000003:0",
+    "workspaces": {
+      "/xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx": {
+        "associated_remote_urls": {
+          "origin": "xxxxx://xxxxxx.xxx/xxxxxxxxx/xxxx.xxx"
+        },
+        "has_changes": true,
+        "latest_git_commit_hash": "0000000000000000000000000000000000000007"
+      }
+    }
+  },
+  "call.host": "chatgpt.com",
+  "call.input_tokens": 15781,
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "fdd398995460e2943ed84a5f08f3b367",
+  "call.key_hint": "eyJhbG…ture",
+  "call.kind": "model",
+  "call.message_id": "resp_00x000000000000x000xx00000000x00x0x00x0x000x0xxx33",
+  "call.method": "POST",
+  "call.model": "gpt-6.1-sol",
+  "call.model_call": true,
+  "call.output_tokens": 94,
+  "call.path": "/backend-api/codex/responses",
+  "call.person_id": "00000000-0000-4000-8000-000000000002",
+  "call.product": "codex",
+  "call.prompt_id": "00000000-0000-4000-8000-000000000005",
+  "call.service_tier": "auto",
+  "call.session_id": "00000000-0000-4000-8000-000000000003",
+  "call.status": 200,
+  "call.stop_reason": "completed",
+  "call.stream": true,
+  "call.tool_uses": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "exec",
+      "tool": "exec"
+    },
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "exec_command",
+      "tool": "exec_command"
+    }
+  ],
+  "call.tools_offered": [
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent",
+    "exec",
+    "request_user_input",
+    "request_user_input_async",
+    "wait"
+  ],
+  "call.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "convo.format": "openai_responses",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 21534
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 3779
+        },
+        {
+          "kind": "text",
+          "size": 3297
+        },
+        {
+          "kind": "text",
+          "size": 362
+        },
+        {
+          "kind": "text",
+          "size": 1056
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 2400
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 271
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 2074
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 423
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 581
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "kind": "opaque",
+          "size": 62
+        }
+      ],
+      "role": "system"
+    }
+  ],
+  "convo.new": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "detail.calls": [
+    {
+      "commands": [
+        "xxx"
+      ],
+      "id": "call_000000000x00000x00x000xx0000x054",
+      "tool": "exec"
+    }
+  ],
+  "detail.prompt": "# XXXXXX.xx xxxxxxxxxxxx xxx /xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx\n\n<XXXXXXXXXXXX>\n# Xxxxxxxxxx xxxxx…(2003 bytes)",
+  "detail.promptChars": 2656,
+  "detail.said": [
+    {
+      "note": "system",
+      "role": "system",
+      "text": "Xxx xxx Xxxxx, xx xxxxx xxxxx xx XXX-0. Xxx xxx xxx xxxx xxxxx xxx xxxxxxxxx, xxx xxxx xxx xx xx xxx…(2003 bytes)"
+    },
+    {
+      "note": "system",
+      "role": "system",
+      "text": "<xxxx_xxxxxx_xxxxxxx>\n<!-- Xxxxxxx xxxxxxxx - xxxxx xx xxxxxx xxxxxxx, xxx xxxx xxxxxx-->\n[XXXX XXXX…(2017 bytes)"
+    },
+    {
+      "note": "system",
+      "role": "system",
+      "text": "<xxxxxx_xxxxxxxxxxxx>\n## Xxxxxx\nX xxxxx xx x xxx xx xxxxx xxxxxxxxxxxx xx xxxxxx xxxx xx xxxxxx xx x…(2007 bytes)"
+    },
+    {
+      "note": "<permissions instructions>",
+      "role": "system",
+      "text": "<permissions instructions>\nXxxxxxxxxx xxxxxxxxxx xxxxxxx xxxxx xxxxx xxx xx xxxx xx xxxxxxx. `xxxxxx…(362 bytes)"
+    },
+    {
+      "note": "system",
+      "role": "system",
+      "text": "<xxxxxxxxxxxxx_xxxx># Xxxxxxxxxxxxx Xxxx: Xxxxxxx\n\nXxx xxx xxx xx Xxxxxxx xxxx. Xxx xxxxxxxx xxxxxxx…(1056 bytes)"
+    },
+    {
+      "note": "system",
+      "role": "system",
+      "text": "<xxxxx_xxxxx_xxxx>Xxx xxx `/xxxx`, xxx xxxxxxx xxxxx xx x xxxx xx xxxxxx xxxxxxxxxxxxx xx xxxxxxx xx…(2003 bytes)"
+    },
+    {
+      "note": "system",
+      "role": "system",
+      "text": "<xxxxx_xxxxx_xxxx>Xxx xxxxxxx xxxxxxxxxxx xxxxxxxx xxxxxxxxx xxxxx-xxxxx xxxxxxxxxx xx xxxxxx xxxxxx…(271 bytes)"
+    },
+    {
+      "role": "user",
+      "text": "# XXXXXX.xx xxxxxxxxxxxx xxx /xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx\n\n<XXXXXXXXXXXX>\n# Xxxxxxxxxx xxxxx…(2003 bytes)"
+    },
+    {
+      "note": "<environment_context>",
+      "role": "system",
+      "text": "<environment_context>\n  <xxx>/xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx</xxx>\n  <xxxxx>xxxx</xxxxx>\n  <xxx…(423 bytes)"
+    },
+    {
+      "role": "user",
+      "text": "Xxx xxx x XXXXX, XXXXXXXXXXX, XXXX-XXXX xxxxxxxx xxx xxxxxxxxx/xxxx XX #0000. Xxxx ./XXXXX.xx xx xxx…(581 bytes)"
+    }
+  ],
+  "detail.text": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx xx `@xxxx`.",
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "tool_call",
+    "complete"
+  ],
+  "on_call_complete.call.client.product": "codex",
+  "on_call_complete.call.client.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "on_call_complete.call.host": "chatgpt.com",
+  "on_call_complete.call.identity.device_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_complete.call.identity.email": "person9@example.com",
+  "on_call_complete.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "fdd398995460e2943ed84a5f08f3b367",
+  "on_call_complete.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_complete.call.identity.name": "Xxxxx Xxxx",
+  "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/backend-api/codex/responses",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.effort": "xhigh",
+  "on_call_complete.request.model": "gpt-6.1-sol",
+  "on_call_complete.request.stream": true,
+  "on_call_complete.request.tools_available": [
+    "exec",
+    "wait",
+    "request_user_input",
+    "request_user_input_async",
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent"
+  ],
+  "on_call_complete.response.cache_read_tokens": "12032",
+  "on_call_complete.response.input_tokens": "15781",
+  "on_call_complete.response.model": "gpt-6.1-sol",
+  "on_call_complete.response.output_tokens": "94",
+  "on_call_complete.response.status": 200,
+  "on_call_complete.response.stop_reason": "completed",
+  "on_call_complete.response.tool_calls": [
+    {
+      "count": 1,
+      "name": "exec"
+    },
+    {
+      "count": 1,
+      "name": "exec_command"
+    }
+  ],
+  "on_call_start.call.client.headers.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.originator": "codex-tui",
+  "on_call_start.call.client.headers.session-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.thread-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.user-agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "on_call_start.call.client.headers.version": "0.166.0",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-codex-beta-features": "remote_compaction_v2",
+  "on_call_start.call.client.headers.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "on_call_start.call.client.headers.x-codex-window-id": "00000000-0000-4000-8000-000000000003:0",
+  "on_call_start.call.client.product": "codex",
+  "on_call_start.call.client.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "on_call_start.call.host": "chatgpt.com",
+  "on_call_start.call.identity.device_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.identity.email": "person9@example.com",
+  "on_call_start.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "fdd398995460e2943ed84a5f08f3b367",
+  "on_call_start.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_start.call.identity.name": "Xxxxx Xxxx",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/backend-api/codex/responses",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.effort": "xhigh",
+  "on_call_start.request.model": "gpt-6.1-sol",
+  "on_call_start.request.stream": true,
+  "on_call_start.request.tools_available": [
+    "exec",
+    "wait",
+    "request_user_input",
+    "request_user_input_async",
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent"
+  ],
+  "on_reply.1.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "1",
+        "text": {
+          "text": "X"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.10.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "3",
+        "text": {
+          "text": " xx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.10.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx",
+  "on_reply.11.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "2",
+        "text": {
+          "text": " `"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.11.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx xx",
+  "on_reply.12.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "1",
+        "text": {
+          "text": "@"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.12.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx xx `",
+  "on_reply.13.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "1",
+        "text": {
+          "text": "x"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.13.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx xx `@",
+  "on_reply.14.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "3",
+        "text": {
+          "text": "xxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.14.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx xx `@x",
+  "on_reply.15.done": true,
+  "on_reply.15.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "3",
+        "text": {
+          "text": "`.\n"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.15.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx xxx xxxxxx xx `@xxxx",
+  "on_reply.2.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "10",
+        "text": {
+          "text": "’xx xxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.2.released": "X",
+  "on_reply.3.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "7",
+        "text": {
+          "text": " `XXXXX"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.3.released": "X’xx xxxx",
+  "on_reply.4.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "12",
+        "text": {
+          "text": ".xx`, xxxxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.4.released": "X’xx xxxx `XXXXX",
+  "on_reply.5.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "12",
+        "text": {
+          "text": " xxx XX xxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.5.released": "X’xx xxxx `XXXXX.xx`, xxxxxx",
+  "on_reply.6.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "26",
+        "text": {
+          "text": " xxxxxxx xxxxxxxx xxx xxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.6.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx",
+  "on_reply.7.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "15",
+        "text": {
+          "text": "xxxx, xxx xxxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.7.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxx",
+  "on_reply.8.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "9",
+        "text": {
+          "text": " xxx xxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.8.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx",
+  "on_reply.9.message": {
+    "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0",
+    "parts": [
+      {
+        "id": "msg_00x000000000000x000xx00000000000x0x0000x00xx0xx034:0/0",
+        "size": "11",
+        "text": {
+          "text": " xxx xxxxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.9.released": "X’xx xxxx `XXXXX.xx`, xxxxxx xxx XX xxxx xxxxxxx xxxxxxxx xxx xxxxxxxx, xxx xxxxx xxx xxxx",
+  "on_request.format": "openai_responses",
+  "on_request.messages": [
+    {
+      "id": "f1ab0f910f847d3dace2e466b75c070f",
+      "parts": [
+        {
+          "id": "f1ab0f910f847d3dace2e466b75c070f/0",
+          "size": "21534",
+          "text": {
+            "text": "Xxx xxx Xxxxx, xx xxxxx xxxxx xx XXX-0. Xxx xxx xxx xxxx xxxxx xxx xxxxxxxxx, xxx xxxx xxx xx xx xxx…(21534 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "a7f647b28526b4a4d47a53bf3b844cdb",
+      "index": 1,
+      "parts": [
+        {
+          "id": "a7f647b28526b4a4d47a53bf3b844cdb/0",
+          "size": "3779",
+          "text": {
+            "text": "<xxxx_xxxxxx_xxxxxxx>\n<!-- Xxxxxxx xxxxxxxx - xxxxx xx xxxxxx xxxxxxx, xxx xxxx xxxxxx-->\n[XXXX XXXX…(3779 bytes)"
+          }
+        },
+        {
+          "id": "a7f647b28526b4a4d47a53bf3b844cdb/1",
+          "size": "3297",
+          "text": {
+            "text": "<xxxxxx_xxxxxxxxxxxx>\n## Xxxxxx\nX xxxxx xx x xxx xx xxxxx xxxxxxxxxxxx xx xxxxxx xxxx xx xxxxxx xx x…(3297 bytes)"
+          }
+        },
+        {
+          "id": "a7f647b28526b4a4d47a53bf3b844cdb/2",
+          "size": "362",
+          "text": {
+            "text": "<permissions instructions>\nXxxxxxxxxx xxxxxxxxxx xxxxxxx xxxxx xxxxx xxx xx xxxx xx xxxxxxx. `xxxxxx…(362 bytes)"
+          }
+        },
+        {
+          "id": "a7f647b28526b4a4d47a53bf3b844cdb/3",
+          "size": "1056",
+          "text": {
+            "text": "<xxxxxxxxxxxxx_xxxx># Xxxxxxxxxxxxx Xxxx: Xxxxxxx\n\nXxx xxx xxx xx Xxxxxxx xxxx. Xxx xxxxxxxx xxxxxxx…(1056 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "0c6ac5703e6d6d831399b2fc4952872c",
+      "index": 2,
+      "parts": [
+        {
+          "id": "0c6ac5703e6d6d831399b2fc4952872c/0",
+          "size": "2400",
+          "text": {
+            "text": "<xxxxx_xxxxx_xxxx>Xxx xxx `/xxxx`, xxx xxxxxxx xxxxx xx x xxxx xx xxxxxx xxxxxxxxxxxxx xx xxxxxxx xx…(2400 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "74fe6e180e94f4269a2a2bcb0f1c8407",
+      "index": 3,
+      "parts": [
+        {
+          "id": "74fe6e180e94f4269a2a2bcb0f1c8407/0",
+          "size": "271",
+          "text": {
+            "text": "<xxxxx_xxxxx_xxxx>Xxx xxxxxxx xxxxxxxxxxx xxxxxxxx xxxxxxxxx xxxxx-xxxxx xxxxxxxxxx xx xxxxxx xxxxxx…(271 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "25c601adea49918744a08d001f1dc4f0",
+      "index": 4,
+      "parts": [
+        {
+          "id": "25c601adea49918744a08d001f1dc4f0/0",
+          "size": "2074",
+          "text": {
+            "text": "# XXXXXX.xx xxxxxxxxxxxx xxx /xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx\n\n<XXXXXXXXXXXX>\n# Xxxxxxxxxx xxxxx…(2074 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    },
+    {
+      "id": "53bd5dbe36f391623009181ad7eebb06",
+      "index": 5,
+      "parts": [
+        {
+          "id": "53bd5dbe36f391623009181ad7eebb06/0",
+          "size": "423",
+          "text": {
+            "text": "<environment_context>\n  <xxx>/xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx</xxx>\n  <xxxxx>xxxx</xxxxx>\n  <xxx…(423 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "7d5ba07c36372229e8ebc2decbe72a34",
+      "index": 6,
+      "parts": [
+        {
+          "id": "7d5ba07c36372229e8ebc2decbe72a34/0",
+          "size": "581",
+          "text": {
+            "text": "Xxx xxx x XXXXX, XXXXXXXXXXX, XXXX-XXXX xxxxxxxx xxx xxxxxxxxx/xxxx XX #0000. Xxxx ./XXXXX.xx xx xxx…(581 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    },
+    {
+      "id": "02f188bee187a9497cbe2e1b1f072979",
+      "index": 7,
+      "parts": [
+        {
+          "id": "02f188bee187a9497cbe2e1b1f072979/0",
+          "opaque": {},
+          "size": "62"
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    }
+  ],
+  "on_request.total_messages": 8,
+  "on_tool_call.message": {
+    "id": "call_000000000x00000x00x000xx0000x054",
+    "parts": [
+      {
+        "id": "call_000000000x00000x00x000xx0000x054/0",
+        "size": "160",
+        "tool_call": {
+          "arguments": "\"xxxxx x = xxxxx tools.exec_command({cmd:\\\"xxx XXXXX.xx\\\",\\\"xxxxxxx\\\":\\\"/xxxx/xxxxx/xxxxxx/xx-xx-x0x…(160 bytes)",
+          "call_id": "call_000000000x00000x00x000xx0000x054",
+          "name": "exec"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "record.account": {
+    "account_id": "00000000-0000-4000-8000-000000000002",
+    "email": "person9@example.com",
+    "name": "Xxxxx Xxxx",
+    "org": ""
+  },
+  "row.account_uuid": "00000000-0000-4000-8000-000000000002",
+  "row.auth.account_id": "00000000-0000-4000-8000-000000000002",
+  "row.auth.client_id": "app_XXxxxXXX00x0XxXxXx0xxx11",
+  "row.auth.email": "person9@example.com",
+  "row.auth.expires_at": 1794683743,
+  "row.auth.issuer": "https://auth.openai.com",
+  "row.auth.name": "Xxxxx Xxxx",
+  "row.auth.plan": "value_1",
+  "row.auth.session_id": "authsess_XX0X0XXXXXxxXXxxxxXxXX12",
+  "row.auth.subject": "xxxx0|00000000000000000000000a",
+  "row.auth.user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx08",
+  "row.cache_read_tokens": 12032,
+  "row.client.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "row.client.originator": "codex-tui",
+  "row.client.session-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.thread-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.user-agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "row.client.version": "0.166.0",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-codex-beta-features": "remote_compaction_v2",
+  "row.client.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "row.client.x-codex-window-id": "00000000-0000-4000-8000-000000000003:0",
+  "row.client_metadata": {
+    "agent_name": "/root",
+    "analytics_enabled": true,
+    "auto_review_enabled": false,
+    "context_window_id": "00000000-0000-4000-8000-000000000006",
+    "history_initialization": "new",
+    "installation_id": "00000000-0000-4000-8000-000000000004",
+    "model": "gpt-6.1-sol",
+    "node_repl_auto_review_required": true,
+    "node_repl_disabled": false,
+    "reasoning_effort": "xhigh",
+    "request_kind": "turn",
+    "root_turn_id": "00000000-0000-4000-8000-000000000005",
+    "sandbox": "none",
+    "sandbox_mode": "danger-full-access",
+    "session_id": "00000000-0000-4000-8000-000000000003",
+    "thread_id": "00000000-0000-4000-8000-000000000003",
+    "thread_source": "user",
+    "turn_id": "00000000-0000-4000-8000-000000000005",
+    "turn_started_at_unix_ms": 1794406688379,
+    "turn_trigger": "user",
+    "window_id": "00000000-0000-4000-8000-000000000003:0",
+    "window_number": 0,
+    "workspaces": {
+      "/xxxx/xxxxx/xxxxxx/xx-xx-x0xx0-xxxxx": {
+        "associated_remote_urls": {
+          "origin": "xxxxx://xxxxxx.xxx/xxxxxxxxx/xxxx.xxx"
+        },
+        "has_changes": true,
+        "latest_git_commit_hash": "0000000000000000000000000000000000000007"
+      }
+    }
+  },
+  "row.device_id": "00000000-0000-4000-8000-000000000004",
+  "row.effort": "xhigh",
+  "row.host": "chatgpt.com",
+  "row.input_tokens": 15781,
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "fdd398995460e2943ed84a5f08f3b367",
+  "row.key_hint": "eyJhbG…ture",
+  "row.message_id": "resp_00x000000000000x000xx00000000x00x0x00x0x000x0xxx33",
+  "row.method": "POST",
+  "row.model": "gpt-6.1-sol",
+  "row.output_tokens": 94,
+  "row.path": "/backend-api/codex/responses",
+  "row.provider.x-codex-active-limit": "value_6",
+  "row.provider.x-codex-credits-balance": "0",
+  "row.provider.x-codex-credits-has-credits": "False",
+  "row.provider.x-codex-credits-unlimited": "False",
+  "row.provider.x-codex-plan-type": "value_1",
+  "row.provider.x-codex-primary-reset-at": "0",
+  "row.provider.x-codex-primary-used-percent": "0",
+  "row.provider.x-codex-primary-window-minutes": "0",
+  "row.provider.x-codex-secondary-used-percent": "0",
+  "row.provider.x-codex-secondary-window-minutes": "0",
+  "row.provider.x-oai-request-id": "00000000-0000-4000-8000-000000000017",
+  "row.service_tier": "auto",
+  "row.session_id": "00000000-0000-4000-8000-000000000003",
+  "row.status": 200,
+  "row.stop_reason": "completed",
+  "row.stream": true,
+  "row.tool_uses": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "exec",
+      "tool": "exec"
+    },
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "exec_command",
+      "tool": "exec_command"
+    }
+  ],
+  "row.tools_available": [
+    {
+      "kind": "builtin",
+      "name": "exec",
+      "tool": "exec"
+    },
+    {
+      "kind": "builtin",
+      "name": "wait",
+      "tool": "wait"
+    },
+    {
+      "kind": "builtin",
+      "name": "request_user_input",
+      "tool": "request_user_input"
+    },
+    {
+      "kind": "builtin",
+      "name": "request_user_input_async",
+      "tool": "request_user_input_async"
+    },
+    {
+      "kind": "builtin",
+      "name": "clock.sleep",
+      "tool": "clock.sleep"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.followup_task",
+      "tool": "collaboration.followup_task"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.interrupt_agent",
+      "tool": "collaboration.interrupt_agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.list_agents",
+      "tool": "collaboration.list_agents"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.send_message",
+      "tool": "collaboration.send_message"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.spawn_agent",
+      "tool": "collaboration.spawn_agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.wait_agent",
+      "tool": "collaboration.wait_agent"
+    }
+  ]
+}

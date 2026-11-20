@@ -1,0 +1,27 @@
+{
+  "method": "POST",
+  "host": "api.openai.com",
+  "path": "/v1/chat/completions",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "api.openai.com",
+    ":method": "POST",
+    ":path": "/v1/chat/completions",
+    ":scheme": "https",
+    "accept": "*/*",
+    "authorization": "<redacted>",
+    "content-length": "88",
+    "content-type": "application/json",
+    "user-agent": "curl/8.7.1",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "openai_api_key"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    88
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "anthropic-organization-id": "00000000-0000-4000-8000-000000000006",
+    "anthropic-ratelimit-unified-7d-reset": "0",
+    "anthropic-ratelimit-unified-7d-status": "value_1",
+    "anthropic-ratelimit-unified-7d-surpassed-threshold": "0",
+    "anthropic-ratelimit-unified-7d-utilization": "0",
+    "anthropic-ratelimit-unified-fallback-percentage": "0",
+    "anthropic-ratelimit-unified-overage-disabled-reason": "value_2",
+    "anthropic-ratelimit-unified-overage-status": "value_3",
+    "anthropic-ratelimit-unified-representative-claim": "value_4",
+    "anthropic-ratelimit-unified-reset": "0",
+    "anthropic-ratelimit-unified-status": "value_1",
+    "anthropic-ratelimit-unified-upgrade-paths": "value_5",
+    "anthropic-workspace-id": "wrkspc_000XXXXXxX00XXXX0XxXXXx7",
+    "cache-control": "value_6",
+    "cf-cache-status": "value_7",
+    "cf-ray": "x0x000000xxx0x00-XX8",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "text/event-stream; charset=utf-8",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "request-id": "req_000Xx0xXxxXx0XXXxxXxxXx9",
+    "server": "value_8",
+    "server-timing": "x-xxxxxxXxxxxx10;xxx=000",
+    "strict-transport-security": "xxx-xxx=0000000b; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "traceresponse": "00-0000000000000000000000000000000c-000000000000000d-00",
+    "vary": "value_9",
+    "x-robots-tag": "value_10"
+  },
+  "body": "response-body.sse",
+  "chunks": [
+    872,
+    128,
+    78,
+    617,
+    0
+  ]
+}

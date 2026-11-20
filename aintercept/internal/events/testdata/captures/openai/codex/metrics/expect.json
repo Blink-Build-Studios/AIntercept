@@ -1,0 +1,76 @@
+{
+  "call.client_version": "0.31.0",
+  "call.host": "ab.chatgpt.com",
+  "call.ip": "192.0.2.2",
+  "call.kind": "metrics",
+  "call.method": "POST",
+  "call.path": "/otlp/v1/metrics",
+  "call.status": 202,
+  "call.user_agent": "OTel-OTLP-Exporter-Rust/0.31.0",
+  "client_events": [
+    {
+      "index": 1,
+      "name": "codex.sqlite.logs.write.count",
+      "new_event": true,
+      "source": "otel",
+      "type": "otel_metric"
+    },
+    {
+      "index": 2,
+      "name": "codex.sqlite.logs.write.duration_ms",
+      "new_event": true,
+      "source": "otel",
+      "type": "otel_metric"
+    },
+    {
+      "index": 3,
+      "name": "codex.sqlite.logs.write.bytes",
+      "new_event": true,
+      "source": "otel",
+      "type": "otel_metric"
+    },
+    {
+      "index": 4,
+      "name": "codex.sqlite.logs.write.entries",
+      "new_event": true,
+      "source": "otel",
+      "type": "otel_metric"
+    },
+    {
+      "index": 5,
+      "name": "codex.sqlite.logs.write.max_entry_bytes",
+      "new_event": true,
+      "source": "otel",
+      "type": "otel_metric"
+    }
+  ],
+  "interceptor.callbacks": [
+    "start",
+    "complete"
+  ],
+  "interceptor.unparsed": {
+    "not a model endpoint": 1
+  },
+  "on_call_complete.call.client.user_agent": "OTel-OTLP-Exporter-Rust/0.31.0",
+  "on_call_complete.call.host": "ab.chatgpt.com",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/otlp/v1/metrics",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.response.status": 202,
+  "on_call_start.call.client.headers.user-agent": "OTel-OTLP-Exporter-Rust/0.31.0",
+  "on_call_start.call.client.user_agent": "OTel-OTLP-Exporter-Rust/0.31.0",
+  "on_call_start.call.host": "ab.chatgpt.com",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/otlp/v1/metrics",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "row.client.user-agent": "OTel-OTLP-Exporter-Rust/0.31.0",
+  "row.host": "ab.chatgpt.com",
+  "row.ip": "192.0.2.2",
+  "row.method": "POST",
+  "row.path": "/otlp/v1/metrics",
+  "row.status": 202
+}

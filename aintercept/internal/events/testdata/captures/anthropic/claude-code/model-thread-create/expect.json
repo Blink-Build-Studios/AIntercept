@@ -1,0 +1,532 @@
+{
+  "call.cache_read_tokens": 26827,
+  "call.cache_write_tokens": 27649,
+  "call.client": "cli",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000004",
+  "call.client_version": "2.1.308",
+  "call.content_encoding": "gzip",
+  "call.device_id": "0000000000000000000000000000000000000000000000000000000000000011",
+  "call.effort": "medium",
+  "call.host": "api.anthropic.com",
+  "call.input_tokens": 2,
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "call.key_hint": "sk-ant…OAAA",
+  "call.kind": "model",
+  "call.message_id": "msg_000Xxx0XXxxxXXxXXxxxxX19",
+  "call.method": "POST",
+  "call.model": "claude-opus-5-5",
+  "call.model_call": true,
+  "call.output_tokens": 192,
+  "call.path": "/v1/messages?beta=true",
+  "call.person_id": "00000000-0000-4000-8000-000000000012",
+  "call.product": "claude_code",
+  "call.prompt_id": "00000000-0000-4000-8000-000000000002",
+  "call.request_class": "main",
+  "call.request_id": "req_000Xxx0XXX0xX0xXXXx0x008",
+  "call.service_tier": "standard",
+  "call.session_id": "00000000-0000-4000-8000-000000000003",
+  "call.status": 200,
+  "call.stop_reason": "tool_use",
+  "call.stream": true,
+  "call.thread_type": "create",
+  "call.tool_uses": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "Bash",
+      "tool": "Bash"
+    }
+  ],
+  "call.tools_offered": [
+    "Agent",
+    "Artifact",
+    "AskUserQuestion",
+    "Bash",
+    "DeferredToolPlaceholder",
+    "Edit",
+    "ListAgents",
+    "Read",
+    "ReportFindings",
+    "ScheduleWakeup",
+    "SendFeedback",
+    "Skill",
+    "ToolSearch",
+    "Workflow",
+    "Write",
+    "advisor"
+  ],
+  "call.user_agent": "claude-cli/2.1.308 (external, cli)",
+  "convo.format": "anthropic_messages",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 764
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 1280
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 583
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 30
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 60276
+        },
+        {
+          "kind": "tool_added",
+          "name": "mcp__xxxxxx_xx_Xxxxxx_Xx13__xxx14",
+          "size": 508
+        },
+        {
+          "kind": "tool_added",
+          "name": "mcp__xxxxxx_xx_Xxxxxx_Xx13__xxx15",
+          "size": 602
+        },
+        {
+          "kind": "tool_added",
+          "name": "mcp__xxxxxx_xx_Xxxxxx_Xx13__xxxx16",
+          "size": 898
+        }
+      ],
+      "role": "system"
+    }
+  ],
+  "convo.new": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "detail.calls": [
+    {
+      "commands": [
+        "ls",
+        "cat",
+        "head",
+        "cat",
+        "head",
+        "ls",
+        "ls",
+        "head"
+      ],
+      "id": "toolu_00X0XXxXxXxX0xxx0XXXxx20",
+      "tool": "Bash"
+    }
+  ],
+  "detail.prompt": "xxx xx x xxx xxxx xxxxxxxxxxx?",
+  "detail.promptChars": 30,
+  "detail.said": [
+    {
+      "note": "<system-reminder",
+      "role": "system",
+      "text": "<system-reminder>\nXxxxxxxx xxx xxxx xxxxxxxxxxxx xxx xxxxx xxxxx. Xx xxxx xx xxxxxx xx xxxxx xxxxxxx…(764 bytes)"
+    },
+    {
+      "note": "<system-reminder",
+      "role": "system",
+      "text": "<system-reminder>\nXx xxx xxxxxx xxx xxxx'x xxxxxxxxx, xxx xxx xxx xxx xxxxxxxxx xxxxxxx:\n# xxxxXxxxx…(1280 bytes)"
+    },
+    {
+      "note": "<system-reminder",
+      "role": "system",
+      "text": "<system-reminder>\nXxxxxxxxxxx xxx xxx xxxxxxx xxx xxxx xxxxxxxx xxx xxxxxx xxxx xxxx xx (xxxx xxxxxx…(582 bytes)"
+    },
+    {
+      "role": "user",
+      "text": "xxx xx x xxx xxxx xxxxxxxxxxx?"
+    },
+    {
+      "note": "system",
+      "role": "system",
+      "text": "# Xxxxxxxxxxx\nXxx xxxx xxxx xxxxxxx xx xxx xxxxxxxxx xxxxxxxxxxx: \n - Xxxxxxx xxxxxxx xxxxxxxxx: /Xx…(2007 bytes)"
+    }
+  ],
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "reply",
+    "tool_call",
+    "complete"
+  ],
+  "on_call_complete.call.client.product": "claude_code",
+  "on_call_complete.call.client.user_agent": "claude-cli/2.1.308 (external, cli)",
+  "on_call_complete.call.host": "api.anthropic.com",
+  "on_call_complete.call.identity.device_id": "0000000000000000000000000000000000000000000000000000000000000011",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_complete.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000012",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/v1/messages?beta=true",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.effort": "medium",
+  "on_call_complete.request.max_tokens": 128000,
+  "on_call_complete.request.model": "claude-opus-5-5",
+  "on_call_complete.request.stream": true,
+  "on_call_complete.request.tools_available": [
+    "Agent",
+    "Artifact",
+    "AskUserQuestion",
+    "Bash",
+    "Edit",
+    "ListAgents",
+    "Read",
+    "ReportFindings",
+    "ScheduleWakeup",
+    "SendFeedback",
+    "Skill",
+    "ToolSearch",
+    "Workflow",
+    "DeferredToolPlaceholder",
+    "Write",
+    "advisor"
+  ],
+  "on_call_complete.response.cache_read_tokens": "26827",
+  "on_call_complete.response.cache_write_tokens": "27649",
+  "on_call_complete.response.input_tokens": "2",
+  "on_call_complete.response.model": "claude-opus-5-5",
+  "on_call_complete.response.output_tokens": "192",
+  "on_call_complete.response.status": 200,
+  "on_call_complete.response.stop_reason": "tool_use",
+  "on_call_complete.response.tool_calls": [
+    {
+      "count": 1,
+      "name": "Bash"
+    }
+  ],
+  "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.308 (external, cli)",
+  "on_call_start.call.client.headers.x-app": "cli",
+  "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.x-claude-code-request-class": "main",
+  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.x-stainless-arch": "arm64",
+  "on_call_start.call.client.headers.x-stainless-lang": "js",
+  "on_call_start.call.client.headers.x-stainless-os": "MacOS",
+  "on_call_start.call.client.headers.x-stainless-package-version": "0.128.0",
+  "on_call_start.call.client.headers.x-stainless-runtime": "node",
+  "on_call_start.call.client.headers.x-stainless-runtime-version": "v26.3.0",
+  "on_call_start.call.client.product": "claude_code",
+  "on_call_start.call.client.user_agent": "claude-cli/2.1.308 (external, cli)",
+  "on_call_start.call.host": "api.anthropic.com",
+  "on_call_start.call.identity.device_id": "0000000000000000000000000000000000000000000000000000000000000011",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_start.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000012",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.effort": "medium",
+  "on_call_start.request.max_tokens": 128000,
+  "on_call_start.request.model": "claude-opus-5-5",
+  "on_call_start.request.stream": true,
+  "on_call_start.request.tools_available": [
+    "Agent",
+    "Artifact",
+    "AskUserQuestion",
+    "Bash",
+    "Edit",
+    "ListAgents",
+    "Read",
+    "ReportFindings",
+    "ScheduleWakeup",
+    "SendFeedback",
+    "Skill",
+    "ToolSearch",
+    "Workflow",
+    "DeferredToolPlaceholder",
+    "Write",
+    "advisor"
+  ],
+  "on_reply.done": true,
+  "on_reply.message": {
+    "id": "msg_000Xxx0XXxxxXXxXXxxxxX19:0",
+    "parts": [
+      {
+        "id": "msg_000Xxx0XXxxxXXxXXxxxxX19:0/0",
+        "opaque": {}
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_request.format": "anthropic_messages",
+  "on_request.messages": [
+    {
+      "id": "bff538f7360c19fa2b958f486ff74951",
+      "parts": [
+        {
+          "id": "bff538f7360c19fa2b958f486ff74951/0",
+          "size": "764",
+          "text": {
+            "text": "<system-reminder>\nXxxxxxxx xxx xxxx xxxxxxxxxxxx xxx xxxxx xxxxx. Xx xxxx xx xxxxxx xx xxxxx xxxxxxx…(764 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "225871eafe4fbe17a363d23526d4492f",
+      "index": 1,
+      "parts": [
+        {
+          "id": "225871eafe4fbe17a363d23526d4492f/0",
+          "size": "1280",
+          "text": {
+            "text": "<system-reminder>\nXx xxx xxxxxx xxx xxxx'x xxxxxxxxx, xxx xxx xxx xxx xxxxxxxxx xxxxxxx:\n# xxxxXxxxx…(1280 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "8366bf316a1c740a5433edda5c439c73",
+      "index": 2,
+      "parts": [
+        {
+          "id": "8366bf316a1c740a5433edda5c439c73/0",
+          "size": "583",
+          "text": {
+            "text": "<system-reminder>\nXxxxxxxxxxx xxx xxx xxxxxxx xxx xxxx xxxxxxxx xxx xxxxxx xxxx xxxx xx (xxxx xxxxxx…(583 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "1dd790cbb7c73a029a00c6cedba1c80a",
+      "index": 3,
+      "parts": [
+        {
+          "id": "1dd790cbb7c73a029a00c6cedba1c80a/0",
+          "size": "30",
+          "text": {
+            "text": "xxx xx x xxx xxxx xxxxxxxxxxx?"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    },
+    {
+      "id": "dfc249c928741aa02c86d1446f6cd4dc",
+      "index": 4,
+      "parts": [
+        {
+          "id": "dfc249c928741aa02c86d1446f6cd4dc/0",
+          "size": "60276",
+          "text": {
+            "text": "# Xxxxxxxxxxx\nXxx xxxx xxxx xxxxxxx xx xxx xxxxxxxxx xxxxxxxxxxx: \n - Xxxxxxx xxxxxxx xxxxxxxxx: /Xx…(60276 bytes)"
+          }
+        },
+        {
+          "id": "dfc249c928741aa02c86d1446f6cd4dc/1",
+          "size": "508",
+          "tool_added": {
+            "name": "mcp__xxxxxx_xx_Xxxxxx_Xx13__xxx14"
+          }
+        },
+        {
+          "id": "dfc249c928741aa02c86d1446f6cd4dc/2",
+          "size": "602",
+          "tool_added": {
+            "name": "mcp__xxxxxx_xx_Xxxxxx_Xx13__xxx15"
+          }
+        },
+        {
+          "id": "dfc249c928741aa02c86d1446f6cd4dc/3",
+          "size": "898",
+          "tool_added": {
+            "name": "mcp__xxxxxx_xx_Xxxxxx_Xx13__xxxx16"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    }
+  ],
+  "on_request.total_messages": 5,
+  "on_tool_call.message": {
+    "id": "toolu_00X0XXxXxXxX0xxx0XXXxx20",
+    "parts": [
+      {
+        "id": "toolu_00X0XXxXxXxX0xxx0XXXxx20/0",
+        "size": "272",
+        "tool_call": {
+          "arguments": "{\"command\": \"cd /Xxxxx/xxxxx/git/xxxxxx-xxxxxxxx-xxxxxx-xxxx && ls && cat XXXXXX* 0>/xxx/xxxx | head…(272 bytes)",
+          "call_id": "toolu_00X0XXxXxXxX0xxx0XXXxx20",
+          "name": "Bash"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "row.account_uuid": "00000000-0000-4000-8000-000000000012",
+  "row.cache_read_tokens": 26827,
+  "row.cache_write_tokens": 27649,
+  "row.client.user-agent": "claude-cli/2.1.308 (external, cli)",
+  "row.client.x-app": "cli",
+  "row.client.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000002",
+  "row.client.x-claude-code-request-class": "main",
+  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "row.client.x-stainless-arch": "arm64",
+  "row.client.x-stainless-lang": "js",
+  "row.client.x-stainless-os": "MacOS",
+  "row.client.x-stainless-package-version": "0.128.0",
+  "row.client.x-stainless-runtime": "node",
+  "row.client.x-stainless-runtime-version": "v26.3.0",
+  "row.device_id": "0000000000000000000000000000000000000000000000000000000000000011",
+  "row.effort": "medium",
+  "row.host": "api.anthropic.com",
+  "row.inference_geo": "global",
+  "row.input_tokens": 2,
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "row.key_hint": "sk-ant…OAAA",
+  "row.max_tokens": 128000,
+  "row.message_id": "msg_000Xxx0XXxxxXXxXXxxxxX19",
+  "row.method": "POST",
+  "row.model": "claude-opus-5-5",
+  "row.output_tokens": 192,
+  "row.path": "/v1/messages?beta=true",
+  "row.provider.anthropic-ratelimit-unified-7d-utilization": "0",
+  "row.provider.anthropic-ratelimit-unified-fallback-percentage": "0",
+  "row.provider.anthropic-ratelimit-unified-overage-status": "value_3",
+  "row.provider.anthropic-ratelimit-unified-representative-claim": "value_4",
+  "row.provider.anthropic-ratelimit-unified-status": "value_1",
+  "row.provider.anthropic-workspace-id": "wrkspc_000xxXxxXxxXXxXxXxXxxxx6",
+  "row.provider.request-id": "req_000Xxx0XXX0xX0xXXXx0x008",
+  "row.provider_org_id": "00000000-0000-4000-8000-000000000005",
+  "row.service_tier": "standard",
+  "row.session_id": "00000000-0000-4000-8000-000000000003",
+  "row.speed": "standard",
+  "row.status": 200,
+  "row.stop_reason": "tool_use",
+  "row.stream": true,
+  "row.thinking_type": "adaptive",
+  "row.thread_type": "create",
+  "row.tool_uses": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "Bash",
+      "tool": "Bash"
+    }
+  ],
+  "row.tools_available": [
+    {
+      "kind": "builtin",
+      "name": "Agent",
+      "tool": "Agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "Artifact",
+      "tool": "Artifact"
+    },
+    {
+      "kind": "builtin",
+      "name": "AskUserQuestion",
+      "tool": "AskUserQuestion"
+    },
+    {
+      "kind": "builtin",
+      "name": "Bash",
+      "tool": "Bash"
+    },
+    {
+      "kind": "builtin",
+      "name": "Edit",
+      "tool": "Edit"
+    },
+    {
+      "kind": "builtin",
+      "name": "ListAgents",
+      "tool": "ListAgents"
+    },
+    {
+      "kind": "builtin",
+      "name": "Read",
+      "tool": "Read"
+    },
+    {
+      "kind": "builtin",
+      "name": "ReportFindings",
+      "tool": "ReportFindings"
+    },
+    {
+      "kind": "builtin",
+      "name": "ScheduleWakeup",
+      "tool": "ScheduleWakeup"
+    },
+    {
+      "kind": "builtin",
+      "name": "SendFeedback",
+      "tool": "SendFeedback"
+    },
+    {
+      "kind": "builtin",
+      "name": "Skill",
+      "tool": "Skill"
+    },
+    {
+      "kind": "builtin",
+      "name": "ToolSearch",
+      "tool": "ToolSearch"
+    },
+    {
+      "kind": "builtin",
+      "name": "Workflow",
+      "tool": "Workflow"
+    },
+    {
+      "kind": "builtin",
+      "name": "DeferredToolPlaceholder",
+      "tool": "DeferredToolPlaceholder"
+    },
+    {
+      "kind": "builtin",
+      "name": "Write",
+      "tool": "Write"
+    },
+    {
+      "kind": "builtin",
+      "name": "advisor",
+      "tool": "advisor"
+    }
+  ],
+  "row.user_id": "{\"device_id\":\"0000000000000000000000000000000000000000000000000000000000000011\",\"account_uuid\":\"0000…(186 bytes)"
+}
