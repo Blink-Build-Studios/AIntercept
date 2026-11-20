@@ -54,6 +54,10 @@ var corpusShapes = []string{
 	"anthropic/claude-code/error-529",
 	"anthropic/claude-code/error-midstream",
 	"anthropic/curl/error-401",
+	// Speed and priority tiers (issue #118): Anthropic's fast mode and its refusal.
+	"anthropic/claude-code/model-fast",             // "speed": "fast", and the usage.speed that answers it
+	"anthropic/claude-code/model-fast-beta",        // a standard request with the fast-mode beta header, no speed
+	"anthropic/claude-code/error-fast-not-enabled", // the 400 an organization without fast mode gets
 	// Codex (chatgpt.com, ab.chatgpt.com).
 	"openai/codex/model-http", // the HTTP fallback: zstd request, event stream reply
 	"openai/codex/model-ws",
@@ -73,6 +77,7 @@ var corpusShapes = []string{
 	"openai/codex/web-search",
 	"openai/codex/error-400",
 	"openai/codex/error-ws",
+	"openai/codex/model-service-tier", // a request that asks for a tier (priority, flex)
 	"openai/curl/codex-error-401",     // chatgpt.com's Codex endpoint, without a valid token
 	"openai/curl/responses-error-401", // api.openai.com: the Responses API's error
 	"openai/curl/chat-error-401",      // and Chat Completions'
