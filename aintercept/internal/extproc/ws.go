@@ -110,6 +110,9 @@ func (srv *Server) wsMessage(st *streamState, dir events.Direction, m wsframe.Me
 		srv.wsEmitTurn(st)
 		ws.turn = &wsTurn{req: m.Payload}
 		srv.wsTurnStart(st, m.Payload)
+		if !m.Truncated {
+			srv.observeTurn(st, ws.turnsTotal+1, m.Payload)
+		}
 	case dir == events.DirOutbound && ws.turn != nil:
 		// Streaming text/argument fragments carry content and nothing the
 		// extractors read; the completed items and response carry the rest.

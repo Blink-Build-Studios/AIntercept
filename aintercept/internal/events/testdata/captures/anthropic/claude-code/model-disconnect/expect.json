@@ -23,6 +23,7 @@
   "interceptor.unparsed": {
     "not JSON": 1
   },
+  "on_call_start.call.api": "API_ANTHROPIC_MESSAGES",
   "on_call_start.call.client.headers.anthropic-client-platform": "xxxxxxx_xxx",
   "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.325 (external, claude-desktop, agent-sdk/0.3.325)",
   "on_call_start.call.client.headers.x-app": "cli",
@@ -45,5 +46,6 @@
   "on_call_start.call.method": "POST",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_start.call.transport": "TRANSPORT_HTTP"
 }

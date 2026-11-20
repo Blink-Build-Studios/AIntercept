@@ -122,12 +122,15 @@ type metaUsage struct {
 
 func (m *ResponseMeta) fold(b []byte) {
 	var obj struct {
-		ID          string     `json:"id"`
-		Model       string     `json:"model"`
-		StopReason  string     `json:"stop_reason"`
-		ServiceTier string     `json:"service_tier"` // OpenAI
-		Usage       *metaUsage `json:"usage"`
-		Message     *struct {  // Anthropic SSE message_start
+		ID          string    `json:"id"`
+		Model       string    `json:"model"`
+		StopReason  string    `json:"stop_reason"`
+		ServiceTier string    `json:"service_tier"` // OpenAI
+		Reasoning   *struct { // OpenAI Responses, not streamed
+			Effort string `json:"effort"`
+		} `json:"reasoning"`
+		Usage   *metaUsage `json:"usage"`
+		Message *struct {  // Anthropic SSE message_start
 			ID    string     `json:"id"`
 			Model string     `json:"model"`
 			Usage *metaUsage `json:"usage"`
@@ -197,6 +200,9 @@ func (m *ResponseMeta) fold(b []byte) {
 		set(&m.StopReason, c.FinishReason)
 	}
 	set(&m.ServiceTier, obj.ServiceTier)
+	if obj.Reasoning != nil {
+		set(&m.Effort, obj.Reasoning.Effort)
+	}
 	if u := obj.Usage; u != nil {
 		set(&m.ServiceTier, u.ServiceTier)
 		set(&m.InferenceGeo, u.InferenceGeo)

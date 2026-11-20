@@ -329,27 +329,11 @@ func providerOf(host string) string {
 	return host
 }
 
-// APIOf is the API a call is on, by its host and path: anthropic_messages,
-// claude_ai_web, openai_responses, openai_chat_completions, chatgpt_backend,
-// gemini; "" for a call outside them (a control-plane endpoint).
-func APIOf(host, path string) string {
-	p, _, _ := strings.Cut(path, "?")
-	switch {
-	case host == "api.anthropic.com" && strings.HasPrefix(p, "/v1/messages"):
-		return "anthropic_messages"
-	case host == "claude.ai":
-		return "claude_ai_web"
-	case host == "api.openai.com" && strings.HasPrefix(p, "/v1/responses"):
-		return "openai_responses"
-	case host == "api.openai.com" && strings.HasPrefix(p, "/v1/chat/completions"):
-		return "openai_chat_completions"
-	case host == "chatgpt.com" && strings.HasPrefix(p, "/backend-api/"):
-		return "chatgpt_backend"
-	case host == "generativelanguage.googleapis.com":
-		return "gemini"
-	}
-	return ""
-}
+// APIOf is the API a call is on, by its host and path (events.APIOf):
+// anthropic_messages, claude_ai_web, openai_responses,
+// openai_chat_completions, chatgpt_backend, gemini; "" for a call outside them
+// (a control-plane endpoint).
+func APIOf(host, path string) string { return events.APIOf(host, path) }
 
 func clientOf(product, ua string) string {
 	switch product {

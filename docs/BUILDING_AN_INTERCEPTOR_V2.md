@@ -86,6 +86,7 @@ other than Accept wins.
 ```go
 intercept.Run(intercept.Hooks{
 	OnCallStart:        func(ctx context.Context, c *intercept.Call) intercept.Answer { … },
+	OnTurnStart:        func(ctx context.Context, t *intercept.Turn) intercept.Answer { … }, // each request on a WebSocket
 	OnMessage:          func(ctx context.Context, m *intercept.Message) intercept.Answer { … }, // both directions, every kind
 	OnRequest:          func(ctx context.Context, m *intercept.Message) intercept.Answer { … }, // to the model
 	OnResponse:         func(ctx context.Context, m *intercept.Message) intercept.Answer { … }, // from the model: each reply text piece, tool calls
@@ -119,7 +120,10 @@ then complete. Calls run concurrently. `ctx` carries the deadline.
 **`Call`** is the same object in every hook of one call (a Codex WebSocket
 connection is one call for all its turns): `ID`, `Mode` (`Observe`,
 `Enforce`), `Person` (`Email`, `Name`, `Account`, and `Verified`: the provider confirmed them for the call's credential; grant privileges on a verified Person only), `Agent` (`ClaudeCode`, `Codex`),
-`Model`, `Session`, `Transport` (`HTTP`, `WebSocket`), and per-call state:
+`Model`, `Session`, `Transport` (`HTTP`, `WebSocket`), `Provider` and `API`
+(who serves the call, and which of its APIs it's on), `Options` (what the
+request asks for: `c.Options.Get(intercept.Speed)`; below, "Options"), and
+per-call state:
 `c.Set(k, v)`, `c.Get(k)`, freed after the call completes. The state lives in
 the process: run one replica, or keep state you need across replicas
 elsewhere.
@@ -151,17 +155,55 @@ by call id from the request's history), `Text`, `IsError`, `ExitCode` (when
 the result says), plus `Message` and `Call`.
 
 **`Record`**: `Call`, `Usage` (`Input`, `Output`, `CacheRead`, `CacheWrite`,
-`Reasoning`), `Status`, `Model`, `StopReason`, `TTFB`, `Duration`, `Answers`
+`Reasoning`), `Status`, `Model`, `StopReason`, `Asked` and `Served` (the
+options the request asked for, and those the provider reports serving it
+with), `TTFB`, `Duration`, `Answers`
 (every decision recorded since the call's previous record, per message),
 `Replied` (`synthesized` or `rewritten`) and `WSTurn`.
 
 **Answers**, the same everywhere: `Accept()` (or nil), `Replace(text)`,
 `ReplaceArgs(json)` for a tool call, `Reply(text)` (answer for the model;
 AIntercept picks how to deliver it), `Hold()` (reply text only: wait for
-more), `NeedFull()` (a `Truncated` message: call again with all of it), and
-`Fail(err)` (AIntercept's `onError` applies: refuse the call, or let it
-through; a panic is recovered the same way). Any answer takes
-`.Note(key, value)`, recorded with the decision.
+more), `NeedFull()` (a `Truncated` message: call again with all of it),
+`Error(status, type, message)` (refuse the call, a WebSocket turn or a
+request: the client gets an error written as the call's API writes its own;
+not for the model's reply), and `Fail(err)` (AIntercept's `onError` applies:
+refuse the call, or let it through; a panic is recovered the same way). Any
+answer takes `.Note(key, value)`, recorded with the decision.
+
+### Options: per-person fast mode
+
+A call's provider settings arrive in `c.Options`, read for you from where
+each API puts them ([`INTERCEPTOR.md`](INTERCEPTOR.md), "Options"):
+`intercept.Effort`, `intercept.Speed` (Anthropic's fast mode: `"fast"`, or
+absent), `intercept.ServiceTier` and `intercept.Thinking`. `Get` returns ""
+for a setting the request doesn't make. They need no Interceptor content.
+
+Anthropic's fast mode is on or off for a whole organization. To allow it per
+person, refuse a fast request from anyone else with Anthropic's own refusal.
+Claude Code then retries at standard speed, as it does when Anthropic itself
+refuses:
+
+```go
+func fastFor(allowed map[string]bool) intercept.Hooks {
+	refuse := func(o intercept.Options, p intercept.Person) intercept.Answer {
+		if o.Get(intercept.Speed) == "fast" && !(p.Verified && allowed[p.Email]) {
+			return intercept.Error(400, "invalid_request_error", "Fast mode is not enabled for your organization.")
+		}
+		return nil
+	}
+	return intercept.Hooks{
+		OnCallStart: func(_ context.Context, c *intercept.Call) intercept.Answer { return refuse(c.Options, c.Person) },
+		// Codex's WebSocket: each request (turn) has its own options.
+		OnTurnStart: func(_ context.Context, t *intercept.Turn) intercept.Answer { return refuse(t.Options, t.Call.Person) },
+	}
+}
+```
+
+**`Turn`** is one request on a Codex WebSocket: `N` (its number on the
+connection, the record's `WSTurn`), `Model`, `Options`, and the connection's
+`Call`. Without an `OnTurnStart` hook the library answers it UNIMPLEMENTED,
+and AIntercept stops asking (and keeps the WebSocket's compression).
 
 ### Reply text, piece by piece
 
@@ -564,8 +606,9 @@ releases what was held (allow).
 ### 6.13 Content off
 
 With `interceptor.content: false`, the Interceptor gets only `OnCallStart`
-and `OnCallComplete`: no messages, so the magic-word rule never runs and the
-call goes upstream as sent. The record still has everything about the call:
+(and a WebSocket's `OnTurnStart`) and `OnCallComplete`: no messages, so the
+magic-word rule never runs and the call goes upstream as sent. Rules on who
+calls, the model and its options (an Error for fast mode) still apply. The record still has everything about the call:
 
 ```json
 {"Usage":{"Input":2140,"Output":12,"CacheRead":18000,"CacheWrite":0,"Reasoning":0},"Status":200,"Model":"claude-sonnet-4-5","StopReason":"end_turn","Answers":null}
@@ -607,15 +650,16 @@ In Go, `pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 
 | Callback | What you get | What you answer |
 |---|---|---|
-| `OnCallStart` | `CallStart`: who, which client, which model | `CallVerdict`: Accept, or `respond` |
-| `OnRequest` | `RequestMessages`: the call's new messages (content on) | `RequestVerdict`: per message Accept or Replace; `respond`; or `fetch` |
+| `OnCallStart` | `CallStart`: who, which client, which model, its options | `CallVerdict`: Accept, `respond` or `error` |
+| `OnTurnStart` | `TurnStart`: a WebSocket's request: its turn, model and options | `CallVerdict`: Accept, `respond` or `error` |
+| `OnRequest` | `RequestMessages`: the call's new messages (content on) | `RequestVerdict`: per message Accept or Replace; `respond`; `error`; or `fetch` |
 | `OnReply` | `ResponseMessage`: a text block's pending text, with `released` and `done`; or an opaque part | `MessageVerdict`: Accept, Replace, Hold or Respond, and `keep` |
 | `OnToolCall` | `ResponseMessage`: one complete tool call | `MessageVerdict`: Accept, Replace (new arguments) or Respond |
 | `OnCallComplete` | `CallRecord`: usage, timings, your answers | `Ack` |
 
-An empty answer is Accept. There is no Deny or Drop. Not implementing
-`OnReply` or `OnToolCall` (UNIMPLEMENTED) accepts what it would get, and
-AIntercept stops holding it. [`INTERCEPTOR.md`](INTERCEPTOR.md) is the full
+An empty answer is Accept. There is no Drop. Not implementing
+`OnTurnStart`, `OnReply` or `OnToolCall` (UNIMPLEMENTED) accepts what it
+would get, and AIntercept stops holding it. [`INTERCEPTOR.md`](INTERCEPTOR.md) is the full
 specification, and `aintercept/examples/python-redact` a complete
 Interceptor on the raw protocol, in Python.
 

@@ -130,7 +130,7 @@ func scan(ctx context.Context, ws []watcher, m *Message, text string, skip int, 
 			}
 			sb.WriteString(a.text)
 			at, last, s.changed = h.end, h.end, true
-		case vReply:
+		case vReply, vError:
 			if h.start > at {
 				sb.WriteString(text[at:h.start])
 			}

@@ -35,6 +35,8 @@ type RequestSummary struct {
 	ToolsAvailable []ToolRef
 	Prewarm        bool
 	Attachments    int
+	// Options are the provider settings the request asks for, read per API.
+	Options []Option
 	// Identity the client sends: Claude Code's metadata.user_id, Codex's turn
 	// metadata and account header.
 	AccountID string
@@ -66,6 +68,7 @@ func SummarizeRequest(host, path string, headers map[string]string, body []byte)
 		if a := AttachmentsFromRequestBody(body); a != nil {
 			s.Attachments = a.Images + a.Files
 		}
+		s.Options = OptionsFromRequest(APIOf(host, path), body)
 	}
 	if md := codexTurnMetadata(headerValue(headers, "x-codex-turn-metadata"), body); md != nil {
 		str := func(k string) string { v, _ := md[k].(string); return v }

@@ -36,7 +36,12 @@ import (
 // complete); calls run concurrently. ctx carries the deadline. In observe
 // mode the same code runs; answers are recorded, never applied.
 type Hooks struct {
+	// OnCallStart: the call, before it goes upstream (c.Options: what it
+	// asks for). Accept, Reply, or Error.
 	OnCallStart func(ctx context.Context, c *Call) Answer
+	// OnTurnStart: each request on a WebSocket (Codex), before it goes
+	// upstream: OnCallStart for one turn. Accept, Reply, or Error.
+	OnTurnStart func(ctx context.Context, t *Turn) Answer
 	// OnMessage: every message, both directions, every kind.
 	OnMessage func(ctx context.Context, m *Message) Answer
 	// OnRequest: messages to the model (prompts, tool results, media).
@@ -128,6 +133,9 @@ func merge(a, b Hooks) Hooks {
 	if a.OnCallStart == nil {
 		a.OnCallStart = b.OnCallStart
 	}
+	if a.OnTurnStart == nil {
+		a.OnTurnStart = b.OnTurnStart
+	}
 	if a.OnMessage == nil {
 		a.OnMessage = b.OnMessage
 	}
@@ -170,8 +178,8 @@ func (s *Server) call(c *pb.Call) *Call {
 			}
 		}
 		id := c.GetIdentity()
-		cl = &Call{ID: k, Mode: Observe, Person: personOf(id),
-			Agent: Agent(c.GetClient().GetProduct()), Session: id.GetSessionId(), Transport: HTTP}
+		cl = &Call{ID: k, Mode: Observe, Person: personOf(id), Agent: Agent(c.GetClient().GetProduct()),
+			Session: id.GetSessionId(), Transport: HTTP, Provider: c.GetProvider(), API: c.GetApi()}
 		if c.GetMode() == pb.Mode_MODE_ENFORCE {
 			cl.Mode = Enforce
 		}
@@ -299,22 +307,47 @@ func failed(a *answer) error {
 
 func (s *Server) OnCallStart(ctx context.Context, cs *pb.CallStart) (*pb.CallVerdict, error) {
 	c := s.call(cs.GetCall())
-	c.Model = cs.GetRequest().GetModel()
-	v := &pb.CallVerdict{}
+	c.Model, c.Options = cs.GetRequest().GetModel(), optionsOf(cs.GetRequest().GetOptions())
 	if s.hooks.OnCallStart == nil {
-		return v, nil
+		return &pb.CallVerdict{}, nil
 	}
 	m := &Message{Call: c}
 	a := first(ctx, m, func(ctx context.Context, _ *Message) Answer { return s.hooks.OnCallStart(ctx, c) })
 	s.note("call_start", m, a)
-	v.Annotations = annotations(a.notes)
+	return startVerdict(a)
+}
+
+// ── OnTurnStart: each request on a WebSocket ─────────────────────────────────
+
+func (s *Server) OnTurnStart(ctx context.Context, ts *pb.TurnStart) (*pb.CallVerdict, error) {
+	if s.hooks.OnTurnStart == nil {
+		return nil, status.Error(codes.Unimplemented, "intercept: no OnTurnStart hook")
+	}
+	c := s.call(ts.GetCall())
+	t := &Turn{N: int(ts.GetWsTurn()), Model: ts.GetRequest().GetModel(), Options: optionsOf(ts.GetRequest().GetOptions()), Call: c}
+	m := &Message{Call: c, ID: strconv.Itoa(t.N)}
+	a := first(ctx, m, func(ctx context.Context, _ *Message) Answer { return s.hooks.OnTurnStart(ctx, t) })
+	s.note("turn_start", m, a)
+	return startVerdict(a)
+}
+
+// startVerdict is OnCallStart's or OnTurnStart's answer on the wire.
+func startVerdict(a *answer) (*pb.CallVerdict, error) {
+	v := &pb.CallVerdict{Annotations: annotations(a.notes)}
 	switch a.verb {
 	case vReply:
 		v.Action = &pb.CallVerdict_Respond{Respond: &pb.Respond{Text: a.text}}
+	case vError:
+		v.Action = &pb.CallVerdict_Error{Error: a.errorOf()}
 	case vFail:
 		return nil, failed(a)
 	}
 	return v, nil
+}
+
+// errorOf is an Error answer on the wire.
+func (a *answer) errorOf() *pb.Error {
+	return &pb.Error{HttpStatus: int32(a.status), Type: a.errType, Message: a.text}
 }
 
 // ── OnRequest: messages to the model ─────────────────────────────────────────
@@ -381,6 +414,10 @@ func (s *Server) OnRequest(ctx context.Context, r *pb.RequestMessages) (*pb.Requ
 			switch a.verb {
 			case vReply:
 				v.Respond = &pb.Respond{Text: a.text}
+				v.Messages, v.Fetch = nil, nil
+				return v, nil
+			case vError:
+				v.Error = a.errorOf()
 				v.Messages, v.Fetch = nil, nil
 				return v, nil
 			case vFail:
@@ -468,6 +505,8 @@ func (s *Server) OnReply(ctx context.Context, r *pb.ResponseMessage) (*pb.Messag
 	switch {
 	case sc.err != nil:
 		a = &answer{verb: vFail, err: sc.err}
+	case sc.reply != nil && sc.reply.verb == vError:
+		a = &answer{verb: vFail, err: errors.New("an Error answers a call or a request, not the model's reply"), notes: sc.reply.notes}
 	case sc.reply != nil:
 		a = &answer{verb: vReply, text: sc.out + sc.reply.text, notes: sc.reply.notes}
 	case sc.changed:
@@ -484,6 +523,8 @@ func (s *Server) OnReply(ctx context.Context, r *pb.ResponseMessage) (*pb.Messag
 	switch a.verb {
 	case vFail:
 		return nil, failed(a)
+	case vError:
+		return nil, failed(&answer{err: errors.New("an Error answers a call or a request, not the model's reply")})
 	case vReply:
 		v.Action = &pb.MessageVerdict_Respond{Respond: &pb.Respond{Text: a.text}}
 	case vHold:
@@ -527,6 +568,8 @@ func (s *Server) OnToolCall(ctx context.Context, r *pb.ResponseMessage) (*pb.Mes
 	switch a.verb {
 	case vFail:
 		return nil, failed(a)
+	case vError:
+		return nil, failed(&answer{err: errors.New("an Error answers a call or a request, not a tool call")})
 	case vReply:
 		v.Action = &pb.MessageVerdict_Respond{Respond: &pb.Respond{Text: a.text}}
 	case vReplace, vReplaceArgs:
@@ -552,7 +595,8 @@ func (s *Server) OnCallComplete(ctx context.Context, r *pb.CallRecord) (*pb.Ack,
 		TTFB: time.Duration(resp.GetTtfbMs()) * time.Millisecond, Duration: time.Duration(resp.GetDurationMs()) * time.Millisecond,
 		Usage: Usage{Input: resp.GetInputTokens(), Output: resp.GetOutputTokens(), CacheRead: resp.GetCacheReadTokens(),
 			CacheWrite: resp.GetCacheWriteTokens(), Reasoning: resp.GetReasoningTokens()},
-		Replied: r.GetRespond(), WSTurn: int(r.GetWsTurn())}
+		Replied: r.GetRespond(), WSTurn: int(r.GetWsTurn()),
+		Asked: optionsOf(r.GetRequest().GetOptions()), Served: optionsOf(resp.GetOptions())}
 	for _, d := range r.GetVerdicts() {
 		dd := Decision{Callback: d.GetCallback(), Action: d.GetAction(), Applied: d.GetApplied(), MessageID: d.GetMessageId(),
 			Reason: d.GetReason(), RespondMode: d.GetRespondMode()}

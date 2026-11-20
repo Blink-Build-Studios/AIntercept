@@ -36,3 +36,23 @@ shape anthropic/claude-code/model-fast: no request with "speed": "fast" (or a re
 shape anthropic/claude-code/model-fast-beta: no request carries the fast-mode anthropic-beta header in any capture
 shape anthropic/claude-code/error-fast-not-enabled: no "Fast mode is not enabled" 400 in any capture
 shape openai/codex/model-service-tier: no Codex request sets service_tier in any capture (responses report the tier that served them, "auto": every Codex model case)
+
+# Options (issue #118): each key on each API that carries it. Absent from the
+# requests captured, not unread: none of them sets it.
+field anthropic_messages:on_call_start.request.options:OPTION_SPEED: no request with "speed": "fast" in any capture (shape model-fast)
+field anthropic_messages:on_call_start.request.options:OPTION_SERVICE_TIER: Claude Code never sends service_tier; no other Anthropic client's model call was captured
+field chatgpt_backend:on_call_start.request.options:OPTION_SERVICE_TIER: no Codex request sets service_tier in any capture (shape model-service-tier)
+field chatgpt_backend:on_turn_start.request.options:OPTION_SERVICE_TIER: no Codex response.create sets service_tier in any capture (shape model-service-tier)
+field openai_responses:on_call_start.request.options:OPTION_EFFORT: the only api.openai.com /v1/responses capture is a curl 401
+field openai_responses:on_call_start.request.options:OPTION_SERVICE_TIER: the only api.openai.com /v1/responses capture is a curl 401
+field openai_responses:on_call_complete.response.options:OPTION_EFFORT: the only api.openai.com /v1/responses capture is a curl 401
+field openai_responses:on_call_complete.response.options:OPTION_SERVICE_TIER: the only api.openai.com /v1/responses capture is a curl 401
+field openai_chat_completions:on_call_start.request.options:OPTION_EFFORT: the only Chat Completions capture is a curl 401
+field openai_chat_completions:on_call_start.request.options:OPTION_SERVICE_TIER: the only Chat Completions capture is a curl 401
+field openai_chat_completions:on_call_complete.response.options:OPTION_SERVICE_TIER: the only Chat Completions capture is a curl 401
+field gemini:on_call_start.request.options:OPTION_EFFORT: no Gemini traffic in any capture (only the observer's probes)
+
+# OnTurnStart (a Codex WebSocket's requests): what no captured response.create carries.
+field on_turn_start.request.attachments: no Codex WebSocket capture sends an image or a file
+field on_turn_start.request.max_tokens: Codex sends no max_output_tokens in a response.create
+field on_turn_start.request.mcp_tools_available: no captured response.create declares an MCP tool (Codex's tools come in namespaces, none of them MCP)

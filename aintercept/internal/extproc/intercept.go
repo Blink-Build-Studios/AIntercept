@@ -322,6 +322,21 @@ func (srv *Server) decideRequest(st *streamState, r convo.Request) interceptor.D
 	return srv.ic.DecideRequest(context.Background(), st.icState().call, r)
 }
 
+// enforcingTurns reports whether an enforced WebSocket's requests go to
+// OnTurnStart (its client messages decoded and re-framed for it).
+func (srv *Server) enforcingTurns(st *streamState) bool {
+	return st.enforce && srv.intercepting(st) && srv.ic.Turns()
+}
+
+// observeTurn queues OnTurnStart for a WebSocket's request (observe mode):
+// turn is its number on the connection.
+func (srv *Server) observeTurn(st *streamState, turn int, msg []byte) {
+	if !srv.intercepting(st) || st.enforce || st.ic == nil || !st.ic.started {
+		return
+	}
+	srv.ic.ObserveTurn(interceptor.TurnStart(st.ic.call, st.host, st.path, turn, msg))
+}
+
 // enforcingRequests reports whether an enforced stream evaluates its
 // requests' new messages (and, when the Interceptor has rules on them, its
 // reply's text and tool calls).

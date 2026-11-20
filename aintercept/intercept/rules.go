@@ -26,10 +26,11 @@ const (
 	vHold
 	vNeedFull
 	vFail
+	vError
 )
 
 func (v verb) String() string {
-	return [...]string{"accept", "replace", "replace", "reply", "hold", "need full", "fail"}[v]
+	return [...]string{"accept", "replace", "replace", "reply", "hold", "need full", "fail", "error"}[v]
 }
 
 type answer struct {
@@ -37,6 +38,9 @@ type answer struct {
 	text  string
 	err   error
 	notes [][2]string
+	// status and errType are an Error's.
+	status  int
+	errType string
 }
 
 func (a *answer) Note(key, value string) Answer {
@@ -71,6 +75,22 @@ func ReplaceArgs(json string) Answer { return &answer{verb: vReplaceArgs, text: 
 // keeps the conversation, the model is asked for exactly the text); in the
 // reply, it ends there with the text.
 func Reply(text string) Answer { return &answer{verb: vReply, text: text} }
+
+// Error refuses the call (OnCallStart), a WebSocket turn (OnTurnStart) or a
+// request (a message to the model): the client gets an error with this HTTP
+// status (400 to 599) and message, written as the call's API writes its own,
+// and the call never reaches the model. errType is the API's error type
+// ("invalid_request_error"; Gemini's status, "INVALID_ARGUMENT"), or "" for
+// its usual one for the status. Refusing Anthropic's fast mode with its own
+// 400 makes Claude Code retry at standard speed:
+//
+//	intercept.Error(400, "invalid_request_error", "Fast mode is not enabled for your organization.")
+//
+// Not for the model's reply (a Fail there). In observe mode it's recorded,
+// not applied.
+func Error(status int, errType, message string) Answer {
+	return &answer{verb: vError, status: status, errType: errType, text: message}
+}
 
 // Hold (reply text only) releases nothing yet: the piece comes back with
 // what arrives next.

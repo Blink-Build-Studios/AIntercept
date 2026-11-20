@@ -116,6 +116,7 @@
     "tool_call",
     "complete"
   ],
+  "on_call_complete.call.api": "API_ANTHROPIC_MESSAGES",
   "on_call_complete.call.client.product": "claude_code",
   "on_call_complete.call.client.user_agent": "claude-cli/2.1.308 (external, cli)",
   "on_call_complete.call.host": "api.anthropic.com",
@@ -128,15 +129,35 @@
   "on_call_complete.call.method": "POST",
   "on_call_complete.call.mode": "MODE_OBSERVE",
   "on_call_complete.call.path": "/v1/messages?beta=true",
+  "on_call_complete.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_complete.call.transport": "TRANSPORT_HTTP",
-  "on_call_complete.request.effort": "medium",
   "on_call_complete.request.max_tokens": 128000,
   "on_call_complete.request.model": "claude-opus-5-5",
+  "on_call_complete.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "medium"
+    },
+    {
+      "key": "OPTION_THINKING",
+      "value": "adaptive"
+    }
+  ],
   "on_call_complete.request.stream": true,
   "on_call_complete.response.cache_read_tokens": "808234",
   "on_call_complete.response.cache_write_tokens": "758",
   "on_call_complete.response.input_tokens": "4",
   "on_call_complete.response.model": "claude-opus-5-5",
+  "on_call_complete.response.options": [
+    {
+      "key": "OPTION_SPEED",
+      "value": "standard"
+    },
+    {
+      "key": "OPTION_SERVICE_TIER",
+      "value": "standard"
+    }
+  ],
   "on_call_complete.response.output_tokens": "245",
   "on_call_complete.response.status": 200,
   "on_call_complete.response.stop_reason": "tool_use",
@@ -146,6 +167,7 @@
       "name": "Bash"
     }
   ],
+  "on_call_start.call.api": "API_ANTHROPIC_MESSAGES",
   "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.308 (external, cli)",
   "on_call_start.call.client.headers.x-app": "cli",
   "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000002",
@@ -170,10 +192,20 @@
   "on_call_start.call.method": "POST",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_start.call.transport": "TRANSPORT_HTTP",
-  "on_call_start.request.effort": "medium",
   "on_call_start.request.max_tokens": 128000,
   "on_call_start.request.model": "claude-opus-5-5",
+  "on_call_start.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "medium"
+    },
+    {
+      "key": "OPTION_THINKING",
+      "value": "adaptive"
+    }
+  ],
   "on_call_start.request.stream": true,
   "on_reply.done": true,
   "on_reply.message": {

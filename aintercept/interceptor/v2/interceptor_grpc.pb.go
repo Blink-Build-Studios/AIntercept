@@ -46,6 +46,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Interceptor_OnCallStart_FullMethodName    = "/aintercept.interceptor.v2.Interceptor/OnCallStart"
+	Interceptor_OnTurnStart_FullMethodName    = "/aintercept.interceptor.v2.Interceptor/OnTurnStart"
 	Interceptor_OnRequest_FullMethodName      = "/aintercept.interceptor.v2.Interceptor/OnRequest"
 	Interceptor_OnReply_FullMethodName        = "/aintercept.interceptor.v2.Interceptor/OnReply"
 	Interceptor_OnToolCall_FullMethodName     = "/aintercept.interceptor.v2.Interceptor/OnToolCall"
@@ -57,10 +58,19 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InterceptorClient interface {
 	// The request has arrived and been parsed; nothing has gone upstream yet in
-	// enforce mode. Accept, or Respond.
+	// enforce mode. Accept, Respond, or Error. Content-free: the call, who
+	// makes it and its settings (RequestInfo), never its messages.
 	OnCallStart(ctx context.Context, in *CallStart, opts ...grpc.CallOption) (*CallVerdict, error)
+	// Each request on a WebSocket (Codex's response.create), before it goes
+	// upstream: what OnCallStart is for an HTTP call, for one turn (a
+	// WebSocket's OnCallStart is its upgrade, which carries no request).
+	// Accept, Respond, or Error; content-free, with or without Interceptor
+	// content. An Interceptor that doesn't implement it (UNIMPLEMENTED)
+	// accepts every turn, and AIntercept stops asking.
+	OnTurnStart(ctx context.Context, in *TurnStart, opts ...grpc.CallOption) (*CallVerdict, error)
 	// The call's new messages, before they go upstream. Per message: Accept or
-	// Replace. For the call: Respond. Or Fetch parts sent by reference first.
+	// Replace. For the call: Respond or Error. Or Fetch parts sent by
+	// reference first.
 	// Only called with Interceptor content on, for requests AIntercept can
 	// read.
 	OnRequest(ctx context.Context, in *RequestMessages, opts ...grpc.CallOption) (*RequestVerdict, error)
@@ -102,6 +112,16 @@ func (c *interceptorClient) OnCallStart(ctx context.Context, in *CallStart, opts
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CallVerdict)
 	err := c.cc.Invoke(ctx, Interceptor_OnCallStart_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *interceptorClient) OnTurnStart(ctx context.Context, in *TurnStart, opts ...grpc.CallOption) (*CallVerdict, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CallVerdict)
+	err := c.cc.Invoke(ctx, Interceptor_OnTurnStart_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -153,10 +173,19 @@ func (c *interceptorClient) OnCallComplete(ctx context.Context, in *CallRecord, 
 // for forward compatibility.
 type InterceptorServer interface {
 	// The request has arrived and been parsed; nothing has gone upstream yet in
-	// enforce mode. Accept, or Respond.
+	// enforce mode. Accept, Respond, or Error. Content-free: the call, who
+	// makes it and its settings (RequestInfo), never its messages.
 	OnCallStart(context.Context, *CallStart) (*CallVerdict, error)
+	// Each request on a WebSocket (Codex's response.create), before it goes
+	// upstream: what OnCallStart is for an HTTP call, for one turn (a
+	// WebSocket's OnCallStart is its upgrade, which carries no request).
+	// Accept, Respond, or Error; content-free, with or without Interceptor
+	// content. An Interceptor that doesn't implement it (UNIMPLEMENTED)
+	// accepts every turn, and AIntercept stops asking.
+	OnTurnStart(context.Context, *TurnStart) (*CallVerdict, error)
 	// The call's new messages, before they go upstream. Per message: Accept or
-	// Replace. For the call: Respond. Or Fetch parts sent by reference first.
+	// Replace. For the call: Respond or Error. Or Fetch parts sent by
+	// reference first.
 	// Only called with Interceptor content on, for requests AIntercept can
 	// read.
 	OnRequest(context.Context, *RequestMessages) (*RequestVerdict, error)
@@ -196,6 +225,9 @@ type UnimplementedInterceptorServer struct{}
 
 func (UnimplementedInterceptorServer) OnCallStart(context.Context, *CallStart) (*CallVerdict, error) {
 	return nil, status.Error(codes.Unimplemented, "method OnCallStart not implemented")
+}
+func (UnimplementedInterceptorServer) OnTurnStart(context.Context, *TurnStart) (*CallVerdict, error) {
+	return nil, status.Error(codes.Unimplemented, "method OnTurnStart not implemented")
 }
 func (UnimplementedInterceptorServer) OnRequest(context.Context, *RequestMessages) (*RequestVerdict, error) {
 	return nil, status.Error(codes.Unimplemented, "method OnRequest not implemented")
@@ -244,6 +276,24 @@ func _Interceptor_OnCallStart_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InterceptorServer).OnCallStart(ctx, req.(*CallStart))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Interceptor_OnTurnStart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TurnStart)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InterceptorServer).OnTurnStart(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Interceptor_OnTurnStart_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InterceptorServer).OnTurnStart(ctx, req.(*TurnStart))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -330,6 +380,10 @@ var Interceptor_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OnCallStart",
 			Handler:    _Interceptor_OnCallStart_Handler,
+		},
+		{
+			MethodName: "OnTurnStart",
+			Handler:    _Interceptor_OnTurnStart_Handler,
 		},
 		{
 			MethodName: "OnRequest",

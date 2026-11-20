@@ -107,6 +107,10 @@ const (
 	Deny Action = "deny"
 	// Respond: the client gets Text as the model's reply.
 	Respond Action = "respond"
+	// Refuse: the client gets an error (HTTPStatus, ErrorType, and Reason as
+	// its message), written as the call's API writes its own: an Error
+	// answer.
+	Refuse Action = "refuse"
 	// Hold (reply text): nothing is released yet.
 	Hold Action = "hold"
 )
@@ -117,9 +121,11 @@ type Decision struct {
 	// Payload is a Replace's rewritten request body; for a tool call, its
 	// arguments.
 	Payload []byte
-	// Reason and HTTPStatus describe a Deny (status 0 means 403).
+	// Reason and HTTPStatus describe a Deny (status 0 means 403) or a
+	// Refuse; ErrorType is a Refuse's error type ("": the API's usual one).
 	Reason     string
 	HTTPStatus int
+	ErrorType  string
 	// Text is a Respond's reply, or reply text's replacement.
 	Text string
 	// Keep (reply text, Allow or Replace): the pending text's last Keep
@@ -160,16 +166,17 @@ type Client struct {
 	queued, dropped, delivered, failed, decided, decideFailed, unparsed, heldCalls atomic.Uint64
 	// noNew counts requests with no new messages: no OnRequest.
 	noNew atomic.Uint64
-	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
-	// OnReply.
-	noToolCall, noReply atomic.Bool
+	// noToolCall, noReply, noTurn: the Interceptor doesn't implement
+	// OnToolCall, OnReply, OnTurnStart.
+	noToolCall, noReply, noTurn atomic.Bool
 }
 
 type job struct {
 	callID string
 	start  *pb.CallStart
-	req    *Request  // OnRequest
-	reply  *replyJob // OnReply or OnToolCall
+	turn   *pb.TurnStart // OnTurnStart
+	req    *Request      // OnRequest
+	reply  *replyJob     // OnReply or OnToolCall
 	rec    *pb.CallRecord
 	// final marks the record that ends the call (its verdicts can go).
 	final bool
@@ -510,6 +517,8 @@ func (c *Client) stamp(j *job) {
 	switch {
 	case j.start != nil:
 		j.start.Call.Identity = ci.id
+	case j.turn != nil:
+		j.turn.Call.Identity = ci.id
 	case j.req != nil:
 		j.req.call.Identity = ci.id
 	case j.reply != nil:
@@ -581,8 +590,10 @@ func (c *Client) deliver(j job) {
 		t := time.Now()
 		var v *pb.CallVerdict
 		if v, err = c.api.OnCallStart(ctx, j.start); err == nil {
-			c.noteStart(j.callID, "observe", v, false, time.Since(t))
+			err = c.noteStart(j.callID, "call_start", "", v, false, time.Since(t))
 		}
+	case j.turn != nil:
+		err = c.onTurnObserved(ctx, j.callID, j.turn)
 	case j.req != nil:
 		err = c.onRequestObserved(ctx, j.req)
 	case j.reply != nil:
