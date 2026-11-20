@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -196,7 +197,19 @@ func ToolsFromRequestBody(body []byte) (available []ToolRef, calls []ToolCallCou
 		s, tool, kind := ClassifyTool(name)
 		calls = append(calls, ToolCallCount{Name: name, Server: s, Tool: tool, Kind: kind, Count: n})
 	}
+	sortToolCounts(calls)
 	return available, calls
+}
+
+// sortToolCounts orders tool counts by name and server, so the same traffic
+// always yields the same row.
+func sortToolCounts(c []ToolCallCount) {
+	sort.Slice(c, func(i, j int) bool {
+		if c[i].Name != c[j].Name {
+			return c[i].Name < c[j].Name
+		}
+		return c[i].Server < c[j].Server
+	})
 }
 
 // responsesItem is the part of an OpenAI Responses input item we read.

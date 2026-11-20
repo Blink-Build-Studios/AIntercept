@@ -188,5 +188,6 @@ func (c toolUseCounter) result() []ToolCallCount {
 		}
 		out = append(out, ToolCallCount{Name: k.name, Server: s, Tool: tool, Kind: kind, Count: n})
 	}
+	sortToolCounts(out)
 	return out
 }
