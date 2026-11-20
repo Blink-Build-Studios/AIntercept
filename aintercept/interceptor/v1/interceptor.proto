@@ -97,10 +97,11 @@ message Identity {
   string key_hint = 2;
   // The client's IP address.
   string ip = 3;
-  // Deprecated: always empty. Use verified_account_id (what the provider
+  // Removed: account_id. Use verified_account_id (what the provider
   // confirmed for this credential) or reported_account_id (what the client
   // sent).
-  string account_id = 4 [deprecated = true];
+  reserved 4;
+  reserved "account_id";
   // The organization: the one the provider confirmed for the credential when
   // there is one, else what the request names.
   string org_id = 5;

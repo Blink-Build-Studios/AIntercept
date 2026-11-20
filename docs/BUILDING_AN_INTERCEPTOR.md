@@ -240,7 +240,7 @@ The rest of this section is what you need to know to write your own.
 | `mode` | `MODE_OBSERVE` or `MODE_ENFORCE`: whether your verdict will be applied. Usually you return the same verdict either way; the mode is for your own logs and metrics. |
 | `transport` | `HTTP` or `WEBSOCKET`. |
 | `host`, `method`, `path` | The request as the client sent it, including the query string. |
-| `identity` | `key_hash` (a salted hash of the API key or token; stable per credential, never reversible) and `key_hint` (e.g. `sk-ant…a3f9`), plus `ip`, `org_id`, `device_id`, `session_id`, `email`, `name` and `email_source`, `reported_account_id` (what the client says), `verified_account_id` (what the provider confirmed for the credential) and `account_mismatch`. `account_id` is deprecated and empty. See `docs/INTERCEPTOR.md`, Identity. |
+| `identity` | `key_hash` (a salted hash of the API key or token; stable per credential, never reversible) and `key_hint` (e.g. `sk-ant…a3f9`), plus `ip`, `org_id`, `device_id`, `session_id`, `email`, `name` and `email_source`, `reported_account_id` (what the client says), `verified_account_id` (what the provider confirmed for the credential) and `account_mismatch`. See `docs/INTERCEPTOR.md`, Identity. |
 | `client` | `product` (`claude_code`, `codex`, or empty), `user_agent`, and the client's identifying headers (`originator`, `x-app`, `anthropic-version`, …). |
 
 To map identities to people or teams, keep your own table keyed on
