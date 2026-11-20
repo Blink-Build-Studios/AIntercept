@@ -68,3 +68,12 @@ func TestAPIAndProvider(t *testing.T) {
 		}
 	}
 }
+
+// An option of another JSON type reads as unset, and doesn't cost the rest of
+// the request's metadata.
+func TestOptionOfAnotherTypeIsUnset(t *testing.T) {
+	m := RequestMetaFromBody([]byte(`{"speed":{"mode":"fast"},"service_tier":7,"output_config":{"effort":"high"},"stream":true,"max_tokens":9}`))
+	if got := fmt.Sprint(m.Options(APIAnthropicMessages)); got != "[{effort high}]" || !m.Stream || m.MaxTokens != 9 {
+		t.Fatalf("%s, stream %v, max_tokens %d", got, m.Stream, m.MaxTokens)
+	}
+}

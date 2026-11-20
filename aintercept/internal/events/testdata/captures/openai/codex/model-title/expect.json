@@ -46,8 +46,8 @@
   ],
   "interceptor.callbacks": [
     "start",
-    "request",
     "turn",
+    "request",
     "reply",
     "reply",
     "reply",

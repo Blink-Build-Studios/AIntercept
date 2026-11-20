@@ -143,3 +143,17 @@ func TestInterceptorContractIsV2(t *testing.T) {
 		t.Errorf("failure %q doesn't say v1 was removed", strings.TrimSpace(out))
 	}
 }
+
+// interceptor.turns reaches the observer (off by default: a WebSocket isn't
+// re-framed for OnTurnStart without content unless asked).
+func TestInterceptorTurns(t *testing.T) {
+	for set, want := range map[string]string{"": "false", "interceptor.turns=true": "true"} {
+		args := []string{"interceptor.endpoint=decision:443"}
+		if set != "" {
+			args = append(args, set)
+		}
+		if got := envOf(container(render(t, args...), "Deployment", "envoy", "observer"))["INTERCEPTOR_TURNS"]; got != want {
+			t.Errorf("%q: INTERCEPTOR_TURNS = %v, want %s", set, got, want)
+		}
+	}
+}

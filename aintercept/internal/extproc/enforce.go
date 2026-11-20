@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"maps"
+	"slices"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -433,8 +435,9 @@ func (srv *Server) deny(st *streamState, d interceptor.Decision) []*extprocv3.Pr
 	st.denyReason = denyReason(d, dn)
 	srv.emitComplete(st)
 	var set []*corev3.HeaderValueOption
-	for _, k := range sortedKeys(dn.headers()) {
-		set = append(set, &corev3.HeaderValueOption{Header: &corev3.HeaderValue{Key: k, RawValue: []byte(dn.headers()[k])}})
+	h := dn.headers()
+	for _, k := range slices.Sorted(maps.Keys(h)) {
+		set = append(set, &corev3.HeaderValueOption{Header: &corev3.HeaderValue{Key: k, RawValue: []byte(h[k])}})
 	}
 	details := "aintercept_interceptor_deny"
 	if d.Action == interceptor.Refuse {

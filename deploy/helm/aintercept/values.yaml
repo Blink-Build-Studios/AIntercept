@@ -36,6 +36,12 @@ interceptor:
   # Separate from interceptionMode: the Interceptor can act on content
   # AIntercept doesn't record.
   content: false
+  # Send each WebSocket request (Codex's response.create) to OnTurnStart
+  # without content (with content it always goes): per-turn options, refused
+  # with an Error. In enforce, those WebSockets' client messages are
+  # re-framed: compression is off, and a client message over 16 MiB closes
+  # the connection.
+  turns: false
   # Enforce: how long the Interceptor has to answer each callback, and what
   # happens when it doesn't (or fails): deny (fail closed) or allow.
   deadlineMs: 50

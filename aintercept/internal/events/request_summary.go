@@ -29,7 +29,6 @@ func ProductOf(host, userAgent, originator, sessionID string) string {
 // declares, and the identity the client sends. No content.
 type RequestSummary struct {
 	Model          string
-	Effort         string
 	Stream         bool
 	MaxTokens      int
 	ToolsAvailable []ToolRef
@@ -60,15 +59,12 @@ func SummarizeRequest(host, path string, headers map[string]string, body []byte)
 		s.Model = ModelFromRequestBody(body)
 		s.ToolsAvailable, _ = ToolsFromRequestBody(body)
 		rm := RequestMetaFromBody(body)
-		s.Effort, s.Stream, s.MaxTokens, s.Prewarm = rm.Effort, rm.Stream, rm.MaxTokens, rm.Prewarm
-		if s.Effort == "" {
-			s.Effort = rm.ThinkingType
-		}
+		s.Stream, s.MaxTokens, s.Prewarm = rm.Stream, rm.MaxTokens, rm.Prewarm
+		s.Options = rm.Options(APIOf(host, path))
 		s.DeviceID, s.AccountID, s.SessionID = rm.UserID.DeviceID, rm.UserID.AccountUUID, rm.UserID.SessionID
 		if a := AttachmentsFromRequestBody(body); a != nil {
 			s.Attachments = a.Images + a.Files
 		}
-		s.Options = OptionsFromRequest(APIOf(host, path), body)
 	}
 	if md := codexTurnMetadata(headerValue(headers, "x-codex-turn-metadata"), body); md != nil {
 		str := func(k string) string { v, _ := md[k].(string); return v }

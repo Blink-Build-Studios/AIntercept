@@ -200,12 +200,17 @@ service Interceptor {
   `response.create`), before it goes upstream: `OnCallStart` for one turn.
   `TurnStart` carries the connection's `Call`, the turn's number
   (`ws_turn`, as on its `CallRecord`) and the turn's `RequestInfo`. Accept,
-  **Respond** or **Error**. Content-free, so it's made with Interceptor
-  content off too. In enforce, a WebSocket whose turns are decided has its
-  client messages decoded and re-framed: AIntercept removes
-  `Sec-WebSocket-Extensions` from the upgrade, so compression isn't
-  negotiated. An Interceptor that doesn't implement it (UNIMPLEMENTED)
-  accepts every turn, and AIntercept stops asking (and keeps compression).
+  **Respond** or **Error**. It's content-free, but it's made only with
+  Interceptor content on, or with `interceptor.turns: true` without it: in
+  enforce, a WebSocket whose turns are decided has its client messages
+  decoded and re-framed (AIntercept removes `Sec-WebSocket-Extensions` from
+  the upgrade, so compression isn't negotiated, and a client message over
+  16 MiB closes the connection), and without content an enforced WebSocket
+  otherwise passes untouched. An Interceptor that doesn't implement it
+  (UNIMPLEMENTED) accepts every turn, and AIntercept doesn't ask again for a
+  minute (so one old replica in a rolling deploy can't turn it off for
+  good). With content on, a turn waits for `OnTurnStart` and then
+  `OnRequest`, each within the deadline.
 - **`OnRequest`** fires once per call with the new messages, before they go
   upstream. Per message: **Accept**, or **Replace** it. For the call:
   **Respond**. Or **Fetch** parts first. A request that adds no message
@@ -637,8 +642,8 @@ itself records:
 | `interceptor.content: true` | **The Interceptor sees the messages, AIntercept stores none** (e.g. redaction without retention) | Both |
 
 Without content, an Interceptor can still decide on everything in
-`CallStart` and `TurnStart`: model, options, tools, client, identity,
-provider, API, host and path (Respond or Error).
+`CallStart` (and, with `interceptor.turns`, `TurnStart`): model, options,
+tools, client, identity, provider, API, host and path (Respond or Error).
 
 With content on, enforce asks upstream for replies it can read and release
 without re-compressing: it removes `accept-encoding` from a request whose
@@ -661,6 +666,7 @@ interceptor:
   endpoint: my-interceptor.policy.svc:9100   # host:port of your service
   inlineLimitBytes: 65536                    # larger parts go by reference
   content: true                              # OnRequest, OnReply, OnToolCall
+  turns: false                               # OnTurnStart without content (always with it)
   deadlineMs: 50                             # enforce: per callback
   onError: deny                              # enforce: deny (fail closed) | allow
   enforce:                                   # empty: observe only
@@ -680,7 +686,7 @@ interceptor:
 ```
 
 - **Without the chart:** set the observer's environment: `INTERCEPTOR_ENDPOINT`,
-  `INTERCEPTOR_INLINE_LIMIT_BYTES`, `INTERCEPTOR_CONTENT`,
+  `INTERCEPTOR_INLINE_LIMIT_BYTES`, `INTERCEPTOR_CONTENT`, `INTERCEPTOR_TURNS`,
   `INTERCEPTOR_DEADLINE_MS`, `INTERCEPTOR_ON_ERROR`, `INTERCEPTOR_TLS`,
   `INTERCEPTOR_TLS_CA_FILE`, `INTERCEPTOR_TLS_CERT_FILE`,
   `INTERCEPTOR_TLS_KEY_FILE`, `INTERCEPTOR_TLS_SERVER_NAME`, `INTERCEPTOR_TOKEN`

@@ -329,7 +329,7 @@ func (e *Event) ExtractDeferred() {
 		e.UserID, e.DeviceID, e.AccountUUID, e.SessionID = rm.UserID.Raw, rm.UserID.DeviceID, rm.UserID.AccountUUID, rm.UserID.SessionID
 		e.clientEvents = ClientEventsFromRequest(e.Host, e.Path, e.rawReq, "")
 		e.MCP = MCPFromBodies(e.rawReq, resp, respEnc)
-		e.reqOptions = OptionsFromRequest(APIOf(e.Host, e.Path), e.rawReq)
+		e.reqOptions = rm.Options(APIOf(e.Host, e.Path))
 	}
 	// Codex identity: per-turn metadata (installation → device, session) and
 	// the ChatGPT account header.

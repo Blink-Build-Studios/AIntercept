@@ -190,8 +190,8 @@
   "convo.prev": "resp_0x0x000xx00xx000000xx00x0x0x0000x000xxx000x0000021",
   "interceptor.callbacks": [
     "start",
-    "request",
     "turn",
+    "request",
     "tool_call",
     "complete",
     "complete"

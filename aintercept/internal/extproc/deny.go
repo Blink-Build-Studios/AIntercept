@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
@@ -43,15 +42,6 @@ func anthropicHost(host string) bool {
 
 func openAIHost(host string) bool {
 	return host == "api.openai.com" || host == "chatgpt.com" || strings.HasSuffix(host, ".openai.com") || strings.HasSuffix(host, ".chatgpt.com")
-}
-
-func sortedKeys(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func mustJSON(v any) []byte {

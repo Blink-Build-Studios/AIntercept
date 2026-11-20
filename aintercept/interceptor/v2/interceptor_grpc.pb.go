@@ -64,9 +64,11 @@ type InterceptorClient interface {
 	// Each request on a WebSocket (Codex's response.create), before it goes
 	// upstream: what OnCallStart is for an HTTP call, for one turn (a
 	// WebSocket's OnCallStart is its upgrade, which carries no request).
-	// Accept, Respond, or Error; content-free, with or without Interceptor
-	// content. An Interceptor that doesn't implement it (UNIMPLEMENTED)
-	// accepts every turn, and AIntercept stops asking.
+	// Accept, Respond, or Error; content-free. Called with Interceptor
+	// content on, or without it when the deployment turns it on
+	// (interceptor.turns). An Interceptor that doesn't implement it
+	// (UNIMPLEMENTED) accepts every turn, and AIntercept doesn't ask again for
+	// a minute.
 	OnTurnStart(ctx context.Context, in *TurnStart, opts ...grpc.CallOption) (*CallVerdict, error)
 	// The call's new messages, before they go upstream. Per message: Accept or
 	// Replace. For the call: Respond or Error. Or Fetch parts sent by
@@ -179,9 +181,11 @@ type InterceptorServer interface {
 	// Each request on a WebSocket (Codex's response.create), before it goes
 	// upstream: what OnCallStart is for an HTTP call, for one turn (a
 	// WebSocket's OnCallStart is its upgrade, which carries no request).
-	// Accept, Respond, or Error; content-free, with or without Interceptor
-	// content. An Interceptor that doesn't implement it (UNIMPLEMENTED)
-	// accepts every turn, and AIntercept stops asking.
+	// Accept, Respond, or Error; content-free. Called with Interceptor
+	// content on, or without it when the deployment turns it on
+	// (interceptor.turns). An Interceptor that doesn't implement it
+	// (UNIMPLEMENTED) accepts every turn, and AIntercept doesn't ask again for
+	// a minute.
 	OnTurnStart(context.Context, *TurnStart) (*CallVerdict, error)
 	// The call's new messages, before they go upstream. Per message: Accept or
 	// Replace. For the call: Respond or Error. Or Fetch parts sent by

@@ -202,8 +202,10 @@ func fastFor(allowed map[string]bool) intercept.Hooks {
 
 **`Turn`** is one request on a Codex WebSocket: `N` (its number on the
 connection, the record's `WSTurn`), `Model`, `Options`, and the connection's
-`Call`. Without an `OnTurnStart` hook the library answers it UNIMPLEMENTED,
-and AIntercept stops asking (and keeps the WebSocket's compression).
+`Call`. It's called with Interceptor content on, or with
+`interceptor.turns: true` in the deployment. Without an `OnTurnStart` hook
+the library answers it UNIMPLEMENTED, and AIntercept doesn't ask again for a
+minute.
 
 ### Reply text, piece by piece
 
@@ -606,7 +608,8 @@ releases what was held (allow).
 ### 6.13 Content off
 
 With `interceptor.content: false`, the Interceptor gets only `OnCallStart`
-(and a WebSocket's `OnTurnStart`) and `OnCallComplete`: no messages, so the
+(and, with `interceptor.turns: true`, a WebSocket's `OnTurnStart`) and
+`OnCallComplete`: no messages, so the
 magic-word rule never runs and the call goes upstream as sent. Rules on who
 calls, the model and its options (an Error for fast mode) still apply. The record still has everything about the call:
 

@@ -139,9 +139,19 @@ func (c *Client) DecideStart(ctx context.Context, s *pb.CallStart) Decision {
 	})
 }
 
-// Turns reports whether a WebSocket's requests go to OnTurnStart (until the
-// Interceptor turns out not to implement it).
-func (c *Client) Turns() bool { return c != nil && !c.noTurn.Load() }
+// noTurnRetry is how long an UNIMPLEMENTED OnTurnStart stops AIntercept
+// asking.
+const noTurnRetry = time.Minute
+
+// Turns reports whether a WebSocket's requests go to OnTurnStart: with
+// content, or with Turns set, unless the Interceptor answered UNIMPLEMENTED
+// in the last minute.
+func (c *Client) Turns() bool {
+	return c != nil && (c.cfg.Content || c.cfg.Turns) && c.now().UnixNano() >= c.noTurnUntil.Load()
+}
+
+// unimplementedTurn notes an OnTurnStart answered UNIMPLEMENTED.
+func (c *Client) unimplementedTurn() { c.noTurnUntil.Store(c.now().Add(noTurnRetry).UnixNano()) }
 
 // DecideTurn calls OnTurnStart for a WebSocket's request and waits for the
 // verdict (enforce mode), as DecideStart. An Interceptor without it accepts.
@@ -152,33 +162,45 @@ func (c *Client) DecideTurn(ctx context.Context, t *pb.TurnStart) Decision {
 	return c.decideStart(ctx, "turn_start", t.GetCall().GetCallId(), strconv.Itoa(int(t.GetWsTurn())), func(ctx context.Context) (*pb.CallVerdict, error) {
 		v, err := c.api.OnTurnStart(ctx, t)
 		if status.Code(err) == codes.Unimplemented {
-			c.noTurn.Store(true)
+			c.unimplementedTurn()
 			return &pb.CallVerdict{}, nil
 		}
 		return v, err
 	})
 }
 
-// ObserveTurn queues OnTurnStart (observe mode).
-func (c *Client) ObserveTurn(t *pb.TurnStart) {
+// turnJob is a queued OnTurnStart: its message is built on the worker, off
+// the stream (building it parses the request).
+type turnJob struct {
+	call       *pb.Call
+	host, path string
+	turn       int
+	msg        []byte
+}
+
+// ObserveTurn queues OnTurnStart (observe mode) for a WebSocket's request
+// (msg: its response.create) on the call: turn is its number.
+func (c *Client) ObserveTurn(call *pb.Call, host, path string, turn int, msg []byte) {
 	if c.Turns() {
-		c.enqueue(job{callID: t.GetCall().GetCallId(), turn: t})
+		c.enqueue(job{callID: call.GetCallId(), turn: &turnJob{call: own(call), host: host, path: path, turn: turn, msg: msg}})
 	}
 }
 
 // onTurnObserved delivers a queued OnTurnStart: its answer is recorded,
 // never applied.
-func (c *Client) onTurnObserved(ctx context.Context, callID string, t *pb.TurnStart) error {
+func (c *Client) onTurnObserved(ctx context.Context, callID string, j *turnJob) error {
+	t := TurnStart(j.call, j.host, j.path, j.turn, j.msg)
 	at := time.Now()
 	v, err := c.api.OnTurnStart(ctx, t)
 	if status.Code(err) == codes.Unimplemented {
-		c.noTurn.Store(true)
+		c.unimplementedTurn()
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	return c.noteStart(callID, "turn_start", strconv.Itoa(int(t.GetWsTurn())), v, false, time.Since(at))
+	c.noteStart(callID, "turn_start", strconv.Itoa(j.turn), v, false, time.Since(at))
+	return nil
 }
 
 // decideStart asks call for the verdict on a call (OnCallStart) or a turn
@@ -222,7 +244,7 @@ func checkStart(v *pb.CallVerdict) error {
 // Accept, an Error (applied in enforce), or (observe) a Respond, recorded and
 // not applied. messageID is a turn's number. An answer that can't be applied
 // is recorded as an error.
-func (c *Client) noteStart(callID, callback, messageID string, v *pb.CallVerdict, enforce bool, took time.Duration) error {
+func (c *Client) noteStart(callID, callback, messageID string, v *pb.CallVerdict, enforce bool, took time.Duration) {
 	ev := events.Verdict{Callback: callback, Action: "accept", Applied: enforce, Mode: "observe", MessageID: messageID,
 		LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}
 	if enforce {
@@ -231,7 +253,7 @@ func (c *Client) noteStart(callID, callback, messageID string, v *pb.CallVerdict
 	if err := checkStart(v); err != nil {
 		ev.Action, ev.Reason = "error", err.Error()
 		c.store(callID, ev)
-		return nil
+		return
 	}
 	switch {
 	case v.GetRespond() != nil:
@@ -240,10 +262,9 @@ func (c *Client) noteStart(callID, callback, messageID string, v *pb.CallVerdict
 		ev.Action, ev.Reason = "refuse", refusalReason(v.GetError())
 	}
 	if ev.Action == "accept" && len(ev.Annotations) == 0 {
-		return nil
+		return
 	}
 	c.store(callID, ev)
-	return nil
 }
 
 // ── OnRequest ────────────────────────────────────────────────────────────────

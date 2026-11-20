@@ -59,6 +59,11 @@ type Config struct {
 	// messages), OnReply and OnToolCall (the reply's text and tool calls).
 	// Independent of what AIntercept records.
 	Content bool
+	// Turns sends each WebSocket request to OnTurnStart without content (with
+	// content it always goes). An enforced WebSocket whose turns are decided
+	// has its client messages re-framed: compression is off, and a client
+	// message over 16 MiB closes the connection.
+	Turns bool
 	// InlineLimit is the size over which a part's content goes by
 	// reference (default convo.DefaultInlineLimit, 64 KiB).
 	InlineLimit int
@@ -166,17 +171,21 @@ type Client struct {
 	queued, dropped, delivered, failed, decided, decideFailed, unparsed, heldCalls atomic.Uint64
 	// noNew counts requests with no new messages: no OnRequest.
 	noNew atomic.Uint64
-	// noToolCall, noReply, noTurn: the Interceptor doesn't implement
-	// OnToolCall, OnReply, OnTurnStart.
-	noToolCall, noReply, noTurn atomic.Bool
+	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
+	// OnReply.
+	noToolCall, noReply atomic.Bool
+	// noTurnUntil: the Interceptor answered OnTurnStart UNIMPLEMENTED; it isn't
+	// asked again until then (unix ns), so one old replica in a rolling deploy
+	// can't turn it off for good.
+	noTurnUntil atomic.Int64
 }
 
 type job struct {
 	callID string
 	start  *pb.CallStart
-	turn   *pb.TurnStart // OnTurnStart
-	req    *Request      // OnRequest
-	reply  *replyJob     // OnReply or OnToolCall
+	turn   *turnJob  // OnTurnStart
+	req    *Request  // OnRequest
+	reply  *replyJob // OnReply or OnToolCall
 	rec    *pb.CallRecord
 	// final marks the record that ends the call (its verdicts can go).
 	final bool
@@ -518,7 +527,7 @@ func (c *Client) stamp(j *job) {
 	case j.start != nil:
 		j.start.Call.Identity = ci.id
 	case j.turn != nil:
-		j.turn.Call.Identity = ci.id
+		j.turn.call.Identity = ci.id
 	case j.req != nil:
 		j.req.call.Identity = ci.id
 	case j.reply != nil:
@@ -590,7 +599,7 @@ func (c *Client) deliver(j job) {
 		t := time.Now()
 		var v *pb.CallVerdict
 		if v, err = c.api.OnCallStart(ctx, j.start); err == nil {
-			err = c.noteStart(j.callID, "call_start", "", v, false, time.Since(t))
+			c.noteStart(j.callID, "call_start", "", v, false, time.Since(t))
 		}
 	case j.turn != nil:
 		err = c.onTurnObserved(ctx, j.callID, j.turn)

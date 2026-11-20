@@ -175,13 +175,13 @@ func TestErrorStatusChecked(t *testing.T) {
 	}
 }
 
-// Codex's WebSocket: each response.create goes to OnTurnStart, without
-// content. A refused turn gets the API's error event and never goes
-// upstream; the connection stays open, and the next turn goes on.
+// Codex's WebSocket: with turns on, each response.create goes to
+// OnTurnStart, without content. A refused turn gets the API's error event and
+// never goes upstream; the connection stays open, and the next turn goes on.
 func TestErrorRefusesAWebSocketTurn(t *testing.T) {
 	var rows []events.Verdict
 	f := noFast()
-	ic := interceptortest.NewClient(t, f, interceptor.Config{Deadline: 5e9}, rowsOf(&rows))
+	ic := interceptortest.NewClient(t, f, interceptor.Config{Turns: true, Deadline: 5e9}, rowsOf(&rows))
 	t.Cleanup(ic.Close)
 	srv := New(Config{Processor: events.NewProcessor(&memSink{}, events.ProcessorConfig{BufferSize: 1024}), InstanceID: "t", KeyHashSalt: "s", Interceptor: ic})
 	st := &streamState{correlationID: "c", enforce: true, enf: &enforceState{}}
@@ -224,10 +224,37 @@ func TestErrorRefusesAWebSocketTurn(t *testing.T) {
 	}
 }
 
+// Without content and without turns on, an enforced WebSocket is what it
+// was: its frames go through untouched, compression and all, and nothing is
+// asked per turn.
+func TestWebSocketWithoutTurnsPassesThrough(t *testing.T) {
+	f := noFast()
+	ic := interceptortest.NewClient(t, f, interceptor.Config{Deadline: 5e9}, nil)
+	t.Cleanup(ic.Close)
+	srv := New(Config{Processor: events.NewProcessor(&memSink{}, events.ProcessorConfig{BufferSize: 1024}), InstanceID: "t", KeyHashSalt: "s", Interceptor: ic})
+	st := &streamState{correlationID: "c", enforce: true, enf: &enforceState{}}
+	out := srv.enforceHandle(st, eReqHeaders(false, ":authority", "chatgpt.com", ":method", "GET", ":path", "/backend-api/codex/responses",
+		"upgrade", "websocket", "sec-websocket-extensions", "permessage-deflate"))
+	if len(out) != 1 || len(removed(out[0])) != 0 {
+		t.Fatalf("upgrade headers %v: compression must stay", out)
+	}
+	srv.enforceHandle(st, eRespHeaders(":status", "101", "upgrade", "websocket"))
+	frame := wsframe.Encode(wsframe.OpText, []byte(`{"type":"response.create","model":"m","service_tier":"priority","input":[]}`), true)
+	for _, chunk := range [][]byte{frame[:7], frame[7:]} { // forwarded as it comes, even mid-frame
+		out = srv.enforceHandle(st, eReqBody(string(chunk), false))
+		if b, _ := streamed(out[0]); len(out) != 1 || string(b) != string(chunk) {
+			t.Fatalf("got %v, want the chunk as sent", out)
+		}
+	}
+	if calls, _, _ := f.Snapshot(); strings.Join(calls, ",") != "start" {
+		t.Fatalf("callbacks %v, want only OnCallStart", calls)
+	}
+}
+
 // An Interceptor without OnTurnStart accepts every turn; AIntercept stops
 // asking, and later connections keep their compression.
 func TestTurnStartUnimplemented(t *testing.T) {
-	ic := interceptortest.NewClient(t, &interceptortest.Fake{}, interceptor.Config{Deadline: 5e9}, nil)
+	ic := interceptortest.NewClient(t, &interceptortest.Fake{}, interceptor.Config{Turns: true, Deadline: 5e9}, nil)
 	t.Cleanup(ic.Close)
 	srv := New(Config{Processor: events.NewProcessor(&memSink{}, events.ProcessorConfig{BufferSize: 1024}), InstanceID: "t", KeyHashSalt: "s", Interceptor: ic})
 	upgrade := eReqHeaders(false, ":authority", "chatgpt.com", ":method", "GET", ":path", "/backend-api/codex/responses",

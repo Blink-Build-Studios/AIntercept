@@ -94,65 +94,64 @@ func ProviderOf(host string) string {
 // optionKeys is every option, in the order a list of them has.
 var optionKeys = []string{OptionEffort, OptionSpeed, OptionServiceTier, OptionThinking}
 
-// requestOptionPaths is where each API's request body sets each option.
-var requestOptionPaths = map[string]map[string][]string{
-	APIAnthropicMessages: {
-		OptionEffort:      {"output_config", "effort"},
-		OptionSpeed:       {"speed"},
-		OptionServiceTier: {"service_tier"},
-		OptionThinking:    {"thinking", "type"},
-	},
-	APIOpenAIResponses: {
-		OptionEffort:      {"reasoning", "effort"},
-		OptionServiceTier: {"service_tier"},
-	},
-	APIChatGPTBackend: { // Codex sends the Responses API's body, over HTTP or in a WebSocket's response.create
-		OptionEffort:      {"reasoning", "effort"},
-		OptionServiceTier: {"service_tier"},
-	},
-	APIOpenAIChat: {
-		OptionEffort:      {"reasoning_effort"},
-		OptionServiceTier: {"service_tier"},
-	},
-	APIGemini: {
-		OptionEffort: {"generationConfig", "thinkingConfig", "thinkingLevel"},
-	},
+// requestOptions are the places a request body sets an option, read with the
+// rest of RequestMeta (one typed parse of the body).
+type requestOptions struct {
+	outputEffort    string // output_config.effort (Anthropic)
+	reasoningEffort string // reasoning.effort (Responses, Codex)
+	chatEffort      string // reasoning_effort (Chat Completions)
+	thinkingLevel   string // generationConfig.thinkingConfig.thinkingLevel (Gemini)
+	speed           string // speed (Anthropic)
+	tier            string // service_tier (Anthropic, OpenAI)
+	thinking        string // thinking.type (Anthropic)
+}
+
+// optString is a string an option may be: any other JSON value reads as "",
+// without failing the rest of the body's parse.
+type optString string
+
+func (s *optString) UnmarshalJSON(b []byte) error {
+	var v string
+	if json.Unmarshal(b, &v) == nil {
+		*s = optString(v)
+	}
+	return nil
+}
+
+// Options are the options the request asks for, read from where api puts
+// each.
+func (m RequestMeta) Options(api string) []Option {
+	o := m.opts
+	var have map[string]string
+	switch api {
+	case APIAnthropicMessages:
+		have = map[string]string{OptionEffort: o.outputEffort, OptionSpeed: o.speed, OptionServiceTier: o.tier, OptionThinking: o.thinking}
+	case APIOpenAIResponses, APIChatGPTBackend: // Codex sends the Responses API's body, over HTTP or in a WebSocket's response.create
+		have = map[string]string{OptionEffort: o.reasoningEffort, OptionServiceTier: o.tier}
+	case APIOpenAIChat:
+		have = map[string]string{OptionEffort: o.chatEffort, OptionServiceTier: o.tier}
+	case APIGemini:
+		have = map[string]string{OptionEffort: o.thinkingLevel}
+	}
+	return optionList(have)
 }
 
 // OptionsFromRequest reads the options a request body on api asks for. body
 // is plain JSON (a WebSocket's response.create too); anything else has none.
 func OptionsFromRequest(api string, body []byte) []Option {
-	paths := requestOptionPaths[api]
-	if len(paths) == 0 || len(body) == 0 {
-		return nil
-	}
-	var doc map[string]any
-	if json.Unmarshal(body, &doc) != nil {
-		return nil
-	}
+	return RequestMetaFromBody(body).Options(api)
+}
+
+// optionList is the options set in have, in order; a value too long to be a
+// setting is left out.
+func optionList(have map[string]string) []Option {
 	var out []Option
 	for _, k := range optionKeys {
-		if p, ok := paths[k]; ok {
-			if v := stringAt(doc, p); v != "" && len(v) <= optionMax {
-				out = append(out, Option{k, v})
-			}
+		if v := have[k]; v != "" && len(v) <= optionMax {
+			out = append(out, Option{k, v})
 		}
 	}
 	return out
-}
-
-// stringAt is the string at path in doc, or "".
-func stringAt(doc map[string]any, path []string) string {
-	var v any = doc
-	for _, k := range path {
-		m, ok := v.(map[string]any)
-		if !ok {
-			return ""
-		}
-		v = m[k]
-	}
-	s, _ := v.(string)
-	return s
 }
 
 // Options are the settings a response on api reports serving it with:
@@ -169,11 +168,5 @@ func (m ResponseMeta) Options(api string) []Option {
 	case APIOpenAIChat:
 		have = map[string]string{OptionServiceTier: m.ServiceTier}
 	}
-	var out []Option
-	for _, k := range optionKeys {
-		if v := have[k]; v != "" && len(v) <= optionMax {
-			out = append(out, Option{k, v})
-		}
-	}
-	return out
+	return optionList(have)
 }
