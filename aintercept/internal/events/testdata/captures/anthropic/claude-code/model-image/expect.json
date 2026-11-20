@@ -1,0 +1,277 @@
+{
+  "call.cache_read_tokens": 127406,
+  "call.cache_write_tokens": 648,
+  "call.client": "cli",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000004",
+  "call.client_version": "2.1.308",
+  "call.content_encoding": "gzip",
+  "call.device_id": "000000000000000000000000000000000000000000000000000000000000000c",
+  "call.effort": "medium",
+  "call.host": "api.anthropic.com",
+  "call.input_tokens": 4,
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "call.key_hint": "sk-ant…OAAA",
+  "call.kind": "model",
+  "call.message_id": "msg_000XxxX0xX0xXXXxXxXxXX15",
+  "call.method": "POST",
+  "call.model": "claude-opus-5-5",
+  "call.model_call": true,
+  "call.output_tokens": 296,
+  "call.path": "/v1/messages?beta=true",
+  "call.person_id": "00000000-0000-4000-8000-00000000000d",
+  "call.previous_message_id": "msg_000XxxX00xxXxxXxX0XXXX14",
+  "call.product": "claude_code",
+  "call.prompt_id": "00000000-0000-4000-8000-000000000003",
+  "call.request_class": "main",
+  "call.request_id": "req_000XxxX0xxXx0xxxXxxxxXX6",
+  "call.service_tier": "standard",
+  "call.session_id": "00000000-0000-4000-8000-000000000002",
+  "call.status": 200,
+  "call.stop_reason": "tool_use",
+  "call.stream": true,
+  "call.thread_type": "continue",
+  "call.tool_uses": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "Bash",
+      "tool": "Bash"
+    }
+  ],
+  "call.user_agent": "claude-cli/2.1.308 (external, cli)",
+  "convo.chained": true,
+  "convo.format": "anthropic_messages",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 114
+        },
+        {
+          "kind": "media",
+          "media_type": "image/png",
+          "size": 5636
+        },
+        {
+          "kind": "text",
+          "size": 151
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "convo.new": [
+    0
+  ],
+  "convo.prev": "msg_000XxxX00xxXxxXxX0XXXX14",
+  "detail.calls": [
+    {
+      "commands": [
+        "sed",
+        "grep",
+        "tail",
+        "python3"
+      ],
+      "id": "toolu_00XXXX0xxxx0xXxxxXxXX016",
+      "tool": "Bash"
+    }
+  ],
+  "detail.prompt": "xxxx, X xxxxx xxxx xx xxxx x xxxxxx xxx xxx xxxxxxx. Xxxxx xx xxxxx xxxx x xxxx xxxx, xx xxxxx xxx'x…(266 bytes)",
+  "detail.promptChars": 264,
+  "detail.said": [
+    {
+      "role": "user",
+      "text": "xxxx, X xxxxx xxxx xx xxxx x xxxxxx xxx xxx xxxxxxx. Xxxxx xx xxxxx xxxx x xxxx xxxx, xx xxxxx xxx'x xxxxxxx xxxx."
+    },
+    {
+      "role": "user",
+      "text": "[Xxxxx: xxxxxx: /xxx/xxxxxxx/0x/xxxxxx000x0xx0x0x0xxx0xx0000xx/X/XxxxxxxxxXxxxx/XXXXX_xxxxxxxxxxxxxx…(151 bytes)"
+    }
+  ],
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "reply",
+    "tool_call",
+    "complete"
+  ],
+  "on_call_complete.call.client.product": "claude_code",
+  "on_call_complete.call.client.user_agent": "claude-cli/2.1.308 (external, cli)",
+  "on_call_complete.call.host": "api.anthropic.com",
+  "on_call_complete.call.identity.device_id": "000000000000000000000000000000000000000000000000000000000000000c",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_complete.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-00000000000d",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/v1/messages?beta=true",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.attachments": 1,
+  "on_call_complete.request.effort": "medium",
+  "on_call_complete.request.max_tokens": 128000,
+  "on_call_complete.request.model": "claude-opus-5-5",
+  "on_call_complete.request.stream": true,
+  "on_call_complete.response.cache_read_tokens": "127406",
+  "on_call_complete.response.cache_write_tokens": "648",
+  "on_call_complete.response.input_tokens": "4",
+  "on_call_complete.response.model": "claude-opus-5-5",
+  "on_call_complete.response.output_tokens": "296",
+  "on_call_complete.response.status": 200,
+  "on_call_complete.response.stop_reason": "tool_use",
+  "on_call_complete.response.tool_calls": [
+    {
+      "count": 1,
+      "name": "Bash"
+    }
+  ],
+  "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.308 (external, cli)",
+  "on_call_start.call.client.headers.x-app": "cli",
+  "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-claude-code-request-class": "main",
+  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.x-stainless-arch": "arm64",
+  "on_call_start.call.client.headers.x-stainless-lang": "js",
+  "on_call_start.call.client.headers.x-stainless-os": "MacOS",
+  "on_call_start.call.client.headers.x-stainless-package-version": "0.128.0",
+  "on_call_start.call.client.headers.x-stainless-runtime": "node",
+  "on_call_start.call.client.headers.x-stainless-runtime-version": "v26.3.0",
+  "on_call_start.call.client.product": "claude_code",
+  "on_call_start.call.client.user_agent": "claude-cli/2.1.308 (external, cli)",
+  "on_call_start.call.host": "api.anthropic.com",
+  "on_call_start.call.identity.device_id": "000000000000000000000000000000000000000000000000000000000000000c",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_start.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-00000000000d",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.attachments": 1,
+  "on_call_start.request.effort": "medium",
+  "on_call_start.request.max_tokens": 128000,
+  "on_call_start.request.model": "claude-opus-5-5",
+  "on_call_start.request.stream": true,
+  "on_reply.done": true,
+  "on_reply.message": {
+    "id": "msg_000XxxX0xX0xXXXxXxXxXX15:0",
+    "parts": [
+      {
+        "id": "msg_000XxxX0xX0xXXXxXxXxXX15:0/0",
+        "opaque": {}
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_request.chained": true,
+  "on_request.format": "anthropic_messages",
+  "on_request.messages": [
+    {
+      "id": "f17a1207168cb7164b65831e252cbb2d",
+      "parts": [
+        {
+          "id": "f17a1207168cb7164b65831e252cbb2d/0",
+          "size": "114",
+          "text": {
+            "text": "xxxx, X xxxxx xxxx xx xxxx x xxxxxx xxx xxx xxxxxxx. Xxxxx xx xxxxx xxxx x xxxx xxxx, xx xxxxx xxx'x xxxxxxx xxxx."
+          }
+        },
+        {
+          "id": "f17a1207168cb7164b65831e252cbb2d/1",
+          "media": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA…(7516 bytes)",
+            "media_type": "image/png"
+          },
+          "size": "5636"
+        },
+        {
+          "id": "f17a1207168cb7164b65831e252cbb2d/2",
+          "size": "151",
+          "text": {
+            "text": "[Xxxxx: xxxxxx: /xxx/xxxxxxx/0x/xxxxxx000x0xx0x0x0xxx0xx0000xx/X/XxxxxxxxxXxxxx/XXXXX_xxxxxxxxxxxxxx…(151 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    }
+  ],
+  "on_request.total_messages": 1,
+  "on_tool_call.message": {
+    "id": "toolu_00XXXX0xxxx0xXxxxXxXX016",
+    "parts": [
+      {
+        "id": "toolu_00XXXX0xxxx0xXxxxXxXX016/0",
+        "size": "420",
+        "tool_call": {
+          "arguments": "{\"command\": \"cd /xxxxxxx/xxx/xxxxxx-000/-Xxxxx-xxxxx-xxx-xxxxxx-xxx-xxxxxxxx/0000x0x0-00xx-00xx-x00x…(420 bytes)",
+          "call_id": "toolu_00XXXX0xxxx0xXxxxXxXX016",
+          "name": "Bash"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "row.account_uuid": "00000000-0000-4000-8000-00000000000d",
+  "row.attachments.images": 1,
+  "row.attachments.inline_bytes": 5636,
+  "row.cache_read_tokens": 127406,
+  "row.cache_write_tokens": 648,
+  "row.client.user-agent": "claude-cli/2.1.308 (external, cli)",
+  "row.client.x-app": "cli",
+  "row.client.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-claude-code-request-class": "main",
+  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "row.client.x-stainless-arch": "arm64",
+  "row.client.x-stainless-lang": "js",
+  "row.client.x-stainless-os": "MacOS",
+  "row.client.x-stainless-package-version": "0.128.0",
+  "row.client.x-stainless-runtime": "node",
+  "row.client.x-stainless-runtime-version": "v26.3.0",
+  "row.device_id": "000000000000000000000000000000000000000000000000000000000000000c",
+  "row.effort": "medium",
+  "row.host": "api.anthropic.com",
+  "row.inference_geo": "global",
+  "row.input_tokens": 4,
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "row.key_hint": "sk-ant…OAAA",
+  "row.max_tokens": 128000,
+  "row.message_id": "msg_000XxxX0xX0xXXXxXxXxXX15",
+  "row.method": "POST",
+  "row.model": "claude-opus-5-5",
+  "row.output_tokens": 296,
+  "row.path": "/v1/messages?beta=true",
+  "row.previous_message_id": "msg_000XxxX00xxXxxXxX0XXXX14",
+  "row.provider.anthropic-ratelimit-unified-7d-utilization": "0.17",
+  "row.provider.anthropic-ratelimit-unified-fallback-percentage": "0.5",
+  "row.provider.anthropic-ratelimit-unified-overage-status": "rejected",
+  "row.provider.anthropic-ratelimit-unified-representative-claim": "seven_day",
+  "row.provider.anthropic-ratelimit-unified-status": "allowed",
+  "row.provider.anthropic-workspace-id": "wrkspc_000xxXxxXxxXXxXxXxXxxxx5",
+  "row.provider.request-id": "req_000XxxX0xxXx0xxxXxxxxXX6",
+  "row.provider_org_id": "00000000-0000-4000-8000-000000000007",
+  "row.service_tier": "standard",
+  "row.session_id": "00000000-0000-4000-8000-000000000002",
+  "row.speed": "standard",
+  "row.status": 200,
+  "row.stop_reason": "tool_use",
+  "row.stream": true,
+  "row.thinking_type": "adaptive",
+  "row.thread_type": "continue",
+  "row.tool_uses": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "Bash",
+      "tool": "Bash"
+    }
+  ],
+  "row.user_id": "{\"device_id\":\"000000000000000000000000000000000000000000000000000000000000000c\",\"account_uuid\":\"0000…(186 bytes)"
+}

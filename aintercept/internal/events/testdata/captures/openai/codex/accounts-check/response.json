@@ -1,0 +1,26 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000008-XXX",
+    "content-length": "1010",
+    "content-type": "application/json",
+    "cross-origin-opener-policy": "xxxx-xxxxxx-xxxxx-xxxxxx",
+    "date": "Mon, 09 Nov 2026 20:07:26 GMT",
+    "nel": "{\"report_to\":\"xx-xxx\",\"success_fraction\":0.01,\"max_age\":604800}",
+    "referrer-policy": "xxxxxx-xxxxxx-xxxx-xxxxx-xxxxxx",
+    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=xXxXxX0%0XXx00xxxXxxxxX0x0x0xxxXxxXxx0x9%0XxXXXxxXxXxx10%0X0xxxx00XxxxxXX0xxXXXxXxxxXxXxxX00XxXxXxXxXXxxXXxxXxXx11%0XxxxxXXXXXXxXx12\"}]}",
+    "server": "cloudflare",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-oai-request-id": "00000000-0000-4000-8000-00000000000d",
+    "x-openai-proxy-wasm": "v0.1"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    1010,
+    0
+  ]
+}

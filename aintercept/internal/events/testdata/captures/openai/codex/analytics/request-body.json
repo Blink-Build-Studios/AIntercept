@@ -1,0 +1,1 @@
+{"events":[{"event_type":"codex_hook_run","event_params":{"thread_id":"00000000-0000-4000-8000-00000000000c","turn_id":"00000000-0000-4000-8000-00000000000d","product_client_id":"codex-tui","model_slug":"gpt-6.1-sol","hook_name":"Xxxx","hook_source":"xxxxxxx_xxxxx","handler_type":"xxxxxxx","execution_mode":"xxxx","status":"completed"}}]}

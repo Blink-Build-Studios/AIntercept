@@ -1,0 +1,354 @@
+{
+  "call.client": "claude-desktop",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000003",
+  "call.client_version": "2.1.326",
+  "call.content_encoding": "gzip",
+  "call.device_id": "0000000000000000000000000000000000000000000000000000000000000013",
+  "call.effort": "medium",
+  "call.host": "api.anthropic.com",
+  "call.input_tokens": 14143,
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "call.key_hint": "sk-ant…OAAA",
+  "call.kind": "model",
+  "call.message_id": "msg_000XxXxXXXXXXxx00XxXxx21",
+  "call.method": "POST",
+  "call.model": "claude-haiku-5-5",
+  "call.model_call": true,
+  "call.output_tokens": 872,
+  "call.path": "/v1/messages?beta=true",
+  "call.person_id": "00000000-0000-4000-8000-000000000014",
+  "call.product": "claude_code",
+  "call.request_class": "auxiliary",
+  "call.request_id": "req_000XxXxXX0x0Xx0xxxxXx015",
+  "call.service_tier": "standard",
+  "call.session_id": "00000000-0000-4000-8000-000000000002",
+  "call.status": 200,
+  "call.stop_reason": "end_turn",
+  "call.stream": true,
+  "call.tool_uses": [
+    {
+      "count": 1,
+      "kind": "server",
+      "name": "web_search",
+      "tool": "web_search"
+    }
+  ],
+  "call.tools_offered": [
+    "web_search"
+  ],
+  "call.user_agent": "claude-cli/2.1.326 (external, claude-desktop, agent-sdk/0.3.326)",
+  "convo.format": "anthropic_messages",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 86
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "convo.new": [
+    0
+  ],
+  "detail.prompt": "Xxxxxxx x xxx xxxxxx xxx xxx xxxxx: Xxxxxx Xxxxxxxxx Xxxxxxx xxxx xxxxxx Xxxxxxxx 0000",
+  "detail.promptChars": 86,
+  "detail.said": [
+    {
+      "role": "user",
+      "text": "Xxxxxxx x xxx xxxxxx xxx xxx xxxxx: Xxxxxx Xxxxxxxxx Xxxxxxx xxxx xxxxxx Xxxxxxxx 0000"
+    }
+  ],
+  "detail.text": "Xxx xxxxxxx xxx'x xxxxxxx xxx Xxxxxxxx 0000 xxxxxx xx Xxxxxx Xxxxxxxxx. Xxx xxxx xxxxxx 0000 xxxx X …(123 bytes)",
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "reply",
+    "complete"
+  ],
+  "on_call_complete.call.client.product": "claude_code",
+  "on_call_complete.call.client.user_agent": "claude-cli/2.1.326 (external, claude-desktop, agent-sdk/0.3.326)",
+  "on_call_complete.call.host": "api.anthropic.com",
+  "on_call_complete.call.identity.device_id": "0000000000000000000000000000000000000000000000000000000000000013",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_complete.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000014",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/v1/messages?beta=true",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.effort": "medium",
+  "on_call_complete.request.max_tokens": 128000,
+  "on_call_complete.request.model": "claude-haiku-5-5",
+  "on_call_complete.request.stream": true,
+  "on_call_complete.request.tools_available": [
+    "web_search"
+  ],
+  "on_call_complete.response.input_tokens": "14143",
+  "on_call_complete.response.model": "claude-haiku-5-5",
+  "on_call_complete.response.output_tokens": "872",
+  "on_call_complete.response.status": 200,
+  "on_call_complete.response.stop_reason": "end_turn",
+  "on_call_complete.response.tool_calls": [
+    {
+      "count": 1,
+      "name": "web_search"
+    }
+  ],
+  "on_call_start.call.client.headers.anthropic-client-platform": "xxxxxxx_xxx",
+  "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.326 (external, claude-desktop, agent-sdk/0.3.326)",
+  "on_call_start.call.client.headers.x-app": "cli",
+  "on_call_start.call.client.headers.x-claude-code-request-class": "auxiliary",
+  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-stainless-arch": "arm64",
+  "on_call_start.call.client.headers.x-stainless-lang": "js",
+  "on_call_start.call.client.headers.x-stainless-os": "MacOS",
+  "on_call_start.call.client.headers.x-stainless-package-version": "0.128.0",
+  "on_call_start.call.client.headers.x-stainless-runtime": "node",
+  "on_call_start.call.client.headers.x-stainless-runtime-version": "v26.12.1",
+  "on_call_start.call.client.product": "claude_code",
+  "on_call_start.call.client.user_agent": "claude-cli/2.1.326 (external, claude-desktop, agent-sdk/0.3.326)",
+  "on_call_start.call.host": "api.anthropic.com",
+  "on_call_start.call.identity.device_id": "0000000000000000000000000000000000000000000000000000000000000013",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_start.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000014",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.effort": "medium",
+  "on_call_start.request.max_tokens": 128000,
+  "on_call_start.request.model": "claude-haiku-5-5",
+  "on_call_start.request.stream": true,
+  "on_call_start.request.tools_available": [
+    "web_search"
+  ],
+  "on_reply.1.done": true,
+  "on_reply.1.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:2",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:2/0",
+        "opaque": {}
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.10.done": true,
+  "on_reply.10.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:11",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:11/0",
+        "size": "256",
+        "text": {
+          "text": "\n\nXxxxx xxxxxxx xxxxx xxxxxxx xxxxxxxx, xxxxxxxxx x 0000 xxxxxxxxx xxxxxx xxx x xxxxx xxxxxx xxxx x …(256 bytes)"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.2.done": true,
+  "on_reply.2.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:3",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:3/0",
+        "size": "282",
+        "text": {
+          "text": "Xxx xxxxxxx xxx'x xxxxxxx xxx Xxxxxxxx 0000 xxxxxx xx Xxxxxx Xxxxxxxxx. Xxx xxxx xxxxxx 0000 xxxx X …(282 bytes)"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.3.done": true,
+  "on_reply.3.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:4",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:4/0",
+        "size": "95",
+        "text": {
+          "text": "xx XXX xxxxxx xx xxxxx xxxxxx, xxx xxxxx xxx x xxxxxx xx xxxxx xxxx xxxxxxx xxx Xxxxx Xxxxxxxx."
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.4.done": true,
+  "on_reply.4.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:5",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:5/0",
+        "size": "1",
+        "text": {
+          "text": " "
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.5.done": true,
+  "on_reply.5.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:6",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:6/0",
+        "size": "76",
+        "text": {
+          "text": "Xxxxx Xxxxx X'Xxxxxxx xxxx xxx xxxxxxx xxxxxx xx xxxxxxx x xxxx-xxxx xxxxxx."
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.6.done": true,
+  "on_reply.6.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:7",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:7/0",
+        "size": "49",
+        "text": {
+          "text": "\n- **Xxxxxx Xxxxxxxx xxxx:** Xx XXXX xxxxxx xxxx "
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.7.done": true,
+  "on_reply.7.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:8",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:8/0",
+        "size": "91",
+        "text": {
+          "text": "Xxxxxxxxx xxxxxx'x xxxx xxxxxxx xxx Xxxxxxxx xxxxxxx xx xxx xxxxxx, xxxxxxxxx xx X'Xxxxxxx."
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.8.done": true,
+  "on_reply.8.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:9",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:9/0",
+        "size": "1",
+        "text": {
+          "text": " "
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.9.done": true,
+  "on_reply.9.message": {
+    "id": "msg_000XxXxXXXXXXxx00XxXxx21:10",
+    "parts": [
+      {
+        "id": "msg_000XxXxXXXXXXxx00XxXxx21:10/0",
+        "size": "164",
+        "text": {
+          "text": "Xxx Xxxxxxx xxxx xxxxxx xxxx 00 xxxxx xxxxxxxx xxxx xxx xxxxxxxxxxx Xxxxx Xxxxxx xxxx xxxxxx xxxxxxx…(164 bytes)"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_request.format": "anthropic_messages",
+  "on_request.messages": [
+    {
+      "id": "3db3c1f72648cf6875c5ecf211ff1cba",
+      "parts": [
+        {
+          "id": "3db3c1f72648cf6875c5ecf211ff1cba/0",
+          "size": "86",
+          "text": {
+            "text": "Xxxxxxx x xxx xxxxxx xxx xxx xxxxx: Xxxxxx Xxxxxxxxx Xxxxxxx xxxx xxxxxx Xxxxxxxx 0000"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    }
+  ],
+  "on_request.total_messages": 1,
+  "row.account_uuid": "00000000-0000-4000-8000-000000000014",
+  "row.client.anthropic-client-platform": "xxxxxxx_xxx",
+  "row.client.user-agent": "claude-cli/2.1.326 (external, claude-desktop, agent-sdk/0.3.326)",
+  "row.client.x-app": "cli",
+  "row.client.x-claude-code-request-class": "auxiliary",
+  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-stainless-arch": "arm64",
+  "row.client.x-stainless-lang": "js",
+  "row.client.x-stainless-os": "MacOS",
+  "row.client.x-stainless-package-version": "0.128.0",
+  "row.client.x-stainless-runtime": "node",
+  "row.client.x-stainless-runtime-version": "v26.12.1",
+  "row.device_id": "0000000000000000000000000000000000000000000000000000000000000013",
+  "row.effort": "medium",
+  "row.host": "api.anthropic.com",
+  "row.inference_geo": "global",
+  "row.input_tokens": 14143,
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "row.key_hint": "sk-ant…OAAA",
+  "row.max_tokens": 128000,
+  "row.message_id": "msg_000XxXxXXXXXXxx00XxXxx21",
+  "row.method": "POST",
+  "row.model": "claude-haiku-5-5",
+  "row.output_tokens": 872,
+  "row.path": "/v1/messages?beta=true",
+  "row.provider.anthropic-ratelimit-unified-7d-utilization": "0.26",
+  "row.provider.anthropic-ratelimit-unified-fallback-percentage": "0.5",
+  "row.provider.anthropic-ratelimit-unified-overage-status": "rejected",
+  "row.provider.anthropic-ratelimit-unified-representative-claim": "seven_day",
+  "row.provider.anthropic-ratelimit-unified-status": "allowed",
+  "row.provider.anthropic-workspace-id": "wrkspc_00XxXxxxXx00XXXxXxXx0X13",
+  "row.provider.request-id": "req_000XxXxXX0x0Xx0xxxxXx015",
+  "row.provider_org_id": "00000000-0000-4000-8000-000000000012",
+  "row.service_tier": "standard",
+  "row.session_id": "00000000-0000-4000-8000-000000000002",
+  "row.speed": "standard",
+  "row.status": 200,
+  "row.stop_reason": "end_turn",
+  "row.stream": true,
+  "row.tool_uses": [
+    {
+      "count": 1,
+      "kind": "server",
+      "name": "web_search",
+      "tool": "web_search"
+    }
+  ],
+  "row.tools_available": [
+    {
+      "kind": "server",
+      "name": "web_search",
+      "tool": "web_search"
+    }
+  ],
+  "row.user_id": "{\"device_id\":\"0000000000000000000000000000000000000000000000000000000000000013\",\"account_uuid\":\"0000…(186 bytes)"
+}

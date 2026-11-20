@@ -1,0 +1,53 @@
+{
+  "method": "GET",
+  "host": "chatgpt.com",
+  "path": "/backend-api/codex/responses",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "chatgpt.com",
+    ":method": "GET",
+    ":path": "/backend-api/codex/responses",
+    ":scheme": "https",
+    "authorization": "<redacted>",
+    "chatgpt-account-id": "00000000-0000-4000-8000-000000000006",
+    "connection": "Upgrade",
+    "cookie": "<redacted>",
+    "openai-beta": "responses_websockets=2026-02-06",
+    "originator": "codex-tui",
+    "sec-websocket-extensions": "permessage-deflate; client_max_window_bits",
+    "sec-websocket-key": "xXxX0xXxx0Xx0x3+xx0xxx==",
+    "sec-websocket-version": "13",
+    "session-id": "00000000-0000-4000-8000-000000000002",
+    "thread-id": "00000000-0000-4000-8000-000000000002",
+    "upgrade": "websocket",
+    "user-agent": "codex-tui/0.164.0 (Debian 12.0.0; aarch64) tmux-256color (codex-tui; 0.164.0)",
+    "version": "0.164.0",
+    "x-client-request-id": "00000000-0000-4000-8000-000000000002",
+    "x-codex-beta-features": "remote_compaction_v2",
+    "x-codex-routing-hint": "xxxxx=xxx-0.0-xxxx",
+    "x-codex-turn-metadata": "{\"installation_id\":\"00000000-0000-4000-8000-000000000004\",\"session_id\":\"00000000-0000-4000-8000-000000000002\",\"thread_id\":\"00000000-0000-4000-8000-000000000002\",\"agent_name\":\"/root\",\"turn_id\":\"\",\"window_id\":\"00000000-0000-4000-8000-000000000002:0\",\"window_number\":0,\"context_window_id\":\"00000000-0000-4000-8000-000000000005\",\"request_kind\":\"prewarm\",\"history_initialization\":\"new\",\"thread_source\":\"thread_title\",\"sandbox\":\"seccomp\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"analytics_enabled\":true,\"model\":\"gpt-5.6-luna\",\"reasoning_effort\":\"medium\"}",
+    "x-codex-window-id": "00000000-0000-4000-8000-000000000002:0",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "chatgpt_jwt",
+    "claims": {
+      "client_id": "app_XXxxxXXX00x0XxXxXx0xxxx7",
+      "exp": 1794497032,
+      "xxxxx://xxx.xxxxxx.xxx/xxxx": {
+        "chatgpt_account_id": "00000000-0000-4000-8000-000000000006",
+        "chatgpt_plan_type": "plus",
+        "chatgpt_user_id": "user-XXxXx0x00Xxxxx0XxXx0xxX8"
+      },
+      "xxxxx://xxx.xxxxxx.xxx/xxxxxxx": {
+        "email": "person9@example.com"
+      },
+      "iss": "xxxxx://xxxx.xxxxxx.xxx",
+      "name": "Xxxxx Xxxxxxx",
+      "session_id": "authsess_xxXXxxxXX00XxXxxX0xxX010",
+      "sub": "xxxxxx-xxxxx0|00000000000000000000b"
+    }
+  }
+}

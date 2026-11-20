@@ -1,0 +1,24 @@
+{
+  "status": 401,
+  "headers": {
+    ":status": "401",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000002-XXX",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Tue, 03 Nov 2026 21:22:05 GMT",
+    "request-id": "req_000XxxxXxx0X0XXX0xXxx0X3",
+    "server": "cloudflare",
+    "server-timing": "x-xxxxxxXxxxxxx4;xxx=00",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "traceresponse": "00-00000000000000000000000000000005-0000000000000006-00",
+    "vary": "Accept-Encoding",
+    "x-robots-tag": "none",
+    "x-should-retry": "false"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    141,
+    0
+  ]
+}

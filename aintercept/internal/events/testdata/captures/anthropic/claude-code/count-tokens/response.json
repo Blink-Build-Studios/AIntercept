@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "anthropic-organization-id": "00000000-0000-4000-8000-000000000004",
+    "anthropic-workspace-id": "wrkspc_00XxXxxxXx00XXXxXxXx0XX5",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000006-XXX",
+    "content-length": "19",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Wed, 18 Nov 2026 05:06:05 GMT",
+    "request-id": "req_000Xx0x0xxx0XXxx00Xx0xX8",
+    "server": "cloudflare",
+    "server-timing": "x-xxxxxxXxxxxxx7;xxx=00",
+    "x-robots-tag": "none"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    19,
+    0
+  ]
+}

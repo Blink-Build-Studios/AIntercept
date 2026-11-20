@@ -1,0 +1,12 @@
+{
+  "provider": "openai",
+  "client": "codex",
+  "api": "chatgpt_backend",
+  "client_version": "0.164.0",
+  "shape": "model-ws-interrupted",
+  "captured": "2026-11-02",
+  "turns": [
+    5
+  ],
+  "notes": "Arrays longer than 6 elements are cut to their first and last 3 (capture-fixture -trim 3): the shape doesn't depend on their length."
+}

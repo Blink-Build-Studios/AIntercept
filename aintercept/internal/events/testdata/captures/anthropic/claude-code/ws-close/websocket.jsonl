@@ -1,0 +1,14 @@
+{"dir":"down","msg":{"kind":"roster","slug":"00000000-0000-4000-8000-000000000001","payload":{"accountUuids":[],"agents":[{"accountUuid":"00000000-0000-4000-8000-00000000000c"}]}}}
+{"dir":"down","msg":{"kind":"ctrl:joined","slug":"00000000-0000-4000-8000-000000000001","payload":{"lane":"x0","stores":["xxxxx","xx"],"sendStores":["xxxxx"],"door":true}}}
+{"dir":"down","msg":{"kind":"ctrl:invalidate","slug":"00000000-0000-4000-8000-000000000001","payload":{"ver":"000000000d-0x0x","tag":"XXXXXXXXXX_XXX_XXXX","replay":true}}}
+{"dir":"down","msg":{"kind":"ctrl:comment_hint","slug":"00000000-0000-4000-8000-000000000001","payload":{"commentsEmpty":true,"readAtMs":1794803078934}}}
+{"dir":"down","msg":{"kind":"ctrl:token_refresh_declined","slug":"00000000-0000-4000-8000-000000000001","payload":{"reason":"TOKEN_REFRESH_DECLINED_REASON_LINEAGE_EXPIRED"}}}
+{"dir":"down","msg":{"kind":"roster","slug":"00000000-0000-4000-8000-000000000001","payload":{"accountUuids":[],"agents":[{"accountUuid":"00000000-0000-4000-8000-00000000000c"}]}}}
+{"dir":"up","msg":{"kind":"ping","slug":"00000000-0000-4000-8000-000000000001"}}
+{"dir":"down","msg":{"kind":"pong"}}
+{"dir":"up","msg":{"kind":"ping","slug":"00000000-0000-4000-8000-000000000001"}}
+{"dir":"down","msg":{"kind":"pong"}}
+{"dir":"up","msg":{"kind":"ping","slug":"00000000-0000-4000-8000-000000000001"}}
+{"dir":"down","msg":{"kind":"pong"}}
+{"dir":"down","close":4503}
+{"dir":"up","close":4503}

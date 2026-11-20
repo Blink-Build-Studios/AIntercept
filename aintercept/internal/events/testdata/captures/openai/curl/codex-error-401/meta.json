@@ -1,0 +1,8 @@
+{
+  "provider": "openai",
+  "client": "curl",
+  "api": "chatgpt_backend",
+  "client_version": "8.5.0",
+  "shape": "codex-error-401",
+  "captured": "2026-11-09"
+}

@@ -1,0 +1,23 @@
+{
+  "status": 101,
+  "headers": {
+    ":status": "101",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "000000000000000d-XXX",
+    "connection": "upgrade",
+    "cross-origin-opener-policy": "xxxx-xxxxxx-xxxxx-xxxxxx",
+    "date": "Sun, 08 Nov 2026 23:52:06 GMT",
+    "nel": "{\"report_to\":\"xx-xxx\",\"success_fraction\":0.01,\"max_age\":604800}",
+    "referrer-policy": "xxxxxx-xxxxxx-xxxx-xxxxx-xxxxxx",
+    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XxxxXxxXxXXxXXXxxxxxxxXxXXXXxX0x0XXxXXx0X0xxXx0XXXxxx0X00XxXXx0xXXx14%0X%0XXxXxxxXX0xxxXxXXXxxxxxX0Xx0XxXxxXxxXXXxXxXXxxxXXxXx15\"}]}",
+    "sec-websocket-accept": "0Xx0XxXXXxxx0Xx0XxxxXxXxX16=",
+    "sec-websocket-extensions": "permessage-deflate",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "upgrade": "websocket",
+    "x-content-type-options": "nosniff",
+    "x-models-etag": "X/\"0000000000000000000000000000000c\"",
+    "x-oai-request-id": "00000000-0000-4000-8000-000000000011",
+    "x-openai-proxy-wasm": "v0.1"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "method": "POST",
+  "host": "api.anthropic.com",
+  "path": "/api/eval/sdk-xXXxxxXXXxXxXXX1",
+  "ip": "192.0.2.3",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "POST",
+    ":path": "/api/eval/sdk-xXXxxxXXXxXxXXX1",
+    ":scheme": "https",
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "anthropic-beta": "oauth-2025-04-20",
+    "authorization": "<redacted>",
+    "content-length": "559",
+    "content-type": "application/json",
+    "user-agent": "claude-code/2.1.312",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "anthropic_oauth"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    559,
+    0
+  ]
+}

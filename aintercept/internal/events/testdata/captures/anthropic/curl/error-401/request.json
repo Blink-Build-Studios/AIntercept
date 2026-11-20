@@ -1,0 +1,21 @@
+{
+  "method": "POST",
+  "host": "api.anthropic.com",
+  "path": "/v1/messages",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "POST",
+    ":path": "/v1/messages",
+    ":scheme": "https",
+    "accept": "*/*",
+    "content-length": "2",
+    "content-type": "application/x-www-form-urlencoded",
+    "user-agent": "curl/8.7.1",
+    "x-forwarded-proto": "https"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    2
+  ]
+}

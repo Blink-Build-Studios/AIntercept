@@ -1,0 +1,25 @@
+{
+  "status": 401,
+  "headers": {
+    ":status": "401",
+    "access-control-expose-headers": "X-Xxxxxxx-XX, Xxxxxx-Xxxxxx-Xxxxx,XX-Xxx,XX-Xxx",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000002-XXX",
+    "content-length": "160",
+    "content-type": "application/json",
+    "date": "Mon, 09 Nov 2026 19:09:49 GMT",
+    "openai-processing-ms": "0",
+    "openai-version": "2020-10-01",
+    "server": "cloudflare",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "www-authenticate": "Xxxxxx xxxxx=\"XxxxXX XXX\"",
+    "x-content-type-options": "nosniff",
+    "x-request-id": "req_x000xx000x000x0xx0000x0x00xx0x03"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    160,
+    0
+  ]
+}

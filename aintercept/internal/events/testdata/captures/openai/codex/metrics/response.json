@@ -1,0 +1,30 @@
+{
+  "status": 202,
+  "headers": {
+    ":status": "202",
+    "access-control-allow-credentials": "true",
+    "access-control-allow-origin": "*",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000003-XXX",
+    "content-length": "16",
+    "content-type": "application/json",
+    "cross-origin-opener-policy": "xxxx-xxxxxx-xxxxx-xxxxxx",
+    "date": "Mon, 09 Nov 2026 00:07:44 GMT",
+    "nel": "{\"report_to\":\"xx-xxx\",\"success_fraction\":0.01,\"max_age\":604800}",
+    "permissions-policy": "xxxxxxxx-xxxxxx=()",
+    "referrer-policy": "xxxxxx-xxxxxx-xxxx-xxxxx-xxxxxx",
+    "report-to": "{\"group\":\"xx-xxx\",\"max_age\":604800,\"endpoints\":[{\"url\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=0XX0XxxXXxXXXXxxxxXXXX0XX000xXxxx0xXXXXXXXxxxxXXXxX4%0Xx00XX0X0x00xXXxX0x0xXxx0Xx0xXxxx0x5%0XxxxXXXxXxXxxX0xXxXxxxXxxxxx0XXX0XxxXxx6\"}]}",
+    "server": "cloudflare",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "via": "1.1 google",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "XXXXXXXXXX",
+    "x-response-time": "0 xx"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    16,
+    0
+  ]
+}

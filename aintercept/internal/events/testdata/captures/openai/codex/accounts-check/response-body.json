@@ -1,0 +1,32 @@
+{
+  "accounts": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "account_user_id": "xxxx-0X0Xx0xXxXXxxx0xX0xxXx0x__xx00x000-00x0-0x00-x0x0-x00x00x0x014",
+      "account_user_role": "xxxxxxx-xxxxx",
+      "structure": "xxxxxxxx",
+      "plan_type": "pro",
+      "is_zdr": false,
+      "is_openai_internal": false,
+      "tbo_config": {
+        "plan_eligible": true,
+        "tbo_available": true,
+        "waitlist_info": "XX_XXXXXXXX"
+      },
+      "account_residency_region": "xx_xxxxxxxxxx",
+      "can_access_with_session": true,
+      "enable_account_switching": false,
+      "is_deactivated": false,
+      "is_fedramp_compliant_workspace": false,
+      "workspace_backend_origin": "XX_XXXXXXXXXX",
+      "account_routing_override": "XX_XXXXXXXXXX",
+      "name": null,
+      "profile_picture_url": null,
+      "sso_connection_name": null
+    }
+  ],
+  "default_account_id": "00000000-0000-4000-8000-000000000002",
+  "account_ordering": [
+    "00000000-0000-4000-8000-000000000002"
+  ]
+}

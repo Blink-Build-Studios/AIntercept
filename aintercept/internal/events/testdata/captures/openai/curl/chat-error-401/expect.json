@@ -1,0 +1,86 @@
+{
+  "call.client_version": "8.7.1",
+  "call.error": "invalid_request_error: Xxxxxxxxx XXX xxx xxxxxxxx: xx-xxxx-xxxx. Xxx xxx xxxx xxxx XXX xxx xx xxxxx:…(139 bytes)",
+  "call.host": "api.openai.com",
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "baabb9d5fcb8994e40e5e0face57eeaa",
+  "call.key_hint": "sk-pro…OPEN",
+  "call.kind": "account",
+  "call.method": "POST",
+  "call.model": "gpt-4o-mini",
+  "call.path": "/v1/chat/completions",
+  "call.status": 401,
+  "call.user_agent": "curl/8.7.1",
+  "convo.format": "openai_chat",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 23
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "convo.new": [
+    0
+  ],
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "complete"
+  ],
+  "on_call_complete.call.client.user_agent": "curl/8.7.1",
+  "on_call_complete.call.host": "api.openai.com",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "baabb9d5fcb8994e40e5e0face57eeaa",
+  "on_call_complete.call.identity.key_hint": "sk-pro…OPEN",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/v1/chat/completions",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.model": "gpt-4o-mini",
+  "on_call_complete.response.error": "invalid_request_error: Xxxxxxxxx XXX xxx xxxxxxxx: xx-xxxx-xxxx. Xxx xxx xxxx xxxx XXX xxx xx xxxxx:…(139 bytes)",
+  "on_call_complete.response.model": "gpt-4o-mini",
+  "on_call_complete.response.status": 401,
+  "on_call_start.call.client.headers.user-agent": "curl/8.7.1",
+  "on_call_start.call.client.user_agent": "curl/8.7.1",
+  "on_call_start.call.host": "api.openai.com",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "baabb9d5fcb8994e40e5e0face57eeaa",
+  "on_call_start.call.identity.key_hint": "sk-pro…OPEN",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/v1/chat/completions",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.model": "gpt-4o-mini",
+  "on_request.format": "openai_chat",
+  "on_request.messages": [
+    {
+      "id": "dff255aa7775841b2d778911580ea01c",
+      "parts": [
+        {
+          "id": "dff255aa7775841b2d778911580ea01c/0",
+          "size": "23",
+          "text": {
+            "text": "xxxx xxx xxxxx xxxxx xx"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    }
+  ],
+  "on_request.total_messages": 1,
+  "row.client.user-agent": "curl/8.7.1",
+  "row.error": "invalid_request_error: Xxxxxxxxx XXX xxx xxxxxxxx: xx-xxxx-xxxx. Xxx xxx xxxx xxxx XXX xxx xx xxxxx:…(139 bytes)",
+  "row.host": "api.openai.com",
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "baabb9d5fcb8994e40e5e0face57eeaa",
+  "row.key_hint": "sk-pro…OPEN",
+  "row.method": "POST",
+  "row.model": "gpt-4o-mini",
+  "row.path": "/v1/chat/completions",
+  "row.provider.x-request-id": "req_x000x0xx0x0x0x0x0000000xxx000xx2",
+  "row.status": 401
+}

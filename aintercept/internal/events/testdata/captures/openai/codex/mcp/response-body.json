@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2025-06-18","capabilities":{"resources":{"subscribe":false,"listChanged":false},"tools":{"listChanged":false},"extensions":{"io.modelcontextprotocol/ui":{}}},"serverInfo":{"name":"xxxxxx-xxxxxxx","version":"0.1.0"}}}

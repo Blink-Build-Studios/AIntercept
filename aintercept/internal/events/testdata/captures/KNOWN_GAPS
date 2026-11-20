@@ -1,0 +1,31 @@
+# What the capture corpus doesn't cover yet, and why. One gap per line:
+#
+#   shape <provider>/<client>/<shape>: <why there is no case>
+#   field <field>: <why no case asserts it>
+#   field <provider>:<field>: <why that provider's cases don't>
+#
+# TestCorpusCoverage (internal/extproc) fails on a gap that isn't listed here,
+# and on a listed gap a case now covers. Never fake a capture to close one: add
+# the case when real traffic shows the shape (docs/PROVIDERS.md, "Adding a case").
+
+# Errors no capture holds.
+shape anthropic/claude-code/error-429: every 429 captured (curl load tests, one Claude Code call) was recorded content-free, without its body
+shape anthropic/claude-code/error-529: no 529 (overloaded) in any capture
+shape anthropic/claude-code/error-midstream: no event stream that ends in an error event in any capture
+shape openai/codex/error-ws: no response.failed or error event on a Codex WebSocket in any capture (model-ws-interrupted is the only turn that didn't complete)
+
+# Gemini: the captures hold only the observer's own probes of the host.
+shape gemini/api/model-generate: no Gemini traffic in any capture (only the observer's probes)
+shape gemini/api/model-stream: no Gemini traffic in any capture (only the observer's probes)
+
+# Web and desktop chat (claude.ai, ChatGPT) are deferred (docs/PROVIDERS.md).
+field row.web_chat: web and desktop chat (claude.ai, ChatGPT) are deferred
+field client_events.email: only ChatGPT web's analytics name the person (web chat is deferred)
+field client_events.user_id: only ChatGPT web's analytics name the person (web chat is deferred)
+
+# Fields no real call has set.
+field client_events.new_fields: the client-event registry knows every field the corpus's events carry (make client-event-registry absorbs new ones)
+field on_call_start.call.identity.account_mismatch: no capture has a client reporting an account other than its credential's owner
+field on_call_complete.call.identity.account_mismatch: no capture has a client reporting an account other than its credential's owner
+field on_call_start.request.prewarm: Codex prewarms only on its WebSocket, where OnCallStart is the upgrade request (no body); no HTTP prewarm was captured
+field gemini:row.error: no Gemini traffic in any capture (only the observer's probes)

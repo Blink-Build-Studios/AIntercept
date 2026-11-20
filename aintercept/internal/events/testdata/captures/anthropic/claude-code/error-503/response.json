@@ -1,0 +1,12 @@
+{
+  "status": 503,
+  "headers": {
+    ":status": "503",
+    "content-length": "95",
+    "content-type": "text/plain"
+  },
+  "body": "response-body.txt",
+  "chunks": [
+    95
+  ]
+}

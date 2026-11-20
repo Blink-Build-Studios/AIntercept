@@ -1,0 +1,30 @@
+{
+  "method": "POST",
+  "host": "api.anthropic.com",
+  "path": "/api/event_logging/v2/batch",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "POST",
+    ":path": "/api/event_logging/v2/batch",
+    ":scheme": "https",
+    "accept": "application/json, text/plain, */*",
+    "anthropic-beta": "oauth-2025-04-20",
+    "authorization": "<redacted>",
+    "content-length": "1989",
+    "content-type": "application/json",
+    "user-agent": "claude-code/2.1.319",
+    "x-forwarded-proto": "https",
+    "x-service-name": "claude-code"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "anthropic_oauth"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    1989,
+    0
+  ]
+}

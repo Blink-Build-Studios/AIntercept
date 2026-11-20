@@ -1,0 +1,25 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000005-XXX",
+    "content-encoding": "br",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Mon, 02 Nov 2026 20:03:41 GMT",
+    "request-id": "req_000XxxxXXxX0XXxXXx0XxXx3",
+    "server": "cloudflare",
+    "server-timing": "x-xxxxxxXxxxxxx4;xxx=00",
+    "vary": "Accept-Encoding",
+    "x-robots-tag": "none"
+  },
+  "encoding": "br",
+  "body": "response-body.json",
+  "chunks": [
+    8192,
+    8192,
+    3869,
+    0
+  ]
+}

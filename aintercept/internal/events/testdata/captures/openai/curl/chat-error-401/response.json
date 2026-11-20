@@ -1,0 +1,26 @@
+{
+  "status": 401,
+  "headers": {
+    ":status": "401",
+    "access-control-expose-headers": "XX-Xxx,XX-Xxx",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000003-XXX",
+    "content-length": "258",
+    "content-type": "text/plain",
+    "date": "Tue, 10 Nov 2026 21:19:52 GMT",
+    "server": "cloudflare",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-error-json": "ewogICJlcnJvciI6IHsKICAgICJtZXNzYWdlIjogIlh4eHh4eHh4eCBYWFggeHh4IHh4eHh4eHh4OiB4eC14eHh4LXh4eHguIFh4eCB4eHggeHh4eCB4eHh4IFhYWCB4eHggeHggeHh4eHg6Ly94eHh4eHh4eC54eHh4eHgueHh4L3h4eHh4eHgveHh4LXh4eHguIiwKICAgICJ0eXBlIjogImludmFsaWRfcmVxdWVzdF9lcnJvciIsCiAgICAiY29kZSI6ICJpbnZhbGlkX2FwaV9rZXkiLAogICAgInBhcmFtIjogbnVsbAogIH0sCiAgInN0YXR1cyI6IDQwMQp9",
+    "x-openai-authorization-error": "401",
+    "x-openai-ide-error-code": "xxxxxxx_xxx_xxx",
+    "x-openai-internal-caller": "xxxxxxx_xxxxxxx_xxx",
+    "x-request-id": "req_x000x0xx0x0x0x0x0000000xxx000xx2"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    258,
+    0
+  ]
+}

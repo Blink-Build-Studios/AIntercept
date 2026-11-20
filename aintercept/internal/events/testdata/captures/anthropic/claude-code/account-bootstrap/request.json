@@ -1,0 +1,26 @@
+{
+  "method": "GET",
+  "host": "api.anthropic.com",
+  "path": "/api/claude_cli/bootstrap?entrypoint=claude-desktop&model=claude-fable-5",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "GET",
+    ":path": "/api/claude_cli/bootstrap?entrypoint=claude-desktop&model=claude-fable-5",
+    ":scheme": "https",
+    "accept": "application/json, text/plain, */*",
+    "accept-encoding": "gzip, compress, deflate, br",
+    "anthropic-beta": "oauth-2025-04-20",
+    "anthropic-client-platform": "xxxxxxx_xxx",
+    "anthropic-client-version": "4.23118.1",
+    "authorization": "<redacted>",
+    "content-type": "application/json",
+    "user-agent": "claude-code/2.1.321",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "anthropic_oauth"
+  }
+}

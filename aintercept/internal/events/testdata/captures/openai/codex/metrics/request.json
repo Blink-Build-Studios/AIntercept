@@ -1,0 +1,22 @@
+{
+  "method": "POST",
+  "host": "ab.chatgpt.com",
+  "path": "/otlp/v1/metrics",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "ab.chatgpt.com",
+    ":method": "POST",
+    ":path": "/otlp/v1/metrics",
+    ":scheme": "https",
+    "accept": "*/*",
+    "content-length": "13536",
+    "content-type": "application/json",
+    "statsig-api-key": "client-XxXxxxXXXx0xxxxxXXxXXX0XxXxX00Xxxx0xx0XXXX2",
+    "user-agent": "OTel-OTLP-Exporter-Rust/0.31.0",
+    "x-forwarded-proto": "https"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    13536
+  ]
+}

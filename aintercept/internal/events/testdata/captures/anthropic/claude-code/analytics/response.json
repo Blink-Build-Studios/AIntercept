@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "accept-encoding": "zstd,gzip",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "0000000000000003-XXX",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Wed, 11 Nov 2026 15:34:10 GMT",
+    "request-id": "req_000XxxXXX0XxxxXxxxXxxxx4",
+    "server": "cloudflare",
+    "server-timing": "x-xxxxxxXxxxxxx2;xxx=00",
+    "vary": "Accept-Encoding",
+    "x-robots-tag": "none"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    39,
+    0
+  ]
+}

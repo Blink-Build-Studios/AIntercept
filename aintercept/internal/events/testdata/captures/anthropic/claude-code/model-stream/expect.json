@@ -1,0 +1,201 @@
+{
+  "call.agent_id": "00000000000000002",
+  "call.client": "cli",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000003",
+  "call.client_version": "2.1.327",
+  "call.device_id": "000000000000000000000000000000000000000000000000000000000000000d",
+  "call.effort": "low",
+  "call.host": "api.anthropic.com",
+  "call.input_tokens": 1008,
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "call.key_hint": "sk-ant…OAAA",
+  "call.kind": "model",
+  "call.message_id": "msg_000Xx0xXx0xxx0xXX0xX0x15",
+  "call.method": "POST",
+  "call.model": "claude-haiku-5-5",
+  "call.model_call": true,
+  "call.output_tokens": 13,
+  "call.path": "/v1/messages?beta=true",
+  "call.person_id": "00000000-0000-4000-8000-00000000000e",
+  "call.product": "claude_code",
+  "call.prompt_id": "00000000-0000-4000-8000-000000000005",
+  "call.request_class": "auxiliary",
+  "call.request_id": "req_000Xx0xXxxXx0XXXxxXxxXx8",
+  "call.service_tier": "standard",
+  "call.session_id": "00000000-0000-4000-8000-000000000004",
+  "call.status": 200,
+  "call.stop_reason": "end_turn",
+  "call.stream": true,
+  "call.user_agent": "claude-cli/2.1.327 (external, cli)",
+  "convo.format": "anthropic_messages",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 1925
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "convo.new": [
+    0
+  ],
+  "detail.prompt": "<xxxx>\nXxxx /xxx/xxxxxxx-xxxx-0000x-xxxx/xxxxx/xxxxxx-xxxxxxxx.xx xxx xxxxxx xx xxxxxxx. Xx xxxxxxxx…(1925 bytes)",
+  "detail.promptChars": 1923,
+  "detail.said": [
+    {
+      "role": "user",
+      "text": "<xxxx>\nXxxx /xxx/xxxxxxx-xxxx-0000x-xxxx/xxxxx/xxxxxx-xxxxxxxx.xx xxx xxxxxx xx xxxxxxx. Xx xxxxxxxx…(1925 bytes)"
+    }
+  ],
+  "detail.text": "Xxxxxxx xxxxxxx.xx xx xxxxxx",
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "reply",
+    "reply",
+    "complete"
+  ],
+  "on_call_complete.call.client.product": "claude_code",
+  "on_call_complete.call.client.user_agent": "claude-cli/2.1.327 (external, cli)",
+  "on_call_complete.call.host": "api.anthropic.com",
+  "on_call_complete.call.identity.device_id": "000000000000000000000000000000000000000000000000000000000000000d",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_complete.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-00000000000e",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/v1/messages?beta=true",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.effort": "low",
+  "on_call_complete.request.max_tokens": 2108,
+  "on_call_complete.request.model": "claude-haiku-5-5",
+  "on_call_complete.request.stream": true,
+  "on_call_complete.response.input_tokens": "1008",
+  "on_call_complete.response.model": "claude-haiku-5-5",
+  "on_call_complete.response.output_tokens": "13",
+  "on_call_complete.response.status": 200,
+  "on_call_complete.response.stop_reason": "end_turn",
+  "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.327 (external, cli)",
+  "on_call_start.call.client.headers.x-app": "cli",
+  "on_call_start.call.client.headers.x-claude-code-agent-id": "00000000000000002",
+  "on_call_start.call.client.headers.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000005",
+  "on_call_start.call.client.headers.x-claude-code-request-class": "auxiliary",
+  "on_call_start.call.client.headers.x-claude-code-session-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-stainless-arch": "x64",
+  "on_call_start.call.client.headers.x-stainless-lang": "js",
+  "on_call_start.call.client.headers.x-stainless-os": "Linux",
+  "on_call_start.call.client.headers.x-stainless-package-version": "0.128.0",
+  "on_call_start.call.client.headers.x-stainless-runtime": "node",
+  "on_call_start.call.client.headers.x-stainless-runtime-version": "v26.12.1",
+  "on_call_start.call.client.product": "claude_code",
+  "on_call_start.call.client.user_agent": "claude-cli/2.1.327 (external, cli)",
+  "on_call_start.call.host": "api.anthropic.com",
+  "on_call_start.call.identity.device_id": "000000000000000000000000000000000000000000000000000000000000000d",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "on_call_start.call.identity.key_hint": "sk-ant…OAAA",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-00000000000e",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.effort": "low",
+  "on_call_start.request.max_tokens": 2108,
+  "on_call_start.request.model": "claude-haiku-5-5",
+  "on_call_start.request.stream": true,
+  "on_reply.1.message": {
+    "id": "msg_000Xx0xXx0xxx0xXX0xX0x15:0",
+    "parts": [
+      {
+        "id": "msg_000Xx0xXx0xxx0xXX0xX0x15:0/0",
+        "size": "21",
+        "text": {
+          "text": "Xxxxxxx xxxxxxx.xx xx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.2.message": {
+    "id": "msg_000Xx0xXx0xxx0xXX0xX0x15:0",
+    "parts": [
+      {
+        "id": "msg_000Xx0xXx0xxx0xXX0xX0x15:0/0",
+        "size": "7",
+        "text": {
+          "text": " xxxxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.2.released": "Xxxxxxx xxxxxxx.xx xx",
+  "on_request.format": "anthropic_messages",
+  "on_request.messages": [
+    {
+      "id": "fef4855a5b327fb117e7631336a1f99c",
+      "parts": [
+        {
+          "id": "fef4855a5b327fb117e7631336a1f99c/0",
+          "size": "1925",
+          "text": {
+            "text": "<xxxx>\nXxxx /xxx/xxxxxxx-xxxx-0000x-xxxx/xxxxx/xxxxxx-xxxxxxxx.xx xxx xxxxxx xx xxxxxxx. Xx xxxxxxxx…(1925 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    }
+  ],
+  "on_request.total_messages": 1,
+  "row.account_uuid": "00000000-0000-4000-8000-00000000000e",
+  "row.client.user-agent": "claude-cli/2.1.327 (external, cli)",
+  "row.client.x-app": "cli",
+  "row.client.x-claude-code-agent-id": "00000000000000002",
+  "row.client.x-claude-code-prompt-id": "00000000-0000-4000-8000-000000000005",
+  "row.client.x-claude-code-request-class": "auxiliary",
+  "row.client.x-claude-code-session-id": "00000000-0000-4000-8000-000000000004",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-stainless-arch": "x64",
+  "row.client.x-stainless-lang": "js",
+  "row.client.x-stainless-os": "Linux",
+  "row.client.x-stainless-package-version": "0.128.0",
+  "row.client.x-stainless-runtime": "node",
+  "row.client.x-stainless-runtime-version": "v26.12.1",
+  "row.device_id": "000000000000000000000000000000000000000000000000000000000000000d",
+  "row.effort": "low",
+  "row.host": "api.anthropic.com",
+  "row.inference_geo": "global",
+  "row.input_tokens": 1008,
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "532733f9c6a9498e19d283d2c20e7de2",
+  "row.key_hint": "sk-ant…OAAA",
+  "row.max_tokens": 2108,
+  "row.message_id": "msg_000Xx0xXx0xxx0xXX0xX0x15",
+  "row.method": "POST",
+  "row.model": "claude-haiku-5-5",
+  "row.output_tokens": 13,
+  "row.path": "/v1/messages?beta=true",
+  "row.provider.anthropic-ratelimit-unified-7d-utilization": "0.86",
+  "row.provider.anthropic-ratelimit-unified-fallback-percentage": "0.5",
+  "row.provider.anthropic-ratelimit-unified-overage-status": "rejected",
+  "row.provider.anthropic-ratelimit-unified-representative-claim": "seven_day",
+  "row.provider.anthropic-ratelimit-unified-status": "allowed_warning",
+  "row.provider.anthropic-workspace-id": "wrkspc_000XXXXXxX00XXXX0XxXXXx6",
+  "row.provider.request-id": "req_000Xx0xXxxXx0XXXxxXxxXx8",
+  "row.provider_org_id": "00000000-0000-4000-8000-00000000000b",
+  "row.service_tier": "standard",
+  "row.session_id": "00000000-0000-4000-8000-000000000004",
+  "row.speed": "standard",
+  "row.status": 200,
+  "row.stop_reason": "end_turn",
+  "row.stream": true,
+  "row.user_id": "{\"device_id\":\"000000000000000000000000000000000000000000000000000000000000000d\",\"account_uuid\":\"0000…(186 bytes)"
+}

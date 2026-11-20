@@ -1,0 +1,8 @@
+{
+  "provider": "openai",
+  "client": "curl",
+  "api": "openai_responses",
+  "client_version": "8.5.0",
+  "shape": "responses-error-401",
+  "captured": "2026-11-09"
+}

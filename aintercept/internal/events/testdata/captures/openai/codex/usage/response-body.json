@@ -1,0 +1,50 @@
+{
+  "user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx04",
+  "account_id": "00000000-0000-4000-8000-000000000002",
+  "email": "person5@example.com",
+  "plan_type": "pro",
+  "rate_limit": {
+    "allowed": true,
+    "limit_reached": false,
+    "primary_window": {
+      "used_percent": 51,
+      "limit_window_seconds": 604800,
+      "reset_after_seconds": 28,
+      "reset_at": 1794424601
+    },
+    "secondary_window": null
+  },
+  "code_review_rate_limit": null,
+  "additional_rate_limits": null,
+  "model_usage": {
+    "gpt-6-astra": {
+      "available": true,
+      "available_at": null,
+      "credits_would_enable": false
+    }
+  },
+  "credits": {
+    "has_credits": true,
+    "unlimited": false,
+    "overage_limit_reached": false,
+    "balance": "50652.1999150000",
+    "approx_local_messages": [
+      12663,
+      65848
+    ],
+    "approx_cloud_messages": [
+      2026,
+      12663
+    ]
+  },
+  "spend_control": {
+    "reached": false,
+    "individual_limit": null
+  },
+  "rate_limit_reached_type": null,
+  "promo": null,
+  "rate_limit_reset_credits": {
+    "available_count": 2,
+    "applicable_available_count": 0
+  }
+}
