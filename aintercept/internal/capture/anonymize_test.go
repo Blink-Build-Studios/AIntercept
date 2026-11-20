@@ -241,7 +241,9 @@ func TestAnonymizerCodex(t *testing.T) {
 		`{"type":"reasoning","id":"rs_PlantedReasoning0001","summary":[],"encrypted_content":"` + base64.StdEncoding.EncodeToString(reasoning) + `"},` +
 		`{"type":"function_call","name":"exec_command","call_id":"call_PlantedCallId0001","arguments":` + string(args) + `},` +
 		`{"type":"function_call_output","call_id":"call_PlantedCallId0001","output":"{\"output\":\"` + p("path") + `\",\"metadata\":{\"exit_code\":2}}"}],` +
-		`"prompt_cache_key":"` + p("session") + `","client_metadata":` + string(meta) + `,"cookies":"__Secure-next-auth.session-token=` + p("cookie") + `"}`
+		`"prompt_cache_key":"` + p("session") + `","client_metadata":` + string(meta) + `,"cookies":"__Secure-next-auth.session-token=` + p("cookie") + `",` +
+		`"grants":{"` + p("account") + `:deploy":true},"connectors":[{"type":"remote","name":"` + p("secret_word") + `",` +
+		`"access":{"service":"` + p("host") + `","type":"sends_data_to"}}]}`
 	ev := func(data string) string { return "event: x\ndata: " + data + "\n\n" }
 	argPieces := []string{`{"cmd":"cat `, p("path"), `"}`}
 	resp := ev(`{"type":"response.created","response":{"id":"resp_PlantedResponse0001","model":"gpt-6.1-sol","status":"in_progress"}}`)

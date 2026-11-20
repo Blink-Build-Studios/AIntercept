@@ -140,6 +140,7 @@ func (a *Anonymizer) SSE(body []byte) ([]byte, error) {
 	for i, l := range lines {
 		d, ok := strings.CutPrefix(l, "data:")
 		if !ok {
+			lines[i] = a.sseLine(l)
 			continue
 		}
 		d = strings.TrimSpace(d)
@@ -163,12 +164,32 @@ func (a *Anonymizer) SSE(body []byte) ([]byte, error) {
 		trail := l[len(strings.TrimRight(l, "\r\n")):]
 		lines[i] = lead + string(out[j]) + trail
 	}
-	for i, l := range lines {
-		if strings.HasPrefix(l, "id:") {
-			lines[i] = "id: " + a.ID(strings.TrimSpace(strings.TrimPrefix(l, "id:"))) + "\n"
+	return []byte(strings.Join(lines, "")), nil
+}
+
+// sseLine is an event stream's line other than data: an event name kept
+// when it reads as one, comments, ids and anything else replaced.
+func (a *Anonymizer) sseLine(l string) string {
+	body := strings.TrimRight(l, "\r\n")
+	trail := l[len(body):]
+	switch {
+	case body == "":
+		return l
+	case strings.HasPrefix(body, "event:"):
+		if name := strings.TrimSpace(strings.TrimPrefix(body, "event:")); !enumLike(name) {
+			return "event: " + a.Text(name) + trail
+		}
+		return l
+	case strings.HasPrefix(body, "retry:"):
+		return l
+	case strings.HasPrefix(body, "id:"):
+		return "id: " + a.ID(strings.TrimSpace(strings.TrimPrefix(body, "id:"))) + trail
+	case json.Valid([]byte(body)):
+		if b, err := a.JSON([]byte(body)); err == nil {
+			return string(b) + trail
 		}
 	}
-	return []byte(strings.Join(lines, "")), nil
+	return a.Text(body) + trail
 }
 
 // Body anonymizes a decoded body by its content type: an event stream, JSON,

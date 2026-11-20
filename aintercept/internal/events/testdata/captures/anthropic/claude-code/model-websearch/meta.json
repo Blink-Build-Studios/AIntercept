@@ -4,5 +4,6 @@
   "api": "anthropic_messages",
   "client_version": "2.1.326",
   "shape": "model-websearch",
-  "captured": "2026-11-19"
+  "captured": "2026-11-19",
+  "notes": "Captured from the Claude desktop app, which runs Claude Code through its SDK."
 }

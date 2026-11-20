@@ -129,8 +129,8 @@ func isHex(c rune) bool { return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' ||
 
 // ID is a whole value that is one identifier, as a fake of the same shape.
 func (a *Anonymizer) ID(s string) string {
-	if s == "" || s == redacted {
-		return s
+	if s == "" || s == redacted || strings.Trim(s, "0-.:") == "" || reModel.MatchString(s) {
+		return s // all zeros (an unset trace id), or a model's name
 	}
 	switch {
 	case reUUID.MatchString(s) && len(s) == 36:
@@ -393,8 +393,28 @@ var b64Keys = set("data", "signature", "encrypted_content", "encrypted_output", 
 
 // toolMarkers are keys beside a "name" that make it a tool's, function's or
 // metric's name (structure) rather than a person's or an organization's.
-var toolMarkers = set("type", "input_schema", "parameters", "arguments", "input", "unit", "sum", "gauge",
+var toolMarkers = set("input_schema", "parameters", "arguments", "input", "unit", "sum", "gauge",
 	"histogram", "dataPoints", "server_name", "call_id")
+
+// toolTypes are the "type" values of a tool, a call of one, or a namespace of
+// them: the "name" beside one is the tool's. (A directory's or a person's list
+// of connectors also has types and names: those are replaced.)
+var toolTypes = set("tool_use", "server_tool_use", "mcp_tool_use", "function_call", "custom_tool_call", "mcp_call",
+	"function", "custom", "namespace", "tool_reference", "tool", "web_search_call", "local_shell_call", "json_schema")
+
+// reServerTool is a provider's versioned server tool type (advisor_20260301).
+var reServerTool = regexp.MustCompile(`^[a-z_]+_\d{8}$`)
+
+// toolName is whether a "name" sits in a tool's object.
+func toolName(n *node) bool {
+	if hasAny(n.siblings, toolMarkers) {
+		return true
+	}
+	t := n.siblings["type"]
+	return toolTypes[t] || reServerTool.MatchString(t) || strings.HasPrefix(t, "web_search_") || strings.HasPrefix(t, "web_fetch_") ||
+		strings.HasPrefix(t, "code_execution_") || strings.HasPrefix(t, "bash_") || strings.HasPrefix(t, "text_editor_") ||
+		strings.HasPrefix(t, "computer_") || strings.HasPrefix(t, "memory_") || strings.HasPrefix(t, "tool_search_")
+}
 
 func set(ks ...string) map[string]bool {
 	m := map[string]bool{}
@@ -413,7 +433,7 @@ func (a *Anonymizer) str(n *node, s string) string {
 	switch {
 	case k == "user_id" && n.under("metadata"):
 		return a.userID(s)
-	case k == "name" && hasAny(n.siblings, toolMarkers):
+	case k == "name" && toolName(n):
 		return a.ToolName(s)
 	case k == "server_name" || k == "server_label":
 		return a.mcpPart(s)
@@ -455,13 +475,15 @@ func (a *Anonymizer) str(n *node, s string) string {
 func (a *Anonymizer) key(s string) string {
 	switch {
 	case strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~") || strings.Contains(s, `:\`) || strings.Contains(s, "@") ||
-		strings.Contains(s, "://"):
+		strings.Contains(s, "://") || reDomain.MatchString(s):
 		return a.Default(s)
 	case reUUID.FindString(s) == s || reHex.FindString(s) == s && len(s) >= 16 || reDigits.FindString(s) == s ||
 		rePrefixed.FindString(s) == s && randomish(s):
 		return a.ID(s)
 	case strings.HasPrefix(s, "mcp__"):
 		return a.ToolName(s)
+	case reUUID.MatchString(s) || reEmail.MatchString(s) || reHex.MatchString(s) || reIPv4.MatchString(s):
+		return a.tokens(s, a.glue) // ids inside a key (<uuid>:<tool>)
 	}
 	return s
 }
@@ -567,7 +589,7 @@ func (a *Anonymizer) userID(s string) string {
 func (a *Anonymizer) ToolName(s string) string {
 	rest, ok := strings.CutPrefix(s, "mcp__")
 	if !ok {
-		if looksSecret(s) || strings.ContainsAny(s, " /@") {
+		if looksSecret(s) || strings.ContainsAny(s, " /@") || reDomain.MatchString(s) {
 			return a.Default(s)
 		}
 		return s
@@ -590,9 +612,12 @@ func (a *Anonymizer) mcpPart(s string) string {
 // enumLike is a value that reads as structure: one short token, not a path,
 // an address or a credential.
 func enumLike(s string) bool {
-	return len(s) <= 64 && !strings.ContainsAny(s, " \t\n@\\~") && !looksSecret(s) &&
+	return len(s) <= 64 && !strings.ContainsAny(s, " \t\n@\\~") && !looksSecret(s) && !reDomain.MatchString(s) &&
 		!strings.HasPrefix(s, "/Users/") && !strings.HasPrefix(s, "/home/") && strings.Count(s, "/") <= 2
 }
+
+// reDomain is a value that names a host (example.com, mcp.example.io).
+var reDomain = regexp.MustCompile(`(?i)\b[a-z0-9-]+\.(com|net|org|io|ai|dev|app|co|so|sh|us|uk|de|fr|jp|cn|me|tv|info|edu|gov|xyz|cloud|gg|site|tech|ly|to|cc|in|eu)\b`)
 
 // B64 is a base64 blob (or a data: URL) as the same length of valid base64:
 // JSON inside is anonymized and re-encoded, anything else is zeros.

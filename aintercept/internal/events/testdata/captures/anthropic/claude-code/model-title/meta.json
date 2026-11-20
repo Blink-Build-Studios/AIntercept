@@ -4,5 +4,6 @@
   "api": "anthropic_messages",
   "client_version": "2.1.308",
   "shape": "model-title",
-  "captured": "2026-11-11"
+  "captured": "2026-11-11",
+  "notes": "Claude Code's <session> side request that names the session."
 }

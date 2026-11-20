@@ -8,5 +8,5 @@
   "turns": [
     2
   ],
-  "notes": "Arrays longer than 18 elements are cut to their first and last 9 (capture-fixture -trim 9): the shape doesn't depend on their length."
+  "notes": "A forked subagent's first turn: it carries the parent's history, tool calls included, after previous_response_id. Arrays longer than 18 elements are cut to their first and last 9 (capture-fixture -trim 9): the shape doesn't depend on their length."
 }

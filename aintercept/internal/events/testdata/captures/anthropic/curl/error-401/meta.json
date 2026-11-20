@@ -4,5 +4,6 @@
   "api": "anthropic_messages",
   "client_version": "8.7.1",
   "shape": "error-401",
-  "captured": "2026-11-03"
+  "captured": "2026-11-03",
+  "notes": "A request made with curl and a bad key: the API's own 401."
 }

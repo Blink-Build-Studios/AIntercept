@@ -4,5 +4,6 @@
   "api": "anthropic_messages",
   "client_version": "2.1.327",
   "shape": "error-503",
-  "captured": "2026-11-18"
+  "captured": "2026-11-18",
+  "notes": "The proxy's own upstream error (text, not the API's JSON)."
 }

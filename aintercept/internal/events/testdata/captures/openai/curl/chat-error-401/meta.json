@@ -4,5 +4,6 @@
   "api": "openai_chat_completions",
   "client_version": "8.7.1",
   "shape": "chat-error-401",
-  "captured": "2026-11-10"
+  "captured": "2026-11-10",
+  "notes": "A request made with curl and a bad key: the Chat Completions API's own 401."
 }
