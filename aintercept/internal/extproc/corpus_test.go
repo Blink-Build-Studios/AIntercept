@@ -173,6 +173,7 @@ func replayCase(t *testing.T, c *capture.Case) map[string]any {
 	fake := &interceptortest.Fake{
 		Start: func(s *pb2.CallStart) *pb2.CallVerdict { starts = append(starts, s); return &pb2.CallVerdict{} },
 		Reply: func(*pb2.ResponseMessage) *pb2.MessageVerdict { return &pb2.MessageVerdict{} },
+		Turn:  func(*pb2.TurnStart) *pb2.CallVerdict { return &pb2.CallVerdict{} },
 	}
 	ic := interceptortest.NewClient(t, fake, interceptor.Config{Content: true, Deadline: 5 * time.Second}, nil)
 	sink := &memSink{}
@@ -582,6 +583,8 @@ func observeInterceptor(out map[string]any, f *interceptortest.Fake, starts []*p
 		}
 	}
 	list("on_call_start", protos(starts), "call.call_id", "call.start_unix_nano", "headers", "request.request_bytes")
+	// A turn's call is its connection's (OnCallStart's).
+	list("on_turn_start", protos(f.TurnsSeen()), "call", "request.request_bytes")
 	list("on_request", protos(reqs), "call")
 	list("on_tool_call", protos(f.ToolCallsSeen()), "call")
 	list("on_reply", protos(f.RepliesSeen()), "call")

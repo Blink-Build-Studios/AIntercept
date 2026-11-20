@@ -19,11 +19,13 @@
   "convo.prev": "resp_0x0x000xx00xx000000xx00x00x0x000x0xxx0xx0x0000x021",
   "interceptor.callbacks": [
     "start",
+    "turn",
     "request",
     "tool_call",
     "complete",
     "complete"
   ],
+  "on_call_complete.1.call.api": "API_CHATGPT_BACKEND",
   "on_call_complete.1.call.client.product": "codex",
   "on_call_complete.1.call.client.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
   "on_call_complete.1.call.host": "chatgpt.com",
@@ -39,13 +41,29 @@
   "on_call_complete.1.call.method": "GET",
   "on_call_complete.1.call.mode": "MODE_OBSERVE",
   "on_call_complete.1.call.path": "/backend-api/codex/responses",
+  "on_call_complete.1.call.provider": "PROVIDER_OPENAI",
   "on_call_complete.1.call.transport": "TRANSPORT_WEBSOCKET",
-  "on_call_complete.1.request.effort": "medium",
   "on_call_complete.1.request.model": "gpt-6.1-sol",
+  "on_call_complete.1.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "medium"
+    }
+  ],
   "on_call_complete.1.request.stream": true,
   "on_call_complete.1.response.cache_read_tokens": "19584",
   "on_call_complete.1.response.input_tokens": "20662",
   "on_call_complete.1.response.model": "gpt-6.1-sol",
+  "on_call_complete.1.response.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "medium"
+    },
+    {
+      "key": "OPTION_SERVICE_TIER",
+      "value": "auto"
+    }
+  ],
   "on_call_complete.1.response.output_tokens": "113",
   "on_call_complete.1.response.status": 101,
   "on_call_complete.1.response.stop_reason": "completed",
@@ -56,6 +74,7 @@
     }
   ],
   "on_call_complete.1.ws_turn": 1,
+  "on_call_complete.2.call.api": "API_CHATGPT_BACKEND",
   "on_call_complete.2.call.client.product": "codex",
   "on_call_complete.2.call.client.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
   "on_call_complete.2.call.host": "chatgpt.com",
@@ -71,8 +90,10 @@
   "on_call_complete.2.call.method": "GET",
   "on_call_complete.2.call.mode": "MODE_OBSERVE",
   "on_call_complete.2.call.path": "/backend-api/codex/responses",
+  "on_call_complete.2.call.provider": "PROVIDER_OPENAI",
   "on_call_complete.2.call.transport": "TRANSPORT_WEBSOCKET",
   "on_call_complete.2.response.status": 101,
+  "on_call_start.call.api": "API_CHATGPT_BACKEND",
   "on_call_start.call.client.headers.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
   "on_call_start.call.client.headers.openai-beta": "responses_websockets=2026-02-06",
   "on_call_start.call.client.headers.originator": "codex_exec",
@@ -99,6 +120,7 @@
   "on_call_start.call.method": "GET",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/backend-api/codex/responses",
+  "on_call_start.call.provider": "PROVIDER_OPENAI",
   "on_call_start.call.transport": "TRANSPORT_WEBSOCKET",
   "on_request.chained": true,
   "on_request.format": "openai_responses",
@@ -134,6 +156,15 @@
     ],
     "role": "ROLE_ASSISTANT"
   },
+  "on_turn_start.request.model": "gpt-6.1-sol",
+  "on_turn_start.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "medium"
+    }
+  ],
+  "on_turn_start.request.stream": true,
+  "on_turn_start.ws_turn": 1,
   "record.account": {
     "account_id": "00000000-0000-4000-8000-000000000002",
     "email": "person9@example.com",

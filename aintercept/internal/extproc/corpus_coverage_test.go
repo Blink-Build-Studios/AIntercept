@@ -117,8 +117,29 @@ var corpusRequire = []struct {
 	// A real error in each API's own shape.
 	{APIs: []string{apiAnthropic, apiChatGPT, apiResponses, apiChat, apiGemini}, Fields: []string{"row.error"}},
 	// What every call has, whatever it is.
-	{Each: true, Fields: []string{"call.kind", "interceptor.callbacks"}},
+	{Each: true, Fields: []string{"call.kind", "interceptor.callbacks", "on_call_start.call.provider"}},
+	// The API, on every call that's on one.
+	{APIs: []string{apiAnthropic, apiChatGPT, apiResponses, apiChat, apiGemini}, Each: true, Fields: []string{"on_call_start.call.api"}},
+	// Options (docs/INTERCEPTOR.md): every key, on every API that carries it,
+	// asked for (the request) and reported (the response).
+	{APIs: []string{apiAnthropic}, Fields: []string{
+		reqOption("OPTION_EFFORT"), reqOption("OPTION_SPEED"), reqOption("OPTION_SERVICE_TIER"), reqOption("OPTION_THINKING"),
+		respOption("OPTION_SPEED"), respOption("OPTION_SERVICE_TIER"),
+	}},
+	{APIs: []string{apiChatGPT, apiResponses}, Fields: []string{
+		reqOption("OPTION_EFFORT"), reqOption("OPTION_SERVICE_TIER"), respOption("OPTION_EFFORT"), respOption("OPTION_SERVICE_TIER"),
+	}},
+	{APIs: []string{apiChatGPT}, Fields: []string{ // Codex's WebSocket: each request's, in OnTurnStart
+		"on_turn_start.request.options:OPTION_EFFORT", "on_turn_start.request.options:OPTION_SERVICE_TIER",
+	}},
+	{APIs: []string{apiChat}, Fields: []string{reqOption("OPTION_EFFORT"), reqOption("OPTION_SERVICE_TIER"), respOption("OPTION_SERVICE_TIER")}},
+	{APIs: []string{apiGemini}, Fields: []string{reqOption("OPTION_EFFORT")}},
 }
+
+// reqOption and respOption name an option asked for (OnCallStart) and
+// reported (OnCallComplete), as fieldsOf names them.
+func reqOption(k string) string  { return "on_call_start.request.options:" + k }
+func respOption(k string) string { return "on_call_complete.response.options:" + k }
 
 // Fields no call's row can hold (other rows' payloads, or set only outside
 // the observer), so they're not the corpus's to cover.
@@ -270,6 +291,10 @@ func fieldsOf(k string, v any) []string {
 				out = append(out, "on_request.messages.part:"+partKind(p))
 			}
 		}
+	case strings.HasSuffix(k, ".options"):
+		for _, o := range asList(v) {
+			out = append(out, k+":"+str(o.(map[string]any)["key"]))
+		}
 	case strings.HasPrefix(k, "on_reply.message") || strings.HasPrefix(k, "on_tool_call.message"):
 		for _, p := range asList(v.(map[string]any)["parts"]) {
 			out = append(out, k+".part:"+partKind(p))
@@ -330,6 +355,9 @@ func corpusCatalog() []string {
 	}
 	for _, f := range protoFields(&pb2.CallStart{}, "", "call.call_id", "call.start_unix_nano", "headers", "request.request_bytes") {
 		add("on_call_start." + f)
+	}
+	for _, f := range protoFields(&pb2.TurnStart{}, "", "call", "request.request_bytes") {
+		add("on_turn_start." + f)
 	}
 	for _, f := range protoFields(&pb2.CallRecord{}, "", "call.call_id", "call.start_unix_nano", "call.client.headers", "end_unix_nano",
 		"request.request_bytes", "response.response_bytes", "response.ttfb_ms", "response.duration_ms") {

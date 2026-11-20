@@ -52,6 +52,7 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     - { name: INTERCEPTOR_ENDPOINT, value: {{ .endpoint | quote }} }
     - { name: INTERCEPTOR_INLINE_LIMIT_BYTES, value: {{ .inlineLimitBytes | default 65536 | int | toString | quote }} }
     - { name: INTERCEPTOR_CONTENT, value: {{ .content | toString | quote }} }
+    - { name: INTERCEPTOR_TURNS, value: {{ .turns | default false | toString | quote }} }
     - { name: INTERCEPTOR_DEADLINE_MS, value: {{ .deadlineMs | toString | quote }} }
     - { name: INTERCEPTOR_ON_ERROR, value: {{ .onError | quote }} }
     {{- if .tls.enabled }}

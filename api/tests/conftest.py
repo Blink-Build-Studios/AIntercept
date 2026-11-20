@@ -7,14 +7,19 @@ checks the response but writes nothing. Run it through `make regen`, which
 regenerates spec.ts first.
 """
 
-import atexit
+import concurrent.futures
+import contextlib
+import fcntl
+import functools
+import gzip
+import hashlib
 import json
 import os
 import pathlib
 import re
 import shutil
 import subprocess
-import tempfile
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -76,56 +81,116 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 _binary: list[pathlib.Path] = []
 
 
+def _build(out: pathlib.Path) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["go", "build", "-o", str(out), "./cmd/aintercept"], cwd=REPO / "aintercept", check=True)  # noqa: S603, S607
+
+
+def pytest_configure(config):
+    """The run's one `aintercept` build: in the controlling process, before xdist starts its workers,
+    which use it (AINTERCEPT_TEST_BIN) rather than each building their own."""
+    if hasattr(config, "workerinput") or os.environ.get("AINTERCEPT_TEST_BIN"):
+        return
+    out = REPO / ".cache" / "test-bin" / "aintercept"
+    _build(out)
+    os.environ["AINTERCEPT_TEST_BIN"] = str(out)
+
+
 def aintercept_binary() -> pathlib.Path:
-    """The `aintercept` binary, built once per test session."""
+    """The `aintercept` binary: AINTERCEPT_TEST_BIN (the run's build, pytest_configure), else built
+    here once."""
     if not _binary:
-        # One output per xdist worker: workers build at once, and must not write the same file.
-        worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
-        default = REPO / ".cache" / "test-bin" / worker / "aintercept"
-        out = pathlib.Path(os.environ.get("AINTERCEPT_TEST_BIN") or default)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["go", "build", "-o", str(out), "./cmd/aintercept"], cwd=REPO / "aintercept", check=True)  # noqa: S603, S607
+        given = os.environ.get("AINTERCEPT_TEST_BIN")
+        out = pathlib.Path(given) if given else REPO / ".cache" / "test-bin" / "aintercept"
+        if not given or not out.exists():
+            _build(out)
         _binary.append(out)
     return _binary[0]
 
 
-_scratch: list[pathlib.Path] = []
-
-
-def _scratch_root() -> pathlib.Path:
-    """A directory for this session's raw files, removed at exit."""
-    if not _scratch:
-        _scratch.append(pathlib.Path(tempfile.mkdtemp(prefix="aintercept-v9-")))
-        atexit.register(shutil.rmtree, _scratch[0], True)
-    return _scratch[0]
-
-
-def load_v9(raw: pathlib.Path, dsn: str) -> pathlib.Path:
+def load_v9(raw: pathlib.Path, dsn: str, out: pathlib.Path) -> None:
     """v9's path over raw (docs/PIPELINE.md §2, §8 "In CI"): `aintercept canon -raw` writes the rows as v9
-    raw files through the observer's writer, and `canon -load -refresh 1` loads them into dsn as the
-    workers do (each call's member range on its row) with the rollups refreshed. Returns the raw files'
-    root: a call's raw_key is relative to it."""
-    out = pathlib.Path(tempfile.mkdtemp(dir=_scratch_root(), prefix="v9-"))
+    raw files into out through the observer's writer, and `canon -load -refresh 4` loads them into dsn as
+    the workers do (each call's member range on its row) with the rollups refreshed and checked against
+    the facts from scratch. A call's raw_key is relative to out."""
     binary = str(aintercept_binary())
-    subprocess.run([binary, "canon", "-src", str(raw), "-raw", str(out)], check=True, capture_output=True)  # noqa: S603
-    subprocess.run(  # noqa: S603
-        [binary, "canon", "-src", str(out), "-load", dsn, "-refresh", "1"], check=True, capture_output=True
-    )
-    return out
+    load = ["-src", str(out), "-load", dsn, "-refresh", "4", "-timings=false"]
+    for args in (["-src", str(raw), "-raw", str(out)], load):
+        r = subprocess.run([binary, "canon", *args], capture_output=True, text=True)  # noqa: S603
+        if r.returncode != 0:
+            raise RuntimeError(f"aintercept canon {' '.join(args)} failed:\n{r.stdout[-4000:]}{r.stderr[-4000:]}")
+
+
+# Each distinct dataset is loaded once, into a template database, and every test that loads it gets a
+# copy of that (CREATE DATABASE … TEMPLATE, a file copy). A template is named by what made it: the
+# `aintercept` build and the schema (its prefix), and the dataset's rows. xdist's workers share them
+# through a lock file per template; the test server keeps them between runs, so a run whose code and
+# data didn't change loads nothing, and the controller drops an older build's (pytest_sessionstart).
+TEMPLATES = REPO / ".cache" / "test-templates"
+
+
+@functools.cache
+def build_key() -> str:
+    """What every load depends on but the data: the `aintercept` build and the schema."""
+    h = hashlib.sha256(aintercept_binary().read_bytes())
+    h.update(pgdb.SCHEMA.read_bytes())
+    for m in sorted(pgdb.MIGRATIONS.iterdir()):
+        h.update(m.name.encode() + m.read_bytes())
+    return h.hexdigest()[:10]
+
+
+def dataset_key(root: pathlib.Path) -> str:
+    """The dataset's rows: each file's path and decompressed content (gzip stamps the time it wrote)."""
+    h = hashlib.sha256()
+    for f in sorted(p for p in root.rglob("*") if p.is_file()):
+        h.update(str(f.relative_to(root)).encode() + b"\0")
+        data = f.read_bytes()
+        h.update(gzip.decompress(data) if f.suffix == ".gz" else data)
+    return h.hexdigest()[:20]
+
+
+def template_for(admin: str, root: pathlib.Path) -> tuple[str, pathlib.Path]:
+    """The template database holding root's dataset, and its raw files' root, made the first time."""
+    name = f"tpl_{build_key()}_{dataset_key(root)}"
+    out = TEMPLATES / name
+    TEMPLATES.mkdir(parents=True, exist_ok=True)
+    with open(TEMPLATES / f"{name}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        done = out / ".done"
+        if not (done.exists() and pgdb.database_exists(admin, name)):
+            shutil.rmtree(out, ignore_errors=True)
+            out.mkdir(parents=True)
+            load_v9(root, pgdb.create_template(admin, name), out)
+            pgdb.seal_template(admin, name)
+            done.touch()
+        os.utime(TEMPLATES / f"{name}.lock")  # in use: not dropped as stale
+    return name, out
+
+
+def pytest_sessionstart(session):
+    """The controller drops the templates an older build made and nothing used for an hour (each is
+    the test server's memory; one a concurrent run still uses is kept)."""
+    admin = pgdb.admin_dsn()
+    if not admin or hasattr(session.config, "workerinput"):
+        return
+    prefix = f"tpl_{build_key()}_"
+
+    def keep(name: str) -> bool:
+        lock = TEMPLATES / f"{name}.lock"
+        return name.startswith(prefix) or lock.exists() and time.time() - lock.stat().st_mtime < 3600
+
+    with contextlib.suppress(Exception):
+        pgdb.drop_templates(admin, keep)
 
 
 class PgDataset:
-    """A dataset in a fresh Postgres of its own: its facts and rollups (load_v9), and the raw files the
-    drawer's ranged GETs read."""
+    """A dataset in a fresh Postgres of its own: a copy of its template (its facts and rollups,
+    load_v9), and the raw files the drawer's ranged GETs read."""
 
     def __init__(self, admin: str, root: pathlib.Path) -> None:
-        self._db = pgdb.fresh_database(admin)
+        template, self.raw = template_for(admin, pathlib.Path(root))
+        self._db = pgdb.clone_database(admin, template)
         self.dsn = self._db.__enter__()
-        try:
-            self.raw = load_v9(root, self.dsn)
-        except BaseException:
-            self._db.__exit__(None, None, None)
-            raise
 
     def store(self, **kwargs: Any) -> Any:
         from aintercept_api.pgstore import PgStore
@@ -134,6 +199,25 @@ class PgDataset:
 
     def close(self) -> None:
         self._db.__exit__(None, None, None)
+
+
+def pg_datasets(admin: str, roots: dict[str, pathlib.Path]) -> dict[str, PgDataset]:
+    """Each dataset root in a fresh Postgres of its own (PgDataset), loaded at once: each load is its own
+    database and its own `aintercept` processes."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(roots) or 1) as pool:
+        futures = {name: pool.submit(PgDataset, admin, root) for name, root in roots.items()}
+        out: dict[str, PgDataset] = {}
+        failure: BaseException | None = None
+        for name, f in futures.items():
+            try:
+                out[name] = f.result()
+            except BaseException as e:
+                failure = failure or e
+        if failure is not None:
+            for pg in out.values():
+                pg.close()
+            raise failure
+    return out
 
 
 def pg_admin() -> str:
@@ -198,11 +282,18 @@ def write_sample(request):
         _written[out] = request.node.nodeid
         out.parent.mkdir(parents=True, exist_ok=True)
         body = json.dumps(response.json(), indent=2, sort_keys=True)
-        out.write_text(
-            "// GENERATED by `make regen` from api/tests. Do not edit.\n"
-            'import type { components } from "../../spec";\n\n'
-            f'const sample: components["schemas"]["{schema}"] = {body};\n\n'
-            "export default sample;\n"
-        )
+        # Created, never overwritten: `make regen` empties the folder first and runs the tests in
+        # parallel, so a sample two tests write (in any two workers) fails here.
+        try:
+            f = out.open("x")
+        except FileExistsError:
+            pytest.fail(f"{out.name} already written by another test")
+        with f:
+            f.write(
+                "// GENERATED by `make regen` from api/tests. Do not edit.\n"
+                'import type { components } from "../../spec";\n\n'
+                f'const sample: components["schemas"]["{schema}"] = {body};\n\n'
+                "export default sample;\n"
+            )
 
     return write

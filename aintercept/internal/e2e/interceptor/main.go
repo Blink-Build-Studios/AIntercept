@@ -1,11 +1,14 @@
 // The Interceptor the end-to-end suite (internal/e2e, contract v2) runs: the
 // example rabbit's rules on the request, plus rules that prove the reply's
 // paths: tool calls held and answered or replaced, and reply text replaced
-// even when the phrase is split across streamed pieces. Built on package
-// intercept. Not shipped: test/interceptor's compose builds it.
+// even when the phrase is split across streamed pieces; and options: fast
+// mode and the priority tier refused with an Error, at call start and per
+// WebSocket turn. Built on package intercept. Not shipped:
+// test/interceptor's compose builds it.
 package main
 
 import (
+	"context"
 	"log"
 	"regexp"
 	"strconv"
@@ -42,4 +45,25 @@ func Rules() []intercept.Item {
 	}
 }
 
-func main() { log.Fatal(intercept.Run(Rules()...)) }
+// FastNotEnabled is Anthropic's own refusal of fast mode, which Claude Code
+// answers by retrying at standard speed.
+const FastNotEnabled = "Fast mode is not enabled for your organization."
+
+// refuse is the options rule: no fast mode, no priority tier.
+func refuse(o intercept.Options) intercept.Answer {
+	switch {
+	case o.Get(intercept.Speed) == "fast":
+		return intercept.Error(400, "invalid_request_error", FastNotEnabled)
+	case o.Get(intercept.ServiceTier) == "priority":
+		return intercept.Error(403, "", "The priority tier isn't enabled here.")
+	}
+	return nil
+}
+
+// Options is the suite's rule on options, at call start and per turn.
+var Options = intercept.Hooks{
+	OnCallStart: func(_ context.Context, c *intercept.Call) intercept.Answer { return refuse(c.Options) },
+	OnTurnStart: func(_ context.Context, t *intercept.Turn) intercept.Answer { return refuse(t.Options) },
+}
+
+func main() { log.Fatal(intercept.Run(append(Rules(), Options)...)) }

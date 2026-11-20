@@ -319,6 +319,65 @@ func TestV2ChainedCodexWebSocket(t *testing.T) {
 	}
 }
 
+// ── Options: an Error at call start, and per turn ────────────────────────────
+
+// A Claude Code fast request is refused with Anthropic's own 400 (and
+// x-should-retry: false), and never reaches the provider; the same request
+// at standard speed goes on. Observed, the answer is recorded, not applied.
+func TestV2FastModeRefused(t *testing.T) {
+	fast := `{"model":"fixture-model","stream":true,"speed":"fast","output_config":{"effort":"high"},"messages":[{"role":"user","content":"hi"}]}`
+	req, _ := http.NewRequest("POST", "http://"+envoyAddr+"/v1/messages", strings.NewReader(fast))
+	req.Host = "api.anthropic.com"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-beta", "fast-mode-2026-02-01")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	var e struct {
+		Type  string
+		Error struct{ Type, Message string }
+	}
+	if resp.StatusCode != 400 || json.Unmarshal(b, &e) != nil || e.Type != "error" || e.Error.Type != "invalid_request_error" ||
+		e.Error.Message != "Fast mode is not enabled for your organization." {
+		t.Fatalf("status %d: %s", resp.StatusCode, b)
+	}
+	if resp.Header.Get("x-should-retry") != "false" || upstream(resp) {
+		t.Fatalf("x-should-retry %q, reached the provider %v", resp.Header.Get("x-should-retry"), upstream(resp))
+	}
+	standard := strings.Replace(fast, `"speed":"fast",`, "", 1)
+	if resp, _ := postV2(t, "api.anthropic.com", "/v1/messages", standard, false); !upstream(resp) {
+		t.Error("a standard request didn't reach the provider")
+	}
+	if resp, _ := postV2(t, "api.anthropic.com", "/v1/messages", fast, true); !upstream(resp) {
+		t.Error("observed, the refusal was applied")
+	}
+}
+
+// Codex's WebSocket: a turn that asks for the priority tier gets the API's
+// error event and never goes upstream; the connection stays open and the
+// next turn reaches the server.
+func TestV2PriorityTurnRefused(t *testing.T) {
+	w := dialCodex(t)
+	w.send(`{"type":"response.create","model":"gpt-fixture","service_tier":"priority","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
+	var e struct {
+		Type   string
+		Status int
+		Error  struct{ Message string }
+	}
+	if got := w.next(t); json.Unmarshal([]byte(got), &e) != nil || e.Type != "error" || e.Status != 403 ||
+		e.Error.Message != "The priority tier isn't enabled here." {
+		t.Fatalf("got %s", got)
+	}
+	next := `{"type":"response.create","model":"gpt-fixture","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"thanks"}]}]}`
+	w.send(next)
+	if got := w.next(t); got != "echo: "+next+" (silly clown)" {
+		t.Errorf("next turn got %s", got)
+	}
+}
+
 // ── Tool calls held whole ────────────────────────────────────────────────────
 
 func toolRequest(format, args string, stream bool) string {

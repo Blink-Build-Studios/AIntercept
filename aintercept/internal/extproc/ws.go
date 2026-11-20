@@ -91,13 +91,23 @@ func (srv *Server) wsMessage(st *streamState, dir events.Direction, m wsframe.Me
 	if m.Opcode != wsframe.OpText && m.Opcode != wsframe.OpBinary {
 		return // ping / pong
 	}
+	typ := messageType(m.Payload)
 	if !m.Truncated {
+		if dir == events.DirInbound && typ == "response.create" {
+			// Its OnTurnStart before its OnRequest, as in enforce. Its number:
+			// the turns so far, the one still open (this request ends it), and
+			// this one.
+			n := ws.turnsTotal + 1
+			if ws.turn != nil {
+				n++
+			}
+			srv.observeTurn(st, n, m.Payload)
+		}
 		srv.observeWSMessage(st, dir, m)
 	}
 	if m.Truncated {
 		ws.conn.TruncatedMessages++
 	}
-	typ := messageType(m.Payload)
 	key := string(dir) + ":" + typ
 	if _, ok := ws.conn.MessageTypes[key]; ok || len(ws.conn.MessageTypes) < maxWSMessageTypes {
 		ws.conn.MessageTypes[key]++

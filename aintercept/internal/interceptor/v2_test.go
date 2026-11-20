@@ -581,3 +581,30 @@ func TestV2NoNewMessagesSkipsOnRequest(t *testing.T) {
 		t.Fatalf("stats %+v", st)
 	}
 }
+
+// OnTurnStart goes with content, or with Turns; an UNIMPLEMENTED answer stops
+// it for a minute, not for good (one old replica in a rolling deploy can't
+// turn it off).
+func TestTurnsAskedAgainAfterUnimplemented(t *testing.T) {
+	if c := interceptortest.NewClient(t, &interceptortest.Fake{}, interceptor.Config{Deadline: 5e9}, nil); c.Turns() {
+		t.Fatal("turns on without content or Turns")
+	}
+	f := &interceptortest.Fake{}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Turns: true, Deadline: 5e9}, nil)
+	now := time.Now()
+	interceptor.SetClock(c, func() time.Time { return now })
+	turn := &pb.TurnStart{Call: call, WsTurn: 1}
+	if d := c.DecideTurn(context.Background(), turn); d.Action != interceptor.Allow || c.Turns() {
+		t.Fatalf("unimplemented: %+v, still asking %v", d, c.Turns())
+	}
+	now = now.Add(61 * time.Second)
+	if !c.Turns() {
+		t.Fatal("not asked again after a minute")
+	}
+	f.Turn = func(*pb.TurnStart) *pb.CallVerdict {
+		return &pb.CallVerdict{Action: &pb.CallVerdict_Error{Error: &pb.Error{HttpStatus: 403}}}
+	}
+	if d := c.DecideTurn(context.Background(), turn); d.Action != interceptor.Refuse || d.HTTPStatus != 403 {
+		t.Fatalf("after the replica's upgrade: %+v", d)
+	}
+}

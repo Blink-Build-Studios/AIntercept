@@ -253,6 +253,7 @@
     "tool_call",
     "complete"
   ],
+  "on_call_complete.call.api": "API_CHATGPT_BACKEND",
   "on_call_complete.call.client.product": "codex",
   "on_call_complete.call.client.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
   "on_call_complete.call.host": "chatgpt.com",
@@ -268,9 +269,15 @@
   "on_call_complete.call.method": "POST",
   "on_call_complete.call.mode": "MODE_OBSERVE",
   "on_call_complete.call.path": "/backend-api/codex/responses",
+  "on_call_complete.call.provider": "PROVIDER_OPENAI",
   "on_call_complete.call.transport": "TRANSPORT_HTTP",
-  "on_call_complete.request.effort": "xhigh",
   "on_call_complete.request.model": "gpt-6.1-sol",
+  "on_call_complete.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "xhigh"
+    }
+  ],
   "on_call_complete.request.stream": true,
   "on_call_complete.request.tools_available": [
     "exec",
@@ -288,6 +295,16 @@
   "on_call_complete.response.cache_read_tokens": "12032",
   "on_call_complete.response.input_tokens": "15781",
   "on_call_complete.response.model": "gpt-6.1-sol",
+  "on_call_complete.response.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "xhigh"
+    },
+    {
+      "key": "OPTION_SERVICE_TIER",
+      "value": "auto"
+    }
+  ],
   "on_call_complete.response.output_tokens": "94",
   "on_call_complete.response.status": 200,
   "on_call_complete.response.stop_reason": "completed",
@@ -301,6 +318,7 @@
       "name": "exec_command"
     }
   ],
+  "on_call_start.call.api": "API_CHATGPT_BACKEND",
   "on_call_start.call.client.headers.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
   "on_call_start.call.client.headers.originator": "codex-tui",
   "on_call_start.call.client.headers.session-id": "00000000-0000-4000-8000-000000000003",
@@ -326,9 +344,15 @@
   "on_call_start.call.method": "POST",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/backend-api/codex/responses",
+  "on_call_start.call.provider": "PROVIDER_OPENAI",
   "on_call_start.call.transport": "TRANSPORT_HTTP",
-  "on_call_start.request.effort": "xhigh",
   "on_call_start.request.model": "gpt-6.1-sol",
+  "on_call_start.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "xhigh"
+    }
+  ],
   "on_call_start.request.stream": true,
   "on_call_start.request.tools_available": [
     "exec",

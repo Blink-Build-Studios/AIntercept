@@ -18,7 +18,7 @@ import pytest
 
 from aintercept_api import drawer
 from tests.builders import INSTANCE, ClaudeCode, Dataset, load_fixture, ns, one_stream_one_id
-from tests.conftest import PgDataset, make_client, pg_admin
+from tests.conftest import PgDataset, make_client, pg_admin, pg_datasets
 from tests.test_codex import claude_code_account, codex_work
 from tests.test_directory import OTHER, S1, person, unattributed
 from tests.test_requests import failed_then_retried, retained
@@ -152,13 +152,14 @@ def sides(tmp_path_factory) -> Iterator[dict[str, Side]]:
     tmp = tmp_path_factory.mktemp("drawer")
     with contextlib.ExitStack() as stack:
         out: dict[str, Side] = {}
+        roots: dict[str, pathlib.Path] = {}
         for name, build in SIDES.items():
             ds = Dataset(tmp / name.replace(" ", "-") / "data")
             build(ds)
-            root = pathlib.Path(ds.write())
-            pg = PgDataset(admin, root)
+            roots[name] = pathlib.Path(ds.write())
+        for name, pg in pg_datasets(admin, roots).items():
             stack.callback(pg.close)
-            out[name] = Side(name, root, pg)
+            out[name] = Side(name, roots[name], pg)
             stack.callback(out[name].close)
         yield out
 
@@ -270,7 +271,8 @@ def test_every_drawer_statement_can_use_an_index(sides):
     for url in urls:
         side.store.trace.clear()
         side.new.get(url)
-        plans += [(s.name, p) for ld in side.store.trace for s in ld.statements for p in side.store.reader.explain(s)]
+        stmts = [s for ld in side.store.trace for s in ld.statements]
+        plans += [(s.name, p) for s, ps in zip(stmts, side.store.reader.explain_many(stmts), strict=True) for p in ps]
     scans = [(n, p) for n, p in plans if "Seq Scan on" in p and p.split("Seq Scan on ")[1].split()[0] not in _SMALL]
     assert plans and not scans, scans
 

@@ -20,3 +20,15 @@ func TestIdentityAccountIDReserved(t *testing.T) {
 		t.Errorf("%s doesn't reserve field number 4", d.FullName())
 	}
 }
+
+// RequestInfo.effort (field 2) moved into options (OPTION_EFFORT): the
+// contract reserves its name and number.
+func TestRequestInfoEffortReserved(t *testing.T) {
+	d := (&v2.RequestInfo{}).ProtoReflect().Descriptor()
+	if f := d.Fields().ByName("effort"); f != nil {
+		t.Errorf("%s still has field effort (%d)", d.FullName(), f.Number())
+	}
+	if !d.ReservedNames().Has("effort") || !d.ReservedRanges().Has(2) {
+		t.Errorf("%s doesn't reserve effort (2)", d.FullName())
+	}
+}

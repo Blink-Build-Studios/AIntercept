@@ -1,8 +1,11 @@
 package extproc
 
 import (
+	"context"
 	"io"
 	"log/slog"
+	"maps"
+	"slices"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -219,12 +222,12 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 	}
 	ci := srv.callInfo(st, body)
 	start := srv.decideStart(st, ci)
-	if start.Action == interceptor.Deny {
+	if start.Action == interceptor.Deny || start.Action == interceptor.Refuse {
 		return srv.deny(st, start)
 	}
 	requests := srv.enforcingRequests(st)
 	var remove []string
-	if requests && st.wsRequested {
+	if (requests || srv.enforcingTurns(st)) && st.wsRequested {
 		remove = append(remove, "sec-websocket-extensions") // client messages are re-framed
 	}
 	if start.Action == interceptor.Respond && (!hasBody || len(body) == 0) {
@@ -254,7 +257,7 @@ func (srv *Server) enforceStart(st *streamState, body []byte, hasBody bool) []*e
 			case interceptor.Replace:
 				fwd = d.Payload
 				remove = append(remove, "content-length", "content-encoding")
-			case interceptor.Deny:
+			case interceptor.Deny, interceptor.Refuse:
 				return srv.deny(st, d)
 			case interceptor.Respond:
 				out, rewritten := srv.respondHTTP(st, ci, r, true, d)
@@ -281,7 +284,7 @@ func (srv *Server) enforceResponseHeaders(st *streamState, h *extprocv3.HttpHead
 		return srv.holdReplyHeaders(st)
 	}
 	if st.ws != nil {
-		if srv.enforcingRequests(st) {
+		if srv.enforcingRequests(st) || srv.enforcingTurns(st) {
 			if st.ws.ext.Deflate {
 				// The server negotiated compression the client was never offered:
 				// messages can't be re-encoded, so they pass unevaluated.
@@ -312,9 +315,10 @@ func (srv *Server) enforceResponseBody(st *streamState, chunk []byte, eos bool) 
 	return []*extprocv3.ProcessingResponse{bodyResponse(false, chunk, eos)}
 }
 
-// enforceWS forwards a WebSocket body chunk: as is without content. With
-// content, client messages go through OnRequest (a response.create) and are
-// re-framed; the server's go through OnReply and OnToolCall when the
+// enforceWS forwards a WebSocket body chunk: as is when nothing decides its
+// turns. Otherwise client messages are re-framed, and each request (a
+// response.create) goes to OnTurnStart, then with content to OnRequest; with
+// content, the server's go through OnReply and OnToolCall when the
 // Interceptor has rules on them (respond.go), else they're decoded for
 // recording and forwarded as they came.
 func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3.HttpBody) []*extprocv3.ProcessingResponse {
@@ -350,18 +354,24 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 		if m.Truncated {
 			return srv.wsDeny(st, toServer, interceptor.Decision{Reason: "WebSocket message too large to evaluate."}, 1009)
 		}
-		var d interceptor.Decision
-		if r, ok := srv.parseWSRequest(st, m); ok {
-			if d = srv.decideRequest(st, r); d.Action == interceptor.Respond {
+		d := srv.decideWSRequest(st, m)
+		switch d.Action {
+		case interceptor.Respond:
+			if r, ok := srv.ic.Parser().ParseWebSocket(st.host, st.path, m.Payload); ok {
 				var reply []byte
 				d, reply = srv.respondWS(st, r, m.Payload, d)
 				toClient = append(toClient, reply...)
+			} else {
+				srv.ic.Responded(st.correlationID, d, "") // a request it can't read: recorded, not applied
+				d = interceptor.Decision{Action: interceptor.Allow}
 			}
+		case interceptor.Refuse:
+			toClient = append(toClient, srv.refuseTurn(st, d)...)
 		}
 		switch d.Action {
 		case interceptor.Replace:
 			out = append(out, wsframe.Encode(m.Opcode, d.Payload, toServer)...)
-		case interceptor.Respond: // a synthesized reply: the request never goes upstream
+		case interceptor.Respond, interceptor.Refuse: // answered here: the request never goes upstream
 		case interceptor.Deny:
 			if len(out) > 0 {
 				return append([]*extprocv3.ProcessingResponse{bodyResponse(toServer, out, false)}, srv.wsDeny(st, toServer, d, 1008)...)
@@ -379,6 +389,29 @@ func (srv *Server) enforceWS(st *streamState, dir events.Direction, b *extprocv3
 	return res
 }
 
+// decideWSRequest decides a client message on a WebSocket: a request (a
+// response.create) goes to OnTurnStart, then with content to OnRequest.
+func (srv *Server) decideWSRequest(st *streamState, m wsframe.Message) interceptor.Decision {
+	allow := interceptor.Decision{Action: interceptor.Allow}
+	if m.Opcode != wsframe.OpText || messageType(m.Payload) != "response.create" {
+		return allow
+	}
+	if srv.enforcingTurns(st) {
+		t := interceptor.TurnStart(st.icState().call, st.host, st.path, st.ws.turnsTotal+1, m.Payload)
+		if d := srv.ic.DecideTurn(context.Background(), t); d.Action != interceptor.Allow {
+			return d
+		}
+	}
+	if !srv.enforcingRequests(st) {
+		return allow
+	}
+	r, ok := srv.parseWSRequest(st, m)
+	if !ok {
+		return allow
+	}
+	return srv.decideRequest(st, r)
+}
+
 // wsDeny ends a WebSocket: the client gets the provider's error message and a
 // close frame, the server a close frame.
 func (srv *Server) wsDeny(st *streamState, toServer bool, d interceptor.Decision, code int) []*extprocv3.ProcessingResponse {
@@ -392,32 +425,74 @@ func (srv *Server) wsDeny(st *streamState, toServer bool, d interceptor.Decision
 	}
 }
 
-// deny refuses the call with the provider's own error. The call still gets
-// its record (the status it was refused with, and why).
+// deny refuses the call with the provider's own error: a Deny, or an Error
+// answer (Refuse). The call still gets its record (the status it was refused
+// with, and why).
 func (srv *Server) deny(st *streamState, d interceptor.Decision) []*extprocv3.ProcessingResponse {
 	st.enf.denied = true
 	dn := srv.denial(st, d)
 	st.status = dn.status
-	st.denyReason = "denied by interceptor: " + dn.message()
+	st.denyReason = denyReason(d, dn)
 	srv.emitComplete(st)
+	var set []*corev3.HeaderValueOption
+	h := dn.headers()
+	for _, k := range slices.Sorted(maps.Keys(h)) {
+		set = append(set, &corev3.HeaderValueOption{Header: &corev3.HeaderValue{Key: k, RawValue: []byte(h[k])}})
+	}
+	details := "aintercept_interceptor_deny"
+	if d.Action == interceptor.Refuse {
+		details = "aintercept_interceptor_error"
+	}
 	return []*extprocv3.ProcessingResponse{{
 		Response: &extprocv3.ProcessingResponse_ImmediateResponse{ImmediateResponse: &extprocv3.ImmediateResponse{
-			Status: &typev3.HttpStatus{Code: typev3.StatusCode(dn.status)},
-			Headers: &extprocv3.HeaderMutation{SetHeaders: []*corev3.HeaderValueOption{{
-				Header: &corev3.HeaderValue{Key: "content-type", RawValue: []byte("application/json")},
-			}}},
+			Status:  &typev3.HttpStatus{Code: typev3.StatusCode(dn.status)},
+			Headers: &extprocv3.HeaderMutation{SetHeaders: set},
 			Body:    dn.body(),
-			Details: "aintercept_interceptor_deny",
+			Details: details,
 		}},
 	}}
 }
 
+// denyReason is the call's record of why it was refused.
+func denyReason(d interceptor.Decision, dn denial) string {
+	if d.Action == interceptor.Refuse {
+		return "refused by interceptor: " + dn.message()
+	}
+	return "denied by interceptor: " + dn.message()
+}
+
+// denial is how the client is refused. An Error answer (Refuse) is written
+// as the Interceptor gave it; AIntercept's own refusal (the Interceptor
+// failed, or the call can't be evaluated) as a policy block.
 func (srv *Server) denial(st *streamState, d interceptor.Decision) denial {
 	status := d.HTTPStatus
 	if status == 0 {
 		status = 403
 	}
-	return denial{status: status, reason: d.Reason, host: st.host, path: st.path}
+	dn := denial{status: status, reason: d.Reason, errType: d.ErrorType, host: st.host, path: st.path}
+	if d.Action != interceptor.Refuse {
+		dn.code = "blocked_by_policy"
+		switch dn.format() {
+		case events.APIGemini:
+			dn.errType = "PERMISSION_DENIED"
+		case events.APIOpenAIResponses, events.APIOpenAIChat, events.APIChatGPTBackend:
+			dn.errType = "invalid_request_error"
+		default:
+			dn.errType = "permission_error"
+		}
+	}
+	return dn
+}
+
+// refuseTurn refuses one WebSocket turn (an Error answer): the client gets
+// the API's error event, which ends the turn, and the request never goes
+// upstream. The connection stays open.
+func (srv *Server) refuseTurn(st *streamState, d interceptor.Decision) []byte {
+	msg := srv.denial(st, d).wsMessage()
+	srv.wsMessage(st, events.DirOutbound, wsframe.Message{Opcode: wsframe.OpText, Payload: msg}) // records the turn's end
+	out := wsframe.Encode(wsframe.OpText, msg, false)
+	st.ws.conn.BytesDown += len(out)
+	return out
 }
 
 // undecodable notes content enforce had to release unevaluated.

@@ -50,15 +50,18 @@ shape for every provider.
 
 | | What you get | What you return |
 |---|---|---|
-| `OnCallStart` | Who's calling (key hash, IP, verified email and account, device, session), which client (Claude Code, Codex, …), which model, effort, declared tools | Accept, or Respond |
+| `OnCallStart` | Who's calling (key hash, IP, verified email and account, device, session), which client (Claude Code, Codex, …), the provider and API, which model, its options (effort, fast mode, the priority tier), declared tools | Accept, Respond, or Error |
+| `OnTurnStart` | Each request on a Codex WebSocket: its turn, model and options | Accept, Respond, or Error |
 | `OnRequest` | The call's new messages, before they go upstream: the prompt, tool results, the harness's notes. **Only if content is enabled.** | Accept or Replace per message; Respond; or Fetch a part sent by reference |
 | `OnReply` | The model's reply text, piece by piece as it streams, before the client sees it. **Only with content.** | Accept, Replace, Hold or Respond, and `keep` |
 | `OnToolCall` | Each tool call the model makes, whole, before the agent sees it. **Only with content.** | Accept, Replace (new arguments) or Respond |
 | `OnCallComplete` | The finished call: status, tokens, tools used, timings, error, and the answers you gave | Ack |
 
 Respond answers for the model: the client gets your text as the model's reply.
-There's no Deny: rewrite, or answer, rather than refuse. Leave `OnReply` or
-`OnToolCall` unimplemented and AIntercept doesn't hold replies for you.
+Error refuses the call the way the provider would (its status, type and
+message, in the API's own format), so the client handles it as it handles
+the provider's own errors. Leave `OnTurnStart`, `OnReply` or `OnToolCall`
+unimplemented and AIntercept doesn't hold those for you.
 
 And two modes, with the same callbacks and the same messages:
 

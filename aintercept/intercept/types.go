@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 )
 
 // Mode is how the call is intercepted.
@@ -94,6 +96,45 @@ type Person struct {
 	Verified bool
 }
 
+// Option is a provider setting (docs/INTERCEPTOR.md, Options).
+type Option = pb.Option
+
+const (
+	// Effort: how hard the model reasons (low, medium, high, …).
+	Effort = pb.Option_OPTION_EFFORT
+	// Speed: Anthropic's fast mode ("fast"; absent: standard).
+	Speed = pb.Option_OPTION_SPEED
+	// ServiceTier: the priority tier (Anthropic's and OpenAI's service_tier).
+	ServiceTier = pb.Option_OPTION_SERVICE_TIER
+	// Thinking: Anthropic's thinking mode (enabled, adaptive, disabled).
+	Thinking = pb.Option_OPTION_THINKING
+)
+
+// Options are a call's settings, as the provider sends them. A setting the
+// request doesn't make isn't there.
+type Options map[Option]string
+
+// Get is the option's value, "" when the call doesn't set it.
+func (o Options) Get(k Option) string { return o[k] }
+
+func optionsOf(vs []*pb.OptionValue) Options {
+	if len(vs) == 0 {
+		return nil
+	}
+	o := Options{}
+	for _, v := range vs {
+		o[v.GetKey()] = v.GetValue()
+	}
+	return o
+}
+
+// Provider is who serves the call, and API which of its APIs it's on (how
+// its options' values read).
+type (
+	Provider = pb.Provider
+	API      = pb.Api
+)
+
 // Call is one intercepted call: the same object in every hook of the call.
 // A Codex WebSocket connection is one call for all its turns.
 type Call struct {
@@ -104,6 +145,11 @@ type Call struct {
 	Model     string
 	Session   string
 	Transport Transport
+	Provider  Provider
+	API       API
+	// Options are what the request asks for (OnCallStart). A WebSocket's
+	// upgrade has none: each turn's are its Turn's.
+	Options Options
 
 	mu    sync.Mutex
 	state map[string]any
@@ -250,6 +296,15 @@ type ToolResult struct {
 	Call     *Call
 }
 
+// Turn is one request on a WebSocket (Codex's response.create): OnTurnStart.
+type Turn struct {
+	// N is its number on the connection: 1, 2, …
+	N       int
+	Model   string
+	Options Options
+	Call    *Call
+}
+
 // Usage is a call's token counts.
 type Usage struct {
 	Input, Output, CacheRead, CacheWrite, Reasoning int64
@@ -257,10 +312,11 @@ type Usage struct {
 
 // Decision is one answer recorded on a call.
 type Decision struct {
-	// Callback: "call_start", "request", "reply" or "tool_call".
+	// Callback: "call_start", "turn_start", "request", "reply" or
+	// "tool_call".
 	Callback string
-	// Action: "accept" (with notes), "replace", "respond", "hold", or
-	// "error".
+	// Action: "accept" (with notes), "replace", "respond", "hold", "refuse"
+	// (an Error), or "error" (it failed).
 	Action string
 	// Applied: enforce mode, and it took effect.
 	Applied     bool
@@ -277,8 +333,11 @@ type Record struct {
 	Status     int
 	Model      string
 	StopReason string
-	TTFB       time.Duration
-	Duration   time.Duration
+	// Asked are the settings the request asked for, Served the ones the
+	// provider reports serving it with (the tier, the speed).
+	Asked, Served Options
+	TTFB          time.Duration
+	Duration      time.Duration
 	// Answers is every decision recorded in the call, per message.
 	Answers []Decision
 	// Replied is how a Reply was delivered: "synthesized" (the call never

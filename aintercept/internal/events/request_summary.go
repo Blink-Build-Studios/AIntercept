@@ -29,12 +29,13 @@ func ProductOf(host, userAgent, originator, sessionID string) string {
 // declares, and the identity the client sends. No content.
 type RequestSummary struct {
 	Model          string
-	Effort         string
 	Stream         bool
 	MaxTokens      int
 	ToolsAvailable []ToolRef
 	Prewarm        bool
 	Attachments    int
+	// Options are the provider settings the request asks for, read per API.
+	Options []Option
 	// Identity the client sends: Claude Code's metadata.user_id, Codex's turn
 	// metadata and account header.
 	AccountID string
@@ -58,10 +59,8 @@ func SummarizeRequest(host, path string, headers map[string]string, body []byte)
 		s.Model = ModelFromRequestBody(body)
 		s.ToolsAvailable, _ = ToolsFromRequestBody(body)
 		rm := RequestMetaFromBody(body)
-		s.Effort, s.Stream, s.MaxTokens, s.Prewarm = rm.Effort, rm.Stream, rm.MaxTokens, rm.Prewarm
-		if s.Effort == "" {
-			s.Effort = rm.ThinkingType
-		}
+		s.Stream, s.MaxTokens, s.Prewarm = rm.Stream, rm.MaxTokens, rm.Prewarm
+		s.Options = rm.Options(APIOf(host, path))
 		s.DeviceID, s.AccountID, s.SessionID = rm.UserID.DeviceID, rm.UserID.AccountUUID, rm.UserID.SessionID
 		if a := AttachmentsFromRequestBody(body); a != nil {
 			s.Attachments = a.Images + a.Files

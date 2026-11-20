@@ -31,11 +31,23 @@ option go_package = "github.com/Blink-Build-Studios/aintercept/aintercept/interc
 
 service Interceptor {
   // The request has arrived and been parsed; nothing has gone upstream yet in
-  // enforce mode. Accept, or Respond.
+  // enforce mode. Accept, Respond, or Error. Content-free: the call, who
+  // makes it and its settings (RequestInfo), never its messages.
   rpc OnCallStart(CallStart) returns (CallVerdict);
 
+  // Each request on a WebSocket (Codex's response.create), before it goes
+  // upstream: what OnCallStart is for an HTTP call, for one turn (a
+  // WebSocket's OnCallStart is its upgrade, which carries no request).
+  // Accept, Respond, or Error; content-free. Called with Interceptor
+  // content on, or without it when the deployment turns it on
+  // (interceptor.turns). An Interceptor that doesn't implement it
+  // (UNIMPLEMENTED) accepts every turn, and AIntercept doesn't ask again for
+  // a minute.
+  rpc OnTurnStart(TurnStart) returns (CallVerdict);
+
   // The call's new messages, before they go upstream. Per message: Accept or
-  // Replace. For the call: Respond. Or Fetch parts sent by reference first.
+  // Replace. For the call: Respond or Error. Or Fetch parts sent by
+  // reference first.
   // Only called with Interceptor content on, for requests AIntercept can
   // read.
   rpc OnRequest(RequestMessages) returns (RequestVerdict);
@@ -99,6 +111,31 @@ message Call {
   int64 start_unix_nano = 7;
   Identity identity = 8;
   Client client = 9;
+  // Who serves the call (the company), and which of its APIs it's on (the
+  // wire format: where an option comes from, what its values mean, and how
+  // an Error is written).
+  Provider provider = 10;
+  Api api = 11;
+}
+
+// The company a call goes to, by its host.
+enum Provider {
+  PROVIDER_UNSPECIFIED = 0;
+  PROVIDER_ANTHROPIC = 1; // api.anthropic.com, claude.ai
+  PROVIDER_OPENAI = 2;    // api.openai.com, chatgpt.com
+  PROVIDER_GOOGLE = 3;    // generativelanguage.googleapis.com
+}
+
+// The API a call is on, by its host and path. UNSPECIFIED for a call outside
+// them (a control-plane endpoint: an account lookup, analytics).
+enum Api {
+  API_UNSPECIFIED = 0;
+  API_ANTHROPIC_MESSAGES = 1;      // api.anthropic.com /v1/messages (API key or OAuth)
+  API_CLAUDE_AI_WEB = 2;           // claude.ai
+  API_OPENAI_RESPONSES = 3;        // api.openai.com /v1/responses
+  API_OPENAI_CHAT_COMPLETIONS = 4; // api.openai.com /v1/chat/completions
+  API_CHATGPT_BACKEND = 5;         // chatgpt.com /backend-api (Codex, ChatGPT web)
+  API_GEMINI = 6;                  // generativelanguage.googleapis.com
 }
 
 // Who is calling (docs/INTERCEPTOR.md, Identity).
@@ -157,7 +194,9 @@ message CallStart {
 
 message RequestInfo {
   string model = 1;
-  string effort = 2;
+  // Removed: effort. It's OPTION_EFFORT in options.
+  reserved 2;
+  reserved "effort";
   bool stream = 3;
   int32 max_tokens = 4;
   repeated string tools_available = 5;
@@ -165,6 +204,46 @@ message RequestInfo {
   bool prewarm = 7;
   int32 attachments = 8;
   int64 request_bytes = 9;
+  // The provider settings the request asks for. A setting it doesn't make
+  // isn't listed.
+  repeated OptionValue options = 10;
+}
+
+// A provider setting on a call (docs/INTERCEPTOR.md, Options): the same keys
+// on the request (what the client asked for) and the response (what the
+// provider reports serving). AIntercept reads each from where the call's API
+// puts it; the value is as the provider sends it (Call.api says how to read
+// it). A new setting is a new value here, never a new field.
+enum Option {
+  OPTION_UNSPECIFIED = 0;
+  // How hard the model reasons: Anthropic output_config.effort, OpenAI
+  // reasoning.effort (Chat Completions: reasoning_effort), Gemini
+  // thinkingConfig.thinkingLevel.
+  OPTION_EFFORT = 1;
+  // Anthropic's fast mode: speed ("fast"). Absent means standard; the
+  // response says which served it (usage.speed: "standard" or "fast").
+  OPTION_SPEED = 2;
+  // The priority tier: Anthropic's and OpenAI's service_tier (the response's
+  // is the tier that served it).
+  OPTION_SERVICE_TIER = 3;
+  // Anthropic's thinking mode: thinking.type (enabled, adaptive, disabled).
+  OPTION_THINKING = 4;
+}
+
+// One setting. Proto maps can't have enum keys: the options are a list of
+// these, at most one per key.
+message OptionValue {
+  Option key = 1;
+  string value = 2;
+}
+
+// TurnStart: a WebSocket's request (a turn), parsed, before it goes upstream.
+message TurnStart {
+  // The connection's Call, as OnCallStart had it.
+  Call call = 1;
+  // The turn on the connection: 1, 2, … (CallRecord.ws_turn).
+  int32 ws_turn = 2;
+  RequestInfo request = 3;
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -306,6 +385,10 @@ message RequestVerdict {
   // The client gets this text as the model's reply (Respond, below). The
   // message answers are then ignored.
   Respond respond = 3;
+  // The client gets this error instead of a reply (Error, below); the call
+  // never goes upstream. The message answers are then ignored. Not with
+  // respond.
+  Error error = 4;
   // Recorded on AIntercept's records of the call, in both modes.
   repeated Annotation annotations = 10;
 }
@@ -366,14 +449,36 @@ message Fetch {
   repeated string part_ids = 1;
 }
 
-// The answer to OnCallStart. Unset action means Accept.
+// The client gets an error, written as the call's API writes its own (the
+// body, its content type, and Anthropic's x-should-retry: false on a 4xx), so
+// it fails in the client's normal error handling: Claude Code shows the
+// message, and on Anthropic's "Fast mode is not enabled" 400 retries without
+// fast mode. The call never goes upstream. On a WebSocket turn, the API's
+// error event, and the connection stays open. Enforce only: in observe mode
+// it's recorded, not applied.
+message Error {
+  // 400 to 599.
+  int32 http_status = 1;
+  // The API's error type (Anthropic, OpenAI: "invalid_request_error";
+  // Gemini: its status, "INVALID_ARGUMENT"). Empty: the API's usual one for
+  // the status.
+  string type = 2;
+  // Shown verbatim as the error's message. Empty: "Blocked by your
+  // organization's AI usage policy."
+  string message = 3;
+}
+
+// The answer to OnCallStart and OnTurnStart. Unset action means Accept.
 message CallVerdict {
   oneof action {
     Accept accept = 1;
     // Not for a WebSocket's OnCallStart (its requests come later: answer
-    // them in OnRequest), nor a request AIntercept can't read: recorded, not
-    // applied.
+    // them in OnTurnStart or OnRequest), nor a request AIntercept can't read:
+    // recorded, not applied.
     Respond respond = 2;
+    // A WebSocket's OnCallStart refuses the connection (the upgrade gets the
+    // error); OnTurnStart refuses that turn.
+    Error error = 3;
   }
   repeated Annotation annotations = 10;
 }
@@ -440,6 +545,9 @@ message ResponseInfo {
   int64 duration_ms = 11;
   int64 response_bytes = 12;
   string error = 13;
+  // The settings the provider reports serving the call with (the tier, the
+  // speed): the same keys as RequestInfo.options.
+  repeated OptionValue options = 14;
 }
 
 message ToolCount {
@@ -448,16 +556,17 @@ message ToolCount {
 }
 
 message RecordedVerdict {
-  // "call_start", "request", "reply" or "tool_call".
+  // "call_start", "turn_start", "request", "reply" or "tool_call".
   string callback = 1;
-  // "accept" (annotated), "replace", "respond", "hold", or "error" when the
-  // Interceptor failed, timed out or gave an invalid answer.
+  // "accept" (annotated), "replace", "respond", "hold", "refuse" (an Error
+  // answer), or "error" when the Interceptor failed, timed out or gave an
+  // invalid answer.
   string action = 2;
   bool applied = 3;
   string reason = 4;
   repeated Annotation annotations = 5;
-  // The message the answer is for ("" for the call; a tool call's id; a
-  // reply text block's id).
+  // The message the answer is for ("" for the call; a WebSocket turn's
+  // number, for turn_start; a tool call's id; a reply text block's id).
   string message_id = 6;
   // Respond, applied: "synthesized" or "rewritten".
   string respond_mode = 7;

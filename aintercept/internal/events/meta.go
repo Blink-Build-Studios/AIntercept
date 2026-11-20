@@ -21,6 +21,8 @@ type RequestMeta struct {
 	UserID ClientUserID
 	// Prewarm: generate:false (a warm-up request that produces no output).
 	Prewarm bool
+	// opts are where each API sets an option (Options reads them per API).
+	opts requestOptions
 }
 
 // RequestMetaFromBody reads RequestMeta from a JSON request body. Unknown or
@@ -48,10 +50,34 @@ func RequestMetaFromBody(body []byte) RequestMeta {
 			UserID string `json:"user_id"`
 		} `json:"metadata"`
 		Generate *bool `json:"generate"`
+		// The options' other places (Options): Anthropic's speed and
+		// service_tier, OpenAI's service_tier, Chat Completions'
+		// reasoning_effort, Gemini's thinkingLevel.
+		Speed            optString `json:"speed"`
+		ServiceTier      optString `json:"service_tier"`
+		ReasoningEffort  optString `json:"reasoning_effort"`
+		GenerationConfig *struct {
+			ThinkingConfig *struct {
+				ThinkingLevel optString `json:"thinkingLevel"`
+			} `json:"thinkingConfig"`
+		} `json:"generationConfig"`
 	}
 	var m RequestMeta
 	if json.Unmarshal(body, &r) != nil {
 		return m
+	}
+	m.opts = requestOptions{speed: string(r.Speed), tier: string(r.ServiceTier), chatEffort: string(r.ReasoningEffort)}
+	if r.OutputConfig != nil {
+		m.opts.outputEffort = r.OutputConfig.Effort
+	}
+	if r.Reasoning != nil {
+		m.opts.reasoningEffort = r.Reasoning.Effort
+	}
+	if r.Thinking != nil {
+		m.opts.thinking = r.Thinking.Type
+	}
+	if g := r.GenerationConfig; g != nil && g.ThinkingConfig != nil {
+		m.opts.thinkingLevel = string(g.ThinkingConfig.ThinkingLevel)
 	}
 	m.Stream = r.Stream
 	m.MaxTokens = r.MaxTokens
@@ -122,12 +148,15 @@ type metaUsage struct {
 
 func (m *ResponseMeta) fold(b []byte) {
 	var obj struct {
-		ID          string     `json:"id"`
-		Model       string     `json:"model"`
-		StopReason  string     `json:"stop_reason"`
-		ServiceTier string     `json:"service_tier"` // OpenAI
-		Usage       *metaUsage `json:"usage"`
-		Message     *struct {  // Anthropic SSE message_start
+		ID          string    `json:"id"`
+		Model       string    `json:"model"`
+		StopReason  string    `json:"stop_reason"`
+		ServiceTier string    `json:"service_tier"` // OpenAI
+		Reasoning   *struct { // OpenAI Responses, not streamed
+			Effort string `json:"effort"`
+		} `json:"reasoning"`
+		Usage   *metaUsage `json:"usage"`
+		Message *struct {  // Anthropic SSE message_start
 			ID    string     `json:"id"`
 			Model string     `json:"model"`
 			Usage *metaUsage `json:"usage"`
@@ -197,6 +226,9 @@ func (m *ResponseMeta) fold(b []byte) {
 		set(&m.StopReason, c.FinishReason)
 	}
 	set(&m.ServiceTier, obj.ServiceTier)
+	if obj.Reasoning != nil {
+		set(&m.Effort, obj.Reasoning.Effort)
+	}
 	if u := obj.Usage; u != nil {
 		set(&m.ServiceTier, u.ServiceTier)
 		set(&m.InferenceGeo, u.InferenceGeo)

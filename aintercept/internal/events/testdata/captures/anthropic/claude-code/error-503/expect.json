@@ -50,6 +50,7 @@
     "request",
     "complete"
   ],
+  "on_call_complete.call.api": "API_ANTHROPIC_MESSAGES",
   "on_call_complete.call.client.product": "claude_code",
   "on_call_complete.call.client.user_agent": "claude-cli/2.1.327 (external, cli)",
   "on_call_complete.call.host": "api.anthropic.com",
@@ -62,13 +63,20 @@
   "on_call_complete.call.method": "POST",
   "on_call_complete.call.mode": "MODE_OBSERVE",
   "on_call_complete.call.path": "/v1/messages?beta=true",
+  "on_call_complete.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_complete.call.transport": "TRANSPORT_HTTP",
-  "on_call_complete.request.effort": "low",
   "on_call_complete.request.max_tokens": 2108,
   "on_call_complete.request.model": "claude-haiku-5-5",
+  "on_call_complete.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "low"
+    }
+  ],
   "on_call_complete.request.stream": true,
   "on_call_complete.response.model": "claude-haiku-5-5",
   "on_call_complete.response.status": 503,
+  "on_call_start.call.api": "API_ANTHROPIC_MESSAGES",
   "on_call_start.call.client.headers.user-agent": "claude-cli/2.1.327 (external, cli)",
   "on_call_start.call.client.headers.x-app": "cli",
   "on_call_start.call.client.headers.x-claude-code-agent-id": "00000000000000002",
@@ -94,10 +102,16 @@
   "on_call_start.call.method": "POST",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/v1/messages?beta=true",
+  "on_call_start.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_start.call.transport": "TRANSPORT_HTTP",
-  "on_call_start.request.effort": "low",
   "on_call_start.request.max_tokens": 2108,
   "on_call_start.request.model": "claude-haiku-5-5",
+  "on_call_start.request.options": [
+    {
+      "key": "OPTION_EFFORT",
+      "value": "low"
+    }
+  ],
   "on_call_start.request.stream": true,
   "on_request.format": "anthropic_messages",
   "on_request.messages": [

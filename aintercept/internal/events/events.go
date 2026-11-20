@@ -245,6 +245,10 @@ type Event struct {
 	reqHeaders   map[string]string
 	respHeaders  map[string]string
 	deferExtract bool
+	// reqOptions and respOptions are the settings the request asked for and
+	// the response reports serving (RequestOptions, ResponseOptions): for the
+	// Interceptor's record, never written to a row.
+	reqOptions, respOptions []Option
 	// held is the bytes of buffered body this event carries, charged to the
 	// observer's memory budget until the processor has extracted from them.
 	held int64
@@ -269,6 +273,13 @@ func (e *Event) AttachBodies(req, resp []byte, respEncoding string, respHeaders 
 	e.respHeaders = respHeaders
 	e.deferExtract = true
 }
+
+// RequestOptions are the provider settings the call's request asked for,
+// read per API (after extraction).
+func (e *Event) RequestOptions() []Option { return e.reqOptions }
+
+// ResponseOptions are the settings its response reports serving it with.
+func (e *Event) ResponseOptions() []Option { return e.respOptions }
 
 // AttachRequestHeaders stores the redacted request headers on the unexported
 // carrier for unrecognized-shape fingerprinting. They are never serialized onto
@@ -318,6 +329,7 @@ func (e *Event) ExtractDeferred() {
 		e.UserID, e.DeviceID, e.AccountUUID, e.SessionID = rm.UserID.Raw, rm.UserID.DeviceID, rm.UserID.AccountUUID, rm.UserID.SessionID
 		e.clientEvents = ClientEventsFromRequest(e.Host, e.Path, e.rawReq, "")
 		e.MCP = MCPFromBodies(e.rawReq, resp, respEnc)
+		e.reqOptions = rm.Options(APIOf(e.Host, e.Path))
 	}
 	// Codex identity: per-turn metadata (installation → device, session) and
 	// the ChatGPT account header.
@@ -376,6 +388,7 @@ func (e *Event) ExtractDeferred() {
 		}
 		e.MessageID, e.StopReason = pm.MessageID, pm.StopReason
 		e.ServiceTier, e.InferenceGeo, e.Speed = pm.ServiceTier, pm.InferenceGeo, pm.Speed
+		e.respOptions = pm.Options(APIOf(e.Host, e.Path))
 		if u, ok := UsageFromResponseBody(resp, respEnc); ok {
 			e.InputTokens = u.InputTokens
 			e.OutputTokens = u.OutputTokens

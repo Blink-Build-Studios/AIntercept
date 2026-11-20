@@ -59,6 +59,11 @@ type Config struct {
 	// messages), OnReply and OnToolCall (the reply's text and tool calls).
 	// Independent of what AIntercept records.
 	Content bool
+	// Turns sends each WebSocket request to OnTurnStart without content (with
+	// content it always goes). An enforced WebSocket whose turns are decided
+	// has its client messages re-framed: compression is off, and a client
+	// message over 16 MiB closes the connection.
+	Turns bool
 	// InlineLimit is the size over which a part's content goes by
 	// reference (default convo.DefaultInlineLimit, 64 KiB).
 	InlineLimit int
@@ -107,6 +112,10 @@ const (
 	Deny Action = "deny"
 	// Respond: the client gets Text as the model's reply.
 	Respond Action = "respond"
+	// Refuse: the client gets an error (HTTPStatus, ErrorType, and Reason as
+	// its message), written as the call's API writes its own: an Error
+	// answer.
+	Refuse Action = "refuse"
 	// Hold (reply text): nothing is released yet.
 	Hold Action = "hold"
 )
@@ -117,9 +126,11 @@ type Decision struct {
 	// Payload is a Replace's rewritten request body; for a tool call, its
 	// arguments.
 	Payload []byte
-	// Reason and HTTPStatus describe a Deny (status 0 means 403).
+	// Reason and HTTPStatus describe a Deny (status 0 means 403) or a
+	// Refuse; ErrorType is a Refuse's error type ("": the API's usual one).
 	Reason     string
 	HTTPStatus int
+	ErrorType  string
 	// Text is a Respond's reply, or reply text's replacement.
 	Text string
 	// Keep (reply text, Allow or Replace): the pending text's last Keep
@@ -163,11 +174,16 @@ type Client struct {
 	// noToolCall, noReply: the Interceptor doesn't implement OnToolCall,
 	// OnReply.
 	noToolCall, noReply atomic.Bool
+	// noTurnUntil: the Interceptor answered OnTurnStart UNIMPLEMENTED; it isn't
+	// asked again until then (unix ns), so one old replica in a rolling deploy
+	// can't turn it off for good.
+	noTurnUntil atomic.Int64
 }
 
 type job struct {
 	callID string
 	start  *pb.CallStart
+	turn   *turnJob  // OnTurnStart
 	req    *Request  // OnRequest
 	reply  *replyJob // OnReply or OnToolCall
 	rec    *pb.CallRecord
@@ -510,6 +526,8 @@ func (c *Client) stamp(j *job) {
 	switch {
 	case j.start != nil:
 		j.start.Call.Identity = ci.id
+	case j.turn != nil:
+		j.turn.call.Identity = ci.id
 	case j.req != nil:
 		j.req.call.Identity = ci.id
 	case j.reply != nil:
@@ -581,8 +599,10 @@ func (c *Client) deliver(j job) {
 		t := time.Now()
 		var v *pb.CallVerdict
 		if v, err = c.api.OnCallStart(ctx, j.start); err == nil {
-			c.noteStart(j.callID, "observe", v, false, time.Since(t))
+			c.noteStart(j.callID, "call_start", "", v, false, time.Since(t))
 		}
+	case j.turn != nil:
+		err = c.onTurnObserved(ctx, j.callID, j.turn)
 	case j.req != nil:
 		err = c.onRequestObserved(ctx, j.req)
 	case j.reply != nil:

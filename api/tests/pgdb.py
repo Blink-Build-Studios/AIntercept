@@ -11,8 +11,9 @@ import os
 import pathlib
 import re
 import secrets
+import time
 import urllib.parse
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import psycopg
@@ -71,6 +72,62 @@ def apply_schema(dsn: str) -> None:
         execute(conn, *statements(SCHEMA.read_text()), sql)
         conn.commit()
     finally:
+        conn.close()
+
+
+def database_exists(admin: str, name: str) -> bool:
+    with contextlib.closing(connect(admin)) as conn:
+        return conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone() is not None
+
+
+def create_template(admin: str, name: str) -> str:
+    """A new database for a template (cloned by clone_database), the schema applied; its DSN. It's
+    kept: drop_templates drops the stale ones."""
+    with contextlib.closing(connect(admin)) as conn:
+        execute(conn, f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+        locale = "LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8'"
+        execute(conn, f"CREATE DATABASE {name} TEMPLATE template0 ENCODING 'UTF8' {locale}")
+    dsn = with_database(admin, name)
+    apply_schema(dsn)
+    return dsn
+
+
+def seal_template(admin: str, name: str) -> None:
+    """Closes a loaded template to connections (autovacuum's too), so it can always be copied."""
+    with contextlib.closing(connect(admin)) as conn:
+        execute(conn, f"ALTER DATABASE {name} WITH IS_TEMPLATE true ALLOW_CONNECTIONS false")
+
+
+def drop_templates(admin: str, keep: Callable[[str], bool]) -> None:
+    """Drops the template databases (tpl_…) keep says no to."""
+    with contextlib.closing(connect(admin)) as conn:
+        names = [r[0] for r in conn.execute("SELECT datname FROM pg_database WHERE datname LIKE 'tpl\\_%'")]
+        for name in names:
+            if not keep(name):
+                execute(
+                    conn,
+                    f"ALTER DATABASE {name} WITH IS_TEMPLATE false",
+                    f"DROP DATABASE IF EXISTS {name} WITH (FORCE)",
+                )
+
+
+@contextlib.contextmanager
+def clone_database(admin: str, template: str) -> Iterator[str]:
+    """A new database, a copy of template (a file copy: no load), dropped afterwards; yields its DSN."""
+    name = "t_" + secrets.token_hex(6)
+    conn = connect(admin)
+    try:
+        for attempt in range(50):  # another copy of it starting at the same moment: wait a little
+            try:
+                execute(conn, f"CREATE DATABASE {name} TEMPLATE {template}")
+                break
+            except psycopg.errors.ObjectInUse:
+                if attempt == 49:
+                    raise
+                time.sleep(0.05)
+        yield with_database(admin, name)
+    finally:
+        execute(conn, f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
         conn.close()
 
 

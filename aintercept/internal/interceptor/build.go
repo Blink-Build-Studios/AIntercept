@@ -45,6 +45,39 @@ func transport(ws bool) pb.Transport {
 	return pb.Transport_TRANSPORT_HTTP
 }
 
+var providers = map[string]pb.Provider{
+	events.ProviderAnthropic: pb.Provider_PROVIDER_ANTHROPIC,
+	events.ProviderOpenAI:    pb.Provider_PROVIDER_OPENAI,
+	events.ProviderGoogle:    pb.Provider_PROVIDER_GOOGLE,
+}
+
+var apis = map[string]pb.Api{
+	events.APIAnthropicMessages: pb.Api_API_ANTHROPIC_MESSAGES,
+	events.APIClaudeAIWeb:       pb.Api_API_CLAUDE_AI_WEB,
+	events.APIOpenAIResponses:   pb.Api_API_OPENAI_RESPONSES,
+	events.APIOpenAIChat:        pb.Api_API_OPENAI_CHAT_COMPLETIONS,
+	events.APIChatGPTBackend:    pb.Api_API_CHATGPT_BACKEND,
+	events.APIGemini:            pb.Api_API_GEMINI,
+}
+
+var optionKeys = map[string]pb.Option{
+	events.OptionEffort:      pb.Option_OPTION_EFFORT,
+	events.OptionSpeed:       pb.Option_OPTION_SPEED,
+	events.OptionServiceTier: pb.Option_OPTION_SERVICE_TIER,
+	events.OptionThinking:    pb.Option_OPTION_THINKING,
+}
+
+// options are a call's settings on the wire.
+func options(os []events.Option) []*pb.OptionValue {
+	var out []*pb.OptionValue
+	for _, o := range os {
+		if k, ok := optionKeys[o.Key]; ok {
+			out = append(out, &pb.OptionValue{Key: k, Value: o.Value})
+		}
+	}
+	return out
+}
+
 // Call builds the Call every callback carries, its identity resolved from
 // what's known now (never waits).
 func (ci *CallInfo) Call() *pb.Call { return ci.callWith(ci.who().identity()) }
@@ -53,7 +86,7 @@ func (ci *CallInfo) callWith(id *pb.Identity) *pb.Call {
 	return &pb.Call{
 		CallId: ci.CallID, Mode: mode(ci.Enforce), Transport: transport(ci.WebSocket),
 		Host: ci.Host, Method: ci.Method, Path: ci.Path, StartUnixNano: ci.StartNS,
-		Identity: id,
+		Identity: id, Provider: providers[events.ProviderOf(ci.Host)], Api: apis[events.APIOf(ci.Host, ci.Path)],
 		Client: &pb.Client{
 			Product: ci.Summary.Product, UserAgent: ci.Headers["user-agent"], Headers: ci.Summary.Client,
 		},
@@ -105,6 +138,14 @@ func identityOf(r identity.Identity) *pb.Identity {
 	}
 }
 
+// TurnStart builds OnTurnStart's message for a WebSocket's request (msg: its
+// response.create, plain JSON) on the connection's call (host, path): turn is
+// its number on the connection.
+func TurnStart(call *pb.Call, host, path string, turn int, msg []byte) *pb.TurnStart {
+	s := events.SummarizeRequest(host, path, nil, msg)
+	return &pb.TurnStart{Call: own(call), WsTurn: int32(turn), Request: requestInfo(s, len(msg))}
+}
+
 // Start builds OnCallStart's message.
 func (ci *CallInfo) Start() *pb.CallStart { return ci.startWith(ci.Call()) }
 
@@ -114,8 +155,8 @@ func (ci *CallInfo) startWith(call *pb.Call) *pb.CallStart {
 
 func requestInfo(s events.RequestSummary, bytes int) *pb.RequestInfo {
 	ri := &pb.RequestInfo{
-		Model: s.Model, Effort: s.Effort, Stream: s.Stream, MaxTokens: int32(s.MaxTokens),
-		Prewarm: s.Prewarm, Attachments: int32(s.Attachments), RequestBytes: int64(bytes),
+		Model: s.Model, Stream: s.Stream, MaxTokens: int32(s.MaxTokens),
+		Prewarm: s.Prewarm, Attachments: int32(s.Attachments), RequestBytes: int64(bytes), Options: options(s.Options),
 	}
 	for _, t := range s.ToolsAvailable {
 		ri.ToolsAvailable = append(ri.ToolsAvailable, t.Name)
@@ -143,16 +184,16 @@ func Record(e *events.Event, ids *identity.Cache) (*pb.CallRecord, bool) {
 	call := &pb.Call{
 		CallId: e.CorrelationID, Mode: mode(e.InterceptMode == "enforce"), Transport: transport(ws),
 		Host: e.Host, Method: e.Method, Path: e.Path, StartUnixNano: e.RequestStartNS,
-		Identity: id,
-		Client:   &pb.Client{Headers: e.Client},
+		Identity: id, Provider: providers[events.ProviderOf(e.Host)], Api: apis[events.APIOf(e.Host, e.Path)],
+		Client: &pb.Client{Headers: e.Client},
 	}
 	if e.Client != nil {
 		call.Client.UserAgent = e.Client["user-agent"]
 		call.Client.Product = events.ProductOf(e.Host, e.Client["user-agent"], e.Client["originator"], e.SessionID)
 	}
 	req := &pb.RequestInfo{
-		Model: e.Model, Effort: firstNonEmpty(e.Effort, e.ThinkingType), Stream: e.Stream, MaxTokens: int32(e.MaxTokens),
-		Prewarm: e.Prewarm, RequestBytes: int64(e.RequestBytes),
+		Model: e.Model, Stream: e.Stream, MaxTokens: int32(e.MaxTokens),
+		Prewarm: e.Prewarm, RequestBytes: int64(e.RequestBytes), Options: options(e.RequestOptions()),
 	}
 	for _, t := range e.ToolsAvailable {
 		req.ToolsAvailable = append(req.ToolsAvailable, t.Name)
@@ -168,7 +209,7 @@ func Record(e *events.Event, ids *identity.Cache) (*pb.CallRecord, bool) {
 		InputTokens: int64(e.InputTokens), OutputTokens: int64(e.OutputTokens),
 		CacheReadTokens: int64(e.CacheReadTokens), CacheWriteTokens: int64(e.CacheWriteTokens),
 		ReasoningTokens: int64(e.ReasoningTokens), StopReason: e.StopReason,
-		ResponseBytes: int64(e.ResponseBytes), Error: e.Error,
+		ResponseBytes: int64(e.ResponseBytes), Error: e.Error, Options: options(e.ResponseOptions()),
 	}
 	for _, t := range e.ToolUses {
 		resp.ToolCalls = append(resp.ToolCalls, &pb.ToolCount{Name: t.Name, Count: int32(t.Count)})

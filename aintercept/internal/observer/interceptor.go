@@ -24,6 +24,7 @@ func setupInterceptor(instanceID string, offer func(events.Event)) *interceptor.
 	cfg := interceptor.Config{
 		Endpoint:       endpoint,
 		Content:        os.Getenv("INTERCEPTOR_CONTENT") == "true",
+		Turns:          os.Getenv("INTERCEPTOR_TURNS") == "true",
 		InlineLimit:    envInt("INTERCEPTOR_INLINE_LIMIT_BYTES", 0),
 		Deadline:       time.Duration(envInt("INTERCEPTOR_DEADLINE_MS", 50)) * time.Millisecond,
 		ObserveTimeout: time.Duration(envInt("INTERCEPTOR_OBSERVE_TIMEOUT_MS", 5000)) * time.Millisecond,
@@ -47,7 +48,7 @@ func setupInterceptor(instanceID string, offer func(events.Event)) *interceptor.
 	if err != nil {
 		fatal("interceptor setup failed", "err", err)
 	}
-	slog.Info("interceptor configured", "endpoint", endpoint, "content", cfg.Content,
+	slog.Info("interceptor configured", "endpoint", endpoint, "content", cfg.Content, "turns", cfg.Turns,
 		"deadline", cfg.Deadline, "on_error", cfg.OnError, "tls", cfg.TLS, "auth", authKind(cfg))
 	return ic
 }

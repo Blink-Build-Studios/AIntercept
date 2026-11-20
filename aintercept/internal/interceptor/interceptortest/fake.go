@@ -21,8 +21,11 @@ import (
 // server keeps the default 4 MiB receive limit.
 type Fake struct {
 	pb.UnimplementedInterceptorServer
-	mu      sync.Mutex
-	Start   func(*pb.CallStart) *pb.CallVerdict
+	mu    sync.Mutex
+	Start func(*pb.CallStart) *pb.CallVerdict
+	// Turn answers OnTurnStart; nil leaves it unimplemented, as in an
+	// Interceptor that doesn't have it.
+	Turn    func(*pb.TurnStart) *pb.CallVerdict
 	Request func(*pb.RequestMessages) *pb.RequestVerdict
 	Tool    func(*pb.ResponseMessage) *pb.MessageVerdict
 	// Reply answers OnReply; nil leaves it unimplemented, as in an
@@ -34,7 +37,8 @@ type Fake struct {
 	Delay      time.Duration
 	// Block, when set, holds every callback until it's closed.
 	Block     chan struct{}
-	Calls     []string // "start", "request", "reply", "tool_call", "complete"
+	Calls     []string // "start", "turn", "request", "reply", "tool_call", "complete"
+	Turns     []*pb.TurnStart
 	Requests  []*pb.RequestMessages
 	ToolCalls []*pb.ResponseMessage
 	Replies   []*pb.ResponseMessage
@@ -78,6 +82,26 @@ func (f *Fake) OnCallStart(ctx context.Context, s *pb.CallStart) (*pb.CallVerdic
 		return f.Start(s), nil
 	}
 	return &pb.CallVerdict{}, nil
+}
+
+func (f *Fake) OnTurnStart(ctx context.Context, t *pb.TurnStart) (*pb.CallVerdict, error) {
+	if f.Turn == nil {
+		return f.UnimplementedInterceptorServer.OnTurnStart(ctx, t)
+	}
+	f.wait()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.auth(ctx)
+	f.Calls = append(f.Calls, "turn")
+	f.Turns = append(f.Turns, t)
+	return f.Turn(t), nil
+}
+
+// TurnsSeen returns the OnTurnStart messages received so far.
+func (f *Fake) TurnsSeen() []*pb.TurnStart {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*pb.TurnStart(nil), f.Turns...)
 }
 
 func (f *Fake) OnRequest(ctx context.Context, r *pb.RequestMessages) (*pb.RequestVerdict, error) {

@@ -29,10 +29,11 @@ decides.
 Status: **built for Claude Code and Codex** (Anthropic Messages, OpenAI
 Responses over HTTP and Codex's WebSocket, Chat Completions): every message
 in both directions, before it goes on. The request's new messages, Replace,
-Fetch and Respond; the reply's text piece by piece and its tool calls whole,
-each decided before the client sees it. Not yet: ChatGPT and claude.ai on the
-web, whose calls get `OnCallStart` and `OnCallComplete` and go upstream
-unread.
+Fetch, Respond and Error; the reply's text piece by piece and its tool calls
+whole, each decided before the client sees it; and, without content, each
+call's provider settings (options: effort, fast mode, the priority tier),
+decided before it goes upstream. Not yet: ChatGPT and claude.ai on the web,
+whose calls get `OnCallStart` and `OnCallComplete` and go upstream unread.
 
 The first contract, v1, handed an Interceptor whole request bodies and each
 streamed event (`OnMessage`). It has been removed: v2 is the only contract,
@@ -180,7 +181,8 @@ as in enforce.
 
 ```proto
 service Interceptor {
-  rpc OnCallStart(CallStart) returns (CallVerdict);           // who, which client, which model
+  rpc OnCallStart(CallStart) returns (CallVerdict);           // who, which client, which model, its options
+  rpc OnTurnStart(TurnStart) returns (CallVerdict);           // a WebSocket's each request: its model and options
   rpc OnRequest(RequestMessages) returns (RequestVerdict);    // the call's new messages
   rpc OnReply(ResponseMessage) returns (MessageVerdict);      // the reply's text, piece by piece; opaque parts
   rpc OnToolCall(ResponseMessage) returns (MessageVerdict);   // each tool call the model makes, held whole
@@ -189,10 +191,26 @@ service Interceptor {
 ```
 
 - **`OnCallStart`** fires once per call, before anything goes upstream. It
-  carries `Call` (identity, client, host and path; below, "Identity") and
-  `RequestInfo` (model, effort, stream, declared tools, MCP tools,
-  attachments, size), and can **Respond**. For a WebSocket it fires at the
-  upgrade, before any message.
+  carries `Call` (identity, client, host and path, `provider` and `api`;
+  below, "Identity" and "Options") and `RequestInfo` (model, options, stream,
+  declared tools, MCP tools, attachments, size), and can **Respond** or
+  **Error**. It's content-free: no message is in it. For a WebSocket it fires
+  at the upgrade, before any message (an Error there refuses the connection).
+- **`OnTurnStart`** fires for each request on a WebSocket (Codex's
+  `response.create`), before it goes upstream: `OnCallStart` for one turn.
+  `TurnStart` carries the connection's `Call`, the turn's number
+  (`ws_turn`, as on its `CallRecord`) and the turn's `RequestInfo`. Accept,
+  **Respond** or **Error**. It's content-free, but it's made only with
+  Interceptor content on, or with `interceptor.turns: true` without it: in
+  enforce, a WebSocket whose turns are decided has its client messages
+  decoded and re-framed (AIntercept removes `Sec-WebSocket-Extensions` from
+  the upgrade, so compression isn't negotiated, and a client message over
+  16 MiB closes the connection), and without content an enforced WebSocket
+  otherwise passes untouched. An Interceptor that doesn't implement it
+  (UNIMPLEMENTED) accepts every turn, and AIntercept doesn't ask again for a
+  minute (so one old replica in a rolling deploy can't turn it off for
+  good). With content on, a turn waits for `OnTurnStart` and then
+  `OnRequest`, each within the deadline.
 - **`OnRequest`** fires once per call with the new messages, before they go
   upstream. Per message: **Accept**, or **Replace** it. For the call:
   **Respond**. Or **Fetch** parts first. A request that adds no message
@@ -224,9 +242,9 @@ service Interceptor {
 `OnRequest`, `OnReply` and `OnToolCall` need Interceptor content on. In
 observe mode every callback is made the same way, queued off the stream;
 answers are recorded, never applied. An Interceptor that doesn't implement
-`OnReply` or `OnToolCall` (UNIMPLEMENTED) accepts what it would have been
-asked, and AIntercept stops holding it: there's no cost for what nobody
-handles.
+`OnTurnStart`, `OnReply` or `OnToolCall` (UNIMPLEMENTED) accepts what it
+would have been asked, and AIntercept stops holding it: there's no cost for
+what nobody handles.
 
 ### Answers
 
@@ -236,11 +254,13 @@ handles.
 | **Replace** | a request message, reply text, a tool call | AIntercept puts your version of the message in place, in the provider's format; everything else in the call is byte-for-byte as sent |
 | **Hold** | reply text | nothing is released yet; the pending text comes back with what arrives next |
 | `keep` | reply text, with Accept or Replace | the pending text's last `keep` bytes stay held; the rest goes (as it was, or replaced) |
-| **Respond** | call start, request, reply text, a tool call | the client gets your text as the model's reply (below) |
+| **Respond** | call start, a WebSocket turn, request, reply text, a tool call | the client gets your text as the model's reply (below) |
+| **Error** | call start, a WebSocket turn, request | the client gets an error, written as the call's API writes its own; the call never goes upstream (below) |
 | **Fetch** | request | AIntercept calls `OnRequest` again with those parts' content filled in |
 
-There is no Deny or Drop: rewrite, or answer for the model, rather than
-refuse. Annotations (key/value) on any answer are recorded with it.
+There is no Drop. To refuse, answer with an Error the client already knows
+how to handle, or answer for the model. Annotations (key/value) on any answer
+are recorded with it.
 
 ### Respond
 
@@ -288,6 +308,54 @@ As built:
   your text, in the same text block (what was released stays), and the reply
   ends the same way. The record keeps the provider's real usage: it
   generated the reply.
+
+### Error
+
+```proto
+message Error {
+  int32 http_status = 1;  // 400 to 599
+  string type = 2;        // the API's error type; empty: its usual one for the status
+  string message = 3;     // shown verbatim; empty: "Blocked by your organization's AI usage policy."
+}
+```
+
+An Error refuses the call (`CallVerdict.error`, `RequestVerdict.error`) the
+way the provider itself would, so the client fails in its own normal error
+handling. AIntercept writes it as the call's API (`Call.api`) writes its
+errors. Each format is checked against that API's real errors in the capture
+corpus (`TestErrorShapesMatchCorpus`):
+
+| API | Body | Headers | `type` when empty |
+|---|---|---|---|
+| Anthropic Messages | `{"type":"error","error":{"type":…,"message":…}}` | `x-should-retry: false` on a 4xx | by status: `invalid_request_error`, `authentication_error` (401), `permission_error` (403), `not_found_error` (404), `request_too_large` (413), `rate_limit_error` (429), `overloaded_error` (529), `api_error` (5xx) |
+| OpenAI Responses, Chat Completions | `{"error":{"message":…,"type":…,"param":null,"code":null}}` | | `invalid_request_error`; `server_error` (5xx) |
+| ChatGPT backend (Codex over HTTP) | `{"detail":…}` (what chatgpt.com sends; `type` isn't used) | | |
+| Gemini | `{"error":{"code":…,"message":…,"status":…}}` (`type` is the status) | | `INVALID_ARGUMENT`; `UNAUTHENTICATED` (401), `PERMISSION_DENIED` (403), `NOT_FOUND` (404), `RESOURCE_EXHAUSTED` (429), `UNAVAILABLE` (503), `INTERNAL` (5xx) |
+| A Codex WebSocket turn (`OnTurnStart`, or `OnRequest` on it) | the Responses API's error event, `{"type":"error","status":…,"error":{"type":…,"code":null,"message":…}}` | | as Responses |
+
+Every response has `content-type: application/json`. A call outside these
+APIs (a control-plane endpoint) gets its provider's format. On a WebSocket
+turn the connection stays open: the error event ends the turn, and the next
+one goes on. At a WebSocket's `OnCallStart`, the upgrade itself is refused.
+
+**Per-person fast mode** is the motivating case. Anthropic's own control is
+per organization, all or nothing: a fast request (`"speed": "fast"`) from an
+organization without it gets a 400 with "Fast mode is not enabled for your
+organization…", and Claude Code then retries the same turn at standard
+speed. Answering a fast request with that same Error:
+
+```go
+Error{HttpStatus: 400, Type: "invalid_request_error", Message: "Fast mode is not enabled for your organization."}
+```
+
+downgrades the person, not blocks them: Claude Code falls back to standard
+speed exactly as it does on Anthropic's own refusal, and tells them.
+
+Enforce only: in observe mode an Error is recorded (`action: refuse`,
+`applied: false`) and the call goes on. An Error whose status isn't 400 to
+599, or an OnRequest answer with both an Error and a Respond, is an invalid
+answer (`onError`). An Error isn't an answer to the model's reply (`OnReply`,
+`OnToolCall`): end that with a Respond.
 
 ### Reply text
 
@@ -377,9 +445,11 @@ released undecided from then on.
 ### What's recorded
 
 Every answer other than a plain Accept is a verdict row (`callback`:
-`call_start`, `request`, `reply` or `tool_call`; `action`: `accept` with
-annotations, `replace`, `hold`, `respond` or `error`), with the message's id,
-in both modes (`applied: false` in observe). `CallRecord.verdicts` carries the
+`call_start`, `turn_start`, `request`, `reply` or `tool_call`; `action`:
+`accept` with annotations, `replace`, `hold`, `respond`, `refuse` (an Error,
+its `reason` the status, type and message the client got) or `error` (a
+failure)), with the message's id (a WebSocket turn's number, for
+`turn_start`), in both modes (`applied: false` in observe). `CallRecord.verdicts` carries the
 call's rows: an HTTP call's, or on a WebSocket, each turn's own. Each row is
 also stored in Postgres (`verdicts`, keyed by the call and the row's sequence
 number; at most 1000 per call), written with the call.
@@ -389,7 +459,8 @@ call's `correlation_id`, with `callback`, `action`, `applied`, `mode`,
 `reason`, `annotations`, `latency_ms`, `message_id` and, for an applied
 Respond, `respond_mode`. Every failure is a row too (`action: error`). A call
 refused because the Interceptor failed carries the status it was refused with
-on its complete row, and `error: "denied by interceptor: …"`.
+on its complete row, and `error: "denied by interceptor: …"`; one refused
+with an Error, `error: "refused by interceptor: <message>"`.
 
 The observer's `/stats` has an `interceptor` block: queued, dropped,
 delivered, failed, decided, decide_failed, unparsed (and its reasons),
@@ -422,6 +493,83 @@ over 32 MiB isn't available (its size and preview are all there is). Fetch costs
 one more round trip, inside the same deadline. A fetched part can be larger than
 gRPC's default 4 MiB, so an Interceptor that fetches raises its receive limit to
 33 MiB.
+
+## Options
+
+A call's provider settings (how hard the model reasons, fast mode, the
+priority tier) are one list, keyed by an enum, on the request
+(`RequestInfo.options`: what the client asked for) and on the response
+(`ResponseInfo.options`: what the provider reports serving it with). The same
+keys on both sides, so "asked for fast, served standard" is one key:
+
+```proto
+enum Option {
+  OPTION_UNSPECIFIED = 0;
+  OPTION_EFFORT = 1;        // how hard the model reasons
+  OPTION_SPEED = 2;         // Anthropic's fast mode ("fast"); absent: standard
+  OPTION_SERVICE_TIER = 3;  // the priority tier
+  OPTION_THINKING = 4;      // Anthropic's thinking mode
+}
+message OptionValue { Option key = 1; string value = 2; }
+```
+
+- **AIntercept reads them.** Each from where the call's API puts it (below),
+  only these keys, and only a short string value (64 bytes at most): no text
+  reaches a content-free callback this way. An Interceptor never parses a
+  provider's body.
+- **Values are as the provider sends them.** `Call.api` says how to read
+  them (OpenAI's `priority` tier and Anthropic's are different products).
+- **Absent means the request didn't set it.** A standard-speed request has no
+  `OPTION_SPEED`: Claude Code sends `speed` only when fast mode is on. Its
+  `anthropic-beta: fast-mode-…` header says only that the client *can* use
+  fast mode, and comes on standard requests too: never key a rule on it.
+- **A new setting is a new `Option` value, never a new field.** An older
+  Interceptor that gets a key it doesn't know still decodes it (proto3 keeps
+  unknown enum values). Mapping an option for an API is on
+  [`PROVIDERS.md`](PROVIDERS.md)'s checklist.
+
+Values are as each API sends them: the ones listed were seen in the capture
+corpus; those marked * are the provider's own, with no capture yet
+(`KNOWN_GAPS` lists every option no capture proves).
+
+| Option | API | Request (`RequestInfo.options`) | Response (`ResponseInfo.options`) | Values |
+|---|---|---|---|---|
+| `OPTION_EFFORT` | Anthropic Messages | `output_config.effort` | | `low`, `medium`, `high`, `xhigh` |
+| | ChatGPT backend (Codex, HTTP and WebSocket), OpenAI Responses | `reasoning.effort` | `reasoning.effort` (echoed) | `low`, `medium`, `xhigh` |
+| | Chat Completions | `reasoning_effort` | | as Responses* |
+| | Gemini | `generationConfig.thinkingConfig.thinkingLevel` | | `low`, `high`* |
+| `OPTION_SPEED` | Anthropic Messages | `speed` | `usage.speed` | request: `fast`* (absent: standard); response: `standard`, `fast`* |
+| `OPTION_SERVICE_TIER` | Anthropic Messages | `service_tier` | `usage.service_tier` | request: `auto`, `standard_only`*; response: `standard`, `priority`*, `batch`* |
+| | ChatGPT backend, OpenAI Responses, Chat Completions | `service_tier` | `service_tier` (the tier that served it) | `auto`; `default`, `flex`, `priority`* |
+| `OPTION_THINKING` | Anthropic Messages | `thinking.type` | | `adaptive`; `enabled`, `disabled`* |
+
+`Call.provider` is who serves the call (the company: a coarse policy, "no
+OpenAI at all"), and `Call.api` which of its APIs it's on (the wire format:
+where an option came from, what its values mean, and how an Error is
+written):
+
+| `Call.api` | Host and path | `Call.provider` |
+|---|---|---|
+| `API_ANTHROPIC_MESSAGES` | api.anthropic.com `/v1/messages` (an API key or OAuth) | `PROVIDER_ANTHROPIC` |
+| `API_CLAUDE_AI_WEB` | claude.ai | `PROVIDER_ANTHROPIC` |
+| `API_OPENAI_RESPONSES` | api.openai.com `/v1/responses` | `PROVIDER_OPENAI` |
+| `API_OPENAI_CHAT_COMPLETIONS` | api.openai.com `/v1/chat/completions` | `PROVIDER_OPENAI` |
+| `API_CHATGPT_BACKEND` | chatgpt.com `/backend-api` (Codex, ChatGPT on the web) | `PROVIDER_OPENAI` |
+| `API_GEMINI` | generativelanguage.googleapis.com | `PROVIDER_GOOGLE` |
+| `API_UNSPECIFIED` | any other path: a control-plane endpoint (an account lookup, analytics) | by host |
+
+The client software (`Call.client.product`) is a third axis.
+
+**Removed:** `RequestInfo.effort` (field 2) is `OPTION_EFFORT` now; its name
+and number are reserved. It used to fall back to Anthropic's `thinking.type`
+when a request set no effort; that's `OPTION_THINKING` now. Code that reads
+`effort` stops compiling once you regenerate; an older Interceptor that isn't
+regenerated reads it as empty on every call, so a rule on it stops matching
+without an error.
+
+**Upgrading:** upgrade the observers before an Interceptor answers with an
+Error. An older observer doesn't know the answer and accepts the call: the
+refusal is silently not applied.
 
 ## Identity
 
@@ -494,7 +642,8 @@ itself records:
 | `interceptor.content: true` | **The Interceptor sees the messages, AIntercept stores none** (e.g. redaction without retention) | Both |
 
 Without content, an Interceptor can still decide on everything in
-`CallStart`: model, tools, client, identity, host and path (and Respond).
+`CallStart` (and, with `interceptor.turns`, `TurnStart`): model, options,
+tools, client, identity, provider, API, host and path (Respond or Error).
 
 With content on, enforce asks upstream for replies it can read and release
 without re-compressing: it removes `accept-encoding` from a request whose
@@ -517,6 +666,7 @@ interceptor:
   endpoint: my-interceptor.policy.svc:9100   # host:port of your service
   inlineLimitBytes: 65536                    # larger parts go by reference
   content: true                              # OnRequest, OnReply, OnToolCall
+  turns: false                               # OnTurnStart without content (always with it)
   deadlineMs: 50                             # enforce: per callback
   onError: deny                              # enforce: deny (fail closed) | allow
   enforce:                                   # empty: observe only
@@ -536,7 +686,7 @@ interceptor:
 ```
 
 - **Without the chart:** set the observer's environment: `INTERCEPTOR_ENDPOINT`,
-  `INTERCEPTOR_INLINE_LIMIT_BYTES`, `INTERCEPTOR_CONTENT`,
+  `INTERCEPTOR_INLINE_LIMIT_BYTES`, `INTERCEPTOR_CONTENT`, `INTERCEPTOR_TURNS`,
   `INTERCEPTOR_DEADLINE_MS`, `INTERCEPTOR_ON_ERROR`, `INTERCEPTOR_TLS`,
   `INTERCEPTOR_TLS_CA_FILE`, `INTERCEPTOR_TLS_CERT_FILE`,
   `INTERCEPTOR_TLS_KEY_FILE`, `INTERCEPTOR_TLS_SERVER_NAME`, `INTERCEPTOR_TOKEN`
@@ -592,7 +742,10 @@ in observe mode look right.
 ## The examples
 
 - **`aintercept/examples/rabbit`** (Go, package `intercept`) is the smallest:
-  two rules that answer two phrases in the user's prompts with Reply.
+  two rules that answer two phrases in the user's prompts with Reply. Set
+  `INTERCEPT_FAST_MODE=refuse` and it also refuses Anthropic's fast mode with
+  an Error (a 400 saying `INTERCEPT_FAST_MODE_MESSAGE`, or a default), except
+  for the verified emails in `INTERCEPT_FAST_MODE_ALLOW` (comma-separated).
 - **`aintercept/examples/redact`** (Go, package `intercept`) replaces "silly
   clown" with `[redacted]` in every message both ways (prompts, tool results
   and the harness's notes to the model; the reply's text, even split across
@@ -616,7 +769,9 @@ docker run --entrypoint /redact-interceptor <aintercept image>
 redacted in enforce, untouched in observe, `forbidden-model` answered with
 the refusal, enforced calls refused with a 503 and observed ones carrying on
 when it's stopped), and the suite's own Interceptor (the rabbit's rules plus
-rules on the reply and its tool calls) in every format.
+rules on the reply and its tool calls, and options: a fast request refused
+with Anthropic's own 400, a Codex turn asking for the priority tier refused
+with its error event) in every format.
 
 ## Writing one in another language
 
@@ -628,8 +783,8 @@ python -m grpc_tools.protoc -I aintercept --python_out=. --grpc_python_out=. ain
 ```
 
 The service is `aintercept.interceptor.v2.Interceptor`. Implement the
-callbacks you need (an unimplemented `OnReply` or `OnToolCall` accepts
-everything), and return quickly from all but `OnCallComplete`: in enforce
+callbacks you need (an unimplemented `OnTurnStart`, `OnReply` or
+`OnToolCall` accepts everything), and return quickly from all but `OnCallComplete`: in enforce
 mode they're in the call's path. Messages stay under gRPC's default 4 MiB
 receive limit unless you Fetch; an Interceptor that fetches raises it to
 33 MiB. For Go, import `…/aintercept/interceptor/v2` directly, or use package
@@ -669,6 +824,13 @@ Codex; the web apps follow.
 | S3 | Rewritten (provider keeps the conversation): the model replies with the text; the next turn works |
 | S4 | Respond on a tool call ends the reply cleanly; the agent stops |
 | S5 | A responded call is recorded with zero usage, marked synthesized or rewritten |
+| **Options and Error** | |
+| O1 | Every option on every API that carries it arrives in `OnCallStart` (and a WebSocket turn's in `OnTurnStart`), and the response's in `OnCallComplete` |
+| O2 | A standard request carrying the fast-mode beta header has no `OPTION_SPEED` |
+| O3 | An Error at call start or on a request reaches the client in its API's format and headers; the call never goes upstream |
+| O4 | An Error on a WebSocket turn: the API's error event, the connection stays open, the next turn goes on |
+| O5 | Claude Code refused fast mode with Anthropic's 400 retries at standard speed (Anthropic's documented behavior; needs a real Claude Code with fast mode, not automated) |
+| O6 | Observe: an Error is recorded, not applied |
 | **Streaming** | |
 | T1 | Reply text is decided piece by piece before the client sees it: Accept byte for byte, Replace, Hold, keep, Respond, in every format |
 | T2 | Tool calls are held until complete, then released (or replaced), Chat Completions too |

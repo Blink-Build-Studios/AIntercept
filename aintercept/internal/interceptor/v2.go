@@ -93,6 +93,31 @@ func checkRespond(r *pb.Respond) error {
 	return nil
 }
 
+// checkError checks an Error's status.
+func checkError(e *pb.Error) error {
+	if st := e.GetHttpStatus(); st < 400 || st > 599 {
+		return invalid("an Error's http_status is %d; it's 400 to 599", st)
+	}
+	return nil
+}
+
+// refusal is the Decision that delivers an Error.
+func refusal(e *pb.Error) Decision {
+	return Decision{Action: Refuse, HTTPStatus: int(e.GetHttpStatus()), ErrorType: e.GetType(), Reason: e.GetMessage()}
+}
+
+// refusalReason is an Error as its verdict row's reason: what the client got.
+func refusalReason(e *pb.Error) string {
+	r := strconv.Itoa(int(e.GetHttpStatus()))
+	if e.GetType() != "" {
+		r += " " + e.GetType()
+	}
+	if e.GetMessage() != "" {
+		r += ": " + e.GetMessage()
+	}
+	return r
+}
+
 func annotations(as []*pb.Annotation) map[string]string {
 	if len(as) == 0 {
 		return nil
@@ -104,39 +129,137 @@ func annotations(as []*pb.Annotation) map[string]string {
 	return m
 }
 
-// ── OnCallStart ──────────────────────────────────────────────────────────────
+// ── OnCallStart, OnTurnStart ─────────────────────────────────────────────────
 
 // DecideStart calls OnCallStart and waits for the verdict (enforce mode). A
 // Respond is the caller's to deliver, and to record with Responded.
 func (c *Client) DecideStart(ctx context.Context, s *pb.CallStart) Decision {
-	callID := s.GetCall().GetCallId()
+	return c.decideStart(ctx, "call_start", s.GetCall().GetCallId(), "", func(ctx context.Context) (*pb.CallVerdict, error) {
+		return c.api.OnCallStart(ctx, s)
+	})
+}
+
+// noTurnRetry is how long an UNIMPLEMENTED OnTurnStart stops AIntercept
+// asking.
+const noTurnRetry = time.Minute
+
+// Turns reports whether a WebSocket's requests go to OnTurnStart: with
+// content, or with Turns set, unless the Interceptor answered UNIMPLEMENTED
+// in the last minute.
+func (c *Client) Turns() bool {
+	return c != nil && (c.cfg.Content || c.cfg.Turns) && c.now().UnixNano() >= c.noTurnUntil.Load()
+}
+
+// unimplementedTurn notes an OnTurnStart answered UNIMPLEMENTED.
+func (c *Client) unimplementedTurn() { c.noTurnUntil.Store(c.now().Add(noTurnRetry).UnixNano()) }
+
+// DecideTurn calls OnTurnStart for a WebSocket's request and waits for the
+// verdict (enforce mode), as DecideStart. An Interceptor without it accepts.
+func (c *Client) DecideTurn(ctx context.Context, t *pb.TurnStart) Decision {
+	if !c.Turns() {
+		return Decision{Action: Allow}
+	}
+	return c.decideStart(ctx, "turn_start", t.GetCall().GetCallId(), strconv.Itoa(int(t.GetWsTurn())), func(ctx context.Context) (*pb.CallVerdict, error) {
+		v, err := c.api.OnTurnStart(ctx, t)
+		if status.Code(err) == codes.Unimplemented {
+			c.unimplementedTurn()
+			return &pb.CallVerdict{}, nil
+		}
+		return v, err
+	})
+}
+
+// turnJob is a queued OnTurnStart: its message is built on the worker, off
+// the stream (building it parses the request).
+type turnJob struct {
+	call       *pb.Call
+	host, path string
+	turn       int
+	msg        []byte
+}
+
+// ObserveTurn queues OnTurnStart (observe mode) for a WebSocket's request
+// (msg: its response.create) on the call: turn is its number.
+func (c *Client) ObserveTurn(call *pb.Call, host, path string, turn int, msg []byte) {
+	if c.Turns() {
+		c.enqueue(job{callID: call.GetCallId(), turn: &turnJob{call: own(call), host: host, path: path, turn: turn, msg: msg}})
+	}
+}
+
+// onTurnObserved delivers a queued OnTurnStart: its answer is recorded,
+// never applied.
+func (c *Client) onTurnObserved(ctx context.Context, callID string, j *turnJob) error {
+	t := TurnStart(j.call, j.host, j.path, j.turn, j.msg)
+	at := time.Now()
+	v, err := c.api.OnTurnStart(ctx, t)
+	if status.Code(err) == codes.Unimplemented {
+		c.unimplementedTurn()
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	c.noteStart(callID, "turn_start", strconv.Itoa(j.turn), v, false, time.Since(at))
+	return nil
+}
+
+// decideStart asks call for the verdict on a call (OnCallStart) or a turn
+// (OnTurnStart: messageID is its number) and reads it.
+func (c *Client) decideStart(ctx context.Context, callback, callID, messageID string, call func(context.Context) (*pb.CallVerdict, error)) Decision {
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
-	v, err := c.api.OnCallStart(ctx, s)
+	v, err := call(ctx)
 	took := time.Since(t)
-	if err == nil && v.GetRespond() != nil {
-		err = checkRespond(v.GetRespond())
+	if err == nil {
+		err = checkStart(v)
 	}
 	if err != nil {
-		return c.fail(callID, "call_start", "", err, took)
+		return c.fail(callID, callback, messageID, err, took)
 	}
 	c.decided.Add(1)
 	if r := v.GetRespond(); r != nil {
-		return Decision{Action: Respond, Text: r.GetText(), pending: &events.Verdict{Callback: "call_start", Action: "respond",
-			Mode: "enforce", LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}}
+		return Decision{Action: Respond, Text: r.GetText(), pending: &events.Verdict{Callback: callback, Action: "respond",
+			Mode: "enforce", LatencyMS: took.Milliseconds(), MessageID: messageID, Annotations: annotations(v.GetAnnotations())}}
 	}
-	c.noteStart(callID, "enforce", v, true, took)
+	c.noteStart(callID, callback, messageID, v, true, took)
+	if e := v.GetError(); e != nil {
+		return refusal(e)
+	}
 	return Decision{Action: Allow}
 }
 
-// noteStart records OnCallStart's answer: an annotated Accept, or (observe)
-// a Respond, recorded and not applied.
-func (c *Client) noteStart(callID, mode string, v *pb.CallVerdict, enforce bool, took time.Duration) {
-	ev := events.Verdict{Callback: "call_start", Action: "accept", Applied: enforce, Mode: mode,
+// checkStart checks OnCallStart's or OnTurnStart's answer.
+func checkStart(v *pb.CallVerdict) error {
+	switch a := v.GetAction().(type) {
+	case *pb.CallVerdict_Respond:
+		return checkRespond(a.Respond)
+	case *pb.CallVerdict_Error:
+		return checkError(a.Error)
+	}
+	return nil
+}
+
+// noteStart records OnCallStart's or OnTurnStart's answer: an annotated
+// Accept, an Error (applied in enforce), or (observe) a Respond, recorded and
+// not applied. messageID is a turn's number. An answer that can't be applied
+// is recorded as an error.
+func (c *Client) noteStart(callID, callback, messageID string, v *pb.CallVerdict, enforce bool, took time.Duration) {
+	ev := events.Verdict{Callback: callback, Action: "accept", Applied: enforce, Mode: "observe", MessageID: messageID,
 		LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}
-	if v.GetRespond() != nil {
+	if enforce {
+		ev.Mode = "enforce"
+	}
+	if err := checkStart(v); err != nil {
+		ev.Action, ev.Reason = "error", err.Error()
+		c.store(callID, ev)
+		return
+	}
+	switch {
+	case v.GetRespond() != nil:
 		ev.Action, ev.Applied = "respond", false
+	case v.GetError() != nil:
+		ev.Action, ev.Reason = "refuse", refusalReason(v.GetError())
 	}
 	if ev.Action == "accept" && len(ev.Annotations) == 0 {
 		return
@@ -323,6 +446,17 @@ func (q *Request) answer(v *pb.RequestVerdict) ([]convo.Edit, []events.Verdict, 
 	row := func(action, messageID string, as []*pb.Annotation) {
 		rows = append(rows, events.Verdict{Callback: "request", Action: action, MessageID: messageID, Annotations: annotations(as)})
 	}
+	if e := v.GetError(); e != nil {
+		if err := checkError(e); err != nil {
+			return nil, nil, err
+		}
+		if respondOf(v) != nil {
+			return nil, nil, invalid("both an Error and a Respond")
+		}
+		row("refuse", "", v.GetAnnotations())
+		rows[0].Reason = refusalReason(e)
+		return nil, rows, nil
+	}
 	if r := respondOf(v); r != nil {
 		if err := checkRespond(r); err != nil {
 			return nil, nil, err
@@ -421,29 +555,29 @@ func (q *Request) replace(i int, rm *pb.ConvMessage) ([]convo.Edit, error) {
 }
 
 // ask runs OnRequest, with its one Fetch round, and reads the answer: the
-// edits, the rows, and a Respond's text.
-func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Verdict, string, error) {
+// edits, the rows, and a Respond's text or an Error.
+func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Verdict, string, *pb.Error, error) {
 	v, err := c.api.OnRequest(ctx, q.message(nil))
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 	if ids := v.GetFetch().GetPartIds(); len(ids) > 0 {
 		fetched, err := q.fetch(ids)
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", nil, err
 		}
 		if v, err = c.api.OnRequest(ctx, q.message(fetched)); err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", nil, err
 		}
 		if len(v.GetFetch().GetPartIds()) > 0 {
-			return nil, nil, "", invalid("a second Fetch: there is one per call")
+			return nil, nil, "", nil, invalid("a second Fetch: there is one per call")
 		}
 	}
 	edits, rows, err := q.answer(v)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
-	return edits, rows, respondOf(v).GetText(), nil
+	return edits, rows, respondOf(v).GetText(), v.GetError(), nil
 }
 
 // respondOf is OnRequest's Respond: the call's, or else the first message's
@@ -493,7 +627,7 @@ func (c *Client) ObserveRequest(call *pb.Call, r convo.Request) {
 // never applied. An answer that couldn't be applied is recorded as an error.
 func (c *Client) onRequestObserved(ctx context.Context, q *Request) error {
 	t := time.Now()
-	edits, rows, _, err := c.ask(ctx, q)
+	edits, rows, _, _, err := c.ask(ctx, q)
 	if err == nil && len(edits) > 0 {
 		_, err = q.apply(edits)
 	}
@@ -514,7 +648,8 @@ func (c *Client) onRequestObserved(ctx context.Context, q *Request) error {
 
 // DecideRequest calls OnRequest and waits for the answer (enforce mode),
 // within the deadline, Fetch included. Replace: Payload is the body to
-// forward. Respond: the caller delivers it and records it with Responded. A
+// forward. Respond: the caller delivers it and records it with Responded.
+// Refuse: the caller gives the client the error (recorded here). A
 // failure, a missed deadline or an answer that can't be applied is onError.
 // A request with no new messages is allowed without OnRequest.
 func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Request) Decision {
@@ -525,7 +660,7 @@ func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Reque
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
-	edits, rows, text, err := c.ask(ctx, q)
+	edits, rows, text, refuse, err := c.ask(ctx, q)
 	var body []byte
 	if err == nil && len(edits) > 0 {
 		body, err = q.apply(edits)
@@ -535,6 +670,12 @@ func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Reque
 		return c.fail(call.GetCallId(), "request", "", err, took)
 	}
 	c.decided.Add(1)
+	if refuse != nil {
+		r := rows[0]
+		r.Mode, r.Applied, r.LatencyMS = "enforce", true, took.Milliseconds()
+		c.store(call.GetCallId(), r)
+		return refusal(refuse)
+	}
 	if text != "" {
 		r := rows[0]
 		r.Mode, r.LatencyMS = "enforce", took.Milliseconds()

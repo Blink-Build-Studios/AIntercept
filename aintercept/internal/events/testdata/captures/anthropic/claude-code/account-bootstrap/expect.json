@@ -34,6 +34,7 @@
   "on_call_complete.call.method": "GET",
   "on_call_complete.call.mode": "MODE_OBSERVE",
   "on_call_complete.call.path": "/api/claude_cli/bootstrap?entrypoint=claude-desktop&model=claude-fable-5",
+  "on_call_complete.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_complete.call.transport": "TRANSPORT_HTTP",
   "on_call_complete.response.status": 200,
   "on_call_start.call.client.headers.anthropic-client-platform": "xxxxxxx_xxx",
@@ -47,6 +48,7 @@
   "on_call_start.call.method": "GET",
   "on_call_start.call.mode": "MODE_OBSERVE",
   "on_call_start.call.path": "/api/claude_cli/bootstrap?entrypoint=claude-desktop&model=claude-fable-5",
+  "on_call_start.call.provider": "PROVIDER_ANTHROPIC",
   "on_call_start.call.transport": "TRANSPORT_HTTP",
   "record.account": {
     "account_id": "00000000-0000-4000-8000-00000000000a",
