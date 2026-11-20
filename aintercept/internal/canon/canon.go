@@ -369,9 +369,14 @@ func ClientOf(r *Request, originator string) (client, version string) {
 			client = "cli"
 		}
 	case ProductClaudeCode:
-		// claude-cli/2.1.3 (external, cli): the entrypoint is the last part.
-		if i := strings.LastIndex(ua, ", "); i >= 0 {
-			client = strings.TrimSuffix(ua[i+2:], ")")
+		// claude-cli/2.1.3 (external, cli): the entrypoint is the second part;
+		// what follows it names the SDK or app embedding it
+		// (external, claude-desktop, agent-sdk/0.3.326).
+		if _, in, ok := strings.Cut(ua, " ("); ok {
+			parts := strings.Split(strings.TrimSuffix(in, ")"), ", ")
+			if len(parts) > 1 {
+				client = parts[1]
+			}
 		}
 	}
 	return client, version
