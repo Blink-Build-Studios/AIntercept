@@ -1,0 +1,20 @@
+{
+  "method": "GET",
+  "host": "api.anthropic.com",
+  "path": "/api/frame/sync?slug=00000000-0000-4000-8000-000000000001&comment_hint=1&vn=passive",
+  "ip": "192.0.2.3",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "GET",
+    ":path": "/api/frame/sync?slug=00000000-0000-4000-8000-000000000001&comment_hint=1&vn=passive",
+    ":scheme": "https",
+    "connection": "Upgrade",
+    "sec-websocket-extensions": "permessage-deflate; client_max_window_bits",
+    "sec-websocket-key": "XxX00xX0X0XXxX0xXxxXX3==",
+    "sec-websocket-protocol": "xxxxx-xxxx.x0,XXXxXXX0XxxxXxX0XX00XXXxXXX0XxxxXxXxXxXxXxx0XXX4.00000000-0000-4000-8000-000000000005.xxxxx_xxxxx.0000000006.0000000007.XXxX0XXXXXxXx0XXXx_xxxxx",
+    "sec-websocket-version": "13",
+    "upgrade": "websocket",
+    "user-agent": "claude-cli/2.1.319 (external, cli)",
+    "x-forwarded-proto": "https"
+  }
+}

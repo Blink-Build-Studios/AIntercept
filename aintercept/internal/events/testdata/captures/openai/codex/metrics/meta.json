@@ -1,0 +1,7 @@
+{
+  "provider": "openai",
+  "client": "otel-otlp-exporter-rust",
+  "client_version": "0.31.0",
+  "shape": "metrics",
+  "captured": "2026-11-09"
+}

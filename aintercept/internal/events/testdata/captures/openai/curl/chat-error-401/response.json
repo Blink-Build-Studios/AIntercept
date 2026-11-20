@@ -1,0 +1,26 @@
+{
+  "status": 401,
+  "headers": {
+    ":status": "401",
+    "access-control-expose-headers": "XX-Xxx,XX-Xxx",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x0000000xx0x0000-XX2",
+    "content-length": "258",
+    "content-type": "text/plain",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "server": "value_2",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "xxx-xxx=00000003; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "x-content-type-options": "value_3",
+    "x-error-json": "xxxxXXXxxxXxxxX0XXxXXXXxXXXxXXXxXXxxXxxxXxxxX00xxxXxxXXXXXxxx0X0XXXxx0XxXXXxXxXxxx0xXXxxXXXxx0XxXXxxxXXxXX0xXxxxXXX0x0XxXXXXXXXxXXxxXXXxxXX0xXX0Xx0xxXX0Xx0xxX0xxXXxXXxxX00xX0XxX000xxXxXXXxXXxxxXXxXxxXXXXxXXX0xXXxXxxxXxxxxxXxxXXxxxXxxXXxxX0xxxXxxxXxXxXxXXXxX00xXXX0XXXxxxXxxXxxX0XxxX0xXXxxXXxxXXXxXxXxxxXxXxxxxxXxxXxxXX0xXxXxXxX0XXX0xxX0XXXxXXx4",
+    "x-openai-authorization-error": "0",
+    "x-openai-ide-error-code": "value_4",
+    "x-openai-internal-caller": "value_5",
+    "x-request-id": "req_x000x0xx0x0x0x0x0000000xxx000xx5"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    258,
+    0
+  ]
+}

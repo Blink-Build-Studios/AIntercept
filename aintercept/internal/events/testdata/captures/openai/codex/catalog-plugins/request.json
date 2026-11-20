@@ -1,0 +1,41 @@
+{
+  "method": "GET",
+  "host": "chatgpt.com",
+  "path": "/backend-api/ps/plugins/list?scope=GLOBAL&limit=200&pageToken=eyJzY29wZSI6IlhYWFhYWCIsIndvcmtzcGFjZV9pZCI6bnVsbCwiY3JlYXRvcl9hY2NvdW50X3VzZXJfaWQiOm51bGwsImNvbGxlY3Rpb24iOm51bGwsImluY2x1ZGVfdW5saXN0ZWRfZ2xvYmFsX3BsdWdpbnMiOnRydWUsImVsaWdpYmxlX3BsYW5fdHlwZSI6InZhbHVlXzEiLCJlbmZvcmNlX3BsYW5fZWxpZ2liaWxpdHkiOmZhbHNlLCJyYW5rX2J5X3BvcHVsYXJpdHkiOnRydWUsImNvbnRpbnVhdGlvbiI6eyJkZXBsb3ltZW50X3R5cGUiOiJ4eHh4eHh4IiwicXVlcnlfaWQiOiJyczQ6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxOlhYeDBYWDI6MDpsZWFmLTAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMyIsImN1cnNvciI6IlhYMDB4WFgweFh4eHhYWHh4WFhYMHh4eDBYWHhYWFgwWHhYWHhYWFh4X3hYWHhYWHhYMHh4eFgwWFh4eFhYWHh4WFhYMHhYWFh4eFhYeFhYeHh4WFh4WHhYeC14WHh4eFhYWDB4eHh4eDBYWHhYeDQtWDAwWFhYWFhYWFhYeFgweF9YWHh4WFgwMDBYWDB4WHhYeFhYWHgwWDAweFhYX1hYWFhYWHhYeFh4WHh4WDAwWDB4eHh4eHh4eHh4MHh4eFgwWDB4eHh4eFhYPSJ9fQ%3D%3D",
+  "ip": "192.0.2.6",
+  "headers": {
+    ":authority": "chatgpt.com",
+    ":method": "GET",
+    ":path": "/backend-api/ps/plugins/list?scope=GLOBAL&limit=200&pageToken=eyJzY29wZSI6IlhYWFhYWCIsIndvcmtzcGFjZV9pZCI6bnVsbCwiY3JlYXRvcl9hY2NvdW50X3VzZXJfaWQiOm51bGwsImNvbGxlY3Rpb24iOm51bGwsImluY2x1ZGVfdW5saXN0ZWRfZ2xvYmFsX3BsdWdpbnMiOnRydWUsImVsaWdpYmxlX3BsYW5fdHlwZSI6InZhbHVlXzEiLCJlbmZvcmNlX3BsYW5fZWxpZ2liaWxpdHkiOmZhbHNlLCJyYW5rX2J5X3BvcHVsYXJpdHkiOnRydWUsImNvbnRpbnVhdGlvbiI6eyJkZXBsb3ltZW50X3R5cGUiOiJ4eHh4eHh4IiwicXVlcnlfaWQiOiJyczQ6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxOlhYeDBYWDI6MDpsZWFmLTAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMyIsImN1cnNvciI6IlhYMDB4WFgweFh4eHhYWHh4WFhYMHh4eDBYWHhYWFgwWHhYWHhYWFh4X3hYWHhYWHhYMHh4eFgwWFh4eFhYWHh4WFhYMHhYWFh4eFhYeFhYeHh4WFh4WHhYeC14WHh4eFhYWDB4eHh4eDBYWHhYeDQtWDAwWFhYWFhYWFhYeFgweF9YWHh4WFgwMDBYWDB4WHhYeFhYWHgwWDAweFhYX1hYWFhYWHhYeFh4WHh4WDAwWDB4eHh4eHh4eHh4MHh4eFgwWDB4eHh4eFhYPSJ9fQ%3D%3D",
+    ":scheme": "https",
+    "accept": "*/*",
+    "authorization": "<redacted>",
+    "chatgpt-account-id": "00000000-0000-4000-8000-000000000006",
+    "cookie": "<redacted>",
+    "oai-product-sku": "codex",
+    "originator": "codex-tui",
+    "user-agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "chatgpt_jwt",
+    "claims": {
+      "client_id": "app_XXxxxXXX00x0XxXxXx0xxx10",
+      "exp": 1794492640,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "00000000-0000-4000-8000-000000000006",
+        "chatgpt_plan_type": "value_1",
+        "chatgpt_user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx07"
+      },
+      "https://api.openai.com/profile": {
+        "email": "person8@example.com"
+      },
+      "iss": "https://auth.openai.com",
+      "name": "Xxxxx Xxxx",
+      "session_id": "authsess_xXX0X0xxxxxXxX0xXxXXXx11",
+      "sub": "xxxx0|000000000000000000000009"
+    }
+  }
+}

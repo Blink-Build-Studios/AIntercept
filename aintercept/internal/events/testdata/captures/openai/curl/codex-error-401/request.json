@@ -1,0 +1,21 @@
+{
+  "method": "POST",
+  "host": "chatgpt.com",
+  "path": "/backend-api/codex/responses",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "chatgpt.com",
+    ":method": "POST",
+    ":path": "/backend-api/codex/responses",
+    ":scheme": "https",
+    "accept": "*/*",
+    "content-length": "2",
+    "content-type": "application/json",
+    "user-agent": "curl/8.5.0",
+    "x-forwarded-proto": "https"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    2
+  ]
+}

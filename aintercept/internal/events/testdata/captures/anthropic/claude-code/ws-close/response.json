@@ -1,0 +1,18 @@
+{
+  "status": 101,
+  "headers": {
+    ":status": "101",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x0x0xx0xx00xx00x-XX8",
+    "connection": "upgrade",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "request-id": "req_000Xx0xXxXXXx0Xx0XXXXxX9",
+    "sec-websocket-accept": "XxxXX00X+xX0Xx0xxXxxXXXXX10=",
+    "sec-websocket-protocol": "value_2",
+    "server": "value_3",
+    "server-timing": "x-xxxxxxXxxxxx11;xxx=0",
+    "upgrade": "websocket",
+    "x-robots-tag": "value_4"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "provider": "openai",
+  "client": "codex",
+  "api": "chatgpt_backend",
+  "client_version": "0.166.0",
+  "shape": "analytics",
+  "captured": "2026-11-09"
+}

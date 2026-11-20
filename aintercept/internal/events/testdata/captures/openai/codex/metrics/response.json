@@ -1,0 +1,30 @@
+{
+  "status": 202,
+  "headers": {
+    ":status": "202",
+    "access-control-allow-credentials": "false",
+    "access-control-allow-origin": "*",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x0000000xx000000-XX3",
+    "content-length": "16",
+    "content-type": "application/json",
+    "cross-origin-opener-policy": "value_2",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "nel": "{\"xxxxxx_xx\":\"xx-xxx\",\"xxxxxxx_xxxxxxxx\":0.00,\"xxx_xxx\":000004}",
+    "permissions-policy": "xxxxxxxx-xxxxxx=()",
+    "referrer-policy": "value_3",
+    "report-to": "{\"xxxxx\":\"xx-xxx\",\"xxx_xxx\":000004,\"xxxxxxxxx\":[{\"xxx\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=0XX0XxxXXxXXXXxxxxXXXX0XX000xXxxx0xXXXXXXXxxxxXXXxX5%0Xx00XX0X0x00xXXxX0x0xXxx0Xx0xXxxx0x6%0XxxxXXXxXxXxxX0xXxXxxxXxxxxx0XXX0XxxXxx7\"}]}",
+    "server": "value_4",
+    "set-cookie": "<redacted>",
+    "strict-transport-security": "xxx-xxx=00000008; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "via": "0.0 xxxxxx",
+    "x-content-type-options": "value_5",
+    "x-frame-options": "value_6",
+    "x-response-time": "0 xx"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    16,
+    0
+  ]
+}

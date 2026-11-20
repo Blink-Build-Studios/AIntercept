@@ -1,0 +1,9 @@
+{
+  "provider": "openai",
+  "client": "curl",
+  "api": "openai_responses",
+  "client_version": "8.5.0",
+  "shape": "responses-error-401",
+  "captured": "2026-11-09",
+  "notes": "A request made with curl and a bad key: the Responses API's own 401."
+}

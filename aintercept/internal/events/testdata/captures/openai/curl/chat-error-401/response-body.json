@@ -1,0 +1,9 @@
+{
+  "error": {
+    "message": "Xxxxxxxxx XXX xxx xxxxxxxx: xx-xxxx-xxxx. Xxx xxx xxxx xxxx XXX xxx xx xxxxx://xxxxxxxx.xxxxxx.xxx/xxxxxxx/xxx-xxxx.",
+    "type": "invalid_request_error",
+    "code": "invalid_api_key",
+    "param": null
+  },
+  "status": 401
+}

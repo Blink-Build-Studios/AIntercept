@@ -1,0 +1,9 @@
+{
+  "provider": "openai",
+  "client": "codex",
+  "api": "chatgpt_backend",
+  "client_version": "0.164.0",
+  "shape": "web-search",
+  "captured": "2026-11-09",
+  "notes": "An open command (a page), not a search query."
+}

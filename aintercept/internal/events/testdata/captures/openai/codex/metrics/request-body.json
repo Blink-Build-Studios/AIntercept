@@ -1,0 +1,467 @@
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "xxxxxxx.xxxxxxx",
+            "value": {
+              "stringValue": "0.164.0"
+            }
+          },
+          {
+            "key": "xxxxxxxxx.xxx.xxxxxxxx",
+            "value": {
+              "stringValue": "xxxx"
+            }
+          },
+          {
+            "key": "xxxxxxxxx.xxx.xxxx",
+            "value": {
+              "stringValue": "xxxxxxxxxxxxx"
+            }
+          },
+          {
+            "key": "xx_xxxxxxx",
+            "value": {
+              "stringValue": "12.0.0"
+            }
+          },
+          {
+            "key": "xx",
+            "value": {
+              "stringValue": "Xxxxxx"
+            }
+          },
+          {
+            "key": "xxx",
+            "value": {
+              "stringValue": "xxx"
+            }
+          },
+          {
+            "key": "xxxxxxxxx.xxx.xxxxxxx",
+            "value": {
+              "stringValue": "0.31.0"
+            }
+          },
+          {
+            "key": "xxxxxxx.xxxx",
+            "value": {
+              "stringValue": "xxxxx_xxx_xx"
+            }
+          }
+        ],
+        "droppedAttributesCount": 0,
+        "entityRefs": []
+      },
+      "scopeMetrics": [
+        {
+          "scope": {
+            "name": "xxxxx",
+            "version": "",
+            "attributes": [],
+            "droppedAttributesCount": 0
+          },
+          "metrics": [
+            {
+              "name": "codex.sqlite.logs.write.count",
+              "description": "",
+              "unit": "",
+              "metadata": [],
+              "sum": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "xxxxx",
+                        "value": {
+                          "stringValue": "xxxx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxxxxxx",
+                        "value": {
+                          "stringValue": "xxxxx_xxx_xx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxx",
+                        "value": {
+                          "stringValue": "xxxxxxx"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "0000000000000000009",
+                    "timeUnixNano": "000000000000000000a",
+                    "exemplars": [],
+                    "flags": 0,
+                    "asInt": 1
+                  }
+                ],
+                "aggregationTemporality": 1,
+                "isMonotonic": true
+              }
+            },
+            {
+              "name": "codex.sqlite.logs.write.duration_ms",
+              "description": "Xxxxxxxx xx xxxxxxxxxxxx.",
+              "unit": "ms",
+              "metadata": [],
+              "histogram": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "xxxxx",
+                        "value": {
+                          "stringValue": "xxxx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxxxxxx",
+                        "value": {
+                          "stringValue": "xxxxx_xxx_xx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxx",
+                        "value": {
+                          "stringValue": "xxxxxxx"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "000000000000000000b",
+                    "timeUnixNano": "000000000000000000c",
+                    "count": 1,
+                    "sum": 1.0,
+                    "bucketCounts": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      1250.0,
+                      1500.0,
+                      1750.0,
+                      2000.0,
+                      2250.0,
+                      2500.0,
+                      3000.0,
+                      3500.0,
+                      4000.0,
+                      4500.0,
+                      5000.0,
+                      6000.0,
+                      7000.0,
+                      7500.0,
+                      8000.0,
+                      9000.0,
+                      10000.0,
+                      12000.0,
+                      15000.0,
+                      20000.0,
+                      30000.0,
+                      60000.0,
+                      120000.0
+                    ],
+                    "exemplars": [],
+                    "flags": 0,
+                    "min": 1.0,
+                    "max": 1.0
+                  }
+                ],
+                "aggregationTemporality": 1
+              }
+            },
+            {
+              "name": "codex.sqlite.logs.write.bytes",
+              "description": "",
+              "unit": "",
+              "metadata": [],
+              "histogram": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "xxxxx",
+                        "value": {
+                          "stringValue": "xxxx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxxxxxx",
+                        "value": {
+                          "stringValue": "xxxxx_xxx_xx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxx",
+                        "value": {
+                          "stringValue": "xxxxxxx"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "000000000000000000d",
+                    "timeUnixNano": "000000000000000000e",
+                    "count": 1,
+                    "sum": 454.0,
+                    "bucketCounts": [
+                      0,
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      128.0,
+                      256.0,
+                      512.0,
+                      1024.0,
+                      2048.0,
+                      4096.0,
+                      8192.0,
+                      16384.0,
+                      32768.0,
+                      65536.0,
+                      131072.0,
+                      262144.0,
+                      524288.0,
+                      1048576.0,
+                      2097152.0,
+                      4194304.0,
+                      8388608.0,
+                      16777216.0
+                    ],
+                    "exemplars": [],
+                    "flags": 0,
+                    "min": 454.0,
+                    "max": 454.0
+                  }
+                ],
+                "aggregationTemporality": 1
+              }
+            },
+            {
+              "name": "codex.sqlite.logs.write.entries",
+              "description": "",
+              "unit": "",
+              "metadata": [],
+              "histogram": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "xxxxx",
+                        "value": {
+                          "stringValue": "xxxx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxxxxxx",
+                        "value": {
+                          "stringValue": "xxxxx_xxx_xx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxx",
+                        "value": {
+                          "stringValue": "xxxxxxx"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "000000000000000000f",
+                    "timeUnixNano": "0000000000000000010",
+                    "count": 1,
+                    "sum": 2.0,
+                    "bucketCounts": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      2500.0,
+                      5000.0,
+                      7500.0,
+                      10000.0
+                    ],
+                    "exemplars": [],
+                    "flags": 0,
+                    "min": 2.0,
+                    "max": 2.0
+                  }
+                ],
+                "aggregationTemporality": 1
+              }
+            },
+            {
+              "name": "codex.sqlite.logs.write.max_entry_bytes",
+              "description": "",
+              "unit": "",
+              "metadata": [],
+              "histogram": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "xxxxx",
+                        "value": {
+                          "stringValue": "xxxx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxxxxxx",
+                        "value": {
+                          "stringValue": "xxxxx_xxx_xx"
+                        }
+                      },
+                      {
+                        "key": "xxxxxx",
+                        "value": {
+                          "stringValue": "xxxxxxx"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "0000000000000000011",
+                    "timeUnixNano": "0000000000000000012",
+                    "count": 1,
+                    "sum": 228.0,
+                    "bucketCounts": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      128.0,
+                      256.0,
+                      512.0,
+                      1024.0,
+                      2048.0,
+                      4096.0,
+                      8192.0,
+                      16384.0,
+                      32768.0,
+                      65536.0,
+                      131072.0,
+                      262144.0,
+                      524288.0,
+                      1048576.0,
+                      2097152.0,
+                      4194304.0,
+                      8388608.0,
+                      16777216.0
+                    ],
+                    "exemplars": [],
+                    "flags": 0,
+                    "min": 228.0,
+                    "max": 228.0
+                  }
+                ],
+                "aggregationTemporality": 1
+              }
+            }
+          ],
+          "schemaUrl": ""
+        }
+      ],
+      "schemaUrl": ""
+    }
+  ]
+}
