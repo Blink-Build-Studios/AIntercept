@@ -14,8 +14,9 @@ metadata:
     {{- include "aintercept.labels" . | nindent 4 }}
 spec:
   # All the old workers stop before any new one starts: a new build's worker
-  # may reset the database to its schema (worker.schemaReset), and an old one
-  # beside it would write to, or refuse, the new schema.
+  # migrates the database (docs/PIPELINE.md §3.4), and an old one beside it
+  # would write the old build's rows into the new schema, or load files into
+  # tables a migration is emptying for a reload.
   strategy:
     type: Recreate
   selector:

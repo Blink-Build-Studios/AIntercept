@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"slices"
 	"sort"
@@ -20,35 +21,41 @@ import (
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg/pgtest"
 )
 
-// Versioned migrations (docs/PIPELINE.md §3.4): the chain in
-// migrations/NNNN_<name>.sql, each in its own transaction under schemaLock.
+// Versioned migrations (docs/PIPELINE.md §3.4): goose applies the chain in
+// migrations/NNNN_<name>.sql, each in its own transaction; ours is a database
+// from before migrations, the -- reload: and -- reset directives, and refusing
+// a database newer than the build.
 
 // v062Hash is the hash v0.6.2 recorded in schema_version: its schema.sql's
 // sha256, which the live databases hold.
 const v062Hash = "79b14d4e95fdfafe7a2e1f60b76432e39e25bbe551e63572b346c09313a19bbe"
 
 func TestTheFirstMigrationIsV062sSchema(t *testing.T) {
-	first := pg.Migrations[0]
-	sum := sha256.Sum256([]byte(first.SQL))
-	if first.Version != 1 || hex.EncodeToString(sum[:]) != v062Hash {
-		t.Fatalf("%s: version %d, hash %x; want version 1 with v0.6.2's schema.sql byte for byte", first.Name, first.Version, sum)
+	b, err := fs.ReadFile(pg.Migrations, "0001_initial.sql")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if pg.Latest != pg.Migrations[len(pg.Migrations)-1].Version {
-		t.Fatalf("Latest %d isn't the newest migration's", pg.Latest)
+	annotation, body, _ := strings.Cut(string(b), "\n")
+	if sum := sha256.Sum256([]byte(body)); annotation != "-- +goose Up" || hex.EncodeToString(sum[:]) != v062Hash {
+		t.Fatalf("0001_initial.sql: %q, then a body with hash %x; want goose's annotation, then v0.6.2's schema.sql byte for byte", annotation, sum)
+	}
+	ms, err := pg.ParseMigrations(pg.Migrations)
+	if err != nil || ms[0].Version != 1 || pg.Latest != ms[len(ms)-1].Version {
+		t.Fatalf("%v: Latest %d", err, pg.Latest)
 	}
 }
 
 func TestParseMigration(t *testing.T) {
-	m, err := pg.ParseMigration("0007_rebuild_steps.sql", "-- Steps keep their work.\n-- reload: steps, prompts ,step_keys\n-- breaks readers\nALTER TABLE steps ADD COLUMN x text;\n")
+	m, err := pg.ParseMigration("0007_rebuild_steps.sql", "-- +goose Up\n-- Steps keep their work.\n-- reload: steps, prompts ,step_keys\nALTER TABLE steps ADD COLUMN x text;\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Version != 7 || m.Name != "0007_rebuild_steps.sql" || m.Reset || !m.BreaksReaders ||
+	if m.Version != 7 || m.Name != "0007_rebuild_steps.sql" || m.Reset ||
 		strings.Join(m.Reload, " ") != "steps prompts step_keys" || !strings.Contains(m.SQL, "ALTER TABLE") {
 		t.Fatalf("%+v", m)
 	}
-	m, err = pg.ParseMigration("0002_add.sql", "-- reset\nCREATE TABLE x (y int);\n-- reload: calls (after the first statement: a comment)\n")
-	if err != nil || !m.Reset || m.Reload != nil || m.BreaksReaders {
+	m, err = pg.ParseMigration("0002_add.sql", "-- reset\n-- +goose Up\nCREATE TABLE x (y int);\n-- reload: calls (after the first statement: a comment)\n")
+	if err != nil || !m.Reset || m.Reload != nil {
 		t.Fatalf("%+v, %v", m, err)
 	}
 	for _, bad := range [][2]string{
@@ -65,50 +72,21 @@ func TestParseMigration(t *testing.T) {
 	}
 }
 
-func TestTheChainIsNumberedInOrder(t *testing.T) {
-	a, b := migration(t, 1, "a", "SELECT 1;"), migration(t, 3, "b", "SELECT 1;")
-	p := open(t, pgtest.Fresh(t))
-	if _, err := pg.Migrate(ctx(t), p, chain(a, b), false); err == nil {
-		t.Fatal("a chain with a gap (2, 4) was applied")
-	}
-	if _, err := pg.Migrate(ctx(t), p, chain(a, a), false); err == nil {
-		t.Fatal("a chain with 2 twice was applied")
-	}
-}
-
-// chain is this build's migrations and then more, a test's own.
-func chain(more ...pg.Migration) []pg.Migration {
-	return append(slices.Clone(pg.Migrations), more...)
-}
-
-// migration is a test's migration, numbered after this build's.
-func migration(t *testing.T, n int, name, sql string) pg.Migration {
-	t.Helper()
-	m, err := pg.ParseMigration(fmt.Sprintf("%04d_%s.sql", pg.Latest+n, name), sql)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m
-}
-
 // The chain applied to an empty database builds schema.sql's schema: the same
 // tables, columns (in order, with their types, collations, defaults and
 // identities), constraints and indexes.
 func TestTheChainBuildsSchemaSQL(t *testing.T) {
 	p := applied(t)
-	q := open(t, pgtest.Fresh(t))
-	if _, err := q.Exec(ctx(t), schemaSQL(t)); err != nil {
-		t.Fatalf("schema.sql: %v", err)
-	}
-	sameCatalog(t, catalog(t, p), catalog(t, q))
+	sameCatalog(t, catalog(t, p), catalog(t, fromSchemaSQL(t)))
 }
 
 // A database as v0.6.2 left it (the live deployment's: its schema's hash in
-// schema_version, rows in every table) becomes version 1 in place, through
-// the workers' login with the reset on (the chart's default): nothing reset,
-// every row kept, ingest_files untouched (no reload), and the API's login
-// reads the new schema_version. Later migrations in the chain keep the rows
-// too, except the tables they declare reloaded.
+// schema_version, rows in every table) is recorded as version 1 in place,
+// through the workers' login with the reset on (the chart's default): nothing
+// reset, every row kept, ingest_files untouched (no reload), schema_version
+// still holding the hash (v0.6.2's API pods stay ready through the upgrade),
+// and the API's login reads the version. Later migrations in the chain keep
+// the rows too, but for the tables they declare reloaded.
 func TestAV062DatabaseBecomesVersion1InPlace(t *testing.T) {
 	admin := pgtest.Fresh(t)
 	c := ctx(t)
@@ -128,12 +106,16 @@ func TestAV062DatabaseBecomesVersion1InPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if a.Reset || a.From != 1 || a.To != pg.Latest {
-		t.Fatalf("migrate: %+v; want from 1 to %d with no reset", a, pg.Latest)
+	if !a.V062 || a.Reset || a.From != 1 || a.To != pg.Latest {
+		t.Fatalf("migrate: %+v; want v0.6.2's, from 1 to %d with no reset", a, pg.Latest)
+	}
+	ms, err := pg.ParseMigrations(pg.Migrations)
+	if err != nil {
+		t.Fatal(err)
 	}
 	want := before
 	emptied := map[string]bool{}
-	for _, m := range pg.Migrations[1:] {
+	for _, m := range ms[1:] {
 		for _, tb := range m.Reload {
 			emptied[tb], emptied["ingest_files"] = true, true
 		}
@@ -153,16 +135,16 @@ func TestAV062DatabaseBecomesVersion1InPlace(t *testing.T) {
 	}
 	sameRows(t, want, rows(t, worker, before))
 	if got := versions(t, worker); got != versionList(pg.Latest) {
-		t.Errorf("schema_version %s, want %s", got, versionList(pg.Latest))
+		t.Errorf("goose_db_version %s, want %s", got, versionList(pg.Latest))
 	}
-	q := open(t, pgtest.Fresh(t))
-	if _, err := q.Exec(c, schemaSQL(t)); err != nil {
-		t.Fatal(err)
+	var hash string
+	if err := worker.QueryRow(c, "SELECT hash FROM schema_version").Scan(&hash); err != nil || hash != v062Hash {
+		t.Errorf("schema_version: %q, %v; want v0.6.2's hash still", hash, err)
 	}
-	sameCatalog(t, catalog(t, worker), catalog(t, q))
+	sameCatalog(t, catalog(t, worker), catalog(t, fromSchemaSQL(t)))
 	api := open(t, pgtest.WithUser(t, admin, pg.APILogin, "api pw"))
 	if err := pg.Check(c, api); err != nil {
-		t.Errorf("the API checks the schema: %v", err)
+		t.Errorf("the API checks the version: %v", err)
 	}
 }
 
@@ -173,23 +155,22 @@ func TestAnAdditiveMigrationKeepsEveryRow(t *testing.T) {
 	c := ctx(t)
 	fill(t, p)
 	before := rows(t, p, nil)
-	add := migration(t, 1, "add", `
-ALTER TABLE calls ADD COLUMN note text;
+	chain := pgtest.Chain(`ALTER TABLE calls ADD COLUMN note text;
 CREATE INDEX ON calls (note);
 CREATE TABLE notes (id text PRIMARY KEY);`)
-	a, err := pg.Migrate(c, p, chain(add), true)
+	a, err := pg.Migrate(c, p, chain, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Reset || a.Reload != nil || a.From != pg.Latest || a.To != add.Version {
+	if a.Reset || a.Reload != nil || a.From != pg.Latest || a.To != pg.Latest+1 {
 		t.Fatalf("%+v", a)
 	}
 	sameRows(t, before, rows(t, p, before))
-	if got := versions(t, p); got != versionList(add.Version) {
-		t.Fatalf("schema_version %s", got)
+	if got := versions(t, p); got != versionList(pg.Latest+1) {
+		t.Fatalf("goose_db_version %s", got)
 	}
 	// Again: nothing to do.
-	if a, err := pg.Migrate(c, p, chain(add), true); err != nil || a.From != add.Version || a.To != add.Version {
+	if a, err := pg.Migrate(c, p, chain, true); err != nil || a.From != pg.Latest+1 || a.To != pg.Latest+1 {
 		t.Fatalf("again: %+v, %v", a, err)
 	}
 }
@@ -197,63 +178,65 @@ CREATE TABLE notes (id text PRIMARY KEY);`)
 // A migration that says `-- reload: steps, prompts` empties those tables
 // (before it runs, so it can change them as an empty table allows) and
 // ingest_files, so the workers reload every raw file; every other table keeps
-// its rows.
+// its rows. From this build's version or v0.6.2's.
 func TestAReloadMigrationEmptiesOnlyItsTables(t *testing.T) {
-	p := applied(t)
-	c := ctx(t)
-	fill(t, p)
-	before := rows(t, p, nil)
-	reload := migration(t, 1, "rebuild_steps", `-- Steps get a column their refresh fills.
+	for _, from := range []string{"this build", "v0.6.2"} {
+		t.Run(from, func(t *testing.T) {
+			p := filled(t, from)
+			before := rows(t, p, nil)
+			a, err := pg.Migrate(ctx(t), p, pgtest.Chain(`-- Steps get a column their refresh fills.
 -- reload: steps, prompts
-ALTER TABLE steps ADD COLUMN weight bigint NOT NULL;`)
-	a, err := pg.Migrate(c, p, chain(reload), false)
-	if err != nil {
-		t.Fatal(err)
+ALTER TABLE steps ADD COLUMN weight bigint NOT NULL;`), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if a.Reset || strings.Join(a.Reload, " ") != "steps prompts" {
+				t.Fatalf("%+v", a)
+			}
+			want := map[string][]string{}
+			for tb, rs := range before {
+				if tb != "steps" && tb != "prompts" && tb != "ingest_files" {
+					want[tb] = rs
+				}
+			}
+			sameRows(t, want, rows(t, p, before))
+		})
 	}
-	if a.Reset || strings.Join(a.Reload, " ") != "steps prompts" {
-		t.Fatalf("%+v", a)
-	}
-	want := map[string][]string{}
-	for tb, rs := range before {
-		if tb != "steps" && tb != "prompts" && tb != "ingest_files" {
-			want[tb] = rs
-		}
-	}
-	sameRows(t, want, rows(t, p, before))
 }
 
-// A `-- reset` migration empties the database and applies the chain up to it;
-// so does the operator's `aintercept pg reset` (pg.Reset), with this build's.
+// A `-- reset` migration empties the database, and goose applies the whole
+// chain (from this build's version or v0.6.2's); so does the operator's
+// `aintercept pg reset` (pg.Reset), with this build's.
 func TestAResetMigrationEmptiesTheDatabase(t *testing.T) {
-	p := applied(t)
-	c := ctx(t)
-	fill(t, p)
-	before := rows(t, p, nil)
-	reset := migration(t, 1, "start_over", "-- reset\nCREATE TABLE notes (id text PRIMARY KEY);")
-	add := migration(t, 2, "add", "ALTER TABLE notes ADD COLUMN body text;")
-	a, err := pg.Migrate(c, p, chain(reset, add), false)
-	if err != nil {
-		t.Fatal(err)
+	for _, from := range []string{"this build", "v0.6.2"} {
+		t.Run(from, func(t *testing.T) {
+			p := filled(t, from)
+			c := ctx(t)
+			before := rows(t, p, nil)
+			a, err := pg.Migrate(c, p, pgtest.Chain("-- reset\nCREATE TABLE notes (id text PRIMARY KEY);", "ALTER TABLE notes ADD COLUMN body text;"), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !a.Reset || a.To != pg.Latest+2 {
+				t.Fatalf("%+v", a)
+			}
+			sameRows(t, map[string][]string{}, rows(t, p, before))
+			if got := versions(t, p); got != versionList(pg.Latest+2) {
+				t.Fatalf("goose_db_version %s", got)
+			}
+			var cols int
+			if err := p.QueryRow(c, "SELECT count(*) FROM pg_attribute WHERE attrelid = 'notes'::regclass AND attnum > 0").Scan(&cols); err != nil || cols != 2 {
+				t.Fatalf("notes has %d columns (%v), want 2", cols, err)
+			}
+		})
 	}
-	if !a.Reset || a.To != add.Version {
-		t.Fatalf("%+v", a)
-	}
-	sameRows(t, map[string][]string{}, rows(t, p, before))
-	if got := versions(t, p); got != versionList(add.Version) {
-		t.Fatalf("schema_version %s", got)
-	}
-	var cols int
-	if err := p.QueryRow(c, "SELECT count(*) FROM pg_attribute WHERE attrelid = 'notes'::regclass AND attnum > 0").Scan(&cols); err != nil || cols != 2 {
-		t.Fatalf("notes has %d columns (%v), want 2", cols, err)
-	}
-
-	q := applied(t)
-	fill(t, q)
-	if err := pg.Reset(c, q); err != nil {
+	q := filled(t, "this build")
+	before := rows(t, q, nil)
+	if err := pg.Reset(ctx(t), q); err != nil {
 		t.Fatal(err)
 	}
 	sameRows(t, map[string][]string{}, rows(t, q, before))
-	if err := pg.Check(c, q); err != nil {
+	if err := pg.Check(ctx(t), q); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -263,24 +246,23 @@ func TestAResetMigrationEmptiesTheDatabase(t *testing.T) {
 func TestARollbackIsRefusedAndNothingReset(t *testing.T) {
 	p := applied(t)
 	c := ctx(t)
-	newer := migration(t, 1, "newer", "CREATE TABLE notes (id text PRIMARY KEY);")
-	if _, err := pg.Migrate(c, p, chain(newer), false); err != nil {
+	if _, err := pg.Migrate(c, p, pgtest.Chain("CREATE TABLE notes (id text PRIMARY KEY);"), false); err != nil {
 		t.Fatal(err)
 	}
 	fill(t, p)
 	before := rows(t, p, nil)
 	for _, resetting := range []bool{false, true} {
 		_, err := pg.Migrate(c, p, pg.Migrations, resetting)
-		if !errors.Is(err, pg.ErrNewer) || !strings.Contains(err.Error(), fmt.Sprint(newer.Version)) {
-			t.Fatalf("reset %v: %v, want ErrNewer naming version %d", resetting, err, newer.Version)
+		if !errors.Is(err, pg.ErrNewer) || !strings.Contains(err.Error(), fmt.Sprintf("version %d", pg.Latest+1)) {
+			t.Fatalf("reset %v: %v, want ErrNewer naming version %d", resetting, err, pg.Latest+1)
 		}
 	}
 	if err := pg.Check(c, p); !errors.Is(err, pg.ErrNewer) {
 		t.Fatalf("check: %v", err)
 	}
 	sameRows(t, before, rows(t, p, before))
-	if got := versions(t, p); got != versionList(newer.Version) {
-		t.Fatalf("schema_version %s", got)
+	if got := versions(t, p); got != versionList(pg.Latest+1) {
+		t.Fatalf("goose_db_version %s", got)
 	}
 }
 
@@ -294,16 +276,16 @@ func TestConcurrentWorkersRunEachMigrationOnce(t *testing.T) {
 			if start == "v0.6.2" {
 				v062(t, p)
 			}
-			ms := chain(
-				migration(t, 1, "ran", "CREATE TABLE ran (n int);\nINSERT INTO ran VALUES (1);"),
-				migration(t, 2, "again", "-- reload: calls\nINSERT INTO ran VALUES (2);"),
-				migration(t, 3, "more", "INSERT INTO ran VALUES (3);"),
+			chain := pgtest.Chain(
+				"CREATE TABLE ran (n int);\nINSERT INTO ran VALUES (1);",
+				"-- reload: calls\nINSERT INTO ran VALUES (2);",
+				"INSERT INTO ran VALUES (3);",
 			)
 			var wg sync.WaitGroup
-			errs := make([]error, 8)
+			errs := make([]error, 4)
 			for i := range errs {
 				wg.Add(1)
-				go func() { defer wg.Done(); _, errs[i] = pg.Migrate(c, p, ms, true) }()
+				go func() { defer wg.Done(); _, errs[i] = pg.Migrate(c, p, chain, true) }()
 			}
 			wg.Wait()
 			for i, err := range errs {
@@ -318,53 +300,45 @@ func TestConcurrentWorkersRunEachMigrationOnce(t *testing.T) {
 			if fmt.Sprint(ran) != "[1 2 3]" {
 				t.Fatalf("ran %v, want each migration once", ran)
 			}
-			if got := versions(t, p); got != versionList(ms[len(ms)-1].Version) {
-				t.Fatalf("schema_version %s", got)
+			if got := versions(t, p); got != versionList(pg.Latest+3) {
+				t.Fatalf("goose_db_version %s", got)
 			}
 		})
 	}
 }
 
-// Each version records the oldest build whose API reads it: a migration that
-// says `-- breaks readers` raises it to its own version, the others keep it.
-func TestReadersFrom(t *testing.T) {
-	p := applied(t)
+// A migration runs without the worker login's statement timeout (a minute),
+// and with a minute's lock timeout.
+func TestMigrationsRunWithoutTheStatementTimeout(t *testing.T) {
+	admin := pgtest.Fresh(t)
 	c := ctx(t)
-	ms := chain(
-		migration(t, 1, "add", "CREATE TABLE notes (id text PRIMARY KEY);"),
-		migration(t, 2, "rename", "-- breaks readers\nALTER TABLE notes RENAME COLUMN id TO note_id;"),
-		migration(t, 3, "add_more", "ALTER TABLE notes ADD COLUMN body text;"),
-	)
-	if _, err := pg.Migrate(c, p, ms, false); err != nil {
+	conn, err := pgx.Connect(c, admin)
+	if err != nil {
 		t.Fatal(err)
 	}
-	var got string
-	if err := p.QueryRow(c, "SELECT string_agg(version || ':' || readers_from, ' ' ORDER BY version) FROM schema_version").Scan(&got); err != nil {
+	defer conn.Close(c)
+	if err := pg.CreateLogins(c, conn, "worker pw", "api pw"); err != nil {
 		t.Fatal(err)
 	}
-	l := pg.Latest
-	ours, from := readersFromList()
-	want := fmt.Sprintf("%s %d:%d %d:%d %d:%d", ours, l+1, from, l+2, l+2, l+3, l+2)
-	if got != want {
-		t.Fatalf("schema_version %s, want %s", got, want)
+	worker := open(t, pgtest.WithUser(t, admin, pg.WorkerLogin, "worker pw"))
+	if _, err := pg.Migrate(c, worker, pgtest.Chain(
+		"DO $$ BEGIN IF current_setting('statement_timeout') <> '0' OR current_setting('lock_timeout') <> '1min' THEN "+
+			"RAISE EXCEPTION 'statement_timeout %, lock_timeout %', current_setting('statement_timeout'), current_setting('lock_timeout'); END IF; END $$;"), false); err != nil {
+		t.Fatal(err)
 	}
-}
-
-// readersFromList is this build's chain's version:readers_from pairs, and its
-// newest's readers_from.
-func readersFromList() (string, int) {
-	var out []string
-	from := 1
-	for _, m := range pg.Migrations {
-		if m.BreaksReaders {
-			from = m.Version
-		}
-		out = append(out, fmt.Sprintf("%d:%d", m.Version, from))
-	}
-	return strings.Join(out, " "), from
 }
 
 // --- helpers -----------------------------------------------------------------
+
+// fromSchemaSQL is a fresh database with schema.sql applied.
+func fromSchemaSQL(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	q := open(t, pgtest.Fresh(t))
+	if _, err := q.Exec(ctx(t), schemaSQL(t)); err != nil {
+		t.Fatalf("schema.sql: %v", err)
+	}
+	return q
+}
 
 func schemaSQL(t *testing.T) string {
 	t.Helper()
@@ -380,7 +354,11 @@ func schemaSQL(t *testing.T) string {
 func v062(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	c := ctx(t)
-	if _, err := p.Exec(c, pg.Migrations[0].SQL); err != nil {
+	b, err := fs.ReadFile(pg.Migrations, "0001_initial.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Exec(c, string(b)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := p.Exec(c, "INSERT INTO schema_version (hash) VALUES ($1)", v062Hash); err != nil {
@@ -389,7 +367,24 @@ func v062(t *testing.T, p *pgxpool.Pool) {
 	fill(t, p)
 }
 
-// fill puts two rows in every table but schema_version, a value in every
+// filled is a fresh database at this build's version, or as v0.6.2 left it,
+// with rows in every table.
+func filled(t *testing.T, from string) *pgxpool.Pool {
+	t.Helper()
+	if from == "v0.6.2" {
+		p := open(t, pgtest.Fresh(t))
+		v062(t, p)
+		return p
+	}
+	p := applied(t)
+	fill(t, p)
+	return p
+}
+
+// bookkeeping is the tables that hold versions, not data.
+var bookkeeping = []string{"goose_db_version", "schema_version"}
+
+// fill puts two rows in every table but the bookkeeping, a value in every
 // column, from the database's own catalog (so it fills whatever schema the
 // database has).
 func fill(t *testing.T, p *pgxpool.Pool) {
@@ -397,8 +392,8 @@ func fill(t *testing.T, p *pgxpool.Pool) {
 	c := ctx(t)
 	r, err := p.Query(c, `SELECT c.relname::text, array_agg(a.attname::text ORDER BY a.attnum), array_agg(format_type(a.atttypid, a.atttypmod) ORDER BY a.attnum)
 		FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
-		WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind = 'r' AND c.relname <> 'schema_version'
-		GROUP BY c.relname ORDER BY c.relname`)
+		WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind = 'r' AND c.relname <> ALL($1)
+		GROUP BY c.relname ORDER BY c.relname`, bookkeeping)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,15 +445,15 @@ func literal(t *testing.T, typ, s string, i int) string {
 	return ""
 }
 
-// rows is every table's rows but schema_version's, each as JSON, sorted. With
-// like (an earlier rows), only like's tables and the columns its rows have,
-// so a column added since doesn't count.
+// rows is every table's rows but the bookkeeping's, each as JSON, sorted.
+// With like (an earlier rows), only like's tables and the columns its rows
+// have, so a column added since doesn't count.
 func rows(t *testing.T, p *pgxpool.Pool, like map[string][]string) map[string][]string {
 	t.Helper()
 	c := ctx(t)
 	var tables []string
 	if err := p.QueryRow(c, `SELECT coalesce(array_agg(relname::text ORDER BY relname), '{}') FROM pg_class
-		WHERE relnamespace = current_schema()::regnamespace AND relkind = 'r' AND relname <> 'schema_version'`).Scan(&tables); err != nil {
+		WHERE relnamespace = current_schema()::regnamespace AND relkind = 'r' AND relname <> ALL($1)`, bookkeeping).Scan(&tables); err != nil {
 		t.Fatal(err)
 	}
 	out := map[string][]string{}
@@ -517,19 +512,19 @@ func sameRows(t *testing.T, want, got map[string][]string) {
 	}
 }
 
-// versions is schema_version's versions, in order.
+// versions is the versions goose recorded but its 0, in order.
 func versions(t *testing.T, p *pgxpool.Pool) string {
 	t.Helper()
 	var s string
-	if err := p.QueryRow(ctx(t), "SELECT string_agg(version::text, ' ' ORDER BY version) FROM schema_version").Scan(&s); err != nil {
+	if err := p.QueryRow(ctx(t), "SELECT string_agg(version_id::text, ' ' ORDER BY version_id) FROM goose_db_version WHERE version_id > 0 AND is_applied").Scan(&s); err != nil {
 		t.Fatal(err)
 	}
 	return s
 }
 
-func versionList(n int) string {
+func versionList(n int64) string {
 	var out []string
-	for v := 1; v <= n; v++ {
+	for v := int64(1); v <= n; v++ {
 		out = append(out, fmt.Sprint(v))
 	}
 	return strings.Join(out, " ")

@@ -160,8 +160,8 @@ kubectl run lag --rm -i --restart=Never --image=curlimages/curl -- -s http://wor
 ```
 
 With the query API on (`api.enabled=true`), it reads Postgres too, through the Secret's
-`api-url`. It checks the schema's hash every few seconds and answers 503 (unready) until the
-database holds the schema the workers apply, so it's ready only once they've run. Then the request shows up in it:
+`api-url`. It checks the database's schema version every few seconds and answers 503 (unready)
+until the workers have migrated it, so it's ready only once they've run. Then the request shows up in it:
 
 ```bash
 kubectl rollout status deploy/api
@@ -178,14 +178,13 @@ Check out the release's tag and `helm upgrade` from it: the chart brings that re
 load balancer (a new IP for every client), and once took down the tunnel people reach the UI
 through.
 
-A release that changes the schema is just `helm upgrade` too. The schema has no migrations: the
-workers' Deployment is `Recreate` (every old worker stops before a new one starts), and the first new
-worker finds another build's schema hash, drops the old schema and applies its own in one transaction
-(with the grants `logins.sql` gives), logging an `ALARM` line. `ingest_files` starts empty, so the
-workers reload every raw file still in `<prefix>/raw/` and the pages fill back in as they load. The API
-is unready (503 on `/api/v1/status`) for the seconds the reset takes, never restarted, and ready again
-once the database holds its schema. `worker.schemaReset: false` turns the reset off: the workers then
-refuse another build's schema.
+A release that changes the schema is just `helm upgrade` too. The workers' Deployment is `Recreate`
+(every old worker stops before a new one starts), and the first new worker migrates the database
+(docs/PIPELINE.md §3.4): most migrations keep every row; one that says so reloads named tables, or
+everything, from the raw files still in `<prefix>/raw/`. The release notes say which, and
+docs/PRODUCTION.md §5b3 has what each costs. The API stays ready through an upgrade: it reads the
+database's version from the oldest it needs on. Rolling back to an older release fails loudly (its
+workers refuse a newer database) and changes nothing.
 
 ## Teardown
 

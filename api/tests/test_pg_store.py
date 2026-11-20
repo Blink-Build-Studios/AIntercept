@@ -39,38 +39,29 @@ def db(pg_dsn):
     _exec(pg_dsn, "DELETE FROM ingest_pods", "DELETE FROM calls")
 
 
-def test_the_newest_schema_version_is_the_workers(pg_dsn):
-    # The API ships the newest schema version it knows (schema_version.py, which `make regen` writes from
-    # the workers' migrations; it has no copy of them). The database pgdb builds from schema.sql is at it.
-    assert pgstore.OLDEST <= pgstore.NEWEST == pgdb.newest_migration()
+def test_this_build_reads_the_workers_schema(pg_dsn):
+    # The oldest version the API reads is one of the workers' migrations; the database pgdb builds from
+    # schema.sql, at the newest, is read.
+    assert 1 <= pgstore.OLDEST <= pgdb.newest_migration()
     with contextlib.closing(PgStore(pg_dsn)) as store:
         assert store.ready()
 
 
-# The hash v0.6.2 recorded in schema_version (its schema.sql's sha256), the last before versions.
-V062 = "79b14d4e95fdfafe7a2e1f60b76432e39e25bbe551e63572b346c09313a19bbe"
-
-
-def _version(dsn: str, version: int | None, readers_from: int = 1) -> None:
-    """Sets the database's schema version and the oldest build that reads it (None: no row)."""
-    _exec(dsn, "DELETE FROM schema_version")
+def _version(dsn: str, version: int | None) -> None:
+    """Sets the database's schema version, goose's table (None: no row)."""
+    _exec(dsn, "DELETE FROM goose_db_version")
     if version is not None:
-        _exec(dsn, f"INSERT INTO schema_version (version, readers_from) VALUES ({version}, {readers_from})")  # noqa: S608
+        _exec(dsn, f"INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, true), ({version}, true)")  # noqa: S608
 
 
 @contextlib.contextmanager
-def _before_versions(dsn: str) -> Iterator[None]:
-    """schema_version as it was before versions (v0.6.2's hash) until the block ends."""
-    _exec(
-        dsn,
-        "ALTER TABLE schema_version RENAME TO versions_aside",
-        "CREATE TABLE schema_version (hash text NOT NULL)",
-        f"INSERT INTO schema_version (hash) VALUES ('{V062}')",  # noqa: S608
-    )
+def _before_migrations(dsn: str) -> Iterator[None]:
+    """The database as v0.6.2 left it (no goose table, its schema's hash) until the block ends."""
+    _exec(dsn, "ALTER TABLE goose_db_version RENAME TO versions_aside")
     try:
         yield
     finally:
-        _exec(dsn, "DROP TABLE schema_version", "ALTER TABLE versions_aside RENAME TO schema_version")
+        _exec(dsn, "ALTER TABLE versions_aside RENAME TO goose_db_version")
 
 
 def _unready(c: TestClient, store: PgStore) -> None:
@@ -87,16 +78,15 @@ def test_an_older_schema_is_unready_until_the_workers_migrate_it(monkeypatch):
     # (this build reads 5 on). It answers 503 and stays alive, then is ready without a restart.
     monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
     monkeypatch.setattr(pgstore, "OLDEST", 5)
-    monkeypatch.setattr(pgstore, "NEWEST", 6)
     admin = pgdb.admin_dsn()
     assert admin is not None
     with pgdb.fresh_database(admin) as other:
-        for older in ("none", "before versions", 4):
+        for older in ("none", "before migrations", 4):
             aside: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
-            if older == "before versions":
-                aside = _before_versions(other)
+            if older == "before migrations":
+                aside = _before_migrations(other)
             with aside:
-                if older != "before versions":
+                if older != "before migrations":
                     _version(other, None if older == "none" else 4)
                 store = PgStore(other)
                 c = make_client(store)
@@ -106,20 +96,20 @@ def test_an_older_schema_is_unready_until_the_workers_migrate_it(monkeypatch):
                 assert c.get("/api/v1/status").status_code == 200 and store.ready()
 
 
-def test_a_newer_schema_older_builds_read_keeps_a_pod_ready(monkeypatch):
-    # A rolling update: the workers migrate past this build's newest version while its pods still serve.
-    # An additive migration leaves them ready; one that says older builds can't read it (readers_from
-    # after this build's newest) takes them out of the Service until they're replaced.
+def test_a_newer_schema_keeps_a_pod_ready(monkeypatch):
+    # A rolling update: the workers migrate past what this build knows while its pods still serve. A
+    # migration never takes away what the previous release reads (docs/PIPELINE.md §3.4), so they stay
+    # ready; a reset under them (no version yet) takes them out of the Service until the schema is back.
     monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
     admin = pgdb.admin_dsn()
     assert admin is not None
-    newest = pgstore.NEWEST
+    newest = pgdb.newest_migration()
     with pgdb.fresh_database(admin) as other, contextlib.closing(PgStore(other)) as store:
         c = make_client(store)
         assert c.get("/api/v1/status").status_code == 200
-        _version(other, newest + 1, readers_from=newest)
+        _version(other, newest + 3)
         assert c.get("/api/v1/status").status_code == 200 and store.ready()
-        _version(other, newest + 2, readers_from=newest + 2)
+        _version(other, None)
         _unready(c, store)
 
 
@@ -127,16 +117,16 @@ def test_the_schema_is_checked_every_few_seconds(pg_dsn, monkeypatch):
     # Between checks a pod answers from the last one: no query per request.
     with contextlib.closing(PgStore(pg_dsn)) as store:
         assert store.ready()
-        checks: list[tuple[int, int]] = []
+        checks: list[int] = []
 
-        def check(oldest: int, newest: int) -> int:
-            checks.append((oldest, newest))
-            return newest
+        def check(oldest: int) -> int:
+            checks.append(oldest)
+            return oldest
 
         monkeypatch.setattr(store.reader, "check_schema", check)
         assert store.ready() and checks == []
         store._checked -= pgstore.RECHECK_SECONDS  # the interval passes
-        assert store.ready() and checks == [(pgstore.OLDEST, pgstore.NEWEST)]
+        assert store.ready() and checks == [pgstore.OLDEST]
 
 
 def _status(store: PgStore) -> dict:
@@ -364,5 +354,5 @@ def test_the_app_starts_unready_on_another_schema(pg_dsn, tmp_path, monkeypatch)
         with contextlib.closing(app.state.store):
             c = TestClient(app)
             assert c.get("/api/v1/status").status_code == 503
-            _version(other, pgstore.NEWEST)
+            _version(other, pgdb.newest_migration())
             assert c.get("/api/v1/status").status_code == 200

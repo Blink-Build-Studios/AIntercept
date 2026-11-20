@@ -5,6 +5,7 @@
 //	aintercept certsvc    Envoy SDS server: mints leaf certificates on demand
 //	aintercept worker     the workers (docs/PIPELINE.md §2.2, §5): load the observers' raw files into Postgres and refresh the rollups
 //	aintercept canon      writes a capture as raw files, or loads it into Postgres, through the observer's and the workers' code (a tool; takes flags)
+//	aintercept pg reset   empties the workers' database and applies the schema: every fact reloads from the raw files (an operator's tool)
 //
 // The services are configured through environment variables.
 package main
@@ -22,11 +23,12 @@ var modes = map[string]func(){
 	"observer": observer.Run,
 	"certsvc":  certsvc.Run,
 	"canon":    canonCmd,
+	"pg":       pgCmd,
 	"worker":   ingest.Run,
 }
 
 func main() {
-	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "canon") {
+	if len(os.Args) < 2 || (len(os.Args) > 2 && os.Args[1] != "canon" && os.Args[1] != "pg") {
 		usage()
 	}
 	run, ok := modes[os.Args[1]]
@@ -37,7 +39,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|worker, or aintercept canon -h")
+	fmt.Fprintln(os.Stderr, "usage: aintercept observer|certsvc|worker, aintercept pg reset, or aintercept canon -h")
 	os.Exit(2)
 }
 

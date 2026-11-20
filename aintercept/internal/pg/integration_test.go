@@ -66,7 +66,7 @@ func TestSchemaAppliesOnce(t *testing.T) {
 	}
 	// Workers starting together: one applies each migration, the rest find it applied.
 	var wg sync.WaitGroup
-	errs := make([]error, 8)
+	errs := make([]error, 4)
 	for i := range errs {
 		wg.Add(1)
 		go func() { defer wg.Done(); errs[i] = pg.Apply(c, p) }()
@@ -78,7 +78,7 @@ func TestSchemaAppliesOnce(t *testing.T) {
 		}
 	}
 	if got := versions(t, p); got != versionList(pg.Latest) {
-		t.Fatalf("schema_version %s, want %s", got, versionList(pg.Latest))
+		t.Fatalf("goose_db_version %s, want %s", got, versionList(pg.Latest))
 	}
 	if err := pg.Check(c, p); err != nil {
 		t.Fatalf("check after: %v", err)
@@ -93,7 +93,7 @@ func TestSchemaAppliesOnce(t *testing.T) {
 	}
 }
 
-// schemaTables is the tables schema.sql creates, sorted.
+// schemaTables is the tables schema.sql creates (goose's among them), sorted.
 func schemaTables(t *testing.T) []string {
 	var out []string
 	for _, m := range regexp.MustCompile(`(?m)^CREATE TABLE (\w+)`).FindAllStringSubmatch(schemaSQL(t), -1) {
@@ -103,11 +103,11 @@ func schemaTables(t *testing.T) []string {
 	return out
 }
 
-// legacy makes p's schema_version what it was before migrations: one row, a
-// schema's hash.
+// legacy makes p's database one from before migrations: no goose table, and a
+// schema's hash in schema_version.
 func legacy(t *testing.T, p *pgxpool.Pool, hash string) {
 	t.Helper()
-	for _, sql := range []string{"DROP TABLE schema_version", "CREATE TABLE schema_version (hash text NOT NULL)"} {
+	for _, sql := range []string{"DROP TABLE goose_db_version", "DELETE FROM schema_version"} {
 		if _, err := p.Exec(ctx(t), sql); err != nil {
 			t.Fatal(err)
 		}

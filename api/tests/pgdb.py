@@ -3,8 +3,8 @@ test session (each xdist worker its own), on the server AINTERCEPT_TEST_PG names
 service container, or the container `make check` starts with scripts/test-pg.sh).
 
 The schema is the workers' (`aintercept/internal/pg/schema.sql`: what their migrations build, which
-their tests hold equal), its statements in one transaction, then the newest migration's version into
-schema_version, as `pg.Apply` leaves it."""
+their tests hold equal), its statements in one transaction, then every migration recorded applied in
+goose's table, as `pg.Apply` leaves it."""
 
 import contextlib
 import os
@@ -63,11 +63,11 @@ def newest_migration() -> int:
 
 
 def apply_schema(dsn: str) -> None:
-    """schema.sql at the newest migration's version, which only builds that know it read (readers_from)."""
+    """schema.sql at the newest migration's version."""
     v = newest_migration()
     conn = connect(dsn, autocommit=False)
     try:
-        sql = f"INSERT INTO schema_version (version, readers_from) VALUES ({v}, {v})"  # noqa: S608 (an int)
+        sql = f"INSERT INTO goose_db_version (version_id, is_applied) SELECT n, true FROM generate_series(0, {v}) n"  # noqa: S608 (an int)
         execute(conn, *statements(SCHEMA.read_text()), sql)
         conn.commit()
     finally:

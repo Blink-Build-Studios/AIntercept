@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -372,11 +371,7 @@ func TestAReloadMigrationRefillsItsTables(t *testing.T) {
 	}
 	loadAll(t, db, s)
 	before := snapshot(t, db)
-	m, err := pg.ParseMigration(fmt.Sprintf("%04d_reload_calls.sql", pg.Latest+1), "-- reload: calls\nCREATE INDEX ON calls (model);")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pg.Migrate(ctx(t), db, append(slices.Clone(pg.Migrations), m), false); err != nil {
+	if _, err := pg.Migrate(ctx(t), db, pgtest.Chain("-- reload: calls\nCREATE INDEX ON calls (model);"), false); err != nil {
 		t.Fatal(err)
 	}
 	var calls, files, accounts int

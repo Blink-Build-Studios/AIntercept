@@ -2,9 +2,6 @@ package pg
 
 import (
 	"context"
-	"crypto/sha256"
-	_ "embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -12,31 +9,26 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Schema is the schema (§3): one embedded, hand-written file.
-//
-//go:embed schema.sql
-var Schema string
-
-// SchemaHash is Schema's sha256, hex: what schema_version records.
-var SchemaHash = func() string {
-	sum := sha256.Sum256([]byte(Schema))
-	return hex.EncodeToString(sum[:])
-}()
+// The schema (§3) is the migrations' (migrate.go); schema.sql is the schema
+// they build, to read, which the tests hold equal to them.
 
 var (
-	// ErrSchemaMismatch is a database whose schema isn't this one. There are no
-	// migrations: a schema change means a fresh database, which ApplyOrReset
-	// makes.
+	// ErrSchemaMismatch is a database the migrations can't reach: one from
+	// before them at another hash than v0.6.2's (Migrate resets it with
+	// resetting). Check also says it of a database at an older version.
 	ErrSchemaMismatch = errors.New("pg: the database's schema isn't this build's")
+	// ErrNewer is a database at a version newer than the build's: a rollback.
+	// It's never reset.
+	ErrNewer = errors.New("pg: the database is newer than this build")
 	// ErrNoSchema is a database the schema was never applied to.
 	ErrNoSchema = errors.New("pg: the database has no schema")
-	// ErrNotEmpty is a database with tables but no schema_version: not one
-	// Apply would apply the schema to, or ApplyOrReset reset.
-	ErrNotEmpty = errors.New("pg: the database has tables but no schema_version")
+	// ErrNotEmpty is a database with tables but no versions: not one Migrate
+	// would apply the schema to, or reset.
+	ErrNotEmpty = errors.New("pg: the database has tables but no schema version")
 )
 
-// schemaLock is the advisory lock Apply holds, so concurrent workers apply the
-// schema (or reset the database) once.
+// schemaLock is the session lock Migrate holds (goose's Postgres locker, with
+// this id), so concurrent workers migrate (or reset the database) once.
 const schemaLock int64 = 0x61696e7465720001
 
 // resetSQL empties the database for this build's schema: a new public schema,
@@ -62,78 +54,35 @@ type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// Apply applies the schema to an empty database and records its hash, or
-// checks the hash already recorded: it fails on another build's schema
-// (ErrSchemaMismatch) or a database that isn't one (ErrNotEmpty).
+// Apply is Migrate with this build's chain, never resetting.
 func Apply(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := apply(ctx, pool, false)
+	_, err := Migrate(ctx, pool, Migrations, false)
 	return err
 }
 
-// ApplyOrReset is Apply, except that a database holding another build's
-// schema is reset first: everything in it is dropped and this build's schema
-// applied, in one transaction, and reset is true. The workers call it at start
-// (WORKER_SCHEMA_RESET): every fact reloads from the raw files, since
-// ingest_files starts empty. A database with tables but no schema_version is
-// still refused (ErrNotEmpty).
-func ApplyOrReset(ctx context.Context, pool *pgxpool.Pool) (reset bool, err error) {
-	return apply(ctx, pool, true)
-}
-
-func apply(ctx context.Context, pool *pgxpool.Pool, resetting bool) (reset bool, err error) {
-	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		// Workers starting together wait for the first; a reset waits out the
-		// API's reads (30 s at most) for its locks.
-		if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '1min'"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", schemaLock); err != nil {
-			return err
-		}
-		switch err := Check(ctx, tx); {
-		case err == nil:
-			return nil
-		case errors.Is(err, ErrSchemaMismatch) && resetting:
-			if _, err := tx.Exec(ctx, resetSQL); err != nil {
-				return fmt.Errorf("pg: resetting the database: %w", err)
-			}
-			reset = true
-		case errors.Is(err, ErrNoSchema):
-			var tables int
-			if err := tx.QueryRow(ctx, "SELECT count(*) FROM pg_tables WHERE schemaname = current_schema()").Scan(&tables); err != nil {
-				return err
-			}
-			if tables > 0 {
-				return ErrNotEmpty
-			}
-		default:
-			return err
-		}
-		if _, err := tx.Exec(ctx, Schema); err != nil {
-			return fmt.Errorf("pg: applying the schema: %w", err)
-		}
-		_, err := tx.Exec(ctx, "INSERT INTO schema_version (hash) VALUES ($1)", SchemaHash)
-		return err
-	})
-	return reset && err == nil, err
-}
-
-// Check fails unless the database's schema is this one (ErrNoSchema,
-// ErrSchemaMismatch). The API makes the same check (reader.check_schema).
+// Check fails unless the database is at this build's version (ErrNoSchema,
+// ErrSchemaMismatch, ErrNewer).
 func Check(ctx context.Context, q Querier) error {
-	var reg *string
-	if err := q.QueryRow(ctx, "SELECT to_regclass('schema_version')::text").Scan(&reg); err != nil {
+	var gooseTable, hashTable bool
+	if err := q.QueryRow(ctx, "SELECT to_regclass('goose_db_version') IS NOT NULL, to_regclass('schema_version') IS NOT NULL").
+		Scan(&gooseTable, &hashTable); err != nil {
 		return err
 	}
-	if reg == nil {
+	switch {
+	case !gooseTable && hashTable:
+		return fmt.Errorf("%w: it's from before migrations", ErrSchemaMismatch)
+	case !gooseTable:
 		return ErrNoSchema
 	}
-	var hashes []string
-	if err := q.QueryRow(ctx, "SELECT coalesce(array_agg(hash), '{}') FROM schema_version").Scan(&hashes); err != nil {
+	var v int64
+	if err := q.QueryRow(ctx, "SELECT coalesce(max(version_id), 0) FROM goose_db_version").Scan(&v); err != nil {
 		return err
 	}
-	if len(hashes) != 1 || hashes[0] != SchemaHash {
-		return fmt.Errorf("%w: it has %v, this build's is %s", ErrSchemaMismatch, hashes, SchemaHash)
+	switch {
+	case v > Latest:
+		return fmt.Errorf("%w: it's at version %d, this build's is %d", ErrNewer, v, Latest)
+	case v < Latest:
+		return fmt.Errorf("%w: it's at version %d, this build's is %d", ErrSchemaMismatch, v, Latest)
 	}
 	return nil
 }

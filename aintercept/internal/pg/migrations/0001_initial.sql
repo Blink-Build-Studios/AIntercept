@@ -1,3 +1,4 @@
+-- +goose Up
 -- The schema (docs/PIPELINE.md §3, §5): the facts, the dirty list and the rollups. Hand-written.
 -- Applied by pg.Apply to an empty database, which records this file's hash (SchemaHash) in
 -- schema_version. There are no migrations: a change to this file means a fresh database. Only the

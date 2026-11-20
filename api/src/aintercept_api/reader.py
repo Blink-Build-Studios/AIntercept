@@ -34,8 +34,8 @@ POOL_SIZE = 8
 
 
 class SchemaMismatch(RuntimeError):
-    """The database's schema isn't this build's (pg.ErrSchemaMismatch, pg.ErrNoSchema): the API isn't
-    ready (PgStore.ready)."""
+    """The database isn't at a schema version this build reads (Reader.check_schema): the API isn't ready
+    (PgStore.ready)."""
 
 
 # --- tracing (tests: what a request read) -----------------------------------------------------------
@@ -213,15 +213,20 @@ class Reader:
             if self.trace is not None and snap.load.statements:
                 self.trace.append(snap.load)
 
-    def check_schema(self, want: str) -> None:
-        """Refuse a database whose schema isn't this build's (pg.Check)."""
+    def check_schema(self, oldest: int) -> int:
+        """The database's schema version (goose's: the workers' migrations, pg.Migrate), or SchemaMismatch
+        when it's older than `oldest`, the oldest this build reads. A newer one is read: the workers
+        migrate first in an upgrade, and a migration never takes away what the previous release reads."""
         with self.pool.connection() as (conn, _):
-            (reg,) = conn.execute("SELECT to_regclass('schema_version')::text").fetchone() or (None,)
-            if reg != "schema_version":
-                raise SchemaMismatch("the database has no schema (the workers apply it)")
-            found = [h for (h,) in conn.execute("SELECT hash FROM schema_version").fetchall()]
-        if found != [want]:
-            raise SchemaMismatch(f"the database's schema {found} isn't this build's {want} (the workers apply it)")
+            (reg,) = conn.execute("SELECT to_regclass('goose_db_version')::text").fetchone() or (None,)
+            if reg != "goose_db_version":
+                raise SchemaMismatch("the database has no schema version (the workers migrate it)")
+            (version,) = conn.execute("SELECT max(version_id) FROM goose_db_version").fetchone() or (None,)
+        if version is None or version < oldest:
+            raise SchemaMismatch(
+                f"the database is at schema version {version}, this build reads {oldest} on (the workers migrate it)"
+            )
+        return int(version)
 
     def explain(self, statement: Statement) -> list[str]:
         """statement's plan with sequential scans priced out (what an index can serve), on a connection

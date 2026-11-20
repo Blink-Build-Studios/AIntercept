@@ -35,9 +35,10 @@ import (
 //	WORKER_REFRESHERS      rollup rows refreshed at once (default 2)
 //	WORKER_LIST_SECONDS    how often to list (default 5)
 //	WORKER_RETENTION_DAYS  facts older than this are deleted (default 15; 0: never)
-//	WORKER_SCHEMA_RESET    a database holding another build's schema is reset to
-//	                       this one, and every fact reloads from the raw files
-//	                       (default true; false: the worker refuses to start)
+//	WORKER_SCHEMA_RESET    a database the migrations can't reach (from before
+//	                       them, at another schema than v0.6.2's) is reset, and
+//	                       every fact reloads from the raw files (default true;
+//	                       false: the worker refuses to start)
 //	WORKER_HTTP_LISTEN     /healthz, /lag and /metrics (default 0.0.0.0:9005)
 func Run() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
@@ -61,26 +62,27 @@ func Run() {
 		fail("Postgres", err)
 	}
 	defer db.Close()
-	if os.Getenv("WORKER_SCHEMA_RESET") == "false" {
-		if err := pg.Apply(ctx, db); err != nil {
-			fail("schema", err) // a schema that isn't this build's refuses to start
-		}
-	} else if reset, err := pg.ApplyOrReset(ctx, db); err != nil {
-		fail("schema", err)
-	} else if reset {
-		slog.Warn("ALARM worker: the database held another build's schema: reset it to this one; every fact reloads from the raw files",
-			"schema", pg.SchemaHash)
-	}
 	addr := os.Getenv("WORKER_HTTP_LISTEN")
 	if addr == "" {
 		addr = "0.0.0.0:9005"
 	}
+	// Serving before migrating: a migration can take minutes on a big table,
+	// and the liveness probe (/healthz) mustn't kill the pod meanwhile.
 	srv := &http.Server{Addr: addr, Handler: Handler(db), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("worker: http", "err", err)
 		}
 	}()
+	a, err := pg.Migrate(ctx, db, pg.Migrations, os.Getenv("WORKER_SCHEMA_RESET") != "false")
+	switch {
+	case err != nil:
+		fail("schema", err) // a rollback (ErrNewer), or a database the migrations can't reach with the reset off
+	case a.Reset:
+		slog.Warn("worker: reset the database: every fact reloads from the raw files", "from", a.From, "version", a.To)
+	case a.V062 || a.From != a.To:
+		slog.Info("worker: migrated the database", "from", a.From, "v0.6.2", a.V062, "version", a.To, "reload", a.Reload)
+	}
 	days := 15
 	if n, err := strconv.Atoi(os.Getenv("WORKER_RETENTION_DAYS")); err == nil && n >= 0 {
 		days = n
