@@ -736,7 +736,10 @@ in observe mode look right.
 ## The examples
 
 - **`aintercept/examples/rabbit`** (Go, package `intercept`) is the smallest:
-  two rules that answer two phrases in the user's prompts with Reply.
+  two rules that answer two phrases in the user's prompts with Reply. Set
+  `INTERCEPT_FAST_MODE=refuse` and it also refuses Anthropic's fast mode with
+  an Error (a 400 saying `INTERCEPT_FAST_MODE_MESSAGE`, or a default), except
+  for the verified emails in `INTERCEPT_FAST_MODE_ALLOW` (comma-separated).
 - **`aintercept/examples/redact`** (Go, package `intercept`) replaces "silly
   clown" with `[redacted]` in every message both ways (prompts, tool results
   and the harness's notes to the model; the reply's text, even split across
