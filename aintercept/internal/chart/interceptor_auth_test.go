@@ -139,3 +139,20 @@ func TestIdentityValues(t *testing.T) {
 		t.Errorf("admin key from %q, want anthropic-admin/adminKey", got)
 	}
 }
+
+// The Interceptor contract is v2, the only one: the chart has no contract
+// setting, and a values file still naming v1 fails rather than pointing a v1
+// Interceptor at an observer that no longer speaks it.
+func TestInterceptorContractIsV2(t *testing.T) {
+	env := envOf(container(render(t, "interceptor.endpoint=decision:443"), "Deployment", "envoy", "observer"))
+	if env["INTERCEPTOR_ENDPOINT"] != "decision:443" {
+		t.Fatalf("env %v", env)
+	}
+	if _, ok := env["INTERCEPTOR_CONTRACT"]; ok {
+		t.Errorf("INTERCEPTOR_CONTRACT = %v: there's no contract to choose", env["INTERCEPTOR_CONTRACT"])
+	}
+	render(t, "interceptor.endpoint=decision:443", "interceptor.contract=v2") // a leftover v2 is harmless
+	if out := renderFails(t, "interceptor.endpoint=decision:443", "interceptor.contract=v1"); !strings.Contains(out, "v1 was removed") {
+		t.Errorf("failure %q doesn't say v1 was removed", strings.TrimSpace(out))
+	}
+}
