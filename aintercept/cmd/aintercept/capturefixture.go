@@ -68,12 +68,25 @@ func captureFixtureCmd() {
 	if err != nil {
 		fatalf("capture-fixture: %v", err)
 	}
-	if err := c.Write(*out); err != nil {
+	// Checked in a directory of its own first: a case being captured again
+	// keeps its expect.json, and its old files when the check fails.
+	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
 		fatalf("capture-fixture: %v", err)
 	}
-	if err := capture.CheckDir(*out, a); err != nil {
-		os.RemoveAll(*out)
+	tmp, err := os.MkdirTemp(filepath.Dir(*out), ".capture-fixture-")
+	if err != nil {
+		fatalf("capture-fixture: %v", err)
+	}
+	err = c.Write(tmp)
+	if err == nil {
+		err = capture.CheckDir(tmp, a)
+	}
+	os.RemoveAll(tmp)
+	if err != nil {
 		fatalf("capture-fixture: %v (the case was not written)", err)
+	}
+	if err := c.Write(*out); err != nil {
+		fatalf("capture-fixture: %v", err)
 	}
 	if *deny != "" {
 		if *denyLocal == "" {

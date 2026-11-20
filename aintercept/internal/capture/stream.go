@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -26,11 +25,13 @@ func (a *Anonymizer) Events(evs [][]byte) ([][]byte, error) {
 	}
 	runs := map[string]*run{}
 	var order []string
+	fields := make([]string, len(evs)) // the field holding each event's piece
 	for i, ev := range evs {
 		k, field, isJSON, text := deltaOf(ev)
 		if field == "" {
 			continue
 		}
+		fields[i] = field
 		r := runs[k]
 		if r == nil {
 			r = &run{json: isJSON}
@@ -70,7 +71,7 @@ func (a *Anonymizer) Events(evs [][]byte) ([][]byte, error) {
 	out := make([][]byte, len(evs))
 	for i, ev := range evs {
 		o, has := override[i]
-		_, field, _, _ := deltaOf(ev)
+		field := fields[i]
 		str := a.str
 		if has {
 			str = func(n *node, s string) string {
@@ -257,12 +258,7 @@ func (a *Anonymizer) Headers(h map[string]string) (map[string]string, error) {
 		return nil, err
 	}
 	out := make(map[string]string, len(h))
-	keys := make([]string, 0, len(h))
-	for k := range h {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys) // fakes are numbered in the order met: the same call, the same case
-	for _, k := range keys {
+	for _, k := range sortedKeys(h) { // fakes are numbered in the order met: the same call, the same case
 		v := h[k]
 		lk := strings.ToLower(k)
 		switch {
@@ -326,10 +322,17 @@ func (a *Anonymizer) Path(p string) string {
 		if !ok {
 			continue
 		}
-		if !queryKeys[k] { // a parameter of the provider's own (a feature's codename, say)
+		known := queryKeys[k]
+		if !known { // a parameter of the provider's own (a feature's codename, say)
 			k = a.keyFake("param", k)
 		}
-		if dv, err := url.QueryUnescape(v); err == nil && !enumLike(dv) || len(v) > 24 {
+		// A known parameter's short, enum-like value is kept; any other value
+		// (an unknown parameter's, or one that doesn't unescape) is replaced.
+		dv, err := url.QueryUnescape(v)
+		if err != nil {
+			dv = v
+		}
+		if !known || err != nil || !enumLike(dv) || len(v) > 24 {
 			v = url.QueryEscape(a.Default(dv))
 		}
 		parts[i] = k + "=" + v

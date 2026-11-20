@@ -349,6 +349,42 @@ func TestAnonymizerText(t *testing.T) {
 	}
 }
 
+// A data: URL of text (no ;base64,) keeps its media type; its data is
+// placeholder text.
+func TestAnonymizerTextDataURL(t *testing.T) {
+	a := NewAnonymizer()
+	for in, want := range map[string]string{
+		"data:text/plain,hello":                   "data:text/plain,xxxxx",
+		"data:image/svg+xml;utf8,<svg>Acme</svg>": "data:image/svg+xml;utf8,<xxx>Xxxx</xxx>",
+		"data:nocomma":                            "xxxx:xxxxxxx",
+	} {
+		if got := a.Default(in); got != want {
+			t.Errorf("Default(%q) = %q, want %q", in, got, want)
+		}
+		if got := a.B64(in); got != want {
+			t.Errorf("B64(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A query's values are replaced, but a known parameter's short, enum-like
+// one: an unknown parameter's value, and one that doesn't unescape, can name
+// the account.
+func TestAnonymizerPathQuery(t *testing.T) {
+	a := NewAnonymizer()
+	got := a.Path("/v1/models?beta=true&limit=20&model=claude-sonnet-4&user=jsmith&org=acme-corp&q=ab%zzcd&page=ab%zzcd")
+	for _, keep := range []string{"beta=true", "limit=20", "model="} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("%s lost %s", got, keep)
+		}
+	}
+	for _, gone := range []string{"jsmith", "acme", "zzcd", "user", "org", "q="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s kept %s", got, gone)
+		}
+	}
+}
+
 // Account data planted in every place a provider says something about the
 // account: its plan and limits, flags, early-access programs, the models it
 // offers. None may survive; the structure around it does.
@@ -585,6 +621,7 @@ func TestHighEntropy(t *testing.T) {
 		p("org"): true, p("device"): true, p("commit"): true, p("chatgpt_user"): true,
 		p("email"): false, p("ip"): false, p("ipv6"): false, p("name"): false, p("host"): false, p("company"): false,
 		p("user"): false, "a3f19c0e5b7d2468": false, "12345678901234": false, "org-Ab3dE": false,
+		"8271940365518273649105738": false, "8271940365518273649105738264917": true,
 	} {
 		if got := HighEntropy(strings.ToLower(s)); got != want && HighEntropy(s) != want {
 			t.Errorf("HighEntropy(%s) = %v", s, got)

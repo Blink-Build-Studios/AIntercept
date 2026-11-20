@@ -80,6 +80,39 @@ func TestTheChainBuildsSchemaSQL(t *testing.T) {
 	sameCatalog(t, catalog(t, p), catalog(t, fromSchemaSQL(t)))
 }
 
+// A database this build makes at version 1, fresh or reset, holds v0.6.2's
+// hash in schema_version, as v0.6.2 made it: rolled back to v0.6.2, the
+// workers run on it rather than reset it. Past version 1 a migration drops
+// schema_version, so v0.6.2's workers refuse the database (ErrNotEmpty).
+func TestV062RunsOnVersion1AndRefusesLater(t *testing.T) {
+	fresh := applied(t)
+	reset := filled(t, "this build")
+	if err := pg.Reset(ctx(t), reset); err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range map[string]*pgxpool.Pool{"fresh": fresh, "reset": reset} {
+		if _, err := pg.Migrate(ctx(t), p, pg.Migrations, true); err != nil { // again: still one row
+			t.Fatal(err)
+		}
+		var table bool
+		var hashes []string
+		if err := p.QueryRow(ctx(t), "SELECT to_regclass('schema_version') IS NOT NULL").Scan(&table); err != nil {
+			t.Fatal(err)
+		}
+		if table {
+			if err := p.QueryRow(ctx(t), "SELECT coalesce(array_agg(hash), '{}') FROM schema_version").Scan(&hashes); err != nil {
+				t.Fatal(err)
+			}
+		}
+		switch {
+		case pg.Latest == 1 && (len(hashes) != 1 || hashes[0] != v062Hash):
+			t.Errorf("%s: schema_version %v, want v0.6.2's hash", name, hashes)
+		case pg.Latest > 1 && table:
+			t.Errorf("%s: schema_version is still there at version %d; the migration past 1 drops it", name, pg.Latest)
+		}
+	}
+}
+
 // A database as v0.6.2 left it (the live deployment's: its schema's hash in
 // schema_version, rows in every table) is recorded as version 1 in place,
 // through the workers' login with the reset on (the chart's default): nothing

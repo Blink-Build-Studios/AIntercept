@@ -696,14 +696,14 @@ func HighEntropy(s string) bool {
 	}
 	bits := 0.0
 	switch {
+	case digit && !lower && !upper: // before hex: digits are hex digits too
+		bits = 3.32
 	case hexOnly && !(lower && upper):
 		bits = 4
 	case lower && upper && digit:
 		bits = 5.95
 	case lower && upper:
 		bits = 5.7
-	case digit && !lower && !upper:
-		bits = 3.32
 	default:
 		bits = 5.17
 	}

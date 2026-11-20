@@ -660,11 +660,14 @@ var reDomain = regexp.MustCompile(`(?i)\b[a-z0-9-]+\.(com|net|org|io|ai|dev|app|
 func (a *Anonymizer) B64(s string) string {
 	prefix := ""
 	if strings.HasPrefix(s, "data:") {
-		if i := strings.Index(s, ";base64,"); i >= 0 {
-			prefix, s = s[:i+len(";base64,")], s[i+len(";base64,"):]
-		} else {
-			return a.Default(s)
+		i := strings.Index(s, ";base64,")
+		if i < 0 { // a data: URL of text (data:text/plain,hello): its media type kept, its data placeholder text
+			if head, data, ok := strings.Cut(s, ","); ok {
+				return head + "," + a.Text(data)
+			}
+			return a.Text(s)
 		}
+		prefix, s = s[:i+len(";base64,")], s[i+len(";base64,"):]
 	}
 	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
 		b, err := enc.DecodeString(s)
@@ -769,11 +772,15 @@ func (a *Anonymizer) Check(name string, out []byte) error {
 			return fmt.Errorf("%s: a real value survived (%s…)", name, r[:3])
 		}
 	}
-	for _, re := range []*regexp.Regexp{regexp.MustCompile(`sk-ant-[a-z]{3}\d\d-[A-Za-z0-9_-]{20,}`),
-		regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{30,}`), regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`)} {
+	for _, re := range reCredentials {
 		if re.Match(out) {
 			return fmt.Errorf("%s: holds a credential", name)
 		}
 	}
 	return nil
 }
+
+// reCredentials are the credentials Check refuses: Anthropic's and OpenAI's
+// API keys, and Google's.
+var reCredentials = []*regexp.Regexp{regexp.MustCompile(`sk-ant-[a-z]{3}\d\d-[A-Za-z0-9_-]{20,}`),
+	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{30,}`), regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`)}

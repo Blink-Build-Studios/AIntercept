@@ -170,8 +170,28 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, resetting bool
 	if err := up(ctx, db, locker, fsys); err != nil {
 		return a, err
 	}
+	if err := markV062(ctx, db, store, locker, ms[0]); err != nil {
+		return a, err
+	}
 	a.To, err = store.GetLatestVersion(ctx, db)
 	return a, err
+}
+
+// markV062 records v0.6.2's hash in the schema_version of a database at
+// version 1 (v0.6.2's schema) that this build made, fresh or reset, as v0.6.2
+// did. A rollback to v0.6.2 then finds its own schema and runs, where an empty
+// schema_version would have its workers reset the database. Past version 1, a
+// migration drops schema_version (§3.4), and v0.6.2 refuses the database.
+func markV062(ctx context.Context, db *sql.DB, store database.Store, locker lock.SessionLocker, first Migration) error {
+	return withLock(ctx, db, locker, func(ctx context.Context, tx *sql.Tx) error {
+		v, err := store.GetLatestVersion(ctx, tx)
+		if err != nil || v != 1 {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "INSERT INTO schema_version (hash) SELECT $1 WHERE NOT EXISTS (SELECT FROM schema_version)",
+			v062Hash(first))
+		return err
+	})
 }
 
 // gooseDB is a database/sql handle for goose, on connections of its own: the
@@ -332,7 +352,11 @@ func empty(ctx context.Context, tx *sql.Tx, tables []string) error {
 // Reset empties the database and applies this build's chain: `aintercept pg
 // reset`. The workers then reload every raw file.
 func Reset(ctx context.Context, pool *pgxpool.Pool) error {
-	db, _, locker, err := gooseDB(pool)
+	ms, err := ParseMigrations(Migrations)
+	if err != nil {
+		return err
+	}
+	db, store, locker, err := gooseDB(pool)
 	if err != nil {
 		return err
 	}
@@ -340,7 +364,10 @@ func Reset(ctx context.Context, pool *pgxpool.Pool) error {
 	if err := withLock(ctx, db, locker, resetTx); err != nil {
 		return err
 	}
-	return up(ctx, db, locker, Migrations)
+	if err := up(ctx, db, locker, Migrations); err != nil {
+		return err
+	}
+	return markV062(ctx, db, store, locker, ms[0])
 }
 
 // withLock runs f in one transaction under the session lock.

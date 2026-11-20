@@ -69,12 +69,8 @@ type rewriter struct {
 	scalar func(n *node, raw string) string
 }
 
-// rewriteJSON returns b with each string value replaced by str(n, value) and
-// each object key by key(n, key).
-func rewriteJSON(b []byte, str func(n *node, s string) string, key func(s string) string) ([]byte, error) {
-	return rewrite(b, rewriter{str: str, key: func(_ *node, k string) string { return key(k) }})
-}
-
+// rewrite returns b with each string value, object key and other scalar as r
+// says.
 func rewrite(b []byte, r rewriter) ([]byte, error) {
 	w := &jw{in: b, str: r.str, key: r.key, scalar: r.scalar}
 	w.ws()

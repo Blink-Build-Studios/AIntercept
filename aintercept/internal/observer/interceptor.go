@@ -1,6 +1,7 @@
 package observer
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -16,6 +17,9 @@ func setupInterceptor(instanceID string, offer func(events.Event)) *interceptor.
 	endpoint := os.Getenv("INTERCEPTOR_ENDPOINT")
 	if endpoint == "" {
 		return nil
+	}
+	if err := checkContract(os.Getenv("INTERCEPTOR_CONTRACT")); err != nil {
+		fatal("interceptor setup failed", "err", err)
 	}
 	cfg := interceptor.Config{
 		Endpoint:       endpoint,
@@ -46,6 +50,18 @@ func setupInterceptor(instanceID string, offer func(events.Event)) *interceptor.
 	slog.Info("interceptor configured", "endpoint", endpoint, "content", cfg.Content,
 		"deadline", cfg.Deadline, "on_error", cfg.OnError, "tls", cfg.TLS, "auth", authKind(cfg))
 	return ic
+}
+
+// checkContract refuses an INTERCEPTOR_CONTRACT other than v2. Contract v1
+// was removed: an observer still set to it would talk v2 to a v1 Interceptor
+// and get Unimplemented on every call (in enforce mode, with onError deny,
+// every call refused).
+func checkContract(c string) error {
+	if c != "" && c != "v2" {
+		return fmt.Errorf("INTERCEPTOR_CONTRACT %q: contract v1 was removed and v2 is the only one; "+
+			"unset it and port the Interceptor (docs/INTERCEPTOR.md)", c)
+	}
+	return nil
 }
 
 // authKind names how the observer authenticates to the Interceptor, for the

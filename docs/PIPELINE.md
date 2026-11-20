@@ -257,6 +257,10 @@ Any other hash is a database the chain can't reach: with `worker.schemaReset`
 (the default) the first worker resets it once, and every fact reloads; without
 it the workers refuse to start. A database with tables but neither
 `goose_db_version` nor `schema_version` isn't ours, and is never touched.
+A database this build makes at version 1, fresh or reset, gets v0.6.2's hash
+in `schema_version` too, so a rollback to v0.6.2 runs on it rather than
+resetting it; the migration past version 1 drops `schema_version`, and v0.6.2's
+workers then refuse the database.
 
 **What a migration can be:**
 
