@@ -92,3 +92,24 @@ func TestToolUses_NoneOrGarbage(t *testing.T) {
 		}
 	}
 }
+
+// The same traffic always yields the same row: tool counts come in name order,
+// not a map's (a Codex exec script calling several tools, from the corpus).
+func TestToolCountsAreOrdered(t *testing.T) {
+	resp := []byte(`data: {"type":"response.output_item.added","item":{"type":"custom_tool_call","name":"exec"}}` + "\n\n" +
+		`data: {"type":"response.output_item.done","item":{"type":"custom_tool_call","name":"exec","input":"tools.spawn_agent({}); tools.exec_command({}); tools.apply_patch(\"\")"}}` + "\n\n")
+	req := []byte(`{"input":[{"type":"custom_tool_call","name":"exec","input":"tools.spawn_agent({}); tools.exec_command({})"},{"type":"function_call","name":"wait"}]}`)
+	for i := 0; i < 20; i++ {
+		var names []string
+		for _, u := range ToolUsesFromResponseBody(resp, "") {
+			names = append(names, u.Name)
+		}
+		_, calls := ToolsFromRequestBody(req)
+		for _, c := range calls {
+			names = append(names, c.Name)
+		}
+		if got := strings.Join(names, ","); got != "apply_patch,exec,exec_command,spawn_agent,exec,exec_command,spawn_agent,wait" {
+			t.Fatalf("order %s", got)
+		}
+	}
+}

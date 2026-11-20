@@ -116,12 +116,15 @@ the pod:**
 - **Safe to repeat:** every write is a keyed upsert, so a file loaded twice
   (after a crash, or a rebuild) changes nothing.
 - **Rebuild:** clear `ingest_files` and the tables; the workers reload every
-  file. `aintercept canon -load` does the same for one directory of files, for
-  tests and fixtures.
+  file. A migration that says `-- reload:` does it for the tables it names, and
+  `aintercept pg reset` for all of them (§3.4). `aintercept canon -load` loads
+  one directory of files, for tests and fixtures.
 
 ## 3. Facts
 
-Hand-written SQL migrations replace the schema generated from Go state types.
+The schema is hand-written SQL migrations (§3.4), which replaced the schema
+generated from Go state types. `aintercept/internal/pg/schema.sql` is the schema
+they build, to read.
 
 ### 3.1 `calls`: one row per HTTP call
 
@@ -220,11 +223,84 @@ unchanged until the pages are redrawn):
 | `session_edges` | (child session, parent session) | Insert if absent |
 | `ingest_pods` | one per observer pod: `last_ns` (its newest record) | Upsert per file |
 | `ingest_files` | one per raw file: key, listed, loaded | §2.2 |
-| `schema_version` | one row | Migrations |
+| `goose_db_version` | one per migration applied (goose's) | Migrations (§3.4) |
+| `schema_version` | v0.6.2's schema hash, from before migrations: v0.6.2's API reads it, so its pods stay ready through the upgrade. A later migration drops it | Nothing |
 
 A person is an email group: the accounts that share an email, keyed by the
 group's lowest account id (as `process/personmap.go` does). It's resolved at
 read from `accounts` (a handful of rows per person).
+
+### 3.4 Changing the schema: migrations
+
+The schema changes by migrations: SQL files in
+`aintercept/internal/pg/migrations/`, `NNNN_<name>.sql`, numbered from 0001,
+forward only and embedded in the binary. Every worker runs `pg.Migrate` at
+start, before it loads anything:
+
+1. **Our part, in one transaction:** it reads the database's version (goose's
+   `goose_db_version`), refuses a database newer than the build, and does what
+   the pending migrations' directives ask (below).
+2. **goose** ([pressly/goose](https://github.com/pressly/goose)) applies the
+   pending migrations, each in its own transaction, and records each in its
+   table.
+
+Both hold the same Postgres session lock (goose's locker, id `schemaLock`), so
+workers starting together migrate once. The migration's connections have no
+statement timeout (a migration takes as long as it takes) and wait a minute for
+a lock. The worker serves `/healthz` meanwhile, so a long migration isn't
+killed by its liveness probe.
+
+**Before migrations:** 0001 is v0.6.2's `schema.sql` byte for byte under its
+`-- +goose Up` line, so a database v0.6.2 made (that file's hash in
+`schema_version`) is recorded as version 1 as it stands: no reset, no reload.
+Any other hash is a database the chain can't reach: with `worker.schemaReset`
+(the default) the first worker resets it once, and every fact reloads; without
+it the workers refuse to start. A database with tables but neither
+`goose_db_version` nor `schema_version` isn't ours, and is never touched.
+A database this build makes at version 1, fresh or reset, gets v0.6.2's hash
+in `schema_version` too, so a rollback to v0.6.2 runs on it rather than
+resetting it; the migration past version 1 drops `schema_version`, and v0.6.2's
+workers then refuse the database.
+
+**What a migration can be:**
+
+| Kind | How | What it costs |
+|---|---|---|
+| In place | Plain SQL: a new table, column or index, or data rewritten in SQL | Nothing: every row stays, the pages show no gap |
+| Reload | A `-- reload: <table>, <table>` line in its leading comments | Those tables and `ingest_files` are emptied before it runs, so it can change them as an empty table allows (a table it creates starts empty). The workers then list and load every raw file again: the named tables refill as the files load, and the others' upserts change nothing. Every rollup is marked dirty and recomputed as it would be from scratch |
+| Reset | A `-- reset` line | The database is emptied and goose applies the whole chain; everything reloads from the raw files |
+
+A reload or reset keeps only what the raw files still hold: rows older than the
+bucket's lifecycle on `raw/` are gone. Ingest decides what to load from
+`ingest_files` alone (the lister lists every raw file when it's empty), so a
+reload can't load into some tables only; it reloads everything and only the
+named tables start empty.
+
+**A rollback** (an older build on a newer database) is refused: the workers
+exit with "the database is at schema version N and this build's newest is M",
+and nothing changes. The API is different: it reads any version from the
+oldest it needs (`OLDEST` in `api/src/aintercept_api/pgstore.py`) on, so in an
+upgrade the new workers can migrate while the old API pods still serve.
+
+**Adding a migration:**
+1. Add `migrations/NNNN_<name>.sql`, the next number, starting with
+   `-- +goose Up` (goose's annotations otherwise as goose documents them; no
+   `-- +goose Down`: migrations go forward only). Add `-- reload: …` or
+   `-- reset` to its leading comments if it needs data rebuilt; prefer an in-place
+   change.
+2. Make the same change to `schema.sql`, a new column last in its table (as
+   `ALTER TABLE` adds it). The pg tests apply the chain to an empty database and
+   compare its catalog with `schema.sql`'s, and upgrade a v0.6.2 database full of
+   rows through the chain, checking every row survives but in the tables the
+   migrations reload.
+3. Never take away what the previous release's API reads: drop or rename a
+   table or column a release after the API stopped reading it. When the API
+   starts reading what a migration adds, raise `OLDEST` to its number.
+4. Never edit a migration once it's released: write another.
+
+`aintercept pg reset` empties the database by hand and applies this build's
+chain (the workers' DSN, `WORKER_POSTGRES_URL`). The workers, running or not,
+then reload every raw file.
 
 ## 4. Writing: one flush
 

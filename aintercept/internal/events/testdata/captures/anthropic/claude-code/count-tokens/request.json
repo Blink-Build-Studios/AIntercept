@@ -1,0 +1,46 @@
+{
+  "method": "POST",
+  "host": "api.anthropic.com",
+  "path": "/v1/messages/count_tokens?beta=true",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "POST",
+    ":path": "/v1/messages/count_tokens?beta=true",
+    ":scheme": "https",
+    "accept": "application/json",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,token-counting-2024-11-01",
+    "anthropic-client-platform": "xxxxxxx_xxx",
+    "anthropic-client-version": "5.11492.5",
+    "anthropic-dangerous-direct-browser-access": "true",
+    "anthropic-version": "2023-06-01",
+    "authorization": "<redacted>",
+    "content-length": "128",
+    "content-type": "application/json",
+    "user-agent": "claude-cli/2.1.325 (external, claude-desktop, agent-sdk/0.3.325)",
+    "x-app": "cli",
+    "x-claude-1p-request-class": "xxxxxxx-xxxxxxxxxx",
+    "x-claude-code-request-class": "auxiliary",
+    "x-claude-code-session-id": "00000000-0000-4000-8000-000000000002",
+    "x-client-request-id": "00000000-0000-4000-8000-000000000003",
+    "x-forwarded-proto": "https",
+    "x-stainless-arch": "arm64",
+    "x-stainless-lang": "js",
+    "x-stainless-os": "MacOS",
+    "x-stainless-package-version": "0.128.0",
+    "x-stainless-retry-count": "0",
+    "x-stainless-runtime": "node",
+    "x-stainless-runtime-version": "v26.12.1"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "anthropic_oauth"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    128,
+    0
+  ]
+}

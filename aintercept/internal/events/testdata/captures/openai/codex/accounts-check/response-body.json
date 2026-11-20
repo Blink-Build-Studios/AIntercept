@@ -1,0 +1,32 @@
+{
+  "accounts": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "key_1": "xxxx-0X0Xx0xXxXXxxx0xX0xxXx0x__xx00x000-00x0-0x00-x0x0-x00x00x0x016",
+      "key_2": "value_8",
+      "key_3": "value_9",
+      "key_4": "value_1",
+      "key_5": false,
+      "key_6": false,
+      "key_7": {
+        "key_8": false,
+        "key_9": false,
+        "key_10": "value_10"
+      },
+      "key_11": "value_11",
+      "key_12": false,
+      "key_13": false,
+      "is_deactivated": false,
+      "key_14": false,
+      "key_15": "value_12",
+      "key_16": "value_12",
+      "name": null,
+      "key_17": null,
+      "key_18": null
+    }
+  ],
+  "key_19": "00000000-0000-4000-8000-000000000002",
+  "key_20": [
+    "00000000-0000-4000-8000-000000000002"
+  ]
+}

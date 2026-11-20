@@ -15,9 +15,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -50,6 +52,19 @@ func Run() {
 	if len(allow.hosts()) == 0 {
 		log.Fatal("certsvc: CERT_ALLOWLIST is empty; refusing to start (would mint for nothing)")
 	}
+
+	// Readiness (GET /healthz/ready) answers 503 until the startup check below
+	// has signed, so a certsvc that can't sign (bad KMS permissions, an
+	// intermediate it refuses) never counts as Ready and its rollout stalls.
+	var ready readiness
+	httpAddr := envDefault("CERTSVC_HTTP_LISTEN", "0.0.0.0:18001")
+	httpLis, err := net.Listen("tcp", httpAddr)
+	if err != nil {
+		log.Fatalf("certsvc: listen %s: %v", httpAddr, err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/healthz/ready", &ready)
+	go func() { log.Fatal(http.Serve(httpLis, mux)) }()
 
 	// With INTERMEDIATE_KMS_KEY_ID set, leaves are signed by that KMS key and
 	// no private key is read from disk. Credentials, region and endpoint come
@@ -85,7 +100,7 @@ func Run() {
 	// serving anything. REQUIRE_NAME_CONSTRAINTS=true (production) also refuses
 	// an intermediate that isn't name-constrained.
 	requireConstraints := os.Getenv("REQUIRE_NAME_CONSTRAINTS") == "true"
-	constrained, err := issuer.SelfCheck(allow.hosts(), requireConstraints)
+	constrained, err := checkSigning(issuer, allow.hosts(), requireConstraints, &ready)
 	if err != nil {
 		log.Fatalf("certsvc: CA self-check failed: %v", err)
 	}
@@ -134,6 +149,30 @@ func Run() {
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("certsvc: serve: %v", err)
 	}
+}
+
+// readiness is certsvc's readiness probe: 503 until a check has signed a
+// leaf, 200 after.
+type readiness struct{ ok atomic.Bool }
+
+func (r *readiness) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	if !r.ok.Load() {
+		http.Error(w, "no leaf signed yet", http.StatusServiceUnavailable)
+		return
+	}
+	_, _ = w.Write([]byte("ok\n"))
+}
+
+// checkSigning is the startup self-check (a throwaway leaf per allowlisted
+// host, signed and verified as a client would; with KMS, each signature is a
+// KMS Sign call), and marks certsvc ready once it passes. A failed check
+// leaves it unready, and certsvc exits.
+func checkSigning(issuer *ca.Issuer, hosts []string, requireConstraints bool, ready *readiness) (constrained bool, err error) {
+	constrained, err = issuer.SelfCheck(hosts, requireConstraints)
+	if err == nil {
+		ready.ok.Store(true)
+	}
+	return constrained, err
 }
 
 // minter turns SDS resource-name requests into cached leaf secrets, enforcing

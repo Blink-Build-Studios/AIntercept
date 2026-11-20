@@ -1,0 +1,381 @@
+{
+  "call.client": "tui",
+  "call.client_request_id": "00000000-0000-4000-8000-000000000003",
+  "call.client_version": "0.166.0",
+  "call.device_id": "00000000-0000-4000-8000-000000000004",
+  "call.effort": "xhigh",
+  "call.error": "Xxx Xxxxxxx",
+  "call.ext": {
+    "agent_name": "/root",
+    "history_initialization": "new",
+    "request_kind": "turn",
+    "root_turn_id": "00000000-0000-4000-8000-000000000005",
+    "sandbox": "none",
+    "sandbox_mode": "danger-full-access",
+    "thread_source": "user",
+    "turn_trigger": "user",
+    "window_id": "00000000-0000-4000-8000-000000000003:0",
+    "workspaces": {
+      "/xxxx/xxxxx/xxxxxx/xx-xxxxx-xxxxx-xxxxx": {
+        "associated_remote_urls": {
+          "origin": "xxxxx://xxxxxx.xxx/xxxxxxxxx/xxxx.xxx"
+        },
+        "has_changes": true,
+        "latest_git_commit_hash": "0000000000000000000000000000000000000007"
+      }
+    }
+  },
+  "call.host": "chatgpt.com",
+  "call.ip": "192.0.2.2",
+  "call.key_hash": "8d08635382860137a081596beb883f37",
+  "call.key_hint": "eyJhbG…ture",
+  "call.kind": "model",
+  "call.method": "POST",
+  "call.model": "gpt-6.1-sol",
+  "call.model_call": true,
+  "call.path": "/backend-api/codex/responses",
+  "call.person_id": "00000000-0000-4000-8000-000000000002",
+  "call.product": "codex",
+  "call.prompt_id": "00000000-0000-4000-8000-000000000005",
+  "call.session_id": "00000000-0000-4000-8000-000000000003",
+  "call.status": 400,
+  "call.stream": true,
+  "call.tools_offered": [
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent",
+    "exec",
+    "request_user_input",
+    "request_user_input_async",
+    "wait"
+  ],
+  "call.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "convo.format": "openai_responses",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 21534
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 3793
+        },
+        {
+          "kind": "text",
+          "size": 11025
+        },
+        {
+          "kind": "text",
+          "size": 362
+        },
+        {
+          "kind": "text",
+          "size": 1056
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "opaque",
+          "size": 6945
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "parts": [
+        {
+          "call_id": "call_XxxxxX00xXXXX00XxxX0X031",
+          "kind": "tool_call",
+          "name": "exec",
+          "size": 626
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "parts": [
+        {
+          "call_id": "call_XxxxxX00xXXXX00XxxX0X031",
+          "kind": "tool_result",
+          "size": 9343
+        }
+      ],
+      "role": "tool"
+    }
+  ],
+  "convo.new": [
+    4
+  ],
+  "detail.results": {
+    "call_XxxxxX00xXXXX00XxxX0X031": {}
+  },
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "complete"
+  ],
+  "on_call_complete.call.client.product": "codex",
+  "on_call_complete.call.client.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "on_call_complete.call.host": "chatgpt.com",
+  "on_call_complete.call.identity.device_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_complete.call.identity.email": "person13@example.com",
+  "on_call_complete.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_complete.call.identity.ip": "192.0.2.2",
+  "on_call_complete.call.identity.key_hash": "8d08635382860137a081596beb883f37",
+  "on_call_complete.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_complete.call.identity.name": "Xxxxx Xxxx",
+  "on_call_complete.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
+  "on_call_complete.call.method": "POST",
+  "on_call_complete.call.mode": "MODE_OBSERVE",
+  "on_call_complete.call.path": "/backend-api/codex/responses",
+  "on_call_complete.call.transport": "TRANSPORT_HTTP",
+  "on_call_complete.request.effort": "xhigh",
+  "on_call_complete.request.model": "gpt-6.1-sol",
+  "on_call_complete.request.stream": true,
+  "on_call_complete.request.tools_available": [
+    "exec",
+    "wait",
+    "request_user_input",
+    "request_user_input_async",
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent"
+  ],
+  "on_call_complete.response.error": "Xxx Xxxxxxx",
+  "on_call_complete.response.model": "gpt-6.1-sol",
+  "on_call_complete.response.status": 400,
+  "on_call_start.call.client.headers.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.originator": "codex-tui",
+  "on_call_start.call.client.headers.session-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.thread-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.user-agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "on_call_start.call.client.headers.version": "0.166.0",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.client.headers.x-codex-beta-features": "remote_compaction_v2",
+  "on_call_start.call.client.headers.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "on_call_start.call.client.headers.x-codex-turn-state": "xXXXXXXx_X0xXxXXx0xxXX0XXxx000XX00X0xxX_XxxxxX0xx0XXxxXx000XXxXXxxXx0x_0xXXxXxxXXx0XxxxxXXX0XXxX0XxX…(780 bytes)",
+  "on_call_start.call.client.headers.x-codex-window-id": "00000000-0000-4000-8000-000000000003:0",
+  "on_call_start.call.client.product": "codex",
+  "on_call_start.call.client.user_agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "on_call_start.call.host": "chatgpt.com",
+  "on_call_start.call.identity.device_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.identity.email": "person13@example.com",
+  "on_call_start.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "8d08635382860137a081596beb883f37",
+  "on_call_start.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_start.call.identity.name": "Xxxxx Xxxx",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000003",
+  "on_call_start.call.method": "POST",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/backend-api/codex/responses",
+  "on_call_start.call.transport": "TRANSPORT_HTTP",
+  "on_call_start.request.effort": "xhigh",
+  "on_call_start.request.model": "gpt-6.1-sol",
+  "on_call_start.request.stream": true,
+  "on_call_start.request.tools_available": [
+    "exec",
+    "wait",
+    "request_user_input",
+    "request_user_input_async",
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent"
+  ],
+  "on_request.format": "openai_responses",
+  "on_request.messages": [
+    {
+      "id": "178a4b158b95fbfa65a125a95b14d448",
+      "index": 4,
+      "parts": [
+        {
+          "id": "178a4b158b95fbfa65a125a95b14d448/0",
+          "size": "9343",
+          "tool_result": {
+            "call_id": "call_XxxxxX00xXXXX00XxxX0X031",
+            "name": "exec",
+            "text": "Xxxxxx xxxxxxxxx\nXxxx xxxx 0.0 xxxxxxx\nXxxxxx:\n\n{\"chunk_id\":\"000021\",\"wall_time_seconds\":5.001492836…(9343 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_TOOL"
+    }
+  ],
+  "on_request.total_messages": 5,
+  "record.account": {
+    "account_id": "00000000-0000-4000-8000-000000000002",
+    "email": "person13@example.com",
+    "name": "Xxxxx Xxxx",
+    "org": ""
+  },
+  "row.account_uuid": "00000000-0000-4000-8000-000000000002",
+  "row.auth.account_id": "00000000-0000-4000-8000-000000000002",
+  "row.auth.client_id": "app_XXxxxXXX00x0XxXxXx0xxx15",
+  "row.auth.email": "person13@example.com",
+  "row.auth.expires_at": 1795547479,
+  "row.auth.issuer": "https://auth.openai.com",
+  "row.auth.name": "Xxxxx Xxxx",
+  "row.auth.plan": "value_1",
+  "row.auth.session_id": "authsess_XX0X0XXXXXxxXXxxxxXxXX16",
+  "row.auth.subject": "xxxx0|00000000000000000000000e",
+  "row.auth.user_id": "user-0X0Xx0xXxXXxxx0xX0xxXx12",
+  "row.client.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "row.client.originator": "codex-tui",
+  "row.client.session-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.thread-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.user-agent": "codex-tui/0.166.0 (Ubuntu 24.4.0; x86_64) tmux-256color (codex-tui; 0.166.0)",
+  "row.client.version": "0.166.0",
+  "row.client.x-client-request-id": "00000000-0000-4000-8000-000000000003",
+  "row.client.x-codex-beta-features": "remote_compaction_v2",
+  "row.client.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "row.client.x-codex-turn-state": "xXXXXXXx_X0xXxXXx0xxXX0XXxx000XX00X0xxX_XxxxxX0xx0XXxxXx000XXxXXxxXx0x_0xXXxXxxXXx0XxxxxXXX0XXxX0XxX…(780 bytes)",
+  "row.client.x-codex-window-id": "00000000-0000-4000-8000-000000000003:0",
+  "row.client_metadata": {
+    "agent_name": "/root",
+    "analytics_enabled": true,
+    "auto_review_enabled": false,
+    "context_window_id": "00000000-0000-4000-8000-000000000006",
+    "history_initialization": "new",
+    "installation_id": "00000000-0000-4000-8000-000000000004",
+    "model": "gpt-6.1-sol",
+    "node_repl_auto_review_required": true,
+    "node_repl_disabled": false,
+    "reasoning_effort": "xhigh",
+    "request_kind": "turn",
+    "root_turn_id": "00000000-0000-4000-8000-000000000005",
+    "sandbox": "none",
+    "sandbox_mode": "danger-full-access",
+    "session_id": "00000000-0000-4000-8000-000000000003",
+    "thread_id": "00000000-0000-4000-8000-000000000003",
+    "thread_source": "user",
+    "turn_id": "00000000-0000-4000-8000-000000000005",
+    "turn_started_at_unix_ms": 1794931989250,
+    "turn_trigger": "user",
+    "window_id": "00000000-0000-4000-8000-000000000003:0",
+    "window_number": 0,
+    "workspaces": {
+      "/xxxx/xxxxx/xxxxxx/xx-xxxxx-xxxxx-xxxxx": {
+        "associated_remote_urls": {
+          "origin": "xxxxx://xxxxxx.xxx/xxxxxxxxx/xxxx.xxx"
+        },
+        "has_changes": true,
+        "latest_git_commit_hash": "0000000000000000000000000000000000000007"
+      }
+    }
+  },
+  "row.device_id": "00000000-0000-4000-8000-000000000004",
+  "row.effort": "xhigh",
+  "row.error": "Xxx Xxxxxxx",
+  "row.host": "chatgpt.com",
+  "row.ip": "192.0.2.2",
+  "row.key_hash": "8d08635382860137a081596beb883f37",
+  "row.key_hint": "eyJhbG…ture",
+  "row.method": "POST",
+  "row.model": "gpt-6.1-sol",
+  "row.path": "/backend-api/codex/responses",
+  "row.provider.x-oai-request-id": "00000000-0000-4000-8000-000000000017",
+  "row.session_id": "00000000-0000-4000-8000-000000000003",
+  "row.status": 400,
+  "row.stream": true,
+  "row.tool_calls": [
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "exec",
+      "tool": "exec"
+    },
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "exec_command",
+      "tool": "exec_command"
+    },
+    {
+      "count": 1,
+      "kind": "builtin",
+      "name": "write_stdin",
+      "tool": "write_stdin"
+    }
+  ],
+  "row.tools_available": [
+    {
+      "kind": "builtin",
+      "name": "exec",
+      "tool": "exec"
+    },
+    {
+      "kind": "builtin",
+      "name": "wait",
+      "tool": "wait"
+    },
+    {
+      "kind": "builtin",
+      "name": "request_user_input",
+      "tool": "request_user_input"
+    },
+    {
+      "kind": "builtin",
+      "name": "request_user_input_async",
+      "tool": "request_user_input_async"
+    },
+    {
+      "kind": "builtin",
+      "name": "clock.sleep",
+      "tool": "clock.sleep"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.followup_task",
+      "tool": "collaboration.followup_task"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.interrupt_agent",
+      "tool": "collaboration.interrupt_agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.list_agents",
+      "tool": "collaboration.list_agents"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.send_message",
+      "tool": "collaboration.send_message"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.spawn_agent",
+      "tool": "collaboration.spawn_agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.wait_agent",
+      "tool": "collaboration.wait_agent"
+    }
+  ]
+}

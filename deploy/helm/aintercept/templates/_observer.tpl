@@ -50,7 +50,6 @@ is the whole ingest stack, Envoy and the observer together, scaled as one
     {{- if .endpoint }}
     # ── Interceptor (docs/INTERCEPTOR.md) ──
     - { name: INTERCEPTOR_ENDPOINT, value: {{ .endpoint | quote }} }
-    - { name: INTERCEPTOR_CONTRACT, value: {{ .contract | default "v1" | quote }} }
     - { name: INTERCEPTOR_INLINE_LIMIT_BYTES, value: {{ .inlineLimitBytes | default 65536 | int | toString | quote }} }
     - { name: INTERCEPTOR_CONTENT, value: {{ .content | toString | quote }} }
     - { name: INTERCEPTOR_DEADLINE_MS, value: {{ .deadlineMs | toString | quote }} }

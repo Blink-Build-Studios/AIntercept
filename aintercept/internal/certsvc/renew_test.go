@@ -1,6 +1,7 @@
 package certsvc
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -22,6 +23,13 @@ import (
 // newTestIssuer builds a self-signed intermediate CA on disk and returns an
 // Issuer with the given leaf TTL.
 func newTestIssuer(t *testing.T, leafTTL time.Duration) *ca.Issuer {
+	t.Helper()
+	return newTestIssuerSigner(t, leafTTL, nil)
+}
+
+// newTestIssuerSigner is newTestIssuer whose leaves are signed by
+// signer(intermediate key) when signer is set (as a KMS key would sign them).
+func newTestIssuerSigner(t *testing.T, leafTTL time.Duration, signer func(*rsa.PrivateKey) crypto.Signer) *ca.Issuer {
 	t.Helper()
 	dir := t.TempDir()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -47,11 +55,15 @@ func newTestIssuer(t *testing.T, leafTTL time.Duration) *ca.Issuer {
 	writeFile(t, certPath, "CERTIFICATE", der)
 	writeFile(t, keyPath, "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(key))
 
-	issuer, err := ca.NewIssuer(ca.Config{
+	cfg := ca.Config{
 		IntermediateCertPath: certPath,
 		IntermediateKeyPath:  keyPath,
 		LeafTTL:              leafTTL,
-	})
+	}
+	if signer != nil {
+		cfg.Signer = signer(key)
+	}
+	issuer, err := ca.NewIssuer(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

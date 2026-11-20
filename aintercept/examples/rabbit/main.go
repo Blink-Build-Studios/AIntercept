@@ -12,8 +12,7 @@
 // reply, so the observer doesn't hold replies for it.
 //
 // Run it and point an observer at it (INTERCEPTOR_ENDPOINT=<host>:9100,
-// INTERCEPTOR_CONTRACT=v2, INTERCEPTOR_CONTENT=true). It listens on
-// INTERCEPT_LISTEN (default :9100).
+// INTERCEPTOR_CONTENT=true). It listens on INTERCEPT_LISTEN (default :9100).
 package main
 
 import (

@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "headers": {
+    ":status": "200",
+    "anthropic-organization-id": "00000000-0000-4000-8000-000000000004",
+    "anthropic-workspace-id": "wrkspc_00XxXxxxXx00XXXxXxXx0XX5",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x0x000x00000x000-XX6",
+    "content-length": "19",
+    "content-security-policy": "xxxxxxx-xxx 'xxxx'; xxxxx-xxxxxxxxx 'xxxx'",
+    "content-type": "application/json",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "request-id": "req_000Xx0x0xxx0XXxx00Xx0xX7",
+    "server": "value_2",
+    "server-timing": "x-xxxxxxXxxxxxx8;xxx=00",
+    "x-robots-tag": "value_3"
+  },
+  "body": "response-body.json",
+  "chunks": [
+    19,
+    0
+  ]
+}

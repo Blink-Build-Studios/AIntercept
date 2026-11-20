@@ -1,0 +1,564 @@
+{
+  "convo.chained": true,
+  "convo.format": "openai_responses",
+  "convo.messages": [
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 21534
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 1954
+        },
+        {
+          "kind": "text",
+          "size": 362
+        },
+        {
+          "kind": "text",
+          "size": 1056
+        },
+        {
+          "kind": "text",
+          "size": 868
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 271
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 331
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "parts": [
+        {
+          "kind": "text",
+          "size": 28
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "convo.new": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "convo.prev": "resp_0x0x0x0xx0x0x0x0000xx00x000x0000x00x000000x00xxx20",
+  "interceptor.callbacks": [
+    "start",
+    "request",
+    "reply",
+    "reply",
+    "complete",
+    "complete"
+  ],
+  "on_call_complete.1.call.client.product": "codex",
+  "on_call_complete.1.call.client.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "on_call_complete.1.call.host": "chatgpt.com",
+  "on_call_complete.1.call.identity.device_id": "00000000-0000-4000-8000-000000000005",
+  "on_call_complete.1.call.identity.email": "person8@example.com",
+  "on_call_complete.1.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_complete.1.call.identity.ip": "192.0.2.2",
+  "on_call_complete.1.call.identity.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "on_call_complete.1.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_complete.1.call.identity.name": "Xxxxx Xxxxxxx",
+  "on_call_complete.1.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.1.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_complete.1.call.method": "GET",
+  "on_call_complete.1.call.mode": "MODE_OBSERVE",
+  "on_call_complete.1.call.path": "/backend-api/codex/responses",
+  "on_call_complete.1.call.transport": "TRANSPORT_WEBSOCKET",
+  "on_call_complete.1.request.effort": "medium",
+  "on_call_complete.1.request.model": "gpt-6.1-sol",
+  "on_call_complete.1.request.stream": true,
+  "on_call_complete.1.request.tools_available": [
+    "exec",
+    "wait",
+    "request_user_input",
+    "request_user_input_async",
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent"
+  ],
+  "on_call_complete.1.response.cache_read_tokens": "12288",
+  "on_call_complete.1.response.input_tokens": "14110",
+  "on_call_complete.1.response.model": "gpt-6.1-sol",
+  "on_call_complete.1.response.output_tokens": "6",
+  "on_call_complete.1.response.status": 101,
+  "on_call_complete.1.response.stop_reason": "completed",
+  "on_call_complete.1.ws_turn": 1,
+  "on_call_complete.2.call.client.product": "codex",
+  "on_call_complete.2.call.client.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "on_call_complete.2.call.host": "chatgpt.com",
+  "on_call_complete.2.call.identity.device_id": "00000000-0000-4000-8000-000000000005",
+  "on_call_complete.2.call.identity.email": "person8@example.com",
+  "on_call_complete.2.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_complete.2.call.identity.ip": "192.0.2.2",
+  "on_call_complete.2.call.identity.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "on_call_complete.2.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_complete.2.call.identity.name": "Xxxxx Xxxxxxx",
+  "on_call_complete.2.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_complete.2.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_complete.2.call.method": "GET",
+  "on_call_complete.2.call.mode": "MODE_OBSERVE",
+  "on_call_complete.2.call.path": "/backend-api/codex/responses",
+  "on_call_complete.2.call.transport": "TRANSPORT_WEBSOCKET",
+  "on_call_complete.2.response.status": 101,
+  "on_call_start.call.client.headers.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.client.headers.openai-beta": "responses_websockets=2026-02-06",
+  "on_call_start.call.client.headers.originator": "codex_exec",
+  "on_call_start.call.client.headers.session-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.thread-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.user-agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "on_call_start.call.client.headers.version": "0.164.0",
+  "on_call_start.call.client.headers.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.client.headers.x-codex-beta-features": "remote_compaction_v2",
+  "on_call_start.call.client.headers.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "on_call_start.call.client.headers.x-codex-window-id": "00000000-0000-4000-8000-000000000004:0",
+  "on_call_start.call.client.product": "codex",
+  "on_call_start.call.client.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "on_call_start.call.host": "chatgpt.com",
+  "on_call_start.call.identity.device_id": "00000000-0000-4000-8000-000000000005",
+  "on_call_start.call.identity.email": "person8@example.com",
+  "on_call_start.call.identity.email_source": "IDENTITY_SOURCE_CLAIMS",
+  "on_call_start.call.identity.ip": "192.0.2.2",
+  "on_call_start.call.identity.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "on_call_start.call.identity.key_hint": "eyJhbG…ture",
+  "on_call_start.call.identity.name": "Xxxxx Xxxxxxx",
+  "on_call_start.call.identity.reported_account_id": "00000000-0000-4000-8000-000000000002",
+  "on_call_start.call.identity.session_id": "00000000-0000-4000-8000-000000000004",
+  "on_call_start.call.method": "GET",
+  "on_call_start.call.mode": "MODE_OBSERVE",
+  "on_call_start.call.path": "/backend-api/codex/responses",
+  "on_call_start.call.transport": "TRANSPORT_WEBSOCKET",
+  "on_reply.1.message": {
+    "id": "msg_0x0x0x0xx0x0x0x0000xx00x0x0x0x00x0000x00000x000034:0",
+    "parts": [
+      {
+        "id": "msg_0x0x0x0xx0x0x0x0000xx00x0x0x0x00x0000x00000x000034:0/0",
+        "size": "5",
+        "text": {
+          "text": "xxxxx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.2.message": {
+    "id": "msg_0x0x0x0xx0x0x0x0000xx00x0x0x0x00x0000x00000x000034:0",
+    "parts": [
+      {
+        "id": "msg_0x0x0x0xx0x0x0x0000xx00x0x0x0x00x0000x00000x000034:0/0",
+        "size": "3",
+        "text": {
+          "text": " xx"
+        }
+      }
+    ],
+    "role": "ROLE_ASSISTANT"
+  },
+  "on_reply.2.released": "xxxxx",
+  "on_request.chained": true,
+  "on_request.format": "openai_responses",
+  "on_request.messages": [
+    {
+      "id": "8dbbf815a2c2cd7096d5462fe4448b97",
+      "parts": [
+        {
+          "id": "8dbbf815a2c2cd7096d5462fe4448b97/0",
+          "size": "21534",
+          "text": {
+            "text": "Xxx xxx Xxxxx, xx xxxxx xxxxx xx XXX-0. Xxx xxx xxx xxxx xxxxx xxx xxxxxxxxx, xxx xxxx xxx xx xx xxx…(21534 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "5afb8c5c91607af1c762d25861966544",
+      "index": 1,
+      "parts": [
+        {
+          "id": "5afb8c5c91607af1c762d25861966544/0",
+          "size": "1954",
+          "text": {
+            "text": "<xxxxxx_xxxxxxxxxxxx>\n## Xxxxxx\nX xxxxx xx x xxx xx xxxxx xxxxxxxxxxxx xx xxxxxx xxxx xx xxxxxx xx x…(1954 bytes)"
+          }
+        },
+        {
+          "id": "5afb8c5c91607af1c762d25861966544/1",
+          "size": "362",
+          "text": {
+            "text": "<permissions instructions>\nXxxxxxxxxx xxxxxxxxxx xxxxxxx xxxxx xxxxx xxx xx xxxx xx xxxxxxx. `xxxxxx…(362 bytes)"
+          }
+        },
+        {
+          "id": "5afb8c5c91607af1c762d25861966544/2",
+          "size": "1056",
+          "text": {
+            "text": "<xxxxxxxxxxxxx_xxxx># Xxxxxxxxxxxxx Xxxx: Xxxxxxx\n\nXxx xxx xxx xx Xxxxxxx xxxx. Xxx xxxxxxxx xxxxxxx…(1056 bytes)"
+          }
+        },
+        {
+          "id": "5afb8c5c91607af1c762d25861966544/3",
+          "size": "868",
+          "text": {
+            "text": "<xxxxxxxxxxx_xxxxxxx>\nXxxx xx x xxxx xx xxxxxxx xxxx xxx xxxxxxxxx xxx xxx xxxxxxxxx.\n\n- Xxxxxxx (xx…(868 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "f30ef616c57903a7067e86ab2c24a55e",
+      "index": 2,
+      "parts": [
+        {
+          "id": "f30ef616c57903a7067e86ab2c24a55e/0",
+          "size": "271",
+          "text": {
+            "text": "<xxxxx_xxxxx_xxxx>Xxx xxxxxxx xxxxxxxxxxx xxxxxxxx xxxxxxxxx xxxxx-xxxxx xxxxxxxxxx xx xxxxxx xxxxxx…(271 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "2f36a67b26fd1bdb2f91a2788f694c70",
+      "index": 3,
+      "parts": [
+        {
+          "id": "2f36a67b26fd1bdb2f91a2788f694c70/0",
+          "size": "331",
+          "text": {
+            "text": "<environment_context>\n  <xxx>/xxxx</xxx>\n  <xxxxx>xxxx</xxxxx>\n  <xxxxxxx_xxxx>0000-00-00</xxxxxxx_x…(331 bytes)"
+          }
+        }
+      ],
+      "role": "ROLE_SYSTEM"
+    },
+    {
+      "id": "4d211cc9a46f514eefe1058ce02f65ad",
+      "index": 4,
+      "parts": [
+        {
+          "id": "4d211cc9a46f514eefe1058ce02f65ad/0",
+          "size": "28",
+          "text": {
+            "text": "Xxxxx xxxx xxxxxxx: xxxxx xx"
+          }
+        }
+      ],
+      "role": "ROLE_USER"
+    }
+  ],
+  "on_request.total_messages": 5,
+  "record.account": {
+    "account_id": "00000000-0000-4000-8000-000000000002",
+    "email": "person8@example.com",
+    "name": "Xxxxx Xxxxxxx",
+    "org": ""
+  },
+  "turn1.call.cache_read_tokens": 12288,
+  "turn1.call.client": "exec",
+  "turn1.call.client_request_id": "00000000-0000-4000-8000-000000000004",
+  "turn1.call.client_version": "0.164.0",
+  "turn1.call.device_id": "00000000-0000-4000-8000-000000000005",
+  "turn1.call.effort": "medium",
+  "turn1.call.ext.agent_name": "/root",
+  "turn1.call.ext.history_initialization": "new",
+  "turn1.call.ext.request_kind": "turn",
+  "turn1.call.ext.root_turn_id": "00000000-0000-4000-8000-000000000019",
+  "turn1.call.ext.sandbox": "none",
+  "turn1.call.ext.sandbox_mode": "danger-full-access",
+  "turn1.call.ext.thread_source": "user",
+  "turn1.call.ext.turn_trigger": "exec",
+  "turn1.call.ext.window_id": "00000000-0000-4000-8000-000000000004:0",
+  "turn1.call.host": "chatgpt.com",
+  "turn1.call.input_tokens": 14110,
+  "turn1.call.ip": "192.0.2.2",
+  "turn1.call.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "turn1.call.key_hint": "eyJhbG…ture",
+  "turn1.call.kind": "model",
+  "turn1.call.message_id": "resp_0x0x0x0xx0x0x0x0000xx00x00000000x000000000x00xxx33",
+  "turn1.call.method": "GET",
+  "turn1.call.model": "gpt-6.1-sol",
+  "turn1.call.model_call": true,
+  "turn1.call.output_tokens": 6,
+  "turn1.call.path": "/backend-api/codex/responses",
+  "turn1.call.person_id": "00000000-0000-4000-8000-000000000002",
+  "turn1.call.previous_message_id": "resp_0x0x0x0xx0x0x0x0000xx00x000x0000x00x000000x00xxx20",
+  "turn1.call.product": "codex",
+  "turn1.call.prompt_id": "00000000-0000-4000-8000-000000000019",
+  "turn1.call.service_tier": "auto",
+  "turn1.call.session_id": "00000000-0000-4000-8000-000000000004",
+  "turn1.call.status": 101,
+  "turn1.call.stop_reason": "completed",
+  "turn1.call.stream": true,
+  "turn1.call.tools_offered": [
+    "clock.sleep",
+    "collaboration.followup_task",
+    "collaboration.interrupt_agent",
+    "collaboration.list_agents",
+    "collaboration.send_message",
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent",
+    "exec",
+    "request_user_input",
+    "request_user_input_async",
+    "wait"
+  ],
+  "turn1.call.transport": "websocket",
+  "turn1.call.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "turn1.call.ws_turn": 1,
+  "turn1.row.account_uuid": "00000000-0000-4000-8000-000000000002",
+  "turn1.row.auth.account_id": "00000000-0000-4000-8000-000000000002",
+  "turn1.row.auth.client_id": "app_XXxxxXXX00x0XxXxXx0xxx10",
+  "turn1.row.auth.email": "person8@example.com",
+  "turn1.row.auth.expires_at": 1794497032,
+  "turn1.row.auth.issuer": "https://auth.openai.com",
+  "turn1.row.auth.name": "Xxxxx Xxxxxxx",
+  "turn1.row.auth.plan": "value_1",
+  "turn1.row.auth.session_id": "authsess_xxXXxxxXX00XxXxxX0xxX011",
+  "turn1.row.auth.subject": "xxxxxx-xxxxx0|000000000000000000009",
+  "turn1.row.auth.user_id": "user-XXxXx0x00Xxxxx0XxXx0xxX7",
+  "turn1.row.cache_read_tokens": 12288,
+  "turn1.row.client.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "turn1.row.client.openai-beta": "responses_websockets=2026-02-06",
+  "turn1.row.client.originator": "codex_exec",
+  "turn1.row.client.session-id": "00000000-0000-4000-8000-000000000004",
+  "turn1.row.client.thread-id": "00000000-0000-4000-8000-000000000004",
+  "turn1.row.client.user-agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "turn1.row.client.version": "0.164.0",
+  "turn1.row.client.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "turn1.row.client.x-codex-beta-features": "remote_compaction_v2",
+  "turn1.row.client.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "turn1.row.client.x-codex-window-id": "00000000-0000-4000-8000-000000000004:0",
+  "turn1.row.client_metadata.agent_name": "/root",
+  "turn1.row.client_metadata.analytics_enabled": true,
+  "turn1.row.client_metadata.context_window_id": "00000000-0000-4000-8000-000000000006",
+  "turn1.row.client_metadata.history_initialization": "new",
+  "turn1.row.client_metadata.installation_id": "00000000-0000-4000-8000-000000000005",
+  "turn1.row.client_metadata.model": "gpt-6.1-sol",
+  "turn1.row.client_metadata.node_repl_auto_review_required": true,
+  "turn1.row.client_metadata.reasoning_effort": "medium",
+  "turn1.row.client_metadata.request_kind": "turn",
+  "turn1.row.client_metadata.root_turn_id": "00000000-0000-4000-8000-000000000019",
+  "turn1.row.client_metadata.sandbox": "none",
+  "turn1.row.client_metadata.sandbox_mode": "danger-full-access",
+  "turn1.row.client_metadata.session_id": "00000000-0000-4000-8000-000000000004",
+  "turn1.row.client_metadata.thread_id": "00000000-0000-4000-8000-000000000004",
+  "turn1.row.client_metadata.thread_source": "user",
+  "turn1.row.client_metadata.turn_id": "00000000-0000-4000-8000-000000000019",
+  "turn1.row.client_metadata.turn_started_at_unix_ms": 1794181926372,
+  "turn1.row.client_metadata.turn_trigger": "exec",
+  "turn1.row.client_metadata.window_id": "00000000-0000-4000-8000-000000000004:0",
+  "turn1.row.device_id": "00000000-0000-4000-8000-000000000005",
+  "turn1.row.effort": "medium",
+  "turn1.row.host": "chatgpt.com",
+  "turn1.row.input_tokens": 14110,
+  "turn1.row.ip": "192.0.2.2",
+  "turn1.row.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "turn1.row.key_hint": "eyJhbG…ture",
+  "turn1.row.message_id": "resp_0x0x0x0xx0x0x0x0000xx00x00000000x000000000x00xxx33",
+  "turn1.row.method": "GET",
+  "turn1.row.model": "gpt-6.1-sol",
+  "turn1.row.output_tokens": 6,
+  "turn1.row.path": "/backend-api/codex/responses",
+  "turn1.row.previous_message_id": "resp_0x0x0x0xx0x0x0x0000xx00x000x0000x00x000000x00xxx20",
+  "turn1.row.provider.x-codex-plan-type": "value_1",
+  "turn1.row.provider.x-codex-primary-reset-at": "0",
+  "turn1.row.provider.x-codex-primary-used-percent": "0",
+  "turn1.row.provider.x-codex-primary-window-minutes": "0",
+  "turn1.row.provider.x-codex-secondary-reset-at": "0",
+  "turn1.row.provider.x-codex-secondary-used-percent": "0",
+  "turn1.row.provider.x-codex-secondary-window-minutes": "0",
+  "turn1.row.provider.x-oai-request-id": "00000000-0000-4000-8000-000000000013",
+  "turn1.row.service_tier": "auto",
+  "turn1.row.session_id": "00000000-0000-4000-8000-000000000004",
+  "turn1.row.status": 101,
+  "turn1.row.stop_reason": "completed",
+  "turn1.row.stream": true,
+  "turn1.row.tools_available": [
+    {
+      "kind": "builtin",
+      "name": "exec",
+      "tool": "exec"
+    },
+    {
+      "kind": "builtin",
+      "name": "wait",
+      "tool": "wait"
+    },
+    {
+      "kind": "builtin",
+      "name": "request_user_input",
+      "tool": "request_user_input"
+    },
+    {
+      "kind": "builtin",
+      "name": "request_user_input_async",
+      "tool": "request_user_input_async"
+    },
+    {
+      "kind": "builtin",
+      "name": "clock.sleep",
+      "tool": "clock.sleep"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.followup_task",
+      "tool": "collaboration.followup_task"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.interrupt_agent",
+      "tool": "collaboration.interrupt_agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.list_agents",
+      "tool": "collaboration.list_agents"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.send_message",
+      "tool": "collaboration.send_message"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.spawn_agent",
+      "tool": "collaboration.spawn_agent"
+    },
+    {
+      "kind": "builtin",
+      "name": "collaboration.wait_agent",
+      "tool": "collaboration.wait_agent"
+    }
+  ],
+  "turn1.row.transport": "websocket",
+  "turn1.row.ws_turn": 1,
+  "ws_connection.account_uuid": "00000000-0000-4000-8000-000000000002",
+  "ws_connection.auth.account_id": "00000000-0000-4000-8000-000000000002",
+  "ws_connection.auth.client_id": "app_XXxxxXXX00x0XxXxXx0xxx10",
+  "ws_connection.auth.email": "person8@example.com",
+  "ws_connection.auth.expires_at": 1794497032,
+  "ws_connection.auth.issuer": "https://auth.openai.com",
+  "ws_connection.auth.name": "Xxxxx Xxxxxxx",
+  "ws_connection.auth.plan": "value_1",
+  "ws_connection.auth.session_id": "authsess_xxXXxxxXX00XxXxxX0xxX011",
+  "ws_connection.auth.subject": "xxxxxx-xxxxx0|000000000000000000009",
+  "ws_connection.auth.user_id": "user-XXxXx0x00Xxxxx0XxXx0xxX7",
+  "ws_connection.call.client": "exec",
+  "ws_connection.call.client_request_id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.call.client_version": "0.164.0",
+  "ws_connection.call.device_id": "00000000-0000-4000-8000-000000000005",
+  "ws_connection.call.ext.agent_name": "/root",
+  "ws_connection.call.ext.history_initialization": "new",
+  "ws_connection.call.ext.request_kind": "prewarm",
+  "ws_connection.call.ext.sandbox": "none",
+  "ws_connection.call.ext.sandbox_mode": "danger-full-access",
+  "ws_connection.call.ext.thread_source": "user",
+  "ws_connection.call.ext.window_id": "00000000-0000-4000-8000-000000000004:0",
+  "ws_connection.call.hidden_kind": "prewarm",
+  "ws_connection.call.host": "chatgpt.com",
+  "ws_connection.call.ip": "192.0.2.2",
+  "ws_connection.call.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "ws_connection.call.key_hint": "eyJhbG…ture",
+  "ws_connection.call.kind": "model",
+  "ws_connection.call.method": "GET",
+  "ws_connection.call.path": "/backend-api/codex/responses",
+  "ws_connection.call.person_id": "00000000-0000-4000-8000-000000000002",
+  "ws_connection.call.product": "codex",
+  "ws_connection.call.session_id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.call.status": 101,
+  "ws_connection.call.transport": "websocket",
+  "ws_connection.call.user_agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "ws_connection.client.chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+  "ws_connection.client.openai-beta": "responses_websockets=2026-02-06",
+  "ws_connection.client.originator": "codex_exec",
+  "ws_connection.client.session-id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.client.thread-id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.client.user-agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+  "ws_connection.client.version": "0.164.0",
+  "ws_connection.client.x-client-request-id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.client.x-codex-beta-features": "remote_compaction_v2",
+  "ws_connection.client.x-codex-routing-hint": "xxxxx=xxx-0.0-xxx",
+  "ws_connection.client.x-codex-window-id": "00000000-0000-4000-8000-000000000004:0",
+  "ws_connection.client_metadata.agent_name": "/root",
+  "ws_connection.client_metadata.analytics_enabled": true,
+  "ws_connection.client_metadata.context_window_id": "00000000-0000-4000-8000-000000000006",
+  "ws_connection.client_metadata.history_initialization": "new",
+  "ws_connection.client_metadata.installation_id": "00000000-0000-4000-8000-000000000005",
+  "ws_connection.client_metadata.model": "gpt-6.1-sol",
+  "ws_connection.client_metadata.node_repl_auto_review_required": true,
+  "ws_connection.client_metadata.reasoning_effort": "medium",
+  "ws_connection.client_metadata.request_kind": "prewarm",
+  "ws_connection.client_metadata.sandbox": "none",
+  "ws_connection.client_metadata.sandbox_mode": "danger-full-access",
+  "ws_connection.client_metadata.session_id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.client_metadata.thread_id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.client_metadata.thread_source": "user",
+  "ws_connection.client_metadata.window_id": "00000000-0000-4000-8000-000000000004:0",
+  "ws_connection.device_id": "00000000-0000-4000-8000-000000000005",
+  "ws_connection.host": "chatgpt.com",
+  "ws_connection.ip": "192.0.2.2",
+  "ws_connection.key_hash": "52430a86ddd50dc017f7db06808c782e",
+  "ws_connection.key_hint": "eyJhbG…ture",
+  "ws_connection.method": "GET",
+  "ws_connection.path": "/backend-api/codex/responses",
+  "ws_connection.provider.x-oai-request-id": "00000000-0000-4000-8000-000000000013",
+  "ws_connection.session_id": "00000000-0000-4000-8000-000000000004",
+  "ws_connection.status": 101,
+  "ws_connection.transport": "websocket",
+  "ws_connection.websocket": {
+    "deflate": true,
+    "message_types": {
+      "inbound:response.create": 1,
+      "outbound:codex.rate_limits": 1,
+      "outbound:codex.response.metadata": 1,
+      "outbound:response.completed": 1,
+      "outbound:response.content_part.added": 1,
+      "outbound:response.content_part.done": 1,
+      "outbound:response.created": 1,
+      "outbound:response.in_progress": 1,
+      "outbound:response.metadata": 1,
+      "outbound:response.output_item.added": 1,
+      "outbound:response.output_item.done": 1,
+      "outbound:response.output_text.delta": 2,
+      "outbound:response.output_text.done": 1,
+      "outbound:responsesapi.websocket_timing": 1
+    },
+    "messages_down": 14,
+    "messages_up": 1,
+    "turns": 1
+  }
+}

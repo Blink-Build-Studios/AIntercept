@@ -1,0 +1,22 @@
+{
+  "status": 101,
+  "headers": {
+    ":status": "101",
+    "cf-cache-status": "value_1",
+    "cf-ray": "x000xx0xxxx00000-XX8",
+    "connection": "upgrade",
+    "cross-origin-opener-policy": "value_2",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "nel": "{\"xxxxxx_xx\":\"xx-xxx\",\"xxxxxxx_xxxxxxxx\":0.00,\"xxx_xxx\":000009}",
+    "referrer-policy": "value_3",
+    "report-to": "{\"xxxxx\":\"xx-xxx\",\"xxx_xxx\":000009,\"xxxxxxxxx\":[{\"xxx\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XX0XXxX0xXxxxxxXxxXXxXXXxxXXXxxxXxxxxx0XXxXX0X00xXXxXxXx00xXXxXXxXXx10%0Xxxx0xXX0000xX11%0XxXxxxx%0XXxxxXxXxX0XX12%0XXx0xXxxXxxX13%0XX\"}]}",
+    "sec-websocket-accept": "XXxXxXXXX0X0XXx0xX14/X00X0x=",
+    "sec-websocket-extensions": "permessage-deflate",
+    "server": "value_4",
+    "strict-transport-security": "xxx-xxx=0000000f; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "upgrade": "websocket",
+    "x-content-type-options": "value_5",
+    "x-models-etag": "X/\"00000000000000000000000000000010\"",
+    "x-openai-proxy-wasm": "value_6"
+  }
+}

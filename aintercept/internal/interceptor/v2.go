@@ -15,17 +15,15 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
-	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 )
 
-// Contract v2 (interceptor/v2, docs/INTERCEPTOR_V2.md): OnRequest carries a
-// call's new messages, parsed by convo, and its answers come back per
-// message; OnToolCall each tool call in a reply. Call, CallStart and
-// CallRecord are v1's messages field for field, so they're built as v1 and
-// converted on the wire format.
+// The contract's content callbacks (interceptor/v2, docs/INTERCEPTOR.md):
+// OnRequest carries a call's new messages, parsed by convo, and its answers
+// come back per message; OnReply the reply's text, piece by piece; OnToolCall
+// each tool call in a reply.
 //
 // A Respond at call start or OnRequest is delivered by the observer
 // (synthesized, or the request rewritten), which then records it with
@@ -48,23 +46,17 @@ func invalid(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", errInvalid, fmt.Sprintf(format, a...))
 }
 
-// convert copies a v1 message into its v2 twin through the wire format.
-func convert[T proto.Message](from proto.Message, to T) T {
-	if b, err := proto.Marshal(from); err == nil {
-		_ = proto.Unmarshal(b, to)
-	}
-	return to
-}
+// own is a message's own copy of the call's Call: the observe workers give
+// it the call's identity as they deliver it (stamp), while the request path
+// keeps using the stream's.
+func own(call *pb.Call) *pb.Call { return proto.Clone(call).(*pb.Call) }
 
-// StartV2 is OnCallStart's message in contract v2.
-func StartV2(s *pb.CallStart) *pb2.CallStart { return convert(s, &pb2.CallStart{}) }
-
-func recordedV2(vs []events.Verdict) []*pb2.RecordedVerdict {
-	var out []*pb2.RecordedVerdict
+func recorded(vs []events.Verdict) []*pb.RecordedVerdict {
+	var out []*pb.RecordedVerdict
 	for _, v := range vs {
-		rv := &pb2.RecordedVerdict{Callback: v.Callback, Action: v.Action, Applied: v.Applied, Reason: v.Reason, MessageId: v.MessageID, RespondMode: v.RespondMode}
+		rv := &pb.RecordedVerdict{Callback: v.Callback, Action: v.Action, Applied: v.Applied, Reason: v.Reason, MessageId: v.MessageID, RespondMode: v.RespondMode}
 		for k, val := range v.Annotations {
-			rv.Annotations = append(rv.Annotations, &pb2.Annotation{Key: k, Value: val})
+			rv.Annotations = append(rv.Annotations, &pb.Annotation{Key: k, Value: val})
 		}
 		out = append(out, rv)
 	}
@@ -94,14 +86,14 @@ func (c *Client) Responded(callID string, d Decision, mode string) {
 }
 
 // checkRespond checks a Respond's text.
-func checkRespond(r *pb2.Respond) error {
+func checkRespond(r *pb.Respond) error {
 	if r.GetText() == "" {
 		return invalid("a Respond with no text")
 	}
 	return nil
 }
 
-func annotations(as []*pb2.Annotation) map[string]string {
+func annotations(as []*pb.Annotation) map[string]string {
 	if len(as) == 0 {
 		return nil
 	}
@@ -114,12 +106,14 @@ func annotations(as []*pb2.Annotation) map[string]string {
 
 // ── OnCallStart ──────────────────────────────────────────────────────────────
 
-func (c *Client) decideStart2(ctx context.Context, s *pb.CallStart) Decision {
+// DecideStart calls OnCallStart and waits for the verdict (enforce mode). A
+// Respond is the caller's to deliver, and to record with Responded.
+func (c *Client) DecideStart(ctx context.Context, s *pb.CallStart) Decision {
 	callID := s.GetCall().GetCallId()
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
-	v, err := c.api2.OnCallStart(ctx, StartV2(s))
+	v, err := c.api.OnCallStart(ctx, s)
 	took := time.Since(t)
 	if err == nil && v.GetRespond() != nil {
 		err = checkRespond(v.GetRespond())
@@ -132,13 +126,13 @@ func (c *Client) decideStart2(ctx context.Context, s *pb.CallStart) Decision {
 		return Decision{Action: Respond, Text: r.GetText(), pending: &events.Verdict{Callback: "call_start", Action: "respond",
 			Mode: "enforce", LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}}
 	}
-	c.noteStart2(callID, "enforce", v, true, took)
+	c.noteStart(callID, "enforce", v, true, took)
 	return Decision{Action: Allow}
 }
 
-// noteStart2 records OnCallStart's answer: an annotated Accept, or (observe)
+// noteStart records OnCallStart's answer: an annotated Accept, or (observe)
 // a Respond, recorded and not applied.
-func (c *Client) noteStart2(callID, mode string, v *pb2.CallVerdict, enforce bool, took time.Duration) {
+func (c *Client) noteStart(callID, mode string, v *pb.CallVerdict, enforce bool, took time.Duration) {
 	ev := events.Verdict{Callback: "call_start", Action: "accept", Applied: enforce, Mode: mode,
 		LatencyMS: took.Milliseconds(), Annotations: annotations(v.GetAnnotations())}
 	if v.GetRespond() != nil {
@@ -156,7 +150,7 @@ func (c *Client) noteStart2(callID, mode string, v *pb2.CallVerdict, enforce boo
 // their ids. It keeps the body and those messages (not the history's
 // content), to apply a Replace.
 type Request struct {
-	call   *pb2.Call
+	call   *pb.Call
 	parsed convo.Request // Messages: only the new ones are set
 	msgs   []convo.Message
 	ids    []string
@@ -168,7 +162,7 @@ type Request struct {
 // call's session (convo.Request.IDs).
 func NewRequest(call *pb.Call, r convo.Request) *Request {
 	ids := r.IDs(call.GetIdentity().GetSessionId())
-	q := &Request{call: convert(call, &pb2.Call{}), parsed: r, at: map[string]int{}, tools: map[string]string{}}
+	q := &Request{call: own(call), parsed: r, at: map[string]int{}, tools: map[string]string{}}
 	for _, m := range r.Messages {
 		for _, p := range m.Parts {
 			if p.Kind == convo.KindToolCall {
@@ -190,18 +184,18 @@ func partID(messageID string, i int) string { return messageID + "/" + strconv.I
 
 // message builds OnRequest's message; fetched names the parts to send with
 // their content (the second round).
-func (q *Request) message(fetched map[string]bool) *pb2.RequestMessages {
-	out := &pb2.RequestMessages{
+func (q *Request) message(fetched map[string]bool) *pb.RequestMessages {
+	out := &pb.RequestMessages{
 		Call: q.call, Format: q.parsed.Format, Chained: q.parsed.Chained,
 		TotalMessages: int32(len(q.parsed.Messages)), Fetched: fetched != nil,
 	}
 	type inline struct {
-		p   *pb2.Part
+		p   *pb.Part
 		src convo.Part
 	}
 	var inlined []inline
 	for i, m := range q.msgs {
-		cm := &pb2.ConvMessage{Id: q.ids[i], Role: role(m.Role), Index: int32(m.Index)}
+		cm := &pb.ConvMessage{Id: q.ids[i], Role: role(m.Role), Index: int32(m.Index)}
 		for j, p := range m.Parts {
 			id := partID(q.ids[i], j)
 			pp := part(p, id, fetched[id])
@@ -230,23 +224,23 @@ func (q *Request) message(fetched map[string]bool) *pb2.RequestMessages {
 	return out
 }
 
-func role(r convo.Role) pb2.Role {
+func role(r convo.Role) pb.Role {
 	switch r {
 	case convo.RoleUser:
-		return pb2.Role_ROLE_USER
+		return pb.Role_ROLE_USER
 	case convo.RoleAssistant:
-		return pb2.Role_ROLE_ASSISTANT
+		return pb.Role_ROLE_ASSISTANT
 	case convo.RoleTool:
-		return pb2.Role_ROLE_TOOL
+		return pb.Role_ROLE_TOOL
 	case convo.RoleSystem:
-		return pb2.Role_ROLE_SYSTEM
+		return pb.Role_ROLE_SYSTEM
 	}
-	return pb2.Role_ROLE_UNSPECIFIED
+	return pb.Role_ROLE_UNSPECIFIED
 }
 
 // part maps one part; fetch fills a by-reference part's content.
-func part(p convo.Part, id string, fetch bool) *pb2.Part {
-	pp := &pb2.Part{Id: id, Size: int64(p.Size), Ref: p.Ref, Preview: p.Preview}
+func part(p convo.Part, id string, fetch bool) *pb.Part {
+	pp := &pb.Part{Id: id, Size: int64(p.Size), Ref: p.Ref, Preview: p.Preview}
 	text, args := p.Text, p.Arguments
 	var data []byte
 	switch {
@@ -259,32 +253,32 @@ func part(p convo.Part, id string, fetch bool) *pb2.Part {
 	}
 	switch p.Kind {
 	case convo.KindText:
-		pp.Kind = &pb2.Part_Text{Text: &pb2.Text{Text: text}}
+		pp.Kind = &pb.Part_Text{Text: &pb.Text{Text: text}}
 	case convo.KindMedia:
-		pp.Kind = &pb2.Part_Media{Media: &pb2.Media{MediaType: p.MediaType, Url: p.URL, CallId: p.CallID, Data: data}}
+		pp.Kind = &pb.Part_Media{Media: &pb.Media{MediaType: p.MediaType, Url: p.URL, CallId: p.CallID, Data: data}}
 	case convo.KindToolCall:
-		pp.Kind = &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: p.CallID, Name: p.Name, Arguments: args}}
+		pp.Kind = &pb.Part_ToolCall{ToolCall: &pb.ToolCall{CallId: p.CallID, Name: p.Name, Arguments: args}}
 	case convo.KindToolResult:
-		pp.Kind = &pb2.Part_ToolResult{ToolResult: &pb2.ToolResult{CallId: p.CallID, Text: text, IsError: p.IsError}}
+		pp.Kind = &pb.Part_ToolResult{ToolResult: &pb.ToolResult{CallId: p.CallID, Text: text, IsError: p.IsError}}
 	case convo.KindToolAdded:
-		pp.Kind = &pb2.Part_ToolAdded{ToolAdded: &pb2.ToolAdded{Name: p.Name}}
+		pp.Kind = &pb.Part_ToolAdded{ToolAdded: &pb.ToolAdded{Name: p.Name}}
 	default:
-		pp.Kind = &pb2.Part_Opaque{Opaque: &pb2.Opaque{}}
+		pp.Kind = &pb.Part_Opaque{Opaque: &pb.Opaque{}}
 	}
 	return pp
 }
 
 // byReference drops an inline part's content, leaving its preview.
-func byReference(pp *pb2.Part, src convo.Part) {
+func byReference(pp *pb.Part, src convo.Part) {
 	pp.Ref = true
 	switch k := pp.GetKind().(type) {
-	case *pb2.Part_Text:
+	case *pb.Part_Text:
 		k.Text.Text = ""
-	case *pb2.Part_ToolCall:
+	case *pb.Part_ToolCall:
 		k.ToolCall.Arguments = ""
-	case *pb2.Part_ToolResult:
+	case *pb.Part_ToolResult:
 		k.ToolResult.Text = ""
-	case *pb2.Part_Media:
+	case *pb.Part_Media:
 		k.Media.Data = nil
 		if !strings.HasPrefix(src.MediaType, "text/") {
 			return
@@ -323,10 +317,10 @@ func (q *Request) fetch(ids []string) (map[string]bool, error) {
 // answer turns OnRequest's answer into edits and the verdict rows to record
 // (callback, action, message id, annotations). A Respond is the call's
 // answer: its row is the only one, and the per-message answers are ignored.
-func (q *Request) answer(v *pb2.RequestVerdict) ([]convo.Edit, []events.Verdict, error) {
+func (q *Request) answer(v *pb.RequestVerdict) ([]convo.Edit, []events.Verdict, error) {
 	var edits []convo.Edit
 	var rows []events.Verdict
-	row := func(action, messageID string, as []*pb2.Annotation) {
+	row := func(action, messageID string, as []*pb.Annotation) {
 		rows = append(rows, events.Verdict{Callback: "request", Action: action, MessageID: messageID, Annotations: annotations(as)})
 	}
 	if r := respondOf(v); r != nil {
@@ -351,7 +345,7 @@ func (q *Request) answer(v *pb2.RequestVerdict) ([]convo.Edit, []events.Verdict,
 		}
 		seen[id] = true
 		switch a := mv.GetAction().(type) {
-		case *pb2.MessageVerdict_Replace:
+		case *pb.MessageVerdict_Replace:
 			e, err := q.replace(i, a.Replace.GetMessage())
 			if err != nil {
 				return nil, nil, fmt.Errorf("message %q: %w", id, err)
@@ -371,7 +365,7 @@ func (q *Request) answer(v *pb2.RequestVerdict) ([]convo.Edit, []events.Verdict,
 // edits for the parts it changes. Every part comes back, by id, in order, of
 // the same kind; only text, tool results' text and tool calls' arguments
 // change; media and opaque parts are as they were.
-func (q *Request) replace(i int, rm *pb2.ConvMessage) ([]convo.Edit, error) {
+func (q *Request) replace(i int, rm *pb.ConvMessage) ([]convo.Edit, error) {
 	m := q.msgs[i]
 	if len(rm.GetParts()) != len(m.Parts) {
 		return nil, invalid("Replace has %d parts, the message %d: every part comes back, by id", len(rm.GetParts()), len(m.Parts))
@@ -429,7 +423,7 @@ func (q *Request) replace(i int, rm *pb2.ConvMessage) ([]convo.Edit, error) {
 // ask runs OnRequest, with its one Fetch round, and reads the answer: the
 // edits, the rows, and a Respond's text.
 func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Verdict, string, error) {
-	v, err := c.api2.OnRequest(ctx, q.message(nil))
+	v, err := c.api.OnRequest(ctx, q.message(nil))
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -438,7 +432,7 @@ func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Ve
 		if err != nil {
 			return nil, nil, "", err
 		}
-		if v, err = c.api2.OnRequest(ctx, q.message(fetched)); err != nil {
+		if v, err = c.api.OnRequest(ctx, q.message(fetched)); err != nil {
 			return nil, nil, "", err
 		}
 		if len(v.GetFetch().GetPartIds()) > 0 {
@@ -454,7 +448,7 @@ func (c *Client) ask(ctx context.Context, q *Request) ([]convo.Edit, []events.Ve
 
 // respondOf is OnRequest's Respond: the call's, or else the first message's
 // (a message's Respond is the call's).
-func respondOf(v *pb2.RequestVerdict) *pb2.Respond {
+func respondOf(v *pb.RequestVerdict) *pb.Respond {
 	if r := v.GetRespond(); r != nil {
 		return r
 	}
@@ -490,7 +484,7 @@ func (c *Client) asks(r convo.Request) bool {
 // ObserveRequest queues OnRequest (observe mode). No-op without content, and
 // for a request with no new messages.
 func (c *Client) ObserveRequest(call *pb.Call, r convo.Request) {
-	if c.Content() && c.V2() && c.asks(r) {
+	if c.Content() && c.asks(r) {
 		c.enqueue(job{callID: call.GetCallId(), req: NewRequest(call, r)})
 	}
 }
@@ -524,7 +518,7 @@ func (c *Client) onRequestObserved(ctx context.Context, q *Request) error {
 // failure, a missed deadline or an answer that can't be applied is onError.
 // A request with no new messages is allowed without OnRequest.
 func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Request) Decision {
-	if !c.Content() || !c.V2() || !c.asks(r) {
+	if !c.Content() || !c.asks(r) {
 		return Decision{Action: Allow}
 	}
 	q := NewRequest(call, r)
@@ -560,18 +554,18 @@ func (c *Client) DecideRequest(ctx context.Context, call *pb.Call, r convo.Reque
 
 // ToolCalls reports whether tool calls in replies go to OnToolCall (v2 with
 // content, until the Interceptor turns out not to implement it).
-func (c *Client) ToolCalls() bool { return c.Content() && c.V2() && !c.noToolCall.Load() }
+func (c *Client) ToolCalls() bool { return c.Content() && !c.noToolCall.Load() }
 
 // toolMessage is OnToolCall's message for a tool call.
-func toolMessage(call *pb.Call, tc convo.ToolCall) *pb2.ResponseMessage {
-	part := &pb2.Part{Id: partID(tc.ID, 0), Size: int64(len(tc.Arguments)),
-		Kind: &pb2.Part_ToolCall{ToolCall: &pb2.ToolCall{CallId: tc.ID, Name: tc.Name, Arguments: tc.Arguments}}}
+func toolMessage(call *pb.Call, tc convo.ToolCall) *pb.ResponseMessage {
+	part := &pb.Part{Id: partID(tc.ID, 0), Size: int64(len(tc.Arguments)),
+		Kind: &pb.Part_ToolCall{ToolCall: &pb.ToolCall{CallId: tc.ID, Name: tc.Name, Arguments: tc.Arguments}}}
 	if len(tc.Arguments) > messageMax {
 		byReference(part, convo.Part{Kind: convo.KindToolCall})
 		part.Preview = preview(tc.Arguments)
 	}
-	return &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}),
-		Message: &pb2.ConvMessage{Id: tc.ID, Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{part}}}
+	return &pb.ResponseMessage{Call: own(call),
+		Message: &pb.ConvMessage{Id: tc.ID, Role: pb.Role_ROLE_ASSISTANT, Parts: []*pb.Part{part}}}
 }
 
 // DecideToolCall calls OnToolCall for one complete tool call in a reply and
@@ -588,7 +582,7 @@ func (c *Client) DecideToolCall(ctx context.Context, call *pb.Call, tc convo.Too
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
-	v, err := c.api2.OnToolCall(ctx, msg)
+	v, err := c.api.OnToolCall(ctx, msg)
 	took := time.Since(t)
 	if status.Code(err) == codes.Unimplemented {
 		c.noToolCall.Store(true)
@@ -617,14 +611,14 @@ func (c *Client) DecideToolCall(ctx context.Context, call *pb.Call, tc convo.Too
 }
 
 // toolAnswer checks OnToolCall's answer against the call.
-func toolAnswer(tc convo.ToolCall, v *pb2.MessageVerdict) (Decision, error) {
+func toolAnswer(tc convo.ToolCall, v *pb.MessageVerdict) (Decision, error) {
 	switch a := v.GetAction().(type) {
-	case *pb2.MessageVerdict_Respond:
+	case *pb.MessageVerdict_Respond:
 		if err := checkRespond(a.Respond); err != nil {
 			return Decision{}, err
 		}
 		return Decision{Action: Respond, Text: a.Respond.GetText()}, nil
-	case *pb2.MessageVerdict_Replace:
+	case *pb.MessageVerdict_Replace:
 		ps := a.Replace.GetMessage().GetParts()
 		if len(ps) != 1 || ps[0].GetToolCall() == nil {
 			return Decision{}, invalid("Replace of a tool call is one tool call part")
@@ -655,34 +649,34 @@ func toolAnswer(tc convo.ToolCall, v *pb2.MessageVerdict) (Decision, error) {
 
 // Replies reports whether reply text is held for OnReply (v2 with content,
 // until the Interceptor turns out not to implement it).
-func (c *Client) Replies() bool { return c.Content() && c.V2() && !c.noReply.Load() }
+func (c *Client) Replies() bool { return c.Content() && !c.noReply.Load() }
 
 // replyMessage is OnReply's message for a text block's pending text.
-func replyMessage(call *pb.Call, p convo.TextPiece) *pb2.ResponseMessage {
-	part := &pb2.Part{Id: partID(p.ID, 0), Size: int64(len(p.Pending)), Kind: &pb2.Part_Text{Text: &pb2.Text{Text: p.Pending}}}
-	return &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}), Released: p.Released, Done: p.Done,
-		Message: &pb2.ConvMessage{Id: p.ID, Role: pb2.Role_ROLE_ASSISTANT, Parts: []*pb2.Part{part}}}
+func replyMessage(call *pb.Call, p convo.TextPiece) *pb.ResponseMessage {
+	part := &pb.Part{Id: partID(p.ID, 0), Size: int64(len(p.Pending)), Kind: &pb.Part_Text{Text: &pb.Text{Text: p.Pending}}}
+	return &pb.ResponseMessage{Call: own(call), Released: p.Released, Done: p.Done,
+		Message: &pb.ConvMessage{Id: p.ID, Role: pb.Role_ROLE_ASSISTANT, Parts: []*pb.Part{part}}}
 }
 
 // opaqueMessage is OnReply's notice of an opaque part.
-func opaqueMessage(call *pb.Call, id string) *pb2.ResponseMessage {
-	return &pb2.ResponseMessage{Call: convert(call, &pb2.Call{}), Done: true,
-		Message: &pb2.ConvMessage{Id: id, Role: pb2.Role_ROLE_ASSISTANT,
-			Parts: []*pb2.Part{{Id: partID(id, 0), Kind: &pb2.Part_Opaque{Opaque: &pb2.Opaque{}}}}}}
+func opaqueMessage(call *pb.Call, id string) *pb.ResponseMessage {
+	return &pb.ResponseMessage{Call: own(call), Done: true,
+		Message: &pb.ConvMessage{Id: id, Role: pb.Role_ROLE_ASSISTANT,
+			Parts: []*pb.Part{{Id: partID(id, 0), Kind: &pb.Part_Opaque{Opaque: &pb.Opaque{}}}}}}
 }
 
 // replyAnswer checks OnReply's answer against the pending text.
-func replyAnswer(p convo.TextPiece, v *pb2.MessageVerdict) (Decision, error) {
+func replyAnswer(p convo.TextPiece, v *pb.MessageVerdict) (Decision, error) {
 	d := Decision{Action: Allow}
 	switch a := v.GetAction().(type) {
-	case *pb2.MessageVerdict_Respond:
+	case *pb.MessageVerdict_Respond:
 		if err := checkRespond(a.Respond); err != nil {
 			return Decision{}, err
 		}
 		return Decision{Action: Respond, Text: a.Respond.GetText()}, nil
-	case *pb2.MessageVerdict_Hold:
+	case *pb.MessageVerdict_Hold:
 		return Decision{Action: Hold}, nil
-	case *pb2.MessageVerdict_Replace:
+	case *pb.MessageVerdict_Replace:
 		ps := a.Replace.GetMessage().GetParts()
 		if len(ps) != 1 || ps[0].GetText() == nil {
 			return Decision{}, invalid("Replace of reply text is one text part")
@@ -703,7 +697,7 @@ func replyAnswer(p convo.TextPiece, v *pb2.MessageVerdict) (Decision, error) {
 
 // replyRow is the verdict row for an answer on reply text: every answer but
 // a plain Accept.
-func replyRow(id string, d Decision, v *pb2.MessageVerdict) (events.Verdict, bool) {
+func replyRow(id string, d Decision, v *pb.MessageVerdict) (events.Verdict, bool) {
 	row := events.Verdict{Callback: "reply", Action: "accept", MessageID: id, Annotations: annotations(v.GetAnnotations())}
 	switch d.Action {
 	case Replace, Hold:
@@ -727,7 +721,7 @@ func (c *Client) DecideReply(ctx context.Context, call *pb.Call, p convo.TextPie
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
 	t := time.Now()
-	v, err := c.api2.OnReply(ctx, replyMessage(call, p))
+	v, err := c.api.OnReply(ctx, replyMessage(call, p))
 	took := time.Since(t)
 	if status.Code(err) == codes.Unimplemented {
 		c.noReply.Store(true)
@@ -751,7 +745,7 @@ func (c *Client) DecideReply(ctx context.Context, call *pb.Call, p convo.TextPie
 // replyJob is an OnReply or OnToolCall delivered off the stream: observe
 // mode, or an opaque part's notice.
 type replyJob struct {
-	msg    *pb2.ResponseMessage
+	msg    *pb.ResponseMessage
 	text   *convo.TextPiece // OnReply on text
 	tool   *convo.ToolCall  // OnToolCall
 	notice bool             // OnReply on an opaque part: nothing to record
@@ -788,7 +782,7 @@ func (c *Client) Opaque(ctx context.Context, call *pb.Call, id string) {
 	}
 	ctx, cancel := c.ctx(ctx, c.cfg.Deadline)
 	defer cancel()
-	if _, err := c.api2.OnReply(ctx, opaqueMessage(call, id)); status.Code(err) == codes.Unimplemented {
+	if _, err := c.api.OnReply(ctx, opaqueMessage(call, id)); status.Code(err) == codes.Unimplemented {
 		c.noReply.Store(true)
 	}
 }
@@ -797,12 +791,12 @@ func (c *Client) Opaque(ctx context.Context, call *pb.Call, id string) {
 // recorded, never applied.
 func (c *Client) onReplyObserved(ctx context.Context, callID string, j *replyJob) error {
 	t := time.Now()
-	var v *pb2.MessageVerdict
+	var v *pb.MessageVerdict
 	var err error
 	if j.tool != nil {
-		v, err = c.api2.OnToolCall(ctx, j.msg)
+		v, err = c.api.OnToolCall(ctx, j.msg)
 	} else {
-		v, err = c.api2.OnReply(ctx, j.msg)
+		v, err = c.api.OnReply(ctx, j.msg)
 	}
 	took := time.Since(t)
 	if status.Code(err) == codes.Unimplemented {

@@ -1,0 +1,30 @@
+{
+  "method": "POST",
+  "host": "chatgpt.com",
+  "path": "/backend-api/ps/mcp",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "chatgpt.com",
+    ":method": "POST",
+    ":path": "/backend-api/ps/mcp",
+    ":scheme": "https",
+    "accept": "text/event-stream, application/json",
+    "authorization": "<redacted>",
+    "chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+    "content-length": "217",
+    "content-type": "application/json",
+    "originator": "codex_exec",
+    "user-agent": "codex-mcp-client/0.164.0",
+    "x-forwarded-proto": "https",
+    "x-openai-product-sku": "codex"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "chatgpt_jwt"
+  },
+  "body": "request-body.json",
+  "chunks": [
+    217
+  ]
+}

@@ -357,6 +357,41 @@ func snapshot(t testing.TB, db *pgxpool.Pool) string {
 	return b.String() + raw
 }
 
+// A migration that says `-- reload: calls` (docs/PIPELINE.md §3.4) empties
+// calls and ingest_files: the lister lists every raw file again, and the
+// loaders refill calls as it was, the other tables' upserts changing nothing.
+func TestAReloadMigrationRefillsItsTables(t *testing.T) {
+	db := fresh(t)
+	root := t.TempDir()
+	s := process.DirStore{Root: root}
+	put(t, root, rawKey(time.Now(), "pod-a", 1), rawFile(t, "f1", 3))
+	put(t, root, rawKey(time.Now().Add(time.Second), "pod-b", 1), rawFile(t, "f2", 2))
+	if _, _, err := List(ctx(t), db, s, ""); err != nil {
+		t.Fatal(err)
+	}
+	loadAll(t, db, s)
+	before := snapshot(t, db)
+	if _, err := pg.Migrate(ctx(t), db, pgtest.Chain("-- reload: calls\nCREATE INDEX ON calls (model);"), false); err != nil {
+		t.Fatal(err)
+	}
+	var calls, files, accounts int
+	if err := db.QueryRow(ctx(t), "SELECT (SELECT count(*) FROM calls), (SELECT count(*) FROM ingest_files), (SELECT count(*) FROM session_credentials)").Scan(&calls, &files, &accounts); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 || files != 0 || accounts == 0 {
+		t.Fatalf("after the migration: %d calls, %d ingest_files, %d session_credentials; want calls and ingest_files emptied, the rest kept", calls, files, accounts)
+	}
+	if n, ok, err := List(ctx(t), db, s, ""); err != nil || !ok || n != 2 {
+		t.Fatalf("List: %d %v %v; want both files again", n, ok, err)
+	}
+	if got := loadAll(t, db, s); len(got) != 2 {
+		t.Fatalf("reloaded %v", got)
+	}
+	if after := snapshot(t, db); after != before {
+		t.Fatalf("the reload didn't give the same tables:\n%s\n%s", before, after)
+	}
+}
+
 // A file that can't be loaded doesn't hold up the others: it's passed over
 // for the rest of the pass, stays unloaded and holds /lag up.
 func TestABadFileDoesNotHoldUpTheOthers(t *testing.T) {

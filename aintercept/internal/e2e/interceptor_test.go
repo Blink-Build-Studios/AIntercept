@@ -3,7 +3,9 @@
 // End-to-end test of the Interceptor (docs/INTERCEPTOR.md) through a real
 // Envoy: run scripts/test-interceptor.sh, which starts test/interceptor's
 // stack (Envoy with both filters, the observer, the example redact
-// Interceptor, the fixture) and runs these tests against it.
+// Interceptor, the fixture) and runs these tests against it. A model host's
+// call goes to that observer with x-e2e-observer: main (else to observer-v2,
+// interceptor_v2_test.go); observe.test and enforce.test always do.
 package e2e
 
 import (
@@ -39,10 +41,19 @@ func envOr(k, def string) string {
 
 func post(t *testing.T, host, path, body string) (*http.Response, string) {
 	t.Helper()
+	return postTo(t, host, path, body, nil)
+}
+
+// postTo is post with extra headers.
+func postTo(t *testing.T, host, path, body string, hdr map[string]string) (*http.Response, string) {
+	t.Helper()
 	req, _ := http.NewRequest("POST", "http://"+envoyAddr+path, strings.NewReader(body))
 	req.Host = host
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "claude-cli/9.9.9 (external, cli)")
+	for k, v := range hdr {
+		req.Header.Set(k, v)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST %s%s: %v", host, path, err)
@@ -50,6 +61,17 @@ func post(t *testing.T, host, path, body string) (*http.Response, string) {
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	return resp, string(b)
+}
+
+// toRedact sends a Claude Code call to the main observer, whose Interceptor
+// is the example redact: enforced, or observed.
+func toRedact(t *testing.T, observe bool, body string) (*http.Response, string) {
+	t.Helper()
+	hdr := map[string]string{"x-e2e-observer": "main"}
+	if observe {
+		hdr["x-e2e-mode"] = "observe"
+	}
+	return postTo(t, "api.anthropic.com", "/v1/messages", body, hdr)
 }
 
 func received(t *testing.T, resp *http.Response) string {
@@ -61,99 +83,78 @@ func received(t *testing.T, resp *http.Response) string {
 	return string(b)
 }
 
+// prompt is a plain call (the no-loss tests' traffic).
 const prompt = `{"model":"fixture-model","stream":true,"messages":[{"role":"user","content":"hello silly clown"}]}`
 
+// clowns says the phrase in the prompt, and has the fixture reply with it
+// split across two streamed pieces.
+const clowns = `{"model":"fixture-model","stream":true,"fixture_text":["what a sil","ly clown"],` +
+	`"messages":[{"role":"user","content":"hello silly clown"}]}`
+
+// Enforce: the prompt is redacted before it goes upstream, and the reply's
+// text before the client sees it, even split across pieces.
 func TestEnforceRedactsBothDirections(t *testing.T) {
-	resp, body := post(t, "enforce.test", "/v1/messages", prompt)
+	resp, body := toRedact(t, false, clowns)
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d: %s", resp.StatusCode, body)
 	}
-	if got := received(t, resp); strings.Contains(got, "silly clown") || !strings.Contains(got, "[redacted]") {
-		t.Errorf("upstream received %q; want the phrase redacted", got)
+	if got := received(t, resp); !strings.Contains(got, `"content":"hello [redacted]"`) {
+		t.Errorf("upstream received %q; want the prompt redacted", got)
 	}
-	if strings.Contains(body, "silly clown") {
-		t.Errorf("client received the phrase: %s", body)
-	}
-	if !strings.Contains(body, "what a [redacted]") {
-		t.Errorf("response event not redacted: %s", body)
-	}
-	if !strings.Contains(body, "event: message_stop") {
-		t.Errorf("stream didn't finish: %s", body)
+	if r := readReply(t, body); r.text != "what a [redacted]" || r.stop != "end_turn" {
+		t.Errorf("reply %+v; want the phrase redacted:\n%s", r, body)
 	}
 }
 
 func TestObserveRecordsButNeverChanges(t *testing.T) {
-	resp, body := post(t, "observe.test", "/v1/messages", prompt)
+	resp, body := toRedact(t, true, clowns)
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d: %s", resp.StatusCode, body)
 	}
-	if got := received(t, resp); !strings.Contains(got, "silly clown") {
+	if got := received(t, resp); got != clowns {
 		t.Errorf("observe changed the request: upstream received %q", got)
 	}
-	if !strings.Contains(body, "what a silly clown") {
-		t.Errorf("observe changed the response: %s", body)
+	if r := readReply(t, body); r.text != "what a silly clown" {
+		t.Errorf("observe changed the reply: %+v", r)
 	}
 }
 
-func TestEnforceWholeBody(t *testing.T) {
-	resp, body := post(t, "enforce.test", "/v1/json", `{"note":"silly clown"}`)
-	if resp.StatusCode != 200 {
-		t.Fatalf("status %d: %s", resp.StatusCode, body)
+// The forbidden model is answered with the refusal at OnCallStart: the call
+// never goes upstream. Observed, it does.
+func TestEnforceRefusesAtCallStart(t *testing.T) {
+	forbidden := `{"model":"forbidden-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`
+	resp, body := toRedact(t, false, forbidden)
+	if resp.StatusCode != 200 || upstream(resp) {
+		t.Fatalf("status %d, upstream %v: %s", resp.StatusCode, upstream(resp), body)
 	}
-	var got map[string]string
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("response isn't JSON: %v: %s", err, body)
+	if r := readReply(t, body); r.text != "forbidden-model isn't approved for use here." {
+		t.Errorf("reply %+v", r)
 	}
-	if got["reply"] != "a [redacted]" || strings.Contains(got["received"], "silly clown") {
-		t.Errorf("got %v; want both directions redacted", got)
-	}
-}
-
-func TestEnforceDenyAtCallStart(t *testing.T) {
-	resp, body := post(t, "enforce.test", "/v1/messages", `{"model":"forbidden-model","messages":[]}`)
-	if resp.StatusCode != 403 {
-		t.Fatalf("status %d, want 403: %s", resp.StatusCode, body)
-	}
-	if !strings.Contains(body, "forbidden-model isn't approved") || !strings.Contains(body, "permission_error") {
-		t.Errorf("deny body %s", body)
-	}
-	// The same request observed goes through.
-	if resp, _ := post(t, "observe.test", "/v1/messages", `{"model":"forbidden-model","messages":[]}`); resp.StatusCode != 200 {
-		t.Errorf("observe: status %d, want 200", resp.StatusCode)
+	if resp, _ := toRedact(t, true, forbidden); resp.StatusCode != 200 || !upstream(resp) {
+		t.Errorf("observe: status %d, upstream %v; want it through", resp.StatusCode, upstream(resp))
 	}
 }
 
-// The silly rabbit: a request whose newest user message says "I'm a silly
-// rabbit" reaches the model rewritten to ask for "Well, tricks are for kids.".
+// The refused call's record says the answer was synthesized.
+func TestRefusedCallRecorded(t *testing.T) {
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, e := range readEvents(t) {
+			if v := e.Verdict; e.Phase == events.PhaseVerdict && v != nil && v.Callback == "call_start" && v.Action == "respond" &&
+				v.Applied && v.RespondMode == "synthesized" {
+				return
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatal("no applied call_start respond row for the refused call")
+}
+
+// tricks is the rabbit's answer (the v2 suite's).
 const tricks = "Well, tricks are for kids."
 
-func TestEnforceSillyRabbit(t *testing.T) {
-	resp, body := post(t, "enforce.test", "/v1/messages",
-		`{"model":"fixture-model","stream":true,"messages":[{"role":"user","content":"I'm a silly rabbit"}]}`)
-	if resp.StatusCode != 200 {
-		t.Fatalf("status %d: %s", resp.StatusCode, body)
-	}
-	if got := received(t, resp); strings.Contains(got, "silly rabbit") || !strings.Contains(got, tricks) {
-		t.Errorf("upstream received %q; want it asked for %q", got, tricks)
-	}
-}
-
-func TestEnforceSillyRabbitOnAWebSocket(t *testing.T) {
-	c, r := wsDial(t, "enforce.test")
-	defer c.Close()
-	_, _ = c.Write(wsframe.Encode(wsframe.OpText, []byte(`{"input":"I'm a silly rabbit"}`), true))
-	if _, got := wsRead(t, r); strings.Contains(got, "silly rabbit") || !strings.Contains(got, tricks) {
-		t.Errorf("got %q; want the message rewritten to ask for %q", got, tricks)
-	}
-}
-
-// wsDial opens a WebSocket to the fixture's /ws through Envoy.
-func wsDial(t *testing.T, host string) (net.Conn, *bufio.Reader) {
-	t.Helper()
-	return wsDialTagged(t, host, "")
-}
-
-// wsDialTagged is wsDial with an x-e2e-id header on the upgrade request.
+// wsDialTagged opens a WebSocket to the fixture's /ws through Envoy, with an
+// x-e2e-id header on the upgrade request.
 func wsDialTagged(t *testing.T, host, id string) (net.Conn, *bufio.Reader) {
 	t.Helper()
 	tag := ""
@@ -203,43 +204,6 @@ func wsRead(t *testing.T, r *bufio.Reader) (byte, string) {
 	}
 }
 
-func TestEnforceWebSocket(t *testing.T) {
-	c, r := wsDial(t, "enforce.test")
-	defer c.Close()
-	_, _ = c.Write(wsframe.Encode(wsframe.OpText, []byte("hello silly clown"), true))
-	_, got := wsRead(t, r)
-	if want := "echo: hello [redacted] ([redacted])"; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	_, _ = c.Write(wsframe.CloseFrame(1000, "", true))
-}
-
-func TestObserveWebSocket(t *testing.T) {
-	c, r := wsDial(t, "observe.test")
-	defer c.Close()
-	_, _ = c.Write(wsframe.Encode(wsframe.OpText, []byte("hello silly clown"), true))
-	_, got := wsRead(t, r)
-	if want := "echo: hello silly clown (silly clown)"; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	_, _ = c.Write(wsframe.CloseFrame(1000, "", true))
-}
-
-// TestDeniedCallRecorded: a refused call still gets its complete row, with
-// the status it was refused with and why.
-func TestDeniedCallRecorded(t *testing.T) {
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		for _, e := range readEvents(t) {
-			if e.Phase == events.PhaseComplete && e.Status == 403 && strings.Contains(e.Error, "forbidden-model") && e.InterceptMode == "enforce" {
-				return
-			}
-		}
-		time.Sleep(time.Second)
-	}
-	t.Fatal("no complete row for the denied call")
-}
-
 func readEvents(t *testing.T) []events.Event {
 	f, err := os.Open(eventsFile)
 	if err != nil {
@@ -263,11 +227,11 @@ func TestVerdictsRecorded(t *testing.T) {
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		applied, recorded := countVerdicts(t)
-		if applied >= 7 && recorded >= 3 {
+		if applied >= 3 && recorded >= 2 {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("verdict rows: %d applied, %d recorded-only; want ≥7 and ≥3", applied, recorded)
+			t.Fatalf("verdict rows: %d applied, %d recorded-only; want ≥3 and ≥2", applied, recorded)
 		}
 		time.Sleep(time.Second)
 	}
@@ -298,11 +262,11 @@ func TestZFailClosed(t *testing.T) {
 		t.Skipf("can't stop the interceptor: %v", err)
 	}
 	defer compose("start", "redact").Run()
-	resp, body := post(t, "enforce.test", "/v1/messages", prompt)
+	resp, body := toRedact(t, false, prompt)
 	if resp.StatusCode != 503 || !strings.Contains(body, "interceptor unavailable") {
 		t.Errorf("enforce with the interceptor down: %d %s; want 503", resp.StatusCode, body)
 	}
-	if resp, _ := post(t, "observe.test", "/v1/messages", prompt); resp.StatusCode != 200 {
+	if resp, _ := toRedact(t, true, prompt); resp.StatusCode != 200 {
 		t.Errorf("observe with the interceptor down: %d; want 200", resp.StatusCode)
 	}
 }

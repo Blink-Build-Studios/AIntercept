@@ -4,7 +4,7 @@ import "testing"
 
 // The API is stateless (docs/PIPELINE.md §6): it reads Postgres and a call's raw
 // member itself, so it has no fixed replica count (an HPA on CPU scales it), no
-// mirror sidecar and no volumes.
+// mirror sidecar and no volume but the read-only RDS CA bundle.
 func TestStatelessAPI(t *testing.T) {
 	docs := render(t, "api.enabled=true")
 	dep := find(docs, "Deployment", "api")
@@ -19,6 +19,7 @@ func TestStatelessAPI(t *testing.T) {
 		t.Errorf("containers %v: want the api alone (no mirror sidecar)", cs)
 	}
 	vols := byName(get(dep, "spec", "template", "spec", "volumes"))
+	delete(vols, "postgres-ca")
 	if len(vols) != 0 {
 		t.Errorf("volumes %v: the API keeps nothing", vols)
 	}

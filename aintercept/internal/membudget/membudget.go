@@ -1,9 +1,9 @@
 // Package membudget measures the bytes the observer holds for traffic in
 // flight: request/response bodies buffered per stream, WebSocket decoder
-// state and turns in progress, and bodies queued for extraction. Utilization
-// (held / limit) is what the observer reports to Envoy for load balancing
-// (ORCA) and to the autoscaler, so pods are added and new streams steered
-// away before memory runs out. It measures; it never refuses.
+// state and turns in progress, and bodies queued for extraction. The observer
+// reports held, peak and utilization (held / limit) on /stats, for sizing its
+// memory limit. Nothing acts on it: it never refuses, and no load balancer or
+// autoscaler reads it.
 package membudget
 
 import "sync/atomic"

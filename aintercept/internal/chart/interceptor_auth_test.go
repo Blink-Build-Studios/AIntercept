@@ -1,8 +1,6 @@
 package chart
 
 import (
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,18 +10,7 @@ import (
 // output (the chart's fail message).
 func renderFails(t *testing.T, set ...string) string {
 	t.Helper()
-	if _, err := exec.LookPath("helm"); err != nil {
-		if os.Getenv("CHART_TEST_REQUIRED") != "" {
-			t.Fatal("helm not found and CHART_TEST_REQUIRED is set")
-		}
-		t.Skip("helm not installed")
-	}
-	args := []string{"template", "t", filepath.Clean(chartDir),
-		"--set", "objectStore.bucket=b", "--set", "objectStore.region=r", "--set", "observer.keyHashSalt=s", "--set", "cloud=aws"}
-	for _, s := range set {
-		args = append(args, "--set", s)
-	}
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	out, err := helmTemplate(t, set...).CombinedOutput()
 	if err == nil {
 		t.Fatalf("helm template succeeded with %v, want a failure", set)
 	}
@@ -137,5 +124,22 @@ func TestIdentityValues(t *testing.T) {
 	}
 	if got := secretRef(obs, "OBSERVER_IDENTITY_ANTHROPIC_ADMIN_KEY"); got != "anthropic-admin/adminKey" {
 		t.Errorf("admin key from %q, want anthropic-admin/adminKey", got)
+	}
+}
+
+// The Interceptor contract is v2, the only one: the chart has no contract
+// setting, and a values file still naming v1 fails rather than pointing a v1
+// Interceptor at an observer that no longer speaks it.
+func TestInterceptorContractIsV2(t *testing.T) {
+	env := envOf(container(render(t, "interceptor.endpoint=decision:443"), "Deployment", "envoy", "observer"))
+	if env["INTERCEPTOR_ENDPOINT"] != "decision:443" {
+		t.Fatalf("env %v", env)
+	}
+	if _, ok := env["INTERCEPTOR_CONTRACT"]; ok {
+		t.Errorf("INTERCEPTOR_CONTRACT = %v: there's no contract to choose", env["INTERCEPTOR_CONTRACT"])
+	}
+	render(t, "interceptor.endpoint=decision:443", "interceptor.contract=v2") // a leftover v2 is harmless
+	if out := renderFails(t, "interceptor.endpoint=decision:443", "interceptor.contract=v1"); !strings.Contains(out, "v1 was removed") {
+		t.Errorf("failure %q doesn't say v1 was removed", strings.TrimSpace(out))
 	}
 }

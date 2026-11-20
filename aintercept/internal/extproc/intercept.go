@@ -5,7 +5,7 @@ import (
 	"context"
 	"strings"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
@@ -15,26 +15,19 @@ import (
 // The customer Interceptor (docs/INTERCEPTOR.md), observe side: callbacks
 // queued off the stream, never awaited. The enforce side is enforce.go.
 //
-// With contract v2 the content callbacks are OnRequest, each model request's
-// new messages (HTTP bodies and Codex's WebSocket response.create), parsed
-// by convo, and for the reply OnReply (its text, piece by piece) and
-// OnToolCall (each tool call): in path in enforce (respond.go), queued here
-// in observe.
+// The content callbacks are OnRequest, each model request's new messages
+// (HTTP bodies and Codex's WebSocket response.create), parsed by convo, and
+// for the reply OnReply (its text, piece by piece) and OnToolCall (each tool
+// call): in path in enforce (respond.go), queued here in observe.
 
 // interceptState is a stream's Interceptor bookkeeping, shared by both modes.
 type interceptState struct {
 	started bool
 	call    *pb.Call
-	seq     [2]int64 // messages sent, client→server and server→client
-	// Observe, with content: the response's event stream cut into events, or
-	// its whole body (capped) when it isn't one.
-	sse       sseSplitter
-	resp      []byte
-	respTrunc bool
-	respSSE   bool
-	respKnown bool
-	// v2: the request's format, when its reply goes to OnReply and
-	// OnToolCall; observe: the reply's stream, or its body held whole.
+	// Observe: the reply's event stream cut into events.
+	sse sseSplitter
+	// The request's format, when its reply goes to OnReply and OnToolCall;
+	// observe: the reply's stream, or its body held whole.
 	replyFormat string
 	reply       *convo.Stream
 	replyBody   []byte
@@ -48,12 +41,8 @@ type interceptState struct {
 	replyEncTrunc bool
 }
 
-// interceptContentCap bounds a whole body sent to OnMessage in observe mode
-// (v1).
-const interceptContentCap = 4 << 20
-
 // interceptBodyCap bounds a body observe mode holds whole to read it for the
-// Interceptor (v2): a request, a JSON reply, an encoded reply. The same as
+// Interceptor: a request, a JSON reply, an encoded reply. The same as
 // enforce's.
 const interceptBodyCap = enforceBodyCap
 
@@ -134,18 +123,7 @@ func (srv *Server) callInfo(st *streamState, body []byte) *interceptor.CallInfo 
 	}
 }
 
-// message builds an OnMessage message for the stream, numbering it.
-func (srv *Server) message(st *streamState, dir events.Direction, kind pb.MessageKind, payload []byte, contentType, sseEvent string) *pb.Message {
-	ic := st.icState()
-	i := 0
-	if dir == events.DirOutbound {
-		i = 1
-	}
-	ic.seq[i]++
-	return interceptor.Message(ic.call, dir, ic.seq[i], kind, payload, contentType, sseEvent)
-}
-
-// observeStart queues OnCallStart (and, with content, the request body) once
+// observeStart queues OnCallStart (and, with content, OnRequest) once
 // the request has arrived: at its headers when it has no body or is a
 // WebSocket upgrade, else at the end of its body.
 func (srv *Server) observeStart(st *streamState) {
@@ -159,14 +137,12 @@ func (srv *Server) observeStart(st *streamState) {
 		body = st.reqBuf
 	}
 	ic.call = srv.ic.ObserveCall(srv.callInfo(st, body), srv.idWait)
-	if srv.ic.Content() && srv.ic.V2() && st.reqTrunc {
+	if srv.ic.Content() && st.reqTrunc {
 		srv.ic.Unparsed("over the buffer") // it can't be read
 	}
 	if srv.ic.Content() && len(body) > 0 {
 		if plain, err := events.DecodeBody(body, st.reqHeaders["content-encoding"]); err == nil {
-			if !srv.ic.V2() {
-				srv.ic.ObserveMessage(srv.message(st, events.DirInbound, pb.MessageKind_MESSAGE_KIND_HTTP_REQUEST_BODY, plain, st.reqHeaders["content-type"], ""))
-			} else if r, ok := srv.parseRequest(st, plain); ok {
+			if r, ok := srv.parseRequest(st, plain); ok {
 				srv.ic.ObserveRequest(ic.call, r)
 				if srv.holdsReply(r.Format) {
 					ic.replyFormat = r.Format
@@ -176,7 +152,7 @@ func (srv *Server) observeStart(st *streamState) {
 	}
 }
 
-// parseRequest reads a request body for OnRequest (v2). A body it can't
+// parseRequest reads a request body for OnRequest. A body it can't
 // read goes upstream untouched, and is counted.
 func (srv *Server) parseRequest(st *streamState, plain []byte) (convo.Request, bool) {
 	r, why := srv.ic.Parser().ParseReason(st.host, st.path, plain)
@@ -186,7 +162,7 @@ func (srv *Server) parseRequest(st *streamState, plain []byte) (convo.Request, b
 	return r, why == ""
 }
 
-// parseWSRequest reads a client WebSocket message for OnRequest (v2): a
+// parseWSRequest reads a client WebSocket message for OnRequest: a
 // response.create. Other messages aren't requests; a response.create it
 // can't read is counted.
 func (srv *Server) parseWSRequest(st *streamState, m wsframe.Message) (convo.Request, bool) {
@@ -200,47 +176,19 @@ func (srv *Server) parseWSRequest(st *streamState, m wsframe.Message) (convo.Req
 	return r, ok
 }
 
-// observeResponseContent hands an HTTP response's content to OnMessage
-// (observe mode): each event of an event stream as it completes, any other
-// body whole at its end.
+// observeResponseContent hands an HTTP response's reply to OnReply and
+// OnToolCall (observe mode).
 func (srv *Server) observeResponseContent(st *streamState, chunk []byte, eos bool) {
 	if !srv.intercepting(st) || st.enforce || !srv.ic.Content() || st.ic == nil || !st.ic.started {
 		return
 	}
-	ic := st.ic
-	if srv.ic.V2() {
-		srv.observeReply(st, chunk, eos)
-		return
-	}
-	if !ic.respKnown {
-		ic.respKnown = true
-		ic.respSSE = strings.Contains(st.respHeaders["content-type"], "text/event-stream") && st.respEncoding == ""
-	}
-	if ic.respSSE {
-		for _, ev := range ic.sse.feed(chunk) {
-			srv.ic.ObserveMessage(srv.message(st, events.DirOutbound, pb.MessageKind_MESSAGE_KIND_SSE_EVENT, ev.data, "text/event-stream", ev.name))
-		}
-		return
-	}
-	ic.resp, ic.respTrunc = appendCapped(ic.resp, chunk, ic.respTrunc, interceptContentCap)
-	if eos {
-		if !ic.respTrunc {
-			if plain, err := events.DecodeBody(ic.resp, st.respEncoding); err == nil && len(plain) > 0 {
-				srv.ic.ObserveMessage(srv.message(st, events.DirOutbound, pb.MessageKind_MESSAGE_KIND_HTTP_RESPONSE_BODY, plain, st.respHeaders["content-type"], ""))
-			}
-		}
-		ic.resp = nil
-	}
+	srv.observeReply(st, chunk, eos)
 }
 
-// observeWSMessage hands a WebSocket data message to OnMessage (observe
-// mode), or with v2 a client's response.create to OnRequest.
+// observeWSMessage hands a client's response.create on a WebSocket to
+// OnRequest, and the server's reply to OnReply and OnToolCall (observe mode).
 func (srv *Server) observeWSMessage(st *streamState, dir events.Direction, m wsframe.Message) {
 	if !srv.intercepting(st) || st.enforce || !srv.ic.Content() || st.ic == nil || !st.ic.started {
-		return
-	}
-	if !srv.ic.V2() {
-		srv.ic.ObserveMessage(srv.message(st, dir, wsKind(m.Opcode), m.Payload, "", ""))
 		return
 	}
 	if dir == events.DirInbound {
@@ -280,7 +228,7 @@ func (srv *Server) observers(st *streamState) convo.Deciders {
 	}
 }
 
-// observeReply follows a reply in observe mode (v2). Observe can't ask for
+// observeReply follows a reply in observe mode. Observe can't ask for
 // a plain reply, so an encoded one is held to its end and decoded whole, as
 // the extractors do; a plain one is read as it comes.
 func (srv *Server) observeReply(st *streamState, chunk []byte, eos bool) {
@@ -356,13 +304,6 @@ func (srv *Server) followReply(st *streamState, chunk []byte, eos bool) {
 	}
 }
 
-func wsKind(op byte) pb.MessageKind {
-	if op == 0x2 {
-		return pb.MessageKind_MESSAGE_KIND_WS_BINARY
-	}
-	return pb.MessageKind_MESSAGE_KIND_WS_TEXT
-}
-
 // decideStart is OnCallStart in enforce mode (Allow without an Interceptor).
 func (srv *Server) decideStart(st *streamState, ci *interceptor.CallInfo) interceptor.Decision {
 	ic := st.icState()
@@ -376,28 +317,14 @@ func (srv *Server) decideStart(st *streamState, ci *interceptor.CallInfo) interc
 	return d
 }
 
-// decideMessage is OnMessage in enforce mode (Allow without content, and
-// with v2).
-func (srv *Server) decideMessage(st *streamState, dir events.Direction, kind pb.MessageKind, payload []byte, contentType, sseEvent string) interceptor.Decision {
-	if !srv.intercepting(st) || !srv.ic.Content() || srv.ic.V2() {
-		return interceptor.Decision{Action: interceptor.Allow}
-	}
-	return srv.ic.DecideMessage(context.Background(), srv.message(st, dir, kind, payload, contentType, sseEvent))
-}
-
-// decideRequest is OnRequest in enforce mode (v2).
+// decideRequest is OnRequest in enforce mode.
 func (srv *Server) decideRequest(st *streamState, r convo.Request) interceptor.Decision {
 	return srv.ic.DecideRequest(context.Background(), st.icState().call, r)
 }
 
-// enforcingContent reports whether an enforced stream evaluates content as
-// v1 does: bodies, events and WebSocket messages, both ways.
-func (srv *Server) enforcingContent(st *streamState) bool {
-	return st.enforce && srv.intercepting(st) && srv.ic.Content() && !srv.ic.V2()
-}
-
 // enforcingRequests reports whether an enforced stream evaluates its
-// requests' new messages (v2). Responses pass untouched.
+// requests' new messages (and, when the Interceptor has rules on them, its
+// reply's text and tool calls).
 func (srv *Server) enforcingRequests(st *streamState) bool {
-	return st.enforce && srv.intercepting(st) && srv.ic.Content() && srv.ic.V2()
+	return st.enforce && srv.intercepting(st) && srv.ic.Content()
 }

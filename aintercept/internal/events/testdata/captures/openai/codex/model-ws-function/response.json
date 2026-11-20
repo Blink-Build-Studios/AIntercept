@@ -1,0 +1,23 @@
+{
+  "status": 101,
+  "headers": {
+    ":status": "101",
+    "cf-cache-status": "value_2",
+    "cf-ray": "x0000x00xx00x000-X13",
+    "connection": "upgrade",
+    "cross-origin-opener-policy": "value_3",
+    "date": "Xxx, 00 Xxx 0000 00:00:00 XXX",
+    "nel": "{\"xxxxxx_xx\":\"xx-xxx\",\"xxxxxxx_xxxxxxxx\":0.00,\"xxx_xxx\":00000e}",
+    "referrer-policy": "value_4",
+    "report-to": "{\"xxxxx\":\"xx-xxx\",\"xxx_xxx\":00000e,\"xxxxxxxxx\":[{\"xxx\":\"xxxxx://x.xxx.xxxxxxxxxx.xxx/xxxxxx/x0?x=XxX0XxxXx0XXXXxXXxxX00XXxxXxx0Xxxx00xxxxXx0xXxxX0XxxXXxx0xxxXxxxxxXXX0XXXx0XxXx00x0XxX0XxX0x15%0X0xx0Xx0XxXxXX0X0xxx0XX0x0XX16\"}]}",
+    "sec-websocket-accept": "+xX00XXXxxXxx0Xx00xXxxxxX17=",
+    "sec-websocket-extensions": "permessage-deflate",
+    "server": "value_5",
+    "strict-transport-security": "xxx-xxx=00000012; xxxxxxxXxxXxxxxxx; xxxxxxx",
+    "upgrade": "websocket",
+    "x-content-type-options": "value_6",
+    "x-models-etag": "X/\"00000000000000000000000000000013\"",
+    "x-oai-request-id": "00000000-0000-4000-8000-000000000014",
+    "x-openai-proxy-wasm": "value_7"
+  }
+}

@@ -362,7 +362,7 @@ func TestPostgresNetworkPolicy(t *testing.T) {
 // RDS (production): TLS with the RDS CA bundle, from a ConfigMap mounted in
 // the workers and the API, which their DSNs name (sslrootcert).
 func TestPostgresCABundle(t *testing.T) {
-	for _, docs := range [][]map[string]any{render(t, "api.enabled=true")} {
+	for _, docs := range [][]map[string]any{render(t, "api.enabled=true", "postgres.inCluster.enabled=true", "postgres.caConfigMap=")} {
 		for _, n := range []string{"worker", "api"} {
 			if _, ok := byName(get(find(docs, "Deployment", n), "spec", "template", "spec", "volumes"))["postgres-ca"]; ok {
 				t.Errorf("%s mounts a CA bundle that isn't configured", n)

@@ -1,6 +1,6 @@
 //go:build e2e
 
-// Contract v2 end to end (docs/INTERCEPTOR_V2.md): test/interceptor's second
+// Contract v2 end to end (docs/INTERCEPTOR.md): test/interceptor's second
 // observer speaks v2 to the suite's own Interceptor (internal/e2e/interceptor,
 // on package intercept): the example rabbit's rules (a prompt saying the
 // rabbit's phrase is answered with tricks, the bing phrase with bong), and rules on the reply: a tool call whose arguments say the bing

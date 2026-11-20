@@ -21,7 +21,6 @@ spec:
         - name: observer
           image: aintercept/aintercept:dev # replace with your registry
           args: ["observer"]
-          args: []
           env:
             - { name: OBSERVER_GRPC_LISTEN, value: "0.0.0.0:9000" }
             - { name: OBSERVER_HTTP_LISTEN, value: "0.0.0.0:9001" }
@@ -44,7 +43,9 @@ spec:
             periodSeconds: 10
           resources:
             requests: { cpu: "50m", memory: "64Mi" }
-            limits: { cpu: "500m", memory: "256Mi" }
+            # The limit bounds what the observer holds in flight (about 4 s of its
+            # throughput, docs/PRODUCTION.md §5a).
+            limits: { cpu: "500m", memory: "1Gi" }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

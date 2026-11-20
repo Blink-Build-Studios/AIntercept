@@ -1,0 +1,25 @@
+{
+  "method": "GET",
+  "host": "api.anthropic.com",
+  "path": "/api/oauth/usage?param_1=1",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "api.anthropic.com",
+    ":method": "GET",
+    ":path": "/api/oauth/usage?param_1=1",
+    ":scheme": "https",
+    "accept": "application/json",
+    "accept-encoding": "br, gzip, deflate",
+    "accept-language": "*",
+    "anthropic-beta": "oauth-2025-04-20",
+    "authorization": "<redacted>",
+    "sec-fetch-mode": "cors",
+    "user-agent": "claude-cli/2.1.288 (external, cli)",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "anthropic_oauth"
+  }
+}

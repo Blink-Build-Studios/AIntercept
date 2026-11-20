@@ -1,0 +1,48 @@
+{
+  "method": "POST",
+  "host": "chatgpt.com",
+  "path": "/backend-api/codex/alpha/search",
+  "ip": "192.0.2.2",
+  "headers": {
+    ":authority": "chatgpt.com",
+    ":method": "POST",
+    ":path": "/backend-api/codex/alpha/search",
+    ":scheme": "https",
+    "accept": "*/*",
+    "authorization": "<redacted>",
+    "chatgpt-account-id": "00000000-0000-4000-8000-000000000002",
+    "content-length": "830",
+    "content-type": "application/json",
+    "cookie": "<redacted>",
+    "originator": "codex_exec",
+    "user-agent": "codex_exec/0.164.0 (Debian 12.0.0; aarch64) unknown (codex_exec; 0.164.0)",
+    "version": "0.164.0",
+    "x-codex-turn-metadata": "{\"session_id\":\"00000000-0000-4000-8000-000000000003\",\"thread_id\":\"00000000-0000-4000-8000-000000000003\",\"reasoning_effort\":\"medium\",\"turn_id\":\"00000000-0000-4000-8000-000000000004\",\"model\":\"gpt-6.1-sol\",\"thread_source\":\"user\",\"turn_trigger\":\"exec\",\"sandbox\":\"none\",\"sandbox_mode\":\"danger-full-access\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":true,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":1794182513557,\"codex_version\":\"0.164.0\"}",
+    "x-forwarded-proto": "https"
+  },
+  "credential": {
+    "header": "authorization",
+    "scheme": "Bearer",
+    "kind": "chatgpt_jwt",
+    "claims": {
+      "client_id": "app_XXxxxXXX00x0XxXxXx0xxxx8",
+      "exp": 1794497032,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "00000000-0000-4000-8000-000000000002",
+        "chatgpt_plan_type": "value_1",
+        "chatgpt_user_id": "user-XXxXx0x00Xxxxx0XxXx0xxX5"
+      },
+      "https://api.openai.com/profile": {
+        "email": "person6@example.com"
+      },
+      "iss": "https://auth.openai.com",
+      "name": "Xxxxx Xxxxxxx",
+      "session_id": "authsess_xxXXxxxXX00XxXxxX0xxX0X9",
+      "sub": "xxxxxx-xxxxx0|000000000000000000007"
+    }
+  },
+  "body": "request-body.json",
+  "chunks": [
+    830
+  ]
+}

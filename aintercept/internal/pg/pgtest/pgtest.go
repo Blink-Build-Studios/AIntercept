@@ -9,12 +9,17 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/pg"
 )
 
 // AdminDSN is the test server's admin DSN, or skips (or fails) t without one.
@@ -80,4 +85,20 @@ func WithUser(t testing.TB, dsn, user, password string) string {
 	}
 	u.User = url.UserPassword(user, password)
 	return u.String()
+}
+
+// Chain is the workers' migrations and then a test's, sqls, numbered after
+// them (NNNN_test_<n>.sql, each with goose's `-- +goose Up` first): a chain
+// for pg.Migrate.
+func Chain(sqls ...string) fs.FS {
+	m := fstest.MapFS{}
+	names, _ := fs.Glob(pg.Migrations, "*.sql")
+	for _, n := range names {
+		b, _ := fs.ReadFile(pg.Migrations, n)
+		m[n] = &fstest.MapFile{Data: b}
+	}
+	for i, sql := range sqls {
+		m[fmt.Sprintf("%04d_test_%d.sql", pg.Latest+int64(i)+1, i+1)] = &fstest.MapFile{Data: []byte("-- +goose Up\n" + sql)}
+	}
+	return m
 }

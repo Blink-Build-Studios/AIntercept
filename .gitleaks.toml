@@ -12,3 +12,13 @@ condition = "AND"
 paths = ['''^docs/ui/handoff/canvas/final/spec-manifest\.json$''']
 regexTarget = "line"
 regexes = ['''KeyStripCell/tokens''']
+
+# The capture corpus (docs/PROVIDERS.md, "The test rule"): key_hash is the
+# salted hash of the stand-in credential the replay builds, and pageToken an
+# anonymized cursor; neither is a secret. Scoped to the corpus and those keys.
+[[allowlists]]
+description = "Capture corpus: stand-in credential hashes, anonymized cursors"
+condition = "AND"
+paths = ['''^aintercept/internal/events/testdata/captures/''']
+regexTarget = "line"
+regexes = ['''key_hash|pageToken=''']

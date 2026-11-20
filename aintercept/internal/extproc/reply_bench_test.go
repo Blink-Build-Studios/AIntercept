@@ -30,7 +30,7 @@ func BenchmarkReplyPiece(b *testing.B) {
 			g := intercept.New(bc.items...).GRPC()
 			go func() { _ = g.Serve(lis) }()
 			defer g.Stop()
-			ic, err := interceptor.New(interceptor.Config{Endpoint: lis.Addr().String(), Contract: "v2", Content: true, Deadline: 5 * time.Second}, nil)
+			ic, err := interceptor.New(interceptor.Config{Endpoint: lis.Addr().String(), Content: true, Deadline: 5 * time.Second}, nil)
 			if err != nil {
 				b.Fatal(err)
 			}

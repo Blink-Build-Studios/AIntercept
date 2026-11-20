@@ -5,20 +5,17 @@ next to AIntercept, observing every AI call, and then enforcing a policy on
 the calls you choose. It assumes you know gRPC and Kubernetes. It doesn't
 assume anything about AIntercept beyond what's here.
 
-[`INTERCEPTOR.md`](INTERCEPTOR.md) is the reference: the interface, the modes
-and the settings. This document is the walkthrough. Read the reference's first
-two sections first.
-
-This walkthrough builds on contract v1 (bodies and events). For contract v2
-(each call's new messages, Respond, tool calls held whole), read
-[`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md) for what's
-different; deploying and operating are the same.
+[`INTERCEPTOR.md`](INTERCEPTOR.md) is the reference: the protocol, the modes
+and the settings. [`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md)
+shows how to write the code: in Go with package `intercept`, every kind of
+answer worked through, and the raw protocol. This document is the walkthrough
+from code to production.
 
 **Contents**
 1. [What you're building](#1-what-youre-building)
 2. [Decide what your Interceptor needs](#2-decide-what-your-interceptor-needs)
-3. [Get the contract and generate code](#3-get-the-contract-and-generate-code)
-4. [Implement the three callbacks](#4-implement-the-three-callbacks)
+3. [Get the contract and write the code](#3-get-the-contract-and-write-the-code)
+4. [What every Interceptor must handle](#4-what-every-interceptor-must-handle)
 5. [Test it locally, through a real Envoy](#5-test-it-locally-through-a-real-envoy)
 6. [Package it](#6-package-it)
 7. [Deploy it next to AIntercept](#7-deploy-it-next-to-aintercept)
@@ -38,23 +35,30 @@ laptop ──TLS──> Envoy ────────────────�
                   │ ext_proc
                   ▼
                AIntercept observer ──gRPC (client)──> YOUR INTERCEPTOR (server)
-                  │                                      OnCallStart(CallStart)   → Verdict
-                  ▼                                      OnMessage(Message)       → Verdict
-               object store, processor, API, UI          OnCallComplete(CallRecord) → Ack
+                  │                                      OnCallStart(CallStart)         → CallVerdict
+                  ▼                                      OnRequest(RequestMessages)     → RequestVerdict
+               object store, processor, API, UI          OnReply(ResponseMessage)       → MessageVerdict
+                                                         OnToolCall(ResponseMessage)    → MessageVerdict
+                                                         OnCallComplete(CallRecord)     → Ack
 ```
 
 You write a **gRPC server**. AIntercept's observer is the **client**: it dials
 your service and calls it for every intercepted call. You never talk to Envoy,
 and you never handle TLS interception, certificates or provider protocols.
-AIntercept parses all of that and hands you normalized messages.
-
-There are three callbacks per call:
+AIntercept parses all of that and hands you each call's new messages, in one
+shape for every provider.
 
 | | What you get | What you return |
 |---|---|---|
-| `OnCallStart` | The parsed request, before it goes upstream: who (key hash, IP, account, device, session), which client (Claude Code, Codex, …), which model, effort, declared tools | Allow, or Deny |
-| `OnMessage` | The content, one unit at a time: the request body, each streamed event of the response, a whole JSON response, each WebSocket message. **Only if content is enabled.** | Allow, Replace, Drop, or Deny |
-| `OnCallComplete` | The finished call: status, tokens, tools used, timings, error, and the verdicts you returned | Ack |
+| `OnCallStart` | Who's calling (key hash, IP, verified email and account, device, session), which client (Claude Code, Codex, …), which model, effort, declared tools | Accept, or Respond |
+| `OnRequest` | The call's new messages, before they go upstream: the prompt, tool results, the harness's notes. **Only if content is enabled.** | Accept or Replace per message; Respond; or Fetch a part sent by reference |
+| `OnReply` | The model's reply text, piece by piece as it streams, before the client sees it. **Only with content.** | Accept, Replace, Hold or Respond, and `keep` |
+| `OnToolCall` | Each tool call the model makes, whole, before the agent sees it. **Only with content.** | Accept, Replace (new arguments) or Respond |
+| `OnCallComplete` | The finished call: status, tokens, tools used, timings, error, and the answers you gave | Ack |
+
+Respond answers for the model: the client gets your text as the model's reply.
+There's no Deny: rewrite, or answer, rather than refuse. Leave `OnReply` or
+`OnToolCall` unimplemented and AIntercept doesn't hold replies for you.
 
 And two modes, with the same callbacks and the same messages:
 
@@ -65,11 +69,6 @@ And two modes, with the same callbacks and the same messages:
   for your answer and applies it.
 
 You write the code once. Which traffic is enforced is deployment configuration.
-
-**Build on Allow and Replace.** Deny and Drop are being removed in the next
-version of the contract, in favour of Replace and a Respond answer (the
-Interceptor supplies the reply; the call never reaches the provider). Rewrite
-rather than refuse.
 
 ---
 
@@ -83,14 +82,16 @@ to be.
 | You want to… | Content? | You'll implement |
 |---|---|---|
 | Alert on or count by model, client, person/key, host or path | No | `OnCallStart`, `OnCallComplete` |
+| Answer certain calls yourself (a model nobody may use) | No | `OnCallStart` (Respond) |
 | Track usage (calls, tokens) in real time | No | `OnCallComplete` |
-| Redact secrets or PII in prompts or responses | **Yes** | `OnMessage` (Replace) |
-| Rewrite prompts that match a pattern or classifier | **Yes** | `OnMessage` (Replace) |
-| Rewrite tool calls the model makes, before the agent runs them | **Yes** | `OnMessage` on server-to-client events (Replace) |
+| Redact secrets or PII in prompts or tool results | **Yes** | `OnRequest` (Replace) |
+| Redact secrets or PII in the model's replies | **Yes** | `OnReply` (Replace, `keep`) |
+| Rewrite, or answer, prompts that match a pattern or classifier | **Yes** | `OnRequest` (Replace, Respond) |
+| Rewrite or stop tool calls the model makes, before the agent runs them | **Yes** | `OnToolCall` (Replace, Respond) |
 
 Content is a deployment setting (`interceptor.content`). It's independent of
 whether AIntercept *records* bodies (`interceptionMode`). With content on, your
-service receives every prompt and response, so treat it as data that is as
+service receives every prompt and reply, so treat it as data that is as
 sensitive as the traffic itself.
 
 **Does it need to enforce, or only observe?**
@@ -98,10 +99,11 @@ sensitive as the traffic itself.
 - **Only observe** (alerting, audit, usage): latency doesn't matter. Your
   service can be a single replica, can call slow systems (Slack, a SIEM, a
   database), and can restart freely.
-- **Enforce** (redacting, rewriting): `OnCallStart` and `OnMessage` are in the
-  request path, with a deadline of 50 ms per callback by default. A slow or
-  unavailable service means refused calls. You'll need multiple replicas, low
-  latency, and no slow I/O inside those two handlers.
+- **Enforce** (redacting, rewriting, answering): `OnCallStart`, `OnRequest`,
+  `OnReply` and `OnToolCall` are in the call's path, with a deadline of 50 ms
+  per callback by default. A slow or unavailable service means refused calls.
+  You'll need multiple replicas, low latency, and no slow I/O inside those
+  handlers.
 
 Whatever you decide, **build it as if it will enforce**: answer fast, and keep
 the slow work in `OnCallComplete` or in the background. Then turning enforce on
@@ -109,138 +111,86 @@ later is only a configuration change.
 
 ---
 
-## 3. Get the contract and generate code
+## 3. Get the contract and write the code
 
-The contract is one file: `aintercept/interceptor/v1/interceptor.proto`
-(package `aintercept.interceptor.v1`). Copy it into your project, and pin the
-version you copied: v1 only grows by adding fields and enum values, never by
-changing or removing them, so your copy keeps working. Handle enum values you
-don't recognize as "unspecified".
+The contract is one file: `aintercept/interceptor/v2/interceptor.proto`
+(package `aintercept.interceptor.v2`). Pin the version you build against, and
+handle enum values you don't recognize as "unspecified". AIntercept's release
+notes call out any breaking change to it.
 
 ### Go
 
-Import the generated package directly. No codegen is needed:
+Use package `intercept`: rules for the common case, hooks for full control,
+and watches for phrases in streamed text, with the gRPC server, receive
+limits, health checks and graceful shutdown done for you.
+[`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md) is its guide.
 
 ```go
-import pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+import "github.com/Blink-Build-Studios/aintercept/aintercept/intercept"
+
+func main() {
+	log.Fatal(intercept.Run(
+		intercept.OnMessage(intercept.Contains("silly clown")).Replace("[redacted]"),
+	))
+}
 ```
 
-To vendor the proto into your own module instead:
-
-```bash
-protoc -I . --go_out=. --go_opt=paths=source_relative \
-  --go-grpc_out=. --go-grpc_opt=paths=source_relative interceptor/v1/interceptor.proto
-```
+The generated code is importable directly too, for the raw protocol:
+`pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"`.
 
 ### Python
 
 ```bash
 pip install grpcio==1.71.0 grpcio-tools==1.71.0 protobuf
-python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/interceptor/v1/interceptor.proto
-touch interceptor/__init__.py interceptor/v1/__init__.py
+python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/interceptor/v2/interceptor.proto
+touch interceptor/__init__.py interceptor/v2/__init__.py
 ```
 
-That gives you `interceptor/v1/interceptor_pb2.py` (messages) and
+That gives you `interceptor/v2/interceptor_pb2.py` (messages) and
 `interceptor_pb2_grpc.py` (the servicer base class).
+`aintercept/examples/python-redact/server.py` is a complete one on the raw
+protocol.
 
 ### Node / TypeScript
 
 Either load the proto at runtime with `@grpc/proto-loader` and `@grpc/grpc-js`,
 or generate types with `grpc-tools` or `ts-proto`. The service name is
-`aintercept.interceptor.v1.Interceptor`.
+`aintercept.interceptor.v2.Interceptor`.
 
 ### Anything else
 
 Any language with gRPC support works. Generate a server for
-`aintercept.interceptor.v1.Interceptor` with that language's `protoc` plugin.
+`aintercept.interceptor.v2.Interceptor` with that language's `protoc` plugin.
 
 ---
 
-## 4. Implement the three callbacks
+## 4. What every Interceptor must handle
 
-Two complete examples live in the repo, and both pass the end-to-end suite in
-section 5:
+Three complete examples live in the repo:
 
-- `aintercept/examples/redact/main.go` (Go)
-- `aintercept/examples/python-redact/server.py` (Python)
+- `aintercept/examples/rabbit` (Go, package `intercept`): two rules that
+  answer two phrases in the user's prompts for the model.
+- `aintercept/examples/redact` (Go, package `intercept`): redacts "silly
+  clown" in every message both ways, answers the model `forbidden-model` with
+  a refusal, and logs who makes each call. It passes the end-to-end suite in
+  section 5.
+- `aintercept/examples/python-redact/server.py` (Python, the raw protocol):
+  redact's behaviour for prompts, tool results and reply text, and the same
+  suite.
 
-They do the same thing: redact "silly clown" in both directions, refuse the
-model `forbidden-model`, answer two phrases (below), and log every call. Here
-is the core of the Python one:
-
-```python
-import logging, os, re
-from concurrent import futures
-import grpc
-from interceptor.v1 import interceptor_pb2 as pb
-from interceptor.v1 import interceptor_pb2_grpc as pb_grpc
-
-PHRASE = re.compile(rb"(?i)silly clown")
-TOKEN = os.environ.get("INTERCEPTOR_TOKEN", "")
-
-class Interceptor(pb_grpc.InterceptorServicer):
-    def _authorized(self, context) -> bool:
-        if not TOKEN:
-            return True
-        return dict(context.invocation_metadata()).get("authorization") == f"Bearer {TOKEN}"
-
-    def OnCallStart(self, request, context):
-        if not self._authorized(context):
-            context.abort(grpc.StatusCode.UNAUTHENTICATED, "bad token")
-        if request.request.model == "forbidden-model":
-            return pb.Verdict(deny=pb.Deny(reason="forbidden-model isn't approved for use here."))
-        return pb.Verdict()                      # no action: Allow
-
-    def OnMessage(self, request, context):
-        if not self._authorized(context):
-            context.abort(grpc.StatusCode.UNAUTHENTICATED, "bad token")
-        new, n = PHRASE.subn(b"[redacted]", request.payload)
-        if n == 0:
-            return pb.Verdict()
-        return pb.Verdict(replace=pb.Replace(payload=new),
-                          annotations=[pb.Annotation(key="redacted", value=str(n))])
-
-    def OnCallComplete(self, request, context):
-        r = request.response
-        logging.info("complete %s status=%d in=%d out=%d", request.call.call_id,
-                     r.status, r.input_tokens, r.output_tokens)
-        return pb.Ack()
-
-# Request bodies arrive whole, up to 32 MiB: raise gRPC's default 4 MiB limit.
-server = grpc.server(futures.ThreadPoolExecutor(max_workers=32),
-                     options=[("grpc.max_receive_message_length", 33 << 20)])
-pb_grpc.add_InterceptorServicer_to_server(Interceptor(), server)
-server.add_insecure_port(os.environ.get("LISTEN", "[::]:9100"))
-server.start(); server.wait_for_termination()
-```
-
-**Raise your server's message limit.** `OnMessage` carries a whole request
-body, up to 32 MiB, and clients resend the whole conversation on every call: a
-long Claude Code session's body is several MiB. gRPC servers take 4 MiB by
-default, and anything over that fails the callback (in enforce, the call is
-refused). Set the receive limit to 33 MiB: `grpc.MaxRecvMsgSize(33 << 20)` in
-Go, `grpc.max_receive_message_length` in Python. This is v1 only: the
-proposed v2 contract sends only each call's new messages, with large parts by
-reference, so messages stay small.
-
-**The phrases** show a rule on what the user just said. Clients resend the
-whole conversation, so the examples look only at the newest user message
-(`newest` in each): the last message or input item when it's the user's, or
-claude.ai's `prompt`. "I'm a silly rabbit" is rewritten to ask the model for
-"Well, tricks are for kids.", and "first we bing" for "then we bong". Anything
-that isn't a request they know is matched whole.
-
-The rest of this section is what you need to know to write your own.
+What each callback carries and how each answer behaves is in
+[`INTERCEPTOR.md`](INTERCEPTOR.md) ("Callbacks", "Answers", "Reply text").
+The rest of this section is what you need to know whatever you write.
 
 ### 4.1 Every callback carries `Call`
 
 | Field | Use it for |
 |---|---|
 | `call_id` | The key for any per-call state you keep. It's the same on every callback for the call, and is AIntercept's `correlation_id`. |
-| `mode` | `MODE_OBSERVE` or `MODE_ENFORCE`: whether your verdict will be applied. Usually you return the same verdict either way; the mode is for your own logs and metrics. |
+| `mode` | `MODE_OBSERVE` or `MODE_ENFORCE`: whether your answer will be applied. Usually you answer the same either way; the mode is for your own logs and metrics. |
 | `transport` | `HTTP` or `WEBSOCKET`. |
 | `host`, `method`, `path` | The request as the client sent it, including the query string. |
-| `identity` | `key_hash` (a salted hash of the API key or token; stable per credential, never reversible) and `key_hint` (e.g. `sk-ant…a3f9`), plus `ip`, `org_id`, `device_id`, `session_id`, `email`, `name` and `email_source`, `reported_account_id` (what the client says), `verified_account_id` (what the provider confirmed for the credential) and `account_mismatch`. `account_id` is deprecated and empty. See `docs/INTERCEPTOR.md`, Identity. |
+| `identity` | `key_hash` (a salted hash of the API key or token; stable per credential, never reversible) and `key_hint` (e.g. `sk-ant…a3f9`), plus `ip`, `org_id`, `device_id`, `session_id`, `email`, `name` and `email_source`, `reported_account_id` (what the client says), `verified_account_id` (what the provider confirmed for the credential) and `account_mismatch`. See `docs/INTERCEPTOR.md`, Identity. |
 | `client` | `product` (`claude_code`, `codex`, or empty), `user_agent`, and the client's identifying headers (`originator`, `x-app`, `anthropic-version`, …). |
 
 To map identities to people or teams, keep your own table keyed on
@@ -249,95 +199,14 @@ privileges only when `email_source` is `IDENTITY_SOURCE_CREDENTIAL`: the
 provider confirmed that person for the call's credential. The other sources are
 what the client says.
 
-### 4.2 `OnCallStart`
+### 4.2 Failure semantics you must design for
 
-- **When it fires:** once per call, after the request headers *and* body have
-  arrived and been parsed. In enforce mode nothing has gone upstream yet. For
-  a WebSocket it fires at the upgrade request, before any message.
-- **What it carries:** `CallStart.request` has `model`, `effort`, `stream`,
-  `max_tokens`, `tools_available` (tool names), `mcp_tools_available`
-  (`server/tool`), `prewarm`, `attachments` and `request_bytes`.
-  `CallStart.headers` are the request headers with credentials redacted.
-- **What you can return:** **Allow** (or an empty `Verdict`), or **Deny**.
-  Replace and Drop make no sense here and are treated as Allow.
-- **What Deny does:** the client gets the provider's own error: HTTP status
-  `http_status` (default 403), with the provider's error body
-  (Anthropic `permission_error`, OpenAI `blocked_by_policy`, Gemini
-  `PERMISSION_DENIED`) and your `reason` as the message. Claude Code, Codex and
-  the SDKs show that message to the user.
-
-### 4.3 `OnMessage` (only with content enabled)
-
-| `kind` | `payload` is | Direction | Notes |
-|---|---|---|---|
-| `HTTP_REQUEST_BODY` | The whole request body, decompressed (usually JSON: the prompt, the history, tool results) | client to server | Exactly one per HTTP call that has a body |
-| `SSE_EVENT` | One server-sent event's `data` (usually JSON); `sse_event` is the event name | server to client | One per event of a streamed response, in order |
-| `HTTP_RESPONSE_BODY` | A whole non-streamed response body, decompressed | server to client | AIntercept holds the response until you answer |
-| `WS_TEXT` / `WS_BINARY` | One WebSocket message, reassembled and unmasked | either | Codex sends its turns over a WebSocket: `response.create` client to server, the `response.*` events back |
-
-`seq` numbers the messages from 1, per direction.
-
-**Replace:**
-- **Return valid content of the same kind.** The client parses what you send.
-  If you replace a JSON body, keep it valid JSON. The safe pattern is to parse,
-  change the strings, and re-serialize, or to substitute text inside JSON
-  strings with a replacement that contains no `"` or `\`.
-- **AIntercept takes care of the wire:** it fixes `content-length` and
-  `content-encoding`, rewrites the SSE event with its other fields (`event`,
-  `id`) kept, and re-frames WebSocket messages.
-
-**Drop:**
-- **For SSE events and WebSocket messages:** the message isn't forwarded.
-  Dropping a model's text delta removes those words.
-- **Be careful with structural events:** dropping `message_start` or
-  `response.completed` breaks the client.
-- **For a whole HTTP body:** Drop behaves like Deny.
-
-**Deny:**
-- **On the request body:** the call is refused, exactly as in `OnCallStart`.
-- **On a streamed response:** AIntercept sends the provider's `error` event and
-  ends the stream. The client sees an error mid-answer.
-- **On a WebSocket:** the client gets the provider's error message, and both
-  sides get a close frame (1008).
-
-**Streamed text is split.** A model's answer arrives as many small deltas
-(`content_block_delta`, `response.output_text.delta`), so a phrase can span two
-events. To catch split phrases in responses, keep a short tail of recent text
-per `call_id`, and match across it. Prompts are never split: the request body
-is always whole.
-
-**Order and concurrency:**
-- **Enforce:** within one call and direction, messages arrive one at a time, in
-  order. AIntercept waits for each answer before sending the next.
-- **Observe:** messages also arrive in order per call.
-- **Across calls:** many calls run concurrently, in both modes. Make your
-  handlers thread-safe.
-
-### 4.4 `OnCallComplete`
-
-- **When it fires:** once per HTTP call, after the response ended. Always
-  asynchronous, in both modes.
-- **For a WebSocket:** one per model turn (`ws_turn` 1, 2, …), plus a final one
-  when the connection closes (`ws_turn` 0).
-- **What it carries:**
-  - `request`: the same `RequestInfo` as at start;
-  - `response`: `status`, `model` (as served), `input_tokens`,
-    `output_tokens`, `cache_read_tokens`, `cache_write_tokens`,
-    `reasoning_tokens`, `stop_reason`, `tool_calls` (name and count),
-    `ttfb_ms`, `duration_ms`, `response_bytes`, `error`;
-  - `verdicts`: what you returned for this call, and whether each was
-    `applied`.
-- **Denied calls get a record too:** the status they were refused with, and
-  `error: "denied by interceptor: …"`.
-- **Where the slow work goes:** writing to your warehouse, posting to Slack,
-  updating your own counters. It can take as long as it needs, up to 5 s per call by
-  default.
-
-### 4.5 Failure semantics you must design for
-
-- **Returning a gRPC error, or not answering in time, is a failure.**
+- **Returning a gRPC error, an answer that can't be applied, or not answering
+  in time, is a failure.**
   - In enforce, it's handled by `onError`: `deny` (the default) refuses the
-    call with a 503, and `allow` lets it through.
+    call with a 503 in the provider's own error format (or, once the reply
+    has started, ends it with the provider's error event), and `allow` lets it
+    through.
   - In observe, it's counted and nothing else happens.
 - **Observe delivery is best-effort:**
   - callbacks are queued per observer, delivered in order per call, and never
@@ -347,9 +216,13 @@ is always whole.
   So you may see an `OnCallComplete` without its `OnCallStart`, or the
   reverse. Never let a missing callback crash your logic.
 - **Calls can repeat:** the same request can be sent twice (client retries).
-  Use `call_id` to tell them apart, not the content.
+  Use `call_id` to tell them apart, and message ids (stable within a session)
+  to recognize a message you've seen.
+- **Order and concurrency:** within one call, callbacks arrive one at a time,
+  in order, in both modes. Many calls run concurrently: make your handlers
+  thread-safe.
 
-### 4.6 Authenticate the observer
+### 4.3 Authenticate the observer
 
 The observer can present a bearer token, either a static one
 (`interceptor.tokenSecret`) or its own rotating Kubernetes service-account
@@ -367,15 +240,20 @@ certificate (`interceptor.tls.clientCert`), or a token and a certificate.
 ## 5. Test it locally, through a real Envoy
 
 The repo has an end-to-end stack: Envoy with both filters, the observer, the
-example Interceptor, and a fixture upstream that echoes requests and says
-"silly clown". `make test-interceptor` (Docker required) builds it and tests:
-- redaction in both directions, for an event stream, a JSON body and a
-  WebSocket;
-- a prompt rewritten on the way out, over HTTP and over a WebSocket;
+example redact Interceptor, and a fixture upstream that echoes requests and
+replies in the provider's format. `make test-interceptor` (Docker required)
+builds it and tests, against redact:
+- a prompt redacted on the way out, and the reply on the way back, even with
+  the phrase split across streamed pieces;
 - observe leaving traffic unchanged;
-- a deny at call start, with its record;
+- `forbidden-model` answered with the refusal at call start, never reaching
+  the provider, and its record;
 - recorded verdicts;
-- fail-closed with the Interceptor stopped.
+- fail-closed with the Interceptor stopped;
+
+and, against the suite's own Interceptor, every kind of answer in every
+format (Anthropic Messages, Responses over HTTP and Codex's WebSocket, Chat
+Completions).
 
 **Run the suite against your own Interceptor** by giving it a compose override
 that replaces the `redact` service:
@@ -393,34 +271,37 @@ services:
 INTERCEPTOR_COMPOSE_OVERRIDE=path/to/my-interceptor.override.yml make test-interceptor
 ```
 
-The tests assert the example's rules: redact "silly clown", refuse
-`forbidden-model`, and "I'm a silly rabbit". To run them against your
-service, temporarily add those rules; the Python example shows them. Or use the stack as a
-sandbox for your own rules:
+The tests assert the example's rules: redact "silly clown" both ways, and
+answer `forbidden-model` with "forbidden-model isn't approved for use here.".
+To run them against your service, temporarily add those rules; the Python
+example shows them on the raw protocol. Or use the stack as a sandbox for your
+own rules:
 
 ```bash
 KEEP=1 make test-interceptor      # leaves the stack up afterwards
-# Enforced (enforce.test) and observed (observe.test) calls through Envoy on :10000:
-curl -s -H 'Host: enforce.test' -H 'content-type: application/json' \
-  -d '{"model":"m","messages":[{"role":"user","content":"my secret is hunter2"}]}' \
+# A Claude Code call through Envoy on :10000, to your Interceptor (x-e2e-observer: main),
+# enforced (add -H 'x-e2e-mode: observe' to observe it):
+curl -s -H 'Host: api.anthropic.com' -H 'x-e2e-observer: main' -H 'content-type: application/json' \
+  -d '{"model":"m","stream":true,"messages":[{"role":"user","content":"my secret is hunter2"}]}' \
   http://localhost:10000/v1/messages
-# The fixture echoes what it received in the X-Fixture-Received header (base64).
+# The fixture echoes what it received in the X-Fixture-Received header (base64), and
+# replies with "fixture_text" (a list of pieces) when the request has it.
 # Every verdict is a row in test/interceptor/out/events.ndjson:
 jq -c 'select(.phase=="verdict") | {call: .correlation_id, v: .verdict}' test/interceptor/out/events.ndjson
 docker compose --project-directory test/interceptor logs redact    # your service's logs
 docker compose --project-directory test/interceptor down -v        # when done
 ```
 
-The fixture also serves `/v1/json` (a JSON response) and `/ws` (a WebSocket
-echo).
-
-**Also unit-test your rules** directly, by calling your handlers with
-hand-built `CallStart`/`Message` objects. Cover the edge cases:
-- JSON with escaped quotes;
-- payloads that aren't JSON;
-- empty payloads;
-- very large payloads (up to 32 MiB);
-- your behaviour with an unexpected `kind`.
+**Also unit-test your rules.** In Go, `intercepttest` runs them exactly as
+the observer would and reports what the client sees
+([`BUILDING_AN_INTERCEPTOR_V2.md`](BUILDING_AN_INTERCEPTOR_V2.md), "Test
+it"; `examples/redact/main_test.go` is a complete one). On the raw protocol,
+call your handlers with hand-built messages. Cover the edge cases:
+- a phrase split across reply pieces;
+- a part sent by reference (`ref`, with only a preview);
+- media and opaque parts, which come back unchanged;
+- the harness's notes (`ROLE_SYSTEM`) beside the user's prompt;
+- unknown enum values.
 
 ---
 
@@ -558,7 +439,7 @@ Add to AIntercept's values file. The first deploy is observe only:
 ```yaml
 interceptor:
   endpoint: my-interceptor.aintercept.svc:9100
-  content: true            # only if you need OnMessage (section 2)
+  content: true            # only if you need the messages (section 2)
   deadlineMs: 50           # enforce only; per callback
   onError: deny            # enforce only; deny = fail closed, allow = fail open
   enforce: []              # empty: observe everything, enforce nothing
@@ -621,11 +502,11 @@ you can see exactly what enforcing would do.
 - **`CallRecord.verdicts`.** Your own `OnCallComplete` receives them.
 
 **What to look for before enforcing:**
-- **False positives.** Every deny or replace you'd have applied: would it have
-  been right?
+- **False positives.** Every replace or respond you'd have applied: would it
+  have been right?
 - **Latency.** `latency_ms` on verdict rows, and your own timings. p99 must sit
-  well under `deadlineMs`. Remember that each streamed event costs one round
-  trip when content is on.
+  well under `deadlineMs`. Remember that with content on, each piece of reply
+  text and each tool call costs one round trip.
 - **Errors.** Verdict rows with `action: "error"`, and `/stats`
   `failed`, should be zero.
 - **Coverage.** The clients and paths you care about actually show up
@@ -647,7 +528,9 @@ you need:
 | claude.ai in the browser or desktop app (chats, projects, files) | `host: claude.ai`, `paths: ["/api/organizations/"]` |
 | The OpenAI API | `host: api.openai.com`, `paths: ["/v1/chat/completions", "/v1/responses"]` |
 
-Path matching is by prefix. Leave out `paths` to enforce on the whole host.
+Path matching is by prefix. Leave out `paths` to enforce on the whole host. ChatGPT and claude.ai on the web aren't read as
+conversations yet: enforced, their calls get `OnCallStart` and
+`OnCallComplete`, and their content goes as it came.
 
 **Then set the values and upgrade:**
 
@@ -687,11 +570,12 @@ Remove the scope, or set `onError: allow`.
 ## 11. Operating it
 
 **The latency budget, per enforced call:**
-- the request is held until its body has fully arrived (it's evaluated whole);
-- then `OnCallStart`, then `OnMessage` for the body;
-- then, with content on, one `OnMessage` round trip per streamed event before
-  that event reaches the user. A long answer can be hundreds of events, so keep
-  `OnMessage` in the low single-digit milliseconds.
+- the request is held until its body has fully arrived (it's read whole);
+- then `OnCallStart`, then, with content on, `OnRequest` for its new messages;
+- then, with content on and an `OnReply`, one round trip per piece of reply
+  text before it reaches the user (pieces that arrive meanwhile gather into
+  the next call), and with an `OnToolCall`, one per tool call. Keep those
+  handlers in the low single-digit milliseconds.
 
 **What fails, and what users see:**
 
@@ -706,7 +590,9 @@ Remove the scope, or set `onError: allow`.
 messages up to 16 MiB. A larger request is refused (413). A larger response,
 one that arrives compressed even though AIntercept asked for none, or a
 WebSocket on which the server negotiated compression, passes through
-unevaluated and is counted.
+unevaluated and is counted. A request AIntercept can't read as a conversation
+goes upstream untouched, without `OnRequest`, and is counted by reason
+(`/stats`: `unparsed_reasons`).
 
 **Upgrading your service:** do rolling updates, with readiness probes and the
 PodDisruptionBudget, and drain on `SIGTERM`. Deploy new rules in observe first
@@ -719,8 +605,9 @@ observe-only traffic, by pointing a second AIntercept deployment at it.
 - **Your service:** latency p99 per callback, and errors.
 - **The verdicts:** counts of each action, by scope.
 
-**Changing the proto:** you can't. Only AIntercept changes it, and only by
-adding fields in v1. Regenerate when you update the copy you pinned.
+**Changing the proto:** you can't. Only AIntercept changes it, and its
+release notes call out anything that breaks. Regenerate when you update the
+copy you pinned.
 
 ---
 
@@ -730,23 +617,24 @@ adding fields in v1. Regenerate when you update the copy you pinned.
 |---|---|---|
 | No callbacks arrive | `interceptor.endpoint` unset or wrong, or a NetworkPolicy blocks the observer | Check the `"interceptor configured"` log line; `kubectl exec` into an observer and try the address; allow ingress from `app: envoy` (the observer runs in each envoy pod) |
 | `/stats` `failed` climbs; your logs show nothing | TLS mismatch (server name, CA), or the token is rejected | Check `tls.serverName`, `tls.ca`, the token Secret; try `grpcurl` from inside the cluster |
-| Enforced calls get 503 "interceptor unavailable" | Your service missed `deadlineMs` or errored | Check its p99 latency; raise `deadlineMs` only if you understand the cost to users; fix slow I/O in `OnCallStart`/`OnMessage` |
-| A replaced response breaks the client | The replacement isn't valid for that message (invalid JSON, or a dropped structural event) | Parse, change, re-serialize; never drop `message_start`, `message_stop`, `response.completed` |
-| A phrase in a model's answer isn't caught | It spans two streamed deltas | Keep a per-`call_id` text tail and match across it (§4.3) |
+| Enforced calls get 503 "interceptor unavailable" | Your service missed `deadlineMs`, errored, or gave an answer that can't be applied | Check its p99 latency and the verdict rows' `reason`; raise `deadlineMs` only if you understand the cost to users; fix slow I/O in the handlers |
+| Verdict rows say `error` with "invalid answer" | A Replace that doesn't return every part by id, in order, or changes media or an opaque part; a Respond with no text; a second Fetch | Return the message as you got it with only its text changed (`INTERCEPTOR.md`, "Answers") |
+| A phrase in a model's answer isn't caught | It spans two streamed pieces, and each piece was accepted whole | In Go, use a watch (a `Contains` or `Matches` rule on the reply is one); on the raw protocol, answer with `keep` to hold back a tail that could still become it |
+| No `OnRequest` for some calls | The request isn't a conversation AIntercept reads (another endpoint, a token count), or adds no new message | Expected; `/stats` counts them (`unparsed_reasons`, `no_new_messages`) |
 | `helm upgrade` fails: "interceptor.enforce host … isn't in interception.allowlist" | The scope's host isn't intercepted | Add it to `interception.allowlist`, or fix the host name |
 | `helm upgrade` fails: "interceptor.enforce needs envoy.autoscaling.minReplicas >= 2" | Enforce with one ingest pod | Raise `envoy.autoscaling.minReplicas` |
 | Verdicts say `applied: false` for a host you meant to enforce | The path isn't in the scope (prefix match) | Check `Call.path` in your logs against the scope's `paths` |
-| `OnCallComplete` arrives with no matching `OnCallStart` | Observe delivery is best-effort (a full queue, or a restart) | Expected; make your state tolerant of it (§4.5) |
+| `OnCallComplete` arrives with no matching `OnCallStart` | Observe delivery is best-effort (a full queue, or a restart) | Expected; make your state tolerant of it (§4.2) |
 
 ---
 
 ## 13. Checklist
 
 **Before observe:**
-- [ ] Generated code from a pinned copy of `interceptor.proto`.
-- [ ] `OnCallStart` and `OnMessage` answer fast, with no slow I/O; slow work is in `OnCallComplete` or in the background.
+- [ ] Built against a pinned copy of `interceptor.proto` (or a pinned AIntercept version, for package `intercept`).
+- [ ] Every callback but `OnCallComplete` answers fast, with no slow I/O; slow work is in `OnCallComplete` or in the background.
 - [ ] Handlers are thread-safe; per-call state is keyed by `call_id` and expires.
-- [ ] Replace keeps payloads valid for their kind.
+- [ ] A Replace returns the message as it came, every part by id and in order, with only its text changed.
 - [ ] The service checks the token (or mutual TLS).
 - [ ] `make test-interceptor` passes against your service (with the example's rules added), and unit tests cover your own rules.
 - [ ] It's deployed with readiness, resources, a NetworkPolicy, and graceful `SIGTERM`.

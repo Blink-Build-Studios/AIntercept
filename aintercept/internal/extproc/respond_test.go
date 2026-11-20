@@ -9,7 +9,7 @@ import (
 
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	pb2 "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
@@ -18,41 +18,41 @@ import (
 )
 
 // Respond and tool calls held whole, through the enforcing filter
-// (docs/INTERCEPTOR_V2.md, S1–S5, T1–T2).
+// (docs/INTERCEPTOR.md, S1–S5, T1–T2).
 
 const tricks = "Well, tricks are for kids."
 
 // bing answers "first we bing" in a request with Respond("then we bong"), and
 // a tool call: one whose arguments say "first we bing" with Respond, one that
 // says "silly rabbit" with its arguments replaced.
-func bing() *interceptortest.FakeV2 {
-	return &interceptortest.FakeV2{
-		Request: func(q *pb2.RequestMessages) *pb2.RequestVerdict {
+func bing() *interceptortest.Fake {
+	return &interceptortest.Fake{
+		Request: func(q *pb.RequestMessages) *pb.RequestVerdict {
 			for _, m := range q.GetMessages() {
 				for _, p := range m.GetParts() {
 					if strings.Contains(p.GetText().GetText(), "first we bing") {
-						return &pb2.RequestVerdict{Respond: &pb2.Respond{Text: "then we bong"}}
+						return &pb.RequestVerdict{Respond: &pb.Respond{Text: "then we bong"}}
 					}
 				}
 			}
-			return &pb2.RequestVerdict{}
+			return &pb.RequestVerdict{}
 		},
-		Tool: func(m *pb2.ResponseMessage) *pb2.MessageVerdict {
+		Tool: func(m *pb.ResponseMessage) *pb.MessageVerdict {
 			tc := m.GetMessage().GetParts()[0].GetToolCall()
 			switch {
 			case strings.Contains(tc.GetArguments(), "first we bing"):
-				return &pb2.MessageVerdict{Action: &pb2.MessageVerdict_Respond{Respond: &pb2.Respond{Text: "then we bong"}}}
+				return &pb.MessageVerdict{Action: &pb.MessageVerdict_Respond{Respond: &pb.Respond{Text: "then we bong"}}}
 			case strings.Contains(tc.GetArguments(), "silly rabbit"):
 				r := m.GetMessage()
 				r.GetParts()[0].GetToolCall().Arguments = strings.ReplaceAll(tc.GetArguments(), "silly rabbit", "tricks")
-				return &pb2.MessageVerdict{MessageId: r.GetId(), Action: &pb2.MessageVerdict_Replace{Replace: &pb2.Replace{Message: r}}}
+				return &pb.MessageVerdict{MessageId: r.GetId(), Action: &pb.MessageVerdict_Replace{Replace: &pb.Replace{Message: r}}}
 			}
-			return &pb2.MessageVerdict{}
+			return &pb.MessageVerdict{}
 		},
 	}
 }
 
-func newBingRig(t *testing.T, f *interceptortest.FakeV2, cfg interceptor.Config) *v2Rig {
+func newBingRig(t *testing.T, f *interceptortest.Fake, cfg interceptor.Config) *v2Rig {
 	t.Helper()
 	sink := &memSink{}
 	proc := events.NewProcessor(sink, events.ProcessorConfig{BufferSize: 1024})
@@ -61,7 +61,7 @@ func newBingRig(t *testing.T, f *interceptortest.FakeV2, cfg interceptor.Config)
 	if cfg.Deadline == 0 {
 		cfg.Deadline = 5 * time.Second
 	}
-	ic := interceptortest.NewClientV2(t, f, cfg, func(_ string, v events.Verdict) { rows = append(rows, v) })
+	ic := interceptortest.NewClient(t, f, cfg, func(_ string, v events.Verdict) { rows = append(rows, v) })
 	return &v2Rig{
 		enforceRig: enforceRig{t: t, sink: sink, proc: proc, st: &streamState{correlationID: "c", enforce: true, enf: &enforceState{}},
 			srv: New(Config{Processor: proc, InstanceID: "t", KeyHashSalt: "s", Interceptor: ic})},
@@ -193,8 +193,8 @@ func TestV2RespondRewritten(t *testing.T) {
 // Respond at call start: synthesized before OnRequest.
 func TestV2RespondAtCallStart(t *testing.T) {
 	f := bing()
-	f.Start = func(*pb2.CallStart) *pb2.CallVerdict {
-		return &pb2.CallVerdict{Action: &pb2.CallVerdict_Respond{Respond: &pb2.Respond{Text: tricks}}}
+	f.Start = func(*pb.CallStart) *pb.CallVerdict {
+		return &pb.CallVerdict{Action: &pb.CallVerdict_Respond{Respond: &pb.Respond{Text: tricks}}}
 	}
 	r := newBingRig(t, f, interceptor.Config{})
 	r.send(eReqHeaders(false, anthropicCall...))
@@ -214,8 +214,8 @@ func TestV2RespondAtCallStart(t *testing.T) {
 // Respond recorded, not applied.
 func TestV2RespondUnreadable(t *testing.T) {
 	f := bing()
-	f.Start = func(*pb2.CallStart) *pb2.CallVerdict {
-		return &pb2.CallVerdict{Action: &pb2.CallVerdict_Respond{Respond: &pb2.Respond{Text: tricks}}}
+	f.Start = func(*pb.CallStart) *pb.CallVerdict {
+		return &pb.CallVerdict{Action: &pb.CallVerdict_Respond{Respond: &pb.Respond{Text: tricks}}}
 	}
 	r := newBingRig(t, f, interceptor.Config{})
 	r.send(eReqHeaders(false, ":authority", "api.anthropic.com", ":method", "POST", ":path", "/v1/messages/count_tokens"))
@@ -321,7 +321,7 @@ func anthropicToolStream(args string) []string {
 func jsonStr(s string) string { b, _ := json.Marshal(s); return string(b) }
 
 // toolRig is a rig with an Anthropic request sent.
-func toolRig(t *testing.T, f *interceptortest.FakeV2, cfg interceptor.Config) *v2Rig {
+func toolRig(t *testing.T, f *interceptortest.Fake, cfg interceptor.Config) *v2Rig {
 	r := newBingRig(t, f, cfg)
 	r.send(eReqHeaders(false, anthropicCall...))
 	out := r.send(eReqBody(`{"model":"m-1","stream":true,"messages":[{"role":"user","content":"look"}]}`, true))

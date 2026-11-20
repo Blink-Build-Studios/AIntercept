@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v1"
+	pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
+	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/convo"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/events"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/identity"
 	"github.com/Blink-Build-Studios/aintercept/aintercept/internal/interceptor"
@@ -52,35 +54,45 @@ func info(id string, ids *identity.Cache, reported string) *interceptor.CallInfo
 		Identities: ids, Lookup: ids.Begin(kh, "sk-ant…0001", "api.anthropic.com", map[string]string{"authorization": "Bearer " + oauth})}
 }
 
-// seen collects what a fake v1 Interceptor receives, by call.
+// seen collects what a fake Interceptor receives, by call: each start's
+// identity, and each OnRequest's prompt ("x" when its identity isn't the
+// start's).
 type seen struct {
 	mu     sync.Mutex
 	starts map[string]*pb.Identity
-	msgs   map[string][]int64
-	at     map[string]time.Time
+	msgs   map[string][]string
 }
 
 func newSeen(f *interceptortest.Fake) *seen {
-	s := &seen{starts: map[string]*pb.Identity{}, msgs: map[string][]int64{}, at: map[string]time.Time{}}
-	f.Start = func(c *pb.CallStart) *pb.Verdict {
+	s := &seen{starts: map[string]*pb.Identity{}, msgs: map[string][]string{}}
+	f.Start = func(c *pb.CallStart) *pb.CallVerdict {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.starts[c.GetCall().GetCallId()] = c.GetCall().GetIdentity()
-		s.at[c.GetCall().GetCallId()] = time.Now()
-		return &pb.Verdict{}
+		return &pb.CallVerdict{}
 	}
-	f.Message = func(m *pb.Message) *pb.Verdict {
+	f.Request = func(r *pb.RequestMessages) *pb.RequestVerdict {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		id := m.GetCall().GetCallId()
-		if m.GetCall().GetIdentity().GetEmail() != s.starts[id].GetEmail() {
-			s.msgs[id] = append(s.msgs[id], -1) // a message whose identity isn't its start's
+		id := r.GetCall().GetCallId()
+		if r.GetCall().GetIdentity().GetEmail() != s.starts[id].GetEmail() {
+			s.msgs[id] = append(s.msgs[id], "x") // a request whose identity isn't its start's
 		}
-		s.msgs[id] = append(s.msgs[id], m.GetSeq())
-		s.at[id+"/msg"] = time.Now()
-		return &pb.Verdict{}
+		s.msgs[id] = append(s.msgs[id], r.GetMessages()[0].GetParts()[0].GetText().GetText())
+		return &pb.RequestVerdict{}
 	}
 	return s
+}
+
+func (s *seen) got(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return strings.Join(s.msgs[id], " ")
+}
+
+// prompt is a request whose one new message says text.
+func prompt(t *testing.T, text string) convo.Request {
+	return parse(t, `{"model":"m","messages":[{"role":"user","content":"`+text+`"}]}`)
 }
 
 func (s *seen) start(id string) *pb.Identity {
@@ -112,20 +124,20 @@ func TestObserveFirstCallCarriesTheEmail(t *testing.T) {
 	if took := time.Since(t0); took > 20*time.Millisecond {
 		t.Errorf("ObserveCall took %v: the request path waited", took)
 	}
-	c.ObserveMessage(interceptor.Message(call, events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_HTTP_REQUEST_BODY, []byte("{}"), "", ""))
+	c.ObserveRequest(call, prompt(t, "1"))
 	rec, _ := interceptor.Record(&events.Event{CorrelationID: "a", KeyHash: "kh-a", Phase: events.PhaseComplete}, nil)
 	c.Complete(rec, true)
 	c.Close()
 	id := s.start("a")
 	if id.GetEmail() != "a@example.com" || id.GetName() != "Ada Example" || id.GetEmailSource() != pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL ||
 		id.GetVerifiedAccountId() != "acc-1" || id.GetReportedAccountId() != "acc-1" || id.GetOrgId() != "org-1" ||
-		id.GetAccountMismatch() || id.GetAccountId() != "" || id.GetKeyHash() != "kh-a" {
+		id.GetAccountMismatch() || id.GetKeyHash() != "kh-a" {
 		t.Fatalf("start identity %v", id)
 	}
-	if m := s.msgs["a"]; len(m) != 1 || m[0] != 1 {
-		t.Errorf("messages %v: want seq 1 with the start's identity", m)
+	if m := s.got("a"); m != "1" {
+		t.Errorf("requests %q: want 1, with the start's identity", m)
 	}
-	_, recs := f.Snapshot()
+	_, _, recs := f.Snapshot()
 	if len(recs) != 1 || recs[0].GetCall().GetIdentity().GetEmail() != "a@example.com" {
 		t.Errorf("the record's identity isn't the start's: %v", recs)
 	}
@@ -141,25 +153,25 @@ func TestObserveSlowLookupGoesWithoutIt(t *testing.T) {
 	s := newSeen(f)
 	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true}, nil)
 	call := c.ObserveCall(info("a", ids, "acc-1"), 50*time.Millisecond)
-	for seq := int64(1); seq <= 3; seq++ {
-		c.ObserveMessage(interceptor.Message(call, events.DirInbound, seq, pb.MessageKind_MESSAGE_KIND_SSE_EVENT, []byte("x"), "", ""))
+	for _, n := range []string{"1", "2", "3"} {
+		c.ObserveRequest(call, prompt(t, n))
 	}
-	if !waitUntil(t, 2*time.Second, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return len(s.msgs["a"]) == 3 }) {
+	if !waitUntil(t, 2*time.Second, func() bool { return s.got("a") == "1 2 3" }) {
 		t.Fatal("the held callbacks never went")
 	}
 	close(release)
 	waitUntil(t, 2*time.Second, func() bool { _, ok := ids.Get("kh-a"); return ok })
-	c.ObserveMessage(interceptor.Message(call, events.DirInbound, 4, pb.MessageKind_MESSAGE_KIND_SSE_EVENT, []byte("x"), "", ""))
+	c.ObserveRequest(call, prompt(t, "4"))
 	rec, _ := interceptor.Record(&events.Event{CorrelationID: "a", KeyHash: "kh-a", Phase: events.PhaseComplete}, ids)
 	c.Complete(rec, true)
 	c.Close()
 	if id := s.start("a"); id.GetEmail() != "" || id.GetEmailSource() != pb.IdentitySource_IDENTITY_SOURCE_UNSPECIFIED || id.GetReportedAccountId() != "acc-1" {
 		t.Errorf("start identity %v: want none (the lookup was late)", id)
 	}
-	if m := s.msgs["a"]; len(m) != 4 || m[0] != 1 || m[1] != 2 || m[2] != 3 || m[3] != 4 {
-		t.Errorf("messages %v: want 1 2 3 4, each with the start's identity", m)
+	if m := s.got("a"); m != "1 2 3 4" {
+		t.Errorf("requests %q: want 1 2 3 4, each with the start's identity", m)
 	}
-	calls, recs := f.Snapshot()
+	calls, _, recs := f.Snapshot()
 	if calls[0] != "start" || len(recs) != 1 || recs[0].GetCall().GetIdentity().GetEmail() != "" {
 		t.Errorf("calls %v; the record's identity isn't the start's: %v", calls, recs)
 	}
@@ -178,11 +190,11 @@ func TestHeldCallDoesntDelayItsQueue(t *testing.T) {
 	s := newSeen(f)
 	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Workers: 1}, nil)
 	slow := c.ObserveCall(info("slow", ids, ""), 5*time.Second)
-	c.ObserveMessage(interceptor.Message(slow, events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_SSE_EVENT, []byte("x"), "", ""))
+	c.ObserveRequest(slow, prompt(t, "1"))
 	t0 := time.Now()
 	other := c.ObserveCall(&interceptor.CallInfo{CallID: "other", Host: "api.anthropic.com", KeyHash: "kh-other", Identities: ids}, 5*time.Second)
-	c.ObserveMessage(interceptor.Message(other, events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_SSE_EVENT, []byte("x"), "", ""))
-	if !waitUntil(t, time.Second, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return len(s.msgs["other"]) == 1 }) {
+	c.ObserveRequest(other, prompt(t, "1"))
+	if !waitUntil(t, time.Second, func() bool { return s.got("other") == "1" }) {
 		t.Fatal("the other call's callbacks were held behind the slow one's lookup")
 	}
 	if took := time.Since(t0); took > 200*time.Millisecond {
@@ -192,15 +204,15 @@ func TestHeldCallDoesntDelayItsQueue(t *testing.T) {
 		t.Error("the slow call's start went before its lookup ended")
 	}
 	close(release)
-	if !waitUntil(t, 2*time.Second, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return len(s.msgs["slow"]) == 1 }) {
+	if !waitUntil(t, 2*time.Second, func() bool { return s.got("slow") == "1" }) {
 		t.Fatal("the slow call's callbacks never went")
 	}
 	c.Close()
 	if id := s.start("slow"); id.GetEmail() != "a@example.com" {
 		t.Errorf("slow start identity %v", id)
 	}
-	if m := s.msgs["slow"]; len(m) != 1 || m[0] != 1 {
-		t.Errorf("slow messages %v", m)
+	if m := s.got("slow"); m != "1" {
+		t.Errorf("slow requests %q", m)
 	}
 }
 
@@ -241,7 +253,7 @@ func TestDecideWaitsAtMostTheEnforceWait(t *testing.T) {
 }
 
 // Spoofing: a body account other than the credential's verified one gives
-// account_mismatch, an empty account_id and the verified email.
+// account_mismatch and the verified email.
 func TestAccountMismatch(t *testing.T) {
 	ids := newProfile(t, 0, nil).cache()
 	ids.Begin("kh-a", "", "api.anthropic.com", map[string]string{"authorization": "Bearer " + oauth}).Wait(2 * time.Second)
@@ -253,7 +265,7 @@ func TestAccountMismatch(t *testing.T) {
 	ci.Auth = &events.AuthIdentity{Email: "spoof@example.com"}
 	c.DecideCall(context.Background(), ci, 0)
 	id := s.start("a")
-	if !id.GetAccountMismatch() || id.GetAccountId() != "" || id.GetEmail() != "a@example.com" || id.GetVerifiedAccountId() != "acc-1" ||
+	if !id.GetAccountMismatch() || id.GetEmail() != "a@example.com" || id.GetVerifiedAccountId() != "acc-1" ||
 		id.GetReportedAccountId() != "acc-someone-else" || id.GetEmailSource() != pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL {
 		t.Fatalf("identity %v", id)
 	}
@@ -262,11 +274,11 @@ func TestAccountMismatch(t *testing.T) {
 	}
 }
 
-// v2: a held call's OnRequest carries the identity resolved for its start.
-func TestV2HeldRequestCarriesTheIdentity(t *testing.T) {
+// A held call's OnRequest carries the identity resolved for its start.
+func TestHeldRequestCarriesTheIdentity(t *testing.T) {
 	ids := newProfile(t, 30*time.Millisecond, nil).cache()
-	f := &interceptortest.FakeV2{}
-	c := interceptortest.NewClientV2(t, f, interceptor.Config{Content: true, Deadline: time.Second}, nil)
+	f := &interceptortest.Fake{}
+	c := interceptortest.NewClient(t, f, interceptor.Config{Content: true, Deadline: time.Second}, nil)
 	call := c.ObserveCall(info("v", ids, ""), time.Second)
 	c.ObserveRequest(call, parse(t, `{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
 	c.Close()
@@ -292,7 +304,7 @@ func TestIdentityStaysWithAnOpenCall(t *testing.T) {
 	c.ObserveCall(&interceptor.CallInfo{CallID: "ws", Host: "api.anthropic.com", KeyHash: "kh-ws", Identities: ids}, time.Second)
 	c.ObserveCall(&interceptor.CallInfo{CallID: "gone", Host: "api.anthropic.com", KeyHash: "kh-ws", Identities: ids}, time.Second)
 	c.Ended("gone") // its stream ended; its final record never came
-	waitUntil(t, 2*time.Second, func() bool { calls, _ := f.Snapshot(); return len(calls) == 2 })
+	waitUntil(t, 2*time.Second, func() bool { calls, _, _ := f.Snapshot(); return len(calls) == 2 })
 	advance(20 * time.Minute)
 	for i := range 600 { // enough new calls to sweep
 		c.ObserveCall(&interceptor.CallInfo{CallID: "other-" + strconv.Itoa(i), Host: "api.anthropic.com"}, time.Second)
@@ -300,15 +312,15 @@ func TestIdentityStaysWithAnOpenCall(t *testing.T) {
 	// Later callbacks built from a Call without the identity get the one
 	// resolved at the call's start; the ended call's entry is gone.
 	bare := func(id string) *pb.Call { return &pb.Call{CallId: id, Identity: &pb.Identity{}} }
-	c.ObserveMessage(interceptor.Message(bare("ws"), events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_WS_TEXT, []byte("x"), "", ""))
+	c.ObserveRequest(bare("ws"), prompt(t, "1"))
 	c.Complete(&pb.CallRecord{Call: bare("ws")}, false)
-	c.ObserveMessage(interceptor.Message(bare("gone"), events.DirInbound, 1, pb.MessageKind_MESSAGE_KIND_WS_TEXT, []byte("x"), "", ""))
+	c.ObserveRequest(bare("gone"), prompt(t, "1"))
 	c.Close()
 	f2 := map[string]string{}
-	for _, m := range f.Messages {
-		f2[m.GetCall().GetCallId()] = m.GetCall().GetIdentity().GetEmail()
+	_, reqs, recs := f.Snapshot()
+	for _, r := range reqs {
+		f2[r.GetCall().GetCallId()] = r.GetCall().GetIdentity().GetEmail()
 	}
-	_, recs := f.Snapshot()
 	if f2["ws"] != "a@example.com" || len(recs) != 1 || recs[0].GetCall().GetIdentity().GetEmail() != "a@example.com" {
 		t.Errorf("the idle open call lost its identity: message %q, records %v", f2["ws"], recs)
 	}

@@ -1,5 +1,5 @@
 // Package convo turns one model request into provider-neutral messages and
-// says which of them are new in this call (docs/INTERCEPTOR_V2.md, "The
+// says which of them are new in this call (docs/INTERCEPTOR.md, "The
 // model" and "What's new in a call"). It keeps no state: what's new is read
 // from the request alone.
 //

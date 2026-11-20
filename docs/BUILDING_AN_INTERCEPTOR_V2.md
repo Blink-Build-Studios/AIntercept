@@ -1,10 +1,10 @@
-# Building an Interceptor on contract v2
+# Writing an Interceptor
 
 An Interceptor sees every message of every call, in both directions, before
 it goes on: the prompts and tool results going to the model, and the model's
 reply text (piece by piece, as it streams) and tool calls coming back. It
-can let each one through, change it, or answer for the model. Contract v2
-([`INTERCEPTOR_V2.md`](INTERCEPTOR_V2.md)) delivers them in one shape for
+can let each one through, change it, or answer for the model. The contract
+([`INTERCEPTOR.md`](INTERCEPTOR.md)) delivers them in one shape for
 Claude Code, Codex (HTTP or WebSocket) and the OpenAI APIs; AIntercept puts
 your answer back on the wire in the provider's format.
 
@@ -14,9 +14,9 @@ underneath, wrapped: the gRPC server, the receive limits, health checks and
 graceful shutdown are done for you. The raw protocol stays usable directly
 (section 7), from any language.
 
-Everything about deploying, operating and observing an Interceptor is as in
-[`BUILDING_AN_INTERCEPTOR.md`](BUILDING_AN_INTERCEPTOR.md) (sections 5 to
-13); this guide covers what's different.
+Testing it through a real Envoy, deploying, operating and observing an
+Interceptor are in [`BUILDING_AN_INTERCEPTOR.md`](BUILDING_AN_INTERCEPTOR.md)
+(sections 5 to 13); this guide covers the code.
 
 ```go
 import "github.com/Blink-Build-Studios/aintercept/aintercept/intercept"
@@ -204,18 +204,17 @@ per decision (other than a plain Accept) and, with
 gracefully on SIGINT or SIGTERM. `intercept.New(…)` gives the server itself
 (`pb.InterceptorServer`; `.GRPC()` for a ready gRPC server).
 
-In the Helm values, set the contract (the rest is as in
+In the Helm values (the rest is in
 [`BUILDING_AN_INTERCEPTOR.md`](BUILDING_AN_INTERCEPTOR.md) section 8):
 
 ```yaml
 interceptor:
   endpoint: my-interceptor.aintercept.svc:9100
-  contract: v2
   content: true             # the messages; off: only call start and complete
   inlineLimitBytes: 65536   # larger parts arrive truncated (NeedFull for all of it)
 ```
 
-Without the chart: `INTERCEPTOR_CONTRACT=v2`, `INTERCEPTOR_CONTENT=true`,
+Without the chart: `INTERCEPTOR_ENDPOINT`, `INTERCEPTOR_CONTENT=true`,
 `INTERCEPTOR_INLINE_LIMIT_BYTES`.
 
 ## 5. Test it
@@ -234,11 +233,12 @@ h.Prompt("hello").WantAccepted(t)
 h.As(&pb.Identity{Email: "a@example.com", EmailSource: pb.IdentitySource_IDENTITY_SOURCE_CREDENTIAL}).Prompt("hello").WantAccepted(t)
 ```
 
-`examples/rabbit/main_test.go` is a complete one. `make test-interceptor`
-runs AIntercept end to end through a real Envoy with the suite's own v2
-Interceptor (`aintercept/internal/e2e/interceptor`: the rabbit's rules plus
-rules on reply text and tool calls), in every format. `KEEP=1` leaves the
-stack up; the v2 observer's records are in
+`examples/rabbit/main_test.go` and `examples/redact/main_test.go` are
+complete ones. `make test-interceptor` runs AIntercept end to end through a
+real Envoy with the example redact, and with the suite's own Interceptor
+(`aintercept/internal/e2e/interceptor`: the rabbit's rules plus rules on
+reply text and tool calls), in every format. `KEEP=1` leaves the stack up;
+the second observer's records (the suite's Interceptor) are in
 `test/interceptor/out/events-v2.ndjson`:
 
 ```bash
@@ -615,8 +615,9 @@ In Go, `pb "github.com/Blink-Build-Studios/aintercept/aintercept/interceptor/v2"
 
 An empty answer is Accept. There is no Deny or Drop. Not implementing
 `OnReply` or `OnToolCall` (UNIMPLEMENTED) accepts what it would get, and
-AIntercept stops holding it. [`INTERCEPTOR_V2.md`](INTERCEPTOR_V2.md) is the
-full specification.
+AIntercept stops holding it. [`INTERCEPTOR.md`](INTERCEPTOR.md) is the full
+specification, and `aintercept/examples/python-redact` a complete
+Interceptor on the raw protocol, in Python.
 
 What the library got in 6.4 (`call` left out; it's on every callback):
 

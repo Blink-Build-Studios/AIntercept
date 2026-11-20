@@ -3,7 +3,8 @@
 // Identity end to end (internal/identity): a Claude Code OAuth token the
 // observer hasn't seen is looked up at the fixture's fake profile endpoint
 // (OBSERVER_IDENTITY_TEST_ORIGIN), and the Interceptor's callbacks carry the
-// verified email, on contract v1 (observe and enforce) and v2.
+// verified email: the example redact's (observe and enforce), through the
+// main observer, and the v2 suite's.
 package e2e
 
 import (
@@ -26,16 +27,17 @@ const (
 )
 
 // postAs sends a Claude Code call with the fake token to the model host,
-// through the v1 or v2 observer, observed or enforced.
-func postAs(t *testing.T, contract string, observe bool, body string) {
+// through the main observer (to the example redact) or observer-v2 (the
+// suite's Interceptor), observed or enforced.
+func postAs(t *testing.T, main, observe bool, body string) {
 	t.Helper()
 	req, _ := http.NewRequest("POST", "http://"+envoyAddr+"/v1/messages", strings.NewReader(body))
 	req.Host = "api.anthropic.com"
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "claude-cli/9.9.9 (external, cli)")
 	req.Header.Set("Authorization", "Bearer "+e2eToken)
-	if contract == "v1" {
-		req.Header.Set("x-e2e-contract", "v1")
+	if main {
+		req.Header.Set("x-e2e-observer", "main")
 	}
 	if observe {
 		req.Header.Set("x-e2e-mode", "observe")
@@ -68,13 +70,13 @@ func redactStart(t *testing.T, model string) map[string]any {
 	return nil
 }
 
-func TestIdentityV1(t *testing.T) {
+func TestIdentityRedact(t *testing.T) {
 	for _, mode := range []string{"observe", "enforce"} {
 		t.Run(mode, func(t *testing.T) {
 			model := "identity-" + mode
-			postAs(t, "v1", mode == "observe", `{"model":"`+model+`","messages":[{"role":"user","content":"hi"}]}`)
+			postAs(t, true, mode == "observe", `{"model":"`+model+`","messages":[{"role":"user","content":"hi"}]}`)
 			m := redactStart(t, model)
-			if m["email"] != e2eEmail || m["email_source"] != "IDENTITY_SOURCE_CREDENTIAL" || m["account"] != e2eAccount {
+			if m["email"] != e2eEmail || m["verified"] != true || m["account"] != e2eAccount {
 				t.Errorf("call start %v: want the verified identity", m)
 			}
 		})
@@ -96,7 +98,7 @@ func TestIdentityV1(t *testing.T) {
 }
 
 func TestIdentityV2(t *testing.T) {
-	postAs(t, "v2", false, `{"model":"fixture-model","messages":[{"role":"user","content":"who am i"}]}`)
+	postAs(t, false, false, `{"model":"fixture-model","messages":[{"role":"user","content":"who am i"}]}`)
 	for end := time.Now().Add(15 * time.Second); ; time.Sleep(500 * time.Millisecond) {
 		for _, e := range readEventsFrom(eventsV2File) {
 			if v := e.Verdict; e.Phase == events.PhaseVerdict && v != nil && v.Annotations["email"] != "" {

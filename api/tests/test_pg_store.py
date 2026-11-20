@@ -1,13 +1,14 @@
 """The API's Postgres store (docs/PIPELINE.md §6): per request one connection and one READ ONLY,
 REPEATABLE READ snapshot, the page's statements in order (test_drawer.py, test_session_pages.py and
-test_person_pages.py hold what each page reads). On a database whose schema isn't this build's the API
-is up but not ready, until it is.
+test_person_pages.py hold what each page reads). On a database at a schema version this build can't read
+the API is up but not ready, until it can.
 
 /status (the first call, the probes, the pods) and the overview's request count are held here."""
 
 import contextlib
 import pathlib
 import time
+from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,62 +39,94 @@ def db(pg_dsn):
     _exec(pg_dsn, "DELETE FROM ingest_pods", "DELETE FROM calls")
 
 
-def test_the_schema_hash_is_this_builds(pg_dsn):
-    # The API ships the hash of the schema it reads (it has no copy of schema.sql); a schema change
-    # without it fails here.
-    assert pgstore.SCHEMA_HASH == pgdb.schema_hash()
-    PgStore(pg_dsn).close()
+def test_this_build_reads_the_workers_schema(pg_dsn):
+    # The oldest version the API reads is one of the workers' migrations; the database pgdb builds from
+    # schema.sql, at the newest, is read.
+    assert 1 <= pgstore.OLDEST <= pgdb.newest_migration()
+    with contextlib.closing(PgStore(pg_dsn)) as store:
+        assert store.ready()
 
 
-def _schema(dsn: str, hash_: str | None) -> None:
-    """Sets the database's schema_version (None: no row, as before the workers apply it)."""
-    if hash_ is None:
-        _exec(dsn, "DELETE FROM schema_version")
-    else:
-        _exec(dsn, "DELETE FROM schema_version", f"INSERT INTO schema_version (hash) VALUES ('{hash_}')")  # noqa: S608
+def _version(dsn: str, version: int | None) -> None:
+    """Sets the database's schema version, goose's table (None: no row)."""
+    _exec(dsn, "DELETE FROM goose_db_version")
+    if version is not None:
+        _exec(dsn, f"INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, true), ({version}, true)")  # noqa: S608
 
 
-def test_another_schema_is_unready_until_the_workers_apply_this_one(monkeypatch):
-    # An upgrade: the new pod starts before the workers have reset the database to its schema. It
-    # answers 503 (its readiness probe fails) and stays alive, then is ready without a restart.
+@contextlib.contextmanager
+def _before_migrations(dsn: str) -> Iterator[None]:
+    """The database as v0.6.2 left it (no goose table, its schema's hash) until the block ends."""
+    _exec(dsn, "ALTER TABLE goose_db_version RENAME TO versions_aside")
+    try:
+        yield
+    finally:
+        _exec(dsn, "ALTER TABLE versions_aside RENAME TO goose_db_version")
+
+
+def _unready(c: TestClient, store: PgStore) -> None:
+    """Up but unready: 503 on the API (its readiness probe fails), and alive."""
+    assert not store.ready()
+    r = c.get("/api/v1/status")
+    assert r.status_code == 503 and r.json()["error"]["code"] == "schema_not_ready"
+    assert c.get("/api/v1/people").status_code == 503
+    assert c.get("/healthz").status_code == 200
+
+
+def test_an_older_schema_is_unready_until_the_workers_migrate_it(monkeypatch):
+    # An upgrade: the new pod starts before the workers have migrated the database to a version it reads
+    # (this build reads 5 on). It answers 503 and stays alive, then is ready without a restart.
     monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
+    monkeypatch.setattr(pgstore, "OLDEST", 5)
     admin = pgdb.admin_dsn()
     assert admin is not None
     with pgdb.fresh_database(admin) as other:
-        for older in (None, "not-this-build"):
-            _schema(other, older)
-            with contextlib.closing(PgStore(other)) as store:
+        for older in ("none", "before migrations", 4):
+            aside: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+            if older == "before migrations":
+                aside = _before_migrations(other)
+            with aside:
+                if older != "before migrations":
+                    _version(other, None if older == "none" else 4)
+                store = PgStore(other)
                 c = make_client(store)
-                assert not store.ready()
-                r = c.get("/api/v1/status")
-                assert r.status_code == 503 and r.json()["error"]["code"] == "schema_not_ready"
-                assert c.get("/api/v1/people").status_code == 503
-                assert c.get("/healthz").status_code == 200
-                _schema(other, pgstore.SCHEMA_HASH)
+                _unready(c, store)
+            with contextlib.closing(store):
+                _version(other, 5)
                 assert c.get("/api/v1/status").status_code == 200 and store.ready()
 
 
-def test_a_ready_pod_goes_unready_when_its_schema_is_replaced(monkeypatch):
-    # The older pods of an upgrade: the workers reset the database to the new schema under them.
+def test_a_newer_schema_keeps_a_pod_ready(monkeypatch):
+    # A rolling update: the workers migrate past what this build knows while its pods still serve. A
+    # migration never takes away what the previous release reads (docs/PIPELINE.md §3.4), so they stay
+    # ready; a reset under them (no version yet) takes them out of the Service until the schema is back.
     monkeypatch.setattr(pgstore, "RECHECK_SECONDS", 0.0)
     admin = pgdb.admin_dsn()
     assert admin is not None
+    newest = pgdb.newest_migration()
     with pgdb.fresh_database(admin) as other, contextlib.closing(PgStore(other)) as store:
         c = make_client(store)
         assert c.get("/api/v1/status").status_code == 200
-        _schema(other, "a-newer-build")
-        assert c.get("/api/v1/status").status_code == 503 and not store.ready()
+        _version(other, newest + 3)
+        assert c.get("/api/v1/status").status_code == 200 and store.ready()
+        _version(other, None)
+        _unready(c, store)
 
 
 def test_the_schema_is_checked_every_few_seconds(pg_dsn, monkeypatch):
     # Between checks a pod answers from the last one: no query per request.
     with contextlib.closing(PgStore(pg_dsn)) as store:
         assert store.ready()
-        checks: list[str] = []
-        monkeypatch.setattr(store.reader, "check_schema", checks.append)
+        checks: list[int] = []
+
+        def check(oldest: int) -> int:
+            checks.append(oldest)
+            return oldest
+
+        monkeypatch.setattr(store.reader, "check_schema", check)
         assert store.ready() and checks == []
         store._checked -= pgstore.RECHECK_SECONDS  # the interval passes
-        assert store.ready() and checks == [pgstore.SCHEMA_HASH]
+        assert store.ready() and checks == [pgstore.OLDEST]
 
 
 def _status(store: PgStore) -> dict:
@@ -305,7 +338,7 @@ def test_the_app_reads_postgres(pg_dsn, tmp_path, monkeypatch):
 
 
 def test_the_app_starts_unready_on_another_schema(pg_dsn, tmp_path, monkeypatch):
-    # The schema-hash check never stops the app starting (a crash loop would back off for minutes):
+    # The schema check never stops the app starting (a crash loop would back off for minutes):
     # it's up, unready, and ready once the workers have applied this build's schema.
     from aintercept_api.app import create_app
 
@@ -315,11 +348,11 @@ def test_the_app_starts_unready_on_another_schema(pg_dsn, tmp_path, monkeypatch)
     admin = pgdb.admin_dsn()
     assert admin is not None
     with pgdb.fresh_database(admin) as other:
-        _schema(other, "not-this-build")
+        _version(other, None)
         monkeypatch.setenv("AINTERCEPT_PG_DSN", other)
         app = create_app()
         with contextlib.closing(app.state.store):
             c = TestClient(app)
             assert c.get("/api/v1/status").status_code == 503
-            _schema(other, pgstore.SCHEMA_HASH)
+            _version(other, pgdb.newest_migration())
             assert c.get("/api/v1/status").status_code == 200

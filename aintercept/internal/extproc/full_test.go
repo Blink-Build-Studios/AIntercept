@@ -53,7 +53,7 @@ func TestEnforceRefusesNewStreamsWhenSpoolFull(t *testing.T) {
 	full := true
 	sink := &memSink{}
 	proc := events.NewProcessor(sink, events.ProcessorConfig{BufferSize: 64})
-	ic := interceptortest.NewClient(t, redactor(), interceptor.Config{Deadline: 5e9}, nil)
+	ic := interceptortest.NewClient(t, &interceptortest.Fake{}, interceptor.Config{Deadline: 5e9}, nil)
 	t.Cleanup(ic.Close)
 	srv := New(Config{Processor: proc, InstanceID: "t", KeyHashSalt: "s", Interceptor: ic, Full: func() bool { return full }})
 

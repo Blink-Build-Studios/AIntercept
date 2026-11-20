@@ -133,3 +133,19 @@ func TestValueConversions(t *testing.T) {
 		t.Fatal("Marshal: empty map and unencodable values are empty")
 	}
 }
+
+// Claude Code's user agent names its entrypoint second; an SDK or app that
+// embeds it follows (a capture from the Claude desktop app, in the corpus).
+func TestClientOfClaudeCode(t *testing.T) {
+	for ua, want := range map[string]string{
+		"claude-cli/2.1.3 (external, cli)":                                 "cli",
+		"claude-cli/2.1.326 (external, claude-desktop, agent-sdk/0.3.326)": "claude-desktop",
+		"claude-cli/2.1.326 (external, sdk-ts)":                            "sdk-ts",
+		"claude-code/2.1.321":                                              "",
+	} {
+		r := Request{UserAgent: ua, Product: ProductClaudeCode}
+		if got, _ := ClientOf(&r, ""); got != want {
+			t.Errorf("%s: client %q, want %q", ua, got, want)
+		}
+	}
+}
